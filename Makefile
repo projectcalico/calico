@@ -358,9 +358,24 @@ go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
 	                                --enable=goimports \
 	                                --vendor ./...
 
+.PHONY: check-typha-pins
+check-typha-pins: vendor/.up-to-date
+	@echo "Checking Typha's libcalico-go pin matches ours (so that any datamodel"
+	@echo "changes are reflected in the Typha-Felix API)."
+	@echo
+	@echo "Felix's libcalico-go pin:"
+	@grep libcalico-go glide.lock -A 5 | grep 'version:' | head -n 1
+	@echo "Typha's libcalico-go pin:"
+	@grep libcalico-go vendor/github.com/projectcalico/typha/glide.lock -A 5 | grep 'version:' | head -n 1
+	if [ "`grep libcalico-go glide.lock -A 5 | grep 'version:' | head -n 1`" != \
+	     "`grep libcalico-go vendor/github.com/projectcalico/typha/glide.lock -A 5 | grep 'version:' | head -n 1`" ]; then \
+	     echo "Typha and Felix libcalico-go pins differ."; \
+	     false; \
+	fi
+
 .PHONY: static-checks
 static-checks:
-	$(MAKE) go-meta-linter check-licenses
+	$(MAKE) check-typha-pins go-meta-linter check-licenses
 
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
