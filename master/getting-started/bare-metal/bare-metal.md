@@ -479,8 +479,8 @@ outside the cluster:
    normal host endpoint policy).  In other words, if a host endpoint is defined
    but has no pre-DNAT policies that explicitly allow or deny a particular
    incoming packet, that packet is allowed to continue on its way, and will
-   then be accepted or dropped according to workload policy - if it is going to
-   a local workload - or to normal host endpoint policy - if not.
+   then be accepted or dropped according to workload policy (if it is going to
+   a local workload) or to normal host endpoint policy (if not).
 
 ## When do host endpoint policies apply?
 
@@ -574,14 +574,15 @@ possible against incoming traffic from outside the cluster.  Let's suppose that:
   NodePorts - i.e. as well-known TCP port numbers that appear to be available
   on any node in the cluster.
 
-- Most of those Services, however, should not be accessed via _any_ node, but
-  instead via a LoadBalancer IP that is routable from outside the cluster and
-  maps to one of just a few 'ingress' nodes.  (The LoadBalancer IP is a virtual
-  IP that, at any given time, gets routed somehow to one of those 'ingress'
-  nodes.)
+- Most of those Services, however, should not be accessed from outside the
+  cluster via _any_ node, but instead via a LoadBalancer IP that is routable
+  from outside the cluster and maps to one of just a few 'ingress' nodes.  (The
+  LoadBalancer IP is a virtual IP that, at any given time, gets routed somehow
+  to one of those 'ingress' nodes.)
 
 - For a few Services, on the other hand, there is no LoadBalancer IP set up, so
-  those Services should be accessible through their NodePorts on any node.
+  those Services should be accessible from outside the cluster through their
+  NodePorts on any node.
 
 - All other incoming traffic from outside the cluster should be disallowed.
 
