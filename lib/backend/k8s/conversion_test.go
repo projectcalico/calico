@@ -25,9 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Test parsing strings", func() {
@@ -686,74 +683,5 @@ var _ = Describe("Test Namespace conversion", func() {
 			Expect(inboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
 			Expect(outboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
 		})
-	})
-})
-
-var _ = Describe("Test Node conversion", func() {
-
-	It("should parse a k8s Node to a Calico Node", func() {
-		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
-		node := k8sapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "TestNode",
-				Labels:          l,
-				ResourceVersion: "1234",
-				Annotations: map[string]string{
-					"projectcalico.org/IPv4Address": "172.17.17.10/24",
-					"projectcalico.org/ASNumber":    "2546",
-				},
-			},
-			Status: k8sapi.NodeStatus{
-				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
-						Type:    k8sapi.NodeInternalIP,
-						Address: "172.17.17.10",
-					},
-					k8sapi.NodeAddress{
-						Type:    k8sapi.NodeExternalIP,
-						Address: "192.168.1.100",
-					},
-					k8sapi.NodeAddress{
-						Type:    k8sapi.NodeHostName,
-						Address: "172-17-17-10",
-					},
-				},
-			},
-			Spec: k8sapi.NodeSpec{},
-		}
-
-		n, err := resources.K8sNodeToCalico(&node)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Ensure we got the correct values.
-		felixAddress := *n.Value.(*model.Node).FelixIPv4
-		bgpAddress := *n.Value.(*model.Node).BGPIPv4Addr
-		bgpNet := *n.Value.(*model.Node).BGPIPv4Net
-		labels := n.Value.(*model.Node).Labels
-		asn := n.Value.(*model.Node).BGPASNumber
-
-		ip, ipNet, _ := net.ParseCIDR("172.17.17.10/24")
-
-		Expect(felixAddress).To(Equal(*ip))
-		Expect(bgpAddress).To(Equal(*ip))
-		Expect(bgpNet).To(Equal(*ipNet))
-		Expect(labels).To(Equal(l))
-		Expect(asn.String()).To(Equal("2546"))
-	})
-
-	It("should error on an invalid IP", func() {
-		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
-		node := k8sapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "TestNode",
-				Labels:          l,
-				ResourceVersion: "1234",
-				Annotations:     map[string]string{"projectcalico.org/IPv4Address": "172.984.12.5/24"},
-			},
-			Spec: k8sapi.NodeSpec{},
-		}
-
-		_, err := resources.K8sNodeToCalico(&node)
-		Expect(err).To(HaveOccurred())
 	})
 })
