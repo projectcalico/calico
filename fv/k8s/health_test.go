@@ -1,3 +1,5 @@
+// +build fvtests
+
 // Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -227,10 +229,14 @@ var _ = Describe("with Felix running", func() {
 		felixLiveness = getHealthStatus(felixContainer.IP, "9099", "liveness")
 	})
 
+	AfterEach(func() {
+		felixContainer.Stop()
+	})
+
 	Describe("with no per-node config in datastore", func() {
 		It("should not open port due to lack of config", func() {
 			// With no config, Felix won't even open the socket.
-			Consistently(felixReady, "10s", "1s").Should(BeErr())
+			Consistently(felixReady, "5s", "1s").Should(BeErr())
 		})
 	})
 
@@ -283,15 +289,20 @@ var _ = Describe("with Felix running", func() {
 
 	Describe("after replacing iptables with a slow version, with per-node config", func() {
 		BeforeEach(func() {
-			// Replace iptables before installing the config so that we affect
-			// the first dataplane update.
+			// We need to delete the file first since it's a symlink and "docker cp"
+			// follows the link and overwrites the wrong file if we don't.
 			err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
 			Expect(err).NotTo(HaveOccurred())
+
+			// Copy in the nobbled iptables command.
 			err = felixContainer.CopyFileIntoContainer("slow-iptables-restore",
 				"/sbin/iptables-restore")
 			Expect(err).NotTo(HaveOccurred())
+			// Make it executable.
 			err = felixContainer.RunInContainer("chmod", "+x", "/sbin/iptables-restore")
 			Expect(err).NotTo(HaveOccurred())
+
+			// Insert per-node config.  This will trigger felix to start up.
 			createPerNodeConfig()
 		})
 		AfterEach(removePerNodeConfig)
@@ -306,10 +317,6 @@ var _ = Describe("with Felix running", func() {
 			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
 			Consistently(felixLiveness, "30s", "1s").Should(BeGood())
 		})
-	})
-
-	AfterEach(func() {
-		felixContainer.Stop()
 	})
 })
 
