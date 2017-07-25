@@ -42,8 +42,7 @@ sections.
 
 Before starting this you will need the following:
 
--   One or more machines running RHEL 7, with OpenStack Liberty or Mitaka
-    installed.
+-   One or more machines running RHEL 7, with OpenStack installed.
 -   SSH access to these machines.
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
