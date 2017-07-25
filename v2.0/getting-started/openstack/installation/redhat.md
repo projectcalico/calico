@@ -38,10 +38,7 @@ These steps are detailed in this section.
 ### Install OpenStack
 
 If you haven't already done so, install Openstack with Neutron and ML2
-networking. Instructions for installing OpenStack on RHEL can be found
-here
---[Kilo](http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html)
-/ [Liberty](http://docs.openstack.org/liberty/index.html).
+networking.
 
 ### Configure YUM repositories
 

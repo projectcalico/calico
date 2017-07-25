@@ -47,21 +47,23 @@ spec:
 
 #### Spec
 
-| Field      | Description                                                                                                                                                         | Accepted Values | Schema                | Default |
-|------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-----------------------+---------|
-| order      | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence)                             |                 | float                 |         |
-| selector   | Selects the endpoints to which this policy applies.                                                                                                                 |                 | [selector](#selector) | all()   |
-| ingress    | Ordered list of ingress rules applied by policy.                                                                                                                    |                 | List of [Rule](#rule) |         |
-| egress     | Ordered list of egress rules applied by this policy.                                                                                                                |                 | List of [Rule](#rule) |         |
-| doNotTrack | Indicates that the rules in this policy should be applied before any data plane connection tracking, and that packets allowed by these rules should not be tracked. | true, false     | boolean               | false   |
+| Field      | Description                                                                                                                                           | Accepted Values | Schema                | Default |
+|------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
+| order      | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence)               |                 | float                 |         |
+| selector   | Selects the endpoints to which this policy applies.                                                                                                   |                 | [selector](#selector) | all()   |
+| ingress    | Ordered list of ingress rules applied by policy.                                                                                                      |                 | List of [Rule](#rule) |         |
+| egress     | Ordered list of egress rules applied by this policy.                                                                                                  |                 | List of [Rule](#rule) |         |
+| doNotTrack | Indicates to apply the rules in this policy before any data plane connection tracking, and that packets allowed by these rules should not be tracked. | true, false     | boolean               | false   |
+| preDNAT    | Indicates to apply the rules in this policy before any DNAT.                                                                                          | true, false     | boolean               | false   |
 
-The `doNotTrack` field is meaningful for [host
-endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
-only.  It does not apply at all to [workload
-endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint);
-connection tracking is always used for flows to and from those.
+The `doNotTrack` and `preDNAT` fields are meaningful only when applying policy to a
+[host endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
+Only one of them may be set to `true` (in a given policy).  If they are both `false`, or when applying the policy to a
+[workload endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint),
+the policy is enforced after connection tracking and any DNAT.
 
-[Untracked policy]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal) explains more about how `doNotTrack` can be useful for host endpoints.
+See [Using Calico to Secure Host Interfaces]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal)
+for how `doNotTrack` and `preDNAT` can be useful for host endpoints.
 
 #### Rule
 
