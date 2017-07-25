@@ -212,6 +212,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config:            config,
 		applyThrottle:     throttle.New(10),
 	}
+	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 
 	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
@@ -372,6 +373,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// Register that we will report a liveness indicator.
 	if config.HealthAggregator != nil {
+		log.Info("Registering to report health.")
 		config.HealthAggregator.RegisterReporter(
 			healthName,
 			&health.HealthReport{Live: true, Ready: true},
@@ -685,19 +687,20 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Info(
 					"Finished applying updates to dataplane.")
+
+				if !d.doneFirstApply {
+					log.WithField(
+						"secsSinceStart", monotime.Since(processStartTime).Seconds(),
+					).Info("Completed first update to dataplane.")
+					d.doneFirstApply = true
+					if d.config.PostInSyncCallback != nil {
+						d.config.PostInSyncCallback()
+					}
+				}
 			} else {
 				if !beingThrottled {
 					log.Info("Dataplane updates throttled")
 					beingThrottled = true
-				}
-			}
-			if !d.doneFirstApply {
-				log.WithField(
-					"secsSinceStart", monotime.Since(processStartTime).Seconds(),
-				).Info("Completed first update to dataplane.")
-				d.doneFirstApply = true
-				if d.config.PostInSyncCallback != nil {
-					d.config.PostInSyncCallback()
 				}
 			}
 		}
