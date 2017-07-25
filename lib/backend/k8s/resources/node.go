@@ -25,6 +25,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+const (
+	nodeBgpIpv4CidrAnnotation = "projectcalico.org/IPv4Address"
+	nodeBgpAsnAnnotation = "projectcalico.org/ASNumber"
+)
+
 func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &retryWrapper{
 		client: &nodeClient{
