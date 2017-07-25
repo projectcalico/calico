@@ -84,6 +84,8 @@ type AsyncCalcGraph struct {
 	flushTicks       <-chan time.Time
 	flushLeakyBucket int
 	dirty            bool
+
+	debugHangC    <-chan time.Time
 }
 
 const (
@@ -100,6 +102,11 @@ func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}, hea
 		Dispatcher:       disp,
 		eventBuffer:      eventBuffer,
 		healthAggregator: healthAggregator,
+	}
+	if conf.DebugSimulateCalcGraphHangAfter != 0 {
+		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
+			"Simulating a calculation graph hang.")
+		g.debugHangC = time.After(conf.DebugSimulateDataplaneHangAfter)
 	}
 	eventBuffer.Callback = g.onEvent
 	if healthAggregator != nil {
@@ -171,6 +178,10 @@ func (acg *AsyncCalcGraph) loop() {
 			}
 		case <-healthTicks:
 			acg.reportHealth()
+		case <-acg.debugHangC:
+			log.Warning("Debug hang simulation timer popped, hanging the calculation graph!!")
+			time.Sleep(1 * time.Hour)
+			log.Panic("Woke up after 1 hour, something's probably wrong with the test.")
 		}
 		acg.maybeFlush()
 	}

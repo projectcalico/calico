@@ -114,6 +114,8 @@ type Config struct {
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
+
+	DebugSimulateDataplaneHangAfter time.Duration
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -190,6 +192,8 @@ type InternalDataplane struct {
 	applyThrottle *throttle.Throttle
 
 	config Config
+
+	debugHangC <-chan time.Time
 }
 
 const (
@@ -381,6 +385,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			&health.HealthReport{Live: true, Ready: true},
 			healthInterval*2,
 		)
+	}
+
+	if config.DebugSimulateDataplaneHangAfter != 0 {
+		log.WithField("delay", config.DebugSimulateDataplaneHangAfter).Warn(
+			"Simulating a dataplane hang.")
+		dp.debugHangC = time.After(config.DebugSimulateDataplaneHangAfter)
 	}
 
 	return dp
@@ -664,6 +674,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		case <-healthTicks:
 			d.reportHealth()
 		case <-retryTicker.C:
+		case <-d.debugHangC:
+			log.Warning("Debug hang simulation timer popped, hanging the dataplane!!")
+			time.Sleep(1 * time.Hour)
+			log.Panic("Woke up after 1 hour, something's probably wrong with the test.")
 		}
 
 		if datastoreInSync && d.dataplaneNeedsSync {

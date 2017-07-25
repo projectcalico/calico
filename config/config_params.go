@@ -170,6 +170,8 @@ type Config struct {
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
+	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
+	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 
 	// State tracking.
 

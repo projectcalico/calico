@@ -60,6 +60,7 @@ var config EnvConfig
 var etcdContainer *Container
 var apiServerContainer *Container
 var k8sAPIEndpoint string
+var badK8sAPIEndpoint string
 var k8sCertFilename string
 var calicoClient *client.Client
 var k8sClient *kubernetes.Clientset
@@ -131,6 +132,7 @@ var _ = BeforeSuite(func() {
 	}
 
 	k8sAPIEndpoint = fmt.Sprintf("https://%s:6443", apiServerContainer.IP)
+	badK8sAPIEndpoint = fmt.Sprintf("https://%s:1234", apiServerContainer.IP)
 	for {
 		resp, err := insecureHTTPClient.Get(k8sAPIEndpoint + "/apis/extensions/v1beta1/thirdpartyresources")
 		if err != nil {
@@ -201,44 +203,9 @@ var _ = AfterSuite(func() {
 	etcdContainer.Stop()
 })
 
-var _ = Describe("with Felix running", func() {
+var _ = Describe("health tests", func() {
 	var felixContainer *Container
 	var felixReady, felixLiveness func() int
-
-	BeforeEach(func() {
-		var err error
-		felixContainer, err = NewContainer("felix",
-			"--privileged",
-			//${typha_felix_args}",
-			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
-			"-e", "FELIX_HEALTHENABLED=true",
-			"-e", "FELIX_LOGSEVERITYSCREEN=info",
-			"-e", "FELIX_DATASTORETYPE=kubernetes",
-			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-			"-e", "FELIX_USAGEREPORTINGENABLED=false",
-			"-e", "FELIX_HEALTHENABLED=true",
-			"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
-			"-e", "K8S_API_ENDPOINT="+k8sAPIEndpoint,
-			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-			"-v", k8sCertFilename+":/tmp/apiserver.crt",
-			"calico/felix", // TODO Felix version
-			"calico-felix")
-		Expect(err).NotTo(HaveOccurred())
-
-		felixReady = getHealthStatus(felixContainer.IP, "9099", "readiness")
-		felixLiveness = getHealthStatus(felixContainer.IP, "9099", "liveness")
-	})
-
-	AfterEach(func() {
-		felixContainer.Stop()
-	})
-
-	Describe("with no per-node config in datastore", func() {
-		It("should not open port due to lack of config", func() {
-			// With no config, Felix won't even open the socket.
-			Consistently(felixReady, "5s", "1s").Should(BeErr())
-		})
-	})
 
 	createPerNodeConfig := func() {
 		// Make a k8s Node using the hostname of Felix's container.
@@ -256,66 +223,217 @@ var _ = Describe("with Felix running", func() {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	Describe("with per-node config in datastore", func() {
-		BeforeEach(createPerNodeConfig)
-		AfterEach(removePerNodeConfig)
-
-		It("should become ready and stay ready", func() {
-			Eventually(felixReady, "5s", "100ms").Should(BeGood())
-			Consistently(felixReady, "30s", "1s").Should(BeGood())
+	// describeCommonFelixTests creates specs for Felix tests that are common between the
+	// two scenarios below (with and without Typha).
+	describeCommonFelixTests := func() {
+		Describe("with no per-node config in datastore", func() {
+			It("should not open port due to lack of config", func() {
+				// With no config, Felix won't even open the socket.
+				Consistently(felixReady, "5s", "1s").Should(BeErr())
+			})
 		})
 
-		It("should become live and stay live", func() {
-			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
-			Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+		Describe("with per-node config in datastore", func() {
+			BeforeEach(createPerNodeConfig)
+			AfterEach(removePerNodeConfig)
+
+			It("should become ready and stay ready", func() {
+				Eventually(felixReady, "5s", "100ms").Should(BeGood())
+				Consistently(felixReady, "30s", "1s").Should(BeGood())
+			})
+
+			It("should become live and stay live", func() {
+				Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
+				Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+			})
+		})
+
+		Describe("after removing iptables-restore", func() {
+			BeforeEach(func() {
+				// Delete iptables-restore in order to make the first apply() fail.
+				err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
+				Expect(err).NotTo(HaveOccurred())
+
+				createPerNodeConfig()
+			})
+			AfterEach(removePerNodeConfig)
+
+			It("should never be ready, then die", func() {
+				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
+				Eventually(felixContainer.Stopped, "5s").Should(BeTrue())
+			})
+		})
+
+		Describe("after replacing iptables with a slow version, with per-node config", func() {
+			BeforeEach(func() {
+				// We need to delete the file first since it's a symlink and "docker cp"
+				// follows the link and overwrites the wrong file if we don't.
+				err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Copy in the nobbled iptables command.
+				err = felixContainer.CopyFileIntoContainer("slow-iptables-restore",
+					"/sbin/iptables-restore")
+				Expect(err).NotTo(HaveOccurred())
+				// Make it executable.
+				err = felixContainer.RunInContainer("chmod", "+x", "/sbin/iptables-restore")
+				Expect(err).NotTo(HaveOccurred())
+
+				// Insert per-node config.  This will trigger felix to start up.
+				createPerNodeConfig()
+			})
+			AfterEach(removePerNodeConfig)
+
+			It("should delay readiness", func() {
+				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
+				Eventually(felixReady, "10s", "100ms").Should(BeGood())
+				Consistently(felixReady, "20s", "1s").Should(BeGood())
+			})
+
+			It("should become live as normal", func() {
+				Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
+				Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+			})
+		})
+	}
+
+	var typhaContainer *Container
+	var typhaReady, typhaLiveness func() int
+
+	startTypha := func(endpoint string) {
+		var err error
+		typhaContainer, err = NewContainer("typha",
+			"--privileged",
+			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
+			"-e", "TYPHA_HEALTHENABLED=true",
+			"-e", "TYPHA_LOGSEVERITYSCREEN=info",
+			"-e", "TYPHA_DATASTORETYPE=kubernetes",
+			"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
+			"-e", "TYPHA_USAGEREPORTINGENABLED=false",
+			"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+			"-e", "K8S_API_ENDPOINT="+endpoint,
+			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
+			"-v", k8sCertFilename+":/tmp/apiserver.crt",
+			"calico/typha:v0.3.0", // TODO typha version
+			"calico-typha")
+		Expect(err).NotTo(HaveOccurred())
+		typhaReady = getHealthStatus(typhaContainer.IP, "9098", "readiness")
+		typhaLiveness = getHealthStatus(typhaContainer.IP, "9098", "liveness")
+	}
+
+	startFelix := func(typhaAddr string, calcGraphHangTime string, dataplaneHangTime string) {
+		var err error
+		felixContainer, err = NewContainer("felix",
+			"--privileged",
+			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
+			"-e", "FELIX_HEALTHENABLED=true",
+			"-e", "FELIX_LOGSEVERITYSCREEN=info",
+			"-e", "FELIX_DATASTORETYPE=kubernetes",
+			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
+			"-e", "FELIX_USAGEREPORTINGENABLED=false",
+			"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+			"-e", "FELIX_DebugSimulateCalcGraphHangAfter=" +calcGraphHangTime,
+			"-e", "FELIX_DebugSimulateDataplaneHangAfter=" +dataplaneHangTime,
+			"-e", "K8S_API_ENDPOINT="+k8sAPIEndpoint,
+			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
+			"-e", "FELIX_TYPHAADDR="+typhaAddr,
+			"-v", k8sCertFilename+":/tmp/apiserver.crt",
+			"calico/felix", // TODO Felix version
+			"calico-felix")
+		Expect(err).NotTo(HaveOccurred())
+
+		felixReady = getHealthStatus(felixContainer.IP, "9099", "readiness")
+		felixLiveness = getHealthStatus(felixContainer.IP, "9099", "liveness")
+	}
+
+	Describe("with Felix running (no Typha)", func() {
+		BeforeEach(func() {
+			startFelix("", "", "")
+		})
+
+		AfterEach(func() {
+			felixContainer.Stop()
+		})
+
+		describeCommonFelixTests()
+	})
+
+	Describe("with Felix (no Typha) and Felix calc graph set to hang", func() {
+		BeforeEach(func() {
+			startFelix("", "5", "")
+			createPerNodeConfig()
+		})
+
+		AfterEach(func() {
+			felixContainer.Stop()
+			removePerNodeConfig()
+		})
+
+		It("should report live initially, then become non-live", func() {
+			Eventually(felixLiveness, "10s", "100ms").Should(BeGood())
+			Eventually(felixLiveness, "30s", "100ms").Should(BeBad())
+			Consistently(felixLiveness, "30s", "100ms").Should(BeBad())
 		})
 	})
 
-	Describe("after removing iptables-restore", func() {
+	FDescribe("with Felix (no Typha) and Felix dataplane set to hang", func() {
 		BeforeEach(func() {
-			// Delete iptables-restore in order to make the first apply() fail.
-			err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
-			Expect(err).NotTo(HaveOccurred())
-
+			startFelix("", "", "5")
 			createPerNodeConfig()
 		})
-		AfterEach(removePerNodeConfig)
 
-		It("should never be ready, then die", func() {
-			Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
-			Eventually(felixContainer.Stopped, "5s").Should(BeTrue())
+		AfterEach(func() {
+			felixContainer.Stop()
+			removePerNodeConfig()
+		})
+
+		It("should report live initially, then become non-live", func() {
+			Eventually(felixLiveness, "10s", "100ms").Should(BeGood())
+			Eventually(felixLiveness, "30s", "100ms").Should(BeBad())
+			Consistently(felixLiveness, "30s", "100ms").Should(BeBad())
 		})
 	})
 
-	Describe("after replacing iptables with a slow version, with per-node config", func() {
+	Describe("with Felix and Typha running", func() {
 		BeforeEach(func() {
-			// We need to delete the file first since it's a symlink and "docker cp"
-			// follows the link and overwrites the wrong file if we don't.
-			err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
-			Expect(err).NotTo(HaveOccurred())
-
-			// Copy in the nobbled iptables command.
-			err = felixContainer.CopyFileIntoContainer("slow-iptables-restore",
-				"/sbin/iptables-restore")
-			Expect(err).NotTo(HaveOccurred())
-			// Make it executable.
-			err = felixContainer.RunInContainer("chmod", "+x", "/sbin/iptables-restore")
-			Expect(err).NotTo(HaveOccurred())
-
-			// Insert per-node config.  This will trigger felix to start up.
-			createPerNodeConfig()
-		})
-		AfterEach(removePerNodeConfig)
-
-		It("should delay readiness", func() {
-			Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
-			Eventually(felixReady, "10s", "100ms").Should(BeGood())
-			Consistently(felixReady, "20s", "1s").Should(BeGood())
+			startTypha(k8sAPIEndpoint)
+			startFelix(typhaContainer.IP+":5473", "", "")
 		})
 
-		It("should become live as normal", func() {
-			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
-			Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+		AfterEach(func() {
+			felixContainer.Stop()
+			typhaContainer.Stop()
+		})
+
+		describeCommonFelixTests()
+
+		It("typha should report ready", func() {
+			Eventually(typhaReady, "5s", "100ms").Should(BeGood())
+			Consistently(typhaReady, "30s", "1s").Should(BeGood())
+		})
+
+		It("typha should report live", func() {
+			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
+			Consistently(typhaLiveness, "30s", "1s").Should(BeGood())
+		})
+	})
+
+	Describe("with typha connected to bad API endpoint", func() {
+		BeforeEach(func() {
+			startTypha(badK8sAPIEndpoint)
+		})
+
+		AfterEach(func() {
+			typhaContainer.Stop()
+		})
+
+		It("typha should not report ready", func() {
+			Consistently(typhaReady, "30s", "1s").ShouldNot(BeGood())
+		})
+
+		It("typha should report live", func() {
+			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
+			Consistently(typhaLiveness, "30s", "1s").Should(BeGood())
 		})
 	})
 })
