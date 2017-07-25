@@ -12,13 +12,15 @@ Make sure you've read the [Calico AWS reference guide][aws-reference] for detail
 **[Heptio AWS Quickstart][heptio]** uses kubeadm and CloudFormation to build Kubernetes clusters on AWS using Calico
 for networking and network policy enforcement.
 
-
 **[Kops][kops]** is a popular Kubernetes project for launching production-ready clusters on AWS,
 as well as other public and private cloud environments.
 
+**[CoreOS Kubernetes][coreos]** documentation to learn how to install, run and use Kubernetes on CoreOS Container Linux on AWS.
 
-**[kube-aws][kube-aws]** is a command-line tool by CoreOS to create, update, and destroy production-ready
-container-linux based Kubernetes clusters on AWS.
+**[Kismatic Enterprise Toolkit][ket]** Fully-automated, production-grade Kubernetes operations on AWS and other clouds.
+
+**[StackPointCloud][stackpoint]** lets you deploy a Kubernetes cluster with Calico to AWS in 3 steps using a web-based interface.
+
 
 #### More installation options
 
@@ -27,7 +29,9 @@ on AWS using one of our [self-hosted manifests][self-hosted], or by [integrating
 
 [heptio]: https://s3.amazonaws.com/quickstart-reference/heptio/latest/doc/heptio-kubernetes-on-the-aws-cloud.pdf
 [kops]: https://github.com/kubernetes/kops/blob/master/docs/networking.md#calico-example-for-cni-and-network-policy
-[kube-aws]: https://github.com/coreos/kube-aws/#getting-started
+[ket]: https://apprenda.com/kismatic/
+[stackpoint]: https://stackpoint.io/#/
+[coreos]: https://coreos.com/kubernetes/docs/latest/
 
 [self-hosted]: hosted
 [integration-guide]: integration
