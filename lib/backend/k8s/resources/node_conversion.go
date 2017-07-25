@@ -35,7 +35,7 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 	calicoNode := model.Node{}
 	calicoNode.Labels = node.Labels
 	annotations := node.ObjectMeta.Annotations
-	cidrString, ok := annotations["projectcalico.org/IPv4Address"]
+	cidrString, ok := annotations[nodeBgpIpv4CidrAnnotation]
 	if ok {
 		ip, cidr, err := net.ParseCIDR(cidrString)
 		if err != nil {
@@ -47,7 +47,7 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 		calicoNode.BGPIPv4Net = cidr
 	}
 
-	asnString, ok := annotations["projectcalico.org/ASNumber"]
+	asnString, ok := annotations[nodeBgpAsnAnnotation]
 	if ok {
 		asn, err := numorstring.ASNumberFromString(asnString)
 		if err != nil {
@@ -70,14 +70,16 @@ func mergeCalicoK8sNode(calicoNode *model.Node, k8sNode *kapiv1.Node) (*kapiv1.N
 	if calicoNode.BGPIPv4Net != nil {
 		subnet, _ := calicoNode.BGPIPv4Net.Mask.Size()
 		ipCidr := fmt.Sprintf("%s/%d", calicoNode.BGPIPv4Addr.String(), subnet)
-		k8sNode.Annotations["projectcalico.org/IPv4Address"] = ipCidr
+		k8sNode.Annotations[nodeBgpIpv4CidrAnnotation] = ipCidr
+	} else {
+		delete(k8sNode.Annotations, nodeBgpIpv4CidrAnnotation)
 	}
 
 	// Don't set the ASNumber if it is nil, and ensure it does not exist in k8s.
 	if calicoNode.BGPASNumber != nil {
-		k8sNode.Annotations["projectcalico.org/ASNumber"] = calicoNode.BGPASNumber.String()
+		k8sNode.Annotations[nodeBgpAsnAnnotation] = calicoNode.BGPASNumber.String()
 	} else {
-		delete(k8sNode.Annotations, "projectcalico.org/ASNumber")
+		delete(k8sNode.Annotations, nodeBgpAsnAnnotation)
 	}
 
 	return k8sNode, nil
