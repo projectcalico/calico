@@ -1,0 +1,3 @@
+#!/bin/sh
+sleep 20
+exec xtables-multi iptables-restore "$@"

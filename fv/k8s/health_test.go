@@ -35,13 +35,14 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 
-	"github.com/projectcalico/libcalico-go/lib/health"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/pkg/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/rest"
+
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 type EnvConfig struct {
@@ -185,7 +186,7 @@ var _ = BeforeSuite(func() {
 	for {
 		k8sClient, err = kubernetes.NewForConfig(&rest.Config{
 			Transport: insecureTransport,
-			Host:     "https://" + apiServerContainer.IP + ":6443",
+			Host:      "https://" + apiServerContainer.IP + ":6443",
 		})
 		if err == nil {
 			break
@@ -200,7 +201,7 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("with Felix running", func() {
 	var felixContainer *Container
-	var felixReady func() int
+	var felixReady, felixLiveness func() int
 
 	BeforeEach(func() {
 		var err error
@@ -223,32 +224,70 @@ var _ = Describe("with Felix running", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		felixReady = getHealthStatus(felixContainer.IP, "9099", "readiness")
+		felixLiveness = getHealthStatus(felixContainer.IP, "9099", "liveness")
 	})
 
 	Describe("with no per-node config in datastore", func() {
-		It("Should become ready", func() {
+		It("should not open port due to lack of config", func() {
 			// With no config, Felix won't even open the socket.
 			Consistently(felixReady, "10s", "1s").Should(BeErr())
 		})
 	})
 
-	Describe("with per-node config in datastore", func() {
-		BeforeEach(func() {
-			// Make a k8s Node.
-			_, err := k8sClient.Nodes().Create(&v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: felixContainer.Hostname,
-				},
-				Spec: v1.NodeSpec{
+	createPerNodeConfig := func() {
+		// Make a k8s Node using the hostname of Felix's container.
+		_, err := k8sClient.Nodes().Create(&v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: felixContainer.Hostname,
+			},
+			Spec: v1.NodeSpec{},
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
 
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
+	removePerNodeConfig := func() {
+		err := k8sClient.Nodes().Delete(felixContainer.Hostname, nil)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	Describe("with per-node config in datastore", func() {
+		BeforeEach(createPerNodeConfig)
+		AfterEach(removePerNodeConfig)
+
+		It("should become ready and stay ready", func() {
+			Eventually(felixReady, "5s", "100ms").Should(BeGood())
+			Consistently(felixReady, "30s", "1s").Should(BeGood())
 		})
 
-		It("Should become ready", func() {
+		It("should become live and stay live", func() {
+			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
+			Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+		})
+	})
+
+	Describe("after replacing iptables with a slow version, with per-node config", func() {
+		BeforeEach(func() {
+			// Replace iptables before installing the config so that we affect
+			// the first dataplane update.
+			err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
+			Expect(err).NotTo(HaveOccurred())
+			err = felixContainer.CopyFileIntoContainer("slow-iptables-restore", "/sbin/iptables-restore")
+			Expect(err).NotTo(HaveOccurred())
+
+			createPerNodeConfig()
+		})
+		AfterEach(removePerNodeConfig)
+
+		It("should become unready then ready", func() {
+			Eventually(felixReady, "5s", "100ms").Should(BeBad())
+			Consistently(felixReady, "10s", "100ms").Should(BeBad())
 			Eventually(felixReady, "10s", "100ms").Should(BeGood())
-			Consistently(felixReady, "30s", "1s").Should(BeGood())
+			Consistently(felixReady, "20s", "1s").Should(BeGood())
+		})
+
+		It("should become live quickly", func() {
+			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
+			Consistently(felixLiveness, "30s", "1s").Should(BeGood())
 		})
 	})
 
@@ -258,11 +297,11 @@ var _ = Describe("with Felix running", func() {
 })
 
 type Container struct {
-	Name    string
-	Cmd     *exec.Cmd
-	IP      string
+	Name     string
+	Cmd      *exec.Cmd
+	IP       string
 	Hostname string
-	stopped chan struct{}
+	stopped  chan struct{}
 }
 
 func NewContainer(nameStem string, dockerRunArgs ...string) (*Container, error) {
@@ -293,17 +332,22 @@ func NewContainer(nameStem string, dockerRunArgs ...string) (*Container, error) 
 	}()
 	waitForContainer(name, stoppedChan)
 	return &Container{
-		Name:    name,
-		Cmd:     cmd,
-		stopped: stoppedChan,
-		IP:      getContainerIP(name),
-		Hostname:      name,
+		Name:     name,
+		Cmd:      cmd,
+		stopped:  stoppedChan,
+		IP:       getContainerIP(name),
+		Hostname: name,
 	}, nil
 }
 
 func (c *Container) RunInContainer(args ...string) error {
 	dockerArgs := append([]string{"exec", c.Name}, args...)
 	cmd := exec.Command("docker", dockerArgs...)
+	return cmd.Run()
+}
+
+func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error {
+	cmd := exec.Command("docker", "cp", hostPath, c.Name+":"+containerPath)
 	return cmd.Run()
 }
 
@@ -387,6 +431,7 @@ func command(name string, args ...string) *exec.Cmd {
 }
 
 const statusErr = -1
+
 func getHealthStatus(ip, port, endpoint string) func() int {
 	return func() int {
 		resp, err := http.Get("http://" + ip + ":" + port + "/" + endpoint)
