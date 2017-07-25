@@ -32,7 +32,7 @@ The full list of parameters which can be set is as follows.
 | PrometheusMetricsPort (FELIX_PROMETHEUSMETRICSPORT)                      | Experimental: TCP port that the Prometheus metrics server should bind to.  [Default: `9091`]                                                                                                     | int                                     |
 | PrometheusGoMetricsEnabled (FELIX_PROMETHEUSGOMETRICSENABLED)            | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`]   | boolean                                 |
 | PrometheusProcessMetricsEnabled (FELIX_PROMETHEUSPROCESSMETRICSENABLED)  | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`]      | boolean                                 |
-| UsageReportingEnabled (FELIX_USAGEREPORTINGENABLED)                      | Reports anonymous Calico version number and cluster size to projectcalico.org.  Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: `true`] | boolean    |
+| UsageReportingEnabled (FELIX_USAGEREPORTINGENABLED)                      | Reports anonymous Calico version number and cluster size to projectcalico.org.  Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: `true`] | boolean |
 | FailsafeInboundHostPorts (FELIX_FAILSAFEINBOUNDHOSTPORTS)                | Comma-delimited list of UDP/TCP ports that Felix will allow incoming traffic to host endpoints on irrespective of the security policy.  This is useful to avoid accidently cutting off a host with incorrect configuration.  Each port should be specified as `tcp:<port-number>` or `udp:<port-number>`.  For back-compatibility, if the protocol is not specified, it defaults to "tcp".  To disable all inbound host ports, use the value `none`.  The default value allows ssh access and DHCP. [Default: `tcp:22, udp:68`] | string                               |
 | FailsafeOutboundHostPorts (FELIX_FAILSAFEOUTBOUNDHOSTPORTS)              | Comma-delimited list of UDP/TCP ports that Felix will allow outgoing traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration.  Each port should be specified as `tcp:<port-number>` or `udp:<port-number>`.  For back-compatibility, if the protocol is not specified, it defaults to "tcp".  To disable all outbound host ports, use the value `none`.  The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd as well as allowing DHCP and DNS. [Default: `tcp:2379, tcp:2380, tcp:4001, tcp:7001, udp:53, udp:67`]  | string |
 | ReportingIntervalSecs (FELIX_REPORTINGINTERVALSECS)                      | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments. [Default: `30`]                                                       | int                                     |
@@ -58,7 +58,7 @@ The full list of parameters which can be set is as follows.
 
 #### iptables dataplane configuration
 
-| Setting                                                                       | Description                              | Schema                                  |
+| Setting (Environment variable)                                                | Description                              | Schema                                  |
 | ----------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------- |
 | DefaultEndpointToHostAction (FELIX_DEFAULTENDPOINTTOHOSTACTION)               | This parameter controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy).  By default Calico blocks traffic from workload endpoints to the host itself with an iptables "DROP" action. If you want to allow some or all traffic from endpoint to host, set this parameter to `RETURN` or `ACCEPT`.  Use `RETURN` if you have your own rules in the iptables "INPUT" chain; Calico will insert its rules at the top of that chain, then "RETURN" packets to the "INPUT" chain once it has completed processing workload endpoint egress policy.  Use `ACCEPT` to unconditionally accept packets from workloads after processing workload endpoint egress policy. [Default: `DROP`] | DROP, RETURN, ACCEPT (case insensitive) |
 | IptablesAllowAction (FELIX_IPTABLESALLOWACTION)                               | This parameter controls what happens to traffic that is accepted by a Felix policy chain. The default will immediately ACCEPT the traffic. Use RETURN to punt the traffic back up to the system chains for further processing. [Default: `ACCEPT`]  | ACCEPT, RETURN (case insensitive) |
@@ -77,16 +77,16 @@ The full list of parameters which can be set is as follows.
 
 #### OpenStack specific configuration
 
-| Setting                             | Description                              | Schema                                  |
-| ----------------------------------- | ---------------------------------------- | --------------------------------------- |
+| Setting (Environment variable)      | Description                              | Schema                                  |
+| ------------------------------------|----------------------------------------- | --------------------------------------- |
 | MetadataAddr (FELIX_METADATAADDR)   | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none`  (case insensitive) means that Felix should not set up any NAT rule for the metadata path. [Default: `127.0.0.1`]  | IPv4, hostname, none |
 | MetadataPort (FELIX_METADATAPORT)   | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed [Default: `8775`].  | int |
 
 #### Bare metal specific configuration
 
-| Setting                             | Description                              | Schema                                  |
-| ----------------------------------- | ---------------------------------------- | --------------------------------------- |
-| InterfacePrefix (FELIX_INTERFACEPREFIX) | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. [Default: `cali`] | string         |
+| Setting (Environment variable)          | Description                              | Schema                                  |
+| --------------------------------------- | ---------------------------------------- | --------------------------------------- |
+| InterfacePrefix (FELIX_INTERFACEPREFIX) | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. [Default: `cali`] | string |
 
 Environment variables
 ---------------------
