@@ -8,11 +8,11 @@ This mode uses the Kubernetes API as the datastore.
 Note that this feature currently comes with a number of limitations, namely:
 
 - It does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
-- It does not yet support the full set of `calicoctl` commands.
-- It does not yet support the full set of calico/node options (such as IP autodiscovery).
-- Calico networking support is in Beta and has limited configuration options:
-  -  it only supports a full BGP node-to-node mesh
-  -  it does not yet support BGP peer configuration.
+- It does not yet support per-node low-level Felix configuration - this must be handled using the Felix environment variables
+  passed into the `calico/node` container (see [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration)).
+- Calico networking support is in Beta:
+  -  Control of the node-to-node mesh, default AS Number and all BGP peering configuration should
+     be configured using `calicoctl`.
 
 ## Requirements
 
@@ -45,10 +45,10 @@ Ensure you have a cluster which meets the above requirements.  There may be addi
 ### 1. Calico policy with Calico networking (Beta)
 
 With Kubernetes as the Calico datastore, Calico has Beta support for Calico networking.  This provides BGP-based
-networking with a full node-to-node mesh.  It is not currently possible to configure the Calico BGP network to peer with
-other routers - future releases of Calico are expected to bring feature parity with the etcd-backed Calico.
+networking with a full node-to-node mesh and/or explicit configuration of peers.  
 
-To install Calico with Calico networking, run one of the following commands based on your Kubernetes version:
+To install Calico with Calico networking, run one of the commands below based on your Kubernetes version.
+This will install Calico and will initially create a full node-to-node mesh.
 
 For **Kubernetes 1.6+** clusters:
 
@@ -74,6 +74,14 @@ pod-network-cidr matching the default pool of `192.168.0.0/16`, as follows:
 ```
 kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
+
+#### Configuring your BGP topology
+
+After installing Calico, you may update the peering configuration using `calicoctl`.  For example, 
+you may wish to turn off the full note-to-node mesh and configure a pair of redundant route reflectors.
+
+See the [Configuring BGP Peers guide]({{site.baseurl}}/{{page.version}}/usage/configuration/bgp) for details on using `calicoctl`
+to configure your topology.
 
 ### 2. Calico policy-only with user-supplied networking
 
