@@ -265,27 +265,44 @@ var _ = Describe("with Felix running", func() {
 		})
 	})
 
-	Describe("after replacing iptables with a slow version, with per-node config", func() {
+	Describe("after removing iptables-restore", func() {
 		BeforeEach(func() {
-			// Replace iptables before installing the config so that we affect
-			// the first dataplane update.
+			// Delete iptables-restore in order to make the first apply() fail.
 			err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
-			Expect(err).NotTo(HaveOccurred())
-			err = felixContainer.CopyFileIntoContainer("slow-iptables-restore", "/sbin/iptables-restore")
 			Expect(err).NotTo(HaveOccurred())
 
 			createPerNodeConfig()
 		})
 		AfterEach(removePerNodeConfig)
 
-		It("should become unready then ready", func() {
-			Eventually(felixReady, "5s", "100ms").Should(BeBad())
-			Consistently(felixReady, "10s", "100ms").Should(BeBad())
+		It("should never be ready, then die", func() {
+			Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
+			Eventually(felixContainer.Stopped, "5s").Should(BeTrue())
+		})
+	})
+
+	Describe("after replacing iptables with a slow version, with per-node config", func() {
+		BeforeEach(func() {
+			// Replace iptables before installing the config so that we affect
+			// the first dataplane update.
+			err := felixContainer.RunInContainer("rm", "/sbin/iptables-restore")
+			Expect(err).NotTo(HaveOccurred())
+			err = felixContainer.CopyFileIntoContainer("slow-iptables-restore",
+				"/sbin/iptables-restore")
+			Expect(err).NotTo(HaveOccurred())
+			err = felixContainer.RunInContainer("chmod", "+x", "/sbin/iptables-restore")
+			Expect(err).NotTo(HaveOccurred())
+			createPerNodeConfig()
+		})
+		AfterEach(removePerNodeConfig)
+
+		It("should delay readiness", func() {
+			Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
 			Eventually(felixReady, "10s", "100ms").Should(BeGood())
 			Consistently(felixReady, "20s", "1s").Should(BeGood())
 		})
 
-		It("should become live quickly", func() {
+		It("should become live as normal", func() {
 			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
 			Consistently(felixLiveness, "30s", "1s").Should(BeGood())
 		})
@@ -387,6 +404,15 @@ func (c *Container) Stop() {
 		c.Cmd.Process.Kill()
 	case <-c.stopped:
 		timeout.Stop()
+	}
+}
+
+func (c *Container) Stopped() bool {
+	select {
+	case <-c.stopped:
+		return true
+	default:
+		return false
 	}
 }
 
