@@ -10,7 +10,6 @@ Source0:        felix-%{version}.tar.gz
 Source1:        calico-felix.logrotate
 Source35:       calico-felix.init
 Source45:       calico-felix.service
-BuildArch:      x86_64
 
 
 %define _unpackaged_files_terminate_build 0
