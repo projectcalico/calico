@@ -134,6 +134,9 @@ class TestNodeStatusResilience(TestBase):
                     new_workload = hosts[index].create_workload(new_workload, network=network1)
                     _log.debug("host: %s and workload: %s", hosts[index].name, new_workload.name)
 
+                    # Wait for the workload to be networked.
+                    self.assert_true(new_workload.check_can_ping(workload_host3.ip, retries=10))
+
                     # Check connectivity in both directions
                     self.assert_ip_connectivity(workload_list=[workload_host1,
                                                                workload_host2,
