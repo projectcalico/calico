@@ -134,10 +134,15 @@ const (
 	healthInterval = 10 * time.Second
 )
 
+type healthAggregator interface {
+	RegisterReporter(name string, reports *health.HealthReport, timeout time.Duration)
+	Report(name string, report *health.HealthReport)
+}
+
 type Config struct {
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
-	HealthAggregator *health.HealthAggregator
+	HealthAggregator healthAggregator
 }
 
 func (config *Config) ApplyDefaults() {
@@ -232,6 +237,8 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 			log.WithField("status", obj).Info("Received status update message from datastore.")
 			c.pendingStatus = obj
 			batchSize++
+			// Report health immediately in case our sync status has changed.
+			c.reportHealth()
 		case []api.Update:
 			log.WithField("numUpdates", len(obj)).Debug("Received updates.")
 			c.pendingUpdates = append(c.pendingUpdates, obj...)
