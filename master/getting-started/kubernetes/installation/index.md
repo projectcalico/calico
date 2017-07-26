@@ -34,6 +34,9 @@ to integrate Calico into your own installation or deployment scripts.
 ## Third Party Integrations
 
 A number of popular Kubernetes installers use Calico to provide networking and/or network policy.
-Here are a few, listed alphabetically.
 
-- [Container Linux by CoreOS](https://coreos.com/kubernetes/docs/latest/)
+You can find some of them here, organized by cloud provider.
+
+- [Amazon Web Services](aws)
+- [Google Compute Engine](gce)
+- [Microsoft Azure](azure)

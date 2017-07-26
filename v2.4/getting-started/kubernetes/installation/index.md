@@ -34,12 +34,9 @@ to integrate Calico into your own installation or deployment scripts.
 ## Third Party Integrations
 
 A number of popular Kubernetes installers use Calico to provide networking and/or network policy.
-Here are a few, listed alphabetically.
 
-- [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
-- [Container Linux by CoreOS](https://coreos.com/kubernetes/docs/latest/)
-- [GCE](http://kubernetes.io/docs/getting-started-guides/network-policy/calico/)
-- [Gravitational Telekube](http://gravitational.com/blog/gravitational-tigera-partnership/)
-- [Kargo](https://github.com/kubernetes-incubator/kargo)
-- [Kops](https://github.com/kubernetes/kops)
-- [StackPointCloud](https://stackpoint.io)
+You can find some of them here, organized by cloud provider.
+
+- [Amazon Web Services](aws)
+- [Google Compute Engine](gce)
+- [Microsoft Azure](azure)
