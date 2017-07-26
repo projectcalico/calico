@@ -331,7 +331,7 @@ bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go test -c -o $@ ./k8sfv && \
-		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program" \
+		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
 
