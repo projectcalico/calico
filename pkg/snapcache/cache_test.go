@@ -28,8 +28,47 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
+
+type healthRecord struct {
+	time time.Time
+	health.HealthReport
+}
+
+type healthRecorder struct {
+	lock    sync.Mutex
+	reports []healthRecord
+}
+
+func (r *healthRecorder) RegisterReporter(name string, reports *health.HealthReport, timeout time.Duration) {
+
+}
+
+func (r *healthRecorder) Report(name string, report *health.HealthReport) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.reports = append(r.reports, healthRecord{
+		time:         time.Now(),
+		HealthReport: *report,
+	})
+}
+
+func (r *healthRecorder) NumReports() int {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	return len(r.reports)
+}
+
+func (r *healthRecorder) LastReport() (rep health.HealthReport) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if len(r.reports) > 0 {
+		rep = r.reports[len(r.reports)-1].HealthReport
+	}
+	return
+}
 
 var _ = Describe("Snapshot cache FV tests", func() {
 	var cacheConfig snapcache.Config
@@ -37,11 +76,15 @@ var _ = Describe("Snapshot cache FV tests", func() {
 	var cxt context.Context
 	var cancel context.CancelFunc
 	var wg sync.WaitGroup
+	var mockHealth *healthRecorder
+
 	BeforeEach(func() {
 		log.SetLevel(log.InfoLevel)
+		mockHealth = &healthRecorder{}
 		cacheConfig = snapcache.Config{
-			MaxBatchSize:   10,
-			WakeUpInterval: 10 * time.Second,
+			MaxBatchSize:     10,
+			WakeUpInterval:   10 * time.Second,
+			HealthAggregator: mockHealth,
 		}
 		cache = snapcache.New(cacheConfig)
 		cxt, cancel = context.WithCancel(context.Background())
@@ -158,6 +201,28 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		// Its snapshot should be empty.
 		Expect(crumb.KVs.Size()).To(BeZero())
 		Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(deletionUpdate))
+	})
+
+	It("should report health eagerly", func() {
+		// Force 4 updates.
+		cache.OnStatusUpdated(api.InSync)
+		cache.OnStatusUpdated(api.ResyncInProgress)
+		cache.OnStatusUpdated(api.InSync)
+		cache.OnStatusUpdated(api.ResyncInProgress)
+		// Expect 5 updates in total because there's an eager start-of-day update.
+		Eventually(mockHealth.NumReports).Should(BeNumerically("==", 5))
+	})
+
+	It("should report not-ready before in sync", func() {
+		// Wait for start-of-day update.
+		Eventually(mockHealth.LastReport).Should(Equal(health.HealthReport{Live: true, Ready: false}))
+		// Shouldn't get any changes after that.
+		Consistently(mockHealth.LastReport).Should(Equal(health.HealthReport{Live: true, Ready: false}))
+	})
+
+	It("should report ready when in sync", func() {
+		cache.OnStatusUpdated(api.InSync)
+		Eventually(mockHealth.LastReport).Should(Equal(health.HealthReport{Live: true, Ready: true}))
 	})
 
 	generateUpdates := func(num int) []api.Update {
