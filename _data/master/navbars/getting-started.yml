@@ -29,6 +29,8 @@ toc:
       path: /getting-started/kubernetes/installation/aws
     - title: GCE
       path: /getting-started/kubernetes/installation/gce
+    - title: Azure 
+      path: /getting-started/kubernetes/installation/azure
     - title: 'Vagrant/VirtualBox: CoreOS'
       path: /getting-started/kubernetes/installation/vagrant/
   - title: Tutorials
