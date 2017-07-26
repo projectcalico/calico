@@ -19,10 +19,16 @@ type Resource interface {
 	GetTypeMetadata() TypeMetadata
 }
 
-// All singular resources (all resources not including lists) implement the ResourceObject interface
+// All singular resources (all resources not including lists) implement the ResourceObject interface.
 type ResourceObject interface {
 	Resource
+
+	// GetResourceMetadata returns the ResourceMetadata for each Resource Object.
 	GetResourceMetadata() ResourceMetadata
+
+	// String returns a human-readable string representation of a ResourceObject which
+	// includes the important ID fields for a ResourceObject.
+	String() string
 }
 
 // Define available versions.
@@ -46,6 +52,7 @@ func (md TypeMetadata) GetTypeMetadata() TypeMetadata {
 
 // All resource Metadata (not lists) implement the ResourceMetadata interface.
 type ResourceMetadata interface {
+	// GetObjectMetadata returns the ObjectMetadata instance of the ResourceMetadata.
 	GetObjectMetadata() ObjectMetadata
 }
 

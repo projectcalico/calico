@@ -15,6 +15,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
@@ -29,6 +31,12 @@ type HostEndpoint struct {
 
 func (t HostEndpoint) GetResourceMetadata() unversioned.ResourceMetadata {
 	return t.Metadata
+}
+
+// String() returns the human-readable string representation of a HostEndpoint instance
+// which is defined by its Node and Name.
+func (t HostEndpoint) String() string {
+	return fmt.Sprintf("HostEndpoint(Node=%s, Name=%s)", t.Metadata.Node, t.Metadata.Name)
 }
 
 // HostEndpointMetadata contains the Metadata for a HostEndpoint resource.

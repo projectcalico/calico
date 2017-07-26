@@ -15,6 +15,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -35,6 +37,15 @@ type BGPPeer struct {
 
 func (t BGPPeer) GetResourceMetadata() unversioned.ResourceMetadata {
 	return t.Metadata
+}
+
+// String() returns the human-readable string representation of a BGPPeer instance
+// which is defined by its PeerIP and Scope.
+func (t BGPPeer) String() string {
+	if t.Metadata.Scope == scope.Node && t.Metadata.Node == "" {
+		return fmt.Sprintf("BGPPeer(PeerIP=%s, Scope=%s)", t.Metadata.PeerIP.IP.String(), t.Metadata.Scope)
+	}
+	return fmt.Sprintf("BGPPeer(PeerIP=%s, Scope=%s, Node=%s)", t.Metadata.PeerIP.IP.String(), t.Metadata.Scope, t.Metadata.Node)
 }
 
 // BGPPeerMetadata contains the metadata for a BGPPeer resource.

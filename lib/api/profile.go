@@ -15,6 +15,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 )
 
@@ -31,6 +33,12 @@ type Profile struct {
 
 func (t Profile) GetResourceMetadata() unversioned.ResourceMetadata {
 	return t.Metadata
+}
+
+// String() returns the human-readable string representation of a Profile instance
+// which is defined by its Name.
+func (t Profile) String() string {
+	return fmt.Sprintf("Profile(Name=%s)", t.Metadata.Name)
 }
 
 // ProfileMetadata contains the metadata for a security Profile resource.
