@@ -20,14 +20,12 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-
 	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
-
-	"time"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
@@ -43,6 +41,7 @@ var (
 	UpdateFailed    = errors.New("netlink update operation failed")
 	IfaceNotPresent = errors.New("interface not present")
 	IfaceDown       = errors.New("interface down")
+	IfaceGrace      = errors.New("interface in cleanup grace period")
 
 	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
 
@@ -95,7 +94,7 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{conntrack: conntrack.New()}, realTime{})
 }
 
-// NewWithShims is a test constructor, which allows netlink to be replaced by a shim.
+// NewWithShims is a test constructor, which allows netlink, arp and time to be replaced by shims.
 func NewWithShims(interfacePrefixes []string, ipVersion uint8, dpShim dataplaneIface, timeShim timeIface) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
@@ -187,11 +186,15 @@ func (r *RouteTable) Apply() error {
 			}
 		}
 		// Clean up first-seen timestamps for old interfaces.
-		for name, t := range r.ifaceNameToFirstSeen {
+		// Resyncs happen periodically, so the amount of memory leaked to old
+		// first seen timestamps is small.
+		for name, firstSeen := range r.ifaceNameToFirstSeen {
 			if r.dirtyIfaces.Contains(name) {
+				// Interface still present.
 				continue
 			}
-			if time.Since(t) < cleanupGracePeriod {
+			if time.Since(firstSeen) < cleanupGracePeriod {
+				// Interface first seen recently.
 				continue
 			}
 			log.WithField("ifaceName", name).Debug(
@@ -203,6 +206,7 @@ func (r *RouteTable) Apply() error {
 		listIfaceTime.Observe(monotime.Since(listStartTime).Seconds())
 	}
 
+	graceIfaces := 0
 	r.dirtyIfaces.Iter(func(item interface{}) error {
 		retries := 2
 		ifaceName := item.(string)
@@ -215,6 +219,10 @@ func (r *RouteTable) Apply() error {
 			} else if err == IfaceDown {
 				logCxt.Info("Interface down, will retry if it goes up.")
 				break
+			} else if err == IfaceGrace {
+				logCxt.Info("Interface in cleanup grace period, will retry after.")
+				graceIfaces++
+				return nil
 			} else if err != nil {
 				logCxt.WithError(err).Warn("Failed to syncronise routes.")
 				retries--
@@ -234,7 +242,10 @@ func (r *RouteTable) Apply() error {
 
 	r.cleanUpPendingConntrackDeletions()
 
-	if r.dirtyIfaces.Len() > 0 {
+	// Don't return a failure if there are only interfaces in the cleanup grace period.
+	// They'll be retried on the next invocation (the route refresh timer), and we mustn't
+	// count them as Sync Errors.
+	if r.dirtyIfaces.Len() > graceIfaces {
 		r.logCxt.Warn("Some interfaces still out-of sync.")
 		r.inSync = false
 		return UpdateFailed
@@ -252,16 +263,18 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	logCxt.Debug("Syncing interface routes")
 
 	// In order to allow Calico to run without Felix in an emergency, the CNI plugin pre-adds
-	// the route to the interface.  To avoid flapping the route, we give each interface a
-	// grace period after we first see it before we remove routes that we're not expecting.
-	// Check whether the grace period applies to this interface.
+	// the route to the interface.  To avoid flapping the route when Felix sees the interface
+	// before learning about the endpoint, we give each interface a grace period after we first
+	// see it before we remove routes that we're not expecting.  Check whether the grace period
+	// applies to this interface.
 	inGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < cleanupGracePeriod
+	leaveDirty := false
 
 	// If this is a modify or delete, grab a copy of the existing targets so we can clean up
 	// conntrack entries even if the routes have been removed.  We'll remove any still-required
 	// CIDRs from this set below.  We don't apply the grace period to this calculation because
 	// it only removes routes that the datamodel previously said were there and then were
-	// removed.  In that case, we know we're in sync.
+	// removed.  In that case, we know we're up to date.
 	oldCIDRs := set.New()
 	if updatedTargets, ok := r.pendingIfaceNameToTargets[ifaceName]; ok {
 		logCxt.Debug("Have updated targets.")
@@ -343,7 +356,9 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			continue
 		}
 		if inGracePeriod {
+			// Don't remove routes from interfaces created recently.
 			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
+			leaveDirty = true
 			continue
 		}
 		logCxt.Info("Syncing routes: removing old route.")
@@ -394,6 +409,11 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
 		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed)
+	}
+
+	if leaveDirty {
+		// Superfluous routes on a recently created interface.  We'll recheck later.
+		return IfaceGrace
 	}
 
 	return nil

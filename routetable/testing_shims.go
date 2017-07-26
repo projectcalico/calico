@@ -17,10 +17,9 @@ package routetable
 import (
 	"net"
 	"os/exec"
+	"time"
 
 	. "github.com/vishvananda/netlink"
-
-	"time"
 
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ip"
@@ -73,7 +72,7 @@ func (r realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 
 var _ dataplaneIface = realDataplane{}
 
-// timeIface is our shim interface the time package.
+// timeIface is our shim interface to the time package.
 type timeIface interface {
 	Now() time.Time
 	Since(t time.Time) time.Duration

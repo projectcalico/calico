@@ -34,12 +34,6 @@ import (
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/testutils"
 	"github.com/projectcalico/libcalico-go/lib/set"
-
-	"strings"
-
-	"time"
-
-	"github.com/projectcalico/felix/ifacemonitor"
 )
 
 var (
@@ -73,10 +67,10 @@ var _ = Describe("RouteTable", func() {
 		Expect(err).NotTo(HaveOccurred())
 		t = &mockTime{
 			currentTime: startTime,
-			// Setting a large auto-increment effectively disables the grace period
-			// for these tests.
-			autoIncrement: 11 * time.Second,
 		}
+		// Setting an auto-increment greater than the route cleanup delay effectively
+		// disables the grace period for these tests.
+		t.setAutoIncrement(11 * time.Second)
 		rt = NewWithShims([]string{"cali"}, 4, dataplane, t)
 	})
 
@@ -116,6 +110,28 @@ var _ = Describe("RouteTable", func() {
 				Gw:        net.ParseIP("12.0.0.1"),
 			}
 			dataplane.addMockRoute(&gatewayRoute)
+		})
+		It("should wait for the route cleanup delay", func() {
+			t.setAutoIncrement(0 * time.Second)
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route, cali3Route, gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+			t.incrementTime(11 * time.Second)
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+		})
+		It("should wait for the route cleanup delay when resyncing", func() {
+			t.setAutoIncrement(0 * time.Second)
+			rt.QueueResync()
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route, cali3Route, gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+			t.incrementTime(11 * time.Second)
+			rt.QueueResync()
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 		})
 		It("should clean up only our routes", func() {
 			rt.Apply()
@@ -604,9 +620,17 @@ type mockTime struct {
 
 func (m *mockTime) Now() time.Time {
 	t := m.currentTime
-	m.currentTime = m.currentTime.Add(m.autoIncrement)
+	m.incrementTime(m.autoIncrement)
 	return t
 }
 func (m *mockTime) Since(t time.Time) time.Duration {
 	return m.Now().Sub(t)
+}
+
+func (m *mockTime) setAutoIncrement(t time.Duration) {
+	m.autoIncrement = t
+}
+
+func (m *mockTime) incrementTime(t time.Duration) {
+	m.currentTime = m.currentTime.Add(t)
 }
