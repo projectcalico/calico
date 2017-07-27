@@ -117,7 +117,6 @@ SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 grep "__KUBERNETES_SERVICE_HOST__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_HOST__/${KUBERNETES_SERVICE_HOST}/g $TMP_CONF
 grep "__KUBERNETES_SERVICE_PORT__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_PORT__/${KUBERNETES_SERVICE_PORT}/g $TMP_CONF
 sed -i s/__KUBERNETES_NODE_NAME__/${KUBERNETES_NODE_NAME:-$(hostname)}/g $TMP_CONF
-sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g $TMP_CONF
 sed -i s/__KUBECONFIG_FILENAME__/calico-kubeconfig/g $TMP_CONF
 
 # Use alternative command character "~", since these include a "/".
@@ -128,10 +127,18 @@ sed -i s~__ETCD_CA_CERT_FILE__~${CNI_CONF_ETCD_CA:-}~g $TMP_CONF
 sed -i s~__ETCD_ENDPOINTS__~${ETCD_ENDPOINTS:-}~g $TMP_CONF
 sed -i s~__LOG_LEVEL__~${LOG_LEVEL:-warn}~g $TMP_CONF
 
-# Move the temporary CNI config into place.
 FILENAME=${CNI_CONF_NAME:-10-calico.conf}
+
+# Log the config file before inserting service account token.
+# This way auth token is not visible in the logs.
+echo "CNI config: $(cat ${TMP_CONF})"
+
+sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g $TMP_CONF
+
+# Move the temporary CNI config into place.
 mv $TMP_CONF /host/etc/cni/net.d/${FILENAME}
-echo "Wrote CNI config: $(cat /host/etc/cni/net.d/${FILENAME})"
+
+echo "Created CNI config $FILENAME"
 
 # Unless told otherwise, sleep forever.
 # This prevents Kubernetes from restarting the pod repeatedly.
