@@ -45,15 +45,15 @@ See the table below for details on the etcdv2 specific environment variables.
 
 ## Complete list of etcdv2 connection configuration
 
-| Spec field      | Environment       | Description                                | Examples
-|-----------------|----------------------------------------------------------------|----------
-| datastoreType   | DATASTORE_TYPE    | Indicates the datastore to use (optional, defaults to etcdv2) | etcdv2
-| etcdEndpoints   | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional, defaults to http://127.0.0.1:2379) | http://etcd1:2379
-| etcdUsername    | ETCD_USERNAME     | Username for RBAC (optional)               | "user"
-| etcdPassword    | ETCD_PASSWORD     | Password for the given username (optional) | "password"
-| etcdKeyFile     | ETCD_KEY_FILE     | Path to the etcd key file (optional)       | /etc/calico/key.pem
-| etcdCertFile    | ETCD_CERT_FILE    | Path to the etcd client cert (optional)    | /etc/calico/cert.pem
-| etcdCACertFile  | ETCD_CA_CERT_FILE | Path to the etcd CA file (optional)        | /etc/calico/ca.pem
+| Setting (Environment variable)     | Description                                                                            | Schema
+| ---------------------------------- | -------------------------------------------------------------------------------------- | ------
+| datastoreType (DATASTORE_TYPE)     | Indicates the datastore to use [Default: `etcdv2`] (optional)                          | kubernetes, etcdv2
+| etcdEndpoints (ETCD_ENDPOINTS)     | A comma separated list of etcd endpoints [Default: `http://127.0.0.1:2379]` (optional) | string
+| etcdUsername (ETCD_USERNAME)       | Username for RBAC, e.g. `user` (optional)                                              | string
+| etcdPassword (ETCD_PASSWORD)       | Password for the given username, e.g. `password` (optional)                            | string
+| etcdKeyFile (ETCD_KEY_FILE)        | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)                       | string
+| etcdCertFile (ETCD_CERT_FILE)      | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)                   | string
+| etcdCACertFile (ETCD_CA_CERT_FILE) | Path to the etcd CA file, e.g. `/etc/calico/ca.pem` (optional)                         | string
 
 > **NOTES**
 >
@@ -61,7 +61,7 @@ See the table below for details on the etcdv2 specific environment variables.
 > 2. When specifying through environment variables, the DATASTORE_TYPE environment
 >    is not required for etcdv2.
 > 3. All environment variables may also be prefixed with "CALICO_", for example
->    "CALICO_DATASTORE_TYPE" and "CALICO_END_ENDPOINTS" etc. may also be used.
+>    "CALICO_DATASTORE_TYPE" and "CALICO_ETCD_ENDPOINTS" etc. may also be used.
 >    This is useful if the non-prefixed names clash with existing environment
 >    variables defined on your system
 > 4. Previous versions of calicoctl supported ETCD_SCHEME and ETC_AUTHORITY environment

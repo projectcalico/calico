@@ -50,15 +50,15 @@ See the table below for details on the Kubernetes specific environment variables
 
 ## Complete list of Kubernetes API connection configuration
 
-| Spec field     | Environment      | Description                                                        | Examples
-|----------------|---------------------------------------------------------------------------------------|----------
-| datastoreType  | DATASTORE_TYPE   | Indicates the datastore to use (required for kubernetes as the default is etcdv2) | kubernetes
-| kubeconfig     | KUBECONFIG       | When using the kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config 
-| k8sAPIEndpoint | K8S_API_ENDPOINT | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443 
-| k8sCertFile    | K8S_CERT_FILE    | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert 
-| k8sKeyFile     | K8S_KEY_FILE     | Location of a client key for accessing the Kubernetes API.         | /path/to/key 
-| k8sCAFile      | K8S_CA_FILE      | Location of a CA for accessing the Kubernetes API.                 | /path/to/ca 
-| k8sToken       | K8S_TOKEN        | Token to be used for accessing the Kubernetes API.                 |  
+| Setting (Environment variable)    | Description                                                                                               | Schema
+| --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------
+| datastoreType (DATASTORE_TYPE)    | Indicates the datastore to use (required for kubernetes as the default is etcdv2). [Default: `etcdv2`]    | kubernetes, etcdv2
+| kubeconfig (KUBECONFIG)           | When using the kubernetes datastore, the location of a kubeconfig file to use, e.g. /path/to/kube/config. | string
+| k8sAPIEndpoint (K8S_API_ENDPOINT) | Location of the Kubernetes API. Not required if using kubeconfig. [Default: `https://kubernetes-api:443`] | string
+| k8sCertFile (K8S_CERT_FILE)       | Location of a client certificate for accessing the Kubernetes API, e.g. /path/to/cert.                    | string
+| k8sKeyFile (K8S_KEY_FILE)         | Location of a client key for accessing the Kubernetes API, e.g. /path/to/key.                             | string
+| k8sCAFile (K8S_CA_FILE)           | Location of a CA for accessing the Kubernetes API, e.g. /path/to/ca.                                      | string
+| k8sToken (K8S_TOKEN)              | Token to be used for accessing the Kubernetes API.                                                        | string
 
 > Note that all environment variables may also be prefixed with "CALICO_", for 
 > example "CALICO_DATASTORE_TYPE" and "CALICO_KUBECONFIG" etc. may also be used.
