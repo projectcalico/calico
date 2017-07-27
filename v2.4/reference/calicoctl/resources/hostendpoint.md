@@ -50,3 +50,10 @@ spec:
 | interfaceName | The name of the interface on which to apply policy.      |                             | string          |
 | expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list |
 | profiles      | The list of profiles to apply to the endpoint.           |                             | list |
+
+### Supported operations
+
+| Datastore type        | Create/Delete | Update | Get/List | Notes
++-----------------------+---------------+--------+----------+------
+| etcdv2                | Yes           | Yes    | Yes      |
+| Kubernetes API server | No            | No     | No       |

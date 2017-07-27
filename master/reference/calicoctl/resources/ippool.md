@@ -61,3 +61,11 @@ For details on configuring IP-in-IP on your deployment, please read the
 When `ipip` is enabled without `nat-outgoing` routing between Workloads and
 Hosts running Calico is asymmetric and may cause traffic to be filtered due to
 [RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
+
+
+### Supported operations
+
+| Datastore type        | Create/Delete | Update | Get/List | Notes
++-----------------------+---------------+--------+----------+------
+| etcdv2                | Yes           | Yes    | Yes      |
+| Kubernetes API server | Yes           | Yes    | Yes      |

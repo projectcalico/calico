@@ -111,3 +111,11 @@ applied action is deny.
 #### Ports
 
 {% include {{page.version}}/ports.md %}
+
+
+### Supported operations
+
+| Datastore type        | Create/Delete | Update | Get/List | Notes
++-----------------------+---------------+--------+----------+------
+| etcdv2                | Yes           | Yes    | Yes      |
+| Kubernetes API server | No            | No     | Yes      | Policy is determined from Kubernetes NetworkPolicy resources.
