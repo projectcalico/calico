@@ -115,6 +115,8 @@ spec:
             # Enable IP-in-IP within Felix.
             - name: FELIX_IPINIPENABLED
               value: "true"
+            - name: FELIX_HEALTHENABLED
+              value: "true"
             # Set based on the k8s node name.
             - name: NODENAME
               valueFrom:
@@ -128,6 +130,18 @@ spec:
           resources:
             requests:
               cpu: 250m
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 9099
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 9099
+            periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules
               name: lib-modules
