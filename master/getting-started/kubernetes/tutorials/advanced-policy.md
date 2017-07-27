@@ -12,6 +12,7 @@ in order to define more complex network policies.
 
 ### Requirements
 
+- This guide is aimed at Calico v2.4 and above, and will not work on Calico v2.3 or below.
 - This guide assumes you have a working Kubernetes cluster with Calico for policy. (See: [installation]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation) for help)
 - This guide assumes that your pods have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
@@ -37,7 +38,7 @@ kind: NetworkPolicy
 apiVersion: extensions/v1beta1
 metadata:
   name: default-deny
-  namespace: policy-demo
+  namespace: advanced-policy-demo
 spec:
   podSelector:
 EOF
@@ -69,30 +70,11 @@ $ calicoctl get profile -o wide
 NAME                          TAGS
 k8s_ns.advanced-policy-demo   k8s_ns.advanced-policy-demo
 k8s_ns.default                k8s_ns.default
+k8s_ns.kube-public            k8s_ns.kube-public 
 k8s_ns.kube-system            k8s_ns.kube-system
 ```
 
-Because we've enabled isolation on the Namespace, the profile denies all ingress
-traffic and allows all egress traffic.
-
-```
-$ calicoctl get profile k8s_ns.advanced-policy-demo -o yaml
-- apiVersion: v1
-  kind: profile
-  metadata:
-    name: k8s_ns.advanced-policy-demo
-    tags:
-    - k8s_ns.advanced-policy-demo
-  spec:
-    egress:
-    - action: allow
-      destination: {}
-      source: {}
-    ingress:
-    - action: deny
-      destination: {}
-      source: {}
-```
+Because all pods in the namespace are now selected, any traffic which is not explicitly allowed by a policy will be denied.
 
 We can see that this is the case by running another pod in the Namespace and attempting to
 access the nginx Service.
@@ -175,12 +157,8 @@ It now shows up as a [Policy]({{site.baseurl}}/{{page.version}}/reference/calico
 $ calicoctl get policy -o wide
 NAME                                ORDER   SELECTOR
 advanced-policy-demo.access-nginx   1000    calico/k8s_ns == 'advanced-policy-demo' && run == 'nginx'
-k8s-policy-no-match                 2000    has(calico/k8s_ns)
+advanced-policy-demo.default-deny   1000    calico/k8s_ns == 'advanced-policy-demo' 
 ```
-
-> **NOTE**
->
-> The `k8s-policy-no-match` policy is used to send all unmatched traffic to the corresponding per-namespace Profile.  This policy is created automatically by the calico/kube-policy-controller.
 
 After creating the policy, we can now access the nginx Service.  We also see that the pod can
 access google.com on the public internet.  This is because we have not defined any egress policy.
@@ -226,8 +204,7 @@ EOF
 Notice that we've specified an order of 500.  This means that this policy will be applied before any
 of the Kubernetes policies.
 
-We also need to create a policy which allows traffic to access kube-dns.  Let's create a policy which
-applies to the entire cluster, and allows it to access kube-dns pods in the kube-system Namespace.
+We also need to create a policy which allows traffic to access kube-dns. Let's create one now in the kube-system Namespace.
 We'll specify an order of 400 so that it takes precendent over other policies.
 
 ```
@@ -237,7 +214,7 @@ kind: policy
 metadata:
   name: advanced-policy-demo.allow-dns
 spec:
-  selector: has(calico/k8s_ns)
+  selector: calico/k8s_ns == 'advanced-policy-demo'
   order: 400
   egress:
   - action: allow
