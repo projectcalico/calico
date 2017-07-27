@@ -53,6 +53,7 @@ var (
 
 var _ = Describe("RouteTable", func() {
 	var dataplane *mockDataplane
+	var t *mockTime
 	var rt *RouteTable
 
 	BeforeEach(func() {
@@ -62,7 +63,15 @@ var _ = Describe("RouteTable", func() {
 			addedRouteKeys:   set.New(),
 			deletedRouteKeys: set.New(),
 		}
-		rt = NewWithShims([]string{"cali"}, 4, dataplane)
+		startTime, err := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+		Expect(err).NotTo(HaveOccurred())
+		t = &mockTime{
+			currentTime: startTime,
+		}
+		// Setting an auto-increment greater than the route cleanup delay effectively
+		// disables the grace period for these tests.
+		t.setAutoIncrement(11 * time.Second)
+		rt = NewWithShims([]string{"cali"}, 4, dataplane, t)
 	})
 
 	It("should be constructable", func() {
@@ -101,6 +110,28 @@ var _ = Describe("RouteTable", func() {
 				Gw:        net.ParseIP("12.0.0.1"),
 			}
 			dataplane.addMockRoute(&gatewayRoute)
+		})
+		It("should wait for the route cleanup delay", func() {
+			t.setAutoIncrement(0 * time.Second)
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route, cali3Route, gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+			t.incrementTime(11 * time.Second)
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+		})
+		It("should wait for the route cleanup delay when resyncing", func() {
+			t.setAutoIncrement(0 * time.Second)
+			rt.QueueResync()
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route, cali3Route, gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+			t.incrementTime(11 * time.Second)
+			rt.QueueResync()
+			rt.Apply()
+			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
+			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 		})
 		It("should clean up only our routes", func() {
 			rt.Apply()
@@ -580,4 +611,26 @@ func (l *mockLink) Attrs() *netlink.LinkAttrs {
 
 func (l *mockLink) Type() string {
 	return "not-implemented"
+}
+
+type mockTime struct {
+	currentTime   time.Time
+	autoIncrement time.Duration
+}
+
+func (m *mockTime) Now() time.Time {
+	t := m.currentTime
+	m.incrementTime(m.autoIncrement)
+	return t
+}
+func (m *mockTime) Since(t time.Time) time.Duration {
+	return m.Now().Sub(t)
+}
+
+func (m *mockTime) setAutoIncrement(t time.Duration) {
+	m.autoIncrement = t
+}
+
+func (m *mockTime) incrementTime(t time.Duration) {
+	m.currentTime = m.currentTime.Add(t)
 }
