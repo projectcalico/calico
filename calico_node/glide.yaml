@@ -1,9 +1,9 @@
 package: github.com/projectcalico/calico/calico_node
 import:
-- package: github.com/Sirupsen/logrus
+- package: github.com/sirupsen/logrus
   version: ^0.10.0
 - package: github.com/projectcalico/libcalico-go
-  version: ^1.5.0
+  version: 93f9e49214a678551648eb9c28ce57bc286a3169
   subpackages:
   - lib/api
   - lib/client

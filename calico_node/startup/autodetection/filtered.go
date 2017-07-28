@@ -17,8 +17,8 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	log "github.com/sirupsen/logrus"
 )
 
 // FilteredEnumeration performs basic IP and IPNetwork discovery by enumerating

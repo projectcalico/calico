@@ -17,8 +17,8 @@ import (
 	"fmt"
 	gonet "net"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	log "github.com/sirupsen/logrus"
 )
 
 // ReachDestination auto-detects the interface Network by setting up a UDP
