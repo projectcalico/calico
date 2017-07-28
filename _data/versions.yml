@@ -753,7 +753,7 @@ v2.4:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
     calico/routereflector:
-      version: v0.3.0
+      version: v0.4.0
       url: ""
 
 
@@ -799,7 +799,7 @@ v2.4:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
     calico/routereflector:
-      version: v0.3.0
+      version: v0.4.0
       url: ""
 
 
@@ -841,5 +841,5 @@ master:
       version: master
       url: ""
      calico/routereflector:
-      version: v0.3.0
+      version: v0.4.0
       url: ""
