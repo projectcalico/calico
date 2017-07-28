@@ -56,3 +56,9 @@ A BGP peer can also be added at the `node` scope, meaning only a single specifie
 node will peer with it. BGP peer resources of this nature must specify a `node` 
 to inform Calico which node this peer is targeting.
 
+### Supported operations
+
+| Datastore type        | Create/Delete | Update | Get/List | Notes
++-----------------------+---------------+--------+----------+------
+| etcdv2                | Yes           | Yes    | Yes      |
+| Kubernetes API server | Yes           | Yes    | Yes      |

@@ -50,3 +50,10 @@ spec:
 | asNumber    | The AS Number of your Calico node. | Optional.  If omitted the global value is used (see [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config) for details). | integer |
 | ipv4Address | The IPv4 address and subnet exported as the next-hop for the Calico endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
 | ipv6Address | The IPv6 address and subnet exported as the next-hop for the Calico endpoints on the host | Optional.  | string |
+
+### Supported operations
+
+| Datastore type        | Create/Delete | Update | Get/List | Notes
++-----------------------+---------------+--------+----------+------
+| etcdv2                | Yes           | Yes    | Yes      |
+| Kubernetes API server | No            | Yes    | Yes      | Calico Node data is directly tied to the Kubernetes nodes.
