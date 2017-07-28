@@ -602,6 +602,7 @@ Here is the pre-DNAT policy that we need to disallow incoming external traffic
 in general:
 
 ```
+calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: policy
   metadata:
@@ -624,6 +625,7 @@ in general:
     ingress:
       - action: deny
     selector: has(host-endpoint)
+EOF
 ```
 
 Specifically, this policy allows traffic coming from IP addresses that are
@@ -647,10 +649,10 @@ are in use in your own cluster.
 We also need policy to allow _egress_ traffic through each node's external
 interface.  Otherwise, when we define host endpoints for those interfaces, no
 egress traffic will be allowed (except for traffic that is allowed by
-the [failsafe rules](#failsafe-rules)).  If you'd like to allow general
-outbound access, this policy will achieve that:
+the [failsafe rules](#failsafe-rules)).
 
 ```
+calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: policy
   metadata:
@@ -660,24 +662,7 @@ outbound access, this policy will achieve that:
     egress:
       - action: allow
     selector: has(host-endpoint)
-```
-
-If you'd prefer to limit egress similarly to ingress, only to cluster-internal
-IP addresses, you could use this policy (adjusting the IP ranges for your
-cluster):
-
-```
-- apiVersion: v1
-  kind: policy
-  metadata:
-    name: allow-cluster-internal-egress
-  spec:
-    order: 10
-    egress:
-      - action: allow
-        destination:
-          nets: [10.240.0.0/16, 192.168.0.0/16]
-    selector: has(host-endpoint)
+EOF
 ```
 
 > **NOTE**
@@ -692,6 +677,11 @@ cluster):
 > traffic that is sent from a local pod.  Calico does not yet have a form of
 > host endpoint protection that can be used to restrict outbound traffic from a
 > local workload.
+>
+> The policy above allows applications or server processes running on the nodes
+> themselves (as opposed to in pods) to connect outbound to any destination.
+> In case you have a use case for restricting to particular IP addresses, you
+> can achieve that by adding a corresponding `destination` spec.
 
 Now we can define a host endpoint for the outwards-facing interface of each
 node.  The policies above all have a selector that makes them applicable to any
@@ -699,6 +689,7 @@ endpoint with a `host-endpoint` label, so we should include that label in our
 definitions.  For example, for `eth0` on `node1`:
 
 ```
+calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: hostEndpoint
   metadata:
@@ -708,6 +699,7 @@ definitions.  For example, for `eth0` on `node1`:
       host-endpoint: ingress
   spec:
     interfaceName: eth0
+EOF
 ```
 
 After defining host endpoints for each node, you should find that internal
@@ -723,6 +715,7 @@ To open a pinhole for that NodePort, for external access, you can configure a
 pre-DNAT policy like this:
 
 ```
+calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: policy
   metadata:
@@ -736,6 +729,7 @@ pre-DNAT policy like this:
         destination:
           ports: [31852]
     selector: has(host-endpoint)
+EOF
 ```
 
 If you wanted to make that NodePort accessible only through particular nodes, you could achieve that by giving those nodes a particular `host-endpoint` label:
