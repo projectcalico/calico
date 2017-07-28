@@ -17,7 +17,7 @@ package calc_test
 import (
 	net2 "net"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/net"
 )

@@ -27,8 +27,8 @@ import (
 	"io"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 

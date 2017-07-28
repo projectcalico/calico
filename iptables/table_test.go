@@ -24,7 +24,7 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("Table with an empty dataplane", func() {

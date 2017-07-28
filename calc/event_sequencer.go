@@ -17,7 +17,7 @@ package calc
 import (
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ip"

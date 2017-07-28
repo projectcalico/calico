@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"net"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 )

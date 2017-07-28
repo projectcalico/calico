@@ -19,10 +19,10 @@ import (
 
 	"reflect"
 
-	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
