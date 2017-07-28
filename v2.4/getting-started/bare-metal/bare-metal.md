@@ -565,152 +565,204 @@ For packets that are sent from a local workload out of a host interface:
 
 - No host endpoint policies apply.
 
-## Pre-DNAT policy: a worked example
+## Host endpoint policy: a worked example
 
 Imagine a Kubernetes cluster, that its administrator wants to secure as much as
-possible against incoming traffic from outside the cluster.  Let's suppose that:
+possible against incoming traffic from outside the cluster.  But suppose that
+the cluster provides various useful Services that are exposed as Kubernetes
+NodePorts - i.e. as well-known TCP port numbers that appear to be available on
+any node in the cluster - and that the administrator does want to expose some
+of those NodePorts to traffic from outside.
 
-- The cluster provides various useful Services that are exposed as Kubernetes
-  NodePorts - i.e. as well-known TCP port numbers that appear to be available
-  on any node in the cluster.
+In this example we will use pre-DNAT policy, applied to the external interfaces
+of each cluster node:
 
-- Most of those Services, however, should not be accessed from outside the
-  cluster via _any_ node, but instead via a LoadBalancer IP that is routable
-  from outside the cluster and maps to one of just a few 'ingress' nodes.  (The
-  LoadBalancer IP is a virtual IP that, at any given time, gets routed somehow
-  to one of those 'ingress' nodes.)
+- to disallow incoming traffic from outside, in general
 
-- For a few Services, on the other hand, there is no LoadBalancer IP set up, so
-  those Services should be accessible from outside the cluster through their
-  NodePorts on any node.
+- but then to allow incoming traffic to particular NodePorts.
 
-- All other incoming traffic from outside the cluster should be disallowed.
+We use pre-DNAT policy for these purposes, instead of normal host endpoint
+policy, because:
 
-![]({{site.baseurl}}/images/bare-metal-example.png)
+1. We want the protection against general external traffic to apply regardless
+   of where that traffic is destined for - for example, to a locally hosted
+   pod, or to a pod on another node, or to a local server process running on
+   the host itself.  Pre-DNAT policy is enforced in all of those cases - as we
+   want - whereas normal host endpoint policy is not enforced for traffic going
+   to a local pod.
 
-For each Service in the first set, we want to allow traffic from outside the
-cluster that is addressed to `<service-load-balancer-ip>:<service-port>`, but
-only when it enters the cluster through one of the 'ingress' nodes.  For each
-Service in the second set, we want to allow traffic from outside the cluster
-that is addressed to `<node-ip>:<service-node-port>`, via any node.
+2. We want to write this policy in terms of the advertised NodePorts, not in
+   terms of whatever internal port numbers those may be transformed to.
+   kube-proxy on the ingress node will use a DNAT to change a NodePort number
+   and IP address to those of one of the pods that backs the relevant Service.
+   Our policy therefore needs to take effect _before_ that DNAT - and that
+   means that it must be a pre-DNAT policy.
 
-We can do this by applying Calico pre-DNAT policy to the external interfaces of
-each cluster node.  We use pre-DNAT policy, rather than normal host endpoint
-policy, for two reasons:
-
-1. Normal host endpoint policy is not enforced for incoming traffic to a local
-   pod, whereas pre-DNAT policy is enforced for _all_ incoming traffic.  Here
-   we want to police all incoming traffic from outside the cluster, regardless
-   of its destination, so pre-DNAT is the right choice.
-
-2. We want to express our policy in terms of the external port numbers
-   `<service-port>` and `<service-node-port>`.  The kube-proxy on the ingress
-   node will use DNATs to change those port numbers (and IP addresses) to those
-   of one of the pods that backs the relevant Service.  Our policy therefore
-   needs to be enforced _before_ those DNATs, and of course that is exactly
-   what pre-DNAT policy is for.
-
-Let's begin with the policy to disallow incoming traffic by default.  Every
-outward interface of each node, by which traffic from outside could possibly
-enter the cluster, must be defined as a Calico host endpoint; for example, for
-`eth0` on `node1`:
+Here is the pre-DNAT policy that we need to disallow incoming external traffic
+in general:
 
 ```
-apiVersion: v1
-kind: hostEndpoint
-metadata:
-  name: node1-eth0
-  node: node1
-  labels:
-    host-endpoint: ingress
-spec:
-  interfaceName: eth0
+calicoctl apply -f - <<EOF
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: allow-cluster-internal-ingress
+  spec:
+    order: 10
+    preDNAT: true
+    ingress:
+      - action: allow
+        source:
+          nets: [10.240.0.0/16, 192.168.0.0/16]
+    selector: has(host-endpoint)
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: drop-other-ingress
+  spec:
+    order: 20
+    preDNAT: true
+    ingress:
+      - action: deny
+    selector: has(host-endpoint)
+EOF
 ```
 
-The nodes that are allowed as load balancer ingress nodes should have an
-additional label to indicate that, let's say `load-balancer-ingress: true`.
+Specifically, this policy allows traffic coming from IP addresses that are
+known to be cluster-internal, and denies traffic from any other sources.  For
+the cluster-internal IP addresses in this example, we assume 10.240.0.0/16 for
+the nodes' own IP addresses, and 192.168.0.0/16 for IP addresses that
+Kubernetes will assign to pods; obviously you should adjust for the CIDRs that
+are in use in your own cluster.
 
-Then we can deny all incoming traffic through those interfaces, unless it is
-from a source IP that is known to be within the cluster.  (Note: we are
-assuming that the same interfaces can also be used for traffic that is
-forwarded from other nodes or pods in the cluster - as would be the case for
-nodes with only one external interface.)
+> **NOTE**
+>
+> The `drop-other-ingress` policy has a higher `order` value than
+> `allow-cluster-internal-ingress`, so that it applies _after_
+> `allow-cluster-internal-ingress`.
+>
+> The explicit `drop-other-ingress` policy is needed because there is no
+> automatic default-drop semantic for pre-DNAT policy.  There _is_ a
+> default-drop semantic for normal host endpoint policy but - as noted above -
+> normal host endpoint policy is not always enforced.
 
-```
-apiVersion: v1
-kind: policy
-metadata:
-  name: disallow-incoming
-spec:
-  preDNAT: true
-  order: 100
-  ingress:
-    - action: deny
-      source:
-        notNets: [<pod-cidr>, <cluster-internal-node-cidr>, ...]
-  selector: host-endpoint=='ingress'
-```
-
-Now, to allow traffic through the load balancer ingress nodes to
-`<service-load-balancer-ip>:<service-port>` (for each load-balanced Service):
+We also need policy to allow _egress_ traffic through each node's external
+interface.  Otherwise, when we define host endpoints for those interfaces, no
+egress traffic will be allowed (except for traffic that is allowed by
+the [failsafe rules](#failsafe-rules)).
 
 ```
-apiVersion: v1
-kind: policy
-metadata:
-  name: allow-load-balancer-service-1
-spec:
-  preDNAT: true
-  order: 90
-  ingress:
-    - action: allow
-      destination:
-        nets: [<service-load-balancer-ip>]
-        ports: [<service-port>]
-  selector: load-balancer-ingress=='true'
+calicoctl apply -f - <<EOF
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: allow-outbound-external
+  spec:
+    order: 10
+    egress:
+      - action: allow
+    selector: has(host-endpoint)
+EOF
 ```
 
-And for traffic to NodePorts - for each non-load-balanced Service - via any
-node:
+> **NOTE**
+>
+> These egress rules are defined as normal host endpoint policies, not
+> pre-DNAT, because pre-DNAT policy does not support egress rules.  (Which is
+> because pre-DNAT policies are enforced at a point in the Linux networking
+> stack where it is not yet determined what a packet's outgoing interface will
+> be.)
+>
+> Because these are normal host endpoint policies, they are not enforced for
+> traffic that is sent from a local pod.  Calico does not yet have a form of
+> host endpoint protection that can be used to restrict outbound traffic from a
+> local workload.
+>
+> The policy above allows applications or server processes running on the nodes
+> themselves (as opposed to in pods) to connect outbound to any destination.
+> In case you have a use case for restricting to particular IP addresses, you
+> can achieve that by adding a corresponding `destination` spec.
+
+Now we can define a host endpoint for the outwards-facing interface of each
+node.  The policies above all have a selector that makes them applicable to any
+endpoint with a `host-endpoint` label, so we should include that label in our
+definitions.  For example, for `eth0` on `node1`:
 
 ```
-apiVersion: v1
-kind: policy
-metadata:
-  name: allow-node-port-service-1
-spec:
-  preDNAT: true
-  order: 90
-  ingress:
-    - action: allow
-      destination:
-        ports: [<node-port>]
-  selector: host-endpoint=='ingress'
+calicoctl apply -f - <<EOF
+- apiVersion: v1
+  kind: hostEndpoint
+  metadata:
+    name: node1-eth0
+    node: node1
+    labels:
+      host-endpoint: ingress
+  spec:
+    interfaceName: eth0
+EOF
 ```
 
-And that completes the example.  It's worth re-emphasizing, though, two key
-points about the application of pre-DNAT policy that make this work; especially
-as pre-DNAT policy differs on these points from normal host endpoint policy.
+After defining host endpoints for each node, you should find that internal
+cluster communications are all still working as normal - for example, that you
+can successfully execute commands like `calicoctl get hep` and `calicoctl get
+pol` - but that it is impossible to connect into the cluster from outside
+(except for any [failsafe ports](#failsafe-rules)).  For example, if the
+cluster includes a Kubernetes Service that is exposed as NodePort 31852, you
+should find, at this point, that that NodePort works from within the cluster,
+but not from outside.
 
-Firstly, there is no 'default drop' semantic for pre-DNAT policy, like there
-_is_ for normal policy.  So, if policies are defined such that _some_ pre-DNAT
-policies apply to a host endpoint, but none of those policies matches a
-particular incoming packet, that packet is allowed to continue on its way.
-(Whereas if there are normal policies that apply to a host endpoint, and
-none of those policies matches a packet, that packet will be dropped.)
+To open a pinhole for that NodePort, for external access, you can configure a
+pre-DNAT policy like this:
 
-For the example here, that means that we can specify some pre-DNAT policy,
-applying to all of the cluster's external interfaces, without having to
-enumerate and explicitly _allow_ all of the internal flows that may also go
-through those interfaces.  It's also why the second point works...
+```
+calicoctl apply -f - <<EOF
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: allow-nodeport
+  spec:
+    preDNAT: true
+    order: 10
+    ingress:
+      - action: allow
+        protocol: tcp
+        destination:
+          ports: [31852]
+    selector: has(host-endpoint)
+EOF
+```
 
-Namely, that if traffic comes in through a host endpoint and is routed to a
-local workload, any host endpoint pre-DNAT policy is enforced as well as the
-ingress policy for that workload - whereas normal host endpoint policy is
-skipped in that scenario.  (Normal host endpoint policy is 'trumped' by
-workload policy, for packets going to a local workload.)
+If you wanted to make that NodePort accessible only through particular nodes, you could achieve that by giving those nodes a particular `host-endpoint` label:
 
-For the example here, that means that the last pre-DNAT policy above does not
-accidentally expose workloads that happen to use the same `<node-port>`, or
-that provide the backing for `<node-port>`, unless those workloads' own policy
-allows that.
+```
+      host-endpoint: <special-value>
+```
+
+and then using `host-endpoint=='<special-value>'` as the selector of the
+`allow-nodeport` policy, instead of `has(host-endpoint)`.
+
+### A note about conntrack
+
+Calico uses Linux's connection tracking ('conntrack') as an important
+optimization to its processing.  It generally means that Calico only needs to
+check its policies for the first packet in an allowed flow - between a pair of
+IP addresses and ports - and then conntrack automatically allows further
+packets in the same flow, without Calico rechecking every packet.
+
+This can, however, make it look like a Calico policy is not working as it
+should, if policy is changed to disallow a flow that was previously allowed.
+If packets were recently exchanged on the previously allowed flow, and so there
+is conntrack state for that flow that has not yet expired, that conntrack state
+will allow further packets between the same IP addresses and ports, even after
+the Calico policy has been changed.
+
+Per Calico's current implementation, there are two workarounds for this:
+
+1. Somehow ensure that no further packets flow, between the relevant IP
+   addresses and ports, until the conntrack state has expired (typically about
+   a minute).
+
+2. Use the 'conntrack' tool to delete the relevant conntrack state; for example
+   `conntrack -D -p tcp --orig-port-dst 80`.
+
+Then you should observe that the new Calico policy is enforced for new packets.
