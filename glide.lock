@@ -1,5 +1,5 @@
 hash: 202ed42a2f5c98774750abe7ec6592c450f31cb125abc39c54d913dee452e9d4
-updated: 2017-07-21T13:39:33.571605694-07:00
+updated: 2017-07-27T17:11:46.516911671-07:00
 imports:
 - name: github.com/armon/go-radix
   version: 4239b77079c7b5d1243b7b4736304ce8ddb6f0f2
@@ -106,7 +106,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: be5337e7b39e64e5f91445ce7e721888dbab7387
 - name: github.com/onsi/ginkgo
-  version: 9eda700730cba42af70d53180f9dcce9266bc2bc
+  version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
   - config
   - extensions/table
@@ -150,7 +150,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e1ab5e5bf4a57ea6fa71bf4a7712af27b824a005
+  version: 73b7a646d0d29d01ff0a63ea5b03beac0906ea7c
   subpackages:
   - lib/api
   - lib/api/unversioned
