@@ -64,7 +64,7 @@
 |	[juju/ratelimit](https://github.com/juju/ratelimit)	|	[GNU Lesser General Public License v3.0 (94%)](http://github.com/juju/ratelimit/blob/77ed1c8a01217656d2080ad51981f6e99adaa177/LICENSE)	|
 |	[pelletier/go-toml](https://github.com/pelletier/go-toml)	|	[MIT License](http://github.com/pelletier/go-toml/blob/361678322880708ac144df8575e6f01144ba1404/LICENSE)	|
 |	[spf13/viper](https://github.com/spf13/viper)	|	[MIT License](http://github.com/spf13/viper/blob/7538d73b4eb9511d85a9f1dfef202eeb8ac260f4/LICENSE)	|
-|	[Sirupsen/logrus](https://github.com/Sirupsen/logrus)	|	[MIT License](http://github.com/Sirupsen/logrus/blob/0208149b40d863d2c1a2f8fe5753096a9cf2cc8b/LICENSE)	|
+|	[sirupsen/logrus](https://github.com/sirupsen/logrus)	|	[MIT License](http://github.com/sirupsen/logrus/blob/0208149b40d863d2c1a2f8fe5753096a9cf2cc8b/LICENSE)	|
 |	[golang.org/x/text](https://golang.org/x/text)	|	[BSD 3-clause 'New' or 'Revised' License (96%)](http://github.com/golang/text/blob/master/LICENSE)	|
 |	[mailru/easyjson](https://github.com/mailru/easyjson)	|	[MIT License (98%)](http://github.com/mailru/easyjson/blob/d5b7844b561a7bc640052f1b935f7b800330d7e0/LICENSE)	|
 |	[golang/glog](https://github.com/golang/glog)	|	[Apache License 2.0](http://github.com/golang/glog/blob/44145f04b68cf362d9c4df2182967c2275eaefed/LICENSE)	|
@@ -103,7 +103,6 @@
 |	[docker/distribution](https://github.com/docker/distribution)	|	[Apache License 2.0](http://github.com/docker/distribution/blob/cd27f179f2c10c5d300e6d09025b538c475b0d51/LICENSE)	|
 |	[google/gofuzz](https://github.com/google/gofuzz)	|	[Apache License 2.0](http://github.com/google/gofuzz/blob/bbcb9da2d746f8bdbd6a936686a0a6067ada0ec5/LICENSE)	|
 |	[awslabs/aws-sdk-go](https://github.com/awslabs/aws-sdk-go)	|	[Apache License 2.0](http://github.com/awslabs/aws-sdk-go/blob/29717a72a2fc649e790ce97dc2c4d96e32950844/LICENSE.txt)	|
-|	[Sirupsen/logrus](https://github.com/Sirupsen/logrus)	|	[MIT License](http://github.com/Sirupsen/logrus/blob/092eda23b5d2ccf95fe7dfc70354493eb273487a/LICENSE)	|
 |	[go-openapi/jsonreference](https://github.com/go-openapi/jsonreference)	|	[Apache License 2.0](http://github.com/go-openapi/jsonreference/blob/13c6e3589ad90f49bd3e3bbe2c2cb3d7a4142272/LICENSE)	|
 |	[golang.org/x/net](https://golang.org/x/net)	|	[BSD 3-clause 'New' or 'Revised' License (96%)](http://github.com/golang/net/blob/master/LICENSE)	|
 |	[gogo/protobuf](https://github.com/gogo/protobuf)	|	[? (BSD 3-clause 'New' or 'Revised' License, 89%)](http://github.com/gogo/protobuf/blob/e18d7aa8f8c624c915db340349aad4c49b10d173/LICENSE)	|
