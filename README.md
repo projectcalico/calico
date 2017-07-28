@@ -80,7 +80,23 @@ make serve
 
 As the output states, docs should then be viewable at http://localhost:4000/ .
 
+### Faster builds
+
+Jekyll can take a while to render every page. To speed up builds, a supplemental `_config_dev.yml` exists which excludes all
+directories except `master`. Include it in your builds:
+
+```
+jekyll serve --config _config.yml,_config_dev.yml
+```
+
+Or pass enable it in make using the environment variable:
+
+```
+DEV=true make serve
+```
+
 ### Versioning & Branches
+
 The live site is generated from the master branch of this repository.
 
 Documentation for past releases is maintained as a folder in the root of this repository.

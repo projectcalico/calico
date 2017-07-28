@@ -1,0 +1,16 @@
+exclude:
+  - release-scripts
+  - LICENSE
+  - Makefile
+  - README.md
+  - RELEASING.md
+  - BUILDING_CALICO.md
+  - hack
+  - calico_node
+  - v1.5
+  - v1.6
+  - v2.0
+  - v2.1
+  - v2.2
+  - v2.3
+  - v2.4
