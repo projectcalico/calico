@@ -5,7 +5,7 @@ owners:
 - name: Rob Brockbank
   email: rob@tigera.io
 import:
-- package: github.com/Sirupsen/logrus
+- package: github.com/sirupsen/logrus
   version: ^0.10.0
 - package: github.com/coreos/etcd
   subpackages:

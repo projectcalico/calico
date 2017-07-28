@@ -23,8 +23,8 @@ import (
 	net2 "net"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	log "github.com/sirupsen/logrus"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string

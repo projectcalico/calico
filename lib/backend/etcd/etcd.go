@@ -20,13 +20,13 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
 	capi "github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 

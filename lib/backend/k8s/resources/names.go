@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/net"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // This file contains various name conversion methods that can be used to convert

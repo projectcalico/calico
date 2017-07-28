@@ -21,12 +21,12 @@ import (
 
 	"net"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hwm"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
