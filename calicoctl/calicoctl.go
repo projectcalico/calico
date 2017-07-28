@@ -19,9 +19,9 @@ import (
 
 	"os"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	"github.com/projectcalico/calicoctl/calicoctl/commands"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
