@@ -848,7 +848,7 @@ master:
   note: ""
   components:
      felix:
-      version: 2.4.0-rc2 
+      version: 2.4.0
       url: ""
      calicoctl:
       version: master
@@ -860,8 +860,8 @@ master:
      calico/cni:
       version: master 
       url: ""
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.9.1/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.9.1/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico-ipam
      calico-bird:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
