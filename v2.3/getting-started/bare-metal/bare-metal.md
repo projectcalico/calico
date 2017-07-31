@@ -1,6 +1,5 @@
 ---
 title: Using Calico to Secure Host Interfaces
-redirect_from: latest/getting-started/bare-metal/bare-metal
 ---
 
 This guide describes how to use Calico to secure the network interfaces

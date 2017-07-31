@@ -1,5 +1,6 @@
 ---
 title:  Requirements
+redirect_from: latest/getting-started/docker/installation/requirements
 ---
 
 The following information details basic prerequisites that must be met

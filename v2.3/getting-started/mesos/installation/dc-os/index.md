@@ -1,6 +1,5 @@
 ---
 title: Overview of Calico for DC/OS
-redirect_from: latest/getting-started/mesos/installation/dc-os/index
 ---
 
 The following information details Calico's installation and runtime dependencies

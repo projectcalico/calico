@@ -1,5 +1,6 @@
 ---
 title: calicoctl node
+redirect_from: latest/reference/calicoctl/commands/node/index
 ---
 
 This section describes the `calicoctl node` commands.

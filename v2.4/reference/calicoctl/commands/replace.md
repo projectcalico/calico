@@ -1,5 +1,6 @@
 ---
 title: calicoctl replace
+redirect_from: latest/reference/calicoctl/commands/replace
 ---
 
 This sections describes the `calicoctl replace` command.

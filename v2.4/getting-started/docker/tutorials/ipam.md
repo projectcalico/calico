@@ -1,5 +1,6 @@
 ---
 title: IPAM
+redirect_from: latest/getting-started/docker/tutorials/ipam
 ---
 
 With the release of Docker 1.10, support has been added to allow users to
