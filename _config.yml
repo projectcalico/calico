@@ -14,6 +14,7 @@ exclude:
   - README.md
   - RELEASING.md
   - BUILDING_CALICO.md
+  - CONTRIBUTING_DOCS.md
   - hack
   - calico_node
 
