@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // The HealthReport struct has slots for the levels of health that we monitor and aggregate.

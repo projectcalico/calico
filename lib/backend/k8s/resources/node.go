@@ -15,7 +15,7 @@
 package resources
 
 import (
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -27,7 +27,7 @@ import (
 
 const (
 	nodeBgpIpv4CidrAnnotation = "projectcalico.org/IPv4Address"
-	nodeBgpAsnAnnotation = "projectcalico.org/ASNumber"
+	nodeBgpAsnAnnotation      = "projectcalico.org/ASNumber"
 )
 
 func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {

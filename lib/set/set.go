@@ -18,7 +18,7 @@ import (
 	"errors"
 	"reflect"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 type Set interface {

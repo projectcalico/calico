@@ -15,11 +15,11 @@
 package client
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/converter"
+	log "github.com/sirupsen/logrus"
 )
 
 // ProfileInterface has methods to work with Profile resources.
