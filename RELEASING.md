@@ -43,6 +43,7 @@ release is announced.
    3. Navigate to: Setup -> Basics
    4. Under "Sites to search", select "Add", for the url use `docs.projectcalico.org/vX.Y`
    5. Choose vX.Y from the "Label" dropdown.
+1. Edit `_config_dev.yml` to exclude the previous release.
 
 ### Promoting a release candidate to a final release
 1. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file. This step should NOT be performed until testing of the release is complete.
