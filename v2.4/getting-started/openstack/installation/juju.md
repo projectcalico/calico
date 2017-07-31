@@ -1,5 +1,6 @@
 ---
 title: Juju Install
+redirect_from: latest/getting-started/openstack/installation/juju
 ---
 
 You can use Ubuntu's [Juju Charms](https://jujucharms.com/) to quickly deploy a

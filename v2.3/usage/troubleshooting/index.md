@@ -1,6 +1,5 @@
 ---
 title: Troubleshooting
-redirect_from: latest/usage/troubleshooting/index
 ---
 
 ## Running `sudo calicoctl ...` with Environment Variables

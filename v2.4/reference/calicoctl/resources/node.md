@@ -1,5 +1,6 @@
 ---
 title: Node Resource (node)
+redirect_from: latest/reference/calicoctl/resources/node
 ---
 
 An Node resource (node) represents a node running Calico.  When adding a host

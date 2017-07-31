@@ -1,5 +1,6 @@
 ---
 title: Reference
+redirect_from: latest/reference/index
 noversion: yes
 ---
 

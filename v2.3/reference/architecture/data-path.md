@@ -1,6 +1,5 @@
 ---
 title: 'The Calico Data Path: IP Routing and iptables'
-redirect_from: latest/reference/architecture/data-path
 ---
 
 
