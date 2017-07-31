@@ -28,10 +28,10 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	docopt "github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend"
