@@ -47,6 +47,8 @@ toc:
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
     path: /getting-started/kubernetes/upgrade
+  - title: Host Endpoints
+    path: /getting-started/kubernetes/host-endpoints
 
 - title: OpenShift
   section:
