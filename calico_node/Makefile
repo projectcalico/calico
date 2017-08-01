@@ -39,7 +39,6 @@ BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/birdcl
 CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/calico-bgp-daemon
-GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/gobgp
 
 ###############################################################################
 # calico/node build. Contains the following areas
@@ -159,7 +158,6 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 
 # Get the calico-bgp-daemon binary
 $(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
-	$(CURL) -L $(GOBGP_URL) -o $(@D)/gobgp
 	$(CURL) -L $(CALICO_BGP_DAEMON_URL) -o $@
 	chmod +x $(@D)/*
 
