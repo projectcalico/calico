@@ -6,11 +6,11 @@ import (
 	"net"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types/current"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 

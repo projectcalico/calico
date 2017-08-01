@@ -7,7 +7,6 @@ import (
 	"os"
 	"syscall"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -17,6 +16,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 

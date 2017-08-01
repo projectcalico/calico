@@ -1,5 +1,5 @@
-hash: c2216d2e230dc677897c5dae4007eb94a4b338bd21af4c509e0ff987529c0c3e
-updated: 2017-07-21T13:34:03.827876846-07:00
+hash: 22d01bf5d7dab0c84bf299e0ba921f6959856d56a15acb3bbb2eb956a9f035d1
+updated: 2017-07-31T15:38:23.931038218-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -19,30 +19,23 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: d267ca9c184e953554257d0acdd1dc9c47d38229
+  version: c31bec0f29facff13f7c3e3d948e55dd6689ed42
   subpackages:
   - client
-  - pkg/fileutil
   - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
+  - version
 - name: github.com/coreos/go-iptables
   version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
   subpackages:
   - iptables
-- name: github.com/coreos/go-systemd
-  version: 2688e91251d9d8e404e86dd8f096e23b2f086958
+- name: github.com/coreos/go-semver
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
-  - activation
-  - journal
-- name: github.com/coreos/pkg
-  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
-  subpackages:
-  - capnslog
-  - health
-  - httputil
-  - timeutil
+  - semver
 - name: github.com/davecgh/go-spew
   version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
@@ -146,7 +139,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 7c8b6d628b83f5b7d609989e2633c18e55dc6a54
+  version: 93f9e49214a678551648eb9c28ce57bc286a3169
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -182,13 +175,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 3e6a7635bac6573d43f49f97b47eb9bda195dba8
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -197,7 +190,7 @@ imports:
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
-- name: github.com/Sirupsen/logrus
+- name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
@@ -227,7 +220,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -256,7 +249,7 @@ imports:
   - unicode/norm
   - width
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2

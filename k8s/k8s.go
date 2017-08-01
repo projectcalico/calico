@@ -37,8 +37,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	log "github.com/Sirupsen/logrus"
 	calicoclient "github.com/projectcalico/libcalico-go/lib/client"
+	log "github.com/sirupsen/logrus"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod

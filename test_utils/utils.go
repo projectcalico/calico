@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
@@ -28,6 +27,7 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
 	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
