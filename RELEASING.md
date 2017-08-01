@@ -37,7 +37,7 @@ release is announced.
 1. Now merge the PR - this will cause the live docs site to be updated (after a few minutes).
 1. Push the tag.
 1. Create a GitHub release on the Calico repo, and upload the release file (calico_node/release-<VERSION>.tgz)
-1. Edit the [Calico Docs Custom Search Engine](cse.google.com/).
+1. Edit the [Calico Docs Custom Search Engine](https://cse.google.com/).
    1. Navigate to: search engine -> Search Features -> Refinements -> Add
    2. Add a new refinement name: vX.Y
    3. Navigate to: Setup -> Basics
