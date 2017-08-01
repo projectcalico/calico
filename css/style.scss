@@ -69,3 +69,65 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
         padding: 0 0;
     }
 }
+
+// BREADCRUMBS
+.breadcrumb {
+	display: inline-block;
+	background: none;
+	border: none;
+	margin: 0;
+	padding: 0;
+	text-transform: capitalize;
+}
+
+// Submenu Navigation for Desktop
+#tigera-navbar ul.nav li ul {
+    position: absolute;
+    display: none;
+    margin-top: 20px;
+    margin-left: -10px !important;
+    background: #004078;
+    z-index: 1000;
+}
+
+@media screen and (min-width: 999px) {
+    
+    #tigera-navbar ul.nav {
+        li {
+            height: 44px;
+            
+            ul {
+                margin: 24px 0 0 0;
+                padding: 0;
+                
+                li {
+                    min-height: 24px !important;
+                    display: block;
+                    padding: 8px 18px 8px 10px;
+                    overflow: hidden;
+                    width: 200px;
+                    margin: 0;
+                    border-top: 1px dashed #999;
+                    
+                    a {
+                        color: #fff;
+                        font-size: 14px;
+                    }
+                    
+                    a:hover {
+                        color: $navbar-default-link-hover-color !important;
+                        text-decoration: none;
+                    }
+                }
+                
+                li:first-child {
+                    border-top: none;
+                }
+            }
+        }
+        
+        li:hover ul {
+            display: block;
+        }   
+    }
+}
