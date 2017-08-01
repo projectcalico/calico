@@ -1,5 +1,5 @@
-hash: dc862b89e90c2d3fc169a2ccec9b66e4427734157a038165cac29b247eb8d48d
-updated: 2017-07-21T13:49:59.322964923-07:00
+hash: c2ad62d3ebec8994054fa8bb675e43934791f5da8291e21c0370958dfa862ef8
+updated: 2017-07-31T15:18:41.588321487-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -114,7 +114,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e1ab5e5bf4a57ea6fa71bf4a7712af27b824a005
+  version: 93f9e49214a678551648eb9c28ce57bc286a3169
   subpackages:
   - lib
   - lib/api
@@ -168,7 +168,7 @@ imports:
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
-- name: github.com/Sirupsen/logrus
+- name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
@@ -177,7 +177,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: d2b2290a45db4d6aa0e1b0beb0045a9dc7094aff
+  version: b4ec1df61a85b06ecd47d331e081250781675c9c
   repo: https://github.com/fasaxc/go-datastructures.git
   subpackages:
   - list
@@ -228,7 +228,7 @@ imports:
   - unicode/norm
   - width
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2

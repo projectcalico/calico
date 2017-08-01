@@ -21,9 +21,9 @@ import (
 	"time"
 	"unsafe"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/Workiva/go-datastructures/trie/ctrie"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"

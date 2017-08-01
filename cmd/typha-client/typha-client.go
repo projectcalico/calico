@@ -17,7 +17,7 @@ package main
 import (
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"math/rand"
 	"runtime"

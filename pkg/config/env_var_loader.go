@@ -17,7 +17,7 @@ package config
 import (
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // LoadConfigFromEnvironment extracts raw config parameters (identified by
