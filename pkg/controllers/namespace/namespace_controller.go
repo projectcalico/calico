@@ -1,22 +1,20 @@
 package namespace
 
 import (
-	log "github.com/Sirupsen/logrus"
 	calicocache "github.com/projectcalico/k8s-policy/pkg/cache"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/controller"
 	"github.com/projectcalico/k8s-policy/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 	"reflect"
 	"strings"
-	"time"
 )
 
 // NamespaceController Implements Controller interface
@@ -32,6 +30,8 @@ type NamespaceController struct {
 
 // NewNamespaceController Constructor for NamespaceController
 func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *client.Client) controller.Controller {
+	namespaceConverter := converter.NewNamespaceConverter()
+
 	// Function returns map of profile_name:object stored by policy controller
 	// on ETCD datastore. Indentifies controller writen objects by
 	// their naming convention.
@@ -49,7 +49,8 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 
 			profileName := profile.Metadata.Name
 			if strings.HasPrefix(profileName, converter.ProfileNameFormat) {
-				filteredProfiles[profileName] = profile
+				key := namespaceConverter.GetKey(profile)
+				filteredProfiles[key] = profile
 			}
 		}
 		log.Debugf("Found %d profiles in calico ETCD:", len(filteredProfiles))
@@ -58,11 +59,11 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 
 	cacheArgs := calicocache.ResourceCacheArgs{
 		ListFunc:   listFunc,
+		Client:     calicoClient,
 		ObjectType: reflect.TypeOf(api.Profile{}), // Restrict cache to store calico profiles only.
 	}
 
 	ccache := calicocache.NewResourceCache(cacheArgs)
-	namespaceConverter := converter.NewNamespaceConverter()
 
 	// create the watcher
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "namespaces", "", fields.Everything())
@@ -84,10 +85,9 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 				log.WithError(err).Errorf("Error while converting %#v to calico profile.", obj)
 				return
 			}
-			
-			calicoKey := namespaceConverter.GetKey(profile)
 
-			// Add key:profile in calicoCache
+			calicoKey := namespaceConverter.GetKey(profile)
+			// Add key:*profile in calicoCache
 			ccache.Set(calicoKey, profile)
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
@@ -169,7 +169,7 @@ func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stop
 
 	// Start a number of worker threads to read from the queue.
 	for i := 0; i < threadiness; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
+		go c.runWorker()
 	}
 
 	<-stopCh
@@ -224,7 +224,7 @@ func (c *NamespaceController) syncToCalico(key string) error {
 		}
 
 		return err
-	}else{
+	} else {
 
 		var p api.Profile
 		p = obj.(api.Profile)
@@ -249,7 +249,7 @@ func (c *NamespaceController) handleErr(err error, key string) {
 
 	// This controller retries 5 times if something goes wrong. After that, it stops trying.
 	if workqueue.NumRequeues(key) < 5 {
-		
+
 		log.WithError(err).Errorf("Error syncing namespace %v: %v", key, err)
 		// Re-enqueue the key rate limited. Based on the rate limiter on the
 		// queue and the re-enqueue history, the key will be processed later again.
@@ -258,7 +258,7 @@ func (c *NamespaceController) handleErr(err error, key string) {
 	}
 
 	workqueue.Forget(key)
-	
+
 	// Report to an external entity that, even after several retries, we could not successfully process this key
 	uruntime.HandleError(err)
 	log.WithError(err).Errorf("Dropping namespace %q out of the queue: %v", key, err)

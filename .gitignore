@@ -1,5 +1,3 @@
-*.pyc
-*.spec
 build/
 dist/
 *.tar
@@ -7,3 +5,11 @@ dist/
 *.coverage
 .idea/
 version.py
+*.swp
+*.bak
+*.tmp
+*~
+.vscode/
+vendor/
+k8s-policy-go
+image.created

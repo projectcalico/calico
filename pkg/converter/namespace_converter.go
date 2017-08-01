@@ -2,8 +2,8 @@ package converter
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	log "github.com/sirupsen/logrus"
 	k8sApiV1 "k8s.io/client-go/pkg/api/v1"
 	"reflect"
 )
@@ -49,11 +49,11 @@ func (p *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	return *profile, nil
 }
 
-// GetKey returns name of the namespace as key. 
+// GetKey returns name of the namespace as key.
 func (p *namespaceConverter) GetKey(obj interface{}) string {
-	
+
 	if reflect.TypeOf(obj) != reflect.TypeOf(api.Profile{}) {
-		log.Fatalf("can not construct key for object %#v. Object is not of type api.WorkloadEndpoint", obj)	
+		log.Fatalf("can not construct key for object %#v. Object is not of type api.WorkloadEndpoint", obj)
 	}
 	profile := obj.(api.Profile)
 	return profile.Metadata.Name
