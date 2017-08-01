@@ -22,12 +22,13 @@ packet.
 | 9000 | 9000 | 8980 | 8950 |
 | 1460 (GCE) | 1460 | 1440 | 1410 |
 | 9001 (AWS Jumbo) | 9001 | 8981 | 8951 |
+| 1450 (OpenStack VXLAN) | 1450 | 1430 | 1400 |
 
 #### Default MTU sizes
 
 The default MTU for workload interfaces is 1500, this is to match the most
 common network MTU size.  The default MTU for the IP-in-IP tunnel device
-is 1440 to match the value needed in GCE.
+is 1430 to match the value needed in OpenStack VXLAN.
 
 #### Using flannel for Networking
 
