@@ -794,14 +794,15 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 
 			versions.nodeVersion = noList.ListMeta.ResourceVersion
 			for _, no := range noList.Items {
-				node, err := resources.K8sNodeToCalico(&no)
-				if err != nil {
-					log.WithError(err).Fatal("Error converting node")
-				}
-				if node != nil {
-					snap[KEY_NO] = append(snap[KEY_NO], *node)
-					keys[KEY_NO][node.Key.String()] = true
-				}
+				kvpHostIP, kvpIPIPAddr := splitNodeEvent(&no)
+				log.WithFields(log.Fields{
+					"kvpHostIP":   kvpHostIP,
+					"kvpIPIPAddr": kvpIPIPAddr,
+				}).Debug("Got node KVs.")
+				snap[KEY_NO] = append(snap[KEY_NO], *kvpHostIP)
+				keys[KEY_NO][kvpHostIP.Key.String()] = true
+				snap[KEY_HC] = append(snap[KEY_HC], *kvpIPIPAddr)
+				keys[KEY_HC][kvpIPIPAddr.Key.String()] = true
 			}
 		}
 
@@ -884,12 +885,7 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	return []model.KVPair{*rules, *tags, *labels}
 }
 
-func (syn *kubeSyncer) parseNodeEvent(e watch.Event) (*model.KVPair, *model.KVPair) {
-	node, ok := e.Object.(*k8sapi.Node)
-	if !ok {
-		log.Panicf("Invalid node event. Type: %s, Object: %+v", e.Type, e.Object)
-	}
-
+func splitNodeEvent(node *k8sapi.Node) (*model.KVPair, *model.KVPair) {
 	kvp, err := resources.K8sNodeToCalico(node)
 	if err != nil {
 		log.WithError(err).Panic("Failed to convert k8s node to Calico node.")
@@ -921,6 +917,17 @@ func (syn *kubeSyncer) parseNodeEvent(e watch.Event) (*model.KVPair, *model.KVPa
 		}
 	}
 	kvpIPIPAddr.Revision = kvp.Revision
+
+	return kvpHostIp, kvpIPIPAddr
+}
+
+func (syn *kubeSyncer) parseNodeEvent(e watch.Event) (*model.KVPair, *model.KVPair) {
+	node, ok := e.Object.(*k8sapi.Node)
+	if !ok {
+		log.Panicf("Invalid node event. Type: %s, Object: %+v", e.Type, e.Object)
+	}
+
+	kvpHostIp, kvpIPIPAddr := splitNodeEvent(node)
 
 	if e.Type == watch.Deleted {
 		kvpHostIp.Value = nil
