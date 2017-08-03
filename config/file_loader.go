@@ -18,8 +18,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/go-ini/ini"
+	log "github.com/sirupsen/logrus"
 )
 
 func LoadConfigFile(filename string) (map[string]string, error) {

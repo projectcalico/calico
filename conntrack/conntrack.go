@@ -19,7 +19,7 @@ import (
 	"os/exec"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // For TCP/UDP, each conntrack entry holds two copies of the tuple

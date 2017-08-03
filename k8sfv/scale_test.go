@@ -20,9 +20,9 @@ import (
 	"os/exec"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/k8sfv/leastsquares"

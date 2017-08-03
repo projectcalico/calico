@@ -17,7 +17,7 @@ package rules
 import (
 	"net"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"reflect"
 	"strings"

@@ -17,7 +17,7 @@ package intdataplane
 import (
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/proto"
