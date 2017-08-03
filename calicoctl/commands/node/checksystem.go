@@ -23,9 +23,9 @@ import (
 	"regexp"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	docopt "github.com/docopt/docopt-go"
 	goversion "github.com/mcuadros/go-version"
+	log "github.com/sirupsen/logrus"
 )
 
 // The minimum allowed linux kernel version is 2.6.24, which introduced network

@@ -23,12 +23,12 @@ import (
 	"reflect"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/validator"
+	log "github.com/sirupsen/logrus"
 )
 
 // The ResourceManager interface provides useful function for each resource type.  This includes:

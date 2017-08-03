@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	log "github.com/sirupsen/logrus"
 )
 
 func Get(args []string) {

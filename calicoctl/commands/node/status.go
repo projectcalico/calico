@@ -26,12 +26,12 @@ import (
 
 	"reflect"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	gops "github.com/mitchellh/go-ps"
 	"github.com/olekukonko/tablewriter"
 	gobgp "github.com/osrg/gobgp/client"
 	"github.com/osrg/gobgp/packet/bgp"
+	log "github.com/sirupsen/logrus"
 )
 
 // Status prints status of the node and returns error (if any)
@@ -310,7 +310,7 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 
 // printGoBGPPeers queries GoBGP and displays the local peers in table format.
 func printGoBGPPeers(ipv string) {
-	client, err := gobgp.NewGoBGPClient("")
+	client, err := gobgp.New("")
 	if err != nil {
 		fmt.Printf("Error creating gobgp client: %s\n", err)
 		os.Exit(1)

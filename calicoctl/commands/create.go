@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )

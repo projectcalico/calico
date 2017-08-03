@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
 	shutil "github.com/termie/go-shutil"
 )
 

@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	log "github.com/sirupsen/logrus"
 )
 
 // NewClient creates a new CalicoClient using connection information in the specified
@@ -47,7 +47,7 @@ func NewClient(cf string) (*client.Client, error) {
 // otherwise will load from environment variables.
 func LoadClientConfig(cf string) (*api.CalicoAPIConfig, error) {
 	if _, err := os.Stat(cf); err != nil {
-		if (cf != constants.DefaultConfigPath) {
+		if cf != constants.DefaultConfigPath {
 			fmt.Printf("Error reading config file: %s\n", cf)
 			os.Exit(1)
 		}

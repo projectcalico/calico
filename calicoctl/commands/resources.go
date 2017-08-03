@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
@@ -32,6 +31,7 @@ import (
 	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/scope"
+	log "github.com/sirupsen/logrus"
 )
 
 type action int

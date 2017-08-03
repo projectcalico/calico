@@ -25,13 +25,13 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -247,9 +247,9 @@ Description:
 
 	// Create a mapping of environment variables to values.
 	envs := map[string]string{
-		"NODENAME":                          name,
-		"CALICO_NETWORKING_BACKEND":         backend,
-		"CALICO_LIBNETWORK_ENABLED":         fmt.Sprint(!disableDockerNw),
+		"NODENAME":                  name,
+		"CALICO_NETWORKING_BACKEND": backend,
+		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
 	}
 
 	// Validate the ifprefix to only allow alphanumeric characters
