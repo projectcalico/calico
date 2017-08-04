@@ -269,6 +269,11 @@ func (c converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) stri
 		}
 	}
 
+	// If namespace selector is empty then we select all namespaces.
+	if len(selectors) == 0 && ns == nil {
+		selectors = []string{"has(calico/k8s_ns)"}
+	}
+
 	return strings.Join(selectors, " && ")
 }
 
