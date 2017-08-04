@@ -794,7 +794,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 
 			versions.nodeVersion = noList.ListMeta.ResourceVersion
 			for _, no := range noList.Items {
-				kvpHostIP, kvpIPIPAddr := splitNodeEvent(&no)
+				kvpHostIP, kvpIPIPAddr := splitNode(&no)
 				log.WithFields(log.Fields{
 					"kvpHostIP":   kvpHostIP,
 					"kvpIPIPAddr": kvpIPIPAddr,
@@ -885,7 +885,7 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	return []model.KVPair{*rules, *tags, *labels}
 }
 
-func splitNodeEvent(node *k8sapi.Node) (*model.KVPair, *model.KVPair) {
+func splitNode(node *k8sapi.Node) (*model.KVPair, *model.KVPair) {
 	kvp, err := resources.K8sNodeToCalico(node)
 	if err != nil {
 		log.WithError(err).Panic("Failed to convert k8s node to Calico node.")
@@ -927,7 +927,7 @@ func (syn *kubeSyncer) parseNodeEvent(e watch.Event) (*model.KVPair, *model.KVPa
 		log.Panicf("Invalid node event. Type: %s, Object: %+v", e.Type, e.Object)
 	}
 
-	kvpHostIp, kvpIPIPAddr := splitNodeEvent(node)
+	kvpHostIp, kvpIPIPAddr := splitNode(node)
 
 	if e.Type == watch.Deleted {
 		kvpHostIp.Value = nil
