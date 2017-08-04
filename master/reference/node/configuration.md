@@ -31,7 +31,7 @@ The `calico/node` container is primarily configured through environment variable
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_STARTUP_LOGLEVEL      | The log severity above which startup calico/node logs are sent to the stdout. [Default: `Error`] | DEBUG, INFO, WARNING, ERROR, CRITICAL, or NONE (case-insensitive) |
-| CLUSTER_TYPE | Contains comma delimited list of indicators about this cluster.  Expected to contain information like hosted, services, kubeadm, tectonic, or datastore type. If using Kubernetes API as the datastore then KDD will automatically be added to this list. | k8s, policy, KDD, canal, mesos, docker, rkt, acs, acse, dcos, kubeadm, kubespray, kops, tectonic |
+| CLUSTER_TYPE | Contains comma delimited list of indicators about this cluster.  e.g. k8s, mesos, kubeadm, canal, bgp | string |
 | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints [Default: `http://127.0.0.1:2379`] (optional) | string |
 | ETCD_KEY_FILE     | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)        | string |
 | ETCD_CERT_FILE    | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)    | string |
