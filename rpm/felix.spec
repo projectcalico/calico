@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.3.0
+Version:        2.4.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,28 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Aug 04 2017 Neil Jerram <neil@tigera.io> 2.4.0-1
+  - Felix 2.4.0 (from Git commit b891ac5).
+    [Changes recorded in 2.4.0 tag]
+    [Changes recorded in 2.4.0-rc1 tag]
+    - Skip recalculation of selector matches if selector hasn't changed (#1482).
+    - Use updated Typha client API (#1484).
+    - Improve testing and test coverage (#1486, #1494, #1496, #1497).
+    - Make test suites produce junit reports (#1488).
+    - Allow selection of policy allow action (#1492).
+    - Implement liveness and readiness endpoints for Felix (#1489).
+    - Improve Calico version reporting (#1499).
+    - Streamline conntrack state deletions (#1500, #1498).
+    - Add release note to PR template (#1502).
+    - Add support for multiple CIDRs in a match rule (#1483, #1505).
+    - Support using a lock to coordinate iptables programming with other
+      software (#1491, #1504).
+    - Move logutils functionality to libcalico-go (#1503).
+    - Add pre-DNAT policy support (#1506).
+    - Update glide pin for logrus (#1509).
+    - Allow for time fuzziness in route table UT (#1510).
+    - Update to Typha v0.3.0 (#1512).
+
 * Fri Aug 04 2017 Neil Jerram <neil@tigera.io> 2.3.0-1
   - Felix 2.3.0 (from Git commit 85f9fff).
     [Changes recorded in 2.3.0 tag]
