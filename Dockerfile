@@ -11,8 +11,7 @@ ADD dist/calico-ipam /opt/cni/bin/calico-ipam
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
-ENV PATH=$PATH:/opt/cni/bin \
-    LOG_LEVEL=warn
+ENV PATH=$PATH:/opt/cni/bin
 VOLUME /opt/cni
 WORKDIR /opt/cni/bin
 CMD ["/opt/cni/bin/calico"]
