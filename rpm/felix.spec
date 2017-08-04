@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.2.1
+Version:        2.3.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,56 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Aug 04 2017 Neil Jerram <neil@tigera.io> 2.3.0-1
+  - Felix 2.3.0 (from Git commit 85f9fff).
+    [Changes recorded in 2.3.0 tag]
+    This is a feature release of Felix, Calico's per-host agent.
+    
+    The headline feature in this release is a significant increase in scale when using the
+    Kubernetes datastore driver by introducing support for a new daemon, Typha. Typha
+    connects to the Kubernetes API server and fans out updates to a number of Felixes.
+    By having only a handful of Typha instances connected to the API server instead of
+    many Felixes, we place a lot less load on the API server.  In addition, Typha is able
+    to squash unimportant updates form the API server, significantly reducing the
+    number of mesages each Felix has to handle.
+    
+    Typha is disabled by default. The documentation for how to configure Typha and Felix
+    together will follow as part of the wider Calico 2.3.0 meta-release.
+    
+    This release also contains a number of minor enhancements:
+    
+    - Performance: Scan iptables-save output incrementally when calculating hashes.
+    - Performance: Disable WithFields logging in the ipsets resync parse loop.
+    - Performance: Disable some WithField calls in the inner iptables resync loop.
+    - Allow the iptables post-write check interval to be set.
+    - Improve diagnostics around ipset restore failures
+    - Log ip6tables-save stderr if it fails
+    - Convert interval config parameters to time.Duration for increased precision.
+    - Rev libcalico-go to v1.4.4 and Typha to v0.2.2.
+    - Make JUST_A_MINUTE the default, as it's more useful for devs
+    
+    The k8sfv functional tests also got a number of enhancements:
+    
+    - Update imports for recent client-go/apimachinery moves
+    - Check Felix does not die before end of test
+    - mechanism for only running quick tests
+    - fix client authorization to API server 1.6
+    - Ensure that ip6_tables module is loaded
+    - put Typha in the loop.
+    
+    The DockerHub and Quay.io `calico/felix` images have been updated.  The `calico/node` image
+    based on this release will follow shortly.
+    
+    Since we're targetting Kubernetes for this release, we haven't yet updated the OpenStack
+    debs and RPMs, those should follow in a few days.
+    [Changes recorded in 2.3.0-rc3 tag]
+    - Rev libcalico-go and typha to pick up fixes.
+    [Changes recorded in 2.3.0-rc2 tag]
+    - Update libcalico to v1.4.0
+    [Changes recorded in 2.3.0-rc1 tag]
+    [Changes recorded in 2.2.2 tag]
+    - Pin libcalico-go to v1.2.2 to pick up memory leak fix (#1457).
+
 * Thu May 11 2017 Neil Jerram <neil@tigera.io> 2.2.1-1
   - Felix 2.2.1 (from Git commit b04446b).
     [Changes recorded in 2.2.1 tag]
