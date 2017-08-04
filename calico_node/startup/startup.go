@@ -86,17 +86,21 @@ func main() {
 	// updated IP data and use the full list of nodes for validation.
 	node := getNode(client, nodeName)
 
-	// Configure and verify the node IP addresses and subnets.
-	checkConflicts := configureIPsAndSubnets(node)
+	// If Calico is running in policy only mode we don't need to write
+	// BGP related details to the Node.
+	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
+		// Configure and verify the node IP addresses and subnets.
+		checkConflicts := configureIPsAndSubnets(node)
 
-	// If we report an IP change (v4 or v6) we should verify there are no
-	// conflicts between Nodes.
-	if checkConflicts && os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
-		checkConflictingNodes(client, node)
+		// If we report an IP change (v4 or v6) we should verify there are no
+		// conflicts between Nodes.
+		if checkConflicts && os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
+			checkConflictingNodes(client, node)
+		}
+
+		// Configure the node AS number.
+		configureASNumber(node)
 	}
-
-	// Configure the node AS number.
-	configureASNumber(node)
 
 	// Check expected filesystem
 	ensureFilesystemAsExpected()
@@ -118,7 +122,7 @@ func main() {
 
 	// Write the startup.env file now that we are ready to start other
 	// components.
-	writeStartupEnv(nodeName, node.Spec.BGP.IPv4Address, node.Spec.BGP.IPv6Address)
+	writeStartupEnv(nodeName)
 
 	// Tell the user what the name of the node is.
 	message("Using node name: %s", nodeName)
@@ -205,7 +209,7 @@ func waitForConnection(c *client.Client) {
 // writeStartupEnv writes out the startup.env file to set environment variables
 // that are required by confd/bird etc. but may not have been passed into the
 // container.
-func writeStartupEnv(nodeName string, ip, ip6 *net.IPNet) {
+func writeStartupEnv(nodeName string) {
 	text := "export NODENAME=" + nodeName + "\n"
 
 	// Write out the startup.env file to ensure required environments are
