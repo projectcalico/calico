@@ -115,7 +115,7 @@ var _ = Describe("with running container", func() {
 		It("iptables should succeed in getting the lock after 3s", func() {
 			iptCmd := cmdInContainer("iptables", "-w", "3", "-A", "FORWARD")
 			out, err := iptCmd.CombinedOutput()
-			log.Printf("iptables output='%s'", out)
+			log.Infof("iptables output='%s'", out)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
