@@ -512,6 +512,7 @@ $(RELEASE_DIR):
 
 $(RELEASE_DIR_K8S_MANIFESTS):
 	# Ensure that the docs site is generated
+	rm -rf ../_site
 	$(MAKE) -C .. _site
 
 	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
