@@ -981,8 +981,15 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				EndpointID:     "eth0",
 			}}
 
+		hostKey := model.KVPair{
+			Key: model.HostConfigKey{
+				Hostname:       "127.0.0.1",
+				Name:           "IpInIpTunnelAddr",
+			}}
+
 		expectedKeys := []api.Update{
 			api.Update{wepKey, api.UpdateTypeKVNew},	// expected WEP resulting from creating this pod
+			api.Update{hostKey, api.UpdateTypeKVNew},	// expected host resulting from starting client
 		}
 
 		log.Infof("[TEST] Syncer received new: %+v", expectedKeys)
