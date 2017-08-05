@@ -146,21 +146,21 @@ func (c cb) ProcessUpdates() {
 	}
 }
 
-func (c cb) ExpectExists(kvps []model.KVPair) {
+func (c cb) ExpectExists(updates []api.Update) {
 	// For each Key, wait for it to exist.
-	for _, kvp := range kvps {
-		log.Infof("[TEST] Expecting key: %s", kvp.Key)
-		exists := false
+	for _, update := range updates {
+		log.Infof("[TEST] Expecting key: %s", update.Key)
+		matches := false
 
 		wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
-			update, ok := c.State[kvp.Key.String()]
-			exists = ok
+			u, ok := c.State[update.Key.String()]
+			matches = ok && update.UpdateType == u.UpdateType
 			c.Lock.Unlock()
 
-			log.Infof("[TEST] Key exists? %t: %+v", ok, update)
-			if ok {
+			log.Infof("[TEST] Key exists? %t: %+v", ok, u)
+			if ok && update.UpdateType == u.UpdateType {
 				// Expected key to exist, and it does.
 				return true, nil
 			} else {
@@ -170,7 +170,7 @@ func (c cb) ExpectExists(kvps []model.KVPair) {
 		})
 
 		// Expect the key to have existed.
-		Expect(exists).To(Equal(true), fmt.Sprintf("Expected key to exist: %s", kvp.Key))
+		Expect(matches).To(Equal(true), fmt.Sprintf("Expected key to exist: %s", update.Key))
 	}
 }
 
@@ -973,15 +973,19 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		// The expected KVPair keys that should exist as a result of creating this Pod.
-		expectedKeys := []model.KVPair{
-			{Key: model.WorkloadEndpointKey{
+		wepKey := model.KVPair{
+			Key: model.WorkloadEndpointKey{
 				Hostname:       "127.0.0.1",
 				OrchestratorID: "k8s",
 				WorkloadID:     fmt.Sprintf("default.%s", pod.ObjectMeta.Name),
 				EndpointID:     "eth0",
-			}},
+			}}
+
+		expectedKeys := []api.Update{
+			api.Update{wepKey, api.UpdateTypeKVNew},	// expected WEP resulting from creating this pod
 		}
+
+		log.Infof("[TEST] Syncer received new: %+v", expectedKeys)
 
 		By("Expecting an update on the Syncer API", func() {
 			cb.ExpectExists(expectedKeys)
@@ -1001,7 +1005,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		By("Deleting the Pod and expecting the wep to be deleted", func() {
 			err = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			cb.ExpectDeleted(expectedKeys)
+			cb.ExpectDeleted([]model.KVPair{wepKey})
 		})
 	})
 
@@ -1293,8 +1297,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Syncing HostIPs over the Syncer", func() {
-			expectExist := []model.KVPair{
-				{Key: model.HostIPKey{Hostname: nodeHostname}},
+			expectExist := []api.Update{
+				{model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, api.UpdateTypeKVUpdated},
 			}
 
 			// Expect the snapshot to include the right keys.
