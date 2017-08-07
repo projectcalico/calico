@@ -7,6 +7,8 @@ permalink:     /:title.html
 gems:
   - jekyll-redirect-from
 
+url: https://docs.projectcalico.org
+
 exclude:
   - release-scripts
   - LICENSE
