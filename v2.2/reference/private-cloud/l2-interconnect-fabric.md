@@ -30,8 +30,8 @@ deployments.
 It has been acknowledged by the industry for years that, beyond a
 certain size, classical Ethernet networks are unsuitable for production
 deployment. Although there have been
-[multiple](http://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering)
-[attempts](http://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html) [to address](http://en.wikipedia.org/wiki/Virtual_Private_LAN_Service)
+[multiple](https://en.wikipedia.org/wiki/Provider_Backbone_Bridge_Traffic_Engineering)
+[attempts](https://www.cisco.com/web/about/ac123/ac147/archived_issues/ipj_14-3/143_trill.html) [to address](https://en.wikipedia.org/wiki/Virtual_Private_LAN_Service)
 these issues, the scale-out networking community has, largely abandoned
 Ethernet for anything other than providing physical point-to-point links
 in the networking fabric. The principal reasons for Ethernet failures at
@@ -145,7 +145,7 @@ but the *leaf/spine* is the predominant architectural model in use in
 scale-out infrastructure today.
 
 Since Calico is an IP routed fabric, a Calico network can use
-[ECMP](http://en.wikipedia.org/wiki/Equal-cost_multi-path_routing) to
+[ECMP](https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing) to
 distribute traffic across multiple links (instead of using Ethernet
 techniques such as MLAG). By leveraging ECMP load balancing on the
 Calico compute servers, it is possible to build the fabric out of

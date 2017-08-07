@@ -852,8 +852,8 @@ master:
       url: ""
      calicoctl:
       version: master
-      url: "http://www.projectcalico.org/builds/calicoctl"
-      download_url: "http://www.projectcalico.org/builds/calicoctl"
+      url: "https://www.projectcalico.org/builds/calicoctl"
+      download_url: "https://www.projectcalico.org/builds/calicoctl"
      calico/node:
       version: master
       url: ""

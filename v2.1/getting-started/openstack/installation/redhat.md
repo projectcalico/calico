@@ -35,7 +35,7 @@ sections.
 > Following the upgrade to use etcd as a data store, Calico
 > currently only supports RHEL 7 and above. If support on RHEL 6.x
 > or other versions of Linux is important to you, then please [let
-> us know](http://www.projectcalico.org/contact/).
+> us know](https://www.projectcalico.org/contact/).
 >
 
 ## Prerequisites

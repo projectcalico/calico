@@ -13,13 +13,13 @@ Note that the README in this repo is targeted at Calico docs contributors.
 </blockquote>
 
 
-For information on `calico/node`, see the [documentation on calico/node architecture](http://docs.projectcalico.org/master/reference/architecture/components).
+For information on `calico/node`, see the [documentation on calico/node architecture](https://docs.projectcalico.org/master/reference/architecture/components).
 
 ### Developing
 
 Print useful actions with `make help`.
 
-![Project Calico logo](http://docs.projectcalico.org/images/felix.png)
+![Project Calico logo](https://docs.projectcalico.org/images/felix.png)
 
 
 ### Building `calico/node`

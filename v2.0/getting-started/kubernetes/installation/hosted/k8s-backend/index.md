@@ -28,7 +28,7 @@ You must have a cluster which meets the following requirements:
 To install Calico, ensure you have a cluster which meets the above requirements and run the following command:
 
 ```
-kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
 ```
 
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
@@ -44,8 +44,8 @@ exist in the cluster. The following lines need to be run on the master of
 Kubernetes cluster with addon-manager installed:
 
 ```
-curl -sL -o /etc/kubernetes/addons/calico-configmap.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend-addon-manager/calico-configmap.yaml
-curl -sL -o /etc/kubernetes/addons/calico-daemonset.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend-addon-manager/calico-daemonset.yaml
+curl -sL -o /etc/kubernetes/addons/calico-configmap.yaml https://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend-addon-manager/calico-configmap.yaml
+curl -sL -o /etc/kubernetes/addons/calico-daemonset.yaml https://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend-addon-manager/calico-daemonset.yaml
 ```
 
 #### Example: kubeadm + flannel
@@ -64,7 +64,7 @@ kubeadm init --pod-network-cidr=10.244.0.0/16
 Then run the following command to install Calico.
 
 ```
-kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
 ```
 
 Then continue following the guide, following the instructions for installing flannel as the pod network.
@@ -93,7 +93,7 @@ curl -sS https://get.k8s.io | bash
 Once the cluster is running, install Calico:
 
 ```
-kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
 ```
 
 You should see all pods enter "Running" state.

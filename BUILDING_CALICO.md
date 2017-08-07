@@ -42,7 +42,7 @@ mkdir -p $BASEDIR
 These instructions describe how to build a particular release or Calico.  This comprises
 of multiple sub components each individually versioned.  To determine which
 particular tag (version) of code to checkout for each repo, consult the Releases page of the
-appropriate version of the [Calico documentation](http://docs.projectcalico.org)
+appropriate version of the [Calico documentation](https://docs.projectcalico.org)
 
 Define the following environment variables that describe the versions of each of the
 components that you are building (the instruction below use these):

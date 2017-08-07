@@ -21,7 +21,7 @@ or higher.
 To install this Calico and a single node etcd, run the following command:
 
 ```
-kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/calico.yaml
 ```
 
 You can download the addon manfiest [here](calico.yaml)

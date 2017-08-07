@@ -3,7 +3,7 @@ layout: null
 ---
 #cloud-config
 # Calico Version {{site.data.versions[page.version].first.title}}
-# http://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
+# https://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
 # This manifest includes the following component versions:
 #   calico/node:{{site.data.versions[page.version].first.title}}
 ---
