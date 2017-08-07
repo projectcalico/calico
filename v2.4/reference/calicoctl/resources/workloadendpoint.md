@@ -67,6 +67,6 @@ spec:
 ### Supported operations
 
 | Datastore type        | Create/Delete | Update | Get/List | Notes
-+-----------------------+---------------+--------+----------+------
+|-----------------------|---------------|--------|----------|------
 | etcdv2                | Yes           | Yes    | Yes      |
 | Kubernetes API server | No            | Yes    | Yes      | WorkloadEndpoints are directly tied to a Kuberenetes Pod.
