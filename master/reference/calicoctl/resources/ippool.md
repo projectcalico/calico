@@ -66,6 +66,6 @@ Hosts running Calico is asymmetric and may cause traffic to be filtered due to
 ### Supported operations
 
 | Datastore type        | Create/Delete | Update | Get/List | Notes
-+-----------------------+---------------+--------+----------+------
+|-----------------------|---------------|--------|----------|------
 | etcdv2                | Yes           | Yes    | Yes      |
 | Kubernetes API server | Yes           | Yes    | Yes      |

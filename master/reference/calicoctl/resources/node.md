@@ -54,6 +54,6 @@ spec:
 ### Supported operations
 
 | Datastore type        | Create/Delete | Update | Get/List | Notes
-+-----------------------+---------------+--------+----------+------
+|-----------------------|---------------|--------|----------|------
 | etcdv2                | Yes           | Yes    | Yes      |
 | Kubernetes API server | No            | Yes    | Yes      | Calico Node data is directly tied to the Kubernetes nodes.
