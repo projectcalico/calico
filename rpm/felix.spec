@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.2.1
+Version:        2.4.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,84 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Aug 04 2017 Neil Jerram <neil@tigera.io> 2.4.0-1
+  - Felix 2.4.0 (from Git commit b891ac5).
+
+    A fully tested and production-ready Felix release, including the
+    changes from the following release candidates: 2.4.0-rc1, 2.4.0-rc2.
+
+    A summary of changes since Felix 2.3.0:
+
+    - Skip recalculation of selector matches if selector hasn't changed (#1482).
+    - Use updated Typha client API (#1484).
+    - Improve testing and test coverage (#1486, #1494, #1496, #1497).
+    - Make test suites produce junit reports (#1488).
+    - Allow selection of policy allow action (#1492).
+    - Implement liveness and readiness endpoints for Felix (#1489).
+    - Improve Calico version reporting (#1499).
+    - Streamline conntrack state deletions (#1500, #1498).
+    - Add release note to PR template (#1502).
+    - Add support for multiple CIDRs in a match rule (#1483, #1505).
+    - Support using a lock to coordinate iptables programming with other
+      software (#1491, #1504).
+    - Move logutils functionality to libcalico-go (#1503).
+    - Add pre-DNAT policy support (#1506).
+    - Update glide pin for logrus (#1509).
+    - Allow for time fuzziness in route table UT (#1510).
+    - Update to Typha v0.3.0 (#1512).
+    - Only report ready after first apply() completes (#1514).
+    - Add a grace period before deleting routes (#1518).
+
+* Fri Aug 04 2017 Neil Jerram <neil@tigera.io> 2.3.0-1
+  - Felix 2.3.0 (from Git commit 85f9fff).
+    [Changes recorded in 2.3.0 tag]
+    This is a feature release of Felix, Calico's per-host agent.
+
+    The headline feature in this release is a significant increase in scale when using the
+    Kubernetes datastore driver by introducing support for a new daemon, Typha. Typha
+    connects to the Kubernetes API server and fans out updates to a number of Felixes.
+    By having only a handful of Typha instances connected to the API server instead of
+    many Felixes, we place a lot less load on the API server.  In addition, Typha is able
+    to squash unimportant updates form the API server, significantly reducing the
+    number of mesages each Felix has to handle.
+
+    Typha is disabled by default. The documentation for how to configure Typha and Felix
+    together will follow as part of the wider Calico 2.3.0 meta-release.
+
+    This release also contains a number of minor enhancements:
+
+    - Performance: Scan iptables-save output incrementally when calculating hashes.
+    - Performance: Disable WithFields logging in the ipsets resync parse loop.
+    - Performance: Disable some WithField calls in the inner iptables resync loop.
+    - Allow the iptables post-write check interval to be set.
+    - Improve diagnostics around ipset restore failures
+    - Log ip6tables-save stderr if it fails
+    - Convert interval config parameters to time.Duration for increased precision.
+    - Rev libcalico-go to v1.4.4 and Typha to v0.2.2.
+    - Make JUST_A_MINUTE the default, as it's more useful for devs
+
+    The k8sfv functional tests also got a number of enhancements:
+
+    - Update imports for recent client-go/apimachinery moves
+    - Check Felix does not die before end of test
+    - mechanism for only running quick tests
+    - fix client authorization to API server 1.6
+    - Ensure that ip6_tables module is loaded
+    - put Typha in the loop.
+
+    The DockerHub and Quay.io `calico/felix` images have been updated.  The `calico/node` image
+    based on this release will follow shortly.
+
+    Since we're targetting Kubernetes for this release, we haven't yet updated the OpenStack
+    debs and RPMs, those should follow in a few days.
+    [Changes recorded in 2.3.0-rc3 tag]
+    - Rev libcalico-go and typha to pick up fixes.
+    [Changes recorded in 2.3.0-rc2 tag]
+    - Update libcalico to v1.4.0
+    [Changes recorded in 2.3.0-rc1 tag]
+    [Changes recorded in 2.2.2 tag]
+    - Pin libcalico-go to v1.2.2 to pick up memory leak fix (#1457).
+
 * Thu May 11 2017 Neil Jerram <neil@tigera.io> 2.2.1-1
   - Felix 2.2.1 (from Git commit b04446b).
     [Changes recorded in 2.2.1 tag]
@@ -226,7 +304,7 @@ rm -rf $RPM_BUILD_ROOT
     - Port dataplane driver to Golang and move in-process (#1202).
       This has a number of benefits and allowed for a number of
       bugfixes and enhancements to be worked in:
-    
+
       - Improve dataplane programming performance and decrease
         occupancy by having only one process instead of two.
         It also simplifies the codebase substantially.
@@ -248,7 +326,7 @@ rm -rf $RPM_BUILD_ROOT
         identified.  Allows for simpler sync and cleanup.
       - Limit OpenStack special-case rules to deployments with "tap"
         devices (#1020).
-    
+
     - Add support for host endpoint policies that bypass the conntrack
       table.  Useful for high connection throughput workloads such as
       memcacheDB. (#1284)
@@ -283,7 +361,7 @@ rm -rf $RPM_BUILD_ROOT
     - glide: Pin libcalico-go
     [Changes recorded in 2.1.0-rc3 tag]
     Changes since 2.1.0-rc2:
-    
+
     - Implement loose RPF startup check. (#1322)
     - Add coverage reporting target for golang. (#1323)
     - Handle interfaces being renamed in interface monitor. (#1329)
@@ -291,7 +369,7 @@ rm -rf $RPM_BUILD_ROOT
     - Rev libcalico-go to v1.1.0-rc1.
     [Changes recorded in 2.1.0-rc2 tag]
     Changes since 2.1.0-rc1:
-    
+
     - Add extra prometheus metrics (#1304)
     - Switch to goimports for formatting code (#1305)
     - Add gometalinter and fix a couple of bugs it spotted. (#1306)

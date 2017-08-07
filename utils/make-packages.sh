@@ -165,9 +165,23 @@ cat <<EOF
 
     +---------------------------------------------------------------------------+
     | Packaging files (debian/changelog and/or rpm/felix.spec) have been        |
-    | updated, to build the new packages under dist/.  If you decide to release |
-    | those new packages publically (after any QA), please also commit those    |
-    | packaging file changes and push to GitHub, so that we have a record of    |
+    | updated, and new packages built under dist/.  Debian and RPM change logs  |
+    | have been generated from existing Git tag content - which should have     |
+    | been previously reviewed - and so should not need further review now.     |
+    | However, if there are issues to correct in the change logs:               |
+    |                                                                           |
+    | - Fix those issues _before_ releasing (or pre-releasing) the newly built  |
+    |   packages (e.g. to a PPA), because it won't work to try to 'overwrite'   |
+    |   previously released packages by re-releasing with the same package      |
+    |   version number.                                                         |
+    |                                                                           |
+    | - Make the changes needed, then run                                       |
+    |       FORCE_VERSION=<desired version> make deb rpm                        |
+    |   You should observe that your changes are not overwritten, and that new  |
+    |   packages are built with those changes included.                         |
+    |                                                                           |
+    | Then, if you decide to release the new packages publically, please also   |
+    | commit and merge the packaging file changes, so that we have a record of  |
     | how and when the released packages were built.  Otherwise you can discard |
     | those changes.                                                            |
     +---------------------------------------------------------------------------+
