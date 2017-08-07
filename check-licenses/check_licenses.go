@@ -54,6 +54,8 @@ var (
 			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/howeyc/gopass",
 			license: "ISC License (98%)"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/davecgh/go-spew/spew",
+			license: "ISC License (98%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/imdario/mergo",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/kardianos/osext",
