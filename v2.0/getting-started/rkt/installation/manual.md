@@ -94,7 +94,7 @@ b52bba11  node  quay.io/calico/node:v1.0.2  running 10 seconds ago  10 seconds a
    Download the calicoctl binary:
 
    ```
-   sudo wget -O /usr/local/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+   sudo wget -O /usr/local/bin/calicoctl https://www.projectcalico.org/builds/calicoctl
    sudo chmod +x calicoctl
    ```
 

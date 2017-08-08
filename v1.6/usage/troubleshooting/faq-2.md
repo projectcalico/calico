@@ -44,7 +44,7 @@ If this describes your infrastructure, the
 what to do. Otherwise, if you have a layer 3 (IP) fabric, then there are
 detailed datacenter networking recommendations given
 in the main [this article]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
-We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
+We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 
 ### How can I enable NAT for outgoing traffic from containers with private IP addresses?

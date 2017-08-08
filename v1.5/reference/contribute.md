@@ -13,7 +13,7 @@ Features or any changes to the codebase should be done as follows:
         "fixes \#123" in at least one of your commit messages. This
         ensures the pull request is attached to the existing issue (see
         [How do you attach a new pull request to an existing issue on
-        GitHub?](http://stackoverflow.com/questions/4528869/how-do-you-attach-a-new-pull-request-to-an-existing-issue-on-github)).
+        GitHub?](https://stackoverflow.com/questions/4528869/how-do-you-attach-a-new-pull-request-to-an-existing-issue-on-github)).
 
 3.  Push your feature branch to GitHub. Note that before we can accept
     your changes, you need to agree to one of our

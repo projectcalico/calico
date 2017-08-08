@@ -2,7 +2,7 @@
 layout: null
 ---
 # Calico Version {{site.data.versions[page.version].first.title}}
-# http://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
+# https://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
 
 ---
 kind: ClusterRole
