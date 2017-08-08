@@ -38,11 +38,11 @@ You should now have two Ubuntu servers, with Etcd running on the first server.
 
 At this point, it's worth checking that your servers can ping each other.
 
-From calico-1
+From calico-01
 
     ping 172.17.8.102
 
-From calico-2
+From calico-02
 
     ping 172.17.8.101
 
