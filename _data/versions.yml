@@ -912,7 +912,7 @@ master:
       version: v0.2.2
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.2
      libnetwork-plugin:
-      version: v1.1.0 
+      version: master
       url: ""
      calico/kube-policy-controller:
       version: master
