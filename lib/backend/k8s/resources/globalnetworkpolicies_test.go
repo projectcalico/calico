@@ -16,8 +16,8 @@ package resources_test
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
@@ -27,28 +27,25 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("System Network Policies conversion methods", func() {
+var _ = Describe("Global Network Policies conversion methods", func() {
 
-	converter := resources.SystemNetworkPolicyConverter{}
+	converter := resources.GlobalNetworkPolicyConverter{}
 
 	// Define some useful test data.
 	listIncomplete := model.PolicyListOptions{}
-	keyInvalid := model.PolicyKey{
-		Name: "foo.bar",
-	}
 
 	// Compatible set of list, key and name
 	list1 := model.PolicyListOptions{
-		Name: "snp.projectcalico.org/abcd",
+		Name: "abcd",
 	}
 	key1 := model.PolicyKey{
-		Name: "snp.projectcalico.org/abcd",
+		Name: "abcd",
 	}
 	name1 := "abcd"
 
 	// Compatible set of key and name
 	key2 := model.PolicyKey{
-		Name: "snp.projectcalico.org/foo.bar",
+		Name: "foo.bar",
 	}
 	name2 := "foo.bar"
 
@@ -75,7 +72,7 @@ var _ = Describe("System Network Policies conversion methods", func() {
 		Revision: "rv",
 	}
 
-	res1 := &thirdparty.SystemNetworkPolicy{
+	res1 := &custom.GlobalNetworkPolicy{
 		Metadata: metav1.ObjectMeta{
 			Name:            name2,
 			ResourceVersion: "rv",
@@ -121,8 +118,8 @@ var _ = Describe("System Network Policies conversion methods", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
 			Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-			Expect(r).To(BeAssignableToTypeOf(&thirdparty.SystemNetworkPolicy{}))
-			Expect(r.(*thirdparty.SystemNetworkPolicy).Spec).To(Equal(res1.Spec))
+			Expect(r).To(BeAssignableToTypeOf(&custom.GlobalNetworkPolicy{}))
+			Expect(r.(*custom.GlobalNetworkPolicy).Spec).To(Equal(res1.Spec))
 		})
 
 		It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -155,18 +152,13 @@ var _ = Describe("System Network Policies conversion methods", func() {
 		Expect(k).To(Equal(key2))
 	})
 
-	It("should fail to convert an invalid Key to a resource name", func() {
-		_, err := converter.KeyToName(keyInvalid)
-		Expect(err).To(HaveOccurred())
-	})
-
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
 		r, err := converter.FromKVPair(kvp1)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&thirdparty.SystemNetworkPolicy{}))
-		Expect(r.(*thirdparty.SystemNetworkPolicy).Spec).To(Equal(res1.Spec))
+		Expect(r).To(BeAssignableToTypeOf(&custom.GlobalNetworkPolicy{}))
+		Expect(r.(*custom.GlobalNetworkPolicy).Spec).To(Equal(res1.Spec))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {

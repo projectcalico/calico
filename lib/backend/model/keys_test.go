@@ -80,7 +80,7 @@ var _ = DescribeTable(
 		IPPoolKey{CIDR: mustParseCIDR("10.0.0.0/8")},
 	),
 	Entry(
-		"global config",
+		"global felix config",
 		"/calico/v1/config/foo",
 		GlobalConfigKey{Name: "foo"},
 	),

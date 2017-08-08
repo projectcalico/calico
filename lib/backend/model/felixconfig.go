@@ -81,7 +81,7 @@ func (key GlobalConfigKey) valueType() reflect.Type {
 }
 
 func (key GlobalConfigKey) String() string {
-	return fmt.Sprintf("GlobalConfig(name=%s)", key.Name)
+	return fmt.Sprintf("GlobalFelixConfig(name=%s)", key.Name)
 }
 
 type GlobalConfigListOptions struct {

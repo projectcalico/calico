@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package thirdparty
+package custom
 
 import (
 	"encoding/json"
@@ -22,38 +22,38 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// SystemNetworkPolicy is the ThirdPartyResource definition of a Calico Policy resource in
+// GlobalNetworkPolicy is the CustomResourceDefinition of a Calico Policy resource in
 // the Kubernetes API.
-type SystemNetworkPolicy struct {
+type GlobalNetworkPolicy struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ObjectMeta `json:"metadata"`
 	Spec            api.PolicySpec    `json:"spec"`
 }
 
-// SystemNetworkPolicyList is a list of SystemNetworkPolicy resources.
-type SystemNetworkPolicyList struct {
+// GlobalNetworkPolicyList is a list of GlobalNetworkPolicy resources.
+type GlobalNetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ListMeta       `json:"metadata"`
-	Items           []SystemNetworkPolicy `json:"items"`
+	Items           []GlobalNetworkPolicy `json:"items"`
 }
 
 // GetObjectKind returns the kind of this object.  Required to satisfy Object interface
-func (e *SystemNetworkPolicy) GetObjectKind() schema.ObjectKind {
+func (e *GlobalNetworkPolicy) GetObjectKind() schema.ObjectKind {
 	return &e.TypeMeta
 }
 
 // GetOjbectMeta returns the object metadata of this object. Required to satisfy ObjectMetaAccessor interface
-func (e *SystemNetworkPolicy) GetObjectMeta() metav1.Object {
+func (e *GlobalNetworkPolicy) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
 // GetObjectKind returns the kind of this object. Required to satisfy Object interface
-func (el *SystemNetworkPolicyList) GetObjectKind() schema.ObjectKind {
+func (el *GlobalNetworkPolicyList) GetObjectKind() schema.ObjectKind {
 	return &el.TypeMeta
 }
 
 // GetListMeta returns the list metadata of this object. Required to satisfy ListMetaAccessor interface
-func (el *SystemNetworkPolicyList) GetListMeta() metav1.List {
+func (el *GlobalNetworkPolicyList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
@@ -61,27 +61,27 @@ func (el *SystemNetworkPolicyList) GetListMeta() metav1.List {
 // resources and ugorji. If/when these issues are resolved, the code below
 // should no longer be required.
 
-type SystemNetworkPolicyListCopy SystemNetworkPolicyList
-type SystemNetworkPolicyCopy SystemNetworkPolicy
+type GlobalNetworkPolicyListCopy GlobalNetworkPolicyList
+type GlobalNetworkPolicyCopy GlobalNetworkPolicy
 
-func (g *SystemNetworkPolicy) UnmarshalJSON(data []byte) error {
-	tmp := SystemNetworkPolicyCopy{}
+func (g *GlobalNetworkPolicy) UnmarshalJSON(data []byte) error {
+	tmp := GlobalNetworkPolicyCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := SystemNetworkPolicy(tmp)
+	tmp2 := GlobalNetworkPolicy(tmp)
 	*g = tmp2
 	return nil
 }
 
-func (l *SystemNetworkPolicyList) UnmarshalJSON(data []byte) error {
-	tmp := SystemNetworkPolicyListCopy{}
+func (l *GlobalNetworkPolicyList) UnmarshalJSON(data []byte) error {
+	tmp := GlobalNetworkPolicyListCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := SystemNetworkPolicyList(tmp)
+	tmp2 := GlobalNetworkPolicyList(tmp)
 	*l = tmp2
 	return nil
 }

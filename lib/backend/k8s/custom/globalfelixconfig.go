@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package thirdparty
+package custom
 
 import (
 	"encoding/json"
@@ -21,42 +21,43 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-type GlobalConfigSpec struct {
+type GlobalFelixConfig struct {
+	metav1.TypeMeta `json:",inline"`
+	Metadata        metav1.ObjectMeta     `json:"metadata"`
+	Spec            GlobalFelixConfigSpec `json:"spec"`
+}
+
+type GlobalFelixConfigSpec struct {
+	// The reason we have Name field in Spec is because k8s metadata
+	// name field requires the string to be lowercase, so Name field
+	// in Spec is to preserve the casing.
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
-type GlobalConfig struct {
+type GlobalFelixConfigList struct {
 	metav1.TypeMeta `json:",inline"`
-	Metadata        metav1.ObjectMeta `json:"metadata"`
-
-	Spec GlobalConfigSpec `json:"spec"`
-}
-
-type GlobalConfigList struct {
-	metav1.TypeMeta `json:",inline"`
-	Metadata        metav1.ListMeta `json:"metadata"`
-
-	Items []GlobalConfig `json:"items"`
+	Metadata        metav1.ListMeta     `json:"metadata"`
+	Items           []GlobalFelixConfig `json:"items"`
 }
 
 // Required to satisfy Object interface
-func (e *GlobalConfig) GetObjectKind() schema.ObjectKind {
+func (e *GlobalFelixConfig) GetObjectKind() schema.ObjectKind {
 	return &e.TypeMeta
 }
 
 // Required to satisfy ObjectMetaAccessor interface
-func (e *GlobalConfig) GetObjectMeta() metav1.Object {
+func (e *GlobalFelixConfig) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
 // Required to satisfy Object interface
-func (el *GlobalConfigList) GetObjectKind() schema.ObjectKind {
+func (el *GlobalFelixConfigList) GetObjectKind() schema.ObjectKind {
 	return &el.TypeMeta
 }
 
 // Required to satisfy ListMetaAccessor interface
-func (el *GlobalConfigList) GetListMeta() metav1.List {
+func (el *GlobalFelixConfigList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
@@ -64,27 +65,27 @@ func (el *GlobalConfigList) GetListMeta() metav1.List {
 // resources and ugorji. If/when these issues are resolved, the code below
 // should no longer be required.
 
-type GlobalConfigListCopy GlobalConfigList
-type GlobalConfigCopy GlobalConfig
+type GlobalFelixConfigListCopy GlobalFelixConfigList
+type GlobalFelixConfigCopy GlobalFelixConfig
 
-func (g *GlobalConfig) UnmarshalJSON(data []byte) error {
-	tmp := GlobalConfigCopy{}
+func (g *GlobalFelixConfig) UnmarshalJSON(data []byte) error {
+	tmp := GlobalFelixConfigCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := GlobalConfig(tmp)
+	tmp2 := GlobalFelixConfig(tmp)
 	*g = tmp2
 	return nil
 }
 
-func (l *GlobalConfigList) UnmarshalJSON(data []byte) error {
-	tmp := GlobalConfigListCopy{}
+func (l *GlobalFelixConfigList) UnmarshalJSON(data []byte) error {
+	tmp := GlobalFelixConfigListCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := GlobalConfigList(tmp)
+	tmp2 := GlobalFelixConfigList(tmp)
 	*l = tmp2
 	return nil
 }

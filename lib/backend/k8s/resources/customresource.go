@@ -25,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/rest"
 )
 
@@ -95,7 +94,6 @@ func (c *customK8sResourceClient) Create(kvp *model.KVPair) (*model.KVPair, erro
 	resOut := reflect.New(c.k8sResourceType).Interface().(CustomK8sResource)
 	err = c.restClient.Post().
 		Resource(c.resource).
-		Namespace("kube-system").
 		Body(resIn).
 		Do().Into(resOut)
 	if err != nil {
@@ -117,32 +115,68 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 	})
 	logContext.Debug("Update custom Kubernetes resource")
 
-	// Convert the KVPair to the K8s resource.
-	resIn, err := c.converter.FromKVPair(kvp)
-	if err != nil {
-		logContext.WithError(err).Info("Error updating resource")
-		return nil, err
-	}
-
-	// Send the update request using the name.
+	// Create storage for the updated resource.
 	resOut := reflect.New(c.k8sResourceType).Interface().(CustomK8sResource)
-	name := resIn.GetObjectMeta().GetName()
-	logContext = logContext.WithField("Name", name)
-	logContext.Debug("Update resource by name")
-	err = c.restClient.Put().
-		Resource(c.resource).
-		Namespace("kube-system").
-		Body(resIn).
-		Name(name).
-		Do().Into(resOut)
-	if err != nil {
-		logContext.WithError(err).Info("Error updating resource")
-		return nil, K8sErrorToCalico(err, kvp.Key)
+
+	providedRV := ""
+	if kvp.Revision != nil {
+		if rv, ok := kvp.Revision.(string); ok {
+			providedRV = rv
+		}
 	}
 
-	// Update the revision information from the response.
-	kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
-	return kvp, nil
+	var updateError error
+	for i := 0; i < 5; i++ {
+		// If no revision was passed, get the object to use its latest Revision number.
+		// If a revision was passed, then we should just use that.
+		if providedRV == "" {
+			logContext.Debug("Querying for resource version")
+			k, err := c.Get(kvp.Key)
+			if err != nil {
+				return nil, err
+			}
+
+			if k.Revision != nil {
+				kvp.Revision = k.Revision.(string)
+				logContext.Debugf("Set resource version to %s", kvp.Revision)
+			}
+		}
+
+		// Convert the KVPair to a K8s resource.
+		resIn, err := c.converter.FromKVPair(kvp)
+		if err != nil {
+			logContext.WithError(err).Info("Error updating resource")
+			return nil, err
+		}
+
+		// Send the update request using the name.
+		name := resIn.GetObjectMeta().GetName()
+		logContext = logContext.WithField("Name", name)
+		logContext.Debug("Update resource by name")
+		updateError = c.restClient.Put().
+			Resource(c.resource).
+			Body(resIn).
+			Name(name).
+			Do().Into(resOut)
+		if updateError == nil {
+			// Success.
+			// Update the revision information from the response.
+			kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
+			return kvp, nil
+		} else if _, ok := updateError.(errors.ErrorResourceUpdateConflict); ok && providedRV == "" {
+			// We only want to retry if there was no Revision provided with
+			// the KVP AND there was a CAS error while updating.
+			logContext.WithError(updateError).Warnf("Update failed for %s, retrying", kvp.Key.String())
+			continue
+		} else {
+			// We don't retry for any other errors or if the revision number is provided.
+			break
+		}
+	}
+
+	// Failed to update the resource.
+	logContext.WithError(updateError).Error("Error updating resource")
+	return nil, K8sErrorToCalico(updateError, kvp.Key)
 }
 
 // Apply either creates a new Custom K8s Resource instance or updates an existing Custom K8s Resource
@@ -155,19 +189,23 @@ func (c *customK8sResourceClient) Apply(kvp *model.KVPair) (*model.KVPair, error
 	})
 	logContext.Debug("Apply custom Kubernetes resource")
 
-	// Attempt and Update and roll back to a Create if the resource does
-	// not exist.  We only log debug here since the Update and Create will
-	// also log.
-	updated, err := c.Update(kvp)
+	// Attempt to Create and do an Update if the resource already exists.
+	// We only log debug here since the Create and Update will also log.
+	// Can't set Revision while creating a resource.
+	updated, err := c.Create(&model.KVPair{
+		Key:   kvp.Key,
+		Value: kvp.Value,
+	})
 	if err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-			logContext.Debug("Error applying resource (using Update)")
+		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+			logContext.Debug("Error applying resource (using Create)")
 			return nil, err
 		}
 
-		updated, err = c.Create(kvp)
+		// Try to Update if the resource already exists.
+		updated, err = c.Update(kvp)
 		if err != nil {
-			logContext.Debug("Error applying resource (using Create)")
+			logContext.Debug("Error applying resource (using Update)")
 			return nil, err
 		}
 	}
@@ -194,7 +232,6 @@ func (c *customK8sResourceClient) Delete(kvp *model.KVPair) error {
 	logContext.Debug("Send delete request by name")
 	err = c.restClient.Delete().
 		Resource(c.resource).
-		Namespace("kube-system").
 		Name(name).
 		Do().Error()
 	if err != nil {
@@ -224,7 +261,6 @@ func (c *customK8sResourceClient) Get(key model.Key) (*model.KVPair, error) {
 	resOut := reflect.New(c.k8sResourceType).Interface().(CustomK8sResource)
 	err = c.restClient.Get().
 		Resource(c.resource).
-		Namespace("kube-system").
 		Name(name).
 		Do().Into(resOut)
 	if err != nil {
@@ -272,7 +308,6 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 	// Perform the request.
 	err := c.restClient.Get().
 		Resource(c.resource).
-		Namespace("kube-system").
 		Do().Into(reslOut)
 	if err != nil {
 		// Don't return errors for "not found".  This just
@@ -301,26 +336,8 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 	return kvps, reslOut.GetListMeta().GetResourceVersion(), nil
 }
 
-// EnsureInitialized performs client initialization required for a specific
-// Custom K8s Resource type.
+// EnsureInitialized is a no-op since the CRD should be
+// initialized in advance.
 func (c *customK8sResourceClient) EnsureInitialized() error {
-	logContext := log.WithField("Resource", c.resource)
-	logContext.Debug("Ensuring ThirdPartyResource exists")
-	res := extensions.ThirdPartyResource{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.name,
-			Namespace: "kube-system",
-		},
-		Description: c.description,
-		Versions:    []extensions.APIVersion{{Name: "v1"}},
-	}
-	_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&res)
-	if err != nil {
-		// Don't care if it already exists.
-		if !kerrors.IsAlreadyExists(err) {
-			logContext.WithError(err).Info("Error initializing ThirdParyResource")
-			return K8sErrorToCalico(err, res)
-		}
-	}
 	return nil
 }

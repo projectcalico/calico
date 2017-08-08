@@ -16,10 +16,11 @@ package resources_test
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/scope"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -48,7 +49,7 @@ var _ = Describe("Global BGP conversion methods", func() {
 	key2 := model.GlobalBGPPeerKey{
 		PeerIP: net.MustParseIP("11:22::"),
 	}
-	name2 := "11-22--"
+	name2 := "0011-0022-0000-0000-0000-0000-0000-0000"
 
 	// Compatible set of KVPair and Kubernetes Resource.
 	kvp1 := &model.KVPair{
@@ -59,24 +60,18 @@ var _ = Describe("Global BGP conversion methods", func() {
 		},
 		Revision: "rv",
 	}
-	res1 := &thirdparty.GlobalBgpPeer{
+	res1 := &custom.BGPPeer{
 		Metadata: metav1.ObjectMeta{
 			Name:            name2,
 			ResourceVersion: "rv",
 		},
-		Spec: api.BGPPeerSpec{
-			ASNumber: 1212,
-		},
-	}
-
-	// Invalid Kubernetes resource, invalid name
-	resInvalid := &thirdparty.GlobalBgpPeer{
-		Metadata: metav1.ObjectMeta{
-			Name:            nameInvalid,
-			ResourceVersion: "test",
-		},
-		Spec: api.BGPPeerSpec{
-			ASNumber: 1234,
+		Spec: custom.BGPPeerSpec{
+			BGPPeerSpec: api.BGPPeerSpec{
+				ASNumber: 1212,
+			},
+			Scope:  scope.Global,
+			PeerIP: key2.PeerIP,
+			Node:   "",
 		},
 	}
 
@@ -111,8 +106,8 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&thirdparty.GlobalBgpPeer{}))
-		Expect(r.(*thirdparty.GlobalBgpPeer).Spec).To(Equal(res1.Spec))
+		Expect(r).To(BeAssignableToTypeOf(&custom.BGPPeer{}))
+		Expect(r.(*custom.BGPPeer).Spec).To(Equal(res1.Spec))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -122,10 +117,5 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
 		Expect(kvp.Value).To(BeAssignableToTypeOf(&model.BGPPeer{}))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
-	})
-
-	It("should fail to convert an invalid Kuberenetes resource", func() {
-		_, err := converter.ToKVPair(resInvalid)
-		Expect(err).To(HaveOccurred())
 	})
 })

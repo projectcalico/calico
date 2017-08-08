@@ -12,48 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package thirdparty
+package custom
 
 import (
 	"encoding/json"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/scope"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// GlobalBgpPeer is the ThirdPartyResource definition of a Calico Global BGP Peer resource in
+// BGPPeer is the CustomResourceDefinition of a Calico BGP Peer resource in
 // the Kubernetes API.
-type GlobalBgpPeer struct {
+type BGPPeer struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ObjectMeta `json:"metadata"`
-	Spec            api.BGPPeerSpec   `json:"spec"`
+	Spec            BGPPeerSpec       `json:"spec"`
 }
 
-// GlobalBgpPeerList is a list of Calico Global BGP Peer resources.
-type GlobalBgpPeerList struct {
+type BGPPeerSpec struct {
+	api.BGPPeerSpec
+	Scope  scope.Scope `json:"scope"`
+	Node   string      `json:"node,omitempty"`
+	PeerIP net.IP      `json:"peerIP"`
+}
+
+// BGPPeerList is a list of Calico Global BGP Peer resources.
+type BGPPeerList struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ListMeta `json:"metadata"`
-	Items           []GlobalBgpPeer `json:"items"`
+	Items           []BGPPeer       `json:"items"`
 }
 
 // GetObjectKind returns the kind of this object.  Required to satisfy Object interface
-func (e *GlobalBgpPeer) GetObjectKind() schema.ObjectKind {
+func (e *BGPPeer) GetObjectKind() schema.ObjectKind {
 	return &e.TypeMeta
 }
 
 // GetObjectMeta returns the object metadata of this object. Required to satisfy ObjectMetaAccessor interface
-func (e *GlobalBgpPeer) GetObjectMeta() metav1.Object {
+func (e *BGPPeer) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
 // GetObjectKind returns the kind of this object. Required to satisfy Object interface
-func (el *GlobalBgpPeerList) GetObjectKind() schema.ObjectKind {
+func (el *BGPPeerList) GetObjectKind() schema.ObjectKind {
 	return &el.TypeMeta
 }
 
 // GetListMeta returns the list metadata of this object. Required to satisfy ListMetaAccessor interface
-func (el *GlobalBgpPeerList) GetListMeta() metav1.List {
+func (el *BGPPeerList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
@@ -61,27 +70,27 @@ func (el *GlobalBgpPeerList) GetListMeta() metav1.List {
 // resources and ugorji. If/when these issues are resolved, the code below
 // should no longer be required.
 
-type GlobalBgpPeerListCopy GlobalBgpPeerList
-type GlobalBgpPeerCopy GlobalBgpPeer
+type BGPPeerListCopy BGPPeerList
+type BGPPeerCopy BGPPeer
 
-func (g *GlobalBgpPeer) UnmarshalJSON(data []byte) error {
-	tmp := GlobalBgpPeerCopy{}
+func (g *BGPPeer) UnmarshalJSON(data []byte) error {
+	tmp := BGPPeerCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := GlobalBgpPeer(tmp)
+	tmp2 := BGPPeer(tmp)
 	*g = tmp2
 	return nil
 }
 
-func (l *GlobalBgpPeerList) UnmarshalJSON(data []byte) error {
-	tmp := GlobalBgpPeerListCopy{}
+func (l *BGPPeerList) UnmarshalJSON(data []byte) error {
+	tmp := BGPPeerListCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := GlobalBgpPeerList(tmp)
+	tmp2 := BGPPeerList(tmp)
 	*l = tmp2
 	return nil
 }

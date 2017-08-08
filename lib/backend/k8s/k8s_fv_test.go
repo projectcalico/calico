@@ -251,9 +251,7 @@ func CreateClientAndSyncer(cfg capi.KubeConfig) (*KubeClient, *cb, api.Syncer) {
 
 	// Ensure the backend is initialized.
 	err = c.EnsureInitialized()
-	if err != nil {
-		panic(err)
-	}
+	Expect(err).NotTo(HaveOccurred(), "Failed to initialize the backend.")
 
 	// Start the syncer.
 	updateChan := make(chan api.Update)
@@ -281,33 +279,10 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		cfg := capi.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
 		c, cb, syncer = CreateClientAndSyncer(cfg)
 
-		// Create a Node in the API to be used by the tests.
-		n := k8sapi.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
-			Spec:       k8sapi.NodeSpec{PodCIDR: "10.10.10.0/24"},
-			Status: k8sapi.NodeStatus{
-				Addresses: []k8sapi.NodeAddress{
-					{
-						Type:    k8sapi.NodeInternalIP,
-						Address: "127.0.0.1/32",
-					},
-					{
-						Type:    k8sapi.NodeExternalIP,
-						Address: "5.6.7.8/32",
-					},
-				},
-			},
-		}
-
-		// Delete the node to ensure a clean start.
-		c.clientSet.Nodes().Delete(n.Name, &metav1.DeleteOptions{})
-
-		// Re-create the node.
-		_, err := c.clientSet.Nodes().Create(&n)
-		Expect(err).NotTo(HaveOccurred(), "Failed to create node in k8s API for test")
-
 		// Start the syncer.
 		syncer.Start()
+
+		// Node object is created by applying the mock-node.yaml manifest in advance.
 
 		// Start processing updates.
 		go cb.ProcessUpdates()
@@ -480,7 +455,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Perform a Get and ensure no error in the Calico API.
-		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("np.projectcalico.org/default.%s", np.ObjectMeta.Name)})
+		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("knp.default.default.%s", np.ObjectMeta.Name)})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -516,28 +491,25 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	}()
 
-	It("should handle a CRUD of System Network Policy", func() {
-		// In the backend, the Policy name is prepended to indicate where
-		// the policy is derived from in KDD.  The System Network Policy
-		// is a TPR and in the backend the name is prepended with
-		// "snp.projectcalico.org/".  The SNP CRUD operations assume that
-		// the name is of the correct format (it's up to the calling code
-		// to fan-out Policy CRUD operations to the appropriate KDD client
-		// based on the prefix).
-		kvp1Name := "snp.projectcalico.org/my-test-snp"
+	It("should handle a CRUD of Global Network Policy", func() {
+
+		kvp1Name := "my-test-gnp"
 		kvp1a := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp1Name},
 			Value: &calicoAllowPolicyModel,
 		}
+
 		kvp1b := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp1Name},
 			Value: &calicoDisallowPolicyModel,
 		}
-		kvp2Name := "snp.projectcalico.org/my-test-snp2"
+
+		kvp2Name := "my-test-gnp2"
 		kvp2a := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp2Name},
 			Value: &calicoAllowPolicyModel,
 		}
+
 		kvp2b := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp2Name},
 			Value: &calicoDisallowPolicyModel,
@@ -546,110 +518,110 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Make sure we clean up after ourselves.  We allow this to fail because
 		// part of our explicit testing below is to delete the resource.
 		defer func() {
-			c.snpClient.Delete(kvp1a)
-			c.snpClient.Delete(kvp2a)
+			c.gnpClient.Delete(kvp1a)
+			c.gnpClient.Delete(kvp2a)
 		}()
 
-		// Check our syncer has the correct SNP entries for the two
+		// Check our syncer has the correct GNP entries for the two
 		// System Network Protocols that this test manipulates.  Neither
 		// have been created yet.
-		By("Checking cache does not have System Network Policy entries", func() {
+		By("Checking cache does not have Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValuePresentFunc(kvp1a.Key)).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
-		By("Creating a System Network Policy", func() {
-			_, err := c.snpClient.Create(kvp1a)
+		By("Creating a Global Network Policy", func() {
+			_, err := c.gnpClient.Create(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Checking cache has correct System Network Policy entries", func() {
+		By("Checking cache has correct Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1a.Value))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
-		By("Attempting to recreate an existing System Network Policy", func() {
-			_, err := c.snpClient.Create(kvp1a)
+		By("Attempting to recreate an existing Global Network Policy", func() {
+			_, err := c.gnpClient.Create(kvp1a)
 			Expect(err).To(HaveOccurred())
 		})
 
-		By("Updating an existing System Network Policy", func() {
-			_, err := c.snpClient.Update(kvp1b)
+		By("Updating an existing Global Network Policy", func() {
+			_, err := c.gnpClient.Update(kvp1b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Checking cache has correct System Network Policy entries", func() {
+		By("Checking cache has correct Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
-		By("Applying a non-existent System Network Policy", func() {
-			_, err := c.snpClient.Apply(kvp2a)
+		By("Applying a non-existent Global Network Policy", func() {
+			_, err := c.gnpClient.Apply(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Checking cache has correct System Network Policy entries", func() {
+		By("Checking cache has correct Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
 			Eventually(cb.GetSyncerValueFunc(kvp2a.Key)).Should(Equal(kvp2a.Value))
 		})
 
-		By("Updating the System Network Policy created by Apply", func() {
-			_, err := c.snpClient.Apply(kvp2b)
+		By("Updating the Global Network Policy created by Apply", func() {
+			_, err := c.gnpClient.Apply(kvp2b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Checking cache has correct System Network Policy entries", func() {
+		By("Checking cache has correct Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
 			Eventually(cb.GetSyncerValueFunc(kvp2a.Key)).Should(Equal(kvp2b.Value))
 		})
 
-		By("Deleted the System Network Policy created by Apply", func() {
-			err := c.snpClient.Delete(kvp2a)
+		By("Deleted the Global Network Policy created by Apply", func() {
+			err := c.gnpClient.Delete(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Checking cache has correct System Network Policy entries", func() {
+		By("Checking cache has correct Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
 		// Perform Get operations directly on the main client - this
 		// will fan out requests to the appropriate Policy client
-		// (including the System Network Policy client).
-		By("Getting a missing System Network Policy", func() {
-			_, err := c.Get(model.PolicyKey{Name: "my-test-snp"})
+		// (including the Global Network Policy client).
+		By("Getting a Global Network Policy that does noe exist", func() {
+			_, err := c.Get(model.PolicyKey{Name: "my-non-existent-test-gnp"})
 			Expect(err).To(HaveOccurred())
 		})
 
-		By("Listing a missing System Network Policy", func() {
-			kvps, err := c.List(model.PolicyListOptions{Name: "my-test-snp"})
+		By("Listing a missing Global Network Policy", func() {
+			kvps, err := c.List(model.PolicyListOptions{Name: "my-non-existent-test-gnp"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(0))
 		})
 
-		By("Getting an existing System Network Policy", func() {
-			kvp, err := c.Get(model.PolicyKey{Name: "snp.projectcalico.org/my-test-snp"})
+		By("Getting an existing Global Network Policy", func() {
+			kvp, err := c.Get(model.PolicyKey{Name: "my-test-gnp"})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(kvp.Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
+			Expect(kvp.Key.(model.PolicyKey).Name).To(Equal("my-test-gnp"))
 			Expect(kvp.Value.(*model.Policy)).To(Equal(kvp1b.Value))
 		})
 
-		By("Listing all policies (including a System Network Policy)", func() {
+		By("Listing all policies (including a Global Network Policy)", func() {
 			// We expect namespace entries for kube-system, kube-public
 			// and default.
 			kvps, err := c.List(model.PolicyListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
-			Expect(kvps[len(kvps)-1].Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
+			Expect(kvps[len(kvps)-1].Key.(model.PolicyKey).Name).To(Equal("my-test-gnp"))
 			Expect(kvps[len(kvps)-1].Value.(*model.Policy)).To(Equal(kvp1b.Value))
 		})
 
-		By("Deleting an existing System Network Policy", func() {
-			err := c.snpClient.Delete(kvp1a)
+		By("Deleting an existing Global Network Policy", func() {
+			err := c.gnpClient.Delete(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Checking cache has no System Network Policy entries", func() {
+		By("Checking cache has no Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValuePresentFunc(kvp1a.Key)).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
@@ -665,6 +637,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ASNum:  numorstring.ASNumber(6512),
 			},
 		}
+
 		kvp1b := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("10.0.0.1"),
@@ -674,6 +647,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ASNum:  numorstring.ASNumber(6513),
 			},
 		}
+
 		kvp2a := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("aa:bb::cc"),
@@ -683,6 +657,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ASNum:  numorstring.ASNumber(6514),
 			},
 		}
+
 		kvp2b := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("aa:bb::cc"),
@@ -747,10 +722,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(2))
-			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
-			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
-			Expect(kvps[1].Key).To(Equal(kvp2b.Key))
-			Expect(kvps[01].Value).To(Equal(kvp2b.Value))
+			keys := []model.Key{}
+			vals := []interface{}{}
+			for _, k := range kvps {
+				keys = append(keys, k.Key)
+				vals = append(vals, k.Value)
+			}
+			Expect(keys).To(ContainElement(kvp1b.Key))
+			Expect(keys).To(ContainElement(kvp2b.Key))
+			Expect(vals).To(ContainElement(kvp1b.Value))
+			Expect(vals).To(ContainElement(kvp2b.Value))
+
 		})
 
 		By("Deleting the Global BGP Peer created by Apply", func() {
@@ -904,10 +886,16 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvps, err := c.List(model.NodeBGPPeerListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(2))
-			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
-			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
-			Expect(kvps[1].Key).To(Equal(kvp2b.Key))
-			Expect(kvps[1].Value).To(Equal(kvp2b.Value))
+			keys := []model.Key{}
+			vals := []interface{}{}
+			for _, k := range kvps {
+				keys = append(keys, k.Key)
+				vals = append(vals, k.Value)
+			}
+			Expect(keys).To(ContainElement(kvp1b.Key))
+			Expect(keys).To(ContainElement(kvp2b.Key))
+			Expect(vals).To(ContainElement(kvp1b.Value))
+			Expect(vals).To(ContainElement(kvp2b.Value))
 		})
 
 		By("Deleting the Node BGP Peer created by Apply", func() {
@@ -1080,7 +1068,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
 	})
 
-	It("should support setting and getting GlobalConfig", func() {
+	It("should support setting and getting GlobalFelixConfig", func() {
 		gc := &model.KVPair{
 			Key: model.GlobalConfigKey{
 				Name: "ClusterGUID",
@@ -1196,7 +1184,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 					CIDR:          *cidr,
 					IPIPInterface: "tunl0",
 					Masquerade:    true,
-					IPAM:          true,
+					IPAM:          false,
 					Disabled:      true,
 				},
 			}
@@ -1208,7 +1196,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(receivedPool.Value.(*model.IPPool).CIDR).To(Equal(*cidr))
 			Expect(receivedPool.Value.(*model.IPPool).IPIPInterface).To(Equal("tunl0"))
 			Expect(receivedPool.Value.(*model.IPPool).Masquerade).To(Equal(true))
-			Expect(receivedPool.Value.(*model.IPPool).IPAM).To(Equal(true))
+			Expect(receivedPool.Value.(*model.IPPool).IPAM).To(Equal(false))
 			Expect(receivedPool.Value.(*model.IPPool).Disabled).To(Equal(true))
 		})
 
