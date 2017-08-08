@@ -23,7 +23,7 @@ import:
   version: 17ae440991da3bdb2df4309936dd2074f66ec394
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: 93f9e49214a678551648eb9c28ce57bc286a3169
+  version: v1.5.3
   subpackages:
   - lib/api
   - lib/api/unversioned
