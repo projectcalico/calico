@@ -4,6 +4,10 @@ title: Kubeadm Hosted Install
 
 This document outlines how to install Calico, as well as a as single node
 etcd cluster for use by Calico on a Kubernetes cluster created by kubeadm.
+If you have already built your cluster with kubeadm, please review the
+[Requirements / Limitations](#requirements--limitations) at the bottom of
+this page. It is likely you will need to recreate your cluster with the
+`--pod-network-cidr` and `--service-cidr` arguments to kubeadm.
 
 Users who have deployed their own etcd cluster outside of kubeadm should
 use the [Calico only manifest](../hosted) instead, as it does not deploy its
@@ -58,13 +62,15 @@ $ kubectl get node <master_name> -o yaml
 ### Requirements / Limitations
 
 * This install does not configure etcd TLS
-* This install expects that one Kubernetes master node has been labeled with:
+* This install expects that one Kubernetes master node has been labeled
+  (this is usually setup by kubeadm, but `kubectl get node --show-labels` will expose the labels) with:
   * For Kubeadm 1.5 `kubeadm.alpha.kubernetes.io/role: master`
   * For Kubeadm 1.6 `node-role.kubernetes.io/master: ""`
-* This install assumes no other pod network has been installed.
-* The CIDR(s) specified with the flag `--cluster-cidr` (pre 1.6) or
+* This install assumes no other pod network configurations have been installed
+  in /etc/cni/net.d (or equivilent directory).
+* The CIDR(s) specified with the kubeadm flag `--cluster-cidr` (pre 1.6) or
   `--pod-network-cidr` (1.6+) must match the Calico IP Pools to have Network
   Policy function correctly. The default is `192.168.0.0/16`.
-* The CIDR specified with the flag `--service-cidr` should not overlap with the Calico IP Pool.
+* The CIDR specified with the kubeadm flag `--service-cidr` should not overlap with the Calico IP Pool.
   * The default CIDR for `--service-cidr` is `10.96.0.0/12`.
   * The calico.yaml(s) linked sets the Calico IP Pool to `192.168.0.0/16`.
