@@ -27,7 +27,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -90,8 +89,9 @@ type RouteTable struct {
 	time timeIface
 }
 
-func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
-	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{conntrack: conntrack.New()}, realTime{})
+func New(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration) *RouteTable {
+	dp := newRealDataplane(netlinkTimeout)
+	return NewWithShims(interfacePrefixes, ipVersion, dp, realTime{})
 }
 
 // NewWithShims is a test constructor, which allows netlink, arp and time to be replaced by shims.

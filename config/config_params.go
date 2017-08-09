@@ -120,6 +120,8 @@ type Config struct {
 	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
 	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
 
+	NetlinkTimeoutSecs time.Duration `config:"seconds;10"`
+
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
 

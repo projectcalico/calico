@@ -17,60 +17,130 @@ package routetable
 import (
 	"net"
 	"os/exec"
+	"syscall"
 	"time"
 
-	. "github.com/vishvananda/netlink"
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ip"
 )
 
 type dataplaneIface interface {
-	LinkList() ([]Link, error)
-	LinkByName(name string) (Link, error)
-	RouteList(link Link, family int) ([]Route, error)
-	RouteAdd(route *Route) error
-	RouteDel(route *Route) error
+	LinkList() ([]netlink.Link, error)
+	LinkByName(name string) (netlink.Link, error)
+	RouteList(link netlink.Link, family int) ([]netlink.Route, error)
+	RouteAdd(route *netlink.Route) error
+	RouteDel(route *netlink.Route) error
 	AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 	RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP)
 }
 
 type realDataplane struct {
+	nlTimeout           time.Duration
+	cachedNetlinkHandle *netlink.Handle
+
 	conntrack *conntrack.Conntrack
 }
 
-func (r realDataplane) LinkList() ([]Link, error) {
-	return LinkList()
+func newRealDataplane(socketTimeout time.Duration) *realDataplane {
+	return &realDataplane{
+		nlTimeout: socketTimeout,
+		conntrack: conntrack.New(),
+	}
 }
 
-func (r realDataplane) LinkByName(name string) (Link, error) {
-	return LinkByName(name)
+func (r *realDataplane) nl() (*netlink.Handle, error) {
+	if r.cachedNetlinkHandle != nil {
+		return r.cachedNetlinkHandle, nil
+	}
+	h, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to (re)connect to netlink")
+		return nil, err
+	}
+	if r.nlTimeout > 0 {
+		err := h.SetSocketTimeout(r.nlTimeout)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to set netlink socket timeout")
+			return nil, err
+		}
+	}
+	r.cachedNetlinkHandle = h
+	return r.cachedNetlinkHandle, nil
 }
 
-func (r realDataplane) RouteList(link Link, family int) ([]Route, error) {
-	return RouteList(link, family)
+func (r *realDataplane) reconnectIfErr(err error) {
+	if err == nil || r.cachedNetlinkHandle == nil {
+		return
+	}
+	r.cachedNetlinkHandle.Delete()
+	r.cachedNetlinkHandle = nil
 }
 
-func (r realDataplane) RouteAdd(route *Route) error {
-	return RouteAdd(route)
+func (r *realDataplane) LinkList() ([]netlink.Link, error) {
+	h, err := r.nl()
+	if err != nil {
+		return nil, err
+	}
+	l, err := h.LinkList()
+	r.reconnectIfErr(err)
+	return l, err
 }
 
-func (r realDataplane) RouteDel(route *Route) error {
-	return RouteDel(route)
+func (r *realDataplane) LinkByName(name string) (netlink.Link, error) {
+	h, err := r.nl()
+	if err != nil {
+		return nil, err
+	}
+	l, err := h.LinkByName(name)
+	r.reconnectIfErr(err)
+	return l, err
 }
 
-func (r realDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
+func (r *realDataplane) RouteList(link netlink.Link, family int) ([]netlink.Route, error) {
+	h, err := r.nl()
+	if err != nil {
+		return nil, err
+	}
+	l, err := h.RouteList(link, family)
+	r.reconnectIfErr(err)
+	return l, err
+}
+
+func (r *realDataplane) RouteAdd(route *netlink.Route) error {
+	h, err := r.nl()
+	if err != nil {
+		return err
+	}
+	err = h.RouteAdd(route)
+	r.reconnectIfErr(err)
+	return err
+}
+
+func (r *realDataplane) RouteDel(route *netlink.Route) error {
+	h, err := r.nl()
+	if err != nil {
+		return err
+	}
+	err = h.RouteDel(route)
+	r.reconnectIfErr(err)
+	return err
+}
+
+func (r *realDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
 	cmd := exec.Command("arp",
 		"-s", cidr.Addr().String(), destMAC.String(),
 		"-i", ifaceName)
 	return cmd.Run()
 }
 
-func (r realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
+func (r *realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 	r.conntrack.RemoveConntrackFlows(ipVersion, ipAddr)
 }
 
-var _ dataplaneIface = realDataplane{}
+var _ dataplaneIface = &realDataplane{}
 
 // timeIface is our shim interface to the time package.
 type timeIface interface {
