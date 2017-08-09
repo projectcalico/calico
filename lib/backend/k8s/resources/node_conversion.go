@@ -65,6 +65,12 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 // mergeCalicoK8sNode takes a k8s node and a Calico node and push the values from the Calico
 // node into the k8s node.
 func mergeCalicoK8sNode(calicoNode *model.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
+	// If the Annotations map is nil, initialize it so we can populate it
+	// with Calico annotations.
+	if k8sNode.Annotations == nil {
+		k8sNode.Annotations = map[string]string{}
+	}
+
 	// In order to make sure we always end up with a CIDR that has the IP and not just network
 	// we assemble the CIDR from BGPIPv4Addr and BGPIPv4Net.
 	if calicoNode.BGPIPv4Net != nil {
