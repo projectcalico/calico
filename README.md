@@ -4,48 +4,28 @@
 [![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
 
 # Calico
+<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
-This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos as well as the source for the `calico/node` container.
+Calico is an open source system enabling cloud native application connectivity and policy. Calico integrates with major orchestration
+systems like [Kubernetes](kubernetes.io), [Apache Mesos](http://mesos.apache.org/), [Docker](https://www.docker.com/), [OpenStack](https://www.openstack.org/) and more to provide a seamless
+experience for developers and operators.
 
-<blockquote>
-Note that the README in this repo is targeted at Calico docs contributors.
-<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
-</blockquote>
+Calico is a [Tigera](https://www.tigera.io/) open source project, and is primarily maintained by the Tigera team.
 
+## Get Started Using Calico
 
-For information on `calico/node`, see the [documentation on calico/node architecture](https://docs.projectcalico.org/master/reference/architecture/components).
+For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](docs.projectcalico.org).
 
-### Developing
+## Get Started Developing Calico
 
-Print useful actions with `make help`.
+- [Contribution guidlines](CONTRIBUTING_CODE.md): submitting patches to Calico and contribution workflow.
+- [Building Calico](BUILDING_CALICO.md): building Calico from source and developer workflow.
+- [Contributing to the Calico documentation](CONTRIBUTING_DOCS.md): submitting patches to [docs.projectcalico.org](docs.projectcalico.org)
 
-![Project Calico logo](https://docs.projectcalico.org/images/felix.png)
+## Support
 
+You can get help through one of the [Calico community channels](https://www.projectcalico.org/community).
 
-### Building `calico/node`
+## License
 
-To build the `calico/node` container, run the following build step from
-the root of the repository:
-
-```
-make -C calico_node calico/node
-```
-
-Use the build variables listed in the `Calico binaries` variable section
-at the top of the Makefile to modify which components are included in the resulting image.
-For example, the following command will produce a docker image called `calico/node:custom`
-which uses custom Felix and Libnetwork binaries:
-
-```
-FELIX_CONTAINER_NAME=calico/felix:1.4.3 \
-LIBNETWORK_PLUGIN_CONTAINER_NAME=calico/libnetwork-plugin:v1.0.0-beta \
-BUILD_CONTAINER_NAME=calico/node:custom \
-make calico/node
-```
-
-The canonical source for which versions are included in the `calico/node` image come from the `_date/versions.yml` file.
-
-
-### Building the docs
-
-See [CONTRIBUTING_DOCS.md](CONTRIBUTING_DOCS.md)
+Calico is available under the Apache 2.0 license. See the [LICENSE](LICENSE.md) file for details.
