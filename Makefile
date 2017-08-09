@@ -4,7 +4,7 @@ default: all
 all: test
 test: ut
 
-K8S_VERSION=1.6.3
+K8S_VERSION=1.7.3
 CALICO_BUILD?=calico/go-build
 PACKAGE_NAME?=projectcalico/libcalico-go
 LOCAL_USER_ID?=$(shell id -u $$USER)
@@ -47,50 +47,43 @@ run-etcd: stop-etcd
 
 ## Run a local kubernetes master with API via hyperkube
 run-kubernetes-master: stop-kubernetes-master
-	# Run the kubelet which will launch the master components in a pod.
+	# Run a Kubernetes apiserver using Docker.
 	docker run \
-                 -v /proc:/rootfs/proc:ro \
-                 -v /sys:/sys:ro \
-                 -v /var/run:/var/run:rw \
-                 -v /var/lib/docker/:/var/lib/docker:rw \
-                 -v /var/lib/kubelet/:/var/lib/kubelet:rw \
-                 -v ${PWD}/kubernetes-manifests:/etc/kubernetes/:rw \
-                 --net=host \
-                 --pid=host \
-                 --privileged=true \
-                 --name calico-kubelet-master \
-                 -d \
-                 gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
-                 /hyperkube kubelet \
-                 	--containerized \
-                 	--hostname-override="127.0.0.1" \
-                 	--address="0.0.0.0" \
-                 	--api-servers=http://localhost:8080 \
-	                --pod-manifest-path=/etc/kubernetes/manifests-multi/ \
-                 	--cluster-dns=10.0.0.10 \
-                 	--cluster-domain=cluster.local \
-	                --allow-privileged=true --v=2 \
-			--cgroups-per-qos=false --enforce-node-allocatable=""
-	# Wait until the newly launched API server can respond to a
-	# request on port 8080, before completing this Makefile
-	# target.
+		--net=host --name st-apiserver \
+		--detach \
+		gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+		/hyperkube apiserver \
+			--bind-address=0.0.0.0 \
+			--insecure-bind-address=0.0.0.0 \
+	        	--etcd-servers=http://127.0.0.1:2379 \
+			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
+			--authorization-mode=RBAC \
+			--service-cluster-ip-range=10.101.0.0/16 \
+			--v=10 \
+			--logtostderr=true
+
+	# And run the controller manager.
 	docker run \
-		--rm \
-		--net=host \
-		tutum/curl \
-		sh -c "while ! curl http://localhost:8080/apis/extensions/v1beta1/thirdpartyresources; do sleep 2; done"
+		--net=host --name st-controller-manager \
+		--detach \
+		gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+		/hyperkube controller-manager \
+                        --master=127.0.0.1:8080 \
+                        --min-resync-period=3m \
+                        --allocate-node-cidrs=true \
+                        --cluster-cidr=10.1.0.0/16 \
+                        --v=5
+
+	# Wait until we can configure a cluster role binding which allows anonymous auth.
+	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
 
 ## Stop the local kubernetes master
 stop-kubernetes-master:
-	# Stop any existing kubelet that we started
-	-docker rm -f calico-kubelet-master
+	# Delete the cluster role binding.
+	-docker exec st-apiserver kubectl delete clusterrolebinding anonymous-admin
 
-	# Remove any pods that the old kubelet may have started.
-	-docker ps -af name=k8s_ | awk 'NR < 2 {next}{print $$1}' | while read x;do docker rm -f $$x;done
-
-	# Remove any left over volumes
-	-docker volume ls -qf dangling=true | while read x;do docker volume rm $$x;done
-	-mount | grep kubelet | awk '{print $$3}' | while read x;do umount $$x;done
+	# Stop master components. 
+	-docker rm -f st-apiserver st-controller-manager
 
 ## Stop the etcd container (calico-etcd)
 stop-etcd:

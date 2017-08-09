@@ -351,6 +351,9 @@ func (c *customK8sNodeResourceClient) applyResourceToAnnotation(node *apiv1.Node
 		logContext.Error("Unable to convert value for annotation")
 		return nil, err
 	}
+	if node.Annotations == nil {
+		node.Annotations = map[string]string{}
+	}
 	node.Annotations[c.nameToAnnotationKey(resName)] = string(data)
 
 	// Update the Node resource.

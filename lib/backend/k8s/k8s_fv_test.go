@@ -140,7 +140,7 @@ func (c cb) ProcessUpdates() {
 		} else {
 			// Add or modified.
 			c.State[u.Key.String()] = u
-			log.Infof("[TEST] Stored update %s", u.Key.String())
+			log.Infof("[TEST] Stored update (type %d) %s", u.UpdateType, u.Key.String())
 		}
 		c.Lock.Unlock()
 	}
@@ -277,9 +277,36 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	BeforeEach(func() {
 		log.SetLevel(log.DebugLevel)
 
-		// Start the syncer.
+		// Create a Kubernetes client, callbacks, and a syncer.
 		cfg := capi.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
 		c, cb, syncer = CreateClientAndSyncer(cfg)
+
+		// Create a Node in the API to be used by the tests.
+		n := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
+			Spec:       k8sapi.NodeSpec{PodCIDR: "10.10.10.0/24"},
+			Status: k8sapi.NodeStatus{
+				Addresses: []k8sapi.NodeAddress{
+					{
+						Type:    k8sapi.NodeInternalIP,
+						Address: "127.0.0.1/32",
+					},
+					{
+						Type:    k8sapi.NodeExternalIP,
+						Address: "5.6.7.8/32",
+					},
+				},
+			},
+		}
+
+		// Delete the node to ensure a clean start.
+		c.clientSet.Nodes().Delete(n.Name, &metav1.DeleteOptions{})
+
+		// Re-create the node.
+		_, err := c.clientSet.Nodes().Create(&n)
+		Expect(err).NotTo(HaveOccurred(), "Failed to create node in k8s API for test")
+
+		// Start the syncer.
 		syncer.Start()
 
 		// Start processing updates.
@@ -914,6 +941,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				Namespace: "default",
 			},
 			Spec: k8sapi.PodSpec{
+				NodeName: "127.0.0.1",
 				Containers: []k8sapi.Container{
 					k8sapi.Container{
 						Name:    "container1",
@@ -932,6 +960,14 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			_ = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 		}()
 		By("Creating a pod", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Assigning an IP", func() {
+			// Update the Pod to have an IP and be running.
+			pod.Status.PodIP = "192.168.1.1"
+			pod.Status.Phase = k8sapi.PodRunning
+			_, err = c.clientSet.Pods("default").UpdateStatus(&pod)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
