@@ -85,7 +85,7 @@ type AsyncCalcGraph struct {
 	flushLeakyBucket int
 	dirty            bool
 
-	debugHangC    <-chan time.Time
+	debugHangC <-chan time.Time
 }
 
 const (

@@ -332,8 +332,8 @@ var _ = Describe("health tests", func() {
 			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 			"-e", "FELIX_USAGEREPORTINGENABLED=false",
 			"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
-			"-e", "FELIX_DebugSimulateCalcGraphHangAfter=" +calcGraphHangTime,
-			"-e", "FELIX_DebugSimulateDataplaneHangAfter=" +dataplaneHangTime,
+			"-e", "FELIX_DebugSimulateCalcGraphHangAfter="+calcGraphHangTime,
+			"-e", "FELIX_DebugSimulateDataplaneHangAfter="+dataplaneHangTime,
 			"-e", "K8S_API_ENDPOINT="+k8sAPIEndpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-e", "FELIX_TYPHAADDR="+typhaAddr,
@@ -376,7 +376,7 @@ var _ = Describe("health tests", func() {
 		})
 	})
 
-	FDescribe("with Felix (no Typha) and Felix dataplane set to hang", func() {
+	Describe("with Felix (no Typha) and Felix dataplane set to hang", func() {
 		BeforeEach(func() {
 			startFelix("", "", "5")
 			createPerNodeConfig()
