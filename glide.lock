@@ -1,5 +1,5 @@
-hash: a1a6e727d774908cda0d14a92843c8bfe3cba9f249f583fe5c864fffc6dd220f
-updated: 2017-07-24T19:34:43.661032526Z
+hash: 55b1bb6ca3ac60a923e1997963a2e8735895191745dcf8e55d3f2246c7d49a94
+updated: 2017-08-07T10:04:37.816424735-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -32,7 +32,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -69,7 +69,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 748d386b5c1ea99658fd69fe9f03991ce86a90c1
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -140,7 +140,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e1ab5e5bf4a57ea6fa71bf4a7712af27b824a005
+  version: d57562ced98d850282636bb5da16c840ea74b7df
   subpackages:
   - lib
   - lib/api
@@ -171,7 +171,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 28bec615f73b277e92728f6ce6aa847a0354647f
+  version: 5e3fcf3a305f8e24a27aa663323eddf54b0a515a
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -186,13 +186,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 61f87aac8082fa8c3c5655c7608d7478d46ac2ad
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -201,7 +201,7 @@ imports:
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
-- name: github.com/Sirupsen/logrus
+- name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
@@ -210,11 +210,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: 70cf3c74a89e4ca3847f109e77490a40e5639965
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
@@ -231,7 +231,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: d8f5ea21b9295e315e612b4bcf4bedea93454d4d
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -260,7 +260,7 @@ imports:
   - unicode/norm
   - width
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2

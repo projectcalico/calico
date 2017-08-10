@@ -17,7 +17,7 @@ package rules
 import (
 	"sort"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"

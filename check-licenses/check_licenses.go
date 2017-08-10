@@ -17,7 +17,7 @@ package main
 import (
 	"os"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"bufio"
 	"regexp"
@@ -53,6 +53,8 @@ var (
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/golang/protobuf/proto",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/howeyc/gopass",
+			license: "ISC License (98%)"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/davecgh/go-spew/spew",
 			license: "ISC License (98%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/imdario/mergo",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},

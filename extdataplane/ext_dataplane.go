@@ -23,8 +23,8 @@ import (
 	"os"
 	"os/exec"
 
-	log "github.com/Sirupsen/logrus"
 	pb "github.com/gogo/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 
 	_ "github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/proto"

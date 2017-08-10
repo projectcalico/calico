@@ -24,7 +24,7 @@ import (
 	"net/url"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"

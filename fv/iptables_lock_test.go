@@ -25,9 +25,9 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("with running container", func() {
@@ -115,7 +115,7 @@ var _ = Describe("with running container", func() {
 		It("iptables should succeed in getting the lock after 3s", func() {
 			iptCmd := cmdInContainer("iptables", "-w", "3", "-A", "FORWARD")
 			out, err := iptCmd.CombinedOutput()
-			Expect(string(out)).To(ContainSubstring("Another app is currently holding the xtables lock"))
+			log.Infof("iptables output='%s'", out)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

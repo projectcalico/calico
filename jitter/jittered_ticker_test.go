@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 )
 
 var _ = Describe("Real 20ms + 10ms Ticker", func() {

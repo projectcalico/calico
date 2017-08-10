@@ -18,7 +18,7 @@ import (
 	"math/rand"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Ticker tries to emit events on channel C at minDuration intervals plus up to maxJitter.
