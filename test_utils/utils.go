@@ -2,7 +2,6 @@ package test_utils
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -120,7 +119,14 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 
 	// Run the CNI plugin passing in the supplied netconf
 	cmd := &exec.Cmd{
-		Env:  []string{"CNI_COMMAND=" + command, "CNI_CONTAINERID=a", "CNI_NETNS=b", "CNI_IFNAME=c", "CNI_PATH=d", "CNI_ARGS=" + args},
+		Env: []string{
+			"CNI_CONTAINERID=a",
+			"CNI_NETNS=b",
+			"CNI_IFNAME=c",
+			"CNI_PATH=d",
+			fmt.Sprintf("CNI_COMMAND=%s", command),
+			fmt.Sprintf("CNI_ARGS=%s", args),
+		},
 		Path: "dist/" + conf.IPAM.Type,
 	}
 	stdin, err := cmd.StdinPipe()
@@ -208,21 +214,31 @@ func CreateContainerWithId(netconf string, k8sName string, ip string, containerI
 func RunCNIPluginWithId(netconf, k8sName, ip, containerId string, targetNs ns.NetNS) (session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
 
 	// Set up the env for running the CNI plugin
-	//TODO pass in the env properly
-	var k8s_env = ""
+	k8sEnv := ""
 	if k8sName != "" {
-		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", k8sName)
+		k8sEnv = fmt.Sprintf("CNI_ARGS=K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever", k8sName)
 
 		// Append IP=<ip> to CNI_ARGS only if it's not an empty string.
 		if ip != "" {
-			k8s_env = fmt.Sprintf("%s;IP=%s\"", strings.TrimRight(k8s_env, "\""), ip)
+			k8sEnv = fmt.Sprintf("%s;IP=%s", k8sEnv, ip)
 		}
 	}
-	cni_env := fmt.Sprintf("CNI_COMMAND=ADD CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", containerId, targetNs.Path(), k8s_env)
+
+	env := []string{
+		"CNI_COMMAND=ADD",
+		"CNI_IFNAME=eth0",
+		"CNI_PATH=dist",
+		fmt.Sprintf("CNI_CONTAINERID=%s", containerId),
+		fmt.Sprintf("CNI_NETNS=%s", targetNs.Path()),
+		k8sEnv,
+	}
+
+	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 
 	// Run the CNI plugin passing in the supplied netconf
-	//TODO - Get rid of this PLUGIN thing and use netconf instead
-	subProcess := exec.Command("bash", "-c", fmt.Sprintf("%s dist/%s", cni_env, os.Getenv("PLUGIN")), netconf)
+	// TODO - Get rid of this PLUGIN thing and use netconf instead
+	subProcess := exec.Command(fmt.Sprintf("dist/%s", os.Getenv("PLUGIN")), netconf)
+	subProcess.Env = env
 	stdin, err := subProcess.StdinPipe()
 	if err != nil {
 		panic("some error found")
@@ -300,16 +316,26 @@ func DeleteContainerWithId(netconf, netnspath, name, containerId string) (exitCo
 	if containerId != "" {
 		container_id = containerId
 	}
-	var k8s_env = ""
+	k8sEnv := ""
 	if name != "" {
-		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", name)
+		k8sEnv = fmt.Sprintf("CNI_ARGS=K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever", name)
 	}
 
 	// Set up the env for running the CNI plugin
-	cni_env := fmt.Sprintf("CNI_COMMAND=DEL CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", container_id, netnspath, k8s_env)
+	env := []string{
+		"CNI_COMMAND=DEL",
+		fmt.Sprintf("CNI_CONTAINERID=%s", container_id),
+		fmt.Sprintf("CNI_NETNS=%s", netnspath),
+		"CNI_IFNAME=eth0",
+		"CNI_PATH=dist",
+		k8sEnv,
+	}
+
+	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 
 	// Run the CNI plugin passing in the supplied netconf
-	subProcess := exec.Command("bash", "-c", fmt.Sprintf("%s dist/%s", cni_env, os.Getenv("PLUGIN")), netconf)
+	subProcess := exec.Command(fmt.Sprintf("dist/%s", os.Getenv("PLUGIN")), netconf)
+	subProcess.Env = env
 	stdin, err := subProcess.StdinPipe()
 	if err != nil {
 		return
@@ -339,40 +365,6 @@ func Cmd(cmd string) string {
 		ginkgo.Fail("Command failed")
 	}
 	return strings.TrimSpace(string(out))
-}
-
-func CmdWithStdin(cmd, stdin_string string) string {
-	//fmt.Println("Running command:", cmd)
-	//fmt.Println("stdin:", stdin_string)
-	subProcess := exec.Command("bash", "-c", cmd)
-	stdin, err := subProcess.StdinPipe()
-	if err != nil {
-		panic("some error found")
-	}
-
-	stdout_buf := new(bytes.Buffer)
-	stderr_buf := new(bytes.Buffer)
-
-	subProcess.Stdout = stdout_buf
-	subProcess.Stderr = stderr_buf
-
-	io.WriteString(stdin, stdin_string)
-	io.WriteString(stdin, "\n")
-	stdin.Close()
-
-	if err = subProcess.Start(); err != nil {
-		fmt.Println("An error occured: ", err)
-	}
-
-	err = subProcess.Wait()
-	//if err != nil || stderr_buf.Len() != 0 {
-	//	fmt.Println(err)
-	//	fmt.Println(stdout_buf.String())
-	//	fmt.Println("Processes completed STDERR:", stderr_buf.String())
-	//	panic("some error found")
-	//}
-
-	return stdout_buf.String()
 }
 
 // CheckSysctlValue is a utility function to assert sysctl value is set to what is expected.

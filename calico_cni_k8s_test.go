@@ -34,6 +34,7 @@ func init() {
 	log.SetFormatter(&logutils.Formatter{})
 	log.AddHook(&logutils.ContextHook{})
 	log.SetOutput(GinkgoWriter)
+	log.SetLevel(log.DebugLevel)
 }
 
 var _ = Describe("CalicoCni", func() {
