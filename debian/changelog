@@ -1,3 +1,13 @@
+felix (2.4.1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.4.1 (from Git commit 0ee59e4).
+    [Changes recorded in 2.4.1 tag]
+    - Update the import for logrus to use lowercasing
+    - Switched log.Printf to log.Infof.
+    - Update libcalico to v1.5.2
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 10 Aug 2017 13:38:10 +0200
+
 felix (2.4.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.4.0 (from Git commit b891ac5).
