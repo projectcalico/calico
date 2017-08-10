@@ -100,6 +100,7 @@ func init() {
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
 	registerFieldValidator("ipversion", validateIPVersion)
 	registerFieldValidator("ipipmode", validateIPIPMode)
+	registerFieldValidator("policytype", validatePolicyType)
 
 	// Register struct validators.
 	registerStructValidator(validateProtocol, numorstring.Protocol{})
@@ -216,6 +217,18 @@ func validateScopeGlobalOrNode(v *validator.Validate, topStruct reflect.Value, c
 	f := field.Interface().(scope.Scope)
 	log.Debugf("Validate scope: %v", f)
 	return f == scope.Global || f == scope.Node
+}
+
+func validatePolicyType(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate policy type: %s", s)
+	if strings.EqualFold(s, "ingress") {
+		return true
+	}
+	if strings.EqualFold(s, "egress") {
+		return true
+	}
+	return false
 }
 
 func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -518,5 +531,14 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 	if m.PreDNAT && len(m.EgressRules) > 0 {
 		structLevel.ReportError(reflect.ValueOf(m.EgressRules),
 			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"))
+	}
+
+	if m.PreDNAT && len(m.Types) > 0 {
+		for _, t := range m.Types {
+			if strings.EqualFold(t, "egress") {
+				structLevel.ReportError(reflect.ValueOf(m.Types),
+					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"))
+			}
+		}
 	}
 }

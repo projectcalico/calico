@@ -117,6 +117,10 @@ type PolicySpec struct {
 
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
 	PreDNAT bool `json:"preDNAT,omitempty"`
+
+	// Types indicates whether this policy applies to ingress, or to egress, or to both.  An
+	// empty or nil value here indicates both ingress and egress.
+	Types []string `json:"types,omitempty" validate:"omitempty,dive,policytype"`
 }
 
 // NewPolicy creates a new (zeroed) Policy struct with the TypeMetadata initialised to the current
