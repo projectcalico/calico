@@ -54,3 +54,13 @@ However, if you do need to assign a particular address to a Pod, Calico provides
 - You can request an IP using the `cni.projectcalico.org/ipAddrsNoIpam` annotation. Note that this annotation bypasses the configured IPAM plugin, and thus in most cases it is recommended to use the above annotation. 
 
 See the [Requesting a Specific IP address]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#requesting-a-specific-ip-address) section in the CNI plugin reference documentation for more details.
+
+#### How can I restrict external access to exposed services (i.e. access to a NodePort)?
+
+Limiting access to a NodePort (or any host based service) can be accomplished
+by configuring Calico Host Endpoints and Calico policy.  See
+[Using Calico to Secure Host Interfaces]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal#host-endpoint-policy-a-worked-example)
+for setting up Host Endpoints for the hosts and the
+[worked example]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal#host-endpoint-policy-a-worked-example)
+for how to set up the policy to allow the desired traffic and restrict the
+unwanted traffic.

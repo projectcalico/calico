@@ -37,5 +37,12 @@ what can be done with the Kubernetes NetworkPolicy API like egress and CIDR base
 
 **[Configuring BGP Peering][bgp-peering]**: this guide is for users on private cloud who want to configure Calico to peer with their underlying infrastructure.
 
+##### Protecting Host Access
+
+**[Host Endpoint policy to limit NodePort access][hep-worked-example]**:
+A worked example configuring Host Endpoint policy to secure a host against
+incoming traffic from outside the cluster.
+
 [calicoctl]: {{site.baseurl}}/{{page.version}}/reference/calicoctl/
 [bgp-peering]: {{site.baseurl}}/{{page.version}}/usage/configuration/bgp
+[hep-worked-example]: {{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal#host-endpoint-policy-a-worked-example
