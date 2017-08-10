@@ -17,6 +17,7 @@ package calc
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -74,9 +75,13 @@ func (poc *PolicySorter) Sorted() *tierInfo {
 	return tierInfo
 }
 
+// Note: PolKV is really internal to the calc package.  It is named with an initial capital so that
+// the test package calc_test can also use it.
 type PolKV struct {
-	Key   model.PolicyKey
-	Value *model.Policy
+	Key     model.PolicyKey
+	Value   *model.Policy
+	Ingress *bool
+	Egress  *bool
 }
 
 func (p PolKV) String() string {
@@ -89,6 +94,35 @@ func (p PolKV) String() string {
 		}
 	}
 	return fmt.Sprintf("%s(%s)", p.Key.Name, orderStr)
+}
+
+func (p PolKV) governsType(wanted string) bool {
+	// Back-compatibility: no Types means Ingress and Egress.
+	if len(p.Value.Types) == 0 {
+		return true
+	}
+	for _, t := range p.Value.Types {
+		if strings.EqualFold(t, wanted) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p PolKV) GovernsIngress() bool {
+	if p.Ingress == nil {
+		governsIngress := p.governsType("ingress")
+		p.Ingress = &governsIngress
+	}
+	return *p.Ingress
+}
+
+func (p PolKV) GovernsEgress() bool {
+	if p.Egress == nil {
+		governsEgress := p.governsType("egress")
+		p.Egress = &governsEgress
+	}
+	return *p.Egress
 }
 
 type PolicyByOrder []PolKV

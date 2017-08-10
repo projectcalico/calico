@@ -451,18 +451,20 @@ func endpointManagerTests(ipVersion uint8) func() {
 				parts := strings.Split(spec.polName, "_")
 				if len(parts) == 1 {
 					tiers = append(tiers, &proto.TierInfo{
-						Name:     "default",
-						Policies: []string{spec.polName},
+						Name:            "default",
+						IngressPolicies: []string{spec.polName},
+						EgressPolicies:  []string{spec.polName},
 					})
 				} else if len(parts) == 2 && parts[1] == "untracked" {
 					untrackedTiers = append(untrackedTiers, &proto.TierInfo{
-						Name:     "default",
-						Policies: []string{parts[0]},
+						Name:            "default",
+						IngressPolicies: []string{parts[0]},
+						EgressPolicies:  []string{parts[0]},
 					})
 				} else if len(parts) == 2 && parts[1] == "preDNAT" {
 					preDNATTiers = append(preDNATTiers, &proto.TierInfo{
-						Name:     "default",
-						Policies: []string{parts[0]},
+						Name:            "default",
+						IngressPolicies: []string{parts[0]},
 					})
 				} else {
 					panic("Failed to parse policy name " + spec.polName)

@@ -25,13 +25,14 @@ import (
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	ifaceName string,
 	adminUp bool,
-	policies []string,
+	ingressPolicies []string,
+	egressPolicies []string,
 	profileIDs []string,
 ) []*Chain {
 	return []*Chain{
 		// Chain for traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			policies,
+			ingressPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -43,7 +44,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			policies,
+			egressPolicies,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -58,14 +59,15 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	ifaceName string,
-	policyNames []string,
+	ingressPolicyNames []string,
+	egressPolicyNames []string,
 	profileIDs []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
 	return []*Chain{
 		// Chain for traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			policyNames,
+			egressPolicyNames,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -77,7 +79,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			policyNames,
+			ingressPolicyNames,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -92,13 +94,14 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
-	untrackedPolicyNames []string,
+	ingressPolicyNames []string,
+	egressPolicyNames []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint chain.")
 	return []*Chain{
 		// Chain for traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			untrackedPolicyNames,
+			egressPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyOutboundPfx,
@@ -110,7 +113,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			untrackedPolicyNames,
+			ingressPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
