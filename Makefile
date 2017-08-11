@@ -62,6 +62,9 @@ run-kubernetes-master: stop-kubernetes-master
 			--v=10 \
 			--logtostderr=true
 
+	# Wait until we can configure a cluster role binding which allows anonymous auth.
+	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
+
 	# And run the controller manager.
 	docker run \
 		--net=host --name st-controller-manager \
@@ -71,11 +74,8 @@ run-kubernetes-master: stop-kubernetes-master
                         --master=127.0.0.1:8080 \
                         --min-resync-period=3m \
                         --allocate-node-cidrs=true \
-                        --cluster-cidr=10.1.0.0/16 \
+                        --cluster-cidr=10.10.0.0/16 \
                         --v=5
-
-	# Wait until we can configure a cluster role binding which allows anonymous auth.
-	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
 
 ## Stop the local kubernetes master
 stop-kubernetes-master:
