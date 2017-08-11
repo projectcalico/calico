@@ -1,12 +1,12 @@
-hash: c2ad62d3ebec8994054fa8bb675e43934791f5da8291e21c0370958dfa862ef8
-updated: 2017-07-31T15:18:41.588321487-07:00
+hash: 51905d87c37893f1dd12594877bac631b3303304058bbc83d813ee7378cdf274
+updated: 2017-08-11T10:47:43.202639072Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: c31bec0f29facff13f7c3e3d948e55dd6689ed42
+  version: d0d1a87aa96ae14914751d42264262cb69eda170
   subpackages:
   - client
   - pkg/pathutil
@@ -57,7 +57,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  version: 1909bc2f63dc92bb931deace8b8312c4db72d12f
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -177,8 +177,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: b4ec1df61a85b06ecd47d331e081250781675c9c
-  repo: https://github.com/fasaxc/go-datastructures.git
+  version: b9547a38b81ee66409d34781495d771dfa1e7e41
   subpackages:
   - list
   - trie/ctrie
@@ -199,7 +198,7 @@ imports:
   - idna/
   - lex/httplex
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: e42485b6e20ae7d2304ec72e535b103ed350cc02
   subpackages:
   - unix
 - name: golang.org/x/text
