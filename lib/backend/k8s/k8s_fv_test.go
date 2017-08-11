@@ -1012,39 +1012,39 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		expectedKeys := []api.Update{
-			api.Update{
-				model.KVPair{
-					Key: model.WorkloadEndpointKey{
-						Hostname:       "127.0.0.1",
-						OrchestratorID: "k8s",
-						WorkloadID:     fmt.Sprintf("default.%s", pod.ObjectMeta.Name),
-						EndpointID:     "eth0",
-					},
-				},
-				api.UpdateTypeKVNew,
+		expectedKVP := model.KVPair{
+			Key: model.WorkloadEndpointKey{
+				Hostname:       "127.0.0.1",
+				OrchestratorID: "k8s",
+				WorkloadID:     fmt.Sprintf("default.%s", pod.ObjectMeta.Name),
+				EndpointID:     "eth0",
 			},
 		}
 
-		By("Expecting an update on the Syncer API", func() {
-			cb.ExpectExists(expectedKeys)
+		By("Expecting an update with type 'KVUpdated' on the Syncer API", func() {
+			cb.ExpectExists([]api.Update{
+				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVUpdated},
+			})
 		})
 
-		By("Expecting a Syncer snapshot to include the update", func() {
+		By("Expecting a Syncer snapshot to include the update with type 'KVNew'", func() {
 			// Create a new syncer / callback pair so that it performs a snapshot.
 			cfg := capi.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
 
-			// Expect the snapshot to include the right keys.
-			snapshotCallbacks.ExpectExists(expectedKeys)
+			// Expect the snapshot to include workload endpoint with type "KVNew".
+			snapshotCallbacks.ExpectExists([]api.Update{
+				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVNew},
+			})
+
 		})
 
 		By("Deleting the Pod and expecting the wep to be deleted", func() {
 			err = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			cb.ExpectDeleted([]model.KVPair{expectedKeys[0].KVPair})
+			cb.ExpectDeleted([]model.KVPair{expectedKVP})
 		})
 	})
 
