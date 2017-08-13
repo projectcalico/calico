@@ -2,7 +2,7 @@
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 
-# Calico Networking for CNI 
+# Calico Networking for CNI
 
 <blockquote>
 Note that the documentation in this repo is targeted at Calico contributors.
@@ -10,18 +10,19 @@ Note that the documentation in this repo is targeted at Calico contributors.
 </blockquote>
 
 This repository contains the Project Calico network plugin for CNI.  This plugin allows you to use Calico networking for
-any orchestrator which makes use of the [CNI networking specification][cni].
+any orchestrator which makes use of the [CNI networking specification][cni specification].
 
 This repository includes a top-level CNI networking plugin, as well as a CNI IPAM plugin which makes use of Calico IPAM.
 
-To learn more about CNI, visit the [appc/cni][cni] repo.
+To learn more about CNI, visit the [containernetworking/cni][cni] repo.
 
 ## Building the plugins and running tests
 To build the Calico Networking Plugin for CNI locally, clone this repository and run `make`.  This will build both CNI plugin binaries and run the tests. This requires a recent version of Docker.
 
 - To just build the binaries, with no tests, run `make binary`. This will produce `dist/calico` and `dist/calico-ipam`.
 - To only run the tests, simply run `make test`.
-- To run a non-containerized build (i.e. not inside a docker container) you need to have Go 1.7+ and glide installed. 
-[cni]: https://github.com/appc/cni
+- To run a non-containerized build (i.e. not inside a docker container) you need to have Go 1.7+ and glide installed.
 
+[cni]: https://github.com/containernetworking/cni
+[cni specification]: https://github.com/containernetworking/cni/blob/master/SPEC.md
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
