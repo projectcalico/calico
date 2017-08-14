@@ -29,6 +29,13 @@ The default MTU for workload interfaces is 1500, this is to match the most
 common network MTU size.  The default MTU for the IP-in-IP tunnel device
 is 1440 to match the value needed in GCE.
 
+#### Using Flannel for Networking
+
+When using Flannel for networking, the MTU for the network interfaces
+should match the MTU of the flannel interface.  In the above table the 4th
+column "Calico MTU with VXLAN" is the expected MTU when using Flannel
+configured with VXLAN.
+
 ### Setting MTU for workload network interfaces
 
 It is the job of the network plugin to create new interfaces, the current
