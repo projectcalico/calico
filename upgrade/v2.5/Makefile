@@ -1,0 +1,13 @@
+dist/clis:
+	mkdir -p dist
+	curl -sSf -L https://github.com/projectcalico/calicoctl/releases/download/v1.4.1/calicoctl -o calicoctl-v1.4
+	curl -sSf -L https://github.com/projectcalico/calicoctl/releases/download/v1.5.0-rc1/calicoctl -o calicoctl-v1.5
+	curl -sSf -L https://storage.googleapis.com/kubernetes-release/release/v1.7.3/bin/darwin/amd64/kubectl
+	chmod +x dist/calicoctl-v1.4
+	chmod +x dist/calicoctl-v1.5
+	chmod +x dist/kubectl
+
+build-container: dist/clis
+	docker build -t calico/upgrade:v2.5 .
+
+

@@ -1,0 +1,13 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: calico-upgrade-v2.5
+spec:
+  template:
+    metadata:
+      name: calico-upgrade-v2.5
+    spec:
+      containers:
+      - name: calico-upgrade
+        image: gunjan5/upgrade:v2.5.3
+      restartPolicy: Never
