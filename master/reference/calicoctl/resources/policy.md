@@ -77,11 +77,27 @@ that no egress should be allowed ..., you can express that by including
 `egress` as one of the values of the `types` field.
 
 When `types` is not specified (or if it is an empty list), Calico treats the
-policy as applicable to ingress traffic (to the selected endpoints) only if it
-has any ingress rules, and to egress traffic (from the selected endpoints) only
-if it has any egress rules.
+policy as applicable to ingress traffic (to the selected endpoints) if it has
+any ingress rules, or if it has neither ingress nor egress rules - with the
+latter case meaning to deny ingress by default - and to egress traffic (from
+the selected endpoints) only if it has any egress rules.
+
+| Ingress rules present? | Egress rules present? | Default `types`   | Other allowed `types` settings, and their meaning                                                     |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| No                     | No                    | `ingress`         | `egress` - Restrict egress instead of ingress.  `ingress, egress` - Restrict both ingress and egress. |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| Yes                    | No                    | `ingress`         | `ingress, egress` - Restrict egress as well as ingress.                                               |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| No                     | Yes                   | `egress`          | `ingress, egress` - Restrict ingress as well as egress.                                               |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| Yes                    | Yes                   | `ingress, egress` | None.                                                                                                 |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
 
 > **NOTE**
+>
+> It is not valid to specify a `types` value _without_ `ingress` when ingress
+> rules are present, or to specify a `types` value _without_ `egress` when
+> egress rules are present.
 >
 > Prior to v2.6.0, Calico behaved as though `types` was always `[ ingress,
 > egress ]`.  In other words, if a policy applied to a given endpoint at all,
@@ -92,22 +108,8 @@ if it has any egress rules.
 > `types` field was introduced and the default behavior changed.
 >
 > If you have existing YAML with policies without any ingress or egress rules,
-> that you want to behave as they did prior to Calico v2.6.0, you can add
-> `types: [ ingress, egress ]` to each such policy.  Or, if there is a set of
-> endpoints for which there are no policies with any ingress (or egress) rules,
-> and you want all ingress (or egress) to be denied for those endpoints, you
-> can configure that explicitly with:
->
-> ```yaml
-> apiVersion: v1
-> kind: policy
-> metadata:
->   name: deny-ingress
-> spec:
->   selector: <selector for relevant endpoints>
->   ingress:
->   - action: deny
-> ```
+> that you want to behave as they did prior to Calico v2.6.0, simply add
+> `types: [ ingress, egress ]` to each such policy.
 
 #### Rule
 
