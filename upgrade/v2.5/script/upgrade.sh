@@ -12,15 +12,14 @@ echo "Creating Calico CRDs..."; echo
 echo "Migrating IPPools..."
 /sbin/calicoctl-v1.4 get ippool -o yaml > ippool.yaml
 retval=$?
-if [ $retval == 0 ];
-then
+if [ $retval == 0 ]; then
     if [ -f ippool.yaml ]; then
         echo "Successfully got the IPPools:"
         cat ippool.yaml
         $lines="$(cat ippool.yaml | wc -l)"
         cat ippool.yaml | grep '\[\]'
         retval=$?
-        if [ $retval == 0 ] && [ $lines == 1]; then
+        if [ $retval == 0 -a $lines == 1 ]; then
             /sbin/calicoctl-v1.5 apply -f ippool.yaml
         else
             echo "No IPPools found to migrate."
@@ -37,15 +36,14 @@ fi
 echo; echo "Migrating BGPPeers..."
 /sbin/calicoctl-v1.4 get bgppeer -o yaml > bgppeer.yaml
 retval=$?
-if [ $retval == 0 ];
-then
+if [ $retval == 0 ]; then
     if [ -f bgppeer.yaml ]; then
         echo "Successfully got the Global BGP Peers:"
         cat bgppeer.yaml
         $lines="$(cat bgppeer.yaml | wc -l)"
         cat bgppeer.yaml | grep '\[\]'
         retval=$?
-        if [ $retval == 0 ] && [ $lines == 1]; then
+        if [ $retval == 0 -a $lines == 1 ]; then
             /sbin/calicoctl-v1.5 apply -f bgppeer.yaml
         else
             echo "No BGPPeers found to migrate."
