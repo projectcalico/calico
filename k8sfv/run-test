@@ -10,7 +10,7 @@
 : ${FELIX_VERSION:=latest}
 #
 # What version of the k8s API server to use.
-: ${K8S_VERSION:=1.6.4}
+: ${K8S_VERSION:=1.7.3}
 #
 # A string to insert into the container names that we use; a calling
 # script can set this to something to make the container names unique,
@@ -58,6 +58,9 @@
 #
 # Typha logging level.
 : ${TYPHA_LOG_LEVEL:=info}
+#
+# CRD Manifest to use
+: ${CRD_URL:=https://raw.githubusercontent.com/projectcalico/libcalico-go/master/test/crds.yaml}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -126,9 +129,8 @@ while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonym
     sleep 2
 done
 
-# Wait until the newly launched API server can respond to a request,
-# before continuing.
-while ! curl -k ${k8s_api_endpoint}/apis/extensions/v1beta1/thirdpartyresources; do
+# Apply CRD manifest to pre-create resource definitions
+while ! docker exec ${prefix}-apiserver kubectl apply -f ${CRD_URL}; do
     sleep 2
 done
 
