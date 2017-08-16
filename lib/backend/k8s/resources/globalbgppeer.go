@@ -18,7 +18,7 @@ import (
 	"reflect"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/converter"
 	"github.com/projectcalico/libcalico-go/lib/scope"
@@ -29,19 +29,19 @@ import (
 )
 
 const (
-	GlobalBGPPeerResourceName = "globalbgppeers"
-	GlobalBGPPeerTPRName      = "global-bgp-peer.projectcalico.org"
+	BGPPeerResourceName = "BGPPeers"
+	BGPPeerCRDName      = "bgppeers.crd.projectcalico.org"
 )
 
 func NewGlobalBGPPeerClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
-		name:            GlobalBGPPeerTPRName,
-		resource:        GlobalBGPPeerResourceName,
-		description:     "Calico Global BGP Peers",
-		k8sResourceType: reflect.TypeOf(thirdparty.GlobalBgpPeer{}),
-		k8sListType:     reflect.TypeOf(thirdparty.GlobalBgpPeerList{}),
+		name:            BGPPeerCRDName,
+		resource:        BGPPeerResourceName,
+		description:     "Calico BGP Peers",
+		k8sResourceType: reflect.TypeOf(custom.BGPPeer{}),
+		k8sListType:     reflect.TypeOf(custom.BGPPeerList{}),
 		converter:       GlobalBGPPeerConverter{},
 	}
 }
@@ -83,18 +83,15 @@ func (_ GlobalBGPPeerConverter) NameToKey(name string) (model.Key, error) {
 func (c GlobalBGPPeerConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
 	// Since we are using the Calico API Spec definition to store the Calico
 	// BGP Peer, use the client conversion helper to convert between KV and API.
-	t := r.(*thirdparty.GlobalBgpPeer)
-	ip, err := ResourceNameToIP(t.Metadata.Name)
-	if err != nil {
-		return nil, err
-	}
+	t := r.(*custom.BGPPeer)
 
 	peer := api.BGPPeer{
 		Metadata: api.BGPPeerMetadata{
-			PeerIP: *ip,
+			PeerIP: t.Spec.PeerIP,
 			Scope:  scope.Global,
+			Node:   "",
 		},
-		Spec: t.Spec,
+		Spec: t.Spec.BGPPeerSpec,
 	}
 	kvp, err := c.ConvertAPIToKVPair(peer)
 	if err != nil {
@@ -111,19 +108,24 @@ func (c GlobalBGPPeerConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource
 		return nil, err
 	}
 
-	tprName, err := c.KeyToName(kvp.Key)
+	crdName, err := c.KeyToName(kvp.Key)
 	if err != nil {
 		return nil, err
 	}
 
-	tpr := thirdparty.GlobalBgpPeer{
+	crd := custom.BGPPeer{
 		Metadata: metav1.ObjectMeta{
-			Name: tprName,
+			Name: crdName,
 		},
-		Spec: r.(*api.BGPPeer).Spec,
+		Spec: custom.BGPPeerSpec{
+			BGPPeerSpec: r.(*api.BGPPeer).Spec,
+			Scope:       scope.Global,
+			PeerIP:      r.(*api.BGPPeer).Metadata.PeerIP,
+			Node:        "",
+		},
 	}
 	if kvp.Revision != nil {
-		tpr.Metadata.ResourceVersion = kvp.Revision.(string)
+		crd.Metadata.ResourceVersion = kvp.Revision.(string)
 	}
-	return &tpr, nil
+	return &crd, nil
 }

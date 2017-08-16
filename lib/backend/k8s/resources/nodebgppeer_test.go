@@ -79,7 +79,7 @@ var _ = Describe("Node BGP conversion methods", func() {
 		)
 		Expect(err).To(BeNil())
 		Expect(node).To(Equal("nodeX"))
-		Expect(name).To(Equal("1--2-3-4"))
+		Expect(name).To(Equal("0001-0000-0000-0000-0000-0002-0003-0004"))
 	})
 
 	It("should convert a Key with node and PeerIP (IPv4)", func() {
@@ -103,7 +103,7 @@ var _ = Describe("Node BGP conversion methods", func() {
 		)
 		Expect(err).To(BeNil())
 		Expect(node).To(Equal("nodeY"))
-		Expect(name).To(Equal("aa-ff--12"))
+		Expect(name).To(Equal("00aa-00ff-0000-0000-0000-0000-0000-0012"))
 	})
 
 	It("should convert a valid node name and resource name to a Key (IPv4)", func() {

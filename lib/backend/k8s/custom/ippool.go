@@ -12,55 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package thirdparty
+package custom
 
 import (
 	"encoding/json"
 
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// IpPoolSpec is the specification of an IP Pool as represented in the Kubernetes
-// ThirdPartyResource API.
-type IpPoolSpec struct {
-	// Value is a json encoded string which can be unmarshalled into a model.IPPool struct.
-	Value string `json:"value"`
-}
-
-// IpPool is the ThirdPartyResource definition of an IPPool in the Kubernetes API.
-type IpPool struct {
+// IPPool is the CustomResourceDefinition definition of an IPPool in the Kubernetes API.
+type IPPool struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ObjectMeta `json:"metadata"`
-
-	Spec IpPoolSpec `json:"spec"`
+	Spec            IPPoolSpec        `json:"spec"`
 }
 
-// IpPoolList is a list of IpPool resources.
-type IpPoolList struct {
+type IPPoolSpec struct {
+	api.IPPoolSpec
+	CIDR net.IPNet `json:"cidr"`
+}
+
+// IPPoolList is a list of IPPool resources.
+type IPPoolList struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ListMeta `json:"metadata"`
-
-	Items []IpPool `json:"items"`
+	Items           []IPPool        `json:"items"`
 }
 
 // GetObjectKind returns the kind of this object.  Required to satisfy Object interface
-func (e *IpPool) GetObjectKind() schema.ObjectKind {
+func (e *IPPool) GetObjectKind() schema.ObjectKind {
 	return &e.TypeMeta
 }
 
 // GetOjbectMeta returns the object metadata of this object. Required to satisfy ObjectMetaAccessor interface
-func (e *IpPool) GetObjectMeta() metav1.Object {
+func (e *IPPool) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
 // GetObjectKind returns the kind of this object. Required to satisfy Object interface
-func (el *IpPoolList) GetObjectKind() schema.ObjectKind {
+func (el *IPPoolList) GetObjectKind() schema.ObjectKind {
 	return &el.TypeMeta
 }
 
 // GetListMeta returns the list metadata of this object. Required to satisfy ListMetaAccessor interface
-func (el *IpPoolList) GetListMeta() metav1.List {
+func (el *IPPoolList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
@@ -68,27 +66,27 @@ func (el *IpPoolList) GetListMeta() metav1.List {
 // resources and ugorji. If/when these issues are resolved, the code below
 // should no longer be required.
 
-type IpPoolListCopy IpPoolList
-type IpPoolCopy IpPool
+type IPPoolListCopy IPPoolList
+type IPPoolCopy IPPool
 
-func (g *IpPool) UnmarshalJSON(data []byte) error {
-	tmp := IpPoolCopy{}
+func (g *IPPool) UnmarshalJSON(data []byte) error {
+	tmp := IPPoolCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := IpPool(tmp)
+	tmp2 := IPPool(tmp)
 	*g = tmp2
 	return nil
 }
 
-func (l *IpPoolList) UnmarshalJSON(data []byte) error {
-	tmp := IpPoolListCopy{}
+func (l *IPPoolList) UnmarshalJSON(data []byte) error {
+	tmp := IPPoolListCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := IpPoolList(tmp)
+	tmp2 := IPPoolList(tmp)
 	*l = tmp2
 	return nil
 }

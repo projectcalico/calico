@@ -288,7 +288,7 @@ func (c *config) SetFelixConfig(name, node string, value string) error {
 
 // UnsetFelixConfig provides a mechanism for unsetting arbitrary Felix
 // configuration in the datastore.  A blank value for the node will unset the
-// global configuration.
+// global felix configuration.
 //
 // Caution should be observed using this method as no validation is performed
 // and changing arbitrary configuration may have unexpected consequences.
@@ -327,7 +327,7 @@ func (c *config) SetBGPConfig(name, node string, value string) error {
 
 // UnsetBGPConfig provides a mechanism for unsetting arbitrary BGP
 // configuration in the datastore.  A blank value for the node will unset the
-// global configuration.
+// global felix configuration.
 //
 // Caution should be observed using this method as no validation is performed
 // and changing arbitrary configuration may have unexpected consequences.

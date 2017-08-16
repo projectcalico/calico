@@ -68,13 +68,13 @@ func (c converter) parsePolicyNameNamespace(name string) (string, error) {
 
 // parsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
 func (c converter) parsePolicyNameNetworkPolicy(name string) (string, string, error) {
-	// Policies backed by NetworkPolicies have form "np.projectcalico.org/<ns_name>.<np_name>"
-	if !strings.HasPrefix(name, "np.projectcalico.org/") {
+	// Policies backed by NetworkPolicies have form "knp.default.<ns_name>.<np_name>"
+	if !strings.HasPrefix(name, "knp.default.") {
 		// This is not backed by a Kubernetes NetworkPolicy.
 		return "", "", fmt.Errorf("Policy %s not backed by a NetworkPolicy", name)
 	}
 
-	splits := strings.SplitN(strings.TrimPrefix(name, "np.projectcalico.org/"), ".", 2)
+	splits := strings.SplitN(strings.TrimPrefix(name, "knp.default."), ".", 2)
 	if len(splits) != 2 {
 		return "", "", fmt.Errorf("Name does not include both Namespace and NetworkPolicy: %s", name)
 	}
@@ -201,7 +201,7 @@ func (c converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 // networkPolicyToPolicy converts a k8s NetworkPolicy to a model.KVPair.
 func (c converter) networkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf("np.projectcalico.org/%s.%s", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
+	policyName := fmt.Sprintf("knp.default.%s.%s", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
 
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.

@@ -74,7 +74,7 @@ func (options GlobalBGPConfigListOptions) defaultPathRoot() string {
 }
 
 func (options GlobalBGPConfigListOptions) KeyFromDefaultPath(path string) Key {
-	log.Debugf("Get GlobalConfig key from %s", path)
+	log.Debugf("Get GlobalFelixConfig key from %s", path)
 	r := matchGlobalBGPConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		log.Debugf("Didn't match regex")

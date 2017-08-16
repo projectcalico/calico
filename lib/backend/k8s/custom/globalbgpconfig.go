@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package thirdparty
+package custom
 
 import (
 	"encoding/json"
@@ -21,42 +21,43 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-type GlobalBgpConfigSpec struct {
+type GlobalBGPConfig struct {
+	metav1.TypeMeta `json:",inline"`
+	Metadata        metav1.ObjectMeta   `json:"metadata"`
+	Spec            GlobalBGPConfigSpec `json:"spec"`
+}
+
+type GlobalBGPConfigSpec struct {
+	// The reason we have Name field in Spec is because k8s metadata
+	// name field requires the string to be lowercase, so Name field
+	// in Spec is to preserve the casing.
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
-type GlobalBgpConfig struct {
+type GlobalBGPConfigList struct {
 	metav1.TypeMeta `json:",inline"`
-	Metadata        metav1.ObjectMeta `json:"metadata"`
-
-	Spec GlobalBgpConfigSpec `json:"spec"`
-}
-
-type GlobalBgpConfigList struct {
-	metav1.TypeMeta `json:",inline"`
-	Metadata        metav1.ListMeta `json:"metadata"`
-
-	Items []GlobalBgpConfig `json:"items"`
+	Metadata        metav1.ListMeta   `json:"metadata"`
+	Items           []GlobalBGPConfig `json:"items"`
 }
 
 // Required to satisfy Object interface
-func (e *GlobalBgpConfig) GetObjectKind() schema.ObjectKind {
+func (e *GlobalBGPConfig) GetObjectKind() schema.ObjectKind {
 	return &e.TypeMeta
 }
 
 // Required to satisfy ObjectMetaAccessor interface
-func (e *GlobalBgpConfig) GetObjectMeta() metav1.Object {
+func (e *GlobalBGPConfig) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
 // Required to satisfy Object interface
-func (el *GlobalBgpConfigList) GetObjectKind() schema.ObjectKind {
+func (el *GlobalBGPConfigList) GetObjectKind() schema.ObjectKind {
 	return &el.TypeMeta
 }
 
 // Required to satisfy ListMetaAccessor interface
-func (el *GlobalBgpConfigList) GetListMeta() metav1.List {
+func (el *GlobalBGPConfigList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
@@ -64,27 +65,27 @@ func (el *GlobalBgpConfigList) GetListMeta() metav1.List {
 // resources and ugorji. If/when these issues are resolved, the code below
 // should no longer be required.
 
-type GlobalBgpConfigListCopy GlobalBgpConfigList
-type GlobalBgpConfigCopy GlobalBgpConfig
+type GlobalBGPConfigListCopy GlobalBGPConfigList
+type GlobalBGPConfigCopy GlobalBGPConfig
 
-func (g *GlobalBgpConfig) UnmarshalJSON(data []byte) error {
-	tmp := GlobalBgpConfigCopy{}
+func (g *GlobalBGPConfig) UnmarshalJSON(data []byte) error {
+	tmp := GlobalBGPConfigCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := GlobalBgpConfig(tmp)
+	tmp2 := GlobalBGPConfig(tmp)
 	*g = tmp2
 	return nil
 }
 
-func (l *GlobalBgpConfigList) UnmarshalJSON(data []byte) error {
-	tmp := GlobalBgpConfigListCopy{}
+func (l *GlobalBGPConfigList) UnmarshalJSON(data []byte) error {
+	tmp := GlobalBGPConfigListCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := GlobalBgpConfigList(tmp)
+	tmp2 := GlobalBGPConfigList(tmp)
 	*l = tmp2
 	return nil
 }

@@ -109,7 +109,7 @@ func (tc *testClient) NetworkPolicyWatch(opts metav1.ListOptions) (w watch.Inter
 	return
 }
 
-func (tc *testClient) GlobalConfigWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) GlobalFelixConfigWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("global conf", make(chan watch.Event))
 	err = nil
 	return
@@ -154,7 +154,7 @@ func (tc *testClient) PodList(namespace string, opts metav1.ListOptions) (list *
 	return
 }
 
-func (tc *testClient) GlobalConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
+func (tc *testClient) GlobalFelixConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
 	tc.countList()
 	return []*model.KVPair{}, "", nil
 }
@@ -175,11 +175,11 @@ func (tc *testClient) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, 
 	err = nil
 	return
 }
-func (tc *testClient) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.Interface, error) {
-	return tc.newWatch("system network policy", make(chan watch.Event)), nil
+func (tc *testClient) GlobalNetworkPolicyWatch(opts metav1.ListOptions) (watch.Interface, error) {
+	return tc.newWatch("global network policy", make(chan watch.Event)), nil
 }
 
-func (tc *testClient) SystemNetworkPolicyList() ([]*model.KVPair, string, error) {
+func (tc *testClient) GlobalNetworkPolicyList() ([]*model.KVPair, string, error) {
 	tc.countList()
 	return []*model.KVPair{}, "", nil
 }

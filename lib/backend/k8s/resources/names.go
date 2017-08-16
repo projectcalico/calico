@@ -28,8 +28,25 @@ import (
 
 // IPToResourceName converts an IP address to a name used for a k8s resource.
 func IPToResourceName(ip net.IP) string {
-	name := strings.Replace(ip.String(), ".", "-", 3)
-	name = strings.Replace(name, ":", "-", 7)
+	name := ""
+
+	if ip.To4() != nil {
+		name = strings.Replace(ip.String(), ".", "-", 3)
+	} else {
+		// IPv6 address can end in a "::" which would be a string ending in "--",
+		// which is not allowed in k8s name field, so we expand the IPv6 address and then replace ":" with "-".
+		// fe08:123:445:: will look like fe08-0123-0445-0000-0000-0000-0000-0000
+		ip6 := ip.To16()
+		bytes := []string{}
+
+		// Go through pairs of bytes in the address and convert them to a hex string.
+		for i := 0; i < len(ip6); i += 2 {
+			bytes = append(bytes, fmt.Sprintf("%.2x%.2x", ip6[i], ip6[i+1]))
+		}
+
+		// Combine them all into a name.
+		name = strings.Join(bytes, "-")
+	}
 
 	log.WithFields(log.Fields{
 		"Name": name,
@@ -84,7 +101,7 @@ func ResourceNameToIPNet(name string) (*net.IPNet, error) {
 // character conversion used to convert an IP address to a k8s compatible name.
 func resourceNameToIPString(name string) string {
 	// The IP address is stored in the name with periods and colons replaced
-	// by dashes.  To determine if this is IPv4 or IPv6 count the dashes.  If
+	// by dashes.  To determine if this is IPv4 or IPv6 count the dashes. If
 	// either of the following are true, it's IPv6:
 	// -  There is a "--"
 	// -  The number of "-" is greater than 3.

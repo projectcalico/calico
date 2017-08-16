@@ -26,8 +26,14 @@ var _ = Describe("Name conversion methods", func() {
 	It("should convert an IPv4 address to a resource compatible name", func() {
 		Expect(resources.IPToResourceName(net.MustParseIP("11.223.3.41"))).To(Equal("11-223-3-41"))
 	})
-	It("should convert an IPv6 address to a resource compatible name", func() {
-		Expect(resources.IPToResourceName(net.MustParseIP("AA:1234::BBee:CC"))).To(Equal("aa-1234--bbee-cc"))
+	It("should convert a compressed IPv6 address to a resource compatible name", func() {
+		Expect(resources.IPToResourceName(net.MustParseIP("AA:1234:BBee::"))).To(Equal("00aa-1234-bbee-0000-0000-0000-0000-0000"))
+	})
+	It("should convert a compressed IPv6 address to a resource compatible name", func() {
+		Expect(resources.IPToResourceName(net.MustParseIP("::1234:BBee:CC"))).To(Equal("0000-0000-0000-0000-0000-1234-bbee-00cc"))
+	})
+	It("should convert a compressed IPv6 address to a resource compatible name", func() {
+		Expect(resources.IPToResourceName(net.MustParseIP("AA:1234::BBee:CC"))).To(Equal("00aa-1234-0000-0000-0000-0000-bbee-00cc"))
 	})
 	It("should convert an IPv4 Network to a resource compatible name", func() {
 		Expect(resources.IPNetToResourceName(net.MustParseNetwork("11.223.3.0/24"))).To(Equal("11-223-3-0-24"))
@@ -51,9 +57,13 @@ var _ = Describe("Name conversion methods", func() {
 		Expect(*i).To(Equal(net.MustParseIP("11.223.3.41")))
 	})
 	It("should convert a resource name to the equivalent IPv6 address", func() {
-		i, err := resources.ResourceNameToIP("aa-1234--bbee-cc")
+		i, err := resources.ResourceNameToIP("aa-1234-0-0-0-0-bbee-cc")
 		Expect(err).NotTo(HaveOccurred())
-		Expect(*i).To(Equal(net.MustParseIP("AA:1234::BBee:CC")))
+		Expect(*i).To(Equal(net.MustParseIP("AA:1234:0:0:0:0:BBee:CC")))
+	})
+	It("should not convert an invalid resource name to an IP address", func() {
+		_, err := resources.ResourceNameToIP("aa-1234-0-0-0-0-bbee-cc-0-0")
+		Expect(err).To(HaveOccurred())
 	})
 	It("should not convert an invalid resource name to an IP address", func() {
 		_, err := resources.ResourceNameToIP("11-223-3-4a")
