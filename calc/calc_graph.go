@@ -110,47 +110,40 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	activeRulesCalc.RuleScanner = ruleScanner
 	ruleScanner.RulesUpdateCallbacks = callbacks
 
-	// The active selector index matches the active selectors found by the
-	// rule scanner against *all* endpoints.  It emits events when an
-	// endpoint starts/stops matching one of the active selectors.  We
-	// send the events to the membership calculator, which will extract the
-	// ip addresses of the endpoints.  The member calculator handles tags
-	// and selectors uniformly but we need to shim the interface because
-	// it expects a string ID.
-	var memberCalc *MemberCalculator
-	activeSelectorIndex := labelindex.NewInheritIndex(
-		func(selId, labelId interface{}) {
-			// Match started callback.
-			memberCalc.MatchStarted(labelId.(model.Key), selId.(string))
+	combinedIndex := labelindex.NewNamedPortIndex(
+		func(ipSetID string, member labelindex.IPSetMember) {
+			if log.GetLevel() >= log.DebugLevel {
+				log.WithFields(log.Fields{
+					"ipSetID": ipSetID,
+					"member":  member,
+				}).Debug("Member added to IP set.")
+			}
+			callbacks.OnIPAdded(ipSetID, member.IP)
 		},
-		func(selId, labelId interface{}) {
-			// Match stopped callback.
-			memberCalc.MatchStopped(labelId.(model.Key), selId.(string))
+		func(ipSetID string, member labelindex.IPSetMember) {
+			if log.GetLevel() >= log.DebugLevel {
+				log.WithFields(log.Fields{
+					"ipSetID": ipSetID,
+					"member":  member,
+				}).Debug("Member removed from IP set.")
+			}
+			callbacks.OnIPRemoved(ipSetID, member.IP)
 		},
 	)
+	combinedIndex.RegisterWith(allUpdDispatcher)
 
 	ruleScanner.OnSelectorActive = func(sel selector.Selector) {
 		log.Infof("Selector %v now active", sel)
 		callbacks.OnIPSetAdded(sel.UniqueID())
-		activeSelectorIndex.UpdateSelector(sel.UniqueID(), sel)
+		combinedIndex.UpdateIPSet(sel.UniqueID(), sel, labelindex.ProtocolNone, "")
 		gaugeNumActiveSelectors.Inc()
 	}
 	ruleScanner.OnSelectorInactive = func(sel selector.Selector) {
 		log.Infof("Selector %v now inactive", sel)
-		activeSelectorIndex.DeleteSelector(sel.UniqueID())
+		combinedIndex.DeleteIPSet(sel.UniqueID())
 		callbacks.OnIPSetRemoved(sel.UniqueID())
 		gaugeNumActiveSelectors.Dec()
 	}
-	activeSelectorIndex.RegisterWith(allUpdDispatcher)
-
-	// The member calculator merges the IPs from different endpoints to
-	// calculate the actual IPs that should be in each IP set.  It deals
-	// with corner cases, such as having the same IP on multiple endpoints.
-	memberCalc = NewMemberCalculator()
-	// It needs to know about *all* endpoints to do the calculation.
-	memberCalc.RegisterWith(allUpdDispatcher)
-	// Hook it up to the output.
-	memberCalc.callbacks = callbacks
 
 	// The endpoint policy resolver marries up the active policies with
 	// local endpoints and calculates the complete, ordered set of

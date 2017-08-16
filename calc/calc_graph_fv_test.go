@@ -72,6 +72,11 @@ var baseTests = []StateList{
 	// Test mutating the profile list of some endpoints.
 	{localEpsWithNonMatchingProfile, localEpsWithProfile},
 
+	// Cut down repro of particular failure case.
+	{localEpsWithTagInheritProfile,
+		localEp1WithPolicy,
+		localEpsWithProfile},
+
 	// String together some complex updates with profiles and policies
 	// coming and going.
 	{localEpsWithProfile,
