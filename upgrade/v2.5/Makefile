@@ -8,6 +8,6 @@ dist/clis:
 	chmod +x dist/kubectl
 
 build-container: dist/clis
-	docker build -t calico/upgrade:v2.5 .
+	docker build -t calico/v2.5-upgrade:v0.0.1 .
 
 
