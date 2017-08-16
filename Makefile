@@ -1,6 +1,6 @@
 ###############################################################################
 # Versions:
-RELEASE_STREAM?=v2.4
+RELEASE_STREAM?=v2.5
 
 GO_BUILD_VER?=v0.7
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
