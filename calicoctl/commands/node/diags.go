@@ -15,11 +15,13 @@
 package node
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -134,6 +136,9 @@ func runDiags(logDir string) {
 		fmt.Printf("No logs found in %s; skipping log copying", logDir)
 	}
 
+	// Try to copy logs from containers for hosted installs.
+	getNodeContainerLogs(tmpLogDir)
+
 	// Get the current time and create a tar.gz file with the timestamp in the name
 	tarFile := fmt.Sprintf("diags-%s.tar.gz", time.Now().Format("20060102_150405"))
 
@@ -155,7 +160,51 @@ such as transfer.sh using curl or similar.  For example:
 
 }
 
-// writeDiags executes the dignostic commans and outputs the result in the file
+// getNodeContainerLogs will attempt to grab logs for any "calico" named containers for hosted installs.
+func getNodeContainerLogs(logDir string) {
+	os.Mkdir(logDir, os.ModeDir)
+
+	// Get a list of Calico containers running on this Node.
+	result, err := exec.Command("docker", "ps", "-a", "--filter", "\"name=calico\"", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
+	if err != nil {
+		fmt.Printf("Could not run docker command: %s\n", string(result))
+		return
+	}
+
+	// No Calico containers found.
+	if string(result) == "" {
+		log.Debug("Did not find any Calico containers")
+		return
+	}
+
+	// Remove any containers that have "k8s_POD" in them.
+	re := regexp.MustCompile("(?m)[\r\n]+^.*k8s_POD.*$")
+	containers := re.ReplaceAllString(string(result), "")
+
+	fmt.Println("Copying logs from Calico containers")
+	err = ioutil.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0666)
+	if err != nil {
+		fmt.Printf("Could not save output of `docker ps` command to container_creation_time: %s\n", err)
+	}
+
+	// Grab the log for each container and write it as <containerName>.log.
+	scanner := bufio.NewScanner(strings.NewReader(containers))
+	for scanner.Scan() {
+		name := strings.Split(scanner.Text(), ":")[0]
+		log.Debugf("Getting logs for container %s", name)
+		cLog, err := exec.Command("docker", "logs", name).CombinedOutput()
+		if err != nil {
+			fmt.Printf("Could not pull log for container %s: %s\n", name, err)
+			continue
+		}
+		err = ioutil.WriteFile(logDir+"/"+name+".log", cLog, 0666)
+		if err != nil {
+			fmt.Printf("Failed to write log for container %s to file: %s\n", name, err)
+		}
+	}
+}
+
+// writeDiags executes the diagnostic commands and outputs the result in the file
 // with the filename and directory passed as arguments
 func writeDiags(cmds diagCmd, dir string) {
 
@@ -165,11 +214,9 @@ func writeDiags(cmds diagCmd, dir string) {
 
 	parts := strings.Fields(cmds.cmd)
 
-	command := exec.Command(parts[0], parts[1:]...)
-
-	content, err := command.Output()
+	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Failed to run command: %s\nError: %s\n", cmds.cmd, string(content))
 	}
 
 	// This is for the commands we want to run but don't want to save the output
