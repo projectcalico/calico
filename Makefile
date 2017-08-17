@@ -6,7 +6,7 @@ all: clean test
 
 GO_BUILD_CONTAINER?=calico/go-build:v0.4
 
-K8S_VERSION=v1.6.4
+K8S_VERSION=v1.7.3
 ETCDCTL_VER=v3.1.8
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')

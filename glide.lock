@@ -1,5 +1,5 @@
 hash: eae906dc08d4370486ff9c619ebbe7d090fe978eb12d5b4fc53a14acae976208
-updated: 2017-08-17T13:38:43.983062303-07:00
+updated: 2017-08-17T20:42:50.432753137Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -60,7 +60,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -329,7 +329,10 @@ imports:
   - kubernetes/typed/storage/v1
   - kubernetes/typed/storage/v1beta1
   - pkg/api
+  - pkg/api/errors
   - pkg/api/install
+  - pkg/api/meta
+  - pkg/api/unversioned
   - pkg/api/v1
   - pkg/apis/apps
   - pkg/apis/apps/install
@@ -370,9 +373,15 @@ imports:
   - pkg/apis/storage/install
   - pkg/apis/storage/v1
   - pkg/apis/storage/v1beta1
+  - pkg/fields
+  - pkg/runtime
+  - pkg/runtime/schema
+  - pkg/runtime/serializer
   - pkg/util
   - pkg/util/parsers
+  - pkg/util/wait
   - pkg/version
+  - pkg/watch
   - plugin/pkg/client/auth
   - plugin/pkg/client/auth/gcp
   - plugin/pkg/client/auth/oidc
