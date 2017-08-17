@@ -222,10 +222,10 @@ func validateScopeGlobalOrNode(v *validator.Validate, topStruct reflect.Value, c
 func validatePolicyType(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
 	log.Debugf("Validate policy type: %s", s)
-	if strings.EqualFold(s, "ingress") {
+	if s == string(api.PolicyTypeIngress) {
 		return true
 	}
-	if strings.EqualFold(s, "egress") {
+	if s == string(api.PolicyTypeEgress) {
 		return true
 	}
 	return false
@@ -535,10 +535,38 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 
 	if m.PreDNAT && len(m.Types) > 0 {
 		for _, t := range m.Types {
-			if strings.EqualFold(t, "egress") {
+			if t == api.PolicyTypeEgress {
 				structLevel.ReportError(reflect.ValueOf(m.Types),
 					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"))
 			}
+		}
+	}
+
+	// Check (and disallow) any repeats in Types field.
+	mp := map[api.PolicyType]bool{}
+	for _, t := range m.Types {
+		if _, exists := mp[t]; exists {
+			structLevel.ReportError(reflect.ValueOf(m.Types),
+				"PolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
+		} else {
+			mp[t] = true
+		}
+	}
+
+	// When Types is explicitly specified:
+	if len(m.Types) > 0 {
+		var exists bool
+		// 'ingress' type must be there if Policy has any ingress rules.
+		_, exists = mp[api.PolicyTypeIngress]
+		if len(m.IngressRules) > 0 && !exists {
+			structLevel.ReportError(reflect.ValueOf(m.Types),
+				"PolicySpec.Types", "", reason("'ingress' must be specified when policy has ingress rules"))
+		}
+		// 'egress' type must be there if Policy has any egress rules.
+		_, exists = mp[api.PolicyTypeEgress]
+		if len(m.EgressRules) > 0 && !exists {
+			structLevel.ReportError(reflect.ValueOf(m.Types),
+				"PolicySpec.Types", "", reason("'egress' must be specified when policy has egress rules"))
 		}
 	}
 }

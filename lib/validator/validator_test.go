@@ -665,6 +665,45 @@ func init() {
 				PreDNAT:      true,
 				IngressRules: []api.Rule{{Action: "allow"}},
 			}, true),
+
+		// PolicySpec Types field checks.
+		Entry("allow missing Types", api.PolicySpec{}, true),
+		Entry("allow empty Types", api.PolicySpec{Types: []api.PolicyType{}}, true),
+		Entry("allow ingress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress}}, true),
+		Entry("allow egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress}}, true),
+		Entry("allow ingress+egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}}, true),
+		Entry("disallow repeated egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress}}, false),
+		Entry("disallow unexpected value", api.PolicySpec{Types: []api.PolicyType{"unexpected"}}, false),
+		Entry("disallow Types without ingress when IngressRules present",
+			api.PolicySpec{
+				IngressRules: []api.Rule{{Action: "allow"}},
+				Types:        []api.PolicyType{api.PolicyTypeEgress},
+			}, false),
+		Entry("disallow Types without egress when EgressRules present",
+			api.PolicySpec{
+				EgressRules: []api.Rule{{Action: "allow"}},
+				Types:       []api.PolicyType{api.PolicyTypeIngress},
+			}, false),
+		Entry("allow Types with ingress when IngressRules present",
+			api.PolicySpec{
+				IngressRules: []api.Rule{{Action: "allow"}},
+				Types:        []api.PolicyType{api.PolicyTypeIngress},
+			}, true),
+		Entry("allow Types with ingress+egress when IngressRules present",
+			api.PolicySpec{
+				IngressRules: []api.Rule{{Action: "allow"}},
+				Types:        []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+			}, true),
+		Entry("allow Types with egress when EgressRules present",
+			api.PolicySpec{
+				EgressRules: []api.Rule{{Action: "allow"}},
+				Types:       []api.PolicyType{api.PolicyTypeEgress},
+			}, true),
+		Entry("allow Types with ingress+egress when EgressRules present",
+			api.PolicySpec{
+				EgressRules: []api.Rule{{Action: "allow"}},
+				Types:       []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+			}, true),
 	)
 }
 

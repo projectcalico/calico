@@ -120,8 +120,16 @@ type PolicySpec struct {
 
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  An
 	// empty or nil value here indicates both ingress and egress.
-	Types []string `json:"types,omitempty" validate:"omitempty,dive,policytype"`
+	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policytype"`
 }
+
+// PolicyType enumerates the possible values of the PolicySpec Types field.
+type PolicyType string
+
+const (
+	PolicyTypeIngress PolicyType = "ingress"
+	PolicyTypeEgress  PolicyType = "egress"
+)
 
 // NewPolicy creates a new (zeroed) Policy struct with the TypeMetadata initialised to the current
 // version.
