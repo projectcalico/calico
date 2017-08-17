@@ -9,5 +9,5 @@ spec:
     spec:
       containers:
       - name: calico-upgrade
-        image: gunjan5/upgrade:v2.5.7
+        image: gunjan5/upgrade:v2.5.8
       restartPolicy: Never

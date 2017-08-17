@@ -16,13 +16,13 @@ if [ $retval == 0 ]; then
     if [ -f ippool.yaml ]; then
         echo "Successfully got the IPPools:"
         cat ippool.yaml
-        $lines="$(cat ippool.yaml | wc -l)"
+        lines=`cat ippool.yaml | wc -l`
         cat ippool.yaml | grep '\[\]'
         retval=$?
         if [ $retval == 0 -a $lines == 1 ]; then
-            /sbin/calicoctl-v1.5 apply -f ippool.yaml
-        else
             echo "No IPPools found to migrate."
+        else
+            /sbin/calicoctl-v1.5 apply -f ippool.yaml
         fi
     else
        echo "No IPPools found to migrate."
@@ -40,13 +40,13 @@ if [ $retval == 0 ]; then
     if [ -f bgppeer.yaml ]; then
         echo "Successfully got the Global BGP Peers:"
         cat bgppeer.yaml
-        $lines="$(cat bgppeer.yaml | wc -l)"
+        lines=`cat bgppeer.yaml | wc -l`
         cat bgppeer.yaml | grep '\[\]'
         retval=$?
         if [ $retval == 0 -a $lines == 1 ]; then
-            /sbin/calicoctl-v1.5 apply -f bgppeer.yaml
-        else
             echo "No BGPPeers found to migrate."
+        else
+            /sbin/calicoctl-v1.5 apply -f bgppeer.yaml
         fi
     else
        echo "No BGPPeers found to migrate."
