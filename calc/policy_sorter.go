@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type PolicySorter struct {
@@ -49,6 +50,21 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
 				oldPolicy.PreDNAT != newPolicy.PreDNAT {
 				dirty = true
+			} else {
+				var oldTypes, newTypes set.Set
+				if oldPolicy.Types == nil {
+					oldTypes = set.New()
+				} else {
+					oldTypes = set.FromArray(oldPolicy.Types)
+				}
+				if newPolicy.Types == nil {
+					newTypes = set.New()
+				} else {
+					newTypes = set.FromArray(newPolicy.Types)
+				}
+				if !oldTypes.Equals(newTypes) {
+					dirty = true
+				}
 			}
 			poc.tier.Policies[key] = newPolicy
 		} else {
@@ -78,10 +94,12 @@ func (poc *PolicySorter) Sorted() *tierInfo {
 // Note: PolKV is really internal to the calc package.  It is named with an initial capital so that
 // the test package calc_test can also use it.
 type PolKV struct {
-	Key     model.PolicyKey
-	Value   *model.Policy
-	Ingress *bool
-	Egress  *bool
+	Key   model.PolicyKey
+	Value *model.Policy
+
+	// Caches for whether the policy governs ingress and/or egress traffic.
+	ingress *bool
+	egress  *bool
 }
 
 func (p PolKV) String() string {
@@ -110,19 +128,19 @@ func (p *PolKV) governsType(wanted string) bool {
 }
 
 func (p *PolKV) GovernsIngress() bool {
-	if p.Ingress == nil {
+	if p.ingress == nil {
 		governsIngress := p.governsType("ingress")
-		p.Ingress = &governsIngress
+		p.ingress = &governsIngress
 	}
-	return *p.Ingress
+	return *p.ingress
 }
 
 func (p *PolKV) GovernsEgress() bool {
-	if p.Egress == nil {
+	if p.egress == nil {
 		governsEgress := p.governsType("egress")
-		p.Egress = &governsEgress
+		p.egress = &governsEgress
 	}
-	return *p.Egress
+	return *p.egress
 }
 
 type PolicyByOrder []PolKV

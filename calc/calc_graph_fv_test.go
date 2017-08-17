@@ -14,6 +14,10 @@
 
 package calc_test
 
+// This file tests the mapping from datastore content - expressed as KVUpdates using model.* objects
+// - to proto.* messages.  'model' is a dot-import in this file, so non-namespaced type names that
+// look like Calico objects are probably coming from the 'model' package.
+
 import (
 	. "github.com/projectcalico/felix/calc"
 
@@ -189,6 +193,16 @@ var policy1_order20 = Policy{
 	OutboundRules: []Rule{
 		{SrcSelector: bEpBSelector},
 	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_ingress_only = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	Types: []string{"ingress"},
 }
 
 var policy1_order20_untracked = Policy{
@@ -281,6 +295,11 @@ var withPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20},
 ).withName("with policy")
 
+// withPolicyIngressOnly adds a tier and ingress policy containing selectors for all and b=="b"
+var withPolicyIngressOnly = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_ingress_only},
+).withName("with ingress-only policy")
+
 // withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_untracked},
@@ -317,6 +336,27 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	},
 ).withName("ep1 local, policy")
 
+// localEp1WithIngressPolicy is as above except ingress policy only.
+var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{
+		{"default", []string{"pol-1"}, nil},
+	},
+).withName("ep1 local, ingress-only policy")
+
 var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
 ).withIPSet(allSelectorId, []string{
@@ -341,6 +381,26 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("host ep1, policy")
+
+var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	hostEpWithNameId,
+	[]tierInfo{
+		{"default", []string{"pol-1"}, nil},
+	},
+).withName("host ep1, ingress-only policy")
 
 var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -727,6 +787,9 @@ var baseTests = []StateList{
 	// Add one endpoint then remove it and add another with overlapping IP.
 	{localEp1WithPolicy, localEp2WithPolicy},
 
+	// Same but ingress-only policy on ep1.
+	{localEp1WithIngressPolicy, localEp2WithPolicy},
+
 	// Add one endpoint then another with an overlapping IP, then remove
 	// first.
 	{localEp1WithPolicy, localEpsWithPolicy, localEp2WithPolicy},
@@ -735,7 +798,7 @@ var baseTests = []StateList{
 	{localEpsWithPolicy, initialisedStore, localEpsWithPolicy},
 
 	// IP updates.
-	{localEpsWithPolicy, localEpsWithPolicyUpdatedIPs},
+	{localEpsWithPolicy, localEpsWithPolicyUpdatedIPs, localEp1WithIngressPolicy},
 
 	// Add a profile and a couple of endpoints.  Then update the profile to
 	// use different tags and selectors.
@@ -761,6 +824,7 @@ var baseTests = []StateList{
 		hostEp1WithPolicy,
 		localEpsWithUpdatedProfile,
 		withProfileTagInherit,
+		localEp1WithIngressPolicy,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,
 		hostEp1WithUntrackedPolicy,
@@ -769,14 +833,14 @@ var baseTests = []StateList{
 		localEpsWithProfile},
 
 	// Host endpoint tests.
-	{hostEp1WithPolicy, hostEp2WithPolicy},
+	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy},
 
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
 	// Mixed policy.
 	{hostEp1WithTrackedAndUntrackedPolicy},
 	// Single policy switches between tracked/untracked.
-	{hostEp1WithUntrackedPolicy, hostEp1WithPolicy},
+	{hostEp1WithUntrackedPolicy, hostEp1WithPolicy, hostEp1WithIngressPolicy},
 	{hostEp1WithUntrackedPolicy, hostEp1WithTrackedAndUntrackedPolicy, hostEp1WithPolicy},
 
 	// Pre-DNAT policy on its own.
