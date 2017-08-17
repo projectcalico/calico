@@ -1,6 +1,11 @@
-hash: 8abe7dc368049aa274bcf21ddd1b9e28a0683ac0604ed2d1e65b9d60439b2841
-updated: 2017-07-10T23:45:50.085300078Z
+hash: eae906dc08d4370486ff9c619ebbe7d090fe978eb12d5b4fc53a14acae976208
+updated: 2017-08-17T20:42:50.432753137Z
 imports:
+- name: cloud.google.com/go
+  version: 3b1ae45394a234c385be014e9a488f2bb6eef821
+  subpackages:
+  - compute/metadata
+  - internal
 - name: github.com/aws/aws-sdk-go
   version: 2a34ea8812f32aae75b43400f9424a0559840659
   subpackages:
@@ -39,8 +44,23 @@ imports:
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/types
+- name: github.com/coreos/go-oidc
+  version: be73733bb8cc830d0205609b95d125215f8e9c70
+  subpackages:
+  - http
+  - jose
+  - key
+  - oauth2
+  - oidc
+- name: github.com/coreos/pkg
+  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
+  subpackages:
+  - capnslog
+  - health
+  - httputil
+  - timeutil
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -125,6 +145,8 @@ imports:
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/jmespath/go-jmespath
   version: 0b12d6b521d83fc7f755e7cfc1b1fbdd35a01a74
+- name: github.com/jonboulle/clockwork
+  version: 2eee05ed794112d45db504eb05aa693efd2b8b09
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/memkv
@@ -138,13 +160,14 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/projectcalico/libcalico-go
-  version: 3c78c6783694fe8587d11c3fb34bd64497297e27
+  version: 25a8c377d7b3299a50197a92704d606f5f5ca691
   subpackages:
   - lib/api
   - lib/api/unversioned
   - lib/backend/api
   - lib/backend/compat
   - lib/backend/k8s
+  - lib/backend/k8s/custom
   - lib/backend/k8s/resources
   - lib/backend/k8s/thirdparty
   - lib/backend/model
@@ -162,7 +185,7 @@ imports:
   version: 218e9c81c0dd8b3b18172b2bbfad92cc7d6db55f
   subpackages:
   - zk
-- name: github.com/Sirupsen/logrus
+- name: github.com/sirupsen/logrus
   version: 3455d89ac9652295c85db2a98ea32f1d61c380bc
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
@@ -180,12 +203,20 @@ imports:
   version: 6a513affb38dc9788b449d59ffed099b8de18fa0
   subpackages:
   - context
+  - context/ctxhttp
   - http2
   - http2/hpack
   - idna
   - internal/timeseries
   - lex/httplex
   - trace
+- name: golang.org/x/oauth2
+  version: 3c3a985cb79f52a3190fbc056984415ca6763d01
+  subpackages:
+  - google
+  - internal
+  - jws
+  - jwt
 - name: golang.org/x/sys
   version: 20457ee8ea8546920d3f4e19e405da45250dc5a5
   subpackages:
@@ -204,6 +235,18 @@ imports:
   - unicode/bidi
   - unicode/norm
   - width
+- name: google.golang.org/appengine
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  subpackages:
+  - internal
+  - internal/app_identity
+  - internal/base
+  - internal/datastore
+  - internal/log
+  - internal/modules
+  - internal/remote_api
+  - internal/urlfetch
+  - urlfetch
 - name: google.golang.org/grpc
   version: 711a24cde281460b847b211686c2e4e8f4671131
   subpackages:
@@ -245,6 +288,7 @@ imports:
   - pkg/runtime/serializer/versioning
   - pkg/selection
   - pkg/types
+  - pkg/util/diff
   - pkg/util/errors
   - pkg/util/framer
   - pkg/util/intstr
@@ -338,8 +382,12 @@ imports:
   - pkg/util/wait
   - pkg/version
   - pkg/watch
+  - plugin/pkg/client/auth
+  - plugin/pkg/client/auth/gcp
+  - plugin/pkg/client/auth/oidc
   - rest
   - rest/watch
+  - third_party/forked/golang/template
   - tools/auth
   - tools/cache
   - tools/clientcmd
@@ -353,4 +401,5 @@ imports:
   - util/flowcontrol
   - util/homedir
   - util/integer
+  - util/jsonpath
 testImports: []

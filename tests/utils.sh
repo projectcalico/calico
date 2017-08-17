@@ -41,15 +41,15 @@ populate_kdd() {
       sleep 1
     done
 
-    echo "Creating TPRs and dummy Nodes"
-    # This will create the dummy nodes and the third party resources we can populate
-    kubectl apply -f /tests/mock_data/kdd/${to_test}/tprs.yaml > /dev/null 2>&1
+    echo "Creating CRDs and dummy Nodes"
+    # This will create the dummy nodes and the custom resource definitions we can populate
+    kubectl apply -f /tests/mock_data/kdd/${to_test}/crds.yaml > /dev/null 2>&1
     kubectl apply -f /tests/mock_data/kdd/${to_test}/nodes.yaml > /dev/null 2>&1
 
-    echo "Waiting for TPRs to apply"
-    # There is a delay when creating the TPRs and them being ready for use, so we
+    echo "Waiting for CRDs to apply"
+    # There is a delay when creating the CRDs and them being ready for use, so we
     # try to apply the data until it finally makes it into the API server
-    until kubectl apply -f /tests/mock_data/kdd/${to_test}/tpr_data.yaml > /dev/null 2>&1; do
+    until kubectl apply -f /tests/mock_data/kdd/${to_test}/crd_data.yaml > /dev/null 2>&1; do
       sleep 1
     done
 }
@@ -57,8 +57,8 @@ populate_kdd() {
 clean_kdd() {
     echo "Cleaning out k8s API"
     to_remove=$1
-    kubectl delete -f /tests/mock_data/kdd/${to_test}/tpr_data.yaml > /dev/null 2>&1
-    kubectl delete -f /tests/mock_data/kdd/${to_test}/tprs.yaml > /dev/null 2>&1
+    kubectl delete -f /tests/mock_data/kdd/${to_test}/crd_data.yaml > /dev/null 2>&1
+    kubectl delete -f /tests/mock_data/kdd/${to_test}/crds.yaml > /dev/null 2>&1
     kubectl delete -f /tests/mock_data/kdd/${to_test}/nodes.yaml > /dev/null 2>&1
 }
 

@@ -2,7 +2,7 @@ package: github.com/kelseyhightower/confd
 import:
 - package: github.com/BurntSushi/toml
   version: 312db06c6c6dbfa9899e58564bacfaa584f18ab7
-- package: github.com/Sirupsen/logrus
+- package: github.com/sirupsen/logrus
   version: 3455d89ac9652295c85db2a98ea32f1d61c380bc
 - package: github.com/aws/aws-sdk-go
   version: 2a34ea8812f32aae75b43400f9424a0559840659
@@ -130,6 +130,7 @@ import:
 - package: gopkg.in/yaml.v2
   version: f7716cbe52baa25d2e9b0d0da546fcf909fc16b4
 - package: github.com/projectcalico/libcalico-go
+  version: v1.6.0
   subpackages:
   - lib/backend/k8s
   - lib/backend/k8s/resources
