@@ -1,5 +1,5 @@
-hash: 1178b0747299612815e13b4b0d17fe740979987623fb659aae5d6a88981110bb
-updated: 2017-08-17T13:31:28.08700874-07:00
+hash: eae906dc08d4370486ff9c619ebbe7d090fe978eb12d5b4fc53a14acae976208
+updated: 2017-08-17T13:38:43.983062303-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -185,10 +185,8 @@ imports:
   version: 218e9c81c0dd8b3b18172b2bbfad92cc7d6db55f
   subpackages:
   - zk
-- name: github.com/Sirupsen/logrus
-  version: 3455d89ac9652295c85db2a98ea32f1d61c380bc
 - name: github.com/sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: 3455d89ac9652295c85db2a98ea32f1d61c380bc
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/ugorji/go
