@@ -704,6 +704,21 @@ func init() {
 				EgressRules: []api.Rule{{Action: "allow"}},
 				Types:       []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
 			}, true),
+		Entry("allow ingress Types with pre-DNAT",
+			api.PolicySpec{
+				PreDNAT: true,
+				Types:   []api.PolicyType{api.PolicyTypeIngress},
+			}, true),
+		Entry("disallow egress Types with pre-DNAT",
+			api.PolicySpec{
+				PreDNAT: true,
+				Types:   []api.PolicyType{api.PolicyTypeEgress},
+			}, false),
+		Entry("disallow ingress+egress Types with pre-DNAT",
+			api.PolicySpec{
+				PreDNAT: true,
+				Types:   []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+			}, false),
 	)
 }
 

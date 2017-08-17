@@ -103,6 +103,20 @@ var emptyPolicyAfterRead = api.PolicySpec{
 	Types: []api.PolicyType{api.PolicyTypeIngress},
 }
 
+var egressPolicy = api.PolicySpec{
+	Order:       &order2,
+	EgressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
+	Selector:    "thing2 == 'value2'",
+}
+
+// When reading back, the rules should have been updated to the newer format.
+var egressPolicyAfterRead = api.PolicySpec{
+	Order:       &order2,
+	EgressRules: []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
+	Selector:    "thing2 == 'value2'",
+	Types:       []api.PolicyType{api.PolicyTypeEgress},
+}
+
 var _ = testutils.E2eDatastoreDescribe("Policy tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("Policy e2e tests",
@@ -262,6 +276,16 @@ var _ = testutils.E2eDatastoreDescribe("Policy tests", testutils.DatastoreEtcdV2
 			policySpec3,
 			policySpec2,
 			policySpec3AfterRead,
+			policySpec2AfterRead,
+		),
+
+		// An egress Policy and an ingress Policy.
+		Entry("An egress Policy and an ingress Policy",
+			api.PolicyMetadata{Name: "policy-1/with.foo", Annotations: map[string]string{"key": "value"}},
+			api.PolicyMetadata{Name: "policy.1"},
+			egressPolicy,
+			policySpec2,
+			egressPolicyAfterRead,
 			policySpec2AfterRead,
 		),
 	)
