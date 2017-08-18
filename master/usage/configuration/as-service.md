@@ -32,7 +32,9 @@ CALICO_NETWORKING_BACKEND=bird
 Be sure to update this environment file as necessary, such as modifying
 ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
-> Note: The ETCD_CA_FILE, ETCD_CERT_FILE, and ETCD_KEY_FILE
+> **NOTE**
+>
+> The ETCD_CA_FILE, ETCD_CERT_FILE, and ETCD_KEY_FILE
 > environment variables are required when using Etcd with SSL/TLS.  The values
 > here are standard values for a non-SSL version of Etcd, but you can use this
 > template to define your SSL values if desired.
@@ -107,6 +109,8 @@ The Systemd service above does the following on start:
 
 The script will also stop the calico-node container when the service is stopped.
 
-**Note**: Depending on how you've installed Docker, the name of the Docker service
-under the `[Unit]` section may be different (such as `docker-engine.service`).
-Be sure to check this before starting the service.
+> **NOTE**
+>
+> Depending on how you've installed Docker, the name of the Docker service
+> under the `[Unit]` section may be different (such as `docker-engine.service`).
+> Be sure to check this before starting the service.

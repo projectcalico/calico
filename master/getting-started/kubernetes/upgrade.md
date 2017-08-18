@@ -199,7 +199,7 @@ spec:
   podSelector:
 ```
 
-> **Note**:
+> **NOTE**
 >
 > The above steps should be followed when upgrading to Calico v2.3.0+ using the Kubernetes
 > datastore driver, and Calico v2.4.0+ using the etcd datastore,

@@ -2,20 +2,20 @@
 title: Workload Endpoint Resource (workloadEndpoint)
 ---
 
-A Workload Endpoint resource (workloadEndpoint) represents an interface 
+A Workload Endpoint resource (workloadEndpoint) represents an interface
 connecting a Calico networked container or VM to its host.
 
-Each endpoint may specify a set of labels and list of profiles that Calico will use 
+Each endpoint may specify a set of labels and list of profiles that Calico will use
 to apply policy to the interface.
 
 For `calicoctl` commands that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
 
-> **Note**
+> **NOTE**
 >
 > While `calicoctl` allows the user to fully manage Workload Endpoint resources,
-the lifecylce of these resources is generally handled by an orchestrator specific 
-plugin such as the Calico CNI plugin, the Calico Docker network plugin, 
+the lifecycle of these resources is generally handled by an orchestrator specific
+plugin such as the Calico CNI plugin, the Calico Docker network plugin,
 or the Calico OpenStack Neutron Driver.  In general, we recommend that you only
 use `calicoctl` to view this resource type.
 
@@ -25,7 +25,7 @@ use `calicoctl` to view this resource type.
 apiVersion: v1
 kind: workloadEndpoint
 metadata:
-  name: eth0 
+  name: eth0
   workload: default.frontend-5gs43
   orchestrator: k8s
   node: rack1-host1
@@ -34,7 +34,7 @@ metadata:
     calico/k8s_ns: default
 spec:
   interfaceName: cali0ef24ba
-  mac: ca:fe:1d:52:bb:e9 
+  mac: ca:fe:1d:52:bb:e9
   ipNetworks:
   - 192.168.0.0/16
   profiles:

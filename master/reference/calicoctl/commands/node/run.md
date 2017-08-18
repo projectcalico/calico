@@ -67,7 +67,7 @@ Options:
                              destination IP or domain name.
 			   > interface=<IFACE NAME REGEX LIST>
                              Use the first valid IP address found on interfaces
-                             named as per the first matching supplied interface 
+                             named as per the first matching supplied interface
 			     name regex. Regexes are separated by commas
 			     (e.g. eth.*,enp0s.*).
 			   > skip-interface=<IFACE NAME REGEX LIST>
@@ -125,7 +125,7 @@ Description:
 
 ### Kubernetes as the datastore
 
-When Calico is configured to use the Kubernetes API as the datastore, BGP routing is *currently* 
+When Calico is configured to use the Kubernetes API as the datastore, BGP routing is *currently*
 not supported.  Many of the command line options related to BGP routing will
 have no effect.  These include:
 -  `--ip`, `--ip6`, `--ip-autodetection-method`, `--ip6-autodetection-method`
@@ -179,9 +179,10 @@ force autodetection of an IPv6 address, use the option `--ip6=autodetect`.
 To set the autodetection method for IPv4, use the `--ip-autodetection-method` option.
 To set the autodetection method for IPv6, use the `--ip6-autodetection-method` option.
 
-> **Note**
+> **NOTE**
+>
 > If you are starting the calico/node container directly (and not using the
-> `calicoctl run` helper command), the options are passed in an environment
+> `calicoctl run` helper command), the options are passed in environment
 > variables.  These are described in the [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)).
 
 **first-found**
@@ -223,8 +224,8 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method can-reach=www.
 
 The `interface` method uses the supplied interface regular expressions (golang
 syntax) to enumerate matching interfaces and to return the first IP address on
-the first interface that matches any of the interface regexes provided.  The 
-order that both the interfaces and the IP addresses are listed is system 
+the first interface that matches any of the interface regexes provided.  The
+order that both the interfaces and the IP addresses are listed is system
 dependent.
 
 e.g.
@@ -292,7 +293,7 @@ terminating `,` character does not need to be specified for those cases.
                            destination IP or domain name.
 			 > interface=<IFACE NAME REGEX LIST>
                            Use the first valid IP address found on interfaces
-                           named as per the first matching supplied interface 
+                           named as per the first matching supplied interface
 			   name regex. Regexes are separated by commas
 			   (e.g. eth.*,enp0s.*).
 			 > skip-interface=<IFACE NAME REGEX LIST>

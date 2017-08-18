@@ -226,7 +226,7 @@ In addition to specifying IP Pools in the CNI config as discussed above, Calico 
 - `cni.projectcalico.org/ipv4pools`: A list of configured IPv4 Pools from which to choose an address for the Pod.
 
    Example:
- 
+
 ```yaml
 annotations:
       "cni.projectcalico.org/ipv4pools": "[\"192.168.0.0/16\"]"
@@ -235,7 +235,7 @@ annotations:
 - `cni.projectcalico.org/ipv6pools`: A list of configured IPv6 Pools from which to choose an address for the Pod.
 
    Example:
- 
+
 ```yaml
 annotations:
       "cni.projectcalico.org/ipv6pools": "[\"2001:db8::1/120\"]"
@@ -243,14 +243,14 @@ annotations:
 
 If provided, these IP Pools will override any IP Pools specified in the CNI config.
 
-  > **Note:**
+  > **NOTE**
   >
   > This requires the IP Pools to exist before `ipv4pools` or `ipv6pools` annotations are used.
   > Requesting a subset of an IP Pool is not supported. IP Pools requested in the annotations must exactly match a configured [IP Pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
 #### Requesting a Specific IP address
 
-You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with Calico IPAM. 
+You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with Calico IPAM.
 There are two annotations to request a specific IP address:
 
 - `cni.projectcalico.org/ipAddrs`: A list of IPv4 and/or IPv6 addresses to assign to the Pod. The requested IP addresses will be assigned from Calico IPAM and must exist within a configured IP Pool.
@@ -265,15 +265,15 @@ annotations:
 - `cni.projectcalico.org/ipAddrsNoIpam`: A list of IPv4 and/or IPv6 addresses to assign to the Pod, bypassing IPAM. Any IP conflicts and routing have to be taken care of manually or by some other system.
 Calico will only distribute routes to a Pod if its IP address falls within a Calico IP Pool. If you assign an IP address that is not in a Calico IP Pool, you must ensure that routing to that IP address is taken care of through another mechanism.
 
-  Example: 
+  Example:
 
 ```yaml
 annotations:
         "cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\"]"
 ```
 
-  > **Note:**
+  > **NOTE**
   >
-  > - The `ipAddrs` and `ipAddrsNoIpam` annotations can't be used together. 
-  > - You can only specify one IPv4/IPv6 or one IPv4 and one IPv6 address with these annotations. 
-  > - When `ipAddrs` or `ipAddrsNoIpam` is used with `ipv4pools` or `ipv6pools`, `ipAddrs` / `ipAddrsNoIpam` take priority. 
+  > - The `ipAddrs` and `ipAddrsNoIpam` annotations can't be used together.
+  > - You can only specify one IPv4/IPv6 or one IPv4 and one IPv6 address with these annotations.
+  > - When `ipAddrs` or `ipAddrsNoIpam` is used with `ipv4pools` or `ipv6pools`, `ipAddrs` / `ipAddrsNoIpam` take priority.

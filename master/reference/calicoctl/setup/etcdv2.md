@@ -40,8 +40,10 @@ will check a particular set of environment variables.
 
 See the table below for details on the etcdv2 specific environment variables.
 
->  Note that if neither file nor environment variables are set, calicoctl defaults to
->  using etcdv2 with a single endpoint of http://127.0.0.1:2379.
+> **NOTE**
+>
+> If neither file nor environment variables are set, calicoctl defaults to
+> using etcdv2 with a single endpoint of http://127.0.0.1:2379.
 
 ## Complete list of etcdv2 connection configuration
 
@@ -55,7 +57,7 @@ See the table below for details on the etcdv2 specific environment variables.
 | etcdCertFile (ETCD_CERT_FILE)      | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)                   | string
 | etcdCACertFile (ETCD_CA_CERT_FILE) | Path to the etcd CA file, e.g. `/etc/calico/ca.pem` (optional)                         | string
 
-> **NOTES**
+> **NOTE**
 >
 > 1. If you are running with TLS enabled, ensure your endpoint addresses use https
 > 2. When specifying through environment variables, the DATASTORE_TYPE environment
