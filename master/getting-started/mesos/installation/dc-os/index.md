@@ -108,7 +108,9 @@ be restarted to pick up the change. The Framework then performs the following st
        }
    }
    ```
-   >Note: If not running etcd in proxy mode, be sure to change `etcd_endpoints`
+   > **NOTE**
+   >
+   > If not running etcd in proxy mode, be sure to change `etcd_endpoints`
    to your correct etcd endpoint address.
 
 4. Restart the slave process with `systemctl restart dcos-mesos-slave`

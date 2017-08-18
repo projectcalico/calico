@@ -42,7 +42,9 @@ False`, so at the moment - unfortunately - it *still* has to be understood that
 Calico networks do not provide L2 adjacency, even though they report
 `l2_adjacency True` when queried on the API.
 
-> **Note:** Calico's connectivity design, based on IP routing, allows unicast IP
+> **NOTE**
+>
+> Calico's connectivity design, based on IP routing, allows unicast IP
 > and anycast IP.  Anycast IP also requires support for allowed-address-pairs,
 > or some other way of assigning the same IP address to more than one instance;
 > work for allowed-address-pairs support is in progress at

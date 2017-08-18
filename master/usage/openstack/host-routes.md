@@ -31,7 +31,9 @@ that host route to go through.  In networking-calico's usage, subnet gateway
 IPs represent the local hypervisor, because data sent by an instance is always
 routed there.
 
-> **Note:** networking-calico avoids unnecessary IP usage by using the subnet
+> **NOTE**
+>
+> networking-calico avoids unnecessary IP usage by using the subnet
 > gateway IP to represent the local compute host, on every compute host where
 > that subnet is being used.  Although that might initially sound odd, it works
 > because no data is ever sent to or from the gateway IP address; the gateway

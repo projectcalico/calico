@@ -16,7 +16,9 @@ The [calicoctl repostiory](https://github.com/projectcalico/calicoctl) contains 
 configuration files that are used to configure and "glue" these components
 together.
 
-> Note that the `calico/node` may be run in *policy only mode* in which Felix
+> **NOTE**
+>
+> `calico/node` may be run in *policy only mode* in which Felix
 > runs, but both BIRD and confd are removed.  This provides policy management
 > without route distribution between hosts.  This mode can be enabled by
 > setting the environment variable `CALICO_NETWORKING=false` before starting
@@ -65,5 +67,3 @@ For more information on confd, please refer to the [confd project](https://githu
 Calico uses a fork of the main confd repo which includes an additional change
 to improve performance with the handling of watch prefixes
 [calico-bird repo](https://github.com/projectcalico/calico-bird) for more details.
-
-

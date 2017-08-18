@@ -145,9 +145,8 @@ attempt to create one will fail.
 
 > **NOTE**
 >
-> :   It is possible that in a future version of Calico LBaaS may be
-> :   functional. Watch this space.
->
+> It is possible that in a future version of Calico LBaaS may be
+> functional. Watch this space.
 
 ## Horizon
 

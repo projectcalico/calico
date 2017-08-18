@@ -58,7 +58,9 @@ Cluster Store: etcd://10.0.0.1:2379
 By default, Mesos only enables the "Mesos" Containerizer. Ensure
 the Docker Containerizer is also enabled on each Agent.
 
->Note: You may skip this step if you do not plan on using the Docker Containerizer.
+> **NOTE**
+>
+> You may skip this step if you do not plan on using the Docker Containerizer.
 
 If you are using the default `mesos-init-wrapper` from the official Mesos package,
 you can enable the Docker Containerizer with the following command:
@@ -73,7 +75,9 @@ $ systemctl restart mesos-slave.service
 If you are planning to use Calico with the Unified containerizer,
 [enable the CNI Isolator on each agent](http://mesos.apache.org/documentation/latest/cni/#usage)
 
->Note: You may skip this step if you do not plan on using the Unified Containerizer.
+> **NOTE**
+>
+> You may skip this step if you do not plan on using the Unified Containerizer.
 
 When enabling CNI, you will have specified a `network_cni_config_dir`
 and `network_cni_plugins_dir`. We'll refer to these going forward as

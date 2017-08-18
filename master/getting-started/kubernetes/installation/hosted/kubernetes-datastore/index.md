@@ -26,7 +26,9 @@ You must have a cluster which meets the following requirements:
 - Your Kubernetes controller manager is configured to allocate pod CIDRs (i.e. by passing `--allocate-node-cidrs=true` to the controller manager)
 - Your Kubernetes controller manager has been provided a cluster-cidr (i.e. by passing `--cluster-cidr=192.168.0.0/16`, which the manifest expects by default).
 
-> Note:  If you are upgrading from Calico v2.1, the cluster-cidr selected for your controller manager should remain
+> **NOTE**
+>
+> If you are upgrading from Calico v2.1, the cluster-cidr selected for your controller manager should remain
 > unchanged from the v2.1 install (the v2.1 manifests default to `10.244.0.0/16`).
 
 ## Installation
@@ -39,7 +41,9 @@ This document describes three installation options for Calico using Kubernetes A
 
 Ensure you have a cluster which meets the above requirements.  There may be additional requirements based on the installation option you choose.
 
-> Note:  There is currently no upgrade path to switch between different installation options.  Therefore,
+> **NOTE**
+>
+> There is currently no upgrade path to switch between different installation options.  Therefore,
 > if you are upgrading from Calico v2.1, use the [Calico policy-only with user-supplied networking](#2-calico-policy-only-with-user-supplied-networking) installation instructions
 > to upgrade Calico policy-only which leaves the networking solution unchanged.
 
@@ -50,7 +54,9 @@ RBAC roles to allow API access to Calico.
 
 Apply the following manifest to create these necessary RBAC roles and bindings.
 
-> Note: The following RBAC policy is compatible with the Kubernetes v1.7+ manifests only.
+> **NOTE**
+>
+> The following RBAC policy is compatible with the Kubernetes v1.7+ manifests only.
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
@@ -66,7 +72,9 @@ networking with a full node-to-node mesh and/or explicit configuration of peers.
 To install Calico with Calico networking, run one of the commands below based on your Kubernetes version.
 This will install Calico and will initially create a full node-to-node mesh.
 
-> Note: Calico `v2.5.0` or higher with Kubernetes backend requires Kubernetes `v1.7.0` or higher.
+> **NOTE**
+>
+> Calico `v2.5.0` or higher with Kubernetes backend requires Kubernetes `v1.7.0` or higher.
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
@@ -99,7 +107,9 @@ CIDR allocations, either through static routes, a Kubernetes cloud-provider inte
 
 To install Calico in policy-only mode, run one of the following commands based on your Kubernetes version:
 
-> Note: Calico `v2.5.0` or higher with Kubernetes backend requires Kubernetes `v1.7.0` or higher.
+> **NOTE**
+>
+> Calico `v2.5.0` or higher with Kubernetes backend requires Kubernetes `v1.7.0` or higher.
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml
