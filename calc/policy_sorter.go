@@ -39,6 +39,18 @@ func NewPolicySorter() *PolicySorter {
 	}
 }
 
+func policyTypesEqual(pol1, pol2 *model.Policy) bool {
+	if pol1.Types == nil {
+		return pol2.Types == nil
+	}
+	if pol2.Types == nil {
+		return false
+	}
+	types1 := set.FromArray(pol1.Types)
+	types2 := set.FromArray(pol2.Types)
+	return types1.Equals(types2)
+}
+
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.PolicyKey:
@@ -48,23 +60,9 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 			if oldPolicy == nil ||
 				oldPolicy.Order != newPolicy.Order ||
 				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
-				oldPolicy.PreDNAT != newPolicy.PreDNAT {
+				oldPolicy.PreDNAT != newPolicy.PreDNAT ||
+				!policyTypesEqual(oldPolicy, newPolicy) {
 				dirty = true
-			} else {
-				var oldTypes, newTypes set.Set
-				if oldPolicy.Types == nil {
-					oldTypes = set.New()
-				} else {
-					oldTypes = set.FromArray(oldPolicy.Types)
-				}
-				if newPolicy.Types == nil {
-					newTypes = set.New()
-				} else {
-					newTypes = set.FromArray(newPolicy.Types)
-				}
-				if !oldTypes.Equals(newTypes) {
-					dirty = true
-				}
 			}
 			poc.tier.Policies[key] = newPolicy
 		} else {

@@ -205,6 +205,15 @@ var policy1_order20_ingress_only = Policy{
 	Types: []string{"ingress"},
 }
 
+var policy1_order20_egress_only = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"egress"},
+}
+
 var policy1_order20_untracked = Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
@@ -295,10 +304,15 @@ var withPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20},
 ).withName("with policy")
 
-// withPolicyIngressOnly adds a tier and ingress policy containing selectors for all and b=="b"
+// withPolicyIngressOnly adds a tier and ingress policy containing selectors for all
 var withPolicyIngressOnly = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_ingress_only},
 ).withName("with ingress-only policy")
+
+// withPolicyEgressOnly adds a tier and egress policy containing selectors for b=="b"
+var withPolicyEgressOnly = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_egress_only},
+).withName("with egress-only policy")
 
 // withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
@@ -401,6 +415,26 @@ var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 		{"default", []string{"pol-1"}, nil},
 	},
 ).withName("host ep1, ingress-only policy")
+
+var hostEp1WithEgressPolicy = withPolicyEgressOnly.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
+).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	hostEpWithNameId,
+	[]tierInfo{
+		{"default", nil, []string{"pol-1"}},
+	},
+).withName("host ep1, egress-only policy")
 
 var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -833,7 +867,7 @@ var baseTests = []StateList{
 		localEpsWithProfile},
 
 	// Host endpoint tests.
-	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy},
+	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
@@ -843,8 +877,8 @@ var baseTests = []StateList{
 	{hostEp1WithUntrackedPolicy, hostEp1WithPolicy, hostEp1WithIngressPolicy},
 	{hostEp1WithUntrackedPolicy, hostEp1WithTrackedAndUntrackedPolicy, hostEp1WithPolicy},
 
-	// Pre-DNAT policy on its own.
-	{hostEp1WithPreDNATPolicy},
+	// Pre-DNAT policy, then egress-only policy.
+	{hostEp1WithPreDNATPolicy, hostEp1WithEgressPolicy},
 
 	// Tag to label inheritance.  Tag foo should be inherited as label
 	// foo="".
