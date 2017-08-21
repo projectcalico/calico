@@ -52,6 +52,8 @@ func init() {
 	netv6_4 := net.MustParseNetwork("aabb:aabb::ffff/10")
 
 	protoTCP := numorstring.ProtocolFromString("tcp")
+	protoUDP := numorstring.ProtocolFromString("udp")
+	protoNumeric := numorstring.ProtocolFromInt(123)
 
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
@@ -106,6 +108,240 @@ func init() {
 		Entry("should reject !dst ports with no protocol (m)", model.Rule{
 			NotDstPorts: []numorstring.Port{numorstring.SinglePort(80)},
 		}, false),
+
+		// (Backend model) EndpointPorts.
+		Entry("should accept EndpointPort with tcp protocol (m)", model.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoTCP,
+			Port:     1234,
+		}, true),
+		Entry("should accept EndpointPort with udp protocol (m)", model.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoUDP,
+			Port:     1234,
+		}, true),
+		Entry("should reject EndpointPort with empty name (m)", model.EndpointPort{
+			Name:     "",
+			Protocol: protoUDP,
+			Port:     1234,
+		}, false),
+		Entry("should reject EndpointPort with no protocol (m)", model.EndpointPort{
+			Name: "a_Jolly-port",
+			Port: 1234,
+		}, false),
+		Entry("should reject EndpointPort with numeric protocol (m)", model.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoNumeric,
+			Port:     1234,
+		}, false),
+		Entry("should reject EndpointPort with no port (m)", model.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoTCP,
+		}, false),
+
+		// (API model) EndpointPorts.
+		Entry("should accept EndpointPort with tcp protocol", api.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoTCP,
+			Port:     1234,
+		}, true),
+		Entry("should accept EndpointPort with udp protocol", api.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoUDP,
+			Port:     1234,
+		}, true),
+		Entry("should reject EndpointPort with empty name", api.EndpointPort{
+			Name:     "",
+			Protocol: protoUDP,
+			Port:     1234,
+		}, false),
+		Entry("should reject EndpointPort with no protocol", api.EndpointPort{
+			Name: "a_Jolly-port",
+			Port: 1234,
+		}, false),
+		Entry("should reject EndpointPort with numeric protocol", api.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoNumeric,
+			Port:     1234,
+		}, false),
+		Entry("should reject EndpointPort with no port", api.EndpointPort{
+			Name:     "a_Jolly-port",
+			Protocol: protoTCP,
+		}, false),
+
+		// (Backend model) WorkloadEndpoint.
+		Entry("should accept WorkloadEndpoint with a port (m)",
+			model.WorkloadEndpoint{
+				Ports: []model.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			true,
+		),
+		Entry("should reject WorkloadEndpoint with an unnamed port (m)",
+			model.WorkloadEndpoint{
+				Ports: []model.EndpointPort{
+					{
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			false,
+		),
+		Entry("should reject WorkloadEndpoint with name-clashing ports (m)",
+			model.WorkloadEndpoint{
+				Ports: []model.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoUDP,
+						Port:     5456,
+					},
+				},
+			},
+			false,
+		),
+
+		// (API) WorkloadEndpointSpec.
+		Entry("should accept WorkloadEndpointSpec with a port (m)",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			true,
+		),
+		Entry("should reject WorkloadEndpointSpec with an unnamed port (m)",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			false,
+		),
+		Entry("should reject WorkloadEndpointSpec with name-clashing ports (m)",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoUDP,
+						Port:     5456,
+					},
+				},
+			},
+			false,
+		),
+
+		// (Backend model) HostEndpoint.
+		Entry("should accept HostEndpoint with a port (m)",
+			model.HostEndpoint{
+				Ports: []model.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			true,
+		),
+		Entry("should reject HostEndpoint with an unnamed port (m)",
+			model.HostEndpoint{
+				Ports: []model.EndpointPort{
+					{
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			false,
+		),
+		Entry("should reject HostEndpoint with name-clashing ports (m)",
+			model.HostEndpoint{
+				Ports: []model.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoUDP,
+						Port:     5456,
+					},
+				},
+			},
+			false,
+		),
+
+		// (API) HostEndpointSpec.
+		Entry("should accept HostEndpointSpec with a port (m)",
+			api.HostEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			true,
+		),
+		Entry("should reject HostEndpointSpec with an unnamed port (m)",
+			api.HostEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+			},
+			false,
+		),
+		Entry("should reject HostEndpointSpec with name-clashing ports (m)",
+			api.HostEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+					{
+						Name:     "a_Jolly-port",
+						Protocol: protoUDP,
+						Port:     5456,
+					},
+				},
+			},
+			false,
+		),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "allow", IPVersion: &V4}, true),

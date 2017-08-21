@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,9 @@ type HostEndpointSpec struct {
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,namespacedname"`
+
+	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	Ports []EndpointPort `json:"ports,omitempty" validate:"omitempty,dive"`
 }
 
 // NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current

@@ -178,6 +178,38 @@ func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	}
 	labels["calico/k8s_ns"] = pod.ObjectMeta.Namespace
 
+	// Map any named ports through.
+	var endpointPorts []model.EndpointPort
+	for _, container := range pod.Spec.Containers {
+		for _, containerPort := range container.Ports {
+			if containerPort.Name != "" && containerPort.ContainerPort != 0 {
+				var modelProto numorstring.Protocol
+				switch containerPort.Protocol {
+				case kapiv1.ProtocolUDP:
+					numorstring.ProtocolFromString("udp")
+				case kapiv1.ProtocolTCP, kapiv1.Protocol("") /* K8s default is TCP. */ :
+					numorstring.ProtocolFromString("tcp")
+				default:
+					log.WithFields(log.Fields{
+						"protocol": containerPort.Protocol,
+						"pod":      pod,
+						"port":     containerPort,
+					}).Warn("Ignoring named port with unknown protocol")
+					continue
+				}
+				modelProto = numorstring.ProtocolFromString("tcp")
+				if containerPort.Protocol == kapiv1.ProtocolUDP {
+					modelProto = numorstring.ProtocolFromString("udp")
+				}
+				endpointPorts = append(endpointPorts, model.EndpointPort{
+					Name:     containerPort.Name,
+					Protocol: modelProto,
+					Port:     uint16(containerPort.ContainerPort),
+				})
+			}
+		}
+	}
+
 	// Create the key / value pair to return.
 	kvp := model.KVPair{
 		Key: model.WorkloadEndpointKey{
@@ -193,6 +225,7 @@ func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 			IPv4Nets:   ipNets,
 			IPv6Nets:   []cnet.IPNet{},
 			Labels:     labels,
+			Ports:      endpointPorts,
 		},
 		Revision: pod.ObjectMeta.ResourceVersion,
 	}
