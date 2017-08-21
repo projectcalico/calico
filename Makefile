@@ -452,7 +452,12 @@ semaphore:
 	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
 
 release: clean
-	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
+	@echo Using the following versions:
+	@echo "	felix:             ${FELIX_VER}"
+	@echo "	calico:            ${CALICO_VER}"
+	@echo "	bird:              ${BIRD_VER}"
+	@echo "	confd:             ${CONFD_VER}"
+	@echo "	libnetwork_plugin: ${LIBNETWORK_PLUGIN_VER}"
 
 	git tag $(CALICO_VER)
 
