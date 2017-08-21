@@ -101,8 +101,14 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 	ap.Spec.PreDNAT = bp.PreDNAT
 	ap.Spec.Types = nil
 
-	// Note: avoid accidentally converting from nil to [].
-	if bp.Types != nil {
+	if len(bp.Types) == 0 {
+		// This case happens when there is a pre-existing policy in an etcd datastore, from
+		// before the explicit Types feature was available.  Calico's previous behaviour was
+		// always to apply policy to both ingress and egress traffic, so in this case we
+		// return Types as [ ingress, egress ].
+		ap.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+	} else {
+		// Convert from the backend-specified Types.
 		ap.Spec.Types = make([]api.PolicyType, len(bp.Types))
 		for i, t := range bp.Types {
 			ap.Spec.Types[i] = api.PolicyType(t)
