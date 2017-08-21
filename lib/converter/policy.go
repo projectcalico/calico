@@ -52,7 +52,33 @@ func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPa
 			DoNotTrack:    ap.Spec.DoNotTrack,
 			Annotations:   ap.Metadata.Annotations,
 			PreDNAT:       ap.Spec.PreDNAT,
+			Types:         nil, // filled in below
 		},
+	}
+
+	if len(ap.Spec.Types) == 0 {
+		// Default the Types field according to what inbound and outbound rules are present
+		// in the policy.
+		if len(ap.Spec.EgressRules) == 0 {
+			// Policy has no egress rules, so apply this policy to ingress only.  (Note:
+			// intentionally including the case where the policy also has no ingress
+			// rules.)
+			d.Value.(*model.Policy).Types = []string{string(api.PolicyTypeIngress)}
+		} else if len(ap.Spec.IngressRules) == 0 {
+			// Policy has egress rules but no ingress rules, so apply this policy to
+			// egress only.
+			d.Value.(*model.Policy).Types = []string{string(api.PolicyTypeEgress)}
+		} else {
+			// Policy has both ingress and egress rules, so apply this policy to both
+			// ingress and egress.
+			d.Value.(*model.Policy).Types = []string{string(api.PolicyTypeIngress), string(api.PolicyTypeEgress)}
+		}
+	} else {
+		// Convert from the API-specified Types.
+		d.Value.(*model.Policy).Types = make([]string, len(ap.Spec.Types))
+		for i, t := range ap.Spec.Types {
+			d.Value.(*model.Policy).Types[i] = string(t)
+		}
 	}
 
 	return &d, nil
@@ -73,6 +99,21 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 	ap.Spec.Selector = bp.Selector
 	ap.Spec.DoNotTrack = bp.DoNotTrack
 	ap.Spec.PreDNAT = bp.PreDNAT
+	ap.Spec.Types = nil
+
+	if len(bp.Types) == 0 {
+		// This case happens when there is a pre-existing policy in an etcd datastore, from
+		// before the explicit Types feature was available.  Calico's previous behaviour was
+		// always to apply policy to both ingress and egress traffic, so in this case we
+		// return Types as [ ingress, egress ].
+		ap.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+	} else {
+		// Convert from the backend-specified Types.
+		ap.Spec.Types = make([]api.PolicyType, len(bp.Types))
+		for i, t := range bp.Types {
+			ap.Spec.Types[i] = api.PolicyType(t)
+		}
+	}
 
 	return ap, nil
 }

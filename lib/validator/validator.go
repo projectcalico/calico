@@ -100,6 +100,7 @@ func init() {
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
 	registerFieldValidator("ipversion", validateIPVersion)
 	registerFieldValidator("ipipmode", validateIPIPMode)
+	registerFieldValidator("policytype", validatePolicyType)
 
 	// Register struct validators.
 	registerStructValidator(validateProtocol, numorstring.Protocol{})
@@ -216,6 +217,18 @@ func validateScopeGlobalOrNode(v *validator.Validate, topStruct reflect.Value, c
 	f := field.Interface().(scope.Scope)
 	log.Debugf("Validate scope: %v", f)
 	return f == scope.Global || f == scope.Node
+}
+
+func validatePolicyType(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate policy type: %s", s)
+	if s == string(api.PolicyTypeIngress) {
+		return true
+	}
+	if s == string(api.PolicyTypeEgress) {
+		return true
+	}
+	return false
 }
 
 func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -518,5 +531,42 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 	if m.PreDNAT && len(m.EgressRules) > 0 {
 		structLevel.ReportError(reflect.ValueOf(m.EgressRules),
 			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"))
+	}
+
+	if m.PreDNAT && len(m.Types) > 0 {
+		for _, t := range m.Types {
+			if t == api.PolicyTypeEgress {
+				structLevel.ReportError(reflect.ValueOf(m.Types),
+					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"))
+			}
+		}
+	}
+
+	// Check (and disallow) any repeats in Types field.
+	mp := map[api.PolicyType]bool{}
+	for _, t := range m.Types {
+		if _, exists := mp[t]; exists {
+			structLevel.ReportError(reflect.ValueOf(m.Types),
+				"PolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
+		} else {
+			mp[t] = true
+		}
+	}
+
+	// When Types is explicitly specified:
+	if len(m.Types) > 0 {
+		var exists bool
+		// 'ingress' type must be there if Policy has any ingress rules.
+		_, exists = mp[api.PolicyTypeIngress]
+		if len(m.IngressRules) > 0 && !exists {
+			structLevel.ReportError(reflect.ValueOf(m.Types),
+				"PolicySpec.Types", "", reason("'ingress' must be specified when policy has ingress rules"))
+		}
+		// 'egress' type must be there if Policy has any egress rules.
+		_, exists = mp[api.PolicyTypeEgress]
+		if len(m.EgressRules) > 0 && !exists {
+			structLevel.ReportError(reflect.ValueOf(m.Types),
+				"PolicySpec.Types", "", reason("'egress' must be specified when policy has egress rules"))
+		}
 	}
 }

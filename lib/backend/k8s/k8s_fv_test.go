@@ -536,6 +536,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking cache has correct Global Network Policy entries", func() {
+			// The GNP has been roundtripped through conversion to and from an API
+			// Policy object, and in that process the Types field has been defaulted.
+			kvp1a.Value.(*model.Policy).Types = []string{
+				string(capi.PolicyTypeIngress),
+				string(capi.PolicyTypeEgress),
+			}
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1a.Value))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
@@ -551,6 +557,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking cache has correct Global Network Policy entries", func() {
+			// The GNP has been roundtripped through conversion to and from an API
+			// Policy object, and in that process the Types field has been defaulted.
+			kvp1b.Value.(*model.Policy).Types = []string{
+				string(capi.PolicyTypeIngress),
+				string(capi.PolicyTypeEgress),
+			}
 			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
