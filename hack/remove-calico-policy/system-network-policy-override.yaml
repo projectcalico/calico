@@ -1,0 +1,11 @@
+apiVersion: "alpha.projectcalico.org/v1"
+kind: SystemNetworkPolicy
+metadata:
+  name: allow-all-calico-policy
+  namespace: kube-system
+spec:
+  order: 0.0
+  ingress:
+  - action: allow
+  egress:
+  - action: allow
