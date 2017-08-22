@@ -1,5 +1,6 @@
 ---
 title: IP Pool Resource (ipPool)
+redirect_from: latest/reference/calicoctl/resources/ippool
 ---
 
 An IP pool resource (ipPool) represents a collection of IP addresses from which Calico expects

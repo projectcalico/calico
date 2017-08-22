@@ -1,6 +1,5 @@
 ---
 title: Troubleshooting Calico for rkt
-redirect_from: latest/getting-started/rkt/troubleshooting
 ---
 
 This article contains rkt specific troubleshooting advice for Calico and 

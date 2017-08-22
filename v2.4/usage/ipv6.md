@@ -1,6 +1,5 @@
 ---
 title: IPv6 Support
-redirect_from: latest/usage/ipv6
 ---
 
 Calico supports connectivity over IPv6, between compute hosts, and

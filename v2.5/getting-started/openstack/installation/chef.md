@@ -1,5 +1,6 @@
 ---
 title: Chef Trial Install
+redirect_from: latest/getting-started/openstack/installation/chef
 ...
 
 > **WARNING**
