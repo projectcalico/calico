@@ -137,7 +137,8 @@ type RuleRenderer interface {
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,
 		adminUp bool,
-		policies []string,
+		ingressPolicies []string,
+		egressPolicies []string,
 		profileIDs []string,
 	) []*iptables.Chain
 
@@ -145,12 +146,14 @@ type RuleRenderer interface {
 	FromHostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
-		policyNames []string,
+		ingressPolicyNames []string,
+		egressPolicyNames []string,
 		profileIDs []string,
 	) []*iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
-		untrackedPolicyNames []string,
+		ingressPolicyNames []string,
+		egressPolicyNames []string,
 	) []*iptables.Chain
 	HostEndpointToMangleChains(
 		ifaceName string,

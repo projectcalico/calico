@@ -275,7 +275,8 @@ message HostEndpointRemove {
 
 message TierInfo {
   string name = 1;
-  repeated string policies = 2;
+  repeated string ingress_policies = 2;
+  repeated string egress_policies = 3;
 }
 
 message NatInfo {

@@ -14,6 +14,10 @@
 
 package calc_test
 
+// This file tests the mapping from datastore content - expressed as KVUpdates using model.* objects
+// - to proto.* messages.  'model' is a dot-import in this file, so non-namespaced type names that
+// look like Calico objects are probably coming from the 'model' package.
+
 import (
 	. "github.com/projectcalico/felix/calc"
 
@@ -189,6 +193,25 @@ var policy1_order20 = Policy{
 	OutboundRules: []Rule{
 		{SrcSelector: bEpBSelector},
 	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_ingress_only = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	Types: []string{"ingress"},
+}
+
+var policy1_order20_egress_only = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"egress"},
 }
 
 var policy1_order20_untracked = Policy{
@@ -281,12 +304,22 @@ var withPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20},
 ).withName("with policy")
 
+// withPolicyIngressOnly adds a tier and ingress policy containing selectors for all
+var withPolicyIngressOnly = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_ingress_only},
+).withName("with ingress-only policy")
+
+// withPolicyEgressOnly adds a tier and egress policy containing selectors for b=="b"
+var withPolicyEgressOnly = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_egress_only},
+).withName("with egress-only policy")
+
 // withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_untracked},
 ).withName("with untracked policy")
 
-// withPreDNATPolicy adds a tier and policy containing selectors for all and b=="b"
+// withPreDNATPolicy adds a tier and policy containing selectors for all and a=="a"
 var withPreDNATPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1"}, Value: &policy1_order20_pre_dnat},
 ).withName("with pre-DNAT policy")
@@ -313,9 +346,30 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("ep1 local, policy")
+
+// localEp1WithIngressPolicy is as above except ingress policy only.
+var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{
+		{"default", []string{"pol-1"}, nil},
+	},
+).withName("ep1 local, ingress-only policy")
 
 var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -338,9 +392,49 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	hostEpWithNameId,
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("host ep1, policy")
+
+var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	hostEpWithNameId,
+	[]tierInfo{
+		{"default", []string{"pol-1"}, nil},
+	},
+).withName("host ep1, ingress-only policy")
+
+var hostEp1WithEgressPolicy = withPolicyEgressOnly.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
+).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	hostEpWithNameId,
+	[]tierInfo{
+		{"default", nil, []string{"pol-1"}},
+	},
+).withName("host ep1, egress-only policy")
 
 var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -366,7 +460,7 @@ var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	hostEpWithNameId,
 	[]tierInfo{},
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 	[]tierInfo{},
 ).withName("host ep1, untracked policy")
@@ -377,11 +471,6 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 	"10.0.0.1", // ep1
 	"fc00:fe11::1",
 	"10.0.0.2", // ep1 and ep2
-	"fc00:fe11::2",
-}).withIPSet(bEqBSelectorId, []string{
-	"10.0.0.1",
-	"fc00:fe11::1",
-	"10.0.0.2",
 	"fc00:fe11::2",
 }).withActivePolicies(
 	proto.PolicyID{"default", "pre-dnat-pol-1"},
@@ -396,9 +485,9 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 	[]tierInfo{},
 	[]tierInfo{},
 	[]tierInfo{
-		{"default", []string{"pre-dnat-pol-1"}},
+		{"default", []string{"pre-dnat-pol-1"}, nil},
 	},
-).withName("host ep1, untracked policy")
+).withName("host ep1, pre-DNAT policy")
 
 var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20},
@@ -408,10 +497,10 @@ var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpda
 ).withEndpointUntracked(
 	hostEpWithNameId,
 	[]tierInfo{
-		{"default", []string{"pol-2"}},
+		{"default", []string{"pol-2"}, []string{"pol-2"}},
 	},
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 	[]tierInfo{},
 ).withName("host ep1, tracked+untracked policy")
@@ -431,7 +520,7 @@ var hostEp2WithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	hostEpNoNameId,
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("host ep2, policy")
 
@@ -486,7 +575,7 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 	).withEndpoint(
 		localWlEp1Id,
 		[]tierInfo{
-			{"default", expectedOrder[:]},
+			{"default", expectedOrder[:], expectedOrder[:]},
 		},
 	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedOrder[:]))
 	return state
@@ -511,7 +600,7 @@ var localEp2WithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	localWlEp2Id,
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("ep2 local, policy")
 
@@ -544,12 +633,12 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withEndpoint(
 	localWlEp2Id,
 	[]tierInfo{
-		{"default", []string{"pol-1"}},
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("2 local, overlapping IPs & a policy")
 
@@ -732,6 +821,9 @@ var baseTests = []StateList{
 	// Add one endpoint then remove it and add another with overlapping IP.
 	{localEp1WithPolicy, localEp2WithPolicy},
 
+	// Same but ingress-only policy on ep1.
+	{localEp1WithIngressPolicy, localEp2WithPolicy},
+
 	// Add one endpoint then another with an overlapping IP, then remove
 	// first.
 	{localEp1WithPolicy, localEpsWithPolicy, localEp2WithPolicy},
@@ -740,7 +832,7 @@ var baseTests = []StateList{
 	{localEpsWithPolicy, initialisedStore, localEpsWithPolicy},
 
 	// IP updates.
-	{localEpsWithPolicy, localEpsWithPolicyUpdatedIPs},
+	{localEpsWithPolicy, localEpsWithPolicyUpdatedIPs, localEp1WithIngressPolicy},
 
 	// Add a profile and a couple of endpoints.  Then update the profile to
 	// use different tags and selectors.
@@ -766,6 +858,7 @@ var baseTests = []StateList{
 		hostEp1WithPolicy,
 		localEpsWithUpdatedProfile,
 		withProfileTagInherit,
+		localEp1WithIngressPolicy,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,
 		hostEp1WithUntrackedPolicy,
@@ -774,15 +867,18 @@ var baseTests = []StateList{
 		localEpsWithProfile},
 
 	// Host endpoint tests.
-	{hostEp1WithPolicy, hostEp2WithPolicy},
+	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
 	// Mixed policy.
 	{hostEp1WithTrackedAndUntrackedPolicy},
 	// Single policy switches between tracked/untracked.
-	{hostEp1WithUntrackedPolicy, hostEp1WithPolicy},
+	{hostEp1WithUntrackedPolicy, hostEp1WithPolicy, hostEp1WithIngressPolicy},
 	{hostEp1WithUntrackedPolicy, hostEp1WithTrackedAndUntrackedPolicy, hostEp1WithPolicy},
+
+	// Pre-DNAT policy, then egress-only policy.
+	{hostEp1WithPreDNATPolicy, hostEp1WithEgressPolicy},
 
 	// Tag to label inheritance.  Tag foo should be inherited as label
 	// foo="".
@@ -1044,6 +1140,14 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					Expect(tracker.endpointToPolicyOrder).To(Equal(state.ExpectedEndpointPolicyOrder),
 						"Endpoint policy order incorrect after moving to state: %v",
 						state.Name)
+
+					Expect(tracker.endpointToPreDNATPolicyOrder).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
+						"Endpoint pre-DNAT policy order incorrect after moving to state: %v",
+						state.Name)
+
+					Expect(tracker.endpointToUntrackedPolicyOrder).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
+						"Endpoint untracked policy order incorrect after moving to state: %v",
+						state.Name)
 				})
 			}
 		}
@@ -1245,7 +1349,8 @@ func (s *stateTracker) onEvent(event interface{}) {
 		tierInfos := make([]tierInfo, len(tiers))
 		for i, tier := range event.Endpoint.Tiers {
 			tierInfos[i].Name = tier.Name
-			tierInfos[i].PolicyNames = tier.Policies
+			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
+			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		id := workloadId(*event.Id)
 		s.endpointToPolicyOrder[id.String()] = tierInfos
@@ -1261,7 +1366,8 @@ func (s *stateTracker) onEvent(event interface{}) {
 		tierInfos := make([]tierInfo, len(tiers))
 		for i, tier := range tiers {
 			tierInfos[i].Name = tier.Name
-			tierInfos[i].PolicyNames = tier.Policies
+			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
+			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		id := hostEpId(*event.Id)
 		s.endpointToPolicyOrder[id.String()] = tierInfos
@@ -1270,7 +1376,8 @@ func (s *stateTracker) onEvent(event interface{}) {
 		uTierInfos := make([]tierInfo, len(uTiers))
 		for i, tier := range uTiers {
 			uTierInfos[i].Name = tier.Name
-			uTierInfos[i].PolicyNames = tier.Policies
+			uTierInfos[i].IngressPolicyNames = tier.IngressPolicies
+			uTierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		s.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
 
@@ -1278,7 +1385,8 @@ func (s *stateTracker) onEvent(event interface{}) {
 		pTierInfos := make([]tierInfo, len(pTiers))
 		for i, tier := range pTiers {
 			pTierInfos[i].Name = tier.Name
-			pTierInfos[i].PolicyNames = tier.Policies
+			pTierInfos[i].IngressPolicyNames = tier.IngressPolicies
+			pTierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		s.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
 	case *proto.HostEndpointRemove:
@@ -1298,8 +1406,9 @@ func (s *stateTracker) RawValues() map[string]string {
 }
 
 type tierInfo struct {
-	Name        string
-	PolicyNames []string
+	Name               string
+	IngressPolicyNames []string
+	EgressPolicyNames  []string
 }
 
 type workloadId proto.WorkloadEndpointID

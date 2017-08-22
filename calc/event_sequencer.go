@@ -578,36 +578,38 @@ func cidrToIPPoolID(cidr ip.CIDR) string {
 	return strings.Replace(cidr.String(), "/", "-", 1)
 }
 
+func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed bool) {
+	if pol.GovernsIngress() {
+		tierInfo.IngressPolicies = append(tierInfo.IngressPolicies, pol.Key.Name)
+	}
+	if egressAllowed && pol.GovernsEgress() {
+		tierInfo.EgressPolicies = append(tierInfo.EgressPolicies, pol.Key.Name)
+	}
+}
+
 func tierInfoToProtoTierInfo(filteredTiers []tierInfo) (normalTiers, untrackedTiers, preDNATTiers []*proto.TierInfo) {
 	if len(filteredTiers) > 0 {
 		for _, ti := range filteredTiers {
-			var normalPols, untrackedPols, preDNATPols []string
+			untrackedTierInfo := &proto.TierInfo{Name: ti.Name}
+			preDNATTierInfo := &proto.TierInfo{Name: ti.Name}
+			normalTierInfo := &proto.TierInfo{Name: ti.Name}
 			for _, pol := range ti.OrderedPolicies {
 				if pol.Value.DoNotTrack {
-					untrackedPols = append(untrackedPols, pol.Key.Name)
+					addPolicyToTierInfo(&pol, untrackedTierInfo, true)
 				} else if pol.Value.PreDNAT {
-					preDNATPols = append(preDNATPols, pol.Key.Name)
+					addPolicyToTierInfo(&pol, preDNATTierInfo, false)
 				} else {
-					normalPols = append(normalPols, pol.Key.Name)
+					addPolicyToTierInfo(&pol, normalTierInfo, true)
 				}
 			}
-			if len(normalPols) > 0 {
-				normalTiers = append(normalTiers, &proto.TierInfo{
-					Name:     ti.Name,
-					Policies: normalPols,
-				})
+			if len(untrackedTierInfo.IngressPolicies) > 0 || len(untrackedTierInfo.EgressPolicies) > 0 {
+				untrackedTiers = append(untrackedTiers, untrackedTierInfo)
 			}
-			if len(untrackedPols) > 0 {
-				untrackedTiers = append(untrackedTiers, &proto.TierInfo{
-					Name:     ti.Name,
-					Policies: untrackedPols,
-				})
+			if len(preDNATTierInfo.IngressPolicies) > 0 || len(preDNATTierInfo.EgressPolicies) > 0 {
+				preDNATTiers = append(preDNATTiers, preDNATTierInfo)
 			}
-			if len(preDNATPols) > 0 {
-				preDNATTiers = append(preDNATTiers, &proto.TierInfo{
-					Name:     ti.Name,
-					Policies: preDNATPols,
-				})
+			if len(normalTierInfo.IngressPolicies) > 0 || len(normalTierInfo.EgressPolicies) > 0 {
+				normalTiers = append(normalTiers, normalTierInfo)
 			}
 		}
 	}

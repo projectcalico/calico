@@ -394,15 +394,17 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 				delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 			}
-			var policyNames []string
+			var ingressPolicyNames, egressPolicyNames []string
 			if len(workload.Tiers) > 0 {
-				policyNames = workload.Tiers[0].Policies
+				ingressPolicyNames = workload.Tiers[0].IngressPolicies
+				egressPolicyNames = workload.Tiers[0].EgressPolicies
 			}
 			adminUp := workload.State == "active"
 			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
 				workload.Name,
 				adminUp,
-				policyNames,
+				ingressPolicyNames,
+				egressPolicyNames,
 				workload.ProfileIds,
 			)
 			m.filterTable.UpdateChains(chains)
@@ -627,13 +629,15 @@ func (m *endpointManager) resolveHostEndpoints() {
 		hostEp := m.rawHostEndpoints[id]
 
 		// Update the filter chain, for normal traffic.
-		var policyNames []string
+		var ingressPolicyNames, egressPolicyNames []string
 		if len(hostEp.Tiers) > 0 {
-			policyNames = hostEp.Tiers[0].Policies
+			ingressPolicyNames = hostEp.Tiers[0].IngressPolicies
+			egressPolicyNames = hostEp.Tiers[0].EgressPolicies
 		}
 		filtChains := m.ruleRenderer.HostEndpointToFilterChains(
 			ifaceName,
-			policyNames,
+			ingressPolicyNames,
+			egressPolicyNames,
 			hostEp.ProfileIds,
 		)
 		if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
@@ -649,13 +653,13 @@ func (m *endpointManager) resolveHostEndpoints() {
 		hostEp := m.rawHostEndpoints[id]
 
 		// Update the mangle table, for preDNAT policy.
-		var policyNames []string
+		var ingressPolicyNames []string
 		if len(hostEp.PreDnatTiers) > 0 {
-			policyNames = hostEp.PreDnatTiers[0].Policies
+			ingressPolicyNames = hostEp.PreDnatTiers[0].IngressPolicies
 		}
 		mangleChains := m.ruleRenderer.HostEndpointToMangleChains(
 			ifaceName,
-			policyNames,
+			ingressPolicyNames,
 		)
 		if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleChains[ifaceName]) {
 			m.mangleTable.UpdateChains(mangleChains)
@@ -670,13 +674,15 @@ func (m *endpointManager) resolveHostEndpoints() {
 		hostEp := m.rawHostEndpoints[id]
 
 		// Update the raw chain, for untracked traffic.
-		var policyNames []string
+		var ingressPolicyNames, egressPolicyNames []string
 		if len(hostEp.UntrackedTiers) > 0 {
-			policyNames = hostEp.UntrackedTiers[0].Policies
+			ingressPolicyNames = hostEp.UntrackedTiers[0].IngressPolicies
+			egressPolicyNames = hostEp.UntrackedTiers[0].EgressPolicies
 		}
 		rawChains := m.ruleRenderer.HostEndpointToRawChains(
 			ifaceName,
-			policyNames,
+			ingressPolicyNames,
+			egressPolicyNames,
 		)
 		if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
 			m.rawTable.UpdateChains(rawChains)

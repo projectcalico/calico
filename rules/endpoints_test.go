@@ -53,7 +53,7 @@ var _ = Describe("Endpoints", func() {
 	})
 
 	It("should render a minimal workload endpoint", func() {
-		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil)).To(Equal([]*Chain{
+		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil, nil)).To(Equal([]*Chain{
 			{
 				Name: "cali-tw-cali1234",
 				Rules: []Rule{
@@ -91,7 +91,7 @@ var _ = Describe("Endpoints", func() {
 		})
 
 		It("should render a minimal workload endpoint", func() {
-			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil)).To(Equal([]*Chain{
+			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil, nil)).To(Equal([]*Chain{
 				{
 					Name: "cali-tw-cali1234",
 					Rules: []Rule{
@@ -121,7 +121,7 @@ var _ = Describe("Endpoints", func() {
 	})
 
 	It("should render a disabled workload endpoint", func() {
-		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", false, nil, nil)).To(Equal([]*Chain{
+		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", false, nil, nil, nil)).To(Equal([]*Chain{
 			{
 				Name: "cali-tw-cali1234",
 				Rules: []Rule{
@@ -143,7 +143,8 @@ var _ = Describe("Endpoints", func() {
 		Expect(renderer.WorkloadEndpointToIptablesChains(
 			"cali1234",
 			true,
-			[]string{"a", "b"},
+			[]string{"ai", "bi"},
+			[]string{"ae", "be"},
 			[]string{"prof1", "prof2"},
 		)).To(Equal([]*Chain{
 			{
@@ -160,12 +161,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of policies",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-a"}},
+						Action: JumpAction{Target: "cali-pi-ai"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-b"}},
+						Action: JumpAction{Target: "cali-pi-bi"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -200,12 +201,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of policies",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-a"}},
+						Action: JumpAction{Target: "cali-po-ae"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-b"}},
+						Action: JumpAction{Target: "cali-po-be"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -230,7 +231,7 @@ var _ = Describe("Endpoints", func() {
 	})
 
 	It("should render a host endpoint", func() {
-		Expect(renderer.HostEndpointToFilterChains("eth0", []string{"a", "b"}, []string{"prof1", "prof2"})).To(Equal([]*Chain{
+		Expect(renderer.HostEndpointToFilterChains("eth0", []string{"ai", "bi"}, []string{"ae", "be"}, []string{"prof1", "prof2"})).To(Equal([]*Chain{
 			{
 				Name: "cali-th-eth0",
 				Rules: []Rule{
@@ -248,12 +249,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of policies",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-a"}},
+						Action: JumpAction{Target: "cali-po-ae"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-b"}},
+						Action: JumpAction{Target: "cali-po-be"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -291,12 +292,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of policies",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-a"}},
+						Action: JumpAction{Target: "cali-pi-ai"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-b"}},
+						Action: JumpAction{Target: "cali-pi-bi"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -321,7 +322,7 @@ var _ = Describe("Endpoints", func() {
 	})
 
 	It("should render host endpoint raw chains with untracked policies", func() {
-		Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"})).To(Equal([]*Chain{
+		Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"}, []string{"c"})).To(Equal([]*Chain{
 			{
 				Name: "cali-th-eth0",
 				Rules: []Rule{
