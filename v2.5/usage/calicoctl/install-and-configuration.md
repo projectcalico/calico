@@ -1,5 +1,6 @@
 ---
 title: Installing and Configuring calicoctl
+redirect_from: latest/usage/calicoctl/install-and-configuration
 ---
 
 This document outlines how to install and configure calicoctl which is the

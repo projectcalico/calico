@@ -1,5 +1,6 @@
 ---
 title: calicoctl get
+redirect_from: latest/reference/calicoctl/commands/get
 ---
 
 This sections describes the `calicoctl get` command.
