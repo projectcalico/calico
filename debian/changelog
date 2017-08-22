@@ -1,3 +1,15 @@
+felix (2.5.0~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.5.0 (from Git commit daa250c).
+    [Changes recorded in 2.5.0 tag]
+    - Test fix: use local crd manifest file instead of pulling from libcalico-go repository See: #1530
+    - Fix deb and RPM changelogs to include 2.2.x releases.
+    [Changes recorded in 2.5.0-rc1 tag]
+    - Update to libcalico v1.6.0 and typha v0.4.0.
+    - Update k8sfv to be compatible with k8s 1.7 + CRDs
+
+ -- Neil Jerram <neil@tigera.io>  Tue, 22 Aug 2017 10:25:42 +0100
+
 felix (2.4.1~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.4.1 (from Git commit 0ee59e4).
