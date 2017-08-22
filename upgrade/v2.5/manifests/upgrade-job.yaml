@@ -102,5 +102,5 @@ spec:
       serviceAccountName: calico-25-migration
       containers:
       - name: calico-upgrade
-        image: gunjan5/upgrade:v2.5.16
+        image: calico/v2.5-upgrade:v0.0.1
       restartPolicy: Never
