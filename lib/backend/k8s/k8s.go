@@ -142,14 +142,20 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	return kubeClient, nil
 }
 
+// EnsureInitialized checks that the necessary custom resource definitions
+// exist in the backend. This usually passes when using etcd
+// as a backend but can often fail when using KDD as it relies
+// on various custom resources existing.
+// To ensure the datastore is initialized, this function checks that a
+// known custom resource is defined: GlobalFelixConfig. It accomplishes this
+// by trying to set the ClusterType (an instance of GlobalFelixConfig).
 func (c *KubeClient) EnsureInitialized() error {
-	// Ensure ClusterType is set.
-	log.Info("Ensuring ClusterType is set")
+	log.Info("Ensuring datastore has been initialized.")
 	err := c.waitForClusterType()
 	if err != nil {
-		return fmt.Errorf("Failed to ensure ClusterType is set: %s", err)
+		return fmt.Errorf("Failed to ensure datastore has been initialized: \"%s\". Make sure the Custom Resource Definitions have been created and Calico has been authorized to access them.", err)
 	}
-	log.Info("ClusterType is set")
+	log.Info("Confirmed datastore has been initialized.")
 	return nil
 }
 
