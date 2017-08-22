@@ -60,7 +60,7 @@
 : ${TYPHA_LOG_LEVEL:=info}
 #
 # CRD Manifest to use
-: ${CRD_URL:=https://raw.githubusercontent.com/projectcalico/libcalico-go/master/test/crds.yaml}
+: ${CRD_PATH:=./vendor/github.com/projectcalico/libcalico-go/test/crds.yaml}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -129,8 +129,19 @@ while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonym
     sleep 2
 done
 
+if [ ! -e ${CRD_PATH} ]; then
+    echo CRD manifest does not exist: ${CRD_PATH}
+    echo CWD=`pwd`
+    exit 1
+fi
+
+# Copy CRD manifest into running k8sfs-apiserver
+while ! docker cp ${CRD_PATH} ${prefix}-apiserver:/crds.yaml; do
+    sleep 2
+done
+
 # Apply CRD manifest to pre-create resource definitions
-while ! docker exec ${prefix}-apiserver kubectl apply -f ${CRD_URL}; do
+while ! docker exec ${prefix}-apiserver kubectl apply -f /crds.yaml; do
     sleep 2
 done
 
