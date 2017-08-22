@@ -1,6 +1,5 @@
 ---
 title: Service IPs
-redirect_from: latest/usage/openstack/service-ips
 ---
 
 Calico supports two approaches for assigning a service IP to a Calico-networked

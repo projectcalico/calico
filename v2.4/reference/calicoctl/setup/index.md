@@ -1,6 +1,5 @@
 ---
 title: Calicoctl Configuration Overview 
-redirect_from: latest/reference/calicoctl/setup/index
 ---
 
 The `calicoctl` command line tool needs to be configured with details of

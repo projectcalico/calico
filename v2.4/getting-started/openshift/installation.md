@@ -1,6 +1,5 @@
 ---
 title: Installing Calico on OpenShift
-redirect_from: latest/getting-started/openshift/installation
 ---
 
 Installation of Calico in OpenShift is integrated in openshift-ansible v3.6.

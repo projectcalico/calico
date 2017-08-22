@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico on GCE
-redirect_from: latest/reference/public-cloud/gce
 ---
 
 To deploy Calico in [Google Compute Engine][GCE], you must ensure that the

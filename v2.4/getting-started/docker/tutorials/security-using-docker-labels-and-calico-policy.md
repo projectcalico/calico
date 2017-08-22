@@ -1,6 +1,5 @@
 ---
 title: Security using Docker Labels and Calico Policy
-redirect_from: latest/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy
 ---
 
 ## Background

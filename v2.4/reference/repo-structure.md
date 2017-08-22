@@ -1,6 +1,5 @@
 ---
 title: Calico Repositories
-redirect_from: latest/reference/repo-structure
 ---
 
 The following information details which artifacts are built from which
