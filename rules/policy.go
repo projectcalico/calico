@@ -538,6 +538,13 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.SourcePortRanges(pRule.SrcPorts)
 	}
 
+	for _, np := range pRule.SrcNamedPortIpSetIds {
+		logCxt.WithFields(log.Fields{
+			"namedPort": np,
+		}).Debug("Adding source named port match")
+		match = match.SourceIPPortSet(np)
+	}
+
 	if len(pRule.DstNet) == 1 {
 		logCxt.WithField("cidr", pRule.DstNet[0]).Debug("Adding dest CIDR match")
 		match = match.DestNet(pRule.DstNet[0])
@@ -565,6 +572,13 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 			"ports": pRule.SrcPorts,
 		}).Debug("Adding dst port match")
 		match = match.DestPortRanges(pRule.DstPorts)
+	}
+
+	for _, np := range pRule.DstNamedPortIpSetIds {
+		logCxt.WithFields(log.Fields{
+			"namedPort": np,
+		}).Debug("Adding dest named port match")
+		match = match.DestIPPortSet(np)
 	}
 
 	if ipVersion == 4 {
@@ -632,6 +646,13 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
+	for _, np := range pRule.NotSrcNamedPortIpSetIds {
+		logCxt.WithFields(log.Fields{
+			"namedPort": np,
+		}).Debug("Adding negated source named port match")
+		match = match.NotSourceIPPortSet(np)
+	}
+
 	if len(pRule.NotDstNet) == 1 {
 		logCxt.WithField("cidr", pRule.NotDstNet[0]).Debug("Adding !dst CIDR match")
 		match = match.NotDestNet(pRule.NotDstNet[0])
@@ -660,6 +681,13 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
 			match = match.NotDestPortRanges(portSplit)
 		}
+	}
+
+	for _, np := range pRule.NotDstNamedPortIpSetIds {
+		logCxt.WithFields(log.Fields{
+			"namedPort": np,
+		}).Debug("Adding negated dest named port match")
+		match = match.NotDestIPPortSet(np)
 	}
 
 	if ipVersion == 4 {

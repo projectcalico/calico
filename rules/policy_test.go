@@ -354,8 +354,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
-			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
-			allowIfAllMarkRule,
+			"-A test ! --source 11.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		}),
 
@@ -370,8 +369,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
-			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
-			allowIfAllMarkRule,
+			"-A test ! --destination 13.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		}),
 
@@ -459,74 +457,14 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
-
-	It("Should correctly render the cross-product of the source/dest ports", func() {
-		srcPorts := []*proto.PortRange{
-			{First: 1, Last: 2},
-			{First: 3, Last: 4},
-			{First: 5, Last: 6},
-			{First: 7, Last: 8},
-			{First: 9, Last: 10},
-			{First: 11, Last: 12},
-			{First: 13, Last: 14},
-			{First: 15, Last: 16},
-		}
-		dstPorts := []*proto.PortRange{
-			{First: 101, Last: 102},
-			{First: 103, Last: 104},
-			{First: 105, Last: 106},
-			{First: 107, Last: 108},
-			{First: 109, Last: 1010},
-			{First: 1011, Last: 1012},
-			{First: 1013, Last: 1014},
-			{First: 1015, Last: 1016},
-		}
-		rule := proto.Rule{
-			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}},
-			SrcPorts: srcPorts,
-			DstPorts: dstPorts,
-		}
-		renderer := NewRenderer(rrConfigNormal)
-		rules := renderer.ProtoRuleToIptablesRules(&rule, uint8(4))
-		Expect(rules).To(Equal([]iptables.Rule{
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[:7]).
-					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[:7]).
-					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[7:8]).
-					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[7:8]).
-					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-		}))
-	})
 })
 
 var _ = DescribeTable("Port split tests",
 	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
 		Expect(SplitPortList(in)).To(Equal(expected))
 	},
-	Entry("nil input", ([]*proto.PortRange)(nil), [][]*proto.PortRange{{}}),
-	Entry("empty input", []*proto.PortRange{}, [][]*proto.PortRange{{}}),
+	Entry("nil input", ([]*proto.PortRange)(nil), ([][]*proto.PortRange)(nil)),
+	Entry("empty input", []*proto.PortRange{}, ([][]*proto.PortRange)(nil)),
 	Entry("single input", []*proto.PortRange{{First: 1, Last: 1}}, [][]*proto.PortRange{{{First: 1, Last: 1}}}),
 	Entry("range input", []*proto.PortRange{{First: 1, Last: 10}}, [][]*proto.PortRange{{{First: 1, Last: 10}}}),
 	Entry("exactly 15 single ports should give exactly one split", []*proto.PortRange{
@@ -562,7 +500,7 @@ var _ = DescribeTable("Port split tests",
 		{First: 14, Last: 14},
 		{First: 15, Last: 15},
 	}}),
-	Entry("exactly 16 single ports should give exactly tow splits", []*proto.PortRange{
+	Entry("exactly 16 single ports should give exactly two splits", []*proto.PortRange{
 		{First: 1, Last: 1},
 		{First: 2, Last: 2},
 		{First: 3, Last: 3},

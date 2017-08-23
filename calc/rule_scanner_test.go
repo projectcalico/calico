@@ -45,7 +45,6 @@ var (
 	tag1   = "tag1"
 	tag1ID = ipSetIDForTag(tag1)
 	tag2   = "tag2"
-	tag2ID = ipSetIDForTag(tag2)
 	tag3   = "tag3"
 	tag3ID = ipSetIDForTag(tag3)
 	tag4   = "tag4"
@@ -54,11 +53,13 @@ var (
 	sel1   = "a == 'b'"
 	sel1ID = selectorId(sel1)
 	sel2   = "b == 'c'"
-	sel2ID = selectorId(sel2)
 	sel3   = "has(foo3)"
 	sel3ID = selectorId(sel3)
 	sel4   = "d in {'a', 'b'}"
 	sel4ID = selectorId(sel4)
+
+	sel1AndTag1ID = selectorId("(a == 'b') && has(tag1)")
+	sel2AndTag2ID = selectorId("(b == 'c') && has(tag2)")
 )
 
 var _ = DescribeTable("RuleScanner rule conversion should generate correct ParsedRule for",
@@ -130,8 +131,8 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			NotDstSelector: sel4,
 		},
 		ParsedRule{
-			SrcIPSetIDs:    []string{tag1ID, sel1ID},
-			DstIPSetIDs:    []string{tag2ID, sel2ID},
+			SrcIPSetIDs:    []string{sel1AndTag1ID},
+			DstIPSetIDs:    []string{sel2AndTag2ID},
 			NotSrcIPSetIDs: []string{tag3ID, sel3ID},
 			NotDstIPSetIDs: []string{tag4ID, sel4ID},
 		},
