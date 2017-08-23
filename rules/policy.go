@@ -110,13 +110,26 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 		return nil
 	}
 
-	rs := []iptables.Rule{}
-
-	// iptables only supports one source and one destination match in a rule (irrespective of
-	// negation).  If we have more than one of either, we'll render blocks of rules for the
-	// ones that won't fit as follows:
+	// There are a few areas where our data model doesn't fit with iptables, requiring us to
+	// render multiple iptables rules for one of our rules:
+	//
+	//     - iptables has a 15-port limit on the number of ports that can be in a single "multiport"
+	//       match.  Although we can have more than one multiport match in a single rule, they would
+	//       be and-ed together, when our datamodel calls for them to be or-ed instead.
+	//
+	//     - iptables only supports a single source and a single destination CIDR match in a given
+	//       rule, irrespective of negation (i.e. you can't have src==<CIDR1> && src!=<CIDR2>.
+	//       Our datamodel allows for a list of positive and a list of negative CIDR matches.
+	//
+	//     - our datamodel includes named ports, which we render as (IP, port) IP sets, these are
+	//       or-ed with the numeric ports; the "or" operation can't be done in a single rule.
+	//
+	// To work around these limitations, where needed, we break the rule into blocks,
+	// each of which implements a part of the match as follows:
 	//
 	//     rule to initialise mark bits
+	//     positive matches on source ports
+	//     positive matches on dest ports
 	//     positive matches on source address
 	//     positive matches on dest address
 	//     negated matches on source address
@@ -129,179 +142,241 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	//
 	// We do some optimisations to keep the number of rules down:
 	//
-	//    - if there is only one positive match, we don't render a block and we add the match
+	//    - if there is only one positive CIDR match, we don't render a block and we add the match
 	//      to the final rule
+	//
 	//    - if the first block implements a positive match then we have it write directly to the
-	//      "AllBlocks" bit instead of using the scratch bit and copying
-	//    - negative match blocks don't need to use the scratch bit, they simply clear the
-	//      "AllBlocks" bit immediately if any of their rules match.
-	numSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
-	numDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
-	var usingCIDRBlocks bool
-	markAllBlocksPass := r.IptablesMarkScratch0
-	markThisBlockPass := r.IptablesMarkScratch1
-	if numSrcMatches > 1 || numDstMatches > 1 {
-		// We need to render CIDR match blocks.
-		var markBitsToSetInitially uint32
-		if len(ruleCopy.SrcNet) <= 1 && len(ruleCopy.DstNet) <= 1 {
-			// All of the positive CIDR matches fit in the final rule so we're only
-			// using the blocks to render negative matches.  Pre-set the AllBlocks
-			// bit; then the negative rules will unset it if they match.
-			markBitsToSetInitially = markAllBlocksPass
-		} else {
-			// There are at least some positive matches.  Leave the AllBlocks bit
-			// set to 0.  The first positive match block will set it directly if it
-			// matches.
-			markBitsToSetInitially = 0
-		}
-		rs = append(rs,
-			iptables.Rule{
-				Action: iptables.SetMaskedMarkAction{
-					Mark: markBitsToSetInitially,
-					Mask: markAllBlocksPass | markThisBlockPass,
-				},
-			},
-		)
-		usingCIDRBlocks = true
-		doneFirstPositiveMatchBlock := false
-
-		appendCIDRMatchBlock := func(cidrs []string, srcOrDst srcOrDst) {
-			// Implementation a positive match requires us to implement a logical
-			// "or" operation within the block and then "and" that with the result from
-			// the previous block.
-			//
-			// As an optimization, if rendering the first block, we simply set the
-			// "AllBlocks" bit if one of our rules matches.
-			//
-			// If we're not the first block, that doesn't work since the "AllBlocks"
-			// bit may already be set.  In that case, we write to a scratch "ThisBlock"
-			// bit, calculate the "and" at the end of the block and write that back
-			// to the "AllBlocks" bit.
-			var markToSet uint32
-			if doneFirstPositiveMatchBlock {
-				// This isn't the first block, we need to use a scratch bit to
-				// store the result.
-				markToSet = markThisBlockPass
-			} else {
-				// Optimization: since we're the first block, directly use the
-				// "AllBlocks" bit to store our result.
-				markToSet = markAllBlocksPass
-			}
-
-			// Render the per-CIDR rules.
-			for _, cidr := range cidrs {
-				rs = append(rs, iptables.Rule{
-					Match:  srcOrDst.MatchNet(cidr),
-					Action: iptables.SetMarkAction{Mark: markToSet},
-				})
-			}
-			if doneFirstPositiveMatchBlock {
-				// This isn't the first block, copy the scratch bit back to the
-				// AllBlocks bit.
-				rs = append(rs, iptables.Rule{
-					Match:  iptables.Match().MarkClear(markThisBlockPass),
-					Action: iptables.ClearMarkAction{Mark: markAllBlocksPass},
-				})
-			}
-			doneFirstPositiveMatchBlock = true
-		}
-
-		appendNegatedCIDRMatchBlock := func(cidrs []string, srcOrDst srcOrDst) {
-			// To implement a negated match we emit a rule per CIDR that does a positive
-			// match on the CIDR and *clears* the AllMatches bit if the packet matches.
-			// This gives the desired "not any" behaviour.
-			for _, cidr := range cidrs {
-				rule := iptables.Rule{
-					Match:  srcOrDst.MatchNet(cidr),
-					Action: iptables.ClearMarkAction{Mark: markAllBlocksPass},
-				}
-				rs = append(rs, rule)
-			}
-		}
-
-		if len(ruleCopy.SrcNet) > 1 {
-			// More than one positive match on source IP, need to render a block.  We
-			// prioritise the positive match over the negative match and avoid
-			// rendering a block if it'd only contain one IP.
-			appendCIDRMatchBlock(ruleCopy.SrcNet, src)
-			// Since we're using a block for this, nil out the match.
-			ruleCopy.SrcNet = nil
-		}
-
-		if len(ruleCopy.DstNet) > 1 {
-			// More than one positive match on dest IP, need to render a block.  We
-			// prioritise the positive match over the negative match and avoid
-			// rendering a block if it'd only contain one IP.
-			appendCIDRMatchBlock(ruleCopy.DstNet, dst)
-			// Since we're using a block for this, nil out the match.
-			ruleCopy.DstNet = nil
-		}
-
-		if len(ruleCopy.NotSrcNet) > 0 && numSrcMatches > 1 {
-			// We have some negated source CIDR matches and the total number of source
-			// CIDR matches won't fit in the rule.  Render a block of rules to do the
-			// negated match.
-			appendNegatedCIDRMatchBlock(ruleCopy.NotSrcNet, src)
-			// Since we're using a block for this, nil out the match.
-			ruleCopy.NotSrcNet = nil
-		}
-
-		if len(ruleCopy.NotDstNet) > 0 && numDstMatches > 1 {
-			// We have some negated dest CIDR matches and the total number of dest
-			// CIDR matches won't fit in the rule.  Render a block of rules to do the
-			// negated match.
-			appendNegatedCIDRMatchBlock(ruleCopy.NotDstNet, dst)
-			// Since we're using a block for this, nil out the match.
-			ruleCopy.NotDstNet = nil
-		}
+	//      "AllBlocks" bit instead of using the scratch bit and copying; this is why all the
+	//      positive blocks are rendered first.
+	//
+	//    - negative match blocks don't use the scratch bit, they simply clear the "AllBlocks" bit
+	//      immediately if any of their rules match.
+	//
+	// The matchBlockBuilder wraps up the above logic:
+	matchBlockBuilder := matchBlockBuilder{
+		markAllBlocksPass: r.IptablesMarkScratch0,
+		markThisBlockPass: r.IptablesMarkScratch1,
 	}
 
-	// iptables has a 15-port limit on the number of ports that can be in a single multiport
-	// match.  In case a user has supplied a longer port list, break up the source and dest port
-	// lists into blocks of 15 and render the cross-product of the rules.  We only need to do
-	// that for the non-negated matches, because match criteria in a single rule are ANDed
-	// together.  For negated matches, we can just use more than one multiport in the same
-	// rule.
-	for _, srcPorts := range SplitPortList(pRule.SrcPorts) {
-		for _, dstPorts := range SplitPortList(pRule.DstPorts) {
-			ruleCopy.SrcPorts = srcPorts
-			ruleCopy.DstPorts = dstPorts
-
-			logCxt := log.WithFields(log.Fields{
-				"ipVersion": ipVersion,
-				"rule":      ruleCopy,
-			})
-			match, err := r.CalculateRuleMatch(&ruleCopy, ipVersion)
-			if err == SkipRule {
-				logCxt.Debug("Rule skipped.")
-				return nil
-			}
-			if usingCIDRBlocks {
-				// The CIDR matches in the rule overflowed and we rendered them
-				// as additional rules, which set the markAllBlocksPass bit on
-				// success.  Add a match on that bit to the calculated rule.
-				match = match.MarkSet(markAllBlocksPass)
-			}
-			markBit, actions := r.CalculateActions(&ruleCopy, ipVersion)
-			if markBit != 0 {
-				// The rule needs to do more than one action. Render a rule that
-				// executes the match criteria and sets the given mark bit if it
-				// matches, then render the actions as separate rules below.
-				rs = append(rs, iptables.Rule{
-					Match:  match,
-					Action: iptables.SetMarkAction{Mark: markBit},
-				})
-				match = iptables.Match().MarkSet(markBit)
-			}
-			for _, action := range actions {
-				rs = append(rs, iptables.Rule{
-					Match:  match,
-					Action: action,
-				})
-			}
-		}
+	// Port matches.  Wo only need to render blocks if, in total, there's more than one match that
+	// needs to be or-ed together.
+	//
+	// Split the port list into blocks of 15, as per iptables limit and add in the number of
+	// named ports.
+	srcPortSplits := SplitPortList(ruleCopy.SrcPorts)
+	if len(srcPortSplits)+len(ruleCopy.SrcNamedPortIpSetIds) > 1 {
+		matchBlockBuilder.AppendPortMatchBlock(srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
+		ruleCopy.SrcPorts = nil
+		ruleCopy.SrcNamedPortIpSetIds = nil
 	}
+	dstPortSplits := SplitPortList(ruleCopy.DstPorts)
+	if len(dstPortSplits)+len(ruleCopy.DstNamedPortIpSetIds) > 1 {
+		matchBlockBuilder.AppendPortMatchBlock(dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
+		ruleCopy.DstPorts = nil
+		ruleCopy.DstNamedPortIpSetIds = nil
+	}
+
+	// If there's more than one positive source/destination CIDR match, we have to render a block.
+	// Otherwise, if there's exactly one, we'll include it in the main rule below.
+	if len(ruleCopy.SrcNet) > 1 {
+		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.SrcNet, src)
+		// Since we're using a block for this, nil out the match.
+		ruleCopy.SrcNet = nil
+	}
+	if len(ruleCopy.DstNet) > 1 {
+		matchBlockBuilder.AppendCIDRMatchBlock(ruleCopy.DstNet, dst)
+		// Since we're using a block for this, nil out the match.
+		ruleCopy.DstNet = nil
+	}
+	// Now, work out if we need to render a block for the src/dst negative CIDR matches.  We need
+	// to do that if:
+	//
+	//    - there are negative matches to render, and
+	//    - either the positive match is taking up the single slot in the "main" rule, or,
+	//      there's more than negated match.
+	//
+	// Figure that out by counting all the rules.  If there's a positive match left in the rule then
+	// any negative matches will tip the count over 1.  Otherwise, we'll need 2 or more negative
+	// matches to make the count more than 1.
+	totalSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
+	if totalSrcMatches > 1 {
+		// We have some negated source CIDR matches and the total number of source
+		// CIDR matches won't fit in the rule.  Render a block of rules to do the
+		// negated match.
+		matchBlockBuilder.AppendNegatedCIDRMatchBlock(ruleCopy.NotSrcNet, src)
+		// Since we're using a block for this, nil out the match.
+		ruleCopy.NotSrcNet = nil
+	}
+	totalDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
+	if totalDstMatches > 1 {
+		// We have some negated dest CIDR matches and the total number of dest
+		// CIDR matches won't fit in the rule.  Render a block of rules to do the
+		// negated match.
+		matchBlockBuilder.AppendNegatedCIDRMatchBlock(ruleCopy.NotDstNet, dst)
+		// Since we're using a block for this, nil out the match.
+		ruleCopy.NotDstNet = nil
+	}
+
+	// Render the rest of the rule.
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"rule":      ruleCopy,
+	})
+	match, err := r.CalculateRuleMatch(&ruleCopy, ipVersion)
+	if err == SkipRule {
+		logCxt.Debug("Rule skipped.")
+		return nil
+	}
+	if matchBlockBuilder.UsingMatchBlocks {
+		// The CIDR or port matches in the rule overflowed and we rendered them
+		// as additional rules, which set the markAllBlocksPass bit on
+		// success.  Add a match on that bit to the calculated rule.
+		match = match.MarkSet(matchBlockBuilder.markAllBlocksPass)
+	}
+	markBit, actions := r.CalculateActions(&ruleCopy, ipVersion)
+	rs := matchBlockBuilder.Rules
+	if markBit != 0 {
+		// The rule needs to do more than one action. Render a rule that
+		// executes the match criteria and sets the given mark bit if it
+		// matches, then render the actions as separate rules below.
+		rs = append(rs, iptables.Rule{
+			Match:  match,
+			Action: iptables.SetMarkAction{Mark: markBit},
+		})
+		match = iptables.Match().MarkSet(markBit)
+	}
+	for _, action := range actions {
+		rs = append(rs, iptables.Rule{
+			Match:  match,
+			Action: action,
+		})
+	}
+
 	return rs
+}
+
+type matchBlockBuilder struct {
+	UsingMatchBlocks            bool
+	doneFirstPositiveMatchBlock bool
+
+	markAllBlocksPass uint32
+	markThisBlockPass uint32
+
+	Rules []iptables.Rule
+}
+
+func (r *matchBlockBuilder) AppendPortMatchBlock(numericPortSplits [][]*proto.PortRange, namedPortIPSetIDs []string, srcOrDst srcOrDst) {
+	// Write out the initial "reset" rule if this is the first block.
+	r.maybeAppendInitialRule(0)
+	// Figure out which bit to set.  See comment in positiveBlockMarkToSet() for details.
+	markToSet := r.positiveBlockMarkToSet()
+
+	for _, split := range numericPortSplits {
+		r.Rules = append(r.Rules, iptables.Rule{
+			Match:  srcOrDst.MatchPorts(split),
+			Action: iptables.SetMarkAction{Mark: markToSet},
+		})
+	}
+
+	for _, namedPortIPSetID := range namedPortIPSetIDs {
+		r.Rules = append(r.Rules, iptables.Rule{
+			Match:  srcOrDst.MatchIPPortIPSet(namedPortIPSetID),
+			Action: iptables.SetMarkAction{Mark: markToSet},
+		})
+	}
+
+	// Append the end-of-block rules.
+	r.finishPositiveBlock()
+}
+
+func (r *matchBlockBuilder) AppendCIDRMatchBlock(cidrs []string, srcOrDst srcOrDst) {
+	// Write out the initial "reset" rule if this is the first block.
+	r.maybeAppendInitialRule(0)
+	// Figure out which bit to set.  See comment in positiveBlockMarkToSet() for details.
+	markToSet := r.positiveBlockMarkToSet()
+
+	// Render the per-CIDR rules.
+	for _, cidr := range cidrs {
+		r.Rules = append(r.Rules, iptables.Rule{
+			Match:  srcOrDst.MatchNet(cidr),
+			Action: iptables.SetMarkAction{Mark: markToSet},
+		})
+	}
+
+	// Append the end-of-block rules.
+	r.finishPositiveBlock()
+}
+
+func (r *matchBlockBuilder) AppendNegatedCIDRMatchBlock(cidrs []string, srcOrDst srcOrDst) {
+	// Write out the initial "reset" rule if this is the first block.  Since this is a negated
+	// rule, we want the AllBlocks bit to be set by default .
+	r.maybeAppendInitialRule(r.markAllBlocksPass)
+	// To implement a negated match we emit a rule per CIDR that does a positive
+	// match on the CIDR and *clears* the AllMatches bit if the packet matches.
+	// This gives the desired "not any" behaviour.
+	for _, cidr := range cidrs {
+		rule := iptables.Rule{
+			Match:  srcOrDst.MatchNet(cidr),
+			Action: iptables.ClearMarkAction{Mark: r.markAllBlocksPass},
+		}
+		r.Rules = append(r.Rules, rule)
+	}
+}
+
+func (r *matchBlockBuilder) maybeAppendInitialRule(markBitsToSetInitially uint32) {
+	if r.UsingMatchBlocks {
+		return
+	}
+	r.Rules = append(r.Rules,
+		iptables.Rule{
+			Action: iptables.SetMaskedMarkAction{
+				Mark: markBitsToSetInitially,
+				Mask: r.markAllBlocksPass | r.markThisBlockPass,
+			},
+		},
+	)
+	r.UsingMatchBlocks = true
+}
+
+func (r *matchBlockBuilder) positiveBlockMarkToSet() uint32 {
+	// Implementing a positive match requires us to implement a logical
+	// "or" operation within the block and then "and" that with the result from
+	// the previous block.
+	//
+	// As an optimization, if rendering the first block, we simply set the
+	// "AllBlocks" bit if one of our rules matches.
+	//
+	// If we're not the first block, that doesn't work since the "AllBlocks"
+	// bit may already be set.  In that case, we write to a scratch "ThisBlock"
+	// bit, calculate the "and" at the end of the block and write that back
+	// to the "AllBlocks" bit.
+	if r.doneFirstPositiveMatchBlock {
+		// This isn't the first block, we need to use a scratch bit to
+		// store the result.
+		return r.markThisBlockPass
+	} else {
+		// Optimization: since we're the first block, directly use the
+		// "AllBlocks" bit to store our result.
+		return r.markAllBlocksPass
+	}
+}
+
+func (r *matchBlockBuilder) finishPositiveBlock() {
+	if !r.doneFirstPositiveMatchBlock {
+		// First positive block, we don't need to write any rules to calculate the AllBlocks bit
+		// because we optimized that out by setting the Allblocks bit directly from the matching
+		// rule.
+		r.doneFirstPositiveMatchBlock = true
+		return
+	}
+	// This isn't the first block, write a rule to do:
+	//
+	//     <AllBlocks bit> &&= <ThisBlock bit>
+	//
+	r.Rules = append(r.Rules, iptables.Rule{
+		Match:  iptables.Match().MarkClear(r.markThisBlockPass),
+		Action: iptables.ClearMarkAction{Mark: r.markAllBlocksPass},
+	})
 }
 
 // srcOrDst is an enum for selecting source or destination rule rendering.
@@ -314,21 +389,46 @@ const (
 
 // MatchNet returns a new SourceNet or DestNet MatchCriteria for the given CIDR.
 func (sod srcOrDst) MatchNet(cidr string) iptables.MatchCriteria {
-	if sod == src {
+	switch sod {
+	case src:
 		return iptables.Match().SourceNet(cidr)
+	case dst:
+		return iptables.Match().DestNet(cidr)
 	}
-	return iptables.Match().DestNet(cidr)
+	log.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	return nil
+}
+
+func (sod srcOrDst) MatchPorts(pr []*proto.PortRange) iptables.MatchCriteria {
+	switch sod {
+	case src:
+		return iptables.Match().SourcePortRanges(pr)
+	case dst:
+		return iptables.Match().DestPortRanges(pr)
+	}
+	log.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	return nil
+}
+
+func (sod srcOrDst) MatchIPPortIPSet(setID string) iptables.MatchCriteria {
+	switch sod {
+	case src:
+		return iptables.Match().SourceIPPortSet(setID)
+	case dst:
+		return iptables.Match().DestIPPortSet(setID)
+	}
+	log.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	return nil
 }
 
 // SplitPortList splits the input list of ports into groups containing up to 15 port numbers.
-// It always returns at least one (possibly empty) split.
+// If the input list is empty, it returns an empty slice.
 //
 // The requirement to split into groups of 15, comes from iptables' limit on the number of ports
 // "slots" in a multiport match.  A single port takes up one slot, a range of ports requires 2.
 func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 	slotsAvailableInCurrentSplit := 15
-	currentSplit := 0
-	splits = append(splits, []*proto.PortRange{})
+	var split []*proto.PortRange
 	for _, portRange := range ports {
 		// First figure out how many slots adding this PortRange would require.
 		var numSlotsRequired int
@@ -340,12 +440,15 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 		if slotsAvailableInCurrentSplit < numSlotsRequired {
 			// Adding this port to the current split would take it over the 15 slot
 			// limit, start a new split.
+			splits = append(splits, split)
 			slotsAvailableInCurrentSplit = 15
-			splits = append(splits, []*proto.PortRange{})
-			currentSplit += 1
+			split = nil
 		}
-		splits[currentSplit] = append(splits[currentSplit], portRange)
+		split = append(split, portRange)
 		slotsAvailableInCurrentSplit -= numSlotsRequired
+	}
+	if split != nil {
+		splits = append(splits, split)
 	}
 	return
 }

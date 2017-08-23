@@ -129,12 +129,20 @@ func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set --match-set %s src", name))
 }
 
+func (m MatchCriteria) SourceIPPortSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set --match-set %s src,src", name))
+}
+
 func (m MatchCriteria) NotSourceIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set ! --match-set %s src", name))
 }
 
 func (m MatchCriteria) DestIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set --match-set %s dst", name))
+}
+
+func (m MatchCriteria) DestIPPortSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set --match-set %s dst,dst", name))
 }
 
 func (m MatchCriteria) NotDestIPSet(name string) MatchCriteria {
