@@ -1,5 +1,5 @@
-hash: 9cefe4613dbc6971c6a73326f66084aa9beaf35eb23027188e0af6a0fe70bb54
-updated: 2017-08-30T10:36:24.865627131Z
+hash: 4832fe08e846e5e812e466d53665c66065706a529f29a25b24605543fddef4f6
+updated: 2017-08-23T13:45:32.142566165Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -155,7 +155,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: fc4a3648215b9beda5d08e26d76e91f12fb45079
+  version: 6b3db3f65696a1b30f7b097bf7408dddc08c56c4
+  repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
   - lib/api
@@ -186,7 +187,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: f8f62de1fd1b263b089a3453d1932dd2d8e08cdb
+  version: da7479a93f30a6dd3fcfd683e409af4dbf381ea0
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -254,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb
+  version: 07c182904dbd53199946ba614a412c61d3c548f5
   subpackages:
   - unix
 - name: golang.org/x/text
