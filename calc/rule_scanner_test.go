@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -233,12 +232,12 @@ func (ur *scanUpdateRecorder) OnProfileInactive(key model.ProfileRulesKey) {
 	delete(ur.activeRules, key)
 }
 
-func (ur *scanUpdateRecorder) selectorActive(sel selector.Selector) {
-	ur.activeSelectors.Add(sel.String())
+func (ur *scanUpdateRecorder) ipSetActive(ipSet *IPSetData) {
+	ur.activeSelectors.Add(ipSet.Selector.String())
 }
 
-func (ur *scanUpdateRecorder) selectorInactive(sel selector.Selector) {
-	ur.activeSelectors.Discard(sel.String())
+func (ur *scanUpdateRecorder) ipSetInactive(ipSet *IPSetData) {
+	ur.activeSelectors.Discard(ipSet.Selector.String())
 }
 
 func newHookedRulesScanner() (*RuleScanner, *scanUpdateRecorder) {
@@ -248,8 +247,8 @@ func newHookedRulesScanner() (*RuleScanner, *scanUpdateRecorder) {
 		activeRules:     make(map[model.Key]*ParsedRules),
 	}
 	rs.RulesUpdateCallbacks = ur
-	rs.OnSelectorActive = ur.selectorActive
-	rs.OnSelectorInactive = ur.selectorInactive
+	rs.OnIPSetActive = ur.ipSetActive
+	rs.OnIPSetInactive = ur.ipSetInactive
 	return rs, ur
 }
 

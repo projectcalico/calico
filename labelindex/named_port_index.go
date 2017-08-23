@@ -52,26 +52,23 @@ import (
 
 	"reflect"
 
+	"strings"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
-
-type namedPort struct {
-	name     string
-	port     uint16
-	protocol IPSetPortProtocol
-}
 
 // endpointData holds the data that we need to know about a particular endpoint.
 type endpointData struct {
 	labels  map[string]string
 	ips     []ip.Addr
-	ports   []namedPort
+	ports   []model.EndpointPort
 	parents []*npParentData
 
 	cachedMatchingIPSetIDs set.Set /* or, as an optimization, nil if there are none */
@@ -103,6 +100,7 @@ func (d *endpointData) HasParent(parent *npParentData) bool {
 	return false
 }
 
+// TODO move this to the index?  Feels smelly that we need to pass in the map.
 func (d *endpointData) CachedContribution(ipSetDataByID map[string]*ipSetData) map[string][]IPSetMember {
 	if d.cachedMatchingIPSetIDs == nil {
 		return nil
@@ -124,7 +122,7 @@ func (d *endpointData) CalculateContribution(ipSetData *ipSetData) (contrib []IP
 		}
 		if ipSetData.namedPortProtocol != ProtocolNone {
 			namedPort := d.LookupNamedPort(ipSetData.namedPort, ipSetData.namedPortProtocol)
-			member.PortNumber = namedPort.port
+			member.PortNumber = namedPort.Port
 			member.Protocol = ipSetData.namedPortProtocol
 		}
 		contrib = append(contrib, member)
@@ -132,9 +130,9 @@ func (d *endpointData) CalculateContribution(ipSetData *ipSetData) (contrib []IP
 	return
 }
 
-func (d *endpointData) LookupNamedPort(name string, proto IPSetPortProtocol) *namedPort {
+func (d *endpointData) LookupNamedPort(name string, proto IPSetPortProtocol) *model.EndpointPort {
 	for _, p := range d.ports {
-		if p.name == name && p.protocol == proto {
+		if p.Name == name && proto.MatchesModelProtocol(p.Protocol) {
 			return &p
 		}
 	}
@@ -143,10 +141,37 @@ func (d *endpointData) LookupNamedPort(name string, proto IPSetPortProtocol) *na
 
 type IPSetPortProtocol uint8
 
+func (p IPSetPortProtocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
+	if protocol.Type == numorstring.NumOrStringNum {
+		return protocol.NumVal == uint8(p)
+	}
+	switch p {
+	case ProtocolTCP:
+		return strings.ToLower(protocol.StrVal) == "tcp"
+	case ProtocolUDP:
+		return strings.ToLower(protocol.StrVal) == "udp"
+	}
+	log.WithField("protocol", p).Panic("Unknown protocol")
+	return false
+}
+
+func (p IPSetPortProtocol) String() string {
+	switch p {
+	case ProtocolTCP:
+		return "tcp"
+	case ProtocolUDP:
+		return "udp"
+	case ProtocolNone:
+		return "none"
+	default:
+		return "unknown"
+	}
+}
+
 const (
 	ProtocolNone IPSetPortProtocol = 0
-	ProtocolTCP                    = 6
-	ProtocolUDP                    = 17
+	ProtocolTCP  IPSetPortProtocol = 6
+	ProtocolUDP  IPSetPortProtocol = 17
 )
 
 type IPSetMember struct {
@@ -241,7 +266,12 @@ func (idx *NamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Updating NamedPortIndex with endpoint %v", key)
 			endpoint := update.Value.(*model.WorkloadEndpoint)
 			profileIDs := endpoint.ProfileIDs
-			idx.UpdateEndpoint(key, endpoint.Labels, convertNets(endpoint.IPv4Nets, endpoint.IPv6Nets), nil, profileIDs)
+			idx.UpdateEndpoint(
+				key,
+				endpoint.Labels,
+				convertNets(endpoint.IPv4Nets, endpoint.IPv6Nets),
+				endpoint.Ports,
+				profileIDs)
 		} else {
 			log.Debugf("Deleting endpoint %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)
@@ -252,7 +282,12 @@ func (idx *NamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Updating NamedPortIndex for host endpoint %v", key)
 			endpoint := update.Value.(*model.HostEndpoint)
 			profileIDs := endpoint.ProfileIDs
-			idx.UpdateEndpoint(key, endpoint.Labels, convertIPs(endpoint.ExpectedIPv4Addrs, endpoint.ExpectedIPv6Addrs), nil, profileIDs)
+			idx.UpdateEndpoint(
+				key,
+				endpoint.Labels,
+				convertIPs(endpoint.ExpectedIPv4Addrs, endpoint.ExpectedIPv6Addrs),
+				endpoint.Ports,
+				profileIDs)
 		} else {
 			log.Debugf("Deleting host endpoint %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)
@@ -403,7 +438,7 @@ func (idx *NamedPortIndex) UpdateEndpoint(
 	id interface{},
 	labels map[string]string,
 	ips []ip.Addr,
-	ports []namedPort,
+	ports []model.EndpointPort,
 	parentIDs []string,
 ) {
 	logCxt := log.WithFields(log.Fields{

@@ -19,12 +19,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/dispatcher"
-	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/labelindex"
+	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 var (
@@ -44,9 +43,9 @@ func init() {
 }
 
 type ipSetUpdateCallbacks interface {
-	OnIPSetAdded(setID string)
-	OnIPAdded(setID string, ip ip.Addr)
-	OnIPRemoved(setID string, ip ip.Addr)
+	OnIPSetAdded(setID string, ipSetType proto.IPSetUpdate_IPSetType)
+	OnIPSetMemberAdded(setID string, ip labelindex.IPSetMember)
+	OnIPSetMemberRemoved(setID string, ip labelindex.IPSetMember)
 	OnIPSetRemoved(setID string)
 }
 
@@ -118,7 +117,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 					"member":  member,
 				}).Debug("Member added to IP set.")
 			}
-			callbacks.OnIPAdded(ipSetID, member.IP)
+			callbacks.OnIPSetMemberAdded(ipSetID, member)
 		},
 		func(ipSetID string, member labelindex.IPSetMember) {
 			if log.GetLevel() >= log.DebugLevel {
@@ -127,21 +126,21 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 					"member":  member,
 				}).Debug("Member removed from IP set.")
 			}
-			callbacks.OnIPRemoved(ipSetID, member.IP)
+			callbacks.OnIPSetMemberRemoved(ipSetID, member)
 		},
 	)
 	combinedIndex.RegisterWith(allUpdDispatcher)
 
-	ruleScanner.OnSelectorActive = func(sel selector.Selector) {
-		log.Infof("Selector %v now active", sel)
-		callbacks.OnIPSetAdded(sel.UniqueID())
-		combinedIndex.UpdateIPSet(sel.UniqueID(), sel, labelindex.ProtocolNone, "")
+	ruleScanner.OnIPSetActive = func(ipSet *IPSetData) {
+		log.WithField("ipSet", ipSet).Info("IPSet now active")
+		callbacks.OnIPSetAdded(ipSet.UniqueID(), ipSet.ProtocolType())
+		combinedIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Selector, ipSet.NamedPortProtocol, ipSet.NamedPort)
 		gaugeNumActiveSelectors.Inc()
 	}
-	ruleScanner.OnSelectorInactive = func(sel selector.Selector) {
-		log.Infof("Selector %v now inactive", sel)
-		combinedIndex.DeleteIPSet(sel.UniqueID())
-		callbacks.OnIPSetRemoved(sel.UniqueID())
+	ruleScanner.OnIPSetInactive = func(ipSet *IPSetData) {
+		log.WithField("ipSet", ipSet).Info("IPSet now inactive")
+		combinedIndex.DeleteIPSet(ipSet.UniqueID())
+		callbacks.OnIPSetRemoved(ipSet.UniqueID())
 		gaugeNumActiveSelectors.Dec()
 	}
 
