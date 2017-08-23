@@ -102,7 +102,7 @@ message IPSetUpdate {
   repeated string members = 2;
   enum IPSetType {
     IP = 0;           // Each member is an IP address in dotted-decimal or IPv6 format.
-    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp),<port-number>"
+    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp):<port-number>"
   }
   IPSetType type = 3;
 }

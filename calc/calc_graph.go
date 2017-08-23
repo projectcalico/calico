@@ -176,7 +176,7 @@ func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 }
 
 // endpointHostnameFilter provides an UpdateHandler that filters out endpoints
-// that are not on the given host.
+// that are not on the given host.ipset
 type endpointHostnameFilter struct {
 	hostname string
 }
