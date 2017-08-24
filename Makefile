@@ -422,6 +422,19 @@ node-test-containerized: vendor run-etcd-host
 	--net=host \
 	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
 
+.PHONY: node-test-at
+## Run calico/node docker-image acceptance tests
+node-test-at:
+	docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
+        -e CALICO_BGP_DAEMON_VER=$(GOBGPD_VER) \
+        -e CALICO_FELIX_VER=$(FELIX_VER) \
+        -e CONFD_VER=$(CONFD_VER) \
+	calico/node:$(CALICO_VER) /bin/sh -c 'apk --no-cache add wget ca-certificates && \
+	wget -q -O /tmp/goss \
+	https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
+	chmod +rx /tmp/goss && \
+	/tmp/goss --gossfile /tmp/goss.yaml validate'
+
 # This depends on clean to ensure that dependent images get untagged and repulled
 # THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
 .PHONY: semaphore
