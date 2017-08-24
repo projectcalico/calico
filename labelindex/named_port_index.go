@@ -67,7 +67,7 @@ import (
 // endpointData holds the data that we need to know about a particular endpoint.
 type endpointData struct {
 	labels  map[string]string
-	ips     []ip.Addr
+	ipAddrs []ip.Addr
 	ports   []model.EndpointPort
 	parents []*npParentData
 
@@ -116,14 +116,20 @@ func (d *endpointData) CachedContribution(ipSetDataByID map[string]*ipSetData) m
 }
 
 func (d *endpointData) CalculateContribution(ipSetData *ipSetData) (contrib []IPSetMember) {
-	for _, ip := range d.ips {
+	var namedPort *model.EndpointPort
+	if ipSetData.namedPortProtocol != ProtocolNone {
+		namedPort = d.LookupNamedPort(ipSetData.namedPort, ipSetData.namedPortProtocol)
+		if namedPort == nil {
+			return
+		}
+	}
+	for _, addr := range d.ipAddrs {
 		member := IPSetMember{
-			IP: ip,
+			IP: addr,
 		}
 		if ipSetData.namedPortProtocol != ProtocolNone {
-			namedPort := d.LookupNamedPort(ipSetData.namedPort, ipSetData.namedPortProtocol)
-			member.PortNumber = namedPort.Port
 			member.Protocol = ipSetData.namedPortProtocol
+			member.PortNumber = namedPort.Port
 		}
 		contrib = append(contrib, member)
 	}
@@ -143,6 +149,10 @@ type IPSetPortProtocol uint8
 
 func (p IPSetPortProtocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
 	if protocol.Type == numorstring.NumOrStringNum {
+		if protocol.NumVal == 0 {
+			// Special case: named ports default to TCP if protocol isn't specified.
+			return p == ProtocolTCP
+		}
 		return protocol.NumVal == uint8(p)
 	}
 	switch p {
@@ -463,7 +473,7 @@ func (idx *NamedPortIndex) UpdateEndpoint(
 		newEndpointData.parents = parents
 	}
 	if len(ips) > 0 {
-		newEndpointData.ips = ips
+		newEndpointData.ipAddrs = ips
 	}
 	if len(ports) > 0 {
 		newEndpointData.ports = ports
@@ -477,7 +487,7 @@ func (idx *NamedPortIndex) UpdateEndpoint(
 		// change.
 		if reflect.DeepEqual(oldEndpointData.labels, newEndpointData.labels) &&
 			reflect.DeepEqual(oldEndpointData.ports, newEndpointData.ports) &&
-			reflect.DeepEqual(oldEndpointData.ips, newEndpointData.ips) &&
+			reflect.DeepEqual(oldEndpointData.ipAddrs, newEndpointData.ipAddrs) &&
 			reflect.DeepEqual(oldEndpointData.parents, newEndpointData.parents) {
 			log.Debug("Endpoint update makes no changes, skipping.")
 			return

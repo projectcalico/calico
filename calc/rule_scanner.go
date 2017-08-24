@@ -30,6 +30,20 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/hash"
 )
 
+// AllSelector is a pre-calculated copy of the "all()" selector.
+var AllSelector selector.Selector
+
+func init() {
+	var err error
+	AllSelector, err = selector.Parse("all()")
+	if err != nil {
+		log.WithError(err).Panic("Failed to parse all() selector.")
+	}
+	// Force the selector's cache fields to be pre-populated.
+	_ = AllSelector.UniqueID()
+	_ = AllSelector.String()
+}
+
 // RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for tags and
 // selectors. It calculates the set of active tags and selectors and emits events when they become
 // active/inactive.
@@ -68,8 +82,8 @@ type RuleScanner struct {
 }
 
 type IPSetData struct {
-	// The selector and named port that this IP set represents.  If the selector is nil then
-	// this IP set represents an unfiltered named port.  If NamedPortProtocol == ProtocolNone then
+	// The selector and named port that this IP set represents.  To represent an unfiltered named
+	// port, set selector to "all()".  If NamedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
 	Selector          selector.Selector
 	NamedPortProtocol labelindex.IPSetPortProtocol
@@ -83,7 +97,7 @@ func (d *IPSetData) UniqueID() string {
 		if d.NamedPortProtocol == labelindex.ProtocolNone {
 			d.cachedUID = selID
 		} else {
-			idToHash := d.Selector.UniqueID() + d.NamedPortProtocol.String() + d.NamedPort
+			idToHash := selID + "," + d.NamedPortProtocol.String() + "," + d.NamedPort
 			d.cachedUID = hash.MakeUniqueID("n", idToHash)
 		}
 	}
@@ -346,17 +360,17 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []
 
 func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Selector, proto labelindex.IPSetPortProtocol) []*IPSetData {
 	var ipSets []*IPSetData
-	var selOrNil selector.Selector
 	if len(positiveSelectors) > 1 {
 		log.WithField("selectors", positiveSelectors).Panic(
 			"More than one positive selector passed to namedPortsToIPSets")
 	}
+	sel := AllSelector
 	if len(positiveSelectors) > 0 {
-		selOrNil = positiveSelectors[0]
+		sel = positiveSelectors[0]
 	}
 	for _, namedPort := range namedPorts {
 		ipSet := IPSetData{
-			Selector:          selOrNil,
+			Selector:          sel,
 			NamedPort:         namedPort,
 			NamedPortProtocol: proto,
 		}
