@@ -133,7 +133,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 
 	ruleScanner.OnIPSetActive = func(ipSet *IPSetData) {
 		log.WithField("ipSet", ipSet).Info("IPSet now active")
-		callbacks.OnIPSetAdded(ipSet.UniqueID(), ipSet.ProtocolType())
+		callbacks.OnIPSetAdded(ipSet.UniqueID(), ipSet.DataplaneProtocolType())
 		combinedIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Selector, ipSet.NamedPortProtocol, ipSet.NamedPort)
 		gaugeNumActiveSelectors.Inc()
 	}
