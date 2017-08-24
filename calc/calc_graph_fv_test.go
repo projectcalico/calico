@@ -43,6 +43,7 @@ import (
 var baseTests = []StateList{
 	// Empty should be empty!
 	{},
+
 	// Add one endpoint then remove it and add another with overlapping IP.
 	{localEp1WithPolicy, localEp2WithPolicy},
 
@@ -72,7 +73,7 @@ var baseTests = []StateList{
 	// Test mutating the profile list of some endpoints.
 	{localEpsWithNonMatchingProfile, localEpsWithProfile},
 
-	// Cut down repro of particular failure case.
+	// Repro of a particular named port index update failure case.
 	{localEpsWithTagInheritProfile,
 		localEp1WithPolicy,
 		localEpsWithProfile},

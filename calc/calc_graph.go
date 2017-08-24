@@ -84,82 +84,206 @@ type PipelineCallbacks interface {
 
 func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDispatcher *dispatcher.Dispatcher) {
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
-	// The source of the processing graph, this dispatcher will be fed all
-	// the updates from the datastore, fanning them out to the registered
-	// handlers.
+	// The source of the processing graph, this dispatcher will be fed all the updates from the
+	// datastore, fanning them out to the registered handlers.
+	//
+	//          Syncer
+	//            ||
+	//            || All updates
+	//            \/
+	//        Dispatcher (all updates)
+	//           / | \
+	//          /  |  \  Updates filtered by type
+	//         /   |   \
+	//    node_1  ...  node_n
+	//
 	allUpdDispatcher = dispatcher.NewDispatcher()
 
-	// Some of the handlers only need to know about local endpoints.
-	// Create a second dispatcher which will filter out non-local endpoints.
+	// Some of the handlers only need to know about local endpoints. Create a second dispatcher
+	// that will filter out non-local endpoints.
+	//
+	//           ...
+	//        Dispatcher (all updates)
+	//           ... \
+	//                \  All Host/Workload Endpoints
+	//                 \
+	//               Dispatcher (local updates)
+	//                <filter>
+	//                 / | \
+	//                /  |  \  Local Host/Workload Endpoints only
+	//               /   |   \
+	//          node_1  ...  node_n
+	//
 	localEndpointDispatcher := dispatcher.NewDispatcher()
 	(*localEndpointDispatcherReg)(localEndpointDispatcher).RegisterWith(allUpdDispatcher)
 	localEndpointFilter := &endpointHostnameFilter{hostname: hostname}
 	localEndpointFilter.RegisterWith(localEndpointDispatcher)
 
-	// The active rules calculator matches local endpoints against policies
-	// and profiles to figure out which policies/profiles are active on this
-	// host.
+	// The active rules calculator matches local endpoints against policies and profiles to figure
+	// out which policies/profiles are active on this host.  Limiting to policies that apply to
+	// local endpoints significantly cuts down the number of policies that Felix has to
+	// render into the dataplane.
+	//
+	//            ...
+	//        Dispatcher (all updates)
+	//           /   \
+	//          /     \  All Host/Workload Endpoints
+	//         /       \
+	//        /      Dispatcher (local updates)
+	//       /            |
+	//       | Policies   | Local Host/Workload Endpoints only
+	//       | Profiles   |
+	//       |            |
+	//     Active Rules Calculator
+	//              |
+	//              | Locally active policies/profiles
+	//             ...
+	//
 	activeRulesCalc := NewActiveRulesCalculator()
 	activeRulesCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
 
-	// The rule scanner takes the output from the active rules calculator
-	// and scans the individual rules for selectors and tags.  It generates
-	// events when a new selector/tag starts/stops being used.
+	// The active rules calculator only figures out which rules are active, it doesn't extract
+	// any information from the rules.  The rule scanner takes the output from the active rules
+	// calculator and scans the individual rules for selectors, tags, and named ports.  It
+	// generates events when a new selector/tag/named port starts/stops being used.
+	//
+	//             ...
+	//     Active Rules Calculator
+	//              |
+	//              | Locally active policies/profiles
+	//              |
+	//         Rule scanner
+	//          |    \
+	//          |     \ Locally active tags/selectors/named ports
+	//          |      \
+	//          |      ...
+	//          |
+	//          | IP set active/inactive
+	//          |
+	//     <dataplane>
+	//
 	ruleScanner := NewRuleScanner()
+	// Wire up the rule scanner's inputs.
 	activeRulesCalc.RuleScanner = ruleScanner
+	// Send IP set added/removed events to the dataplane.  We'll hook up the other outputs
+	// below.
 	ruleScanner.RulesUpdateCallbacks = callbacks
 
-	combinedIndex := labelindex.NewNamedPortIndex(
-		func(ipSetID string, member labelindex.IPSetMember) {
-			if log.GetLevel() >= log.DebugLevel {
-				log.WithFields(log.Fields{
-					"ipSetID": ipSetID,
-					"member":  member,
-				}).Debug("Member added to IP set.")
-			}
-			callbacks.OnIPSetMemberAdded(ipSetID, member)
-		},
-		func(ipSetID string, member labelindex.IPSetMember) {
-			if log.GetLevel() >= log.DebugLevel {
-				log.WithFields(log.Fields{
-					"ipSetID": ipSetID,
-					"member":  member,
-				}).Debug("Member removed from IP set.")
-			}
-			callbacks.OnIPSetMemberRemoved(ipSetID, member)
-		},
-	)
-	combinedIndex.RegisterWith(allUpdDispatcher)
-
+	// The rule scanner only goes as far as figuring our which tags/selectors/named ports are
+	// active. Next we need to figure out which endpoints (and hence which IP addresses/ports) are
+	// in each tag/selector/named port. The IP set member index calculates the set of IPs and named
+	// ports that should be in each IP set.  To do that, it matches the active selectors/tags/named
+	// ports extracted by the rule scanner against all the endpoints.
+	//
+	//       ...
+	//    Dispatcher (all updates)
+	//     |
+	//     | All endpoints
+	//     |
+	//     |       ...
+	//     |    Rule scanner
+	//     |     |      \
+	//     |    ...      \ Locally active tags/selectors/named ports
+	//     \              |
+	//      \_____        |
+	//            \       |
+	//          IP set member index
+	//                 |
+	//                 | IP set member added/removed
+	//                 |
+	//             <dataplane>
+	//
+	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex()
+	// Wire up the inputs to the IP set member index.
+	ipsetMemberIndex.RegisterWith(allUpdDispatcher)
 	ruleScanner.OnIPSetActive = func(ipSet *IPSetData) {
 		log.WithField("ipSet", ipSet).Info("IPSet now active")
 		callbacks.OnIPSetAdded(ipSet.UniqueID(), ipSet.DataplaneProtocolType())
-		combinedIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Selector, ipSet.NamedPortProtocol, ipSet.NamedPort)
+		ipsetMemberIndex.UpdateIPSet(ipSet.UniqueID(), ipSet.Selector, ipSet.NamedPortProtocol, ipSet.NamedPort)
 		gaugeNumActiveSelectors.Inc()
 	}
 	ruleScanner.OnIPSetInactive = func(ipSet *IPSetData) {
 		log.WithField("ipSet", ipSet).Info("IPSet now inactive")
-		combinedIndex.DeleteIPSet(ipSet.UniqueID())
+		ipsetMemberIndex.DeleteIPSet(ipSet.UniqueID())
 		callbacks.OnIPSetRemoved(ipSet.UniqueID())
 		gaugeNumActiveSelectors.Dec()
 	}
+	// Send the IP set member index's outputs to the dataplane.
+	ipsetMemberIndex.OnMemberAdded = func(ipSetID string, member labelindex.IPSetMember) {
+		if log.GetLevel() >= log.DebugLevel {
+			log.WithFields(log.Fields{
+				"ipSetID": ipSetID,
+				"member":  member,
+			}).Debug("Member added to IP set.")
+		}
+		callbacks.OnIPSetMemberAdded(ipSetID, member)
+	}
+	ipsetMemberIndex.OnMemberRemoved = func(ipSetID string, member labelindex.IPSetMember) {
+		if log.GetLevel() >= log.DebugLevel {
+			log.WithFields(log.Fields{
+				"ipSetID": ipSetID,
+				"member":  member,
+			}).Debug("Member removed from IP set.")
+		}
+		callbacks.OnIPSetMemberRemoved(ipSetID, member)
+	}
 
-	// The endpoint policy resolver marries up the active policies with
-	// local endpoints and calculates the complete, ordered set of
-	// policies that apply to each endpoint.
+	// The endpoint policy resolver marries up the active policies with local endpoints and
+	// calculates the complete, ordered set of policies that apply to each endpoint.
+	//
+	//       ...
+	//    Dispatcher (all updates)
+	//     |
+	//     | All policies
+	//     |
+	//     |       ...
+	//     |    Active rules calculator
+	//     |         \
+	//     |          \
+	//      \          | Policy X matches endpoint Y
+	//       \___      | Policy Z matches endpoint Y
+	//           \     |
+	//          Policy resolver
+	//                 |
+	//                 | Endpoint Y has policies [Z, X] in that order
+	//                 |
+	//             <dataplane>
+	//
 	polResolver := NewPolicyResolver()
 	// Hook up the inputs to the policy resolver.
 	activeRulesCalc.PolicyMatchListener = polResolver
 	polResolver.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
-
 	// And hook its output to the callbacks.
 	polResolver.Callbacks = callbacks
 
 	// Register for host IP updates.
+	//
+	//       ...
+	//    Dispatcher (all updates)
+	//        |
+	//        | host IPs
+	//        |
+	//      passthru
+	//        |
+	//        |
+	//        |
+	//     <dataplane>
+	//
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
 	// Register for config updates.
+	//       ...
+	//    Dispatcher (all updates)
+	//        |
+	//        | separate config updates foo=bar, baz=biff
+	//        |
+	//      config batcher
+	//        |
+	//        | combined config {foo=bar, bax=biff}
+	//        |
+	//     <dataplane>
+	//
 	configBatcher := NewConfigBatcher(hostname, callbacks)
 	configBatcher.RegisterWith(allUpdDispatcher)
 

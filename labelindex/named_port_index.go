@@ -12,39 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The labelindex package provides the NamedPortIndex type, which emits events as the set of
-// endpoints (currently WorkloadEndpoints/HostEndpoint) it has been told about start (or stop) matching
-// the label selectors (which are extracted from the active policy rules) it has been told about.
-//
-// Label inheritance
-//
-// As the name suggests, the NamedPortIndex supports the notion of label inheritance.  In our
-// data-model:
-//
-//     - endpoints have their own labels; these take priority over any inherited labels
-//     - endpoints also inherit labels from any explicitly-named profiles in their data
-//     - profiles have explicit labels
-//     - profiles also have (now deprecated) tags, which we now treat as implicit <tagName>=""
-//       labels; explicit profile labels take precidence over implicit tag labels.
-//
-// For example, suppose an endpoint had labels
-//
-//     {"a": "ep-a", "b": "ep-b"}
-//
-// and it explicitly referenced profile "profile-A", which had these labels and tags:
-//
-//     {"a": "prof-a", "c": "prof-c", "d": "prof-d"}
-//     ["a", "tag-x", "d"]
-//
-// then the resulting labels for the endpoint after considering inheritance would be:
-//
-//     {
-//         "a": "ep-a",    // Explicit endpoint label "wins" over profile labels/tags.
-//         "b": "ep-b",
-//         "c": "prof-c",  // Profile label gets inherited.
-//         "d": "prof-d",  // Profile label "wins" over profile tag with same name.
-//         "tag-x": "",    // Profile tag inherited as empty label.
-//     }
 package labelindex
 
 import (
@@ -225,8 +192,8 @@ func (endpointData *endpointData) Get(labelName string) (value string, present b
 }
 
 // npParentData holds the data that we know about each parent (i.e. each security profile).  Since,
-// profiles consist of multiple resources in our data-model, any of the fields may be nil if we
-// have partial information.
+// profiles consist of multiple resources in our data-model, the labels or tags fields may be nil
+// if we have partial information.
 type npParentData struct {
 	id             string
 	labels         map[string]string
@@ -236,30 +203,30 @@ type npParentData struct {
 
 type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
 
-type NamedPortIndex struct {
+type SelectorAndNamedPortIndex struct {
 	endpointDataByID     map[interface{}]*endpointData
 	parentDataByParentID map[string]*npParentData
 	ipSetDataByID        map[string]*ipSetData
 
 	// Callback functions
-	OnMatchStarted NamedPortMatchCallback
-	OnMatchStopped NamedPortMatchCallback
+	OnMemberAdded   NamedPortMatchCallback
+	OnMemberRemoved NamedPortMatchCallback
 }
 
-func NewNamedPortIndex(onMatchStarted, onMatchStopped NamedPortMatchCallback) *NamedPortIndex {
-	inheritIDx := NamedPortIndex{
+func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
+	inheritIDx := SelectorAndNamedPortIndex{
 		endpointDataByID:     map[interface{}]*endpointData{},
 		parentDataByParentID: map[string]*npParentData{},
 		ipSetDataByID:        map[string]*ipSetData{},
 
 		// Callback functions
-		OnMatchStarted: onMatchStarted,
-		OnMatchStopped: onMatchStopped,
+		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
+		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
 	}
 	return &inheritIDx
 }
 
-func (idx *NamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
+func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.ProfileTagsKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileLabelsKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, idx.OnUpdate)
@@ -269,7 +236,7 @@ func (idx *NamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher)
 // OnUpdate makes LabelInheritanceIndex compatible with the UpdateHandler interface
 // allowing it to be used in a calculation graph more easily.  It accepts updates for endpoints
 // and profiles and passes them through to the Update/DeleteXXX methods.
-func (idx *NamedPortIndex) OnUpdate(update api.Update) (_ bool) {
+func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if update.Value != nil {
@@ -346,7 +313,7 @@ func convertNets(a, b []net.IPNet) []ip.Addr {
 	return combined
 }
 
-func (idx *NamedPortIndex) UpdateIPSet(ipSetID string, sel selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
+func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
 	logCxt := log.WithFields(log.Fields{
 		"ipSetID":           ipSetID,
 		"selector":          sel,
@@ -405,14 +372,14 @@ func (idx *NamedPortIndex) UpdateIPSet(ipSetID string, sel selector.Selector, na
 				if log.GetLevel() >= log.DebugLevel {
 					logCxt.WithField("member", member).Debug("New IP set member")
 				}
-				idx.OnMatchStarted(ipSetID, member)
+				idx.OnMemberAdded(ipSetID, member)
 			}
 			newIPSetData.memberToRefCount[member] = refCount + 1
 		}
 	}
 }
 
-func (idx *NamedPortIndex) DeleteIPSet(id string) {
+func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 	log.WithField("ipSetID", id).Info("Deleting IP set")
 
 	ipSetData := idx.ipSetDataByID[id]
@@ -426,7 +393,7 @@ func (idx *NamedPortIndex) DeleteIPSet(id string) {
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithField("member", member).Debug("Emitting deletion event.")
 		}
-		idx.OnMatchStopped(id, member)
+		idx.OnMemberRemoved(id, member)
 	}
 
 	// Then scan all endpoints and fix up their indexes to remove the match.
@@ -444,7 +411,7 @@ func (idx *NamedPortIndex) DeleteIPSet(id string) {
 //   parents          []*npParentData
 //   cachedMatchingIPSetIDs set.Set
 // }
-func (idx *NamedPortIndex) UpdateEndpoint(
+func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 	id interface{},
 	labels map[string]string,
 	ips []ip.Addr,
@@ -515,7 +482,7 @@ func (idx *NamedPortIndex) UpdateEndpoint(
 					newRefCount := ipSetData.memberToRefCount[newMember] + 1
 					if newRefCount == 1 {
 						// New member in the IP set.
-						idx.OnMatchStarted(ipSetID, newMember)
+						idx.OnMemberAdded(ipSetID, newMember)
 					}
 					ipSetData.memberToRefCount[newMember] = newRefCount
 				}
@@ -528,7 +495,7 @@ func (idx *NamedPortIndex) UpdateEndpoint(
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
-				idx.OnMatchStopped(ipSetID, oldMember)
+				idx.OnMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
 				ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -550,7 +517,7 @@ func (idx *NamedPortIndex) UpdateEndpoint(
 	}
 }
 
-func (idx *NamedPortIndex) DeleteEndpoint(id interface{}) {
+func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id interface{}) {
 	log.Debug("Inherit index deleting endpoint", id)
 	oldEndpointData := idx.endpointDataByID[id]
 	if oldEndpointData == nil {
@@ -568,7 +535,7 @@ func (idx *NamedPortIndex) DeleteEndpoint(id interface{}) {
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
-				idx.OnMatchStopped(ipSetID, oldMember)
+				idx.OnMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
 				ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -584,7 +551,7 @@ func (idx *NamedPortIndex) DeleteEndpoint(id interface{}) {
 	}
 }
 
-func (idx *NamedPortIndex) UpdateParentLabels(parentID string, labels map[string]string) {
+func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels map[string]string) {
 	parentData := idx.getOrCreateParent(parentID)
 	if reflect.DeepEqual(parentData.labels, labels) {
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
@@ -622,7 +589,7 @@ func (idx *NamedPortIndex) UpdateParentLabels(parentID string, labels map[string
 						newRefCount := ipSetData.memberToRefCount[newMember] + 1
 						if newRefCount == 1 {
 							// New member in the IP set.
-							idx.OnMatchStarted(ipSetID, newMember)
+							idx.OnMemberAdded(ipSetID, newMember)
 						}
 						ipSetData.memberToRefCount[newMember] = newRefCount
 					}
@@ -635,7 +602,7 @@ func (idx *NamedPortIndex) UpdateParentLabels(parentID string, labels map[string
 				if newRefCount == 0 {
 					// Member no longer in the IP set.  Emit event and clean up the old reference
 					// count.
-					idx.OnMatchStopped(ipSetID, oldMember)
+					idx.OnMemberRemoved(ipSetID, oldMember)
 					delete(ipSetData.memberToRefCount, oldMember)
 				} else {
 					ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -647,13 +614,13 @@ func (idx *NamedPortIndex) UpdateParentLabels(parentID string, labels map[string
 	parentData.labels = labels
 }
 
-func (idx *NamedPortIndex) DeleteParentLabels(parentID string) {
+func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 	// Defer to the update function, which implements the endpoint scanning logic.
 	idx.UpdateParentLabels(parentID, nil)
 	idx.discardParentIfEmpty(parentID)
 }
 
-func (idx *NamedPortIndex) UpdateParentTags(parentID string, tags []string) {
+func (idx *SelectorAndNamedPortIndex) UpdateParentTags(parentID string, tags []string) {
 	// TODO Make this logic common with label processing version.
 	parentData := idx.getOrCreateParent(parentID)
 	if reflect.DeepEqual(parentData.tags, tags) {
@@ -692,7 +659,7 @@ func (idx *NamedPortIndex) UpdateParentTags(parentID string, tags []string) {
 						newRefCount := ipSetData.memberToRefCount[newMember] + 1
 						if newRefCount == 1 {
 							// New member in the IP set.
-							idx.OnMatchStarted(ipSetID, newMember)
+							idx.OnMemberAdded(ipSetID, newMember)
 						}
 						ipSetData.memberToRefCount[newMember] = newRefCount
 					}
@@ -705,7 +672,7 @@ func (idx *NamedPortIndex) UpdateParentTags(parentID string, tags []string) {
 				if newRefCount == 0 {
 					// Member no longer in the IP set.  Emit event and clean up the old reference
 					// count.
-					idx.OnMatchStopped(ipSetID, oldMember)
+					idx.OnMemberRemoved(ipSetID, oldMember)
 					delete(ipSetData.memberToRefCount, oldMember)
 				} else {
 					ipSetData.memberToRefCount[oldMember] = newRefCount
@@ -717,12 +684,12 @@ func (idx *NamedPortIndex) UpdateParentTags(parentID string, tags []string) {
 	parentData.tags = tags
 }
 
-func (idx *NamedPortIndex) DeleteParentTags(parentID string) {
+func (idx *SelectorAndNamedPortIndex) DeleteParentTags(parentID string) {
 	idx.UpdateParentTags(parentID, nil)
 	idx.discardParentIfEmpty(parentID)
 }
 
-func (idx *NamedPortIndex) getOrCreateParent(id string) *npParentData {
+func (idx *SelectorAndNamedPortIndex) getOrCreateParent(id string) *npParentData {
 	parent := idx.parentDataByParentID[id]
 	if parent == nil {
 		parent = &npParentData{
@@ -733,7 +700,7 @@ func (idx *NamedPortIndex) getOrCreateParent(id string) *npParentData {
 	return parent
 }
 
-func (idx *NamedPortIndex) discardParentIfEmpty(id string) {
+func (idx *SelectorAndNamedPortIndex) discardParentIfEmpty(id string) {
 	parent := idx.parentDataByParentID[id]
 	if parent == nil {
 		return
