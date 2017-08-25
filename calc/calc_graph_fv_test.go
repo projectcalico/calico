@@ -36,9 +36,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-// Each entry in baseTests contains a series of states to move through.  Apart
-// from running each of these, we'll also expand each of them by passing it
-// through the expansion functions below.  In particular, we'll do each of them
+// Each entry in baseTests contains a series of states to move through (defined in
+// states_for_test.go). Apart from running each of these, we'll also expand each of them by
+// passing it through the expansion functions below.  In particular, we'll do each of them
 // in reversed order and reversed KV injection order.
 var baseTests = []StateList{
 	// Empty should be empty!
@@ -116,6 +116,10 @@ var baseTests = []StateList{
 	{withProfileTagInherit, localEpsWithTagInheritProfile},
 	// But if there's an explicit label, it overrides the tag.
 	{localEpsWithTagOverriddenProfile, withProfileTagOverriden},
+
+	// Named ports. Simple cases.
+	{localEp1WithNamedPortPolicy},
+	{localEp1WithNamedPortPolicyNoSelector},
 
 	// TODO(smc): Test config calculation
 	// TODO(smc): Test mutation of endpoints

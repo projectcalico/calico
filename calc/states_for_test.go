@@ -90,6 +90,21 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	},
 ).withName("ep1 local, policy")
 
+// localEp1WithNamedPortPolicy as above but with named port in the policy.
+var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port},
+).withIPSet(namedPortAllTCPID, []string{
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
+}).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
+
+// As above but with no selector in the rules.
+var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port},
+).withName("ep1 local, named port only")
+
 // localEp1WithIngressPolicy is as above except ingress policy only.
 var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},

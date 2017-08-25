@@ -39,6 +39,7 @@ var (
 	tagSelectorId       = selectorId(tagSelector)
 	tagFoobarSelector   = "tag-1 == 'foobar'"
 	tagFoobarSelectorId = selectorId(tagFoobarSelector)
+	namedPortAllTCPID   = "n:RMAIMXhhyW5sWWm_0o9euzK6TlyAbtjf6Ta9Jw"
 )
 
 // Canned workload endpoints.
@@ -62,6 +63,10 @@ var localWlEp1 = WorkloadEndpoint{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
+	},
+	Ports: []EndpointPort{
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
 	},
 }
 
@@ -176,6 +181,37 @@ var policy1_order20 = Policy{
 	Selector: "a == 'a'",
 	InboundRules: []Rule{
 		{SrcSelector: allSelector},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+var protoTCP = numorstring.ProtocolFromString("tcp")
+var policy1_order20_with_named_port = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol: &protoTCP,
+			SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+var policy1_order20_with_selector_and_named_port = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol:    &protoTCP,
+			SrcSelector: allSelector,
+			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
 	},
 	OutboundRules: []Rule{
 		{SrcSelector: bEpBSelector},
