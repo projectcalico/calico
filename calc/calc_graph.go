@@ -87,32 +87,32 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	// The source of the processing graph, this dispatcher will be fed all the updates from the
 	// datastore, fanning them out to the registered handlers.
 	//
-	//          Syncer
-	//            ||
-	//            || All updates
-	//            \/
-	//        Dispatcher (all updates)
-	//           / | \
-	//          /  |  \  Updates filtered by type
-	//         /   |   \
-	//    node_1  ...  node_n
+	//           Syncer
+	//             ||
+	//             || All updates
+	//             \/
+	//         Dispatcher (all updates)
+	//            / | \
+	//           /  |  \  Updates filtered by type
+	//          /   |   \
+	//     node_1  ...  node_n
 	//
 	allUpdDispatcher = dispatcher.NewDispatcher()
 
 	// Some of the handlers only need to know about local endpoints. Create a second dispatcher
 	// that will filter out non-local endpoints.
 	//
-	//           ...
-	//        Dispatcher (all updates)
-	//           ... \
-	//                \  All Host/Workload Endpoints
-	//                 \
-	//               Dispatcher (local updates)
-	//                <filter>
-	//                 / | \
-	//                /  |  \  Local Host/Workload Endpoints only
-	//               /   |   \
-	//          node_1  ...  node_n
+	//        ...
+	//     Dispatcher (all updates)
+	//        ... \
+	//             \  All Host/Workload Endpoints
+	//              \
+	//            Dispatcher (local updates)
+	//             <filter>
+	//              / | \
+	//             /  |  \  Local Host/Workload Endpoints only
+	//            /   |   \
+	//       node_1  ...  node_n
 	//
 	localEndpointDispatcher := dispatcher.NewDispatcher()
 	(*localEndpointDispatcherReg)(localEndpointDispatcher).RegisterWith(allUpdDispatcher)
@@ -124,7 +124,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	// local endpoints significantly cuts down the number of policies that Felix has to
 	// render into the dataplane.
 	//
-	//            ...
+	//           ...
 	//        Dispatcher (all updates)
 	//           /   \
 	//          /     \  All Host/Workload Endpoints
@@ -175,23 +175,23 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	// ports that should be in each IP set.  To do that, it matches the active selectors/tags/named
 	// ports extracted by the rule scanner against all the endpoints.
 	//
-	//       ...
-	//    Dispatcher (all updates)
-	//     |
-	//     | All endpoints
-	//     |
-	//     |       ...
-	//     |    Rule scanner
-	//     |     |      \
-	//     |    ...      \ Locally active tags/selectors/named ports
-	//     \              |
-	//      \_____        |
-	//            \       |
-	//          IP set member index
-	//                 |
-	//                 | IP set member added/removed
-	//                 |
-	//             <dataplane>
+	//        ...
+	//     Dispatcher (all updates)
+	//      |
+	//      | All endpoints
+	//      |
+	//      |       ...
+	//      |    Rule scanner
+	//      |     |       \
+	//      |    ...       \ Locally active tags/selectors/named ports
+	//       \              |
+	//        \_____        |
+	//              \       |
+	//            IP set member index
+	//                   |
+	//                   | IP set member added/removed
+	//                   |
+	//               <dataplane>
 	//
 	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex()
 	// Wire up the inputs to the IP set member index.
@@ -231,22 +231,22 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	// The endpoint policy resolver marries up the active policies with local endpoints and
 	// calculates the complete, ordered set of policies that apply to each endpoint.
 	//
-	//       ...
-	//    Dispatcher (all updates)
-	//     |
-	//     | All policies
-	//     |
-	//     |       ...
-	//     |    Active rules calculator
-	//     |         \
-	//     |          \
-	//      \          | Policy X matches endpoint Y
-	//       \___      | Policy Z matches endpoint Y
-	//           \     |
-	//          Policy resolver
-	//                 |
-	//                 | Endpoint Y has policies [Z, X] in that order
-	//                 |
+	//        ...
+	//     Dispatcher (all updates)
+	//      |
+	//      | All policies
+	//      |
+	//      |       ...
+	//      |    Active rules calculator
+	//      |         \
+	//      |          \
+	//       \          | Policy X matches endpoint Y
+	//        \___      | Policy Z matches endpoint Y
+	//            \     |
+	//           Policy resolver
+	//                  |
+	//                  | Endpoint Y has policies [Z, X] in that order
+	//                  |
 	//             <dataplane>
 	//
 	polResolver := NewPolicyResolver()
@@ -258,31 +258,32 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 
 	// Register for host IP updates.
 	//
-	//       ...
-	//    Dispatcher (all updates)
-	//        |
-	//        | host IPs
-	//        |
-	//      passthru
-	//        |
-	//        |
-	//        |
-	//     <dataplane>
+	//        ...
+	//     Dispatcher (all updates)
+	//         |
+	//         | host IPs
+	//         |
+	//       passthru
+	//         |
+	//         |
+	//         |
+	//      <dataplane>
 	//
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
 	// Register for config updates.
-	//       ...
-	//    Dispatcher (all updates)
-	//        |
-	//        | separate config updates foo=bar, baz=biff
-	//        |
-	//      config batcher
-	//        |
-	//        | combined config {foo=bar, bax=biff}
-	//        |
-	//     <dataplane>
+	//
+	//        ...
+	//     Dispatcher (all updates)
+	//         |
+	//         | separate config updates foo=bar, baz=biff
+	//         |
+	//       config batcher
+	//         |
+	//         | combined config {foo=bar, bax=biff}
+	//         |
+	//      <dataplane>
 	//
 	configBatcher := NewConfigBatcher(hostname, callbacks)
 	configBatcher.RegisterWith(allUpdDispatcher)
