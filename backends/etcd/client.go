@@ -143,8 +143,10 @@ func (c *Client) WatchPrefix(prefix string, keys []string, waitIndex uint64, sto
 		resp, err := watcher.Next(ctx)
 		if err != nil {
 			switch e := err.(type) {
-			case *client.Error:
-				if e.Code == 401 {
+			case client.Error:
+				if e.Code == client.ErrorCodeEventIndexCleared {
+					// for don't tight loop in this error case
+					time.Sleep(time.Second * 5)
 					return 0, nil
 				}
 			}
