@@ -20,6 +20,7 @@ package calc_test
 import (
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 // Canned hostnames.
@@ -109,6 +110,10 @@ var localWlEp2 = WorkloadEndpoint{
 		"id": "loc-ep-2",
 		"a":  "a",
 		"b":  "b2",
+	},
+	Ports: []EndpointPort{
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9090},
 	},
 }
 
