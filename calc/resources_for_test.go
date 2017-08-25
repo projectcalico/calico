@@ -32,14 +32,16 @@ const remoteHostname = "remotehostname"
 
 var (
 	allSelector         = "all()"
-	allSelectorId       = selectorId(allSelector)
+	allSelectorId       = selectorID(allSelector)
 	bEpBSelector        = "b == 'b'"
-	bEqBSelectorId      = selectorId(bEpBSelector)
+	bEqBSelectorId      = selectorID(bEpBSelector)
 	tagSelector         = "has(tag-1)"
-	tagSelectorId       = selectorId(tagSelector)
+	tagSelectorId       = selectorID(tagSelector)
 	tagFoobarSelector   = "tag-1 == 'foobar'"
-	tagFoobarSelectorId = selectorId(tagFoobarSelector)
-	namedPortAllTCPID   = "n:RMAIMXhhyW5sWWm_0o9euzK6TlyAbtjf6Ta9Jw"
+	tagFoobarSelectorId = selectorID(tagFoobarSelector)
+	namedPortAllTCPID   = namedPortID(allSelector, "tcp", "tcpport")
+	namedPortAllTCP2ID  = namedPortID(allSelector, "tcp", "tcpport2")
+	namedPortAllUDPID   = namedPortID(allSelector, "udp", "udpport")
 )
 
 // Canned workload endpoints.
@@ -66,6 +68,7 @@ var localWlEp1 = WorkloadEndpoint{
 	},
 	Ports: []EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
 	},
 }
@@ -118,6 +121,7 @@ var localWlEp2 = WorkloadEndpoint{
 	},
 	Ports: []EndpointPort{
 		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 2345},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9090},
 	},
 }
@@ -189,7 +193,8 @@ var policy1_order20 = Policy{
 }
 
 var protoTCP = numorstring.ProtocolFromString("tcp")
-var policy1_order20_with_named_port = Policy{
+var protoUDP = numorstring.ProtocolFromString("udp")
+var policy1_order20_with_named_port_tcpport = Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
 	InboundRules: []Rule{
@@ -203,7 +208,8 @@ var policy1_order20_with_named_port = Policy{
 	},
 	Types: []string{"ingress", "egress"},
 }
-var policy1_order20_with_selector_and_named_port = Policy{
+
+var policy1_order20_with_selector_and_named_port_tcpport = Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
 	InboundRules: []Rule{
@@ -215,6 +221,56 @@ var policy1_order20_with_selector_and_named_port = Policy{
 	},
 	OutboundRules: []Rule{
 		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_with_selector_and_named_port_udpport = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol:    &protoUDP,
+			SrcSelector: allSelector,
+			SrcPorts:    []numorstring.Port{numorstring.NamedPort("udpport")},
+		},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_with_named_port_mismatched_protocol = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol: &protoTCP,
+			SrcPorts: []numorstring.Port{numorstring.NamedPort("udpport")},
+		},
+	},
+	OutboundRules: []Rule{
+		{
+			Protocol: &protoUDP,
+			SrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_with_selector_and_named_port_tcpport2 = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	OutboundRules: []Rule{
+		{
+			Protocol:    &protoTCP,
+			SrcSelector: allSelector,
+			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport2")},
+		},
 	},
 	Types: []string{"ingress", "egress"},
 }

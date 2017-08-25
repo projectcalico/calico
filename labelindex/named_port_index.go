@@ -567,11 +567,13 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 			continue
 		}
 
-		// This endpoint matches this parent, calculate its old contribution.
+		// This endpoint matches this parent, calculate its old contribution.  If we've been
+		// around the loop already, we'll have swapped in the new labels.  Make sure we swap back
+		// to the old.
 		parentData.labels = oldLabels
 		oldIPSetContributions := epData.CachedContribution(idx.ipSetDataByID)
 
-		// Temporarily swap in the new labels.
+		// Swap in the new labels so we can calculate the new contribution.
 		parentData.labels = labels
 		for ipSetID, ipSetData := range idx.ipSetDataByID {
 			epData.RemoveMatchingIPSetID(ipSetID)
@@ -609,6 +611,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 				}
 			}
 		}
+
 	}
 
 	parentData.labels = labels

@@ -92,7 +92,7 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 
 // localEp1WithNamedPortPolicy as above but with named port in the policy.
 var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port},
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
 	"10.0.0.1,tcp:8080",
 	"10.0.0.2,tcp:8080",
@@ -102,7 +102,7 @@ var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
 
 // As above but with no selector in the rules.
 var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port},
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport},
 ).withName("ep1 local, named port only")
 
 // localEp1WithIngressPolicy is as above except ingress policy only.
@@ -125,6 +125,16 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 		{"default", []string{"pol-1"}, nil},
 	},
 ).withName("ep1 local, ingress-only policy")
+
+// localEp1WithNamedPortPolicy as above but with UDP named port in the policy.
+var localEp1WithNamedPortPolicyUDP = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_udpport},
+).withIPSet(namedPortAllUDPID, []string{
+	"10.0.0.1,udp:9091",
+	"10.0.0.2,udp:9091",
+	"fc00:fe11::1,udp:9091",
+	"fc00:fe11::2,udp:9091",
+}).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
 
 var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -396,6 +406,50 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("2 local, overlapping IPs & a policy")
+
+var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+).withIPSet(
+	allSelectorId, nil,
+).withIPSet(namedPortAllTCPID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
+}).withName("2 local, overlapping IPs & a named port policy")
+
+var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport2},
+).withIPSet(
+	allSelectorId, nil,
+).withIPSet(namedPortAllTCP2ID, []string{
+	"10.0.0.1,tcp:1234", // ep1
+	"fc00:fe11::1,tcp:1234",
+
+	"10.0.0.2,tcp:1234", // IP shared between ep1 and ep2 but different port no
+	"10.0.0.2,tcp:2345",
+	"fc00:fe11::2,tcp:1234",
+	"fc00:fe11::2,tcp:2345",
+
+	"10.0.0.3,tcp:2345", // ep2
+	"fc00:fe11::3,tcp:2345",
+}).withName("2 local, overlapping IPs & a named port policy")
+
+// localEpsWithMismatchedNamedPortsPolicy contains a policy that has named port matches where the
+// rule has a protocol that doesn't match that in the named port definitions in the endpoint.
+var localEpsWithMismatchedNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_mismatched_protocol},
+).withIPSet(
+	allSelectorId, nil,
+).withIPSet(
+	bEqBSelectorId, nil,
+).withIPSet(
+	namedPortID(allSelector, "udp", "tcpport"), []string{},
+).withIPSet(
+	namedPortID(allSelector, "tcp", "udpport"), []string{},
+).withName("Named ports policy with protocol not matching endpoints")
 
 // localEpsWithPolicyUpdatedIPs, when used with localEpsWithPolicy checks
 // correct handling of IP address updates.  We add and remove some IPs from

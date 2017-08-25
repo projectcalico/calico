@@ -51,19 +51,19 @@ var (
 	tag4ID = ipSetIDForTag(tag4)
 
 	sel1   = "a == 'b'"
-	sel1ID = selectorId(sel1)
+	sel1ID = selectorID(sel1)
 	sel2   = "b == 'c'"
 	sel3   = "has(foo3)"
-	sel3ID = selectorId(sel3)
+	sel3ID = selectorID(sel3)
 	sel4   = "d in {'a', 'b'}"
-	sel4ID = selectorId(sel4)
+	sel4ID = selectorID(sel4)
 
-	combinedSrcSelID         = selectorId("(((a == 'b') && has(tag1)) && !(has(foo3))) && !(has(tag3))")
-	combinedDstSelID         = selectorId("(((b == 'c') && has(tag2)) && !(d in {'a', 'b'})) && !(has(tag4))")
-	combinedSrcTagsOnlySelID = selectorId("(has(tag1)) && !(has(tag3))")
-	combinedDstTagsOnlySelID = selectorId("(has(tag2)) && !(has(tag4))")
-	combinedSrcSelsOnlySelID = selectorId("(a == 'b') && !(has(foo3))")
-	combinedDstSelsOnlySelID = selectorId("(b == 'c') && !(d in {'a', 'b'})")
+	combinedSrcSelID         = selectorID("(((a == 'b') && has(tag1)) && !(has(foo3))) && !(has(tag3))")
+	combinedDstSelID         = selectorID("(((b == 'c') && has(tag2)) && !(d in {'a', 'b'})) && !(has(tag4))")
+	combinedSrcTagsOnlySelID = selectorID("(has(tag1)) && !(has(tag3))")
+	combinedDstTagsOnlySelID = selectorID("(has(tag2)) && !(has(tag4))")
+	combinedSrcSelsOnlySelID = selectorID("(a == 'b') && !(has(foo3))")
+	combinedDstSelsOnlySelID = selectorID("(b == 'c') && !(d in {'a', 'b'})")
 )
 
 var _ = DescribeTable("RuleScanner rule conversion should generate correct ParsedRule for",

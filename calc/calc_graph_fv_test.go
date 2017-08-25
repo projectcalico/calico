@@ -73,30 +73,6 @@ var baseTests = []StateList{
 	// Test mutating the profile list of some endpoints.
 	{localEpsWithNonMatchingProfile, localEpsWithProfile},
 
-	// Repro of a particular named port index update failure case.
-	{localEpsWithTagInheritProfile,
-		localEp1WithPolicy,
-		localEpsWithProfile},
-
-	// String together some complex updates with profiles and policies
-	// coming and going.
-	{localEpsWithProfile,
-		localEp1WithOneTierPolicy123,
-		localEpsWithNonMatchingProfile,
-		localEpsWithTagInheritProfile,
-		localEpsWithPolicy,
-		localEpsWithPolicyUpdatedIPs,
-		hostEp1WithPolicy,
-		localEpsWithUpdatedProfile,
-		withProfileTagInherit,
-		localEp1WithIngressPolicy,
-		localEpsWithNonMatchingProfile,
-		localEpsWithUpdatedProfileNegatedTags,
-		hostEp1WithUntrackedPolicy,
-		localEpsWithTagInheritProfile,
-		localEp1WithPolicy,
-		localEpsWithProfile},
-
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
@@ -119,7 +95,74 @@ var baseTests = []StateList{
 
 	// Named ports. Simple cases.
 	{localEp1WithNamedPortPolicy},
+	{localEp1WithNamedPortPolicyUDP},
 	{localEp1WithNamedPortPolicyNoSelector},
+	// Endpoints with overlapping IPs.
+	{localEpsWithNamedPortsPolicy},
+	{localEp1WithNamedPortPolicy, localEpsWithNamedPortsPolicy},
+	// Endpoints with overlapping IPs but different port numbers.
+	{localEpsWithNamedPortsPolicyTCPPort2},
+	// Policy has protocol=TCP but named ports defined as UDP and vice-versa.
+	{localEpsWithMismatchedNamedPortsPolicy},
+	// Handling a port update.
+	{localEpsWithNamedPortsPolicy, localEpsWithNamedPortsPolicyTCPPort2},
+	// Add named ports to policy and then remove them.
+	{hostEp1WithPolicy, localEp1WithNamedPortPolicy, hostEp1WithPolicy},
+	{hostEp1WithPolicy, localEp1WithNamedPortPolicyNoSelector, hostEp1WithPolicy},
+	{hostEp1WithPolicy, localEpsWithNamedPortsPolicy, hostEp1WithPolicy},
+	// In this scenario, the endpoint only matches the selector of the named port due to
+	// inheriting a label from its profile.
+	// TODO Add and remove profile from endpoint
+	// TODO Add and remove matching label from profile
+	// Repro of a particular named port index update failure case.  The inherited profile was
+	// improperly cleaned up, so, when it was added back in again we ended up with multiple copies.
+	{localEpsWithTagInheritProfile,
+		localEp1WithPolicy,
+		localEpsWithProfile},
+
+	// A long, fairly random sequence of updates.
+	{
+		localEpsWithProfile,
+		localEp1WithOneTierPolicy123,
+		localEpsWithNonMatchingProfile,
+		localEpsWithTagInheritProfile,
+		localEpsWithPolicy,
+		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicy,
+		localEpsWithUpdatedProfile,
+		withProfileTagInherit,
+		localEp1WithIngressPolicy,
+		localEpsWithNonMatchingProfile,
+		localEpsWithUpdatedProfileNegatedTags,
+		hostEp1WithUntrackedPolicy,
+		localEpsWithTagInheritProfile,
+		localEp1WithPolicy,
+		localEpsWithProfile,
+	},
+
+	// And another one.
+	{
+		localEpsWithProfile,
+		localEp1WithOneTierPolicy123,
+		localEpsWithNonMatchingProfile,
+		localEpsWithTagInheritProfile,
+		hostEp1WithUntrackedPolicy,
+		localEpsWithTagInheritProfile,
+		localEpsWithMismatchedNamedPortsPolicy,
+		localEp1WithPolicy,
+		localEpsWithProfile,
+		localEp1WithIngressPolicy,
+		localEpsWithNonMatchingProfile,
+		localEpsWithUpdatedProfileNegatedTags,
+		localEpsWithPolicy,
+		localEp1WithNamedPortPolicyNoSelector,
+		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicy,
+		localEpsWithUpdatedProfile,
+		withProfileTagInherit,
+		localEp1WithNamedPortPolicyUDP,
+		localEp1WithNamedPortPolicyUDP,
+	},
 
 	// TODO(smc): Test config calculation
 	// TODO(smc): Test mutation of endpoints
