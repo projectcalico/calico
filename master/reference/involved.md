@@ -18,25 +18,26 @@ in touch for help debugging any issues with Calico.
 All of Calico's code is on [GitHub](https://github.com/projectcalico).  The following
 list contains the most commonly encountered repositories:
 
-Repository         | Description
--------------------|----------------------------
-[felix](https://github.com/projectcalico/felix) | The felix policy enforcement agent.
-[calicoctl](https://github.com/projectcalico/calicoctl) | Home of the calico/node and calicoctl components.
-[cni-plugin](https://github.com/projectcalico/cni-plugin) | The Calico CNI plugin.
-[libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin) | The Calico libnetwork plugin for Docker.
-[k8s-policy](https://github.com/projectcalico/k8s-policy) | Kubernetes policy controller.
-[libcalico](https://github.com/projectcalico/libcalico) | Python Calico library.
-[libcalico-go](https://github.com/projectcalico/libcalico-go) | Golang Calico library.
+Repository                                                              | Description
+------------------------------------------------------------------------|----------------------------
+[Calico](https://github.com/projectcalico/calico)                       | Calico release artifacts and documentation
+[calicoctl](https://github.com/projectcalico/calicoctl)                 | calico/node and calicoctl components
+[cni-plugin](https://github.com/projectcalico/cni-plugin)               | Calico CNI plugin
+[felix](https://github.com/projectcalico/felix)                         | felix policy enforcement agent
+[k8s-policy](https://github.com/projectcalico/k8s-policy)               | Kubernetes policy controller
+[libcalico](https://github.com/projectcalico/libcalico)                 | Python Calico library
+[libcalico-go](https://github.com/projectcalico/libcalico-go)           | Golang Calico library
+[libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin) | Calico libnetwork plugin for Docker
 
 ## Contributing
 
 Calico follows the "Fork & Pull" model of collaborative development,
-with changes being offered to the main Calico codebase via Pull
-Requests. So you can contribute a fix, change or enhancement by forking
+with changes being offered to the main Calico codebase via pull
+requests. So you can contribute a fix, change, or enhancement by forking
 one of our repositories and making a GitHub pull request. If you're
 interested in doing that:
 
 -   Thanks!
 -   See the [GitHub docs](https://help.github.com/articles/using-pull-requests) for how
-    to create a Pull Request.
--   Check our [contibution guide](contribute) for more information.
+    to create a pull request.
+-   Check the contribution guidelines at the root of each repo for more details.
