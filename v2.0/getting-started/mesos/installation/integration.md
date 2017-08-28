@@ -48,7 +48,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    ```shell
    curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
        https://github.com/projectcalico/calico-cni/releases/download/v1.5.6/calico
-   curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
+   curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico-ipam \
        https://github.com/projectcalico/calico-cni/releases/download/v1.5.6/calico-ipam
    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico-ipam
