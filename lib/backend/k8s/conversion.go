@@ -219,10 +219,10 @@ func (c converter) networkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.K
 			Name: policyName,
 		},
 		Value: &model.Policy{
-			Order:         &order,
-			Selector:      c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
-			InboundRules:  inboundRules,
-			OutboundRules: []model.Rule{model.Rule{Action: "allow"}},
+			Order:        &order,
+			Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
+			InboundRules: inboundRules,
+			Types:        []string{"ingress"},
 		},
 		Revision: np.ObjectMeta.ResourceVersion,
 	}, nil
