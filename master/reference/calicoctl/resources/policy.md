@@ -44,17 +44,17 @@ spec:
 | name | The name of the policy. |         | string |
 | annotations | Opaque key/value information to be used by clients. | | map |
 
-
 #### Spec
 
 | Field      | Description                                                                                                                                           | Accepted Values | Schema                | Default |
 |------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
-| order      | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence)               |                 | float                 |         |
+| order      | Indicates ordering of this policy: policies with lower order are applied earlier.  No value means that the policy is applied last.                    |                 | float                 |         |
 | selector   | Selects the endpoints to which this policy applies.                                                                                                   |                 | [selector](#selector) | all()   |
 | ingress    | Ordered list of ingress rules applied by policy.                                                                                                      |                 | List of [Rule](#rule) |         |
 | egress     | Ordered list of egress rules applied by this policy.                                                                                                  |                 | List of [Rule](#rule) |         |
 | doNotTrack | Indicates to apply the rules in this policy before any data plane connection tracking, and that packets allowed by these rules should not be tracked. | true, false     | boolean               | false   |
 | preDNAT    | Indicates to apply the rules in this policy before any DNAT.                                                                                          | true, false     | boolean               | false   |
+| types      | Specifies explicitly whether the policy applies to ingress traffic, or to egress, or to both. | | List of strings, which may each be 'ingress' or 'egress'. | See below. |
 
 The `doNotTrack` and `preDNAT` fields are meaningful only when applying policy to a
 [host endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
@@ -64,6 +64,52 @@ the policy is enforced after connection tracking and any DNAT.
 
 See [Using Calico to Secure Host Interfaces]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal)
 for how `doNotTrack` and `preDNAT` can be useful for host endpoints.
+
+The `types` field is useful when a policy specifies no ingress rules and you
+want that to mean that no ingress should be allowed, to each endpoint to which
+that policy applies, except as allowed by any other policies that apply to that
+endpoint.  You can express that by including `ingress` as one of the values of
+the `types` field - effectively saying "please apply this policy to ingress
+traffic, even though it looks like it should not."
+
+Similarly, when a policy specifies no egress rules and you want that to mean
+that no egress should be allowed ..., you can express that by including
+`egress` as one of the values of the `types` field.
+
+When `types` is not specified (or if it is an empty list), Calico treats the
+policy as applicable to ingress traffic (to the selected endpoints) if it has
+any ingress rules, or if it has neither ingress nor egress rules - with the
+latter case meaning to deny ingress by default - and to egress traffic (from
+the selected endpoints) only if it has any egress rules.
+
+| Ingress rules present? | Egress rules present? | Default `types`   | Other allowed `types` settings, and their meaning                                                     |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| No                     | No                    | `ingress`         | `egress` - Restrict egress instead of ingress.  `ingress, egress` - Restrict both ingress and egress. |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| Yes                    | No                    | `ingress`         | `ingress, egress` - Restrict egress as well as ingress.                                               |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| No                     | Yes                   | `egress`          | `ingress, egress` - Restrict ingress as well as egress.                                               |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+| Yes                    | Yes                   | `ingress, egress` | None.                                                                                                 |
+|------------------------+-----------------------+-------------------+-------------------------------------------------------------------------------------------------------|
+
+> **NOTE**
+>
+> It is not valid to specify a `types` value _without_ `ingress` when ingress
+> rules are present, or to specify a `types` value _without_ `egress` when
+> egress rules are present.
+>
+> Prior to v2.6.0, Calico behaved as though `types` was always `[ ingress,
+> egress ]`.  In other words, if a policy applied to a given endpoint at all,
+> it did so for both ingress and egress traffic, even if that policy specified,
+> for example, no egress rules.  However this made it impossible to define
+> ingress policy for some endpoints without simultaneously affecting the
+> default egress policy for them, and vice versa; so in Calico v2.6.0 the
+> `types` field was introduced and the default behavior changed.
+>
+> If you have existing YAML with policies without any ingress or egress rules,
+> that you want to behave as they did prior to Calico v2.6.0, simply add
+> `types: [ ingress, egress ]` to each such policy.
 
 #### Rule
 
