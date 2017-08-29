@@ -1,12 +1,12 @@
----
-title: Contribution Guidelines
----
+# Contributing to the Calico Codebase
+
+## Overview
 
 Features or any changes to the codebase should be done as follows:
 
 1.  Pull latest code in the **master** branch and create a feature
     branch off this.
-2.  Implement your feature. Commits are cheap in Git, try to split up
+1.  Implement your feature. Commits are cheap in Git; try to split up
     your code into many. It makes reviewing easier as well as for
     saner merging.
     -   If your commit fixes an existing issue \#123, include the text
@@ -15,11 +15,11 @@ Features or any changes to the codebase should be done as follows:
         [How do you attach a new pull request to an existing issue on
         GitHub?](https://stackoverflow.com/questions/4528869/how-do-you-attach-a-new-pull-request-to-an-existing-issue-on-github)).
 
-3.  Push your feature branch to GitHub. Note that before we can accept
+1.  Push your feature branch to GitHub. Note that before we can accept
     your changes, you need to agree to one of our
     contributor agreements. See [below](#contributor-agreements).
-4.  Create a pull request using GitHub, from your branch to master.
-5.  Reviewer process:
+1.  Create a pull request using GitHub, from your branch to master.
+1.  Reviewer process:
     -   Receive notice of review by GitHub email, GitHub notification,
         or by checking your assigned issues.
     -   Make markups as comments on the pull request (either line
@@ -31,7 +31,7 @@ Features or any changes to the codebase should be done as follows:
         branch. Otherwise, assign the pull request to the developer and
         leave this to them.
 
-6.  Developer process:
+1.  Developer process:
     -   Await review.
     -   Address code review issues on your feature branch.
     -   Push your changes to the feature branch on GitHub. This
@@ -46,7 +46,6 @@ Features or any changes to the codebase should be done as follows:
 
 ## Contributor Agreements
 
-If you plan to contribute in the form of documentation or code, we need
-you to sign our Contributor License Agreement before we can accept your
+We need you to sign our Contributor License Agreement before we can accept your
 contribution. You will be prompted to do this as part of the PR process
-on Github.
+on GitHub.
