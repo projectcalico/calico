@@ -149,7 +149,7 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 		if err != nil {
 			log.WithField("member", member).WithError(err).Panic("Bad port")
 		}
-		// Return a dedicated struct for V4 or V6.  This slightly reduced occupancy over storing
+		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
 		// the address as an interface by storing one fewer interface headers.  That is worthwhile
 		// because we store many IP set members.
 		if ipAddr.Version() == 4 {

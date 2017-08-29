@@ -237,11 +237,11 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	//      | All policies
 	//      |
 	//      |       ...
-	//      |    Active rules calculator
-	//      |         \
-	//      |          \
-	//       \          | Policy X matches endpoint Y
-	//        \___      | Policy Z matches endpoint Y
+	//       \   Active rules calculator
+	//        \       \
+	//         \       \
+	//          \       | Policy X matches endpoint Y
+	//           \      | Policy Z matches endpoint Y
 	//            \     |
 	//           Policy resolver
 	//                  |
@@ -301,7 +301,7 @@ func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 }
 
 // endpointHostnameFilter provides an UpdateHandler that filters out endpoints
-// that are not on the given host.ipset
+// that are not on the given host.
 type endpointHostnameFilter struct {
 	hostname string
 }

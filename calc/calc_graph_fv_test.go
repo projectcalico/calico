@@ -114,6 +114,8 @@ var baseTests = []StateList{
 	// inheriting a label from its profile.
 	// TODO Add and remove profile from endpoint
 	// TODO Add and remove matching label from profile
+	// TODO Two endpoints contributing same named port, change one endpoint's profile
+	// TODO Two endpoints contributing same named port, change one endpoint's profile's labels
 	// Repro of a particular named port index update failure case.  The inherited profile was
 	// improperly cleaned up, so, when it was added back in again we ended up with multiple copies.
 	{localEpsWithTagInheritProfile,
