@@ -1,5 +1,5 @@
-hash: da8a8061d5ca9db1b8820c6b289a116a0875436650a1c6cd98cd8edbe511a450
-updated: 2017-08-21T15:51:25.351367412Z
+hash: 9cefe4613dbc6971c6a73326f66084aa9beaf35eb23027188e0af6a0fe70bb54
+updated: 2017-08-30T10:36:24.865627131Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -186,7 +186,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: ec14f2716227ed72aff32691071f4b450367930a
+  version: f8f62de1fd1b263b089a3453d1932dd2d8e08cdb
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -254,7 +254,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 07c182904dbd53199946ba614a412c61d3c548f5
+  version: ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb
   subpackages:
   - unix
 - name: golang.org/x/text

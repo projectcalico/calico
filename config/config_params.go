@@ -102,9 +102,11 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	TyphaAddr           string `config:"authority;;"`
-	TyphaK8sServiceName string `config:"string;"`
-	TyphaK8sNamespace   string `config:"string;kube-system;non-zero"`
+	TyphaAddr           string        `config:"authority;;"`
+	TyphaK8sServiceName string        `config:"string;"`
+	TyphaK8sNamespace   string        `config:"string;kube-system;non-zero"`
+	TyphaReadTimeout    time.Duration `config:"seconds;30"`
+	TyphaWriteTimeout   time.Duration `config:"seconds;10"`
 
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
