@@ -1109,20 +1109,20 @@ class InvalidData(TestBase):
         # Cover the case where no data got stored, but calicoctl didn't fail:
         assert commanderror is True, "Failed - calicoctl did not fail to add invalid config"
 
-
 class TestTypes(TestBase):
     """
-    Test calicoctl types field
-    1) Test the automatic creation of types field when there are
-       both ingress and egress rules
-    2) Test that types field is not automatically appended when
-       there is only an ingress (and no egress) rule
+    Test calicoctl types field. Confirm that for a policy with:
+    1) both ingress and egress rules, the types:ingress,egress
+       field is appended.
+    2) neither an ingress rule nor an egress rule, the
+       types:ingress field is appended.
+    3) only an ingress rule, the types:ingress field is appended.
+    4) only an egress rule, the types:egress field is appended.
     """
-
-    def test_types_implied_creation(self):
+    def test_types_both_egress_and_ingress(self):
         """
         Test that a simple policy with both ingress and egress
-        rules will have the types' field appended.
+        rules will have the types:ingress,egress field appended.
         """
         # Set up simple ingress/egress policy
         policy1_dict = {'apiVersion': 'v1',
@@ -1151,24 +1151,106 @@ class TestTypes(TestBase):
         # Create the policy using calicoctl
         calicoctl("create -f /tmp/policy1.yaml")
 
-        # Now read it out (yaml format) with calicoctl:
+        # Now read it out (yaml format) with calicoctl and verify it matches:
         self.check_data_in_datastore([policy1_types_dict], "policy")
 
         # Remove policy1
         calicoctl("delete -f /tmp/policy1.yaml")
 
+    def test_types_no_ingress_or_egress(self):
+        """
+        Test that a simple policy with neither an ingress nor an
+        egress rule will have the types:ingress field appended.
+        """
+        # Set up simple policy without ingress or egress rules
+        policy2_dict = {'apiVersion': 'v1',
+                        'kind': 'policy',
+                        'metadata': {'name': 'policy2'},
+                        'spec': {
+                            'selector': "type=='application'"
+                        }
+        }
+
+        self.writeyaml('/tmp/policy2.yaml', policy2_dict)
+
+        # Create the policy using calicoctl
+        calicoctl("create -f /tmp/policy2.yaml")
+
+        # append types: 'ingress'
+        policy2_types_dict = policy2_dict
+        policy2_types_dict['spec'].update({'types': ['ingress']})
+
+        # Now read it out (yaml format) with calicoctl and verify it matches:
+        self.check_data_in_datastore([policy2_types_dict], "policy")
+
+        # Remove policy2
+        calicoctl("delete -f /tmp/policy2.yaml")
+
+    def test_types_ingress_only(self):
         """
         Test that a simple policy with only an ingress
-        rule will not have thetypes' field appended.
+        rule will have the types:ingress field appended.
         """
-        # Delete egress rule from the policy1
-        policy1_noegress_dict = policy1_dict
-        policy1_noegress_dict['spec'].pop('egress', None)
+        # Set up simple ingress-only policy
+        policy2_dict = {'apiVersion': 'v1',
+                        'kind': 'policy',
+                        'metadata': {'name': 'policy2'},
+                        'spec': {
+                            'ingress': [{
+                                'action': 'allow',
+                                'destination': {},
+                                'source': {},
+                            }],
+                            'selector': "type=='application'"
+                        }
+        }
 
-        self.writeyaml('/tmp/policy1_noegress.yaml', policy1_noegress_dict)
+        self.writeyaml('/tmp/policy2.yaml', policy2_dict)
 
-        # Create the no egress policy with calicoctl
-        calicoctl("create -f /tmp/policy1_noegress.yaml")
+        # Create the policy using calicoctl
+        calicoctl("create -f /tmp/policy2.yaml")
 
-        # Now read it out (yaml formwat) and ensure no types field is present
-        self.check_data_in_datastore([policy1_noegress_dict], "policy")
+        # append types: 'ingress'
+        policy2_types_dict = policy2_dict
+        policy2_types_dict['spec'].update({'types': ['ingress']})
+
+        # Now read it out (yaml format) with calicoctl and verify it matches:
+        self.check_data_in_datastore([policy2_types_dict], "policy")
+
+        # Remove policy2
+        calicoctl("delete -f /tmp/policy2.yaml")
+
+    def test_types_egress_only(self):
+        """
+        Test that a simple policy with only an egress
+        rule will have the types:egress field appended.
+        """
+        # Set up simple egress-only policy
+        policy2_dict = {'apiVersion': 'v1',
+                        'kind': 'policy',
+                        'metadata': {'name': 'policy2'},
+                        'spec': {
+                            'egress': [{
+                                'action': 'allow',
+                                'destination': {},
+                                'source': {},
+                            }],
+                            'selector': "type=='application'"
+                        }
+        }
+
+        self.writeyaml('/tmp/policy2.yaml', policy2_dict)
+
+        # Create the policy using calicoctl
+        calicoctl("create -f /tmp/policy2.yaml")
+
+        # append types: 'egress'
+        policy2_types_dict = policy2_dict
+        policy2_types_dict['spec'].update({'types': ['egress']})
+
+        # Now read it out (yaml format) with calicoctl and verify it matches:
+        self.check_data_in_datastore([policy2_types_dict], "policy")
+
+        # Remove policy2
+        calicoctl("delete -f /tmp/policy2.yaml")
+
