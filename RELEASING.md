@@ -11,7 +11,7 @@ we do a new patch release, the updates are made in-place.
 
 ## Preparing for a release
 1. Ensure master docs are passing semaphore tests.
-2. Check out latest master locally.
+1. Check out latest master locally.
 
 ## Creating the release
 ### When doing a major/minor release ONLY
@@ -35,7 +35,7 @@ release is announced.
 1. Test the changes locally then open a pull request, make sure it passes CI and get it reviewed.
 1. Run `make -C calico-node release` - **do not push the git tag yet** - and follow the instructions to:
    1. Create release docker images (do not push the `latest` tag yet).
-   2. Create the release file
+   1. Create the release file
 1. Now merge the PR - this will cause the live docs site to be updated (after a few minutes).
 1. Push the tag.
 1. Create a GitHub release on the Calico repo, and upload the release file (calico_node/release-<VERSION>.tgz)
@@ -47,10 +47,10 @@ release is announced.
    1. Copy/paste the contents of `generated-release-notes.md` into the GitHub Release Notes.
 1. Edit the [Calico Docs Custom Search Engine](https://cse.google.com/).
    1. Navigate to: search engine -> Search Features -> Refinements -> Add
-   2. Add a new refinement name: vX.Y
-   3. Navigate to: Setup -> Basics
-   4. Under "Sites to search", select "Add", for the url use `docs.projectcalico.org/vX.Y`
-   5. Choose vX.Y from the "Label" dropdown.
+   1. Add a new refinement name: vX.Y
+   1. Navigate to: Setup -> Basics
+   1. Under "Sites to search", select "Add", for the url use `docs.projectcalico.org/vX.Y`
+   1. Choose vX.Y from the "Label" dropdown.
 1. Edit `_config_dev.yml` to exclude the previous release.
 
 ### Promoting a release candidate to a final release
@@ -59,7 +59,8 @@ release is announced.
 1. Move the section for the release in `_data/versions.yaml` to the top of the file so that it will be the 'Latest Release'.
 1. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects.
 1. Test the changes locally then open a pull request, make sure it passes CI and get it reviewed.
-1. Create a git tag, docker images, and release file by running `make -C calico_node release`. Follow the instructions to push the images but DO NOT PUSH THE TAG YET.
+1. Create a git tag, docker images, and release file by running `make -C calico_node release`.
+   Follow the instructions to push the images but DO NOT PUSH THE TAG YET.
 1. Now merge the PR - this will cause the live docs site to be updated (after a few minutes).
 1. Push the tag.
 1. Create a GitHub release on the Calico repo, upload the release file (calico_node/release-<VERSION>.tgz), and post the updated
@@ -71,14 +72,14 @@ Patch releases shouldn't include any new functionality, just bug fixes (expect d
    - Add the date in the description.
    - Make sure new release candidate versions are added to the top of the new release section (otherwise
      yaml will incorrectly identify an older release candidate):
-    ```
+     ```
       v2.X
         - title: v2.X.0-rc2
           ... etc ...
 
         - title: v2.X.0-rc1
           ... etc ...
-    ```
+     ```
 1. Test the changes locally then open a pull request, make sure it passes CI and get it reviewed.
 1. Create a git tag, docker images, and release file by running `make -C calico_node release`. Follow the instructions to push the images but DO NOT PUSH THE TAG YET.
 1. Now merge the PR - this will cause the live docs site to be updated (after a few minutes).
