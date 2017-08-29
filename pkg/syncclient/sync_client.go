@@ -148,7 +148,7 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 	return nil
 }
 
-func (s *SyncerClient) onConnectionFailed(cxt context.Context, logCxt *log.Entry, err error, operation string) {
+func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Entry, err error, operation string) {
 	if cxt.Err() != nil {
 		logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
 		return
@@ -219,30 +219,38 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 }
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
-// write deadline to ensure we don't block forever.  Logs errors via onConnectionFailed.
+// write deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
 func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entry, op string, message interface{}) error {
-	s.connection.SetWriteDeadline(time.Now().Add(s.options.writeTimeout()))
-	err := s.encoder.Encode(syncproto.Envelope{
+	err := s.connection.SetWriteDeadline(time.Now().Add(s.options.writeTimeout()))
+	if err != nil {
+		s.logConnectionFailure(cxt, logCxt, err, "set timeout before "+op)
+		return err
+	}
+	err = s.encoder.Encode(syncproto.Envelope{
 		Message: message,
 	})
 	if err != nil {
-		s.onConnectionFailed(cxt, logCxt, err, op)
+		s.logConnectionFailure(cxt, logCxt, err, op)
 		return err
 	}
 	return nil
 }
 
 // readMessageFromServer reads a single value-type MsgXYZ object from the server.  It updates the connection's
-// read deadline to ensure we don't block forever.  Logs errors via onConnectionFailed.
+// read deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
 func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.Entry) (interface{}, error) {
 	var envelope syncproto.Envelope
 	// Update the read deadline before we try to read, otherwise we could block for a very long time if the
 	// TCP connection was severed without being cleanly shut down.  Typha sends regular pings so we should receive
 	// something even if there are no datamodel updates.
-	s.connection.SetReadDeadline(time.Now().Add(s.options.readTimeout()))
-	err := s.decoder.Decode(&envelope)
+	err := s.connection.SetReadDeadline(time.Now().Add(s.options.readTimeout()))
 	if err != nil {
-		s.onConnectionFailed(cxt, logCxt, err, "read from server")
+		s.logConnectionFailure(cxt, logCxt, err, "set read timeout")
+		return nil, err
+	}
+	err = s.decoder.Decode(&envelope)
+	if err != nil {
+		s.logConnectionFailure(cxt, logCxt, err, "read from server")
 		return nil, err
 	}
 	logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
