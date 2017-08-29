@@ -39,6 +39,12 @@ release is announced.
 1. Now merge the PR - this will cause the live docs site to be updated (after a few minutes).
 1. Push the tag.
 1. Create a GitHub release on the Calico repo, and upload the release file (calico_node/release-<VERSION>.tgz)
+1. Generate release notes and insert them into the GitHub release:
+   1. Add a release note section to the GitHub PR description for all relevant GitHub pull requests. The PR template
+      documents how to do this with the `release-note` tag.
+   1. Run [generate-release-notes.py](https://github.com/tigera/process/blob/master/releases/generate-release-notes.py)
+      with appropriate settings for MILESTONE and GITHUB_TOKEN environment variables (e.g. `export MILESTONE='Calico v2.5.0'`):
+   1. Copy/paste the contents of `generated-release-notes.md` into the GitHub Release Notes.
 1. Edit the [Calico Docs Custom Search Engine](https://cse.google.com/).
    1. Navigate to: search engine -> Search Features -> Refinements -> Add
    2. Add a new refinement name: vX.Y
@@ -56,7 +62,8 @@ release is announced.
 1. Create a git tag, docker images, and release file by running `make -C calico_node release`. Follow the instructions to push the images but DO NOT PUSH THE TAG YET.
 1. Now merge the PR - this will cause the live docs site to be updated (after a few minutes).
 1. Push the tag.
-1. Create a GitHub release on the Calico repo, and upload the release file (calico_node/release-<VERSION>.tgz)
+1. Create a GitHub release on the Calico repo, upload the release file (calico_node/release-<VERSION>.tgz), and post the updated
+   release notes (see above for details).
 
 ### Performing a "patch" release
 Patch releases shouldn't include any new functionality, just bug fixes (expect during pre-release testing).
