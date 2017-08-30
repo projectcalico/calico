@@ -263,9 +263,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
 		}))
 
-		// OutboundRules should only have one rule and it should be allow.
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
@@ -293,9 +296,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
 		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
 
-		// OutboundRules should only have one rule and it should be allow.
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 	})
 
 	It("should parse a NetworkPolicy with multiple peers", func() {
@@ -350,9 +356,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		By("having the correct peer selectors", func() {
 			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(2))
 
-			// OutboundRules should only have one rule and it should be allow.
-			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-			Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+			// There should be no OutboundRules
+			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+			// Check that Types field exists and has only 'ingress'
+			Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+			Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 
 			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
 			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
@@ -425,9 +434,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			ninety, _ := numorstring.PortFromString("90")
 			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(4))
 
-			// OutboundRules should only have one rule and it should be allow.
-			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-			Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+			// There should be no OutboundRules
+			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+			// Check that Types field exists and has only 'ingress'
+			Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+			Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 
 			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
 			Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts).To(Equal([]numorstring.Port{ninety}))
@@ -466,9 +478,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
 		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
 
-		// OutboundRules should only have one rule and it should be allow.
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 	})
 
 	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
@@ -508,9 +523,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
 		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("has(calico/k8s_ns)"))
 
-		// OutboundRules should only have one rule and it should be allow.
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 	})
 
 	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
@@ -544,9 +562,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && k in { 'v1', 'v2' }"))
 		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
 
-		// OutboundRules should only have one rule and it should be allow.
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 	})
 
 	It("should parse a NetworkPolicy with Ports only", func() {
@@ -587,9 +608,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(len(pol.Value.(*model.Policy).InboundRules[0].DstPorts)).To(Equal(1))
 		Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts[0].String()).To(Equal("80"))
 
-		// OutboundRules should only have one rule and it should be allow.
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).OutboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
 	})
 })
 
