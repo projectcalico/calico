@@ -346,6 +346,10 @@ configRetry:
 			fmt.Sprintf("Revision: %s; Build date: %s",
 				buildinfo.GitRevision, buildinfo.BuildDate),
 			syncerToValidator,
+			&syncclient.Options{
+				ReadTimeout:  configParams.TyphaReadTimeout,
+				WriteTimeout: configParams.TyphaWriteTimeout,
+			},
 		)
 	} else {
 		// Use the syncer locally.
