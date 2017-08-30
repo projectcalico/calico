@@ -112,6 +112,7 @@ var _ = Describe("With an in-process Server", func() {
 			fmt.Sprintf("test-host-%v", id),
 			"test-info",
 			recorder,
+			nil,
 		)
 
 		err := client.Start(clientCxt)
@@ -528,6 +529,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			"test-host",
 			"test-info",
 			recorder,
+			nil,
 		)
 		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
@@ -665,6 +667,87 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 				}
 			})
 		})
+	})
+})
+
+var _ = Describe("With an in-process Server with long ping interval", func() {
+	var (
+		cacheCxt     context.Context
+		cacheCancel  context.CancelFunc
+		cache        *snapcache.Cache
+		server       *syncserver.Server
+		serverCxt    context.Context
+		serverCancel context.CancelFunc
+		serverAddr   string
+	)
+
+	BeforeEach(func() {
+		cache = snapcache.New(snapcache.Config{
+			// Set the batch size small so we can force new Breadcrumbs easily.
+			MaxBatchSize: 10,
+			// Reduce the wake up interval from the default to give us faster tear down.
+			WakeUpInterval: 50 * time.Millisecond,
+		})
+		server = syncserver.New(cache, syncserver.Config{
+			PingInterval: 10000 * time.Second,
+			PongTimeout:  50000 * time.Second,
+			Port:         syncserver.PortRandom,
+			DropInterval: 1 * time.Second,
+		})
+		cacheCxt, cacheCancel = context.WithCancel(context.Background())
+		cache.Start(cacheCxt)
+		serverCxt, serverCancel = context.WithCancel(context.Background())
+		server.Start(serverCxt)
+		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
+	})
+
+	AfterEach(func() {
+		if server != nil {
+			serverCancel()
+			log.Info("Waiting for server to shut down")
+			server.Finished.Wait()
+			log.Info("Done waiting for server to shut down")
+		}
+		if cache != nil {
+			cacheCancel()
+		}
+	})
+
+	It("client should disconnect after read timeout", func() {
+		clientCxt, clientCancel := context.WithCancel(context.Background())
+		recorder := NewRecorder()
+		client := syncclient.New(
+			serverAddr,
+			"test-version",
+			"test-host",
+			"test-info",
+			recorder,
+			&syncclient.Options{
+				ReadTimeout:  1 * time.Second,
+				WriteTimeout: 10 * time.Second,
+			},
+		)
+		err := client.Start(clientCxt)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			clientCancel()
+			client.Finished.Wait()
+		}()
+
+		finishedC := make(chan struct{})
+		go func() {
+			client.Finished.Wait()
+			close(finishedC)
+		}()
+
+		timeout := time.After(2 * time.Second)
+		startTime := time.Now()
+		select {
+		case <-finishedC:
+			Expect(time.Since(startTime)).To(BeNumerically(">=", 900*time.Millisecond))
+		case <-timeout:
+			Fail("Timed out waiting for client to have a read timeout.")
+		}
 	})
 })
 

@@ -87,7 +87,7 @@ func main() {
 
 	callbacks := &syncerCallbacks{}
 	addr := arguments["--server"].(string)
-	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks)
+	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks, nil)
 	err = client.Start(context.Background())
 	if err != nil {
 		log.WithError(err).Panic("Client failed")

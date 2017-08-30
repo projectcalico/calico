@@ -136,6 +136,7 @@ var _ = Describe("Daemon", func() {
 				"",
 				"",
 				cbs,
+				nil,
 			)
 			clientCxt, clientCancelFn := context.WithCancel(context.Background())
 			defer func() {
