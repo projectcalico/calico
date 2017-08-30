@@ -45,14 +45,15 @@ func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPa
 	d := model.KVPair{
 		Key: k,
 		Value: &model.Policy{
-			Order:         ap.Spec.Order,
-			InboundRules:  RulesAPIToBackend(ap.Spec.IngressRules),
-			OutboundRules: RulesAPIToBackend(ap.Spec.EgressRules),
-			Selector:      ap.Spec.Selector,
-			DoNotTrack:    ap.Spec.DoNotTrack,
-			Annotations:   ap.Metadata.Annotations,
-			PreDNAT:       ap.Spec.PreDNAT,
-			Types:         nil, // filled in below
+			Order:          ap.Spec.Order,
+			InboundRules:   RulesAPIToBackend(ap.Spec.IngressRules),
+			OutboundRules:  RulesAPIToBackend(ap.Spec.EgressRules),
+			Selector:       ap.Spec.Selector,
+			DoNotTrack:     ap.Spec.DoNotTrack,
+			Annotations:    ap.Metadata.Annotations,
+			PreDNAT:        ap.Spec.PreDNAT,
+			ApplyOnForward: ap.Spec.ApplyOnForward,
+			Types:          nil, // filled in below
 		},
 	}
 
@@ -99,7 +100,15 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 	ap.Spec.Selector = bp.Selector
 	ap.Spec.DoNotTrack = bp.DoNotTrack
 	ap.Spec.PreDNAT = bp.PreDNAT
+	ap.Spec.ApplyOnForward = bp.ApplyOnForward
 	ap.Spec.Types = nil
+
+	if !bp.ApplyOnForward && (bp.DoNotTrack || bp.PreDNAT) {
+		// This case happens when there is a pre-existing policy in the datastore, from before
+		// the ApplyOnForward feature was available. DoNotTrack or PreDNAT policy applies to
+		// forward traffic by nature. So in this case we return ApplyOnForward flag as true.
+		ap.Spec.ApplyOnForward = true
+	}
 
 	if len(bp.Types) == 0 {
 		// This case happens when there is a pre-existing policy in an etcd datastore, from

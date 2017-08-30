@@ -65,37 +65,41 @@ var policySpec1AfterRead = api.PolicySpec{
 }
 
 var policySpec2 = api.PolicySpec{
-	Order:        &order2,
-	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
-	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
-	Selector:     "thing2 == 'value2'",
-	DoNotTrack:   true,
+	Order:          &order2,
+	IngressRules:   []api.Rule{testutils.InRule2, testutils.InRule1},
+	EgressRules:    []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
+	Selector:       "thing2 == 'value2'",
+	DoNotTrack:     true,
+	ApplyOnForward: true,
 }
 
 // When reading back, the rules should have been updated to the newer format.
 var policySpec2AfterRead = api.PolicySpec{
-	Order:        &order2,
-	IngressRules: []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
-	EgressRules:  []api.Rule{testutils.EgressRule2AfterRead, testutils.EgressRule1AfterRead},
-	Selector:     "thing2 == 'value2'",
-	DoNotTrack:   true,
-	Types:        []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+	Order:          &order2,
+	IngressRules:   []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
+	EgressRules:    []api.Rule{testutils.EgressRule2AfterRead, testutils.EgressRule1AfterRead},
+	Selector:       "thing2 == 'value2'",
+	DoNotTrack:     true,
+	ApplyOnForward: true,
+	Types:          []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
 }
 
 var policySpec3 = api.PolicySpec{
-	Order:        &order2,
-	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
-	Selector:     "thing2 == 'value2'",
-	PreDNAT:      true,
+	Order:          &order2,
+	IngressRules:   []api.Rule{testutils.InRule2, testutils.InRule1},
+	Selector:       "thing2 == 'value2'",
+	PreDNAT:        true,
+	ApplyOnForward: true,
 }
 
 // When reading back, the rules should have been updated to the newer format.
 var policySpec3AfterRead = api.PolicySpec{
-	Order:        &order2,
-	IngressRules: []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
-	Selector:     "thing2 == 'value2'",
-	PreDNAT:      true,
-	Types:        []api.PolicyType{api.PolicyTypeIngress},
+	Order:          &order2,
+	IngressRules:   []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
+	Selector:       "thing2 == 'value2'",
+	PreDNAT:        true,
+	ApplyOnForward: true,
+	Types:          []api.PolicyType{api.PolicyTypeIngress},
 }
 
 // When reading back, an empty policy has Types 'ingress'.
