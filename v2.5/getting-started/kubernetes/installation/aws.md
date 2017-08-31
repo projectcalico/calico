@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico and Kubernetes on AWS
-redirect_from: latest/getting-started/kubernetes/installation/aws
 ---
 
 There are a number of solutions for deploying Calico and Kubernetes on AWS.  We recommend taking
@@ -22,6 +21,7 @@ as well as other public and private cloud environments.
 
 **[StackPointCloud][stackpoint]** lets you deploy a Kubernetes cluster with Calico to AWS in 3 steps using a web-based interface.
 
+**[Typhoon][typhoon]** deploys free and minimal Kubernetes clusters with Terraform, for AWS and other platforms.
 
 #### More installation options
 
@@ -33,6 +33,7 @@ on AWS using one of our [self-hosted manifests][self-hosted], or by [integrating
 [ket]: https://apprenda.com/kismatic/
 [stackpoint]: https://stackpoint.io/#/
 [coreos]: https://coreos.com/kubernetes/docs/latest/
+[typhoon]: https://typhoon.psdn.io/
 
 [self-hosted]: hosted
 [integration-guide]: integration

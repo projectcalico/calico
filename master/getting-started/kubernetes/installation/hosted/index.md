@@ -32,10 +32,10 @@ Each manifest contains all the necessary resources for installing Calico on each
 It installs the following Kubernetes resources:
 
 - The `calico-config` ConfigMap, which contains parameters for configuring the install.
-- Installs the `calico/node` container on each host using a DaemonSet.
-- Installs the Calico CNI binaries and network config on each host using a DaemonSet.
-- Runs the `calico/kube-policy-controller` in a Deployment.
-- The `calico-etcd-secrets` Secret, which optionally allows for providing etcd TLS assets.
+- Installs the `calico/node` container on each host using a daemon set.
+- Installs the Calico CNI binaries and network config on each host using a daemon set.
+- Runs `calico/kube-controllers` as a deployment.
+- The `calico-etcd-secrets` secret, which optionally allows for providing etcd TLS assets.
 
 ## Configuration options
 

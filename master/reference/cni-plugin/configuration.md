@@ -91,7 +91,7 @@ When using Calico IPAM, the following flags determine what IP addresses should b
 
 A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters) and setting `IP` to the desired value.
 
-By default, Calico IPAM will assign IP addresses from all the available IP Pools.
+By default, Calico IPAM will assign IP addresses from all the available IP pools.
 
 Optionally, the list of possible IPv4 and IPv6 pools can also be specified via the following properties:
 
@@ -118,7 +118,7 @@ Example CNI config:
 > **Note**: `ipv6_pools` will be respected only when `assign_ipv6` is set to `"true"`.
 {: .alert .alert-info}
 
-Any IP Pools specified in the CNI config must have already been created. It is an error to specify IP Pools in the config that do not exist.
+Any IP pools specified in the CNI config must have already been created. It is an error to specify IP pools in the config that do not exist.
 
 ## Kubernetes specific
 
@@ -156,8 +156,9 @@ As a convenience, the API location location can also be configured directly, e.g
 
 ### Enabling Kubernetes Policy
 
-If you wish to use the Kubernetes NetworkPolicy API then you must set a policy type in the network config.
-There is a single supported policy type, `k8s` which uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
+If you wish to use the Kubernetes `NetworkPolicy` resource then you must set a policy type in the network config.
+There is a single supported policy type, `k8s`. When set,
+you must also run calico/kube-controllers with the policy, profile, and workloadendpoint controllers enabled.
 
 ```json
 {
@@ -165,8 +166,10 @@ There is a single supported policy type, `k8s` which uses the Kubernetes Network
     "cniVersion": "0.1.0",
     "type": "calico",
     "policy": {
-      "type": "k8s",
-      "k8s_api_root": "http://127.0.0.1:8080"
+      "type": "k8s"
+    },
+    "kubernetes": {
+        "kubeconfig": "/path/to/kubeconfig"
     },
     "ipam": {
         "type": "calico-ipam"
@@ -218,9 +221,9 @@ When making use of the `usePodCidr` option, the Calico CNI plugin requires read-
 
 ### IPAM Manipulation with Kubernetes Annotations
 
-#### Specifying IP Pools on a per-Pod basis
+#### Specifying IP pools on a per-Pod basis
 
-In addition to specifying IP Pools in the CNI config as discussed above, Calico IPAM supports specifying IP Pools per-Pod using the following [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/).
+In addition to specifying IP pools in the CNI config as discussed above, Calico IPAM supports specifying IP pools per-Pod using the following [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/).
 
 - `cni.projectcalico.org/ipv4pools`: A list of configured IPv4 Pools from which to choose an address for the Pod.
 
@@ -240,13 +243,13 @@ In addition to specifying IP Pools in the CNI config as discussed above, Calico 
       "cni.projectcalico.org/ipv6pools": "[\"2001:db8::1/120\"]"
    ```
 
-If provided, these IP Pools will override any IP Pools specified in the CNI config.
+If provided, these IP pools will override any IP pools specified in the CNI config.
 
 
-> **Note**: This requires the IP Pools to exist before `ipv4pools` or 
-> `ipv6pools` annotations are used. Requesting a subset of an IP Pool 
-> is not supported. IP Pools requested in the annotations must exactly 
-> match a configured [IP Pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
+> **Note**: This requires the IP pools to exist before `ipv4pools` or
+> `ipv6pools` annotations are used. Requesting a subset of an IP pool
+> is not supported. IP pools requested in the annotations must exactly
+> match a configured [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) resource.
 {: .alert .alert-info}
 
 
@@ -255,7 +258,7 @@ If provided, these IP Pools will override any IP Pools specified in the CNI conf
 You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with Calico IPAM.
 There are two annotations to request a specific IP address:
 
-- `cni.projectcalico.org/ipAddrs`: A list of IPv4 and/or IPv6 addresses to assign to the Pod. The requested IP addresses will be assigned from Calico IPAM and must exist within a configured IP Pool.
+- `cni.projectcalico.org/ipAddrs`: A list of IPv4 and/or IPv6 addresses to assign to the Pod. The requested IP addresses will be assigned from Calico IPAM and must exist within a configured IP pool.
 
   Example:
 
@@ -265,7 +268,7 @@ There are two annotations to request a specific IP address:
    ```
 
 - `cni.projectcalico.org/ipAddrsNoIpam`: A list of IPv4 and/or IPv6 addresses to assign to the Pod, bypassing IPAM. Any IP conflicts and routing have to be taken care of manually or by some other system.
-Calico will only distribute routes to a Pod if its IP address falls within a Calico IP Pool. If you assign an IP address that is not in a Calico IP Pool, you must ensure that routing to that IP address is taken care of through another mechanism.
+Calico will only distribute routes to a Pod if its IP address falls within a Calico IP pool. If you assign an IP address that is not in a Calico IP pool, you must ensure that routing to that IP address is taken care of through another mechanism.
 
   Example:
 

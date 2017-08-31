@@ -22,13 +22,13 @@ impact on Calico.
 
 > **Note**: When upgrading Calico using the Kubernetes datastore driver from a version < v2.3.0
 > to a version >= v2.3.0, or when upgrading Calico using the etcd datastore from a version < v2.4.0
-> to a version >= v2.4.0, you should follow the steps for 
+> to a version >= v2.4.0, you should follow the steps for
 > [upgrading to v1 NetworkPolicy semantics](#upgrading-to-v1-networkpolicy-semantics)
 {: .alert .alert-info}
 
-> **Important**: If you are using the Kubernetes datastore and upgrading from 
-> Calico v2.4.x or earlier to Calico v2.5.x or later, you must 
-> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md) 
+> **Important**: If you are using the Kubernetes datastore and upgrading from
+> Calico v2.4.x or earlier to Calico v2.5.x or later, you must
+> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
 > before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
 {: .alert .alert-danger}
 
@@ -40,39 +40,22 @@ This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/
 Note that while a self-hosted installation of Calico is typically done all at once (via calico.yaml), it is
 recommended to perform upgrades one component at a time.
 
-#### Upgrading the Calico policy controller
+#### Upgrading the Calico Kubernetes controllers
 
-In a self-hosted Calico installation, the calico/kube-policy-controller is run under a Deployment.  As such,
-it can be upgraded via the standard [Deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment).
+In a self-hosted Calico installation, the calico/kube-controllers container is run as a deployment.  As such,
+it can be upgraded via the standard [deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment).
 
-To upgrade the policy controller, simply apply changes to the Deployment specification and Kubernetes will
+To upgrade the controllers, simply apply changes to the deployment specification and Kubernetes will
 do the rest.
 
 ```
-kubectl apply -f policy-controller.yaml
+kubectl apply -f new-controllers.yaml
 ```
 
-> **Note**: The Deployment must use `.spec.strategy.type==Recreate` to 
+> **Note**: The deployment must use `.spec.strategy.type==Recreate` to
 > ensure that at most one instance of the controller is running at a time.
 {: .alert .alert-info}
 
-
-##### Upgrading from pre-2.0
-
-_Some earlier versions of the calico/kube-policy-controller were deployed as a ReplicaSet rather than a Deployment.
-To upgrade from the ReplicaSet to a Deployment, follow these steps:_
-
-- _Scale the existing ReplicaSet to 0 replicas_
-
-    ```
-    kubectl scale rs -n kube-system calico-policy-controller --replicas=0
-    ```
-
-- _Deploy the new policy controller as a Deployment_
-
-    ```
-    kubectl apply -f policy-controller.yaml
-    ```
 
 #### Upgrading the Calico DaemonSet
 
@@ -117,7 +100,7 @@ kubectl uncordon node-01
 ```
 
 
-> **Note**: You may want to pre-fetch new Docker image to ensure the new 
+> **Note**: You may want to pre-fetch the new Docker image to ensure the new
 > node image is started within BIRD's graceful restart period of 90 seconds.
 {: .alert .alert-info}
 
@@ -128,7 +111,7 @@ Most self-hosted Calico deployments use a ConfigMap for configuration of the Cal
 components.
 
 To update the ConfigMap, make any desired changes and apply the new ConfigMap using
-kubectl.  You will need to restart the policy controller and each calico/node instance
+kubectl.  You will need to restart the Calico Kubernetes controllers and each calico/node instance
 as described above before new config is reflected.
 
 ## Upgrading Components Individually
@@ -158,12 +141,12 @@ To upgrade the CNI config (typically located in /etc/cni/net.d) simply make the 
 config file.  It will be picked up by the kubelet automatically for Kubernetes v1.4.0+.  For older versions
 of Kubernetes you must restart the kubelet for changes to be applied.
 
-#### Upgrading the Calico Policy Controller
+#### Upgrading the Calico Kubernetes controllers
 
-The calico/kube-policy-controller can be stopped and restarted without affecting connectivity or
+The calico/kube-controllers pod can be stopped and restarted without affecting connectivity or
 policy on existing pods.  New pods in existing Namespaces will correctly have
 existing policy applied even when the controller is not running.  However, when the
-policy controller is not running:
+controllers are not running:
 
 - New NetworkPolicies will not be applied.
 - New Pods in new Namespaces will not get network connectivity.
@@ -173,15 +156,15 @@ policy controller is not running:
 > **Note**: Only one instance of the controller should ever be active at a time.
 {: .alert .alert-info}
 
-To upgrade the policy controller:
+To upgrade the controllers:
 
-- Pull the new version of the calico/kube-policy-controller image to each node.
+- Pull the new version of the calico/kube-controllers image to each node.
 - Update the image in your process management to reference the new version.
 - Stop the running container, and start it with the newly pulled version.
 
-We recommend running the policy controller as a Kubernetes Deployment with type "recreate", in which
+We recommend running the controllers as a Kubernetes deployment with type "recreate", in which
 case upgrade can be handled entirely through the
-standard [Deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment)
+standard [deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment)
 
 ## Upgrading to v1 NetworkPolicy semantics
 
@@ -208,7 +191,7 @@ spec:
   podSelector:
 ```
 
-> **Note**: The above steps should be followed when upgrading to 
+> **Note**: The above steps should be followed when upgrading to
 > Calico v2.3.0+ using the Kubernetes
 > datastore driver, and Calico v2.4.0+ using the etcd datastore,
 > independent of the Kubernetes version being used.

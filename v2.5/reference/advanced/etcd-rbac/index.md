@@ -1,6 +1,5 @@
 ---
 title: Setting up etcd certificates for RBAC
-redirect_from: latest/reference/advanced/etcd-rbac/index
 ---
 
 When using etcd it is a good idea to protect the data stored there.  This is
