@@ -71,12 +71,12 @@ for how `doNotTrack` and `preDNAT` can be useful for host endpoints.
 
 \* If `types` has no value, Calico defaults as follows.
 
-| Ingress Rules Present | Egress Rules Present | `Types` value       |
-|-----------------------|----------------------|---------------------|
-| No                    | No                   | `ingress`           |
-| Yes                   | No                   | `ingress`           |
-| No                    | Yes                  | `egress`            |
-| Yes                   | Yes                  | `ingress, egress`   |
+>| Ingress Rules Present | Egress Rules Present | `Types` value       |
+ |-----------------------|----------------------|---------------------|
+ | No                    | No                   | `ingress`           |
+ | Yes                   | No                   | `ingress`           |
+ | No                    | Yes                  | `egress`            |
+ | Yes                   | Yes                  | `ingress, egress`   |
 
 #### Rule
 
