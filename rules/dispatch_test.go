@@ -218,8 +218,8 @@ var _ = Describe("Dispatch chains", func() {
 		}),
 	)
 
-	DescribeTable("host endpoint rendering tests",
-		func(names []string, expectedChains []*iptables.Chain) {
+	Describe("host endpoint rendering tests", func() {
+		convertToInput := func(names []string, expectedChains []*iptables.Chain) map[string]proto.HostEndpointID {
 			var input map[string]proto.HostEndpointID
 			if names != nil {
 				input = map[string]proto.HostEndpointID{}
@@ -227,112 +227,387 @@ var _ = Describe("Dispatch chains", func() {
 					input[name] = proto.HostEndpointID{} // Data is currently ignored.
 				}
 			}
-			// Note: order of chains and rules should be deterministic.
-			Expect(renderer.HostDispatchChains(input)).To(Equal(expectedChains))
-		},
-		Entry("nil map", nil, []*iptables.Chain{
-			{
-				Name:  "cali-from-host-endpoint",
-				Rules: []iptables.Rule{},
+
+			return input
+		}
+
+		DescribeTable("host endpoint rendering tests preDNAT",
+			func(names []string, expectedChains []*iptables.Chain) {
+				input := convertToInput(names, expectedChains)
+				// Note: order of chains and rules should be deterministic.
+				Expect(renderer.FromHostDispatchChains(input)).To(Equal(expectedChains))
 			},
-			{
-				Name:  "cali-to-host-endpoint",
-				Rules: []iptables.Rule{},
-			},
-		}),
-		Entry("single interface", []string{"eth1234"}, []*iptables.Chain{
-			{
-				Name: "cali-from-host-endpoint",
-				Rules: []iptables.Rule{
-					inboundGotoRule("eth1234", "cali-fh-eth1234"),
-				},
-			},
-			{
-				Name: "cali-to-host-endpoint",
-				Rules: []iptables.Rule{
-					outboundGotoRule("eth1234", "cali-th-eth1234"),
-				},
-			},
-		}),
-		Entry("interfaces sharing prefix", []string{"eth1234", "eth2333", "eth2444"}, []*iptables.Chain{
-			{
-				Name: "cali-from-host-endpoint-2",
-				Rules: []iptables.Rule{
-					inboundGotoRule("eth2333", "cali-fh-eth2333"),
-					inboundGotoRule("eth2444", "cali-fh-eth2444"),
-				},
-			},
-			{
-				Name: "cali-to-host-endpoint-2",
-				Rules: []iptables.Rule{
-					outboundGotoRule("eth2333", "cali-th-eth2333"),
-					outboundGotoRule("eth2444", "cali-th-eth2444"),
-				},
-			},
-			{
-				Name: "cali-from-host-endpoint",
-				Rules: []iptables.Rule{
-					inboundGotoRule("eth1234", "cali-fh-eth1234"),
-					inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
-				},
-			},
-			{
-				Name: "cali-to-host-endpoint",
-				Rules: []iptables.Rule{
-					outboundGotoRule("eth1234", "cali-th-eth1234"),
-					outboundGotoRule("eth2+", "cali-to-host-endpoint-2"),
-				},
-			},
-		}),
-		Entry("Multiple interfaces sharing multiple prefixes",
-			[]string{"eth11", "eth12", "eth13", "eth21", "eth22"},
-			[]*iptables.Chain{
+			Entry("nil map", nil, []*iptables.Chain{
 				{
-					Name: "cali-from-host-endpoint-1",
+					Name:  "cali-from-host-endpoint",
+					Rules: []iptables.Rule{},
+				},
+			}),
+			Entry("single interface", []string{"eth1234"}, []*iptables.Chain{
+				{
+					Name: "cali-from-host-endpoint",
 					Rules: []iptables.Rule{
-						inboundGotoRule("eth11", "cali-fh-eth11"),
-						inboundGotoRule("eth12", "cali-fh-eth12"),
-						inboundGotoRule("eth13", "cali-fh-eth13"),
+						inboundGotoRule("eth1234", "cali-fh-eth1234"),
 					},
 				},
-				{
-					Name: "cali-to-host-endpoint-1",
-					Rules: []iptables.Rule{
-						outboundGotoRule("eth11", "cali-th-eth11"),
-						outboundGotoRule("eth12", "cali-th-eth12"),
-						outboundGotoRule("eth13", "cali-th-eth13"),
-					},
-				},
+			}),
+			Entry("interfaces sharing prefix", []string{"eth1234", "eth2333", "eth2444"}, []*iptables.Chain{
 				{
 					Name: "cali-from-host-endpoint-2",
 					Rules: []iptables.Rule{
-						inboundGotoRule("eth21", "cali-fh-eth21"),
-						inboundGotoRule("eth22", "cali-fh-eth22"),
-					},
-				},
-				{
-					Name: "cali-to-host-endpoint-2",
-					Rules: []iptables.Rule{
-						outboundGotoRule("eth21", "cali-th-eth21"),
-						outboundGotoRule("eth22", "cali-th-eth22"),
+						inboundGotoRule("eth2333", "cali-fh-eth2333"),
+						inboundGotoRule("eth2444", "cali-fh-eth2444"),
 					},
 				},
 				{
 					Name: "cali-from-host-endpoint",
 					Rules: []iptables.Rule{
-						inboundGotoRule("eth1+", "cali-from-host-endpoint-1"),
+						inboundGotoRule("eth1234", "cali-fh-eth1234"),
+						inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
+					},
+				},
+			}),
+			Entry("Multiple interfaces sharing multiple prefixes",
+				[]string{"eth11", "eth12", "eth13", "eth21", "eth22"},
+				[]*iptables.Chain{
+					{
+						Name: "cali-from-host-endpoint-1",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth11", "cali-fh-eth11"),
+							inboundGotoRule("eth12", "cali-fh-eth12"),
+							inboundGotoRule("eth13", "cali-fh-eth13"),
+						},
+					},
+					{
+						Name: "cali-from-host-endpoint-2",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth21", "cali-fh-eth21"),
+							inboundGotoRule("eth22", "cali-fh-eth22"),
+						},
+					},
+					{
+						Name: "cali-from-host-endpoint",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth1+", "cali-from-host-endpoint-1"),
+							inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
+						},
+					},
+				}),
+		)
+
+		DescribeTable("host endpoint rendering tests untracked",
+			func(names []string, expectedChains []*iptables.Chain) {
+				input := convertToInput(names, expectedChains)
+				// Note: order of chains and rules should be deterministic.
+				Expect(renderer.HostDispatchChains(input, false)).To(Equal(expectedChains))
+			},
+			Entry("nil map", nil, []*iptables.Chain{
+				{
+					Name:  "cali-from-host-endpoint",
+					Rules: []iptables.Rule{},
+				},
+				{
+					Name:  "cali-to-host-endpoint",
+					Rules: []iptables.Rule{},
+				},
+			}),
+			Entry("single interface", []string{"eth1234"}, []*iptables.Chain{
+				{
+					Name: "cali-from-host-endpoint",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth1234", "cali-fh-eth1234"),
+					},
+				},
+				{
+					Name: "cali-to-host-endpoint",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth1234", "cali-th-eth1234"),
+					},
+				},
+			}),
+			Entry("interfaces sharing prefix", []string{"eth1234", "eth2333", "eth2444"}, []*iptables.Chain{
+				{
+					Name: "cali-from-host-endpoint-2",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth2333", "cali-fh-eth2333"),
+						inboundGotoRule("eth2444", "cali-fh-eth2444"),
+					},
+				},
+				{
+					Name: "cali-to-host-endpoint-2",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth2333", "cali-th-eth2333"),
+						outboundGotoRule("eth2444", "cali-th-eth2444"),
+					},
+				},
+				{
+					Name: "cali-from-host-endpoint",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth1234", "cali-fh-eth1234"),
 						inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
 					},
 				},
 				{
 					Name: "cali-to-host-endpoint",
 					Rules: []iptables.Rule{
-						outboundGotoRule("eth1+", "cali-to-host-endpoint-1"),
+						outboundGotoRule("eth1234", "cali-th-eth1234"),
 						outboundGotoRule("eth2+", "cali-to-host-endpoint-2"),
 					},
 				},
 			}),
-	)
+			Entry("Multiple interfaces sharing multiple prefixes",
+				[]string{"eth11", "eth12", "eth13", "eth21", "eth22"},
+				[]*iptables.Chain{
+					{
+						Name: "cali-from-host-endpoint-1",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth11", "cali-fh-eth11"),
+							inboundGotoRule("eth12", "cali-fh-eth12"),
+							inboundGotoRule("eth13", "cali-fh-eth13"),
+						},
+					},
+					{
+						Name: "cali-to-host-endpoint-1",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth11", "cali-th-eth11"),
+							outboundGotoRule("eth12", "cali-th-eth12"),
+							outboundGotoRule("eth13", "cali-th-eth13"),
+						},
+					},
+					{
+						Name: "cali-from-host-endpoint-2",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth21", "cali-fh-eth21"),
+							inboundGotoRule("eth22", "cali-fh-eth22"),
+						},
+					},
+					{
+						Name: "cali-to-host-endpoint-2",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth21", "cali-th-eth21"),
+							outboundGotoRule("eth22", "cali-th-eth22"),
+						},
+					},
+					{
+						Name: "cali-from-host-endpoint",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth1+", "cali-from-host-endpoint-1"),
+							inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
+						},
+					},
+					{
+						Name: "cali-to-host-endpoint",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth1+", "cali-to-host-endpoint-1"),
+							outboundGotoRule("eth2+", "cali-to-host-endpoint-2"),
+						},
+					},
+				}),
+		)
+
+		DescribeTable("host endpoint rendering tests apply on forward",
+			func(names []string, expectedChains []*iptables.Chain) {
+				input := convertToInput(names, expectedChains)
+				// Note: order of chains and rules should be deterministic.
+				Expect(renderer.HostDispatchChains(input, true)).To(Equal(expectedChains))
+			},
+			Entry("nil map", nil, []*iptables.Chain{
+				{
+					Name:  "cali-from-host-endpoint",
+					Rules: []iptables.Rule{},
+				},
+				{
+					Name:  "cali-to-host-endpoint",
+					Rules: []iptables.Rule{},
+				},
+				{
+					Name:  "cali-from-hep-forward",
+					Rules: []iptables.Rule{},
+				},
+				{
+					Name:  "cali-to-hep-forward",
+					Rules: []iptables.Rule{},
+				},
+			}),
+			Entry("single interface", []string{"eth1234"}, []*iptables.Chain{
+				{
+					Name: "cali-from-host-endpoint",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth1234", "cali-fh-eth1234"),
+					},
+				},
+				{
+					Name: "cali-to-host-endpoint",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth1234", "cali-th-eth1234"),
+					},
+				},
+				{
+					Name: "cali-from-hep-forward",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth1234", "cali-fhfw-eth1234"),
+					},
+				},
+				{
+					Name: "cali-to-hep-forward",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth1234", "cali-thfw-eth1234"),
+					},
+				},
+			}),
+			Entry("interfaces sharing prefix", []string{"eth1234", "eth2333", "eth2444"}, []*iptables.Chain{
+				{
+					Name: "cali-from-host-endpoint-2",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth2333", "cali-fh-eth2333"),
+						inboundGotoRule("eth2444", "cali-fh-eth2444"),
+					},
+				},
+				{
+					Name: "cali-to-host-endpoint-2",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth2333", "cali-th-eth2333"),
+						outboundGotoRule("eth2444", "cali-th-eth2444"),
+					},
+				},
+				{
+					Name: "cali-from-host-endpoint",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth1234", "cali-fh-eth1234"),
+						inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
+					},
+				},
+				{
+					Name: "cali-to-host-endpoint",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth1234", "cali-th-eth1234"),
+						outboundGotoRule("eth2+", "cali-to-host-endpoint-2"),
+					},
+				},
+				{
+					Name: "cali-from-hep-forward-2",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth2333", "cali-fhfw-eth2333"),
+						inboundGotoRule("eth2444", "cali-fhfw-eth2444"),
+					},
+				},
+				{
+					Name: "cali-to-hep-forward-2",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth2333", "cali-thfw-eth2333"),
+						outboundGotoRule("eth2444", "cali-thfw-eth2444"),
+					},
+				},
+				{
+					Name: "cali-from-hep-forward",
+					Rules: []iptables.Rule{
+						inboundGotoRule("eth1234", "cali-fhfw-eth1234"),
+						inboundGotoRule("eth2+", "cali-from-hep-forward-2"),
+					},
+				},
+				{
+					Name: "cali-to-hep-forward",
+					Rules: []iptables.Rule{
+						outboundGotoRule("eth1234", "cali-thfw-eth1234"),
+						outboundGotoRule("eth2+", "cali-to-hep-forward-2"),
+					},
+				},
+			}),
+			Entry("Multiple interfaces sharing multiple prefixes",
+				[]string{"eth11", "eth12", "eth13", "eth21", "eth22"},
+				[]*iptables.Chain{
+					{
+						Name: "cali-from-host-endpoint-1",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth11", "cali-fh-eth11"),
+							inboundGotoRule("eth12", "cali-fh-eth12"),
+							inboundGotoRule("eth13", "cali-fh-eth13"),
+						},
+					},
+					{
+						Name: "cali-to-host-endpoint-1",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth11", "cali-th-eth11"),
+							outboundGotoRule("eth12", "cali-th-eth12"),
+							outboundGotoRule("eth13", "cali-th-eth13"),
+						},
+					},
+					{
+						Name: "cali-from-host-endpoint-2",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth21", "cali-fh-eth21"),
+							inboundGotoRule("eth22", "cali-fh-eth22"),
+						},
+					},
+					{
+						Name: "cali-to-host-endpoint-2",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth21", "cali-th-eth21"),
+							outboundGotoRule("eth22", "cali-th-eth22"),
+						},
+					},
+					{
+						Name: "cali-from-host-endpoint",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth1+", "cali-from-host-endpoint-1"),
+							inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
+						},
+					},
+					{
+						Name: "cali-to-host-endpoint",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth1+", "cali-to-host-endpoint-1"),
+							outboundGotoRule("eth2+", "cali-to-host-endpoint-2"),
+						},
+					},
+					{
+						Name: "cali-from-hep-forward-1",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth11", "cali-fhfw-eth11"),
+							inboundGotoRule("eth12", "cali-fhfw-eth12"),
+							inboundGotoRule("eth13", "cali-fhfw-eth13"),
+						},
+					},
+					{
+						Name: "cali-to-hep-forward-1",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth11", "cali-thfw-eth11"),
+							outboundGotoRule("eth12", "cali-thfw-eth12"),
+							outboundGotoRule("eth13", "cali-thfw-eth13"),
+						},
+					},
+					{
+						Name: "cali-from-hep-forward-2",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth21", "cali-fhfw-eth21"),
+							inboundGotoRule("eth22", "cali-fhfw-eth22"),
+						},
+					},
+					{
+						Name: "cali-to-hep-forward-2",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth21", "cali-thfw-eth21"),
+							outboundGotoRule("eth22", "cali-thfw-eth22"),
+						},
+					},
+					{
+						Name: "cali-from-hep-forward",
+						Rules: []iptables.Rule{
+							inboundGotoRule("eth1+", "cali-from-hep-forward-1"),
+							inboundGotoRule("eth2+", "cali-from-hep-forward-2"),
+						},
+					},
+					{
+						Name: "cali-to-hep-forward",
+						Rules: []iptables.Rule{
+							outboundGotoRule("eth1+", "cali-to-hep-forward-1"),
+							outboundGotoRule("eth2+", "cali-to-hep-forward-2"),
+						},
+					},
+				}),
+		)
+	})
+
 })
 
 func inboundGotoRule(ifaceMatch string, target string) iptables.Rule {

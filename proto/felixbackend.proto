@@ -265,6 +265,7 @@ message HostEndpoint {
   repeated TierInfo tiers = 3;
   repeated TierInfo untracked_tiers = 6;
   repeated TierInfo pre_dnat_tiers = 7;
+  repeated TierInfo forward_tiers = 8;
   repeated string expected_ipv4_addrs = 4;
   repeated string expected_ipv6_addrs = 5;
 }

@@ -55,13 +55,24 @@ var wlDispatchEmpty = []*iptables.Chain{
 	},
 }
 
-var hostDispatchEmpty = []*iptables.Chain{
+var hostDispatchEmptyNormal = []*iptables.Chain{
 	{
 		Name:  "cali-to-host-endpoint",
 		Rules: []iptables.Rule{},
 	},
 	{
 		Name:  "cali-from-host-endpoint",
+		Rules: []iptables.Rule{},
+	},
+}
+
+var hostDispatchEmptyForward = []*iptables.Chain{
+	{
+		Name:  "cali-to-hep-forward",
+		Rules: []iptables.Rule{},
+	},
+	{
+		Name:  "cali-from-hep-forward",
 		Rules: []iptables.Rule{},
 	},
 }
@@ -74,7 +85,9 @@ var fromHostDispatchEmpty = []*iptables.Chain{
 }
 
 func hostChainsForIfaces(ifaceMetadata []string) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, true, "normal")
+	return append(chainsForIfaces(ifaceMetadata, true, "normal"),
+		chainsForIfaces(ifaceMetadata, true, "applyOnForward")...,
+	)
 }
 
 func rawChainsForIfaces(ifaceMetadata []string) []*iptables.Chain {
@@ -105,6 +118,10 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 	if host {
 		hostOrWlLetter = "h"
 		hostOrWlDispatch = "host-endpoint"
+		if tableKind == "applyOnForward" {
+			hostOrWlLetter = "hfw"
+			hostOrWlDispatch = "hep-forward"
+		}
 		outPrefix = "cali-to-"
 		inPrefix = "cali-from-"
 	}
@@ -125,7 +142,8 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 			ifaceName = nameParts[0]
 			polName = nameParts[1]
 		} else {
-			// Interface name, policy name and untracked "eth0_polA_untracked".
+			// Interface name, policy name and untracked "eth0_polA_untracked"
+			// or applyOnForwrd "eth0_polA_applyOnForward".
 			log.Debug("Interface name policy name and untracked/ingress/egress")
 			ifaceName = nameParts[0]
 			polName = nameParts[1]
@@ -139,7 +157,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 			}
 		}
 
-		if tableKind != ifaceKind && tableKind != "normal" {
+		if tableKind != ifaceKind && tableKind != "normal" && tableKind != "applyOnForward" {
 			continue
 		}
 
@@ -158,7 +176,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 			})
 		}
 
-		if host {
+		if host && tableKind != "applyOnForward" {
 			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match(),
 				Action: iptables.JumpAction{Target: "cali-failsafe-out"},
@@ -189,7 +207,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if tableKind == "normal" {
+			if tableKind == "normal" || tableKind == "applyOnForward" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -224,7 +242,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 			})
 		}
 
-		if host {
+		if host && tableKind != "applyOnForward" {
 			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match(),
 				Action: iptables.JumpAction{Target: "cali-failsafe-in"},
@@ -256,7 +274,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if tableKind == "normal" {
+			if tableKind == "normal" || tableKind == "applyOnForward" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -473,6 +491,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			tiers := []*proto.TierInfo{}
 			untrackedTiers := []*proto.TierInfo{}
 			preDNATTiers := []*proto.TierInfo{}
+			forwardTiers := []*proto.TierInfo{}
 			if spec.polName != "" {
 				parts := strings.Split(spec.polName, "_")
 				if len(parts) == 1 {
@@ -491,6 +510,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 					preDNATTiers = append(preDNATTiers, &proto.TierInfo{
 						Name:            "default",
 						IngressPolicies: []string{parts[0]},
+					})
+				} else if len(parts) == 2 && parts[1] == "applyOnForward" {
+					forwardTiers = append(forwardTiers, &proto.TierInfo{
+						Name:            "default",
+						IngressPolicies: []string{parts[0]},
+						EgressPolicies:  []string{parts[0]},
 					})
 				} else if len(parts) == 2 && parts[1] == "ingress" {
 					tiers = append(tiers, &proto.TierInfo{
@@ -517,6 +542,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Tiers:             tiers,
 						UntrackedTiers:    untrackedTiers,
 						PreDnatTiers:      preDNATTiers,
+						ForwardTiers:      forwardTiers,
 						ExpectedIpv4Addrs: spec.ipv4Addrs,
 						ExpectedIpv6Addrs: spec.ipv6Addrs,
 					},
@@ -544,10 +570,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 			return func() {
 				filterTable.checkChains([][]*iptables.Chain{
 					wlDispatchEmpty,
-					hostDispatchEmpty,
+					hostDispatchEmptyNormal,
+					hostDispatchEmptyForward,
 				})
 				rawTable.checkChains([][]*iptables.Chain{
-					hostDispatchEmpty,
+					hostDispatchEmptyNormal,
 				})
 				mangleTable.checkChains([][]*iptables.Chain{
 					fromHostDispatchEmpty,
@@ -681,6 +708,15 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should have expected chains", expectChainsFor("eth0_polA_untracked"))
 				})
 
+				Describe("replaced with applyOnForward version", func() {
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:      "id1",
+						name:    "eth0",
+						polName: "polA_applyOnForward",
+					}))
+					It("should have expected chains", expectChainsFor("eth0_polA_applyOnForward"))
+				})
+
 				Describe("replaced with pre-DNAT version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:      "id1",
@@ -755,6 +791,54 @@ func endpointManagerTests(ipVersion uint8) func() {
 				}))
 
 				It("should have expected chains", expectChainsFor("eth0_polB_untracked"))
+			})
+
+			Describe("with host endpoint with applyOnForward tier matching eth0", func() {
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:      "id1",
+					name:    "eth0",
+					polName: "polA_applyOnForward",
+				}))
+				It("should have expected chains", expectChainsFor("eth0_polA_applyOnForward"))
+
+				Context("with another host ep (<ID) that matches the IPv4 address", func() {
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:        "id0",
+						ipv4Addrs: []string{ipv4},
+						polName:   "polB_applyOnForward",
+					}))
+
+					It("should have expected chains", expectChainsFor("eth0_polB_applyOnForward"))
+
+					Context("with the first host ep removed", func() {
+						JustBeforeEach(removeHostEp("id1"))
+						It("should have expected chains", expectChainsFor("eth0_polB_applyOnForward"))
+
+						Context("with both host eps removed", func() {
+							JustBeforeEach(removeHostEp("id0"))
+							It("should have empty dispatch chains", expectEmptyChains())
+						})
+					})
+				})
+
+				Describe("replaced with a tracked version", func() {
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:      "id1",
+						name:    "eth0",
+						polName: "polA",
+					}))
+					It("should have expected chains", expectChainsFor("eth0_polA"))
+				})
+			})
+
+			Context("with a host ep that matches the IPv4 address with applyOnForward policy", func() {
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id0",
+					ipv4Addrs: []string{ipv4},
+					polName:   "polB_applyOnForward",
+				}))
+
+				It("should have expected chains", expectChainsFor("eth0_polB_applyOnForward"))
 			})
 
 			Describe("with host endpoint with pre-DNAT tier matching eth0", func() {
@@ -1026,7 +1110,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 		expectWlChainsFor := func(names ...string) func() {
 			return func() {
 				filterTable.checkChains([][]*iptables.Chain{
-					hostDispatchEmpty,
+					hostDispatchEmptyNormal,
+					hostDispatchEmptyForward,
 					wlChainsForIfaces(names),
 				})
 				mangleTable.checkChains([][]*iptables.Chain{
