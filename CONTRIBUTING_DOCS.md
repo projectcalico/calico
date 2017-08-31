@@ -8,6 +8,8 @@ Instead of filing a GitHub issue, consider making a PR instead. You are likely t
 
 The doc contribution process works as follows.
 
+**Prerequisite**: To sign our contributer license agreement (required), your local git must be [configured with a user name and email address](https://help.github.com/articles/setting-your-commit-email-address-in-git/) that match those of your GitHub account. 
+
 1. Fork the [Project Calico repo](https://github.com/projectcalico/calico).
 1. Create a branch in your fork off of the master branch.
 1. Give your branch a short but descriptive name.
@@ -31,7 +33,7 @@ We also encourage you to review [Doc site organization](#doc-site-organization),
 
 We use GitHub Pages and Jekyll to serve and build our site. While there are [several ways to build the site locally](https://help.github.com/articles/setting-up-your-github-pages-site-locally-with-jekyll/), we recommend using our Docker image and the Makefile in the root of the repo. These will allow you to build the site with a single command. 
 
-> **Prerequisite**: [Docker](https://docs.docker.com/engine/installation/).
+**Prerequisite**: [Docker](https://docs.docker.com/engine/installation/).
 
 Navigate into the root of the repo and issue the following command from a terminal prompt.
 
@@ -49,7 +51,7 @@ Once the build completes, it returns a URL as the value of `Server address:`. Co
 
 ## Checking for broken links
 
-> **Prerequisite**: [Docker](https://docs.docker.com/engine/installation/).
+**Prerequisite**: [Docker](https://docs.docker.com/engine/installation/).
 
 To check for broken links, navigate into the root of the repo and issue the following command from a terminal prompt.
 
