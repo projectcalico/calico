@@ -97,6 +97,9 @@ var baseTests = []StateList{
 	{localEp1WithNamedPortPolicy},
 	{localEp1WithNamedPortPolicyUDP},
 	{localEp1WithNamedPortPolicyNoSelector},
+	// Host endpoints have named ports too.
+	{localHostEp1WithNamedPortPolicy},
+	{hostEp1WithPolicy, localHostEp1WithNamedPortPolicy, hostEp1WithPolicy},
 	// Endpoints with overlapping IPs.
 	{localEpsWithNamedPortsPolicy},
 	{localEp1WithNamedPortPolicy, localEpsWithNamedPortsPolicy},

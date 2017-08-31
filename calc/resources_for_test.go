@@ -190,6 +190,25 @@ var hostEpWithName = HostEndpoint{
 	},
 }
 
+var hostEpWithNamedPorts = HostEndpoint{
+	Name:       "eth1",
+	ProfileIDs: []string{"prof-1"},
+	ExpectedIPv4Addrs: []net.IP{mustParseIP("10.0.0.1"),
+		mustParseIP("10.0.0.2")},
+	ExpectedIPv6Addrs: []net.IP{mustParseIP("fc00:fe11::1"),
+		mustParseIP("fc00:fe11::2")},
+	Labels: map[string]string{
+		"id": "loc-ep-1",
+		"a":  "a",
+		"b":  "b",
+	},
+	Ports: []EndpointPort{
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
+	},
+}
+
 var hostEpWithNameKey = HostEndpointKey{
 	Hostname:   localHostname,
 	EndpointID: "named",

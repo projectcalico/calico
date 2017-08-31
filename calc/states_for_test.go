@@ -100,6 +100,31 @@ var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
 	"fc00:fe11::2,tcp:8080",
 }).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
 
+// A host endpoint with a named port
+var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithNamedPorts},
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+).withIPSet(namedPortAllTCPID, []string{
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+).withEndpoint(
+	"named",
+	[]tierInfo{
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
+	},
+).withName("Host endpoint, named port policy")
+
 // As above but with no selector in the rules.
 var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport},
