@@ -100,6 +100,42 @@ var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
 	"fc00:fe11::2,tcp:8080",
 }).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
 
+// localEp1WithNamedPortPolicy as above but with negated named port in the policy.
+var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
+).withIPSet(namedPortAllLessFoobarTCPID, []string{
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
+}).withIPSet(allLessFoobarSelectorId, []string{
+	// The selector gets filled in because it's needed when doing the negation.
+	"10.0.0.1",
+	"10.0.0.2",
+	"fc00:fe11::1",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
+	},
+).withName("ep1 local, negated named port policy")
+
+// As above but using the destination fields in the policy instead of source.
+var localEp1WithNegatedNamedPortPolicyDest = localEp1WithNegatedNamedPortPolicy.withKVUpdates(
+	KVPair{
+		Key:   PolicyKey{Name: "pol-1"},
+		Value: &policy1_order20_with_selector_and_negated_named_port_tcpport_dest,
+	},
+).withName("ep1 local, negated named port policy in destination fields")
+
 // A host endpoint with a named port
 var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithNamedPorts},
@@ -129,6 +165,11 @@ var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport},
 ).withName("ep1 local, named port only")
+
+// As above but with negated named port.
+var localEp1WithNegatedNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport_negated},
+).withName("ep1 local, negated named port only")
 
 // localEp1WithIngressPolicy is as above except ingress policy only.
 var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(

@@ -97,6 +97,9 @@ var baseTests = []StateList{
 	{localEp1WithNamedPortPolicy},
 	{localEp1WithNamedPortPolicyUDP},
 	{localEp1WithNamedPortPolicyNoSelector},
+	{localEp1WithNegatedNamedPortPolicyNoSelector},
+	{localEp1WithNegatedNamedPortPolicy},
+	{localEp1WithNegatedNamedPortPolicyDest},
 	// Host endpoints have named ports too.
 	{localHostEp1WithNamedPortPolicy},
 	{hostEp1WithPolicy, localHostEp1WithNamedPortPolicy, hostEp1WithPolicy},
@@ -174,6 +177,7 @@ var baseTests = []StateList{
 		localEpsWithTagInheritProfile,
 		localEpsWithMismatchedNamedPortsPolicy,
 		localEp1WithPolicy,
+		localEp1WithNamedPortPolicyNoSelector,
 		localEpsWithProfile,
 		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
 		localEp1WithIngressPolicy,

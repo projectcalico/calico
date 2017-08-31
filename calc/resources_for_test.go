@@ -31,19 +31,22 @@ const remoteHostname = "remotehostname"
 // Canned selectors.
 
 var (
-	allSelector             = "all()"
-	allSelectorId           = selectorID(allSelector)
-	bEpBSelector            = "b == 'b'"
-	bEqBSelectorId          = selectorID(bEpBSelector)
-	tagSelector             = "has(tag-1)"
-	tagSelectorId           = selectorID(tagSelector)
-	tagFoobarSelector       = "tag-1 == 'foobar'"
-	tagFoobarSelectorId     = selectorID(tagFoobarSelector)
-	namedPortAllTCPID       = namedPortID(allSelector, "tcp", "tcpport")
-	namedPortAllTCP2ID      = namedPortID(allSelector, "tcp", "tcpport2")
-	namedPortAllUDPID       = namedPortID(allSelector, "udp", "udpport")
-	inheritSelector         = "profile == 'prof-1'"
-	namedPortInheritIPSetID = namedPortID(inheritSelector, "tcp", "tcpport")
+	allSelector                 = "all()"
+	allSelectorId               = selectorID(allSelector)
+	allLessFoobarSelector       = "(all()) && !(foo == 'bar')"
+	allLessFoobarSelectorId     = selectorID(allLessFoobarSelector)
+	bEpBSelector                = "b == 'b'"
+	bEqBSelectorId              = selectorID(bEpBSelector)
+	tagSelector                 = "has(tag-1)"
+	tagSelectorId               = selectorID(tagSelector)
+	tagFoobarSelector           = "tag-1 == 'foobar'"
+	tagFoobarSelectorId         = selectorID(tagFoobarSelector)
+	namedPortAllTCPID           = namedPortID(allSelector, "tcp", "tcpport")
+	namedPortAllLessFoobarTCPID = namedPortID(allLessFoobarSelector, "tcp", "tcpport")
+	namedPortAllTCP2ID          = namedPortID(allSelector, "tcp", "tcpport2")
+	namedPortAllUDPID           = namedPortID(allSelector, "udp", "udpport")
+	inheritSelector             = "profile == 'prof-1'"
+	namedPortInheritIPSetID     = namedPortID(inheritSelector, "tcp", "tcpport")
 )
 
 // Canned workload endpoints.
@@ -203,7 +206,7 @@ var hostEpWithNamedPorts = HostEndpoint{
 		"b":  "b",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport" /* protocol defaults to TCP */, Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
 	},
@@ -269,6 +272,21 @@ var policy1_order20_with_named_port_tcpport = Policy{
 	Types: []string{"ingress", "egress"},
 }
 
+var policy1_order20_with_named_port_tcpport_negated = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol:    &protoTCP,
+			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
 var policy_with_named_port_inherit = Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
@@ -295,6 +313,34 @@ var policy1_order20_with_selector_and_named_port_tcpport = Policy{
 	},
 	OutboundRules: []Rule{
 		{SrcSelector: bEpBSelector},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_with_selector_and_negated_named_port_tcpport = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol:       &protoTCP,
+			SrcSelector:    allSelector,
+			NotSrcSelector: "foo == 'bar'",
+			NotSrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
+	},
+	Types: []string{"ingress", "egress"},
+}
+
+var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol:       &protoTCP,
+			DstSelector:    allSelector,
+			NotDstSelector: "foo == 'bar'",
+			NotDstPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
 	},
 	Types: []string{"ingress", "egress"},
 }
