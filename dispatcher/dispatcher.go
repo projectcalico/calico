@@ -94,7 +94,7 @@ func (d *Dispatcher) OnUpdate(update api.Update) (filterOut bool) {
 	keyType := reflect.TypeOf(update.Key)
 	log.Debug("Type: ", keyType)
 	if update.Value != nil && reflect.TypeOf(update.Value).Kind() == reflect.Struct {
-		log.Fatalf("KVPair contained a struct instead of expected pointer: %#v", update)
+		log.Panicf("KVPair contained a struct instead of expected pointer: %#v", update)
 	}
 	typeSpecificHandlers := d.typeToHandler[keyType]
 	log.WithField("typeSpecificHandlers", typeSpecificHandlers).Debug(

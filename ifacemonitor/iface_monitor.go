@@ -75,7 +75,7 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	updates := make(chan netlink.LinkUpdate, 10)
 	addrUpdates := make(chan netlink.AddrUpdate, 10)
 	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
-		log.WithError(err).Fatal("Failed to subscribe to netlink stub")
+		log.WithError(err).Panic("Failed to subscribe to netlink stub")
 	}
 	log.Info("Subscribed to netlink updates.")
 
@@ -84,7 +84,7 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 	// subscription vs a list operation as used by resync().
 	err := m.resync()
 	if err != nil {
-		log.WithError(err).Fatal("Failed to read link states from netlink.")
+		log.WithError(err).Panic("Failed to read link states from netlink.")
 	}
 
 readLoop:
@@ -113,11 +113,11 @@ readLoop:
 			log.Debug("Resync trigger")
 			err := m.resync()
 			if err != nil {
-				log.WithError(err).Fatal("Failed to read link states from netlink.")
+				log.WithError(err).Panic("Failed to read link states from netlink.")
 			}
 		}
 	}
-	log.Fatal("Failed to read events from Netlink.")
+	log.Panic("Failed to read events from Netlink.")
 }
 
 func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {

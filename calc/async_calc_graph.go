@@ -161,7 +161,7 @@ func (acg *AsyncCalcGraph) loop() {
 				}
 				acg.reportHealth()
 			default:
-				log.Fatalf("Unexpected update: %#v", update)
+				log.Panicf("Unexpected update: %#v", update)
 			}
 			acg.dirty = true
 		case <-acg.flushTicks:

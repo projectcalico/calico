@@ -169,7 +169,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			// longer matches.
 			sel, err := selector.Parse(policy.Selector)
 			if err != nil {
-				log.Fatal(err)
+				log.WithError(err).Panic("Failed to parse selector")
 			}
 			arc.labelIndex.UpdateSelector(key, sel)
 
