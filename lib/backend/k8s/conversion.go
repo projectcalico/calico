@@ -198,8 +198,8 @@ func (c converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	return &kvp, nil
 }
 
-// networkPolicyToPolicy converts a k8s NetworkPolicy to a model.KVPair.
-func (c converter) networkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.KVPair, error) {
+// NetworkPolicyToPolicy converts a k8s NetworkPolicy to a model.KVPair.
+func (c converter) NetworkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
 	policyName := fmt.Sprintf("knp.default.%s.%s", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
 

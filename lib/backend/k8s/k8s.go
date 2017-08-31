@@ -612,7 +612,7 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 	// For each policy, turn it into a Policy and generate the list.
 	ret := []*model.KVPair{}
 	for _, p := range networkPolicies.Items {
-		kvp, err := c.converter.networkPolicyToPolicy(&p)
+		kvp, err := c.converter.NetworkPolicyToPolicy(&p)
 		if err != nil {
 			return nil, err
 		}
@@ -655,7 +655,7 @@ func (c *KubeClient) getPolicy(k model.PolicyKey) (*model.KVPair, error) {
 		if err != nil {
 			return nil, resources.K8sErrorToCalico(err, k)
 		}
-		return c.converter.networkPolicyToPolicy(&networkPolicy)
+		return c.converter.NetworkPolicyToPolicy(&networkPolicy)
 	} else {
 		// This is backed by a Global Network Policy CRD.
 		return c.gnpClient.Get(k)

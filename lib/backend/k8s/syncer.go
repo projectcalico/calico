@@ -650,7 +650,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 
 			versions.networkPolicyVersion = npList.ListMeta.ResourceVersion
 			for _, np := range npList.Items {
-				pol, _ := syn.converter.networkPolicyToPolicy(&np)
+				pol, _ := syn.converter.NetworkPolicyToPolicy(&np)
 				snap[KEY_NP] = append(snap[KEY_NP], *pol)
 				keys[KEY_NP][pol.Key.String()] = true
 			}
@@ -991,7 +991,7 @@ func (syn *kubeSyncer) parseNetworkPolicyEvent(e watch.Event) *model.KVPair {
 	}
 
 	// Convert the received NetworkPolicy into a profile KVPair.
-	kvp, err := syn.converter.networkPolicyToPolicy(np)
+	kvp, err := syn.converter.NetworkPolicyToPolicy(np)
 	if err != nil {
 		log.Panicf("%s", err)
 	}

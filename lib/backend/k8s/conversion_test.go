@@ -244,7 +244,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -285,7 +285,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -343,7 +343,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		var pol *model.KVPair
 		var err error
 		By("parsing the policy", func() {
-			pol, err = c.networkPolicyToPolicy(&np)
+			pol, err = c.NetworkPolicyToPolicy(&np)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
 			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -419,7 +419,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		var pol *model.KVPair
 		var err error
 		By("parsing the policy", func() {
-			pol, err = c.networkPolicyToPolicy(&np)
+			pol, err = c.NetworkPolicyToPolicy(&np)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
 			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -467,7 +467,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -511,7 +511,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -551,7 +551,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -594,7 +594,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
