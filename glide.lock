@@ -1,5 +1,5 @@
-hash: 4832fe08e846e5e812e466d53665c66065706a529f29a25b24605543fddef4f6
-updated: 2017-08-23T13:45:32.142566165Z
+hash: 6d980076ac5ec8236dde278276a0a2f4df0ac256bc1779c5947000109c822cd8
+updated: 2017-08-31T15:24:33.054622577Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: ab9f9a6dab164b7d1246e0e688b0ab7b94d8553e
+  version: 83cd65fc365ace80eb6b6ecfc45203e43edfbc70
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -187,7 +187,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: da7479a93f30a6dd3fcfd683e409af4dbf381ea0
+  version: f8f62de1fd1b263b089a3453d1932dd2d8e08cdb
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -202,7 +202,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 61f87aac8082fa8c3c5655c7608d7478d46ac2ad
+  version: bc8b88226a1210b016e9993b1d75f858c9c8f778
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -255,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 07c182904dbd53199946ba614a412c61d3c548f5
+  version: bb24a47a89eac6c1227fbcb2ae37a8b9ed323366
   subpackages:
   - unix
 - name: golang.org/x/text
