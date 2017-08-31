@@ -112,10 +112,29 @@ var baseTests = []StateList{
 	{hostEp1WithPolicy, localEpsWithNamedPortsPolicy, hostEp1WithPolicy},
 	// In this scenario, the endpoint only matches the selector of the named port due to
 	// inheriting a label from its profile.
-	// TODO Add and remove profile from endpoint
-	// TODO Add and remove matching label from profile
-	// TODO Two endpoints contributing same named port, change one endpoint's profile
-	// TODO Two endpoints contributing same named port, change one endpoint's profile's labels
+	{
+		// Start with the endpoints and profile but no policy.
+		localEpsWithOverlappingIPsAndInheritedLabels,
+		// Policy added, matches EP1 due to its inheritance.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1,
+		// Add label to EP2 via inheritance.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+		// Then change inherited label on EP2 to stop the match.
+		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2,
+		// Ditto for EP1.  Now matches none of the EPs.
+		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1},
+	// In this scenario, we remove the profiles from the endpoints rather than changing the labels.
+	{
+		// Start with both matching, as in the middle of the above test.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+		// Remove the profiles from EP2.
+		localEpsAndNamedPortPolicyEP2ProfileRemoved,
+		// Ditto for EP1.  Named port now matches none of the EPs.
+		localEpsAndNamedPortPolicyBothEPsProfilesRemoved,
+		// Add everything back.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+	},
+
 	// Repro of a particular named port index update failure case.  The inherited profile was
 	// improperly cleaned up, so, when it was added back in again we ended up with multiple copies.
 	{localEpsWithTagInheritProfile,
@@ -153,6 +172,7 @@ var baseTests = []StateList{
 		localEpsWithMismatchedNamedPortsPolicy,
 		localEp1WithPolicy,
 		localEpsWithProfile,
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
 		localEp1WithIngressPolicy,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,

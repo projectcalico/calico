@@ -451,6 +451,104 @@ var localEpsWithMismatchedNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
 	namedPortID(allSelector, "tcp", "udpport"), []string{},
 ).withName("Named ports policy with protocol not matching endpoints")
 
+// In this state, we have a couple of endpoints.  EP1 has a profile, through which it inherits
+// a label.
+var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
+	// Two local endpoints with overlapping IPs.
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{},
+).withEndpoint(
+	localWlEp2Id,
+	[]tierInfo{},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
+	proto.ProfileID{"prof-missing"},
+)
+
+// Building on the above, we add a policy to match on the inherited label, which should preduce
+// a named port.
+var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlappingIPsAndInheritedLabels.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "inherit-pol"}, Value: &policy_with_named_port_inherit},
+).withActivePolicies(
+	proto.PolicyID{Tier: "default", Name: "inherit-pol"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{{Name: "default",
+		IngressPolicyNames: []string{"inherit-pol"},
+		EgressPolicyNames:  []string{"inherit-pol"},
+	}},
+).withEndpoint(
+	localWlEp2Id,
+	[]tierInfo{{Name: "default",
+		IngressPolicyNames: []string{"inherit-pol"},
+		EgressPolicyNames:  []string{"inherit-pol"},
+	}},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	// ep2 doesn't match because it doesn't inherit the profile.
+}).withName("2 local WEPs with policy matching inherited label on WEP1")
+
+// Add a second profile with the same labels so that both endpoints now match.
+var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1.withKVUpdates(
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels1},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
+}).withName("2 local WEPs with policy matching inherited label on both WEPs")
+
+// Then, change the label on EP2 so it no-longer matches.
+var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels2},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	// ep2 no longer matches
+}).withName("2 local WEPs with policy matching inherited label on WEP1; WEP2 has different label")
+
+// Then, change the label on EP1 so it no-longer matches.
+var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2.withKVUpdates(
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels2},
+).withIPSet(namedPortInheritIPSetID, []string{
+// No longer any matches.
+}).withName("2 local WEPs with policy not matching inherited labels")
+
+// Alternatively, prevent EP2 from matching by removing its profiles.
+var localEpsAndNamedPortPolicyEP2ProfileRemoved = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2WithLabelsButNoProfiles},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	// ep2 no longer matches
+}).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withName("2 local WEPs with policy matching inherited label on WEP1; WEP2 has no profile")
+
+// Then do the same for EP1.
+var localEpsAndNamedPortPolicyBothEPsProfilesRemoved = localEpsAndNamedPortPolicyEP2ProfileRemoved.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1WithLabelsButNoProfiles},
+).withIPSet(namedPortInheritIPSetID, []string{
+// Neither EP matches.
+}).withActiveProfiles().withName("2 local WEPs with no matches due to removing profiles from endpoints")
+
 // localEpsWithPolicyUpdatedIPs, when used with localEpsWithPolicy checks
 // correct handling of IP address updates.  We add and remove some IPs from
 // endpoint 1 and check that only its non-shared IPs are removed from the IP
@@ -570,19 +668,17 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 	"fc00:fe11::1",
 	"10.0.0.2", // ep1 and ep2
 	"fc00:fe11::2",
-}).withIPSet(tagFoobarSelectorId, []string{}).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
+}).withIPSet(
+	tagFoobarSelectorId, []string{},
 ).withActiveProfiles(
 	proto.ProfileID{"prof-1"},
 	proto.ProfileID{"prof-2"},
 	proto.ProfileID{"prof-3"},
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
-	localWlEp1Id,
-	[]tierInfo{},
+	localWlEp1Id, []tierInfo{},
 ).withEndpoint(
-	localWlEp2Id,
-	[]tierInfo{},
+	localWlEp2Id, []tierInfo{},
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(

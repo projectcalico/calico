@@ -284,7 +284,7 @@ type ParsedRule struct {
 	NotDstIPSetIDs          []string
 }
 
-func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []*IPSetData) {
+func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IPSetData) {
 	srcSel, dstSel, notSrcSels, notDstSels := extractTagsAndSelectors(rule)
 
 	// In the datamodel, named ports are included in the list of ports as an "or" match; i.e. the
@@ -375,14 +375,14 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []
 		NotICMPCode: rule.NotICMPCode,
 	}
 
-	allTagOrSels = append(allTagOrSels, srcNamedPortIPSets...)
-	allTagOrSels = append(allTagOrSels, dstNamedPortIPSets...)
-	allTagOrSels = append(allTagOrSels, notSrcNamedPortIPSets...)
-	allTagOrSels = append(allTagOrSels, notDstNamedPortIPSets...)
-	allTagOrSels = append(allTagOrSels, srcSelIPSets...)
-	allTagOrSels = append(allTagOrSels, dstSelIPSets...)
-	allTagOrSels = append(allTagOrSels, notSrcSelIPSets...)
-	allTagOrSels = append(allTagOrSels, notDstSelIPSets...)
+	allIPSets = append(allIPSets, srcNamedPortIPSets...)
+	allIPSets = append(allIPSets, dstNamedPortIPSets...)
+	allIPSets = append(allIPSets, notSrcNamedPortIPSets...)
+	allIPSets = append(allIPSets, notDstNamedPortIPSets...)
+	allIPSets = append(allIPSets, srcSelIPSets...)
+	allIPSets = append(allIPSets, dstSelIPSets...)
+	allIPSets = append(allIPSets, notSrcSelIPSets...)
+	allIPSets = append(allIPSets, notDstSelIPSets...)
 
 	return
 }

@@ -31,17 +31,19 @@ const remoteHostname = "remotehostname"
 // Canned selectors.
 
 var (
-	allSelector         = "all()"
-	allSelectorId       = selectorID(allSelector)
-	bEpBSelector        = "b == 'b'"
-	bEqBSelectorId      = selectorID(bEpBSelector)
-	tagSelector         = "has(tag-1)"
-	tagSelectorId       = selectorID(tagSelector)
-	tagFoobarSelector   = "tag-1 == 'foobar'"
-	tagFoobarSelectorId = selectorID(tagFoobarSelector)
-	namedPortAllTCPID   = namedPortID(allSelector, "tcp", "tcpport")
-	namedPortAllTCP2ID  = namedPortID(allSelector, "tcp", "tcpport2")
-	namedPortAllUDPID   = namedPortID(allSelector, "udp", "udpport")
+	allSelector             = "all()"
+	allSelectorId           = selectorID(allSelector)
+	bEpBSelector            = "b == 'b'"
+	bEqBSelectorId          = selectorID(bEpBSelector)
+	tagSelector             = "has(tag-1)"
+	tagSelectorId           = selectorID(tagSelector)
+	tagFoobarSelector       = "tag-1 == 'foobar'"
+	tagFoobarSelectorId     = selectorID(tagFoobarSelector)
+	namedPortAllTCPID       = namedPortID(allSelector, "tcp", "tcpport")
+	namedPortAllTCP2ID      = namedPortID(allSelector, "tcp", "tcpport2")
+	namedPortAllUDPID       = namedPortID(allSelector, "udp", "udpport")
+	inheritSelector         = "profile == 'prof-1'"
+	namedPortInheritIPSetID = namedPortID(inheritSelector, "tcp", "tcpport")
 )
 
 // Canned workload endpoints.
@@ -57,6 +59,26 @@ var localWlEp1 = WorkloadEndpoint{
 	Name:       "cali1",
 	Mac:        mustParseMac("01:02:03:04:05:06"),
 	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
+	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.1/32"),
+		mustParseNet("10.0.0.2/32")},
+	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::1/128"),
+		mustParseNet("fc00:fe11::2/128")},
+	Labels: map[string]string{
+		"id": "loc-ep-1",
+		"a":  "a",
+		"b":  "b",
+	},
+	Ports: []EndpointPort{
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
+	},
+}
+
+var localWlEp1WithLabelsButNoProfiles = WorkloadEndpoint{
+	State: "active",
+	Name:  "cali1",
+	Mac:   mustParseMac("01:02:03:04:05:06"),
 	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.1/32"),
 		mustParseNet("10.0.0.2/32")},
 	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::1/128"),
@@ -110,6 +132,25 @@ var localWlEp2 = WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali2",
 	ProfileIDs: []string{"prof-2", "prof-3"},
+	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.2/32"),
+		mustParseNet("10.0.0.3/32")},
+	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::2/128"),
+		mustParseNet("fc00:fe11::3/128")},
+	Labels: map[string]string{
+		"id": "loc-ep-2",
+		"a":  "a",
+		"b":  "b2",
+	},
+	Ports: []EndpointPort{
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 2345},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9090},
+	},
+}
+
+var localWlEp2WithLabelsButNoProfiles = WorkloadEndpoint{
+	State: "active",
+	Name:  "cali2",
 	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.2/32"),
 		mustParseNet("10.0.0.3/32")},
 	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::2/128"),
@@ -207,6 +248,20 @@ var policy1_order20_with_named_port_tcpport = Policy{
 		{SrcSelector: bEpBSelector},
 	},
 	Types: []string{"ingress", "egress"},
+}
+
+var policy_with_named_port_inherit = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{
+			Protocol:    &protoTCP,
+			SrcSelector: "profile == 'prof-1'",
+			SrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
+		},
+	},
+	OutboundRules: []Rule{},
+	Types:         []string{"ingress", "egress"},
 }
 
 var policy1_order20_with_selector_and_named_port_tcpport = Policy{
@@ -353,6 +408,9 @@ var profileRules1NegatedTagSelUpdate = ProfileRules{
 var profileTags1 = []string{"tag-1"}
 var profileLabels1 = map[string]string{
 	"profile": "prof-1",
+}
+var profileLabels2 = map[string]string{
+	"profile": "prof-2",
 }
 var profileLabelsTag1 = map[string]string{
 	"tag-1": "foobar",
