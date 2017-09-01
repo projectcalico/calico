@@ -41,7 +41,7 @@ release is announced.
          values:
            version: vX.Y
     ```
-1. Update the `RELEASE_STREAM` variable at the top of calico_node/Makefile to the new major/minor version.
+1. Update `currentReleaseStream` in `_data/versions.yml`. The correct format is v`Major`.`Minor`, e.g. `v2.5`.
 1. Test the changes locally then open a pull request, make sure it passes CI and get it reviewed.
 1. Run `make -C calico-node release` - **do not push the git tag yet** - and follow the instructions to:
    1. Create release docker images (do not push the `latest` tag yet).

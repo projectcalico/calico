@@ -1,3 +1,6 @@
+# vX.Y format: update during major release process
+currentReleaseStream: v2.5
+
 v2.5:
 - title: v2.5.1
   note: |
