@@ -451,6 +451,30 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			allowIfAllMarkRule,
 			returnRule,
 		),
+		namedPortEntry(
+			"Multiple named + numeric ports",
+			proto.Rule{
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			clearBothMarksRule,
+			"-A test -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		),
 
 		// Positive dest matches only.
 		namedPortEntry(
