@@ -36,9 +36,9 @@ This is only required if you meet ALL of the following criteria:
 We highly recommend backing up your configuration data before proceeding with the migration process.
 We only need to back up the configuration data stored as TPR resources. In the event the migration needs to be halted, this will allow you to restore the original data.
 
-> Note: the migration job does not delete your old data, so your configuration data stored in TPR will still be there until [deleted manually](#5-delete-the-old-tprs).
+> **Note**: the migration job does not delete your old data, so your configuration data stored in TPR will still be there until [deleted manually](#5-delete-the-old-tprs).
 
-> Note: use [`calicoctl` version v1.4.1](https://github.com/projectcalico/calicoctl/releases/tag/v1.4.1) and [`kubectl` version v1.7.4](https://kubernetes.io/docs/tasks/tools/install-kubectl/) to back up the data. Since we will need [`calicoctl` version v1.4.1](https://github.com/projectcalico/calicoctl/releases/tag/v1.4.1) and [v1.5.0](https://github.com/projectcalico/calicoctl/releases/tag/v1.5.0) for this upgrade,
+> **Note**: use [`calicoctl` version v1.4.1](https://github.com/projectcalico/calicoctl/releases/tag/v1.4.1) and [`kubectl` version v1.7.4](https://kubernetes.io/docs/tasks/tools/install-kubectl/) to back up the data. Since we will need [`calicoctl` version v1.4.1](https://github.com/projectcalico/calicoctl/releases/tag/v1.4.1) and [v1.5.0](https://github.com/projectcalico/calicoctl/releases/tag/v1.5.0) for this upgrade,
  we recommend downloading them both and suffixing the binaries with their respective versions. You can check the version by running `calicoctl version`.
  
  Run the following commands in sequence to back up your configuration data:
@@ -51,7 +51,7 @@ We only need to back up the configuration data stored as TPR resources. In the e
   
   1.2.4. `kubectl get globalbgpconfig --all-namespaces -o yaml > tpr-bgpconfig.yaml`
 
-> Note: you may not have some of these resources if you're using Calico in policy-only mode.
+> **Note**: you may not have some of these resources if you're using Calico in policy-only mode.
 
 ## 2. Migration process
 
@@ -75,9 +75,13 @@ Make sure you have all the `IPPools`, `BGPPeers`, `GlobalFelixConfig`, and `Glob
 
 ## 4. Upgrade calico
 
+  > **Note**: If you are updating a [Canal](https://github.com/projectcalico/canal/tree/master/k8s-install)
+  deployment do not use the RBAC manifest in the following step, instead use the
+  appropriate [Canal RBAC manifest](https://github.com/projectcalico/canal/blob/master/k8s-install/1.7/rbac.yaml).
+
   4.1. If you have RBAC enabled, apply the updated RBAC manifest `kubectl apply -f https://docs.projectcalico.org/v2.5/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml`. (This will revoke access to TPRs from calico-node.)
   
-  4.2. Now you can upgrade the Calico version to `v2.5.0` in your Kubernetes Calico DaemonSet. (Make sure you reboot your calico-node pods one at a time if calico-node `updateStrategy` is not set to `RollingUpdate`.) 
+  4.2. Now you can upgrade the calico/node and calico/cni images in your Kubernetes Calico DaemonSet. (Make sure you reboot your calico-node pods one at a time if calico-node `updateStrategy` is not set to `RollingUpdate`.)
   
   4.3. Verify that everything is working as expected.
 
