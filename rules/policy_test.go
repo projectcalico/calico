@@ -99,29 +99,29 @@ var ruleTestData = []TableEntry{
 		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{8}}},
 		"! -p 8"),
 
-	Entry("Source net", 4,
+	Entry("Negated source net", 4,
 		proto.Rule{NotSrcNet: []string{"10.0.0.0/16"}},
 		"! --source 10.0.0.0/16"),
-	Entry("Source IP set", 4,
+	Entry("Negated source IP set", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali4-ipsetid1 src"),
-	Entry("Source IP set v6", 6,
+	Entry("Negated source IP set v6", 6,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali6-ipsetid1 src"),
-	Entry("Source IP sets", 4,
+	Entry("Negated source IP sets", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
 		"-m set ! --match-set cali4-ipsetid1 src -m set ! --match-set cali4-ipsetid2 src"),
-	Entry("Source ports", 4,
+	Entry("Negated source ports", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --source-ports 10:12"),
-	Entry("Source ports (multiple)", 4,
+	Entry("Negated source ports (multiple)", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
 			{First: 20, Last: 30},
 			{First: 8080, Last: 8080},
 		}},
 		"-m multiport ! --source-ports 10:12,20:30,8080"),
-	Entry("Source ports (>15) should be broken into blocks", 4,
+	Entry("Negated source ports (>15) should be broken into blocks", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{
 			{First: 1, Last: 2},
 			{First: 3, Last: 4},
@@ -292,7 +292,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		preSetAllBlocksMarkRule = "-A test --jump MARK --set-mark 0x200/0x600"
 		allowIfAllMarkRule      = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		returnRule              = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
+		ifNotBlockClearAllRule  = "-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200"
 	)
+
 	DescribeTable(
 		"CIDR split tests",
 		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
@@ -395,7 +397,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x400/0x400",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x400/0x400",
 			// If the scratch bit isn't set then we clear the AllBlocks bit.
-			"-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200",
+			ifNotBlockClearAllRule,
 
 			// The negated matches clear the AllBlocks bit directly if they match.
 			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
@@ -406,6 +408,179 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			allowIfAllMarkRule,
 			returnRule,
 		}),
+	)
+
+	namedPortEntry := func(description string, pRule proto.Rule, expected ...string) TableEntry {
+		return Entry(
+			description+", input = "+pRule.String(),
+			pRule,
+			expected,
+		)
+	}
+
+	DescribeTable(
+		"Named port tests",
+		func(pRule proto.Rule, expected []string) {
+			renderer := NewRenderer(rrConfigNormal)
+			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
+			rendered := []string{}
+			for _, ir := range iptRules {
+				s := ir.RenderAppend("test", "")
+				rendered = append(rendered, s)
+			}
+			Expect(rendered).To(Equal(expected))
+		},
+
+		// Positive source matches only.
+		namedPortEntry(
+			"Named port on its own rendered as single rule",
+			proto.Rule{
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Two named ports need a block",
+			proto.Rule{
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
+			},
+			clearBothMarksRule,
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		),
+
+		// Positive dest matches only.
+		namedPortEntry(
+			"Named + numeric ports need a block",
+			proto.Rule{
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Two named ports need a block",
+			proto.Rule{
+				DstNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
+			},
+			clearBothMarksRule,
+			"-A test -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Named + numeric ports need a block",
+			proto.Rule{
+				DstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -m multiport --destination-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		),
+
+		// Positive source and dest matches together.
+		namedPortEntry(
+			"Positive source needs block only",
+			proto.Rule{
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Positive dest needs block only",
+			proto.Rule{
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			// Source port rendered directly into the main rule.
+			"-A test -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Positive source and dest need blocks",
+			proto.Rule{
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+				DstNamedPortIpSetIds: []string{"ipset-2"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			// Second block uses per-block bit.
+			"-A test -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			ifNotBlockClearAllRule,
+			allowIfAllMarkRule,
+			returnRule,
+		),
+
+		// Negative src matches.
+		namedPortEntry(
+			"Negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				NotSrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				NotSrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -m multiport ! --source-ports 1:2 "+
+				"-m set ! --match-set ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				NotSrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				NotSrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			"-A test "+
+				"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
+				"-m multiport ! --source-ports 15:16 "+ // Overflow to new multiport.
+				"-m set ! --match-set ipset-1 src,src "+
+				"-m set ! --match-set ipset-2 src,src "+
+				"-m set ! --match-set ipset-3 src,src "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
 	)
 
 	var renderer *DefaultRuleRenderer
