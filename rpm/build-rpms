@@ -51,7 +51,7 @@ tar -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
 
 # Build, and fix centos7 putting always '.centos7' in the rpm-name
 cd rpmbuild
-rpmbuild --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
+rpmbuild --target=$(uname -m) --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
 
 case "$EL_VERSION" in
   "el7")

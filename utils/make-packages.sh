@@ -148,8 +148,10 @@ EOF
 	    fi
 
 		  for elversion in 7 6; do
-		    ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
-		      calico-build/centos${elversion} rpm/build-rpms
+			# Skip the rpm build if we are missing the matching build image.
+			imageid=$(docker images -q calico-build/centos${elversion}:latest)
+			[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
+				$imageid rpm/build-rpms
 		  done
 	    ;;
 

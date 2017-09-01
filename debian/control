@@ -21,7 +21,7 @@ Description: Project Calico virtual networking for cloud data centers.
  This package provides common files.
 
 Package: calico-felix
-Architecture: amd64
+Architecture: amd64 ppc64el
 Depends:
  calico-common (= ${binary:Version}),
  conntrack,
