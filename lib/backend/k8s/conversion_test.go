@@ -29,8 +29,8 @@ import (
 
 var _ = Describe("Test parsing strings", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse workloadIDs", func() {
 		workloadName := "Namespace.podName"
@@ -87,8 +87,8 @@ var _ = Describe("Test parsing strings", func() {
 
 var _ = Describe("Test Pod conversion", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse a Pod with an IP to a WorkloadEndpoint", func() {
 		pod := k8sapi.Pod{
@@ -206,8 +206,8 @@ var _ = Describe("Test Pod conversion", func() {
 
 var _ = Describe("Test NetworkPolicy conversion", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
 		port80 := intstr.FromInt(80)
@@ -244,7 +244,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -285,7 +285,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -343,7 +343,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		var pol *model.KVPair
 		var err error
 		By("parsing the policy", func() {
-			pol, err = c.networkPolicyToPolicy(&np)
+			pol, err = c.NetworkPolicyToPolicy(&np)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
 			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -419,7 +419,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		var pol *model.KVPair
 		var err error
 		By("parsing the policy", func() {
-			pol, err = c.networkPolicyToPolicy(&np)
+			pol, err = c.NetworkPolicyToPolicy(&np)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
 			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -467,7 +467,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -511,7 +511,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -551,7 +551,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -594,7 +594,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		pol, err := c.networkPolicyToPolicy(&np)
+		pol, err := c.NetworkPolicyToPolicy(&np)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
@@ -619,8 +619,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 var _ = Describe("Test Namespace conversion", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse a Namespace to a Profile", func() {
 		ns := k8sapi.Namespace{
