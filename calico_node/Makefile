@@ -452,7 +452,12 @@ semaphore:
 	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
 
 release: clean
-	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
+	@echo Using the following versions:
+	@echo "	felix:             ${FELIX_VER}"
+	@echo "	calico:            ${CALICO_VER}"
+	@echo "	bird:              ${BIRD_VER}"
+	@echo "	confd:             ${CONFD_VER}"
+	@echo "	libnetwork_plugin: ${LIBNETWORK_PLUGIN_VER}"
 
 	git tag $(CALICO_VER)
 
@@ -475,15 +480,17 @@ release: clean
 	docker run $(NODE_CONTAINER_NAME) calico-felix --version
 	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
 	
-	@echo "See RELEASING.md for detailed instructions."
-	@echo "Now push images."
-	@echo "docker push $(NODE_CONTAINER_NAME):$(CALICO_VER)"
-	@echo "docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)"
-	@echo "docker push $(NODE_CONTAINER_NAME):latest"
-	@echo "docker push quay.io/$(NODE_CONTAINER_NAME):latest"
+	@echo "# See RELEASING.md for detailed instructions."
+	@echo "# Now push release images."
+	@echo "  docker push $(NODE_CONTAINER_NAME):$(CALICO_VER)"
+	@echo "  docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)"
+
+	@echo "# For the final release only, push the latest tag (not for RCs)"
+	@echo "  docker push $(NODE_CONTAINER_NAME):latest"
+	@echo "  docker push quay.io/$(NODE_CONTAINER_NAME):latest"
 	
-	@echo "Only push the tag AFTER this branch is merged to origin/master"
-	@echo "git push origin $(CALICO_VER)"
+	@echo "# Only push the git tag AFTER this branch is merged to origin/master"
+	@echo "  git push origin $(CALICO_VER)"
 
 
 RELEASE_DIR?=release-$(CALICO_VER)
