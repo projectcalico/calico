@@ -29,8 +29,8 @@ import (
 
 var _ = Describe("Test parsing strings", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse workloadIDs", func() {
 		workloadName := "Namespace.podName"
@@ -87,8 +87,8 @@ var _ = Describe("Test parsing strings", func() {
 
 var _ = Describe("Test Pod conversion", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse a Pod with an IP to a WorkloadEndpoint", func() {
 		pod := k8sapi.Pod{
@@ -206,8 +206,8 @@ var _ = Describe("Test Pod conversion", func() {
 
 var _ = Describe("Test NetworkPolicy conversion", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
 		port80 := intstr.FromInt(80)
@@ -619,8 +619,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 var _ = Describe("Test Namespace conversion", func() {
 
-	// Use a single instance of the converter for these tests.
-	c := converter{}
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
 
 	It("should parse a Namespace to a Profile", func() {
 		ns := k8sapi.Namespace{

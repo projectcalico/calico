@@ -218,7 +218,7 @@ var _ = Describe("Test Syncer", func() {
 			poolC: make(chan watch.Event),
 			state: map[model.Key]interface{}{},
 		}
-		syn = newSyncer(tc, converter{}, tc, false)
+		syn = newSyncer(tc, Converter{}, tc, false)
 	})
 
 	It("should create a syncer", func() {

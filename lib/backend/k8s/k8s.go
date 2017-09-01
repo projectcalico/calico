@@ -56,7 +56,7 @@ type KubeClient struct {
 
 	// Contains methods for converting Kubernetes resources to
 	// Calico resources.
-	converter converter
+	converter Converter
 
 	// Clients for interacting with Calico resources.
 	globalBgpPeerClient     resources.K8sResourceClient

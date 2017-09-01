@@ -153,7 +153,7 @@ func (k *realKubeAPI) getReadyStatus(key model.ReadyFlagKey) (*model.KVPair, err
 	return k.kc.getReadyStatus(key)
 }
 
-func newSyncer(kubeAPI kubeAPI, converter converter, callbacks api.SyncerCallbacks, disableNodePoll bool) *kubeSyncer {
+func newSyncer(kubeAPI kubeAPI, converter Converter, callbacks api.SyncerCallbacks, disableNodePoll bool) *kubeSyncer {
 	syn := &kubeSyncer{
 		kubeAPI:   kubeAPI,
 		converter: converter,
@@ -189,7 +189,7 @@ func newSyncer(kubeAPI kubeAPI, converter converter, callbacks api.SyncerCallbac
 
 type kubeSyncer struct {
 	kubeAPI         kubeAPI
-	converter       converter
+	converter       Converter
 	callbacks       api.SyncerCallbacks
 	OneShot         bool
 	disableNodePoll bool
