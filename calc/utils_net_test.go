@@ -25,7 +25,7 @@ import (
 func mustParseMac(m string) *net.MAC {
 	hwAddr, err := net2.ParseMAC(m)
 	if err != nil {
-		log.Fatalf("Failed to parse MAC: %v; %v", m, err)
+		log.Panicf("Failed to parse MAC: %v; %v", m, err)
 	}
 	return &net.MAC{hwAddr}
 }
@@ -33,7 +33,7 @@ func mustParseMac(m string) *net.MAC {
 func mustParseNet(n string) net.IPNet {
 	_, cidr, err := net.ParseCIDR(n)
 	if err != nil {
-		log.Fatalf("Failed to parse CIDR %v; %v", n, err)
+		log.Panicf("Failed to parse CIDR %v; %v", n, err)
 	}
 	return *cidr
 }

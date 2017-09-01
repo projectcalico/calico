@@ -23,7 +23,7 @@ import (
 func selectorId(selStr string) string {
 	sel, err := selector.Parse(selStr)
 	if err != nil {
-		log.Fatalf("Failed to parse %v: %v", selStr, err)
+		log.Panicf("Failed to parse %v: %v", selStr, err)
 	}
 	return sel.UniqueID()
 }

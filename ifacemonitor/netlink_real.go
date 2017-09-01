@@ -30,11 +30,11 @@ func (nl *netlinkReal) Subscribe(
 	cancel := make(chan struct{})
 
 	if err := netlink.LinkSubscribe(linkUpdates, cancel); err != nil {
-		log.WithError(err).Fatal("Failed to subscribe to link updates")
+		log.WithError(err).Panic("Failed to subscribe to link updates")
 		return err
 	}
 	if err := netlink.AddrSubscribe(addrUpdates, cancel); err != nil {
-		log.WithError(err).Fatal("Failed to subscribe to addr updates")
+		log.WithError(err).Panic("Failed to subscribe to addr updates")
 		return err
 	}
 

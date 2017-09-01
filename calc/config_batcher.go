@@ -86,7 +86,7 @@ func (cb *ConfigBatcher) OnUpdate(update api.Update) (filterOut bool) {
 			cb.datastoreReady = true
 		}
 	default:
-		log.Fatalf("Unexpected update: %#v", update)
+		log.Panicf("Unexpected update: %#v", update)
 	}
 	cb.maybeSendCachedConfig()
 	return

@@ -192,11 +192,11 @@ func (buf *EventSequencer) flushConfigUpdate() {
 	logCxt.Info("Possible config update.")
 	globalChanged, err := buf.config.UpdateFrom(buf.pendingGlobalConfig, config.DatastoreGlobal)
 	if err != nil {
-		logCxt.WithError(err).Fatal("Failed to parse config update")
+		logCxt.WithError(err).Panic("Failed to parse config update")
 	}
 	hostChanged, err := buf.config.UpdateFrom(buf.pendingHostConfig, config.DatastorePerHost)
 	if err != nil {
-		logCxt.WithError(err).Fatal("Failed to parse config update")
+		logCxt.WithError(err).Panic("Failed to parse config update")
 	}
 	if globalChanged || hostChanged {
 		rawConfig := buf.config.RawValues()
