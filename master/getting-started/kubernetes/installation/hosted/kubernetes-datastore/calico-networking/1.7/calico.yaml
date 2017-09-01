@@ -20,7 +20,7 @@ data:
         "name": "k8s-pod-network",
         "cniVersion": "0.1.0",
         "type": "calico",
-        "log_level": "debug",
+        "log_level": "info",
         "datastore_type": "kubernetes",
         "nodename": "__KUBERNETES_NODE_NAME__",
         "mtu": 1500,
