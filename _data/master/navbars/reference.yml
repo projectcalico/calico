@@ -59,6 +59,8 @@ toc:
         path: /reference/calicoctl/resources/bgppeer
       - title: Host Endpoint
         path: /reference/calicoctl/resources/hostendpoint
+      - title: Network Set
+        path: /reference/calicoctl/resources/networkset
       - title: IP Pool
         path: /reference/calicoctl/resources/ippool
       - title: Node
