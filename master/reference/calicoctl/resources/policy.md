@@ -52,7 +52,7 @@ spec:
 
 | Field          | Description                                                                                                                                           | Accepted Values | Schema                | Default |
 |----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
-| order          | (Optional) Indicates priority of this policy, with lower order taking precedence. No value indicates highest order (lowest precedence)                |                 | float                 |         |
+| order          | Controls the order of precedence. Calico applies the policy with the lowest value first.                                                              |                 | float                 |         |
 | selector       | Selects the endpoints to which this policy applies.                                                                                                   |                 | [selector](#selector) | all()   |
 | types          | Applies the policy based on the direction of the traffic. To apply the policy to inbound traffic, set to `ingress`. To apply the policy to outbound traffic, set to `egress`. To apply the policy to both, set to `ingress, egress`. | `ingress`, `egress` | List of strings | Depends on presence of ingress/egress rules\* |
 | ingress        | Ordered list of ingress rules applied by policy.                                                                                                      |                 | List of [Rule](#rule) |         |
