@@ -43,10 +43,12 @@ as Calico by setting the following flag when starting the docker daemon:
 --cluster-store=etcd://$ETCD_IP:$ETCD_PORT
 ```
 
->Again, set or replace `$ETCD_IP` and `$ETCD_PORT` with the appropriate address of your
-etcd cluster.
+> **Note**: Set or replace `$ETCD_IP` and `$ETCD_PORT` with the appropriate 
+> address of your etcd cluster.
+{: .alert .alert-info}
 
-Restart docker, then ensure it has picked up the changes:
+
+Restart Docker, then ensure it has picked up the changes:
 
 ```
 $ docker info | grep -i "cluster store"
@@ -58,9 +60,10 @@ Cluster Store: etcd://10.0.0.1:2379
 By default, Mesos only enables the "Mesos" Containerizer. Ensure
 the Docker Containerizer is also enabled on each Agent.
 
-> **NOTE**
->
-> You may skip this step if you do not plan on using the Docker Containerizer.
+> **Note**: You may skip this step if you do not plan on using the Docker 
+> Containerizer.
+{: .alert .alert-info}
+
 
 If you are using the default `mesos-init-wrapper` from the official Mesos package,
 you can enable the Docker Containerizer with the following command:
@@ -75,9 +78,9 @@ $ systemctl restart mesos-slave.service
 If you are planning to use Calico with the Unified containerizer,
 [enable the CNI Isolator on each agent](http://mesos.apache.org/documentation/latest/cni/#usage)
 
-> **NOTE**
->
-> You may skip this step if you do not plan on using the Unified Containerizer.
+> **Note**: You may skip this step if you do not plan on using the 
+> Unified Containerizer.
+{: .alert .alert-info}
 
 When enabling CNI, you will have specified a `network_cni_config_dir`
 and `network_cni_plugins_dir`. We'll refer to these going forward as

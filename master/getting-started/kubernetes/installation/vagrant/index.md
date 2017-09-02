@@ -25,7 +25,11 @@ Run
 
     vagrant up
 
-> *Note*: This will deploy a Kubernetes master and two Kubernetes nodes. To run more nodes, modify the value `num_instances` in the Vagrantfile before running `vagrant up`.
+
+> **Note**: This will deploy a Kubernetes master and two Kubernetes nodes. 
+> To run more nodes, modify the value `num_instances` in the Vagrantfile 
+> before running `vagrant up`.
+{: .alert .alert-info} 
 
 To connect to your servers
 

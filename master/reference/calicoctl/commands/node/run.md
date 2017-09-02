@@ -179,11 +179,11 @@ force autodetection of an IPv6 address, use the option `--ip6=autodetect`.
 To set the autodetection method for IPv4, use the `--ip-autodetection-method` option.
 To set the autodetection method for IPv6, use the `--ip6-autodetection-method` option.
 
-> **NOTE**
->
-> If you are starting the calico/node container directly (and not using the
+> **Note**: If you are starting the calico/node container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
-> variables.  These are described in the [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)).
+> variables. These are described in the 
+> [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+{: .alert .alert-info}
 
 **first-found**
 

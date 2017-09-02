@@ -32,36 +32,36 @@ CALICO_NETWORKING_BACKEND=bird
 Be sure to update this environment file as necessary, such as modifying
 ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
-> **NOTE**
->
-> The ETCD_CA_FILE, ETCD_CERT_FILE, and ETCD_KEY_FILE
-> environment variables are required when using Etcd with SSL/TLS.  The values
-> here are standard values for a non-SSL version of Etcd, but you can use this
+> **Note**: The `ETCD_CA_FILE`, `ETCD_CERT_FILE`, and `ETCD_KEY_FILE`
+> environment variables are required when using etcd with SSL/TLS. The values
+> here are standard values for a non-SSL version of etcd, but you can use this
 > template to define your SSL values if desired.
 >
-> If CALICO_NODENAME is blank, the compute server hostname will be used
+> If `CALICO_NODENAME` is blank, the compute server hostname will be used
 > to identify the Calico node.
 >
-> If CALICO_IP or CALICO_IP6 are left blank, Calico will use the currently
-> configured values for the next hop IP addresses for this node - these can
+> If `CALICO_IP` or `CALICO_IP6` are left blank, Calico will use the currently
+> configured values for the next hop IP addresses for this node—these can
 > be configured through the node resource.  If no next hop addresses have
 > been configured, Calico will automatically determine an IPv4 next hop address
 > by querying the host interfaces (and it will configure this value in the
-> node resource).  You may set CALICO_IP to `autodetect` to force
-> auto-detection of IP address every time the node starts.  If you set IP
+> node resource). You may set `CALICO_IP` to `autodetect` to force
+> auto-detection of IP address every time the node starts. If you set IP
 > addresses through these environments it will reconfigure any values currently
 > set through the node resource.
 >
-> If CALICO_AS is left blank, Calico will use the currently configured value
-> for the AS Number for the node BGP client - this can be configured through
-> the node resource.  If no value is set,  Calico will inherit the AS Number
-> from the global default value.  If you set a value through this environment
+> If `CALICO_AS` is left blank, Calico will use the currently configured value
+> for the AS Number for the node BGP client—this can be configured through
+> the node resource. If no value is set,  Calico will inherit the AS Number
+> from the global default value. If you set a value through this environment
 > it will reconfigure any value currently set through the node resource.
 >
-> The CALICO_NETWORKING_BACKEND defaults to use Bird as the routing daemon.
-> This may also be set to gobgp (to use gobgp as the routing daemon, but note
-> that this does not support IP in IP), or none (if routing is handled by an
+> The `CALICO_NETWORKING_BACKEND` defaults to use BIRD as the routing daemon.
+> This may also be set to `gobgp` (to use GoBGP as the routing daemon, but note
+> that this does not support IP in IP), or `none` (if routing is handled by an
 > alternative mechanism).
+{: .alert .alert-info}
+
 
 ### Systemd Service Example
 
@@ -109,8 +109,8 @@ The Systemd service above does the following on start:
 
 The script will also stop the calico-node container when the service is stopped.
 
-> **NOTE**
->
-> Depending on how you've installed Docker, the name of the Docker service
+> **Note**: Depending on how you've installed Docker, the name of the Docker service
 > under the `[Unit]` section may be different (such as `docker-engine.service`).
 > Be sure to check this before starting the service.
+{: .alert .alert-info}
+

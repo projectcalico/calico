@@ -20,10 +20,10 @@ calico/node container image.
 
 For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bird-rr-config).
 
-> **NOTE**
->
-> The API and behavior of the calico/routereflector is likely to change in
+> **Note**: The API and behavior of the calico/routereflector is likely to change in
 > future releases.
+{: .alert .alert-info}
+
 
 #### Known limitations
 
@@ -75,11 +75,12 @@ Where:
 -  `<ETCD_IP:PORT>` is the colon separated IPv4 address and port of an etcd
    node in the etcd cluster.  A comma-separated list of endpoints may be
    specified.
-
-> **NOTE**
->
-> If you require TLS/SSL enabled etcd, see the [section below](#route-reflector-with-tlsssl-etcd)
+   
+> **Note**: If you require TLS/SSL-enabled etcd, see the 
+> [section below](#route-reflector-with-tlsssl-etcd)
 > for details on how to start the route reflector.
+{: .alert .alert-info}
+
 
 #### Configuring a cluster of Route Reflectors
 

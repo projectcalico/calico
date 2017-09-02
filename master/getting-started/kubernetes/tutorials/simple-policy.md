@@ -104,8 +104,11 @@ spec:
 EOF
 ```
 
-> Notice the NetworkPolicy allows traffic from Pods with the label `run: access` to Pods with the label `run: nginx`.  These are the labels automatically added to Pods started via `kubectl run` based on the name of the `Deployment`.
-
+> **Note**: The NetworkPolicy allows traffic from Pods with 
+> the label `run: access` to Pods with the label `run: nginx`. These 
+> are the labels automatically added to Pods started via `kubectl run` 
+> based on the name of the `Deployment`.
+{: .alert .alert-info}
 
 We should now be able to access the Service from the `access` Pod.
 

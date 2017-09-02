@@ -21,7 +21,8 @@ Launch a Unified Containerizer task onto a Calico network by setting
 }
 ```
 
->Be sure to replace `/usr/sbin/ip` with the correct path to your IP binary.
+> **Note**: Replace `/usr/sbin/ip` with the correct path to your IP binary.
+{: .alert .alert-info}
 
 The task's stdout output should show a Calico IP from the default Calico pool of `192.168.0.0/16`.
 

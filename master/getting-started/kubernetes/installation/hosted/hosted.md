@@ -25,9 +25,10 @@ Then simply apply the manifest:
 kubectl apply -f calico.yaml
 ```
 
-> **NOTE**
->
-> Make sure you configure the provided ConfigMap with the location of your etcd cluster before running the above command.
+> **Note**: Make sure you configure the provided ConfigMap with the 
+> location of your etcd cluster before running the above command.
+{: .alert .alert-info}
+
 
 ## Configuration Options
 

@@ -55,12 +55,11 @@ determined when running the calico/node service).
 For details on configuring IP-in-IP on your deployment, please read the
 [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip).
 
-> **NOTE**
->
-> Setting `nat-outgoing` is recommended on any IP Pool with `ipip` enabled.
+> **Note**: Setting `nat-outgoing` is recommended on any IP Pool with `ipip` enabled.
 When `ipip` is enabled without `nat-outgoing` routing between Workloads and
 Hosts running Calico is asymmetric and may cause traffic to be filtered due to
 [RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
+{: .alert .alert-info}
 
 
 ### Supported operations

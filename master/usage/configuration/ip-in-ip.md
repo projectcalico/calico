@@ -41,10 +41,11 @@ spec:
 EOF
 ```
 
-> **NOTE**
->
-> The default value for `mode` is `always`, and therefore may be omitted
-> from the request.  It is included above for clarity.
+
+> **Note**: The default value for `mode` is `always`, and therefore may be omitted
+> from the request. It is included above for clarity.
+{: .alert .alert-info}
+
 
 ### Configuring cross-subnet IP-in-IP
 
@@ -73,14 +74,15 @@ spec:
 EOF
 ```
 
-> **NOTE**
->
-> The `cross-subnet` mode option requires each Calico node to be configured
-> with the IP address and subnet of the host.  However, the subnet configuration
-> was only introduced in Calico v2.1.  If any nodes in your deployment were originally
-> created with an older version of Calico, or if you if you are unsure whether
+> **Note**: The `cross-subnet` mode option requires each Calico node to be configured
+> with the IP address and subnet of the host. However, the subnet configuration
+> was only introduced in Calico v2.1. If any nodes in your deployment were originally
+> created with an older version of Calico, or if you are unsure whether
 > your deployment is configured correctly, follow the steps in
-> [Upgrading from pre-v2.1](#upgrading-from-pre-v21) before enabling "cross-subnet" IPIP.
+> [Upgrading from pre-v2.1](#upgrading-from-pre-v21) before enabling `cross-subnet` IPIP.
+>
+{: .alert .alert-info}
+
 
 #### Upgrading from pre-v2.1
 

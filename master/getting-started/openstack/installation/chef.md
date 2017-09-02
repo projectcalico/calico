@@ -1,13 +1,11 @@
 ---
 title: Chef Trial Install
-...
+---
 
-> **WARNING**
->
-> The chef install only supports OpenStack Icehouse and we've heard
+> **Important**: The chef install only supports OpenStack Icehouse and we've heard
 > reports that it doesn't work smoothly outside our test lab. We
-> recommend using one of our packaged installs - see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/).
->
+> recommend using one of our [packaged installs]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/).
+{: .alert .alert-danger}
 
 If you're interested in trying out Calico but you don't have much
 familiarity with installing OpenStack, you can install an

@@ -11,13 +11,15 @@ options for doing this depending on your deployment.
 
 Calico requires the following firewall rules to function in GCE.
 
-| Description      | Protocol | Port Range |
-|:-----------------|:---------|:-----------|
-| BGP              | TCP      | 179        |
-| \*IPIP           | 4        | all        |
+| Description       | Protocol | Port Range |
+|:------------------|:---------|:-----------|
+| BGP               | TCP      | 179        |
+| IPIP*             | 4        | all        |
 
->\*IPIP: This rule is required only when using Calico with IPIP encapsulation.
-Keep reading for information on when IPIP is required in GCE.
+
+\* The IPIP rule is required only when using Calico with IPIP encapsulation. Keep reading 
+for information on when IPIP is required in GCE.
+
 
 #### Routing Traffic
 

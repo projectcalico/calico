@@ -35,16 +35,17 @@ following sequence:
 -  If the `IP6` environment variable is not set, and there is no `IPv6Address` value configured in the node
    resource, calico/node will not perform IP6 routing on that node.
 
-> If you are starting the calico/node container using `calicoctl node run` command,
+> **Note**: If you are starting the calico/node container using `calicoctl node run` command,
 > there is a direct mapping between the command line switches and the environment variables that are
-> passed through to the `calico/node` container.  These are listed below:
+> passed through to the `calico/node` container. These are listed below:
 >
 > | Environment | CLI |
 > |-------------|-----|
-> | IP | --ip |
-> | IP6 | --ip6 |
-> | IP_AUTODETECTION_METHOD | --ip-autodetection-method |
-> | IP6_AUTODETECTION_METHOD | --ip6-autodetection-method |
+> | `IP` | `--ip` |
+> | `IP6` | `--ip6` |
+> | `IP_AUTODETECTION_METHOD` | `--ip-autodetection-method` |
+> | `IP6_AUTODETECTION_METHOD` | `--ip6-autodetection-method` |
+{: .alert .alert-info}
 
 The following subsections describe different ways to configure your deployment to
 specify the IP addresses for your nodes.
@@ -118,9 +119,9 @@ $ calicoctl apply -f - << EOF
 EOF
 ```
 
-> **NOTE**
->
-> If you plan to edit the resource to configure the IP addresses, make sure
+> **Note**: If you plan to edit the resource to configure the IP addresses, make sure
 > you are not specifying the IP address options or environment variables when starting the
->`calico/node` container - otherwise those values will overwrite the values
+>`calico/node` container—otherwise those values will overwrite the values
 > configured through the resource.
+{: .alert .alert-info}
+

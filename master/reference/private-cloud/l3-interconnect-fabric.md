@@ -202,14 +202,14 @@ useful for the discussion.
 
 ![]({{site.baseurl}}/images/l3-fabric-diagrams-as-rack-l2-spine.png)
 
-> This diagram shows the *AS per rack model* where the ToR switches are
-> physically meshed via a set of Ethernet switching planes.
+The diagram above shows the *AS per rack model* where the ToR switches are
+physically meshed via a set of Ethernet switching planes.
 
 ![]({{site.baseurl}}/images/l3-fabric-diagrams-as-rack-l3-spine.png)
 
-> This diagram shows the *AS per rack model* where the ToR switches are
-> physically meshed via a set of discrete BGP spine routers, each in
-> their own AS.
+The diagram above shows the *AS per rack model* where the ToR switches are
+physically meshed via a set of discrete BGP spine routers, each in
+their own AS.
 
 In this approach, every ToR-ToR or ToR-Spine (in the case of an AS per
 spine) link is an eBGP peering which means that there is no
@@ -274,14 +274,14 @@ seen in the following two diagrams.
 
 ![]({{site.baseurl}}/images/l3-fabric-diagrams-as-server-l2-spine.png)
 
-> This diagram shows the *AS per compute server model* where the ToR
-> switches are physically meshed via a set of Ethernet switching planes.
+The diagram above shows the *AS per compute server model* where the ToR
+switches are physically meshed via a set of Ethernet switching planes.
 
 ![]({{site.baseurl}}/images/l3-fabric-diagrams-as-server-l3-spine.png)
 
-> This diagram shows the *AS per compute server model* where the ToR
-> switches are physically connected to a set of independent routing
-> planes.
+The diagram above shows the *AS per compute server model* where the ToR
+switches are physically connected to a set of independent routing
+planes.
 
 As can be seen in these diagrams, there are still the same two variants
 as in the *AS per rack* model, one where the spine switches provide a
@@ -324,10 +324,10 @@ The following diagram will show the AS relationships in this model.
 
 ![]({{site.baseurl}}/images/l3-fabric-downward-default.png)
 
-> In this diagram, we are showing that all Calico nodes share the same
-> AS number, as do all ToR switches. However, those ASs are different
-> (*A1* is not the same network as *A2*, even though the both share the
-> same AS number *A* ).
+In the diagram above, we are showing that all Calico nodes share the same
+AS number, as do all ToR switches. However, those ASs are different
+(*A1* is not the same network as *A2*, even though the both share the
+same AS number *A* ).
 
 While the use of a single AS for all ToR switches, and another for all
 compute servers simplifies deployment (standardized configuration), the

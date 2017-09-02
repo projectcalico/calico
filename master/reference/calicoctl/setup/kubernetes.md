@@ -5,10 +5,12 @@ layout: docwithnav
 
 This document covers the configuration options for calicoctl when using the Kubernetes API as a datastore.
 
-> **NOTE**
+> **Note**: If running Calico on Kubernetes with the etcdv2 
+> datastore, see the [etcdv2 configuration document](etcdv2) instead.
+> For more information on running with the Kubernetes datastore, see 
+> [the installation guide](/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/).
 >
-> If running Calico on Kubernetes with the etcdv2 datastore, see the [etcdv2 configuration document](etcdv2) instead.
-> For more information on running with the Kubernetes datastore, see [the installation guide](/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/)
+{: .alert .alert-info}
 
 There are two ways to configure calicoctl with your Kubernetes API details:
 configuration file or environment variables.
@@ -45,8 +47,10 @@ will check a particular set of environment variables.
 
 See the table below for details on the Kubernetes specific environment variables.
 
-> Note that if neither file nor environment variables are set, calicoctl defaults to
+> **Note**: If neither file nor environment variables are set, `calicoctl` defaults to
 > using etcdv2 as the datastore with a single endpoint of http://127.0.0.1:2379.
+{: .alert .alert-info}
+
 
 ## Complete list of Kubernetes API connection configuration
 
@@ -60,10 +64,13 @@ See the table below for details on the Kubernetes specific environment variables
 | k8sCAFile (K8S_CA_FILE)           | Location of a CA for accessing the Kubernetes API, e.g. /path/to/ca.                                      | string
 | k8sToken (K8S_TOKEN)              | Token to be used for accessing the Kubernetes API.                                                        | string
 
-> Note that all environment variables may also be prefixed with "CALICO_", for
-> example "CALICO_DATASTORE_TYPE" and "CALICO_KUBECONFIG" etc. may also be used.
+
+> **Note**: All environment variables may also be prefixed with `"CALICO_"`, for
+> example `"CALICO_DATASTORE_TYPE"` and `"CALICO_KUBECONFIG"` etc. may be used.
 > This is useful if the non-prefixed names clash with existing environment
-> variables defined on your system
+> variables defined on your system.
+{: .alert .alert-info}
+
 
 ## Examples
 
