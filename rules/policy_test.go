@@ -519,6 +519,15 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			returnRule,
 		),
 		namedPortEntry(
+			"Single named port fits in rule",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
 			"Two named ports need a block",
 			proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
@@ -727,6 +736,80 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
 			ifNotBlockClearAllRule,
 			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+
+		// CIDRs + positive and negated named ports.
+		namedPortEntry(
+			"positive and negatednumeric, named ports and CIDRs",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				SrcNet:               []string{"10.1.0.0/16", "11.0.0.0/8"},
+				NotSrcPorts: []*proto.PortRange{
+					{First: 101, Last: 101},
+				},
+				NotSrcNamedPortIpSetIds: []string{"ipset-3"},
+				NotSrcNet:               []string{"14.1.0.0/16", "15.0.0.0/8"},
+
+				DstPorts: []*proto.PortRange{
+					{First: 2, Last: 3},
+				},
+				DstNamedPortIpSetIds: []string{"ipset-2"},
+				DstNet:               []string{"12.1.0.0/16", "13.0.0.0/8"},
+				NotDstPorts: []*proto.PortRange{
+					{First: 201, Last: 201},
+				},
+				NotDstNamedPortIpSetIds: []string{"ipset-4"},
+				NotDstNet:               []string{"16.1.0.0/16", "17.0.0.0/8"},
+			},
+			clearBothMarksRule,
+			// Positive source port match block.
+			"-A test -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -p tcp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 15:16 -p tcp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+
+			// Positive destination port match block..
+			"-A test -m multiport --destination-ports 2:3 -p tcp --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			ifNotBlockClearAllRule,
+
+			// Positive sroiuce CIDRs.
+			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			ifNotBlockClearAllRule,
+
+			// Positive dest CIDRs.
+			"-A test --destination 12.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --destination 13.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			ifNotBlockClearAllRule,
+
+			// Negative source CIDRs.
+			"-A test --source 14.1.0.0/16 --jump MARK --set-mark 0/0x200",
+			"-A test --source 15.0.0.0/8 --jump MARK --set-mark 0/0x200",
+
+			// Negative dest CIDRs.
+			"-A test --destination 16.1.0.0/16 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 17.0.0.0/8 --jump MARK --set-mark 0/0x200",
+
+			// Negative port matches can be inlined into the main rule.
+			"-A test -p tcp "+
+				"-m multiport ! --source-ports 101 "+
+				"-m set ! --match-set ipset-3 src,src "+
+				"-m multiport ! --destination-ports 201 "+
+				"-m set ! --match-set ipset-4 dst,dst "+
+				"-m mark --mark 0x200/0x200 "+
+				"--jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 	)
