@@ -165,13 +165,13 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	// named ports.
 	srcPortSplits := SplitPortList(ruleCopy.SrcPorts)
 	if len(srcPortSplits)+len(ruleCopy.SrcNamedPortIpSetIds) > 1 {
-		matchBlockBuilder.AppendPortMatchBlock(srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
+		matchBlockBuilder.AppendPortMatchBlock(ruleCopy.Protocol, srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
 		ruleCopy.SrcPorts = nil
 		ruleCopy.SrcNamedPortIpSetIds = nil
 	}
 	dstPortSplits := SplitPortList(ruleCopy.DstPorts)
 	if len(dstPortSplits)+len(ruleCopy.DstNamedPortIpSetIds) > 1 {
-		matchBlockBuilder.AppendPortMatchBlock(dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
+		matchBlockBuilder.AppendPortMatchBlock(ruleCopy.Protocol, dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
 		ruleCopy.DstPorts = nil
 		ruleCopy.DstNamedPortIpSetIds = nil
 	}
@@ -265,15 +265,26 @@ type matchBlockBuilder struct {
 	Rules []iptables.Rule
 }
 
-func (r *matchBlockBuilder) AppendPortMatchBlock(numericPortSplits [][]*proto.PortRange, namedPortIPSetIDs []string, srcOrDst srcOrDst) {
+func (r *matchBlockBuilder) AppendPortMatchBlock(
+	protocol *proto.Protocol,
+	numericPortSplits [][]*proto.PortRange,
+	namedPortIPSetIDs []string,
+	srcOrDst srcOrDst,
+) {
 	// Write out the initial "reset" rule if this is the first block.
 	r.maybeAppendInitialRule(0)
 	// Figure out which bit to set.  See comment in positiveBlockMarkToSet() for details.
 	markToSet := r.positiveBlockMarkToSet()
 
+	logCxt := log.WithFields(log.Fields{
+		"protocol":     protocol,
+		"portSplits":   numericPortSplits,
+		"namedPortIDs": namedPortIPSetIDs,
+		"srcOrDst":     srcOrDst,
+	})
 	for _, split := range numericPortSplits {
 		r.Rules = append(r.Rules, iptables.Rule{
-			Match:  srcOrDst.MatchPorts(split),
+			Match:  appendProtocolMatch(srcOrDst.MatchPorts(split), protocol, logCxt),
 			Action: iptables.SetMarkAction{Mark: markToSet},
 		})
 	}
@@ -483,6 +494,20 @@ func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint
 
 var SkipRule = errors.New("Rule skipped")
 
+func appendProtocolMatch(match iptables.MatchCriteria, protocol *proto.Protocol, logCxt *log.Entry) iptables.MatchCriteria {
+	if protocol != nil {
+		switch p := protocol.NumberOrName.(type) {
+		case *proto.Protocol_Name:
+			logCxt.WithField("protoName", p.Name).Debug("Adding protocol match")
+			match = match.Protocol(p.Name)
+		case *proto.Protocol_Number:
+			logCxt.WithField("protoNum", p.Number).Debug("Adding protocol match")
+			match = match.ProtocolNum(uint8(p.Number))
+		}
+	}
+	return match
+}
+
 func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (iptables.MatchCriteria, error) {
 	match := iptables.Match()
 
@@ -497,17 +522,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	}
 
 	// First, process positive (non-negated) match criteria.
-
-	if pRule.Protocol != nil {
-		switch p := pRule.Protocol.NumberOrName.(type) {
-		case *proto.Protocol_Name:
-			logCxt.WithField("protoName", p.Name).Debug("Adding protocol match")
-			match = match.Protocol(p.Name)
-		case *proto.Protocol_Number:
-			logCxt.WithField("protoNum", p.Number).Debug("Adding protocol match")
-			match = match.ProtocolNum(uint8(p.Number))
-		}
-	}
+	match = appendProtocolMatch(match, pRule.Protocol, logCxt)
 
 	if len(pRule.SrcNet) == 1 {
 		logCxt.WithField("cidr", pRule.SrcNet[0]).Debug("Adding src CIDR match")

@@ -288,11 +288,13 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	const (
-		clearBothMarksRule      = "-A test --jump MARK --set-mark 0x0/0x600"
-		preSetAllBlocksMarkRule = "-A test --jump MARK --set-mark 0x200/0x600"
-		allowIfAllMarkRule      = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
-		returnRule              = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
-		ifNotBlockClearAllRule  = "-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200"
+		clearBothMarksRule       = "-A test --jump MARK --set-mark 0x0/0x600"
+		preSetAllBlocksMarkRule  = "-A test --jump MARK --set-mark 0x200/0x600"
+		allowIfAllMarkRule       = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		allowIfAllMarkAndTCPRule = "-A test -p tcp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		allowIfAllMarkAndUDPRule = "-A test -p udp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		returnRule               = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
+		ifNotBlockClearAllRule   = "-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200"
 	)
 
 	DescribeTable(
@@ -435,25 +437,28 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		namedPortEntry(
 			"Named port on its own rendered as single rule",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
-			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			"-A test -p tcp -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
 			"Two named ports need a block",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
 			},
 			clearBothMarksRule,
 			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
-			allowIfAllMarkRule,
+			allowIfAllMarkAndUDPRule,
 			returnRule,
 		),
 		namedPortEntry(
 			"Multiple named + numeric ports",
 			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
 					{First: 3, Last: 4},
@@ -467,12 +472,33 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
 			},
 			clearBothMarksRule,
-			"-A test -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -p tcp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 15:16 -p tcp --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
-			allowIfAllMarkRule,
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Overflow of numeric ports",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+			},
+			clearBothMarksRule,
+			"-A test -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -p udp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 15:16 -p udp --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
 			returnRule,
 		),
 
@@ -480,40 +506,43 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		namedPortEntry(
 			"Named + numeric ports need a block",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
 			clearBothMarksRule,
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
-			"-A test -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 1:2 -p tcp --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
-			allowIfAllMarkRule,
+			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
 		namedPortEntry(
 			"Two named ports need a block",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				DstNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
 			},
 			clearBothMarksRule,
 			"-A test -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
-			allowIfAllMarkRule,
+			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
 		namedPortEntry(
 			"Named + numeric ports need a block",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				DstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				DstNamedPortIpSetIds: []string{"ipset-1"},
 			},
 			clearBothMarksRule,
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
-			"-A test -m multiport --destination-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --destination-ports 1:2 -p tcp --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
-			allowIfAllMarkRule,
+			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
 
@@ -521,6 +550,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		namedPortEntry(
 			"Positive source needs block only",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
@@ -528,14 +558,15 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
-			"-A test -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 1:2 -p udp --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
-			"-A test -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			"-A test -p udp -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
 			"Positive dest needs block only",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
 				DstNamedPortIpSetIds: []string{"ipset-1"},
@@ -543,15 +574,16 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
-			"-A test -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --destination-ports 3:4 -p tcp --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			// Source port rendered directly into the main rule.
-			"-A test -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			"-A test -p tcp -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
 			"Positive source and dest need blocks",
 			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
@@ -560,13 +592,34 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
-			"-A test -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 1:2 -p tcp --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			// Second block uses per-block bit.
-			"-A test -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x400/0x400",
+			"-A test -m multiport --destination-ports 3:4 -p tcp --jump MARK --set-mark 0x400/0x400",
 			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
 			ifNotBlockClearAllRule,
-			allowIfAllMarkRule,
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Overflow of numeric ports",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				DstPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+			},
+			clearBothMarksRule,
+			"-A test -m multiport --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -p udp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --destination-ports 15:16 -p udp --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
 			returnRule,
 		),
 
@@ -574,16 +627,18 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		namedPortEntry(
 			"Negated named + numeric ports rendered in single rule",
 			proto.Rule{
+				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				NotSrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				NotSrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
-			"-A test -m multiport ! --source-ports 1:2 "+
+			"-A test -p tcp -m multiport ! --source-ports 1:2 "+
 				"-m set ! --match-set ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
 			"Multiple negated named + numeric ports rendered in single rule",
 			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				NotSrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
 					{First: 3, Last: 4},
@@ -596,13 +651,82 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				},
 				NotSrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
 			},
-			"-A test "+
+			"-A test -p tcp "+
 				"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
 				"-m multiport ! --source-ports 15:16 "+ // Overflow to new multiport.
 				"-m set ! --match-set ipset-1 src,src "+
 				"-m set ! --match-set ipset-2 src,src "+
 				"-m set ! --match-set ipset-3 src,src "+
 				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+
+		// Negative dst matches.
+		namedPortEntry(
+			"Negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotDstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				NotDstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m multiport ! --destination-ports 1:2 "+
+				"-m set ! --match-set ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				NotDstPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				NotDstNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			"-A test -p udp "+
+				"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
+				"-m multiport ! --destination-ports 15:16 "+ // Overflow to new multiport.
+				"-m set ! --match-set ipset-1 dst,dst "+
+				"-m set ! --match-set ipset-2 dst,dst "+
+				"-m set ! --match-set ipset-3 dst,dst "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+
+		// CIDRs + named ports.
+		namedPortEntry(
+			"numeric, named ports and CIDRs",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+				SrcNet:               []string{"10.1.0.0/16", "11.0.0.0/8"},
+			},
+			clearBothMarksRule,
+			"-A test -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -p tcp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m multiport --source-ports 15:16 -p tcp --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			ifNotBlockClearAllRule,
+			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
 	)
