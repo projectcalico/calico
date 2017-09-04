@@ -521,26 +521,61 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
 		return
 	}
-
-	// Now, scan over all endpoints looking for ones with this parent and calculate the change to
-	// its contribution.  For occupancy reasons, the endpoint data references its parents by
-	// pointer so, to calculate the delta we have to temporarily swap the labels back and forth.
 	oldLabels := parentData.labels
+	idx.updateParent(
+		parentData,
+		// Function to apply the update.
+		func() {
+			parentData.labels = labels
+		},
+		// Function to back out the update.
+		func() {
+			parentData.labels = oldLabels
+		},
+	)
+}
+
+func (idx *SelectorAndNamedPortIndex) UpdateParentTags(parentID string, tags []string) {
+	parentData := idx.getOrCreateParent(parentID)
+	if reflect.DeepEqual(parentData.tags, tags) {
+		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
+		return
+	}
+	oldTags := parentData.tags
+	idx.updateParent(
+		parentData,
+		// Function to apply the update.
+		func() {
+			parentData.tags = tags
+		},
+		// Function to back out the update.
+		func() {
+			parentData.tags = oldTags
+		},
+	)
+}
+
+func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, applyUpdate, revertUpdate func()) {
 	for _, epData := range idx.endpointDataByID {
 		if !epData.HasParent(parentData) {
 			continue
 		}
 
-		// This endpoint matches this parent, calculate its old contribution.  If we've been
-		// around the loop already, we'll have swapped in the new labels.  Make sure we swap back
-		// to the old.
-		parentData.labels = oldLabels
+		// This endpoint matches this parent, calculate its old contribution.  (The revert function is a
+		// no-op on the first loop but keeping it here, rather than at the bottom of the loop makes it
+		// harder to accidentally skip it with a well-intentioned "continue".)
+		revertUpdate()
 		oldIPSetContributions := idx.RecalcCachedContributions(epData)
 
-		// Swap in the new labels so we can calculate the new contribution.
-		parentData.labels = labels
+		// Apply the update to the parent while we calculate this endpoint's new contribution.
+		applyUpdate()
 		for ipSetID, ipSetData := range idx.ipSetDataByID {
+			// Remove this IP set from the endpoint's cache of matching IP sets (if present).
+			// We'll restore it below if it still matches.
 			epData.RemoveMatchingIPSetID(ipSetID)
+
+			// Check if the selector matches.  Since we applied the update, this matches on the new
+			// values.
 			if ipSetData.selector.EvaluateLabels(epData) {
 				newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
 				if len(newIPSetContribution) > 0 {
@@ -548,7 +583,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 					// contribution of this endpoint later.
 					epData.AddMatchingIPSetID(ipSetID)
 
-					// Incref all the new members.  If any of them go from 0 to 1 reference then we know
+					// Incref *all* members.  If any of them go from 0 to 1 reference then we know
 					// that they're new.  We'll temporarily double-count members that were already present,
 					// then decref them below.
 					for _, newMember := range newIPSetContribution {
@@ -561,6 +596,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 					}
 				}
 			}
+
 			// Decref all the old members.  If they hit 0 references, then the member has been
 			// removed so we emit an event.
 			for _, oldMember := range oldIPSetContributions[ipSetID] {
@@ -575,80 +611,16 @@ func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels
 				}
 			}
 		}
-
 	}
 
-	parentData.labels = labels
+	// Defensive: make sure we leave the update applied to the parent.
+	applyUpdate()
 }
 
 func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 	// Defer to the update function, which implements the endpoint scanning logic.
 	idx.UpdateParentLabels(parentID, nil)
 	idx.discardParentIfEmpty(parentID)
-}
-
-func (idx *SelectorAndNamedPortIndex) UpdateParentTags(parentID string, tags []string) {
-	// TODO Make this logic common with label processing version.
-	parentData := idx.getOrCreateParent(parentID)
-	if reflect.DeepEqual(parentData.tags, tags) {
-		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
-		return
-	}
-
-	// Now, scan over all endpoints looking for ones with this parent and calculate the change to
-	// its contribution.  For occupancy reasons, the endpoint data references its parents by
-	// pointer so, to calculate the delta we have to temporarily swap the labels back and forth.
-	oldLabels := parentData.labels
-	for _, epData := range idx.endpointDataByID {
-		if !epData.HasParent(parentData) {
-			continue
-		}
-
-		// This endpoint matches this parent, calculate its old contribution.
-		parentData.labels = oldLabels
-		oldIPSetContributions := idx.RecalcCachedContributions(epData)
-
-		// Temporarily swap in the new labels.
-		parentData.tags = tags
-		for ipSetID, ipSetData := range idx.ipSetDataByID {
-			epData.RemoveMatchingIPSetID(ipSetID)
-			if ipSetData.selector.EvaluateLabels(epData) {
-				newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
-				if len(newIPSetContribution) > 0 {
-					// Record the match in the index.  This allows us to quickly recalculate the
-					// contribution of this endpoint later.
-					epData.AddMatchingIPSetID(ipSetID)
-
-					// Incref all the new members.  If any of them go from 0 to 1 reference then we know
-					// that they're new.  We'll temporarily double-count members that were already present,
-					// then decref them below.
-					for _, newMember := range newIPSetContribution {
-						newRefCount := ipSetData.memberToRefCount[newMember] + 1
-						if newRefCount == 1 {
-							// New member in the IP set.
-							idx.OnMemberAdded(ipSetID, newMember)
-						}
-						ipSetData.memberToRefCount[newMember] = newRefCount
-					}
-				}
-			}
-			// Decref all the old members.  If they hit 0 references, then the member has been
-			// removed so we emit an event.
-			for _, oldMember := range oldIPSetContributions[ipSetID] {
-				newRefCount := ipSetData.memberToRefCount[oldMember] - 1
-				if newRefCount == 0 {
-					// Member no longer in the IP set.  Emit event and clean up the old reference
-					// count.
-					idx.OnMemberRemoved(ipSetID, oldMember)
-					delete(ipSetData.memberToRefCount, oldMember)
-				} else {
-					ipSetData.memberToRefCount[oldMember] = newRefCount
-				}
-			}
-		}
-	}
-
-	parentData.tags = tags
 }
 
 // CalculateEndpointContribution calculates the given endpoint's contribution to the given IP set.
