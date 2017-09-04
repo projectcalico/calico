@@ -179,7 +179,7 @@ type ipSetMember interface {
 
 func (t IPSetType) IsValid() bool {
 	switch t {
-	case IPSetTypeHashIP, IPSetTypeHashNet:
+	case IPSetTypeHashIP, IPSetTypeHashNet, IPSetTypeHashIPPort:
 		return true
 	}
 	return false
