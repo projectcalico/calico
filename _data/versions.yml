@@ -2,7 +2,7 @@
 currentReleaseStream: v2.5
 
 # Local directories to ignore when checking external links
-htmlProoferLocalDirIgnore: /v1.5/,/v1.6/,/v2.0/
+htmlProoferLocalDirIgnore: /v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/
 
 v2.5:
 - title: v2.5.1

@@ -1,7 +1,9 @@
 ###############################################################################
-# For local builds, YAML_CMD can be made faster by running
-# "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
-YAML_CMD?=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+# Determine whether there's a local yaml installed or use dockerized version.
+# Note, to install yaml: "go get github.com/mikefarah/yaml"
+GO_BUILD_VER?=v0.7
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
 
 ###############################################################################
 # Versions
