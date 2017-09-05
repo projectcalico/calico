@@ -1,5 +1,5 @@
 hash: 6d980076ac5ec8236dde278276a0a2f4df0ac256bc1779c5947000109c822cd8
-updated: 2017-08-31T15:24:33.054622577Z
+updated: 2017-09-05T17:26:17.089786342Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 83cd65fc365ace80eb6b6ecfc45203e43edfbc70
+  version: 17ce1425424ab154092bbb43af630bd647f3bb0d
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -155,7 +155,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 6b3db3f65696a1b30f7b097bf7408dddc08c56c4
+  version: 2798ea999324fd43f89f2f71e9efa1ba1cb22d90
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
@@ -255,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: bb24a47a89eac6c1227fbcb2ae37a8b9ed323366
+  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -436,4 +436,8 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
+- name: k8s.io/kube-openapi
+  version: 80f07ef71bb4f781233c65aa8d0369e4ecafab87
+  subpackages:
+  - pkg/common
 testImports: []

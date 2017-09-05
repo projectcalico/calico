@@ -206,7 +206,7 @@ var hostEpWithNamedPorts = HostEndpoint{
 		"b":  "b",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport" /* protocol defaults to TCP */, Port: 8080},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
 		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
 		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
 	},
