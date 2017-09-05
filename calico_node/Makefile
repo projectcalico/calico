@@ -1,12 +1,17 @@
 ###############################################################################
-# Versions:
-RELEASE_STREAM?=v2.5
 
 GO_BUILD_VER?=v0.7
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
+
+# Read current stream version from _data/versions.yml
+RELEASE_STREAM?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
+
+.PHONY: print-version
+print-version:
+	$(info $$RELEASE_STREAM is ${RELEASE_STREAM})
 
 # For local builds this can be made faster by running "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
 YAML_CMD?=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
