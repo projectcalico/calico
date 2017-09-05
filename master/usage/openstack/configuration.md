@@ -30,7 +30,7 @@ function is the same both ways, except that floating IPs are only supported
 when operating as a core plugin; hence the recommended setting here.
 
 However, if you don't need floating IPs and have other reasons for using ML2,
-you can also set
+you can, instead, set
 
 | Setting            | Value                                | Meaning              |
 |--------------------|--------------------------------------|----------------------|
