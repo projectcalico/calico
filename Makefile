@@ -1,3 +1,17 @@
+###############################################################################
+# For local builds, YAML_CMD can be made faster by running
+# "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
+YAML_CMD?=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+
+###############################################################################
+# Versions
+CALICO_DIR=$(shell git rev-parse --show-toplevel)
+VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
+
+###############################################################################
+# HtmlProofer
+HP_IGNORE_LOCAL_DIRS?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "htmlProoferLocalDirIgnore")
+
 JEKYLL_VERSION=3.3.1
 DEV?=false
 
@@ -17,7 +31,7 @@ clean:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
 
 htmlproofer: clean _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore /v1.5/,/v1.6/,/v2.0/ --assume-extension --check-html --empty-alt-ignore --url-ignore "/docs.openshift.org/,#,/github.com\/projectcalico\/calico\/releases\/download/"
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore ${HP_IGNORE_LOCAL_DIRS} --assume-extension --check-html --empty-alt-ignore --url-ignore "/docs.openshift.org/,#,/github.com\/projectcalico\/calico\/releases\/download/"
 	-docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
 	# Rerun htmlproofer across _all_ files, but ignore failure, allowing us to notice legacy docs issues without failing CI
 	

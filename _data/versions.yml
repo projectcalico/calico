@@ -1,6 +1,9 @@
 # vX.Y format: update during major release process
 currentReleaseStream: v2.5
 
+# Local directories to ignore when checking external links
+htmlProoferLocalDirIgnore: /v1.5/,/v1.6/,/v2.0/
+
 v2.5:
 - title: v2.5.1
   note: |
