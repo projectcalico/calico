@@ -56,6 +56,7 @@ func PortFromRange(minPort, maxPort uint16) (Port, error) {
 var (
 	allDigits = regexp.MustCompile(`^\d+$`)
 	portRange = regexp.MustCompile(`^(\d+):(\d+)$`)
+	nameRegex = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
 )
 
 // PortFromString creates a Port struct from its string representation.  A port
@@ -82,6 +83,11 @@ func PortFromString(s string) (Port, error) {
 		} else {
 			return PortFromRange(uint16(pmin), uint16(pmax))
 		}
+	}
+
+	if !nameRegex.MatchString(s) {
+		msg := fmt.Sprintf("invalid name for named port (%s)", s)
+		return Port{}, errors.New(msg)
 	}
 
 	return NamedPort(s), nil
