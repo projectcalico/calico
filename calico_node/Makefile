@@ -13,8 +13,11 @@ RELEASE_STREAM?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleas
 print-version:
 	$(info $$RELEASE_STREAM is ${RELEASE_STREAM})
 
-# For local builds this can be made faster by running "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
-YAML_CMD?=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+###############################################################################
+# Determine whether there's a local yaml installed or use dockerized version.
+# Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
+YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+
 CALICO_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
 CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
 BIRD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
