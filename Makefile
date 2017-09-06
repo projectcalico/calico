@@ -129,6 +129,7 @@ endif
 clean:
 	rm -rf dist image.created
 	-docker rmi $(CONTAINER_NAME)
+	rm -f st-kubeconfig.yaml
 
 .PHONY: help
 ## Display this help text

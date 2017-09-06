@@ -25,5 +25,5 @@ type Config struct {
 
 // Parse parses envconfig and stores in Config struct
 func (c *Config) Parse() error {
-	return envconfig.Process("policy", c)
+	return envconfig.Process("", c)
 }

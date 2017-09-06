@@ -14,22 +14,29 @@ import (
 )
 
 func main() {
+	// Initialize logger to info level.  This may be adjusted once
+	// config is loaded.
+	log.SetLevel(log.InfoLevel)
 
+	// Attempt to load configuration.
 	config := new(config.Config)
 	err := config.Parse()
 	if err != nil {
 		log.WithError(err).Fatal("Failed to parse config")
 	}
+	log.WithField("config", config).Info("Loaded configuration from environment")
 
+	// Set the log level based on the loaded configuration.
 	logLevel, err := log.ParseLevel(config.LogLevel)
 	if err != nil {
 		logLevel = log.InfoLevel
 	}
 	log.SetLevel(logLevel)
 
+	// Build clients to be used by the controlelrs.
 	k8sClientset, calicoClient, err := getClients(config.Kubeconfig)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to get clientset.")
+		log.WithError(err).Fatal("Failed to build clients")
 	}
 
 	stop := make(chan struct{})

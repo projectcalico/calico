@@ -22,14 +22,35 @@ EOF
     sleep 1
 }
 
-# Run policy controller.
+# Create a kubeconfig to be used for the test.
+cat >${PWD}/st-kubeconfig.yaml <<EOF
+apiVersion: v1
+kind: Config
+clusters:
+- name: test 
+  cluster:
+    insecure-skip-tls-verify: true
+    server: https://${K8S_IP}:6443
+users:
+- name: calico
+contexts:
+- name: test-context
+  context:
+    cluster: test  
+    user: calico
+current-context: test-context
+EOF
+
+# Run policy controller. TODO: Run all controller types.
 docker rm -f calico-policy-controller || true
 sleep 2
 docker run --detach --name=calico-policy-controller \
-       -e K8S_API=https://${K8S_IP}:6443 \
-       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
-       -e ETCD_ENDPOINTS=http://${ETCD_IP}:2379 \
-       calico/kube-policy-controller
+	-v ${PWD}/st-kubeconfig.yaml:/st-kubeconfig.yaml \
+	-e ETCD_ENDPOINTS=http://${ETCD_IP}:2379 \
+	-e KUBECONFIG=/st-kubeconfig.yaml \
+	-e CONTROLLER_TYPE="profile" \
+	-e LOG_LEVEL="debug" \
+	calico/kube-policy-controller
 sleep 2
 
 # Create a trap which emits policy controller logs on failure.
