@@ -1,4 +1,4 @@
-# Copyright 2015 Tigera, Inc
+# Copyright 2015-2017 Tigera, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 FROM alpine:3.5
-Add k8s-policy-go /usr/bin
-CMD ["/usr/bin/k8s-policy-go"]
+MAINTAINER Casey Davenport <casey@tigera.io> 
+
+ADD dist/kube-policy-controller /usr/bin
+ENTRYPOINT ["/usr/bin/kube-policy-controller"]

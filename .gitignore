@@ -4,12 +4,12 @@ dist/
 *.created
 *.coverage
 .idea/
-version.py
 *.swp
 *.bak
 *.tmp
 *~
 .vscode/
-vendor/
-k8s-policy-go
 image.created
+vendor/
+dist/kube-policy-controller
+.go-pkg-cache
