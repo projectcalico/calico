@@ -70,11 +70,11 @@ Configure the Calico repository:
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
+    baseurl=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
+    gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
     priority=97
     EOF
 ```
