@@ -185,6 +185,19 @@ var _ = Describe("RouteTable", func() {
 			})
 		})
 
+		Describe("with a persistent failure to connect", func() {
+			BeforeEach(func() {
+				dataplane.PersistentlyFailToConnect = true
+			})
+
+			It("should panic after all its retries are exhausted", func() {
+				for i := 0; i < 3; i++ {
+					Expect(rt.Apply()).To(Equal(ConnectFailed))
+				}
+				Expect(func() { rt.Apply() }).To(Panic())
+			})
+		})
+
 		// We do the following tests in different failure (and non-failure) scenarios.  In
 		// each case, we make the failure transient so that only the first Apply() should
 		// fail.  Then, at most, the second call to Apply() should succeed.
@@ -265,6 +278,22 @@ var _ = Describe("RouteTable", func() {
 							len(dataplane.routeKeyToRoute),
 							dataplane.routeKeyToRoute))
 				})
+				if failFlags&(failNextSetSocketTimeout|
+					failNextNewNetlinkHandle|
+					failNextLinkByName|
+					failNextLinkList|
+					failNextRouteAdd|
+					failNextRouteDel|
+					failNextAddARP|
+					failNextRouteList) != 0 {
+					It("should reconnect to netlink", func() {
+						Expect(dataplane.NumNewNetlinkCalls).To(Equal(2))
+					})
+				} else {
+					It("should not reconnect to netlink", func() {
+						Expect(dataplane.NumNewNetlinkCalls).To(Equal(1))
+					})
+				}
 
 				Describe("after an external route addition", func() {
 					JustBeforeEach(func() {
@@ -406,6 +435,8 @@ const (
 	failNextRouteAdd
 	failNextRouteDel
 	failNextAddARP
+	failNextNewNetlinkHandle
+	failNextSetSocketTimeout
 	failNone failFlags = 0
 )
 
@@ -418,6 +449,8 @@ var failureScenarios = []failFlags{
 	failNextRouteAdd,
 	failNextRouteDel,
 	failNextAddARP,
+	failNextNewNetlinkHandle,
+	failNextSetSocketTimeout,
 }
 
 func (f failFlags) String() string {
@@ -443,6 +476,12 @@ func (f failFlags) String() string {
 	if f&failNextAddARP != 0 {
 		parts = append(parts, "failNextAddARP")
 	}
+	if f&failNextNewNetlinkHandle != 0 {
+		parts = append(parts, "failNextNewNetlinkHandle")
+	}
+	if f&failNextSetSocketTimeout != 0 {
+		parts = append(parts, "failNextSetSocketTimeout")
+	}
 	if f == 0 {
 		parts = append(parts, "failNone")
 	}
@@ -454,6 +493,11 @@ type mockDataplane struct {
 	routeKeyToRoute  map[string]netlink.Route
 	addedRouteKeys   set.Set
 	deletedRouteKeys set.Set
+
+	NumNewNetlinkCalls int
+	NetlinkOpen        bool
+
+	PersistentlyFailToConnect bool
 
 	failuresToSimulate failFlags
 
@@ -494,18 +538,30 @@ func (d *mockDataplane) shouldFail(flag failFlags) bool {
 }
 
 func (d *mockDataplane) NewNetlinkHandle() (HandleIface, error) {
+	d.NumNewNetlinkCalls++
+	if d.PersistentlyFailToConnect || d.shouldFail(failNextNewNetlinkHandle) {
+		return nil, simulatedError
+	}
+	Expect(d.NetlinkOpen).To(BeFalse())
+	d.NetlinkOpen = true
 	return d, nil
 }
 
 func (d *mockDataplane) Delete() {
-
+	Expect(d.NetlinkOpen).To(BeTrue())
+	d.NetlinkOpen = false
 }
 
 func (d *mockDataplane) SetSocketTimeout(to time.Duration) error {
+	Expect(d.NetlinkOpen).To(BeTrue())
+	if d.shouldFail(failNextSetSocketTimeout) {
+		return simulatedError
+	}
 	return nil
 }
 
 func (d *mockDataplane) LinkList() ([]netlink.Link, error) {
+	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextLinkList) {
 		return nil, simulatedError
 	}
@@ -517,6 +573,7 @@ func (d *mockDataplane) LinkList() ([]netlink.Link, error) {
 }
 
 func (d *mockDataplane) LinkByName(name string) (netlink.Link, error) {
+	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextLinkByNameNotFound) {
 		return nil, notFound
 	}
@@ -531,6 +588,7 @@ func (d *mockDataplane) LinkByName(name string) (netlink.Link, error) {
 }
 
 func (d *mockDataplane) RouteList(link netlink.Link, family int) ([]netlink.Route, error) {
+	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextRouteList) {
 		return nil, simulatedError
 	}
@@ -554,6 +612,7 @@ func (d *mockDataplane) removeMockRoute(route *netlink.Route) {
 }
 
 func (d *mockDataplane) RouteAdd(route *netlink.Route) error {
+	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextRouteAdd) {
 		return simulatedError
 	}
@@ -569,6 +628,7 @@ func (d *mockDataplane) RouteAdd(route *netlink.Route) error {
 }
 
 func (d *mockDataplane) RouteDel(route *netlink.Route) error {
+	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(failNextRouteDel) {
 		return simulatedError
 	}
