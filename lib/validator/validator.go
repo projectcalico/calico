@@ -263,8 +263,12 @@ func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 			"Port", "", reason("port range invalid"))
 	}
 
-	// No need to check for the upperbound (65536) because we use uint16.
-	if p.MinPort < 1 || p.MaxPort < 1 {
+	if p.PortName != "" {
+		if p.MinPort != 0 || p.MaxPort != 0 {
+			structLevel.ReportError(reflect.ValueOf(p.PortName),
+				"Port", "", reason("named port invalid, if name is specified, min and max should be 0"))
+		}
+	} else if p.MinPort < 1 || p.MaxPort < 1 {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
 			"Port", "", reason("port range invalid, port number must be between 0 and 65536"))
 	}
@@ -494,8 +498,6 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 	scanNets(rule.Source.GetNotNets(), "Source.NotNet(s)")
 	scanNets(rule.Destination.GetNets(), "Destination.Net(s)")
 	scanNets(rule.Destination.GetNotNets(), "Destination.NotNet(s)")
-
-	// TODO Named ports: check that a protocol is specified if there are any named ports.
 }
 
 func validateBackendRule(v *validator.Validate, structLevel *validator.StructLevel) {

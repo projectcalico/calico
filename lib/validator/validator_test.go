@@ -55,6 +55,14 @@ func init() {
 	protoUDP := numorstring.ProtocolFromString("udp")
 	protoNumeric := numorstring.ProtocolFromInt(123)
 
+	// badPorts contains a port that should fail validation because it mixes named and numeric
+	// ports.
+	badPorts := []numorstring.Port{{
+		PortName: "foo",
+		MinPort:  1,
+		MaxPort:  123,
+	}}
+
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
@@ -107,6 +115,51 @@ func init() {
 		}, false),
 		Entry("should reject !dst ports with no protocol (m)", model.Rule{
 			NotDstPorts: []numorstring.Port{numorstring.SinglePort(80)},
+		}, false),
+		Entry("should accept src named ports with tcp protocol (m)", model.Rule{
+			Protocol: &protoTCP,
+			SrcPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, true),
+		Entry("should accept dst named ports with tcp protocol (m)", model.Rule{
+			Protocol: &protoTCP,
+			DstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, true),
+		Entry("should accept !src named ports with tcp protocol (m)", model.Rule{
+			Protocol:    &protoTCP,
+			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, true),
+		Entry("should accept !dst named ports with tcp protocol (m)", model.Rule{
+			Protocol:    &protoTCP,
+			NotDstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, true),
+		Entry("should reject src named ports with no protocol (m)", model.Rule{
+			SrcPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, false),
+		Entry("should reject dst named ports with no protocol (m)", model.Rule{
+			DstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, false),
+		Entry("should reject !src named ports with no protocol (m)", model.Rule{
+			NotSrcPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, false),
+		Entry("should reject !dst named ports with no protocol (m)", model.Rule{
+			NotDstPorts: []numorstring.Port{numorstring.NamedPort("foo")},
+		}, false),
+		// Check that we tell the validator to "dive" and validate the port too.
+		Entry("should reject src named ports with min and max (m)", model.Rule{
+			Protocol: &protoTCP,
+			SrcPorts: badPorts,
+		}, false),
+		Entry("should reject !src named ports with min and max (m)", model.Rule{
+			Protocol:    &protoTCP,
+			NotSrcPorts: badPorts,
+		}, false),
+		Entry("should reject dst named ports with min and max (m)", model.Rule{
+			Protocol: &protoTCP,
+			DstPorts: badPorts,
+		}, false),
+		Entry("should reject !dst named ports with min and max (m)", model.Rule{
+			Protocol:    &protoTCP,
+			NotDstPorts: badPorts,
 		}, false),
 
 		// (Backend model) EndpointPorts.

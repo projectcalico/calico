@@ -40,23 +40,23 @@ type Rule struct {
 	SrcNet      *net.IPNet         `json:"src_net,omitempty" validate:"omitempty"`
 	SrcNets     []*net.IPNet       `json:"src_nets,omitempty" validate:"omitempty"`
 	SrcSelector string             `json:"src_selector,omitempty" validate:"omitempty,selector"`
-	SrcPorts    []numorstring.Port `json:"src_ports,omitempty" validate:"omitempty"`
+	SrcPorts    []numorstring.Port `json:"src_ports,omitempty" validate:"omitempty,dive"`
 	DstTag      string             `json:"dst_tag,omitempty" validate:"omitempty,tag"`
 	DstSelector string             `json:"dst_selector,omitempty" validate:"omitempty,selector"`
 	DstNet      *net.IPNet         `json:"dst_net,omitempty" validate:"omitempty"`
 	DstNets     []*net.IPNet       `json:"dst_nets,omitempty" validate:"omitempty"`
-	DstPorts    []numorstring.Port `json:"dst_ports,omitempty" validate:"omitempty"`
+	DstPorts    []numorstring.Port `json:"dst_ports,omitempty" validate:"omitempty,dive"`
 
 	NotSrcTag      string             `json:"!src_tag,omitempty" validate:"omitempty,tag"`
 	NotSrcNet      *net.IPNet         `json:"!src_net,omitempty" validate:"omitempty"`
 	NotSrcNets     []*net.IPNet       `json:"!src_nets,omitempty" validate:"omitempty"`
 	NotSrcSelector string             `json:"!src_selector,omitempty" validate:"omitempty,selector"`
-	NotSrcPorts    []numorstring.Port `json:"!src_ports,omitempty" validate:"omitempty"`
+	NotSrcPorts    []numorstring.Port `json:"!src_ports,omitempty" validate:"omitempty,dive"`
 	NotDstTag      string             `json:"!dst_tag,omitempty" validate:"omitempty"`
 	NotDstSelector string             `json:"!dst_selector,omitempty" validate:"omitempty,selector"`
 	NotDstNet      *net.IPNet         `json:"!dst_net,omitempty" validate:"omitempty"`
 	NotDstNets     []*net.IPNet       `json:"!dst_nets,omitempty" validate:"omitempty"`
-	NotDstPorts    []numorstring.Port `json:"!dst_ports,omitempty" validate:"omitempty"`
+	NotDstPorts    []numorstring.Port `json:"!dst_ports,omitempty" validate:"omitempty,dive"`
 
 	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
 }
