@@ -59,7 +59,6 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 
 	cacheArgs := calicocache.ResourceCacheArgs{
 		ListFunc:   listFunc,
-		Client:     calicoClient,
 		ObjectType: reflect.TypeOf(api.Profile{}), // Restrict cache to store calico profiles only.
 	}
 

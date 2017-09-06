@@ -8,6 +8,7 @@ GO_BUILD_VER:=latest
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LDFLAGS=
 LIBCALICOGO_PATH?=none
+LOCAL_USER_ID?=$(shell id -u $$USER)
 
 # Determine which OS / ARCH.
 OS?=$(shell uname -s | tr A-Z a-z)
@@ -72,7 +73,7 @@ binary-containerized: vendor
 ###############################################################################
 
 ## Runs all tests - good for CI. 
-ci: clean docker-image ut st
+ci: clean docker-image # TODO: ut st
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.4

@@ -9,8 +9,8 @@ import:
   version: ~1.3.0
 - package: github.com/kelseyhightower/envconfig
   version: ~1.3.0
-- package: k8s.io/kubernetes/apimachinery
-  version: b64bc0924d97a31dfd1b4eba0c1faee085ee3540
+- package: k8s.io/apimachinery
+  version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
 - package: k8s.io/client-go
   version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
   subpackages:
@@ -31,4 +31,4 @@ import:
   - tools/cache
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: v1.6.1
+  version: 8561b3f8a3b66e98173c5d970416051c0e5d5716
