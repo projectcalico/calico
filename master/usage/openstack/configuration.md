@@ -20,10 +20,24 @@ without any proxying by Neutron. To make that work:
 In `/etc/neutron/neutron.conf` you need the following settings to
 configure the Neutron service.
 
+| Setting            | Value   | Meaning                     |
+|--------------------|---------|-----------------------------|
+| core_plugin        | calico  | Use the Calico core plugin  |
+|--------------------|---------|-----------------------------|
+
+Calico can operate either as a core plugin or as an ML2 mechanism driver.  The
+function is the same both ways, except that floating IPs are only supported
+when operating as a core plugin; hence the recommended setting here.
+
+However, if you don't need floating IPs and have other reasons for using ML2,
+you can, instead, set
+
 | Setting            | Value                                | Meaning              |
 |--------------------|--------------------------------------|----------------------|
 | core_plugin        | neutron.plugins.ml2.plugin.ML2Plugin | Use ML2 plugin       |
 |--------------------|--------------------------------------|----------------------|
+
+and then the further ML2-specific configuration as covered below.
 
 With OpenStack releases earlier than Liberty you will also need:
 
