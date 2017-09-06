@@ -71,7 +71,15 @@ var _ = Describe("RouteTable", func() {
 		// Setting an auto-increment greater than the route cleanup delay effectively
 		// disables the grace period for these tests.
 		t.setAutoIncrement(11 * time.Second)
-		rt = NewWithShims([]string{"cali"}, 4, dataplane, t)
+		rt = NewWithShims(
+			[]string{"cali"},
+			4,
+			dataplane.NewNetlinkHandle,
+			10*time.Second,
+			dataplane.AddStaticArpEntry,
+			dataplane,
+			t,
+		)
 	})
 
 	It("should be constructable", func() {
@@ -483,6 +491,18 @@ func (d *mockDataplane) shouldFail(flag failFlags) bool {
 		log.WithField("flag", flag).Warn("Mock dataplane: triggering failure")
 	}
 	return flagPresent
+}
+
+func (d *mockDataplane) NewNetlinkHandle() (HandleIface, error) {
+	return d, nil
+}
+
+func (d *mockDataplane) Delete() {
+
+}
+
+func (d *mockDataplane) SetSocketTimeout(to time.Duration) error {
+	return nil
 }
 
 func (d *mockDataplane) LinkList() ([]netlink.Link, error) {
