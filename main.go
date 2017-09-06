@@ -1,7 +1,7 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"github.com/projectcalico/k8s-policy/pkg/config"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/namespace"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/networkpolicy"
@@ -20,13 +20,14 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to parse config")
 	}
+
 	logLevel, err := log.ParseLevel(config.LogLevel)
 	if err != nil {
 		logLevel = log.InfoLevel
 	}
 	log.SetLevel(logLevel)
 
-	k8sClientset, calicoClient, err := getClients()
+	k8sClientset, calicoClient, err := getClients(config.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to get clientset.")
 	}
@@ -34,7 +35,7 @@ func main() {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	//TODO: Allow user define multiple types of controllers.
+	// TODO: Allow user define multiple types of controllers.
 	switch config.ControllerType {
 	case "endpoint":
 		podController := pod.NewPodController(k8sClientset, calicoClient)
@@ -53,8 +54,9 @@ func main() {
 	select {}
 }
 
-// Fuction that returns kubernetes and calico clients.
-func getClients() (*kubernetes.Clientset, *client.Client, error) {
+// getClients builds and returns both Kubernetes and Calico clients.
+func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, error) {
+	// First, build the Calico client using the configured environment variables.
 	cconfig, err := client.LoadClientConfig("")
 	if err != nil {
 		return nil, nil, err
@@ -63,29 +65,20 @@ func getClients() (*kubernetes.Clientset, *client.Client, error) {
 	// Get Calico client
 	calicoClient, err := client.New(*cconfig)
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
 
-	var kubeconfig string
-	var master string
-
-	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
-	flag.StringVar(&master, "master", "", "master url")
-	flag.Parse()
-
-	// creates the connection
-	k8sconfig, err := clientcmd.BuildConfigFromFlags(master, kubeconfig)
+	// Now build the Kubernetes client, we support in-cluster config and kubeconfig
+	// as means of configuring the client.
+	k8sconfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		log.Fatal(err)
-	}
-	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
 	// Get kubenetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
-		panic(err.Error())
+		return nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
 
 	return k8sClientset, calicoClient, nil
