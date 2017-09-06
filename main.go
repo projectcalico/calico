@@ -33,10 +33,10 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	// Build clients to be used by the controlelrs.
+	// Build clients to be used by the controllers.
 	k8sClientset, calicoClient, err := getClients(config.Kubeconfig)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to build clients")
+		log.WithError(err).Fatal("Failed to start")
 	}
 
 	stop := make(chan struct{})

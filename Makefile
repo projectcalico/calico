@@ -73,7 +73,7 @@ binary-containerized: vendor
 ###############################################################################
 
 ## Runs all tests - good for CI. 
-ci: clean docker-image # TODO: ut st
+ci: clean docker-image st # TODO: ut
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.4
