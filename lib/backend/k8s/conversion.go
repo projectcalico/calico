@@ -194,7 +194,7 @@ func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 						"protocol": containerPort.Protocol,
 						"pod":      pod,
 						"port":     containerPort,
-					}).Warn("Ignoring named port with unknown protocol")
+					}).Debug("Ignoring named port with unknown protocol")
 					continue
 				}
 				modelProto = numorstring.ProtocolFromString("tcp")
@@ -353,7 +353,7 @@ func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 		ports = []*extensions.NetworkPolicyPort{nil}
 	}
 
-	// Combine desintations with sources to generate rules.
+	// Combine destintations with sources to generate rules.
 	// TODO: This currently creates a lot of rules by making every combination of from / ports
 	// into a rule.  We can combine these so that we don't need as many rules!
 	for _, port := range ports {
