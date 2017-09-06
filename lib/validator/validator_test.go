@@ -631,6 +631,30 @@ func init() {
 					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, true),
+		Entry("should accept Rule with source named ports and protocol type 6",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromInt(6),
+				Source: api.EntityRule{
+					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
+		Entry("should accept Rule with source named ports and protocol type tcp",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Source: api.EntityRule{
+					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
+		Entry("should accept Rule with source named ports and protocol type udp",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("udp"),
+				Source: api.EntityRule{
+					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
+			}, true),
 		Entry("should accept Rule with empty source ports and protocol type 7",
 			api.Rule{
 				Action:   "allow",
@@ -676,6 +700,26 @@ func init() {
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
 					NotPorts: []numorstring.Port{numorstring.SinglePort(0)},
+				},
+			}, false),
+		Entry("should reject Rule with invalid port (name + number)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Destination: api.EntityRule{
+					NotPorts: []numorstring.Port{{
+						PortName: "foo",
+						MinPort:  123,
+						MaxPort:  456,
+					}},
+				},
+			}, false),
+		Entry("should reject named port Rule with invalid protocol",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("unknown"),
+				Destination: api.EntityRule{
+					NotPorts: []numorstring.Port{numorstring.NamedPort("foo")},
 				},
 			}, false),
 		Entry("should accept Rule with empty dest ports and protocol type sctp",
@@ -731,7 +775,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Source: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
+					Ports: []numorstring.Port{{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with invalid source !ports and protocol type tcp",
@@ -739,7 +783,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Source: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
+					NotPorts: []numorstring.Port{{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with invalid dest ports and protocol type tcp",
@@ -747,7 +791,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
+					Ports: []numorstring.Port{{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with invalid dest !ports and protocol type tcp",
@@ -755,7 +799,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
+					NotPorts: []numorstring.Port{{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with one invalid port in the port range (MinPort 0)",
@@ -763,7 +807,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 0, MaxPort: 100}},
+					NotPorts: []numorstring.Port{{MinPort: 0, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject rule mixed IPv4 (src) and IPv6 (dest)",
