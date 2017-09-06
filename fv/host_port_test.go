@@ -17,8 +17,6 @@
 package fv_test
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/fv/containers"
@@ -104,9 +102,10 @@ func MetricsPortReachable(felixName, felixIP string) bool {
 var _ = Context("with initialized Felix and etcd datastore", func() {
 
 	var (
-		etcd   *containers.Container
-		felix  *containers.Container
-		client *client.Client
+		etcd                 *containers.Container
+		felix                *containers.Container
+		client               *client.Client
+		metricsPortReachable func() bool
 	)
 
 	BeforeEach(func() {
@@ -123,6 +122,10 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		felixNode.Metadata.Name = felix.Hostname
 		_, err = client.Nodes().Create(felixNode)
 		Expect(err).NotTo(HaveOccurred())
+
+		metricsPortReachable = func() bool {
+			return MetricsPortReachable(felix.Name, felix.IP)
+		}
 	})
 
 	AfterEach(func() {
@@ -140,17 +143,15 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	})
 
 	It("with no endpoints or policy, port should be reachable", func() {
-		time.Sleep(3 * time.Second)
-		Expect(MetricsPortReachable(felix.Name, felix.IP)).To(BeTrue())
+		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 	})
 
 	It("with a local workload, port should be reachable", func() {
 		w := workload.Run(felix, "cali12345", "10.65.0.2", "8055")
 		w.Configure(client)
-		time.Sleep(10 * time.Second)
-		Expect(MetricsPortReachable(felix.Name, felix.IP)).To(BeTrue())
+		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 		w.Stop()
-		Expect(MetricsPortReachable(felix.Name, felix.IP)).To(BeTrue())
+		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 	})
 
 	Context("with host endpoint defined", func() {
@@ -166,8 +167,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		})
 
 		It("port should not be reachable", func() {
-			time.Sleep(3 * time.Second)
-			Expect(MetricsPortReachable(felix.Name, felix.IP)).To(BeFalse())
+			Eventually(metricsPortReachable, "10s", "1s").Should(BeFalse())
 		})
 
 		Context("with pre-DNAT policy defined", func() {
@@ -191,8 +191,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 			})
 
 			It("port should be reachable", func() {
-				time.Sleep(3 * time.Second)
-				Expect(MetricsPortReachable(felix.Name, felix.IP)).To(BeTrue())
+				Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 			})
 		})
 	})
