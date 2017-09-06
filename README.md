@@ -14,13 +14,13 @@ Calico is a [Tigera](https://www.tigera.io/) open source project, and is primari
 
 ## Get Started Using Calico
 
-For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](docs.projectcalico.org).
+For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](https://docs.projectcalico.org).
 
 ## Get Started Developing Calico
 
 - [Contribution guidlines](CONTRIBUTING_CODE.md): submitting patches to Calico and contribution workflow.
 - [Building Calico](BUILDING_CALICO.md): building Calico from source and developer workflow.
-- [Contributing to the Calico documentation](CONTRIBUTING_DOCS.md): submitting patches to [docs.projectcalico.org](docs.projectcalico.org)
+- [Contributing to the Calico documentation](CONTRIBUTING_DOCS.md): submitting patches to [docs.projectcalico.org](https://docs.projectcalico.org)
 
 ## Support
 
