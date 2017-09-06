@@ -263,7 +263,7 @@ var _ = Describe("PolicyConverter", func() {
 		})
 	})
 
-	Context("GetKey", func(){
+	Context("GetKey", func() {
 		policyName := "allow-all"
 		policy := api.Policy{
 			Metadata: api.PolicyMetadata{
@@ -274,7 +274,7 @@ var _ = Describe("PolicyConverter", func() {
 
 		// Get key
 		key := npConverter.GetKey(policy)
-		It("should return name of policy as key", func(){
+		It("should return name of policy as key", func() {
 			Expect(key).To(Equal(policyName))
 		})
 	})

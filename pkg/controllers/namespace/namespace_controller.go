@@ -1,6 +1,9 @@
 package namespace
 
 import (
+	"reflect"
+	"strings"
+
 	calicocache "github.com/projectcalico/k8s-policy/pkg/cache"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/controller"
 	"github.com/projectcalico/k8s-policy/pkg/converter"
@@ -13,8 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
-	"reflect"
-	"strings"
 )
 
 // NamespaceController Implements Controller interface
@@ -33,120 +34,95 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
-	// on ETCD datastore. Indentifies controller writen objects by
+	// in the Calico datastore. Indentifies controller writen objects by
 	// their naming convention.
 	listFunc := func() (map[string]interface{}, error) {
+		log.Debugf("Listing profiles from Calico datastore")
 		filteredProfiles := make(map[string]interface{})
 
-		// Get all profile objects from ETCD datastore
+		// Get all profile objects from Calico datastore
 		calicoProfiles, err := calicoClient.Profiles().List(api.ProfileMetadata{})
 		if err != nil {
-			return filteredProfiles, err
+			return nil, err
 		}
 
 		// Filter out only objects that are written by policy controller
 		for _, profile := range calicoProfiles.Items {
-
 			profileName := profile.Metadata.Name
 			if strings.HasPrefix(profileName, converter.ProfileNameFormat) {
 				key := namespaceConverter.GetKey(profile)
 				filteredProfiles[key] = profile
 			}
 		}
-		log.Debugf("Found %d profiles in calico ETCD:", len(filteredProfiles))
+		log.Debugf("Found %d profiles in Calico datastore", len(filteredProfiles))
 		return filteredProfiles, nil
 	}
 
+	// Create a Cache to store Profiles in.
 	cacheArgs := calicocache.ResourceCacheArgs{
 		ListFunc:   listFunc,
-		ObjectType: reflect.TypeOf(api.Profile{}), // Restrict cache to store calico profiles only.
+		ObjectType: reflect.TypeOf(api.Profile{}),
 	}
-
 	ccache := calicocache.NewResourceCache(cacheArgs)
 
-	// create the watcher
+	// Create a Namespace watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "namespaces", "", fields.Everything())
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
-	// whenever the kubernetes cache is updated, changes get reflected in calico cache as well.
+	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
 	indexer, informer := cache.NewIndexerInformer(listWatcher, &v1.Namespace{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(obj)
-			log.Debugf("Got ADD event for namespace: %s\n", key)
-
-			if err != nil {
-				log.WithError(err).Error("Failed to generate key")
-				return
-			}
-
+			log.Debugf("Got ADD event for Namespace: %#v", obj)
 			profile, err := namespaceConverter.Convert(obj)
 			if err != nil {
 				log.WithError(err).Errorf("Error while converting %#v to calico profile.", obj)
 				return
 			}
 
-			calicoKey := namespaceConverter.GetKey(profile)
-			// Add key:*profile in calicoCache
-			ccache.Set(calicoKey, profile)
+			// Add to cache.
+			k := namespaceConverter.GetKey(profile)
+			ccache.Set(k, profile)
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(newObj)
-
-			log.Debugf("Got UPDATE event for namespace: %s\n", key)
-			log.Debugf("Old object: %#v\n", oldObj)
-			log.Debugf("New object: %#v\n", newObj)
-
-			if err != nil {
-				log.WithError(err).Error("Failed to generate key")
-				return
-			}
-
+			log.Debugf("Got UPDATE event for Namespace")
+			log.Debugf("Old object: \n%#v\n", oldObj)
+			log.Debugf("New object: \n%#v\n", newObj)
 			if newObj.(*v1.Namespace).Status.Phase == "Terminating" {
-
-				// If object status is updated to "Terminating", object
-				// is getting deleted. Ignore this event. When deletion
-				// completes another DELETE event will be raised.
-				// Let DeleteFunc handle that.
-				log.Debugf("Namespace %s is getting deleted.", newObj.(*v1.Namespace).ObjectMeta.GetName())
+				// Ignore any updates with "Terminating" status, since
+				// we will soon receive a DELETE event to remove this object.
+				log.Debugf("Ignoring 'Terminating' update for Namespace %s.", newObj.(*v1.Namespace).ObjectMeta.GetName())
 				return
 			}
+
+			// Convert the namespace into a Profile.
 			profile, err := namespaceConverter.Convert(newObj)
 			if err != nil {
 				log.WithError(err).Errorf("Error while converting %#v to calico profile.", newObj)
 				return
 			}
 
-			calicoKey := namespaceConverter.GetKey(profile)
-
-			// Add key:profile in calicoCache
-			ccache.Set(calicoKey, profile)
+			// Update in the cache.
+			k := namespaceConverter.GetKey(profile)
+			ccache.Set(k, profile)
 		},
 		DeleteFunc: func(obj interface{}) {
-			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
-			// key function.
-			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			log.Debugf("Got DELETE event for namespace: %s\n", key)
-
-			if err != nil {
-				log.WithError(err).Error("Failed to generate key")
-				return
-			}
-
+			// Convert the namespace into a Profile.
+			log.Debugf("Got DELETE event for namespace: %#v", obj)
 			profile, err := namespaceConverter.Convert(obj)
 			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to calico profile.", obj)
+				log.WithError(err).Errorf("Error converting %#v to Calico profile.", obj)
 				return
 			}
-			calicoKey := namespaceConverter.GetKey(profile)
-			ccache.Delete(calicoKey)
+
+			k := namespaceConverter.GetKey(profile)
+			ccache.Delete(k)
 		},
 	}, cache.Indexers{})
 
 	return &NamespaceController{indexer, informer, ccache, calicoClient, k8sClientset}
 }
 
-// Run starts controller.Internally it starts syncing
-// kubernetes and calico caches.
+// Run starts the controller.
 func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
@@ -154,25 +130,26 @@ func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stop
 	workqueue := c.calicoObjCache.GetQueue()
 	defer workqueue.ShutDown()
 
-	log.Info("Starting namespace controller")
-
-	// Start Calico cache. Cache gets loaded with objects
-	// from ETCD datastore.
-	c.calicoObjCache.Run(reconcilerPeriod)
-
-	go c.informer.Run(stopCh)
+	log.Info("Starting Namespace/Profile controller")
 
 	// Wait till k8s cache is synced
+	log.Debug("Waiting to sync with Kubernetes API (Namespaces)")
+	go c.informer.Run(stopCh)
 	for !c.informer.HasSynced() {
 	}
+	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
+
+	// Start Calico cache.
+	c.calicoObjCache.Run(reconcilerPeriod)
 
 	// Start a number of worker threads to read from the queue.
 	for i := 0; i < threadiness; i++ {
 		go c.runWorker()
 	}
+	log.Info("Namespace/Profile controller is now running")
 
 	<-stopCh
-	log.Info("Stopping Node controller")
+	log.Info("Stopping Namespace/Profile controller")
 }
 
 func (c *NamespaceController) runWorker() {
@@ -181,55 +158,43 @@ func (c *NamespaceController) runWorker() {
 }
 
 func (c *NamespaceController) processNextItem() bool {
-	// Wait until there is a new item in the working queue
+	// Wait until there is a new item in the work queue.
 	workqueue := c.calicoObjCache.GetQueue()
 	key, quit := workqueue.Get()
 	if quit {
 		return false
 	}
 
-	// Tell the queue that we are done with processing this key. This unblocks the key for other workers
-	// This allows safe parallel processing because two nodes with the same key are never processed in
-	// parallel.
-	defer workqueue.Done(key)
+	// Sync the object to the Calico datastore.
+	if err := c.syncToCalico(key.(string)); err != nil {
+		c.handleErr(err, key.(string))
+	}
 
-	// Invoke the method containing the business logic
-	err := c.syncToCalico(key.(string))
-
-	// Handle the error if something went wrong during the execution of the business logic
-	c.handleErr(err, key.(string))
+	// Indicate that we're done processing this key, allowing for safe parallel processing such that
+	// two objects with the same key are never processed in parallel.
+	workqueue.Done(key)
 	return true
 }
 
-// syncToCalico syncs the given update to Calico's etcd, as well as the in-memory cache
-// of Calico objects.
+// syncToCalico syncs the given update to the Calico datastore.
 func (c *NamespaceController) syncToCalico(key string) error {
-	// Check if it exists in our cache.
+	// Check if it exists in the controller's cache.
 	obj, exists := c.calicoObjCache.Get(key)
-
 	if !exists {
-
-		log.Debugf("namespace %s does not exist anymore on kubernetes\n", key)
-		log.Infof("Deleting namespace %s on ETCD \n", key)
-
-		err := c.calicoClient.Profiles().Delete(api.ProfileMetadata{
-			Name: key,
-		})
-
-		// Let Delete() operation be idompotent. Ignore the error while deletion if
-		// object does not exists on ETCD already.
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			err = nil
+		// The object no longer exists - delete from the datastore.
+		log.Infof("Deleting Profile %s from Calico datastore", key)
+		if err := c.calicoClient.Profiles().Delete(api.ProfileMetadata{Name: key}); err != nil {
+			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+				// We hit an error other than "does not exist".
+				return err
+			}
 		}
-
-		return err
+		return nil
 	} else {
-
-		var p api.Profile
-		p = obj.(api.Profile)
-		log.Infof("Applying namespace %s on ETCD \n", key)
+		// The object exists - update the datastore to reflect.
+		log.Infof("Add/Update Profile %s in Calico datastore", key)
+		p := obj.(api.Profile)
 		_, err := c.calicoClient.Profiles().Apply(&p)
-
 		return err
 	}
 }
@@ -238,7 +203,6 @@ func (c *NamespaceController) syncToCalico(key string) error {
 func (c *NamespaceController) handleErr(err error, key string) {
 	workqueue := c.calicoObjCache.GetQueue()
 	if err == nil {
-
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.
 		// This ensures that future processing of updates for this key is not delayed because of
 		// an outdated error history.
@@ -248,17 +212,15 @@ func (c *NamespaceController) handleErr(err error, key string) {
 
 	// This controller retries 5 times if something goes wrong. After that, it stops trying.
 	if workqueue.NumRequeues(key) < 5 {
-
-		log.WithError(err).Errorf("Error syncing namespace %v: %v", key, err)
 		// Re-enqueue the key rate limited. Based on the rate limiter on the
 		// queue and the re-enqueue history, the key will be processed later again.
+		log.WithError(err).Errorf("Error syncing Profile %v: %v", key, err)
 		workqueue.AddRateLimited(key)
 		return
 	}
-
 	workqueue.Forget(key)
 
 	// Report to an external entity that, even after several retries, we could not successfully process this key
 	uruntime.HandleError(err)
-	log.WithError(err).Errorf("Dropping namespace %q out of the queue: %v", key, err)
+	log.WithError(err).Errorf("Dropping Profile %q out of the queue: %v", key, err)
 }

@@ -12,7 +12,7 @@ type Config struct {
 	ReconcilerPeriod string `default:"5m" split_words:"true"`
 
 	// Which controllers to run.
-	EnabledControllers string `default:"policy" split_words:"true"`
+	EnabledControllers string `default:"policy,profile,endpoint" split_words:"true"`
 
 	// Number of workers to run for each controller.
 	EndpointWorkers int `default:"3" split_words:"true"`

@@ -1,18 +1,18 @@
 package cache
 
 import (
+	"reflect"
+	"sync"
+	"time"
+
 	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/util/workqueue"
-	"reflect"
-	"time"
 )
 
-// ResourceCache stores calico representation of kubernetes objects.
-// It tries to be always in sync with kubernetes cache with the
-// help of reconcilor. Adds keys of internal objects to workqueue
-// if any modifications are done to them. Controller will further
-// sync these keys to calico ETCD datastore.
+// ResourceCache stores resources and queues updates when those resources
+// are created, modified, or deleted. It de-duplicates updates by ensuring
+// updates are only queued when an object has changed.
 type ResourceCache interface {
 	// Sets the key to the provided value, and generates an update
 	// on the queue the value has changed.
@@ -47,66 +47,71 @@ type ResourceCache interface {
 // ResourceCacheArgs struct passed to constructor of ResourceCache.
 // Groups togather all the arguments to pass in single struct.
 type ResourceCacheArgs struct {
-	// ListFunc returns a list of objects.  Responsible for filtering any
-	// objects which should not be monitored by the cache / controller.
+	// ListFunc returns a mapping of keys to objects from the Calico datastore.
 	ListFunc func() (map[string]interface{}, error)
 
-	// Type of object cache will hold
-	// Set() API will verfiy the object type before storing it in cache
+	// ObjectType is the type of object which is to be stored in this cache.
 	ObjectType reflect.Type
 }
 
-// CalicoCache implements ResourceCache interface
+// calicoCache implements the ResourceCache interface
 type calicoCache struct {
-	threadSafeCache *cache.Cache                           // Underlaying threadsafe implementation of cache
-	workqueue       workqueue.RateLimitingInterface        // Workqueue
-	ListFunc        func() (map[string]interface{}, error) // Function that returns a list of objects.
-	ObjectType      reflect.Type                           // Type of object cache will hold
+	threadSafeCache *cache.Cache
+	workqueue       workqueue.RateLimitingInterface
+	ListFunc        func() (map[string]interface{}, error)
+	ObjectType      reflect.Type
+	log             *log.Entry
+	running         bool
+	mut             *sync.Mutex
 }
 
-// NewResourceCache Constructor for ResourceCache.
-// Requires calico client to prime the cache
-// Cache only allows adding objects of type `objectType`
+// NewResourceCache builds and returns a resource cache using the provided arguments.
 func NewResourceCache(args ResourceCacheArgs) ResourceCache {
+	// Make sure logging is context aware.
 	return &calicoCache{
 		threadSafeCache: cache.New(cache.NoExpiration, cache.DefaultExpiration),
 		workqueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		ListFunc:        args.ListFunc,
 		ObjectType:      args.ObjectType,
+		log:             log.WithFields(log.Fields{"type": args.ObjectType}),
+		mut:             &sync.Mutex{},
 	}
 }
 
 func (c *calicoCache) Set(key string, newObj interface{}) {
 	if reflect.TypeOf(newObj) != c.ObjectType {
-		log.Fatalf("Wrong object type recieved to store in cache. Expected: %s, Found: %s", c.ObjectType, reflect.TypeOf(newObj))
+		c.log.Fatalf("Wrong object type recieved to store in cache. Expected: %s, Found: %s", c.ObjectType, reflect.TypeOf(newObj))
 	}
 
+	// Check if the object exists in the cache already.  If it does and hasn't changed,
+	// then we don't need to send an update on the queue.
 	if existingObj, found := c.threadSafeCache.Get(key); found {
-
-		log.Debugf("%#v found in cache. comparing..", existingObj)
-
+		c.log.Debugf("%#v already exists in cache - comparing.", existingObj)
 		if !reflect.DeepEqual(existingObj, newObj) {
-			log.Debugf("%#v and %#v do not match.Updating it in calico cache.", newObj, existingObj)
-
+			// The objects do not match - send an update over the queue.
 			c.threadSafeCache.Set(key, newObj, cache.NoExpiration)
-			c.workqueue.Add(key)
+			if c.isRunning() {
+				c.log.Debugf("Queueing update - %#v and %#v do not match.", newObj, existingObj)
+				c.workqueue.Add(key)
+			}
 		}
 	} else {
-		log.Debugf("%#v not found in calico cache. Adding it in calico cache", newObj)
-
 		c.threadSafeCache.Set(key, newObj, cache.NoExpiration)
-		c.workqueue.Add(key)
+		if c.isRunning() {
+			c.log.Debugf("%#v not found in cache, adding it + queuing update.", newObj)
+			c.workqueue.Add(key)
+		}
 	}
 }
 
 func (c *calicoCache) Delete(key string) {
-	log.Debugf("Deleting %s in calico", key)
+	c.log.Debugf("Deleting %s from cache", key)
 	c.threadSafeCache.Delete(key)
 	c.workqueue.Add(key)
 }
 
 func (c *calicoCache) Clean(key string) {
-	log.Debugf("Cleaning up %s in calico cache.", key)
+	c.log.Debugf("Cleaning %s from cache, no update required", key)
 	c.threadSafeCache.Delete(key)
 }
 
@@ -118,15 +123,13 @@ func (c *calicoCache) Get(key string) (interface{}, bool) {
 	return nil, false
 }
 
-// Prime funtion adds object to threadSafeCache.
-// Only difference with Set() call is it does not queue the key
-// to workqueue.
+// Prime adds the key and value to the cache but will never generate
+// an update on the queue.
 func (c *calicoCache) Prime(key string, value interface{}) {
 	c.threadSafeCache.Set(key, value, cache.NoExpiration)
 }
 
-// ListKeys returns list of calico cache keys in the form
-// of array of strings. Cache stores name field of objects as key.
+// ListKeys returns a list of all the keys in the cache.
 func (c *calicoCache) ListKeys() []string {
 	cacheItems := c.threadSafeCache.Items()
 	keys := make([]string, 0, len(cacheItems))
@@ -137,107 +140,105 @@ func (c *calicoCache) ListKeys() []string {
 	return keys
 }
 
+// GetQueue returns the output queue from the cache.  Whenever a key/value pair
+// is modified, an event will appear on this queue.
 func (c *calicoCache) GetQueue() workqueue.RateLimitingInterface {
 	return c.workqueue
 }
 
-// Load all the calico datastore objects at the begining of run
+// Run starts the cache.  And Set calls prior to calling Run will
+// prime the cache, but not trigger any updates on the output queue.
 func (c *calicoCache) Run(reconcilerPeriod string) {
-	// Retry priming of cache if connection to ETCD datastore fails
-	for err := c.primeCache(); err != nil; {
-		log.WithError(err).Errorf("Failed to prime Calico cache, retrying")
-	}
-
 	go c.reconcile(reconcilerPeriod)
+
+	// Indicate that the cache is running, and so updates
+	// can be queued.
+	c.mut.Lock()
+	c.running = true
+	c.mut.Unlock()
 }
 
-// primeCache() function populates Calico Cache with only calico objects
-// that are created by policy controller.
-func (c *calicoCache) primeCache() error {
-	etcdObjList, err := c.ListFunc()
-
-	if err != nil {
-		log.WithError(err).Errorf("unable to list objects from ETCD while priming cache.")
-		return err
-	}
-
-	for name, etcdObj := range etcdObjList {
-		c.Prime(name, etcdObj)
-	}
-	return nil
+func (c *calicoCache) isRunning() bool {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	return c.running
 }
 
-// reconcile() function runs every `reconcilerPeriod` and brings ETCD datastore
-// in sync with Calico cache. This is to correct any manual changes done by
-// user in Calico ETCD.
+// reconcile ensures a reconciliation is run every `reconcilerPeriod` in order to bring the datastore
+// in sync with the cache. This is to correct any manual changes made in the datastore
+// without the cache being aware.
 func (c *calicoCache) reconcile(reconcilerPeriod string) {
 	duration, err := time.ParseDuration(reconcilerPeriod)
 	if err != nil {
-		log.Fatalf("Invalid time duration format %s for reconciler. Some correct examples, 5m, 30s, 2m30s etc.", reconcilerPeriod)
-		return
+		c.log.Fatalf("Invalid time duration format for reconciler: %s. Some valid examples: 5m, 30s, 2m30s etc.", reconcilerPeriod)
 	}
 
 	// If user has set duration to 0 then disable the reconciler job.
 	if duration.Nanoseconds() == 0 {
-		log.Infof("Reconciler period set to %d. Disabling reconciler.", duration.Nanoseconds())
+		c.log.Infof("Reconciler period set to %d. Disabling reconciler.", duration.Nanoseconds())
 		return
 	}
 
+	// Loop forever, performing a datastore reconciliation periodically.
 	for {
+		c.log.Debugf("Performing reconciliation")
+		err := c.performDatastoreSync()
+		if err != nil {
+			c.log.WithError(err).Error("Reconciliation failed")
+			continue
+		}
+
+		// Reconciliation was successful, sleep the configured duration.
+		c.log.Debugf("Reconciliation complete, %+v until next one.", duration)
 		time.Sleep(duration)
-		log.Info("Performing a periodic resync")
-		c.performDatastoreSync()
-		log.Info("Periodic resync done")
 	}
 }
 
-func (c *calicoCache) performDatastoreSync() {
-	// Get all objects created by policy controller from ETCD datastore.
-	etcdObjMap, err := c.ListFunc()
+func (c *calicoCache) performDatastoreSync() error {
+	// Get all the objects we care about from the datastore using ListFunc.
+	objMap, err := c.ListFunc()
 	if err != nil {
-		log.WithError(err).Errorf("unable to list objects from ETCD while reconciling.")
-		return
+		c.log.WithError(err).Errorf("unable to list objects from datastore while reconciling.")
+		return err
 	}
 
-	// Build a map of existing objects on ETCD datastore.
+	// Build a map of existing keys in the datastore.
 	allKeys := map[string]bool{}
-
-	for key := range etcdObjMap {
+	for key := range objMap {
 		allKeys[key] = true
 	}
 
-	// Also add all existing keys from calico cache
+	// Also add all existing keys in the cache.
 	for _, key := range c.ListKeys() {
 		allKeys[key] = true
 	}
 
-	log.Debugf("Reconcilor working on %d keys in total", len(allKeys))
-
+	c.log.Debugf("Reconciling %d keys in total", len(allKeys))
 	for key := range allKeys {
-
 		cachedObj, exists := c.Get(key)
 		if !exists {
-			
-			// Does not exists in calico cache. Delete on ETCD as well.
+			// Key does not exist in the cache, queue an update to
+			// remove it from the datastore.
+			c.log.WithField("key", key).Warn("Value for key should not exist, queueing update to remove")
 			c.workqueue.Add(key)
 			continue
 		}
 
-		if _, exists := etcdObjMap[key]; !exists {
-
-			// Exists in calico cache but has got deleted on ETCD datastore.
-			// Recreate it.
+		if _, exists := objMap[key]; !exists {
+			// Key exists in the cache but not in the datastore - queue an update
+			// to re-add it.
+			c.log.WithField("key", key).Warn("Value for key is missing in datastore, queueing update to reprogram")
 			c.workqueue.Add(key)
 			continue
 		}
 
-		etcdObj := etcdObjMap[key]
-
-		if !reflect.DeepEqual(etcdObj, cachedObj) {
-			
-			// ETCD copy of object is deviated from Calico cache
+		obj := objMap[key]
+		if !reflect.DeepEqual(obj, cachedObj) {
+			// Objects differ - queue an update to re-program.
+			c.log.WithField("key", key).Warn("Value for key has changed, queueing update to reprogram")
 			c.workqueue.Add(key)
 			continue
 		}
 	}
+	return nil
 }

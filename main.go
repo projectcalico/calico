@@ -1,28 +1,49 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
 	"strings"
+
 	"github.com/projectcalico/k8s-policy/pkg/config"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/namespace"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/pod"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// VERSION is filled out during the build process (using git describe output)
+var VERSION string
+
 func main() {
-	// Initialize logger to info level.  This may be adjusted once
-	// config is loaded.
-	log.SetLevel(log.InfoLevel)
+	// Configure log formatting.
+	log.SetFormatter(&logutils.Formatter{})
+
+	// Install a hook that adds file/line no information.
+	log.AddHook(&logutils.ContextHook{})
+
+	// If `-v` is passed, display the version and exit.
+	// Use a new flag set so as not to conflict with existing libraries which use "flag"
+	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)
+	version := flagSet.Bool("v", false, "Display version")
+	err := flagSet.Parse(os.Args[1:])
+	if err != nil {
+		log.WithError(err).Fatal("Failed to parse flags")
+	}
+	if *version {
+		fmt.Println(VERSION)
+		os.Exit(0)
+	}
 
 	// Attempt to load configuration.
 	config := new(config.Config)
-	err := config.Parse()
-	if err != nil {
+	if err = config.Parse(); err != nil {
 		log.WithError(err).Fatal("Failed to parse config")
 	}
 	log.WithField("config", config).Info("Loaded configuration from environment")
@@ -58,7 +79,7 @@ func main() {
 			log.Fatalf("Invalid controller '%s' provided. Valid options are endpoint, profile, policy", controllerType)
 		}
 	}
-	
+
 	// Wait forever.
 	select {}
 }

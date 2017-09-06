@@ -2,10 +2,11 @@ package converter
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	log "github.com/sirupsen/logrus"
 	k8sApiV1 "k8s.io/client-go/pkg/api/v1"
-	"reflect"
 )
 
 // Label which represents the namespace a given pod belongs to.

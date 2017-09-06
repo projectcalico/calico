@@ -159,3 +159,11 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
+
+###############################################################################
+# Utilities 
+###############################################################################
+
+goimports:
+	goimports -l -w ./pkg
+	goimports -l -w ./main.go

@@ -1,12 +1,13 @@
 package converter
 
 import (
+	"reflect"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	"reflect"
 )
 
 type policyConverter struct {

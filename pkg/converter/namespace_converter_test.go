@@ -97,7 +97,7 @@ var _ = Describe("NamespaceConverter", func() {
 		})
 	})
 
-	Context("GetKey", func(){
+	Context("GetKey", func() {
 		profileName := "default"
 		profile := api.Profile{
 			Metadata: api.ProfileMetadata{
@@ -108,8 +108,8 @@ var _ = Describe("NamespaceConverter", func() {
 
 		// Get key of profile
 		key := nsConverter.GetKey(profile)
-		It("should return name as key", func(){
+		It("should return name as key", func() {
 			Expect(key).To(Equal(profileName))
-		})	
+		})
 	})
 })
