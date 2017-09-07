@@ -158,20 +158,24 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 		markThisBlockPass: r.IptablesMarkScratch1,
 	}
 
-	// Port matches.  Wo only need to render blocks if, in total, there's more than one match that
-	// needs to be or-ed together.
+	// Port matches.  We only need to render blocks of ports if, in total, there's more than one
+	// source or more than one destination match that needs to be or-ed together.
 	//
 	// Split the port list into blocks of 15, as per iptables limit and add in the number of
 	// named ports.
 	srcPortSplits := SplitPortList(ruleCopy.SrcPorts)
 	if len(srcPortSplits)+len(ruleCopy.SrcNamedPortIpSetIds) > 1 {
+		// Render a block for the source ports.
 		matchBlockBuilder.AppendPortMatchBlock(ruleCopy.Protocol, srcPortSplits, ruleCopy.SrcNamedPortIpSetIds, src)
+		// And remove them from the rule since they're already handled.
 		ruleCopy.SrcPorts = nil
 		ruleCopy.SrcNamedPortIpSetIds = nil
 	}
 	dstPortSplits := SplitPortList(ruleCopy.DstPorts)
 	if len(dstPortSplits)+len(ruleCopy.DstNamedPortIpSetIds) > 1 {
+		// Render a block for the destination ports.
 		matchBlockBuilder.AppendPortMatchBlock(ruleCopy.Protocol, dstPortSplits, ruleCopy.DstNamedPortIpSetIds, dst)
+		// And remove them from the rule since they're already handled.
 		ruleCopy.DstPorts = nil
 		ruleCopy.DstNamedPortIpSetIds = nil
 	}
@@ -193,7 +197,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	//
 	//    - there are negative matches to render, and
 	//    - either the positive match is taking up the single slot in the "main" rule, or,
-	//      there's more than negated match.
+	//      there's more than one negated match.
 	//
 	// Figure that out by counting all the rules.  If there's a positive match left in the rule then
 	// any negative matches will tip the count over 1.  Otherwise, we'll need 2 or more negative
@@ -323,14 +327,15 @@ func (r *matchBlockBuilder) AppendNegatedCIDRMatchBlock(cidrs []string, srcOrDst
 	// rule, we want the AllBlocks bit to be set by default .
 	r.maybeAppendInitialRule(r.markAllBlocksPass)
 	// To implement a negated match we emit a rule per CIDR that does a positive
-	// match on the CIDR and *clears* the AllMatches bit if the packet matches.
+	// match on the CIDR and *clears* the AllBlocksPass bit if the packet matches.
 	// This gives the desired "not any" behaviour.
 	for _, cidr := range cidrs {
-		rule := iptables.Rule{
-			Match:  srcOrDst.MatchNet(cidr),
-			Action: iptables.ClearMarkAction{Mark: r.markAllBlocksPass},
-		}
-		r.Rules = append(r.Rules, rule)
+		r.Rules = append(r.Rules,
+			iptables.Rule{
+				Match:  srcOrDst.MatchNet(cidr),
+				Action: iptables.ClearMarkAction{Mark: r.markAllBlocksPass},
+			},
+		)
 	}
 }
 
@@ -361,15 +366,15 @@ func (r *matchBlockBuilder) positiveBlockMarkToSet() uint32 {
 	// bit may already be set.  In that case, we write to a scratch "ThisBlock"
 	// bit, calculate the "and" at the end of the block and write that back
 	// to the "AllBlocks" bit.
-	if r.doneFirstPositiveMatchBlock {
-		// This isn't the first block, we need to use a scratch bit to
-		// store the result.
-		return r.markThisBlockPass
-	} else {
+	if !r.doneFirstPositiveMatchBlock {
 		// Optimization: since we're the first block, directly use the
 		// "AllBlocks" bit to store our result.
 		return r.markAllBlocksPass
 	}
+
+	// This isn't the first block, we need to use a scratch bit to
+	// store the result.
+	return r.markThisBlockPass
 }
 
 func (r *matchBlockBuilder) finishPositiveBlock() {
@@ -553,6 +558,10 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.SourcePortRanges(pRule.SrcPorts)
 	}
 
+	if len(pRule.SrcNamedPortIpSetIds) > 1 {
+		log.WithField("rule", pRule).Panic(
+			"Bug: More than one source IP set ID left in rule.")
+	}
 	for _, np := range pRule.SrcNamedPortIpSetIds {
 		logCxt.WithFields(log.Fields{
 			"namedPort": np,
@@ -589,6 +598,10 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.DestPortRanges(pRule.DstPorts)
 	}
 
+	if len(pRule.DstNamedPortIpSetIds) > 1 {
+		log.WithField("rule", pRule).Panic(
+			"Bug: More than one source IP set ID left in rule.")
+	}
 	for _, np := range pRule.DstNamedPortIpSetIds {
 		logCxt.WithFields(log.Fields{
 			"namedPort": np,

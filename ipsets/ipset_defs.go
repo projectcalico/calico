@@ -124,7 +124,7 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 		}
 		return ipAddr
 	case IPSetTypeHashIPPort:
-		// The member should be of the format <IP>,(tcp|udp),<port number>
+		// The member should be of the format <IP>,(tcp|udp):<port number>
 		parts := strings.Split(member, ",")
 		if len(parts) != 2 {
 			log.WithField("member", member).Panic("Failed to parse IP,port IP set member")

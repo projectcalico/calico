@@ -178,7 +178,7 @@ type SelectorAndNamedPortIndex struct {
 }
 
 func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
-	inheritIDx := SelectorAndNamedPortIndex{
+	inheritIdx := SelectorAndNamedPortIndex{
 		endpointDataByID:     map[interface{}]*endpointData{},
 		parentDataByParentID: map[string]*npParentData{},
 		ipSetDataByID:        map[string]*ipSetData{},
@@ -187,7 +187,7 @@ func NewSelectorAndNamedPortIndex() *SelectorAndNamedPortIndex {
 		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
 		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
 	}
-	return &inheritIDx
+	return &inheritIdx
 }
 
 func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
@@ -197,9 +197,8 @@ func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.
 	allUpdDispatcher.Register(model.HostEndpointKey{}, idx.OnUpdate)
 }
 
-// OnUpdate makes LabelInheritanceIndex compatible with the UpdateHandler interface
-// allowing it to be used in a calculation graph more easily.  It accepts updates for endpoints
-// and profiles and passes them through to the Update/DeleteXXX methods.
+// OnUpdate makes SelectorAndNamedPortIndex compatible with the Dispatcher.  It accepts
+// updates for endpoints and profiles and passes them through to the Update/DeleteXXX methods.
 func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
@@ -368,13 +367,6 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 	delete(idx.ipSetDataByID, id)
 }
 
-// type endpointData struct {
-//   labels           map[string]string
-//   ips              []ip.Addr
-//   ports            []namedPort
-//   parents          []*npParentData
-//   cachedMatchingIPSetIDs set.Set
-// }
 func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 	id interface{},
 	labels map[string]string,
@@ -431,41 +423,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 
 	// Calculate and compare the contribution of the new endpoint to IP sets.  Emit events for
 	// new contributions and then mop up deletions.
-	for ipSetID, ipSetData := range idx.ipSetDataByID {
-		if ipSetData.selector.EvaluateLabels(newEndpointData) {
-			newIPSetContribution := idx.CalculateEndpointContribution(newEndpointData, ipSetData)
-			if len(newIPSetContribution) > 0 {
-				// Record the match in the index.  This allows us to quickly recalculate the
-				// contribution of this endpoint later.
-				newEndpointData.AddMatchingIPSetID(ipSetID)
-
-				// Incref all the new members.  If any of them go from 0 to 1 reference then we know
-				// that they're new.  We'll temporarily double-count members that were already present,
-				// then decref them below.
-				for _, newMember := range newIPSetContribution {
-					newRefCount := ipSetData.memberToRefCount[newMember] + 1
-					if newRefCount == 1 {
-						// New member in the IP set.
-						idx.OnMemberAdded(ipSetID, newMember)
-					}
-					ipSetData.memberToRefCount[newMember] = newRefCount
-				}
-			}
-		}
-		// Decref all the old members.  If they hit 0 references, then the member has been
-		// removed so we emit an event.
-		for _, oldMember := range oldIPSetContributions[ipSetID] {
-			newRefCount := ipSetData.memberToRefCount[oldMember] - 1
-			if newRefCount == 0 {
-				// Member no longer in the IP set.  Emit event and clean up the old reference
-				// count.
-				idx.OnMemberRemoved(ipSetID, oldMember)
-				delete(ipSetData.memberToRefCount, oldMember)
-			} else {
-				ipSetData.memberToRefCount[oldMember] = newRefCount
-			}
-		}
-	}
+	idx.scanEndpointAgainstAllIPSets(newEndpointData, oldIPSetContributions)
 
 	// Record the new endpoint data.
 	idx.endpointDataByID[id] = newEndpointData
@@ -481,8 +439,55 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 	}
 }
 
+func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
+	epData *endpointData,
+	oldIPSetContributions map[string][]IPSetMember,
+) {
+	for ipSetID, ipSetData := range idx.ipSetDataByID {
+		// Remove any previous match from the endpoint's cache.  We'll re-add it below if the match
+		// is still correct.  (This is a no-op when we're called from UpdateEndpoint(), which always
+		// creates a new endpointData struct.)
+		epData.RemoveMatchingIPSetID(ipSetID)
+
+		if ipSetData.selector.EvaluateLabels(epData) {
+			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
+			if len(newIPSetContribution) > 0 {
+				// Record the match in the index.  This allows us to quickly recalculate the
+				// contribution of this endpoint later.
+				epData.AddMatchingIPSetID(ipSetID)
+
+				// Incref all the new members.  If any of them go from 0 to 1 reference then we
+				// know that they're new.  We'll temporarily double-count members that were already
+				// present, then decref them below.
+				for _, newMember := range newIPSetContribution {
+					newRefCount := ipSetData.memberToRefCount[newMember] + 1
+					if newRefCount == 1 {
+						// New member in the IP set.
+						idx.OnMemberAdded(ipSetID, newMember)
+					}
+					ipSetData.memberToRefCount[newMember] = newRefCount
+				}
+			}
+		}
+
+		// Decref all the old members.  If they hit 0 references, then the member has been
+		// removed so we emit an event.
+		for _, oldMember := range oldIPSetContributions[ipSetID] {
+			newRefCount := ipSetData.memberToRefCount[oldMember] - 1
+			if newRefCount == 0 {
+				// Member no longer in the IP set.  Emit event and clean up the old reference
+				// count.
+				idx.OnMemberRemoved(ipSetID, oldMember)
+				delete(ipSetData.memberToRefCount, oldMember)
+			} else {
+				ipSetData.memberToRefCount[oldMember] = newRefCount
+			}
+		}
+	}
+}
+
 func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id interface{}) {
-	log.Debug("Inherit index deleting endpoint", id)
+	log.Debug("SelectorAndNamedPortIndex deleting endpoint", id)
 	oldEndpointData := idx.endpointDataByID[id]
 	if oldEndpointData == nil {
 		return
@@ -561,56 +566,15 @@ func (idx *SelectorAndNamedPortIndex) updateParent(parentData *npParentData, app
 			continue
 		}
 
-		// This endpoint matches this parent, calculate its old contribution.  (The revert function is a
-		// no-op on the first loop but keeping it here, rather than at the bottom of the loop makes it
-		// harder to accidentally skip it with a well-intentioned "continue".)
+		// This endpoint matches this parent, calculate its old contribution.  (The revert function
+		// is a no-op on the first loop but keeping it here, rather than at the bottom of the loop
+		// makes it harder to accidentally skip it with a well-intentioned "continue".)
 		revertUpdate()
 		oldIPSetContributions := idx.RecalcCachedContributions(epData)
 
 		// Apply the update to the parent while we calculate this endpoint's new contribution.
 		applyUpdate()
-		for ipSetID, ipSetData := range idx.ipSetDataByID {
-			// Remove this IP set from the endpoint's cache of matching IP sets (if present).
-			// We'll restore it below if it still matches.
-			epData.RemoveMatchingIPSetID(ipSetID)
-
-			// Check if the selector matches.  Since we applied the update, this matches on the new
-			// values.
-			if ipSetData.selector.EvaluateLabels(epData) {
-				newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
-				if len(newIPSetContribution) > 0 {
-					// Record the match in the index.  This allows us to quickly recalculate the
-					// contribution of this endpoint later.
-					epData.AddMatchingIPSetID(ipSetID)
-
-					// Incref *all* members.  If any of them go from 0 to 1 reference then we know
-					// that they're new.  We'll temporarily double-count members that were already present,
-					// then decref them below.
-					for _, newMember := range newIPSetContribution {
-						newRefCount := ipSetData.memberToRefCount[newMember] + 1
-						if newRefCount == 1 {
-							// New member in the IP set.
-							idx.OnMemberAdded(ipSetID, newMember)
-						}
-						ipSetData.memberToRefCount[newMember] = newRefCount
-					}
-				}
-			}
-
-			// Decref all the old members.  If they hit 0 references, then the member has been
-			// removed so we emit an event.
-			for _, oldMember := range oldIPSetContributions[ipSetID] {
-				newRefCount := ipSetData.memberToRefCount[oldMember] - 1
-				if newRefCount == 0 {
-					// Member no longer in the IP set.  Emit event and clean up the old reference
-					// count.
-					idx.OnMemberRemoved(ipSetID, oldMember)
-					delete(ipSetData.memberToRefCount, oldMember)
-				} else {
-					ipSetData.memberToRefCount[oldMember] = newRefCount
-				}
-			}
-		}
+		idx.scanEndpointAgainstAllIPSets(epData, oldIPSetContributions)
 	}
 
 	// Defensive: make sure we leave the update applied to the parent.

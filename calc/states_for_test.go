@@ -124,7 +124,10 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{
+			Name:               "default",
+			IngressPolicyNames: []string{"pol-1"},
+		},
 	},
 ).withName("ep1 local, negated named port policy")
 
@@ -537,7 +540,7 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 )
 
-// Building on the above, we add a policy to match on the inherited label, which should preduce
+// Building on the above, we add a policy to match on the inherited label, which should produce
 // a named port.
 var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlappingIPsAndInheritedLabels.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "inherit-pol"}, Value: &policy_with_named_port_inherit},

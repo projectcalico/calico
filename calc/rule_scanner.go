@@ -68,9 +68,9 @@ func init() {
 // match endpoints against tags/selectors.  (That is done downstream in a labelindex.InheritIndex
 // created in NewCalculationGraph.)
 type RuleScanner struct {
-	// ipSetsByUID maps from the IP set's ID to the metadata for that IP set.
+	// ipSetsByUID maps from the IP set's UID to the metadata for that IP set.
 	ipSetsByUID map[string]*IPSetData
-	// rulesIDToUIDs maps from policy/profile ID to the set of IP set IDs that are
+	// rulesIDToUIDs maps from policy/profile ID to the set of IP set UIDs that are
 	// referenced by that policy/profile.
 	rulesIDToUIDs multidict.IfaceToString
 	// uidsToRulesIDs maps from IP set UID to the set of policy/profile IDs that use it.
@@ -84,7 +84,7 @@ type RuleScanner struct {
 
 type IPSetData struct {
 	// The selector and named port that this IP set represents.  To represent an unfiltered named
-	// port, set selector to "all()".  If NamedPortProtocol == ProtocolNone then
+	// port, set selector to AllSelector.  If NamedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
 	Selector selector.Selector
 	// NamedPortProtocol identifies the protocol (TCP or UDP) for a named port IP set.  It is
@@ -210,7 +210,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 			ipSet := currentUIDToIPSet[uid]
 			rs.ipSetsByUID[uid] = ipSet
 			log.Debugf("IP set became active: %v -> %v", uid, ipSet)
-			// This selector just became active, send event.
+			// This IP set just became active, send event.
 			rs.OnIPSetActive(ipSet)
 		}
 		rs.uidsToRulesIDs.Put(uid, key)
@@ -225,7 +225,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		if !rs.uidsToRulesIDs.ContainsKey(uid) {
 			ipSetData := rs.ipSetsByUID[uid]
 			delete(rs.ipSetsByUID, uid)
-			// This selector just became inactive, send event.
+			// This IP set just became inactive, send event.
 			log.Debugf("IP set became inactive: %v -> %v", uid, ipSetData)
 			rs.OnIPSetInactive(ipSetData)
 		}
@@ -473,12 +473,12 @@ func extractTagsAndSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selec
 	return
 }
 
-func combineMatchesIfPossible(positiveSel, positiveTag, notSrcSel, notSrcTag string) (combinedSel, notSrcSelOut, notSrcTagOut string) {
+func combineMatchesIfPossible(positiveSel, positiveTag, negatedSel, negatedTag string) (string, string, string) {
 	// Combine any positive tag and selector into a single selector.
 	positiveSel = combineSelectorAndTag(positiveSel, positiveTag)
 	if positiveSel == "" {
 		// There were no positive matches, we can't do any further optimization.
-		return positiveSel, notSrcSel, notSrcTag
+		return positiveSel, negatedSel, negatedTag
 	}
 
 	// We have a positive selector so the rule is limited to matching known endpoints.
@@ -488,15 +488,15 @@ func combineMatchesIfPossible(positiveSel, positiveTag, notSrcSel, notSrcTag str
 	// If we have no positive selector, this optimization wouldn't be valid because, in that
 	// case, the negative match criteria should match packets that come from outside the
 	// set of known endpoints too.
-	if notSrcSel != "" {
-		positiveSel = fmt.Sprintf("(%s) && (!(%s))", positiveSel, notSrcSel)
-		notSrcSel = ""
+	if negatedSel != "" {
+		positiveSel = fmt.Sprintf("(%s) && (!(%s))", positiveSel, negatedSel)
+		negatedSel = ""
 	}
-	if notSrcTag != "" {
-		positiveSel = fmt.Sprintf("(%s) && (!has(%s))", positiveSel, notSrcTag)
-		notSrcTag = ""
+	if negatedTag != "" {
+		positiveSel = fmt.Sprintf("(%s) && (!has(%s))", positiveSel, negatedTag)
+		negatedTag = ""
 	}
-	return positiveSel, notSrcSel, notSrcTag
+	return positiveSel, negatedSel, negatedTag
 }
 
 func combineSelectorAndTag(sel string, tag string) string {

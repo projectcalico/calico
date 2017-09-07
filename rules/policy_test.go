@@ -294,7 +294,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		allowIfAllMarkAndTCPRule = "-A test -p tcp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		allowIfAllMarkAndUDPRule = "-A test -p udp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		returnRule               = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
-		ifNotBlockClearAllRule   = "-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200"
+		// allBlocksPassAndEqThisBlockPassRule is seen at the end of every positive match block
+		// after the first one.  It clears the all-blocks-pass bit if the this-block-passes bit
+		// is not set.
+		allBlocksPassAndEqThisBlockPassRule = "-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200"
 	)
 
 	DescribeTable(
@@ -399,7 +402,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x400/0x400",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x400/0x400",
 			// If the scratch bit isn't set then we clear the AllBlocks bit.
-			ifNotBlockClearAllRule,
+			allBlocksPassAndEqThisBlockPassRule,
 
 			// The negated matches clear the AllBlocks bit directly if they match.
 			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
@@ -606,7 +609,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Second block uses per-block bit.
 			"-A test -m multiport --destination-ports 3:4 -p tcp --jump MARK --set-mark 0x400/0x400",
 			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
-			ifNotBlockClearAllRule,
+			allBlocksPassAndEqThisBlockPassRule,
 			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
@@ -734,7 +737,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
 			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
-			ifNotBlockClearAllRule,
+			allBlocksPassAndEqThisBlockPassRule,
 			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
@@ -782,17 +785,17 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Positive destination port match block..
 			"-A test -m multiport --destination-ports 2:3 -p tcp --jump MARK --set-mark 0x400/0x400",
 			"-A test -m set --match-set ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
-			ifNotBlockClearAllRule,
+			allBlocksPassAndEqThisBlockPassRule,
 
 			// Positive sroiuce CIDRs.
 			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
 			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
-			ifNotBlockClearAllRule,
+			allBlocksPassAndEqThisBlockPassRule,
 
 			// Positive dest CIDRs.
 			"-A test --destination 12.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
 			"-A test --destination 13.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
-			ifNotBlockClearAllRule,
+			allBlocksPassAndEqThisBlockPassRule,
 
 			// Negative source CIDRs.
 			"-A test --source 14.1.0.0/16 --jump MARK --set-mark 0/0x200",

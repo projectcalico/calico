@@ -136,9 +136,9 @@ var _ = Describe("IPPort types", func() {
 	It("V6 should stringify correctly", func() {
 		Expect(V6IPPort{
 			IP:       ip.FromString("feed:beef::").(ip.V6Addr),
-			Protocol: labelindex.ProtocolTCP,
+			Protocol: labelindex.ProtocolUDP,
 			Port:     1234,
-		}.String()).To(Equal("feed:beef::,tcp:1234"))
+		}.String()).To(Equal("feed:beef::,udp:1234"))
 	})
 })
 

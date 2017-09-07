@@ -85,34 +85,34 @@ type PipelineCallbacks interface {
 func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDispatcher *dispatcher.Dispatcher) {
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 	// The source of the processing graph, this dispatcher will be fed all the updates from the
-	// datastore, fanning them out to the registered handlers.
+	// datastore, fanning them out to the registered receivers.
 	//
-	//           Syncer
-	//             ||
-	//             || All updates
-	//             \/
-	//         Dispatcher (all updates)
-	//            / | \
-	//           /  |  \  Updates filtered by type
-	//          /   |   \
-	//     node_1  ...  node_n
+	//               Syncer
+	//                 ||
+	//                 || All updates
+	//                 \/
+	//             Dispatcher (all updates)
+	//                / | \
+	//               /  |  \  Updates filtered by type
+	//              /   |   \
+	//     receiver_1  ...  receiver_n
 	//
 	allUpdDispatcher = dispatcher.NewDispatcher()
 
-	// Some of the handlers only need to know about local endpoints. Create a second dispatcher
+	// Some of the receivers only need to know about local endpoints. Create a second dispatcher
 	// that will filter out non-local endpoints.
 	//
-	//        ...
-	//     Dispatcher (all updates)
-	//        ... \
-	//             \  All Host/Workload Endpoints
-	//              \
-	//            Dispatcher (local updates)
-	//             <filter>
-	//              / | \
-	//             /  |  \  Local Host/Workload Endpoints only
-	//            /   |   \
-	//       node_1  ...  node_n
+	//          ...
+	//       Dispatcher (all updates)
+	//          ... \
+	//               \  All Host/Workload Endpoints
+	//                \
+	//              Dispatcher (local updates)
+	//               <filter>
+	//                / | \
+	//               /  |  \  Local Host/Workload Endpoints only
+	//              /   |   \
+	//     receiver_1  ...  receiver_n
 	//
 	localEndpointDispatcher := dispatcher.NewDispatcher()
 	(*localEndpointDispatcherReg)(localEndpointDispatcher).RegisterWith(allUpdDispatcher)
@@ -169,7 +169,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	// below.
 	ruleScanner.RulesUpdateCallbacks = callbacks
 
-	// The rule scanner only goes as far as figuring our which tags/selectors/named ports are
+	// The rule scanner only goes as far as figuring out which tags/selectors/named ports are
 	// active. Next we need to figure out which endpoints (and hence which IP addresses/ports) are
 	// in each tag/selector/named port. The IP set member index calculates the set of IPs and named
 	// ports that should be in each IP set.  To do that, it matches the active selectors/tags/named

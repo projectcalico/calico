@@ -328,7 +328,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport = Policy{
 			NotSrcPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
 		},
 	},
-	Types: []string{"ingress", "egress"},
+	Types: []string{"ingress"},
 }
 
 var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = Policy{
@@ -342,7 +342,7 @@ var policy1_order20_with_selector_and_negated_named_port_tcpport_dest = Policy{
 			NotDstPorts:    []numorstring.Port{numorstring.NamedPort("tcpport")},
 		},
 	},
-	Types: []string{"ingress", "egress"},
+	Types: []string{"ingress"},
 }
 
 var policy1_order20_with_selector_and_named_port_udpport = Policy{
