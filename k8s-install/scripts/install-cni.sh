@@ -51,35 +51,36 @@ fi
 # Choose which default cni binaries should be copied
 SKIP_CNI_BINARIES=${SKIP_CNI_BINARIES:-""}
 SKIP_CNI_BINARIES=",$SKIP_CNI_BINARIES,"
+UPDATE_CNI_BINARIES=${UPDATE_CNI_BINARIES:-"true"}
 
 # Place the new binaries if the directory is writeable.
-if [ -w "/host/opt/cni/bin/" ]; then
-	for path in /opt/cni/bin/*
+for dir in /host/opt/cni/bin /host/secondary-bin-dir
+do
+	if [ ! -w "$dir" ];
+	then
+		echo "$dir is non-writeable, skipping"
+		continue
+	fi
+	for path in /opt/cni/bin/*;
 	do
-		filename=$(basename $path)
+		filename="$(basename $path)"
 		tmp=",$filename,"
-		if [ "${SKIP_CNI_BINARIES#*$tmp}" = "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
-			cp /opt/cni/bin/$filename /host/opt/cni/bin/
+		if [ "${SKIP_CNI_BINARIES#*$tmp}" != "$SKIP_CNI_BINARIES" ];
+		then
+			echo "$filename is in SKIP_CNI_BINARIES, skipping"
+			continue
 		fi
+		if [ "${UPDATE_CNI_BINARIES}" != "true" -a -f $dir/$filename ];
+		then
+			echo "$dir/$filename is already here and UPDATE_CNI_BINARIES isn't true, skipping"
+			continue
+		fi
+		cp $path $dir/
 	done
-	echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
-	echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
-fi
 
-# Place them in the secondary location if it exists and
-# is writeable.
-if [ -w "/host/secondary-bin-dir/" ]; then
-	for path in /opt/cni/bin/*
-	do
-		filename=$(basename $path)
-		tmp=",$filename,"
-		if [ "${SKIP_CNI_BINARIES#*$tmp}" = "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
-			cp /opt/cni/bin/$filename /host/secondary-bin-dir/
-		fi
-	done
-	echo "Wrote Calico CNI binaries to /host/secondary-bin-dir/"
-	echo "CNI plugin version: $(/host/secondary-bin-dir/calico -v)"
-fi
+	echo "Wrote Calico CNI binaries to $dir"
+	echo "CNI plugin version: $($dir/calico -v)"
+done
 
 TMP_CONF='/calico.conf.tmp'
 # If specified, overwrite the network configuration file.
