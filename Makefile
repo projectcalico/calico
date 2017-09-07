@@ -17,7 +17,7 @@ ARCH?=amd64
 ###############################################################################
 # Build targets 
 ###############################################################################
-## Builds the docker image
+## Builds the controller binary and docker image.
 docker-image: image.created
 image.created: dist/kube-policy-controller
 	# Build the docker image for the policy controller.
@@ -45,7 +45,7 @@ vendor: glide.yaml
 		$(CALICO_BUILD) \
 		/bin/sh -c 'cd /go/src/$(PACKAGE_NAME) && glide install -strip-vendor'
 
-# Build the controller binary.
+## Build the controller binary outside of a container.
 binary: vendor
 	# Don't try to "install" the intermediate build files (.a .o) when not on linux
 	# since there are no write permissions for them in our linux build container.
@@ -54,7 +54,7 @@ binary: vendor
 	fi; \
 	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-policy-controller-$(OS)-$(ARCH) $(LDFLAGS) "./main.go"
 
-# Run the build in a container.
+## Build the controller binary in a container.
 binary-containerized: vendor
 	mkdir -p dist
 	-mkdir -p .go-pkg-cache
@@ -132,7 +132,7 @@ clean:
 	rm -f st-kubeconfig.yaml
 
 .PHONY: help
-## Display this help text
+## Display this help text.
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
 	$(info Available targets)
 	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
