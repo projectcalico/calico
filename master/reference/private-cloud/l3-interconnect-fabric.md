@@ -255,7 +255,7 @@ servers that are in its AS, and announces all of the routes from within
 the AS (rack) to the other ToRs and the larger world. This means that
 each compute server will see the ToR as the next hop for all external
 routes, and the individual compute servers are the next hop for all
-routes external to the rack.
+routes internal to the rack.
 
 ### The *AS per Compute Server* model
 
