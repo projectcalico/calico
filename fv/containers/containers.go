@@ -32,6 +32,7 @@ type Container struct {
 	IP       string
 	Hostname string
 	Stop     func()
+	stopped  bool
 }
 
 var containerIdx = 0
@@ -59,8 +60,15 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	c.IP = c.GetIP()
 	c.Hostname = c.GetHostname()
 	c.Stop = func() {
-		runCmd.Process.Signal(os.Interrupt)
-		c.WaitNotRunning(10 * time.Second)
+		if !c.stopped {
+			// We haven't previously tried to stop this container.
+			c.stopped = true
+			runCmd.Process.Signal(os.Interrupt)
+			c.WaitNotRunning(10 * time.Second)
+		}
+		// And now to be really sure that the container is cleaned up - and regardless of
+		// whether we already tried before...
+		utils.RunMayFail("docker", "rm", "-f", c.Name)
 	}
 	log.WithField("container", c).Info("Container now running")
 	return
@@ -120,7 +128,7 @@ func (c *Container) WaitNotRunning(timeout time.Duration) {
 
 var _ = AfterEach(func() {
 	for _, c := range runningContainers {
-		utils.Run("docker", "rm", "-f", c.Name)
+		c.Stop()
 	}
 	runningContainers = []*Container{}
 })
