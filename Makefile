@@ -9,10 +9,24 @@ YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
 # Versions
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
+RELEASE_STREAM?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
 
 ###############################################################################
 # HtmlProofer
 HP_IGNORE_LOCAL_DIRS?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "htmlProoferLocalDirIgnore")
+
+# Some URLs are not present until we commit the new release to github. In order to
+# work around htmlproofer complaining about missing URLs, replace a small set of 
+# unpublished URLs that reference the unpublished release with master. For example:
+#   https://github.com/projectcalico/calico/tree/master/v2.6 ->
+#   https://github.com/projectcalico/calico/tree/master/master
+
+HP_RELEASE_ONLY_URLS="docs.projectcalico.org github.com/projectcalico/calico/tree/master"
+HP_URLS_TO_MASTER=$(shell ./release-scripts/retarget_missing_urls.sh --current=$(RELEASE_STREAM) --list=$(HP_RELEASE_ONLY_URLS))
+
+PHONY: print-url-to-master
+print-url-to-master:
+	$(info $$HP_URLS_TO_MASTER is ${HP_URLS_TO_MASTER})
 
 JEKYLL_VERSION=3.3.1
 DEV?=false
@@ -33,7 +47,7 @@ clean:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
 
 htmlproofer: clean _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore ${HP_IGNORE_LOCAL_DIRS} --assume-extension --check-html --empty-alt-ignore --url-ignore "/docs.openshift.org/,#,/github.com\/projectcalico\/calico\/releases\/download/"
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore ${HP_IGNORE_LOCAL_DIRS} --assume-extension --check-html --empty-alt-ignore --url-ignore "/docs.openshift.org/,#,/github.com\/projectcalico\/calico\/releases\/download/" $(HP_URLS_TO_MASTER)
 	-docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
 	# Rerun htmlproofer across _all_ files, but ignore failure, allowing us to notice legacy docs issues without failing CI
 	
