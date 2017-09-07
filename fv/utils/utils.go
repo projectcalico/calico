@@ -1,0 +1,62 @@
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package utils
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+)
+
+func Run(command string, args ...string) {
+	run(true, command, args...)
+}
+
+func RunMayFail(command string, args ...string) {
+	run(false, command, args...)
+}
+
+var currentTestOutput = []string{}
+
+func run(checkNoError bool, command string, args ...string) {
+	log.Infof("Running: %v %v", command, args)
+	outputBytes, err := exec.Command(command, args...).CombinedOutput()
+	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
+	currentTestOutput = append(currentTestOutput, string(outputBytes))
+	if err != nil {
+		log.WithError(err).Warning("Command failed")
+	}
+	if checkNoError {
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+var _ = BeforeEach(func() {
+	currentTestOutput = []string{}
+})
+
+var _ = AfterEach(func() {
+	if CurrentGinkgoTestDescription().Failed {
+		os.Stdout.WriteString("\n===== begin output from failed test =====\n")
+		for _, output := range currentTestOutput {
+			os.Stdout.WriteString(output)
+		}
+		os.Stdout.WriteString("===== end output from failed test =====\n\n")
+	}
+})

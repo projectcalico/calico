@@ -174,7 +174,7 @@ calico/felix: bin/calico-felix
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix docker-image/bin/
-	docker build --pull -t calico/felix$(ARCHTAG) --file ./docker-image/Dockerfile$(ARCHTAG) docker-image 
+	docker build --pull -t calico/felix$(ARCHTAG) --file ./docker-image/Dockerfile$(ARCHTAG) docker-image
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
@@ -327,6 +327,12 @@ bin/iptables-locker: $(FELIX_GO_FILES) vendor/.up-to-date
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/fv/iptables-locker"'
 
+bin/test-workload: $(FELIX_GO_FILES) vendor/.up-to-date
+	@echo Building test-workload...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/fv/test-workload"'
+
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
@@ -364,13 +370,13 @@ fv/fv.test: vendor/.up-to-date $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go test ./fv -c --tags fvtests -o fv/fv.test
 
 .PHONY: fv
-fv: calico/felix bin/iptables-locker fv/fv.test
+fv: calico/felix bin/iptables-locker bin/test-workload fv/fv.test
 	@echo Running Go FVs.
-	# For now, we pre-build the binary so that we can run it outside a container and allow it
+	# We pre-build the test binary so that we can run it outside a container and allow it
 	# to interact with docker.
 	# fv.test is not expecting a container name with an ARCHTAG.
 	-docker tag calico/felix$(ARCHTAG) calico/felix
-	cd fv && ./fv.test
+	cd fv && ./fv.test -ginkgo.slowSpecThreshold 30
 
 bin/check-licenses: $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"
