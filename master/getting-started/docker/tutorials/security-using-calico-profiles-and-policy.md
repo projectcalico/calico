@@ -154,9 +154,12 @@ example), but define a set of global policy resources that use selectors to
 determine which subset of the policy applies to each container based on the
 labels applied by the profile.
 
-> The advantage of using this approach is that by sharing the same labels
+> **Note**: The advantage of using this approach is that by sharing the same labels
 > across different Docker networks, we can re-use globally defined policy without
 > having to re-specify it.
+>
+{: .alert .alert-info}
+
 
 #### b.1 Create the Docker networks
 

@@ -6,10 +6,9 @@ networking-calico includes beta support for floating IPs.  Currently this
 requires running Calico as a Neutron core plugin (i.e. `core_plugin =
 calico`) instead of as an ML2 mechanism driver.
 
-> **NOTE**
->
-> We would like it to work as an ML2 mechanism driver too - patches
+> **Note**: We would like it to work as an ML2 mechanism driver too—patches
 > and/or advice welcome!
+{: .alert .alert-info}
 
 To set up a floating IP, you need the same pattern of Neutron data model
 objects as you do for Neutron in general, which means:

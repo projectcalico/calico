@@ -307,21 +307,21 @@ perform the following steps:
     will bring in Calico-specific updates to the OpenStack packages and
     to `dnsmasq`. For OpenStack Liberty, this step only upgrades
     `dnsmasq`.
-
-    > **WARNING**
-    >
-    > Check the version of libvirt-bin that is installed using
+    
+    > **Important**: Check the version of libvirt-bin that is installed using
     > `dpkg -s libvirt-bin`. For Kilo, the version of libvirt-bin
     > should be at least `1.2.12-0ubuntu13`. This will become part
     > of the standard Ubuntu Kilo repository, but at the time of
     > writing needs to be installed as follows:
     >
+    > `$ sudo add-apt-repository cloud-archive:kilo-proposed`
     >
-    >   ```shell
-    >      $ sudo add-apt-repository cloud-archive:kilo-proposed
-    >      $ sudo apt-get update
-    >      $ sudo apt-get upgrade
-        ```
+    > `$ sudo apt-get update`
+    >
+    > `$ sudo apt-get upgrade`
+    >  
+    {: .alert .alert-danger}
+
 
 6.  If you're using OpenStack Kilo, open `/etc/neutron/dhcp_agent.ini` in your
     preferred text editor, and set the following in the `[DEFAULT]` section:

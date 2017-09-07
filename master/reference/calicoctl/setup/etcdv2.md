@@ -40,10 +40,10 @@ will check a particular set of environment variables.
 
 See the table below for details on the etcdv2 specific environment variables.
 
-> **NOTE**
->
-> If neither file nor environment variables are set, calicoctl defaults to
+> **Note**: If neither file nor environment variables are set, calicoctl defaults to
 > using etcdv2 with a single endpoint of http://127.0.0.1:2379.
+{: .alert .alert-info}
+
 
 ## Complete list of etcdv2 connection configuration
 
@@ -57,18 +57,19 @@ See the table below for details on the etcdv2 specific environment variables.
 | etcdCertFile (ETCD_CERT_FILE)      | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)                   | string
 | etcdCACertFile (ETCD_CA_CERT_FILE) | Path to the etcd CA file, e.g. `/etc/calico/ca.pem` (optional)                         | string
 
-> **NOTE**
->
-> 1. If you are running with TLS enabled, ensure your endpoint addresses use https
-> 2. When specifying through environment variables, the DATASTORE_TYPE environment
->    is not required for etcdv2.
-> 3. All environment variables may also be prefixed with "CALICO_", for example
->    "CALICO_DATASTORE_TYPE" and "CALICO_ETCD_ENDPOINTS" etc. may also be used.
->    This is useful if the non-prefixed names clash with existing environment
->    variables defined on your system
-> 4. Previous versions of calicoctl supported ETCD_SCHEME and ETC_AUTHORITY environment
->    variables as a mechanism for specifying the etcd endpoints.  These variables are
->    deprecated in favor of the ETCD_ENDPOINTS list.
+> **Note**:
+> - If you are running with TLS enabled, ensure your endpoint addresses use HTTPS.
+> - When specifying through environment variables, the `DATASTORE_TYPE` environment
+>   is not required for etcdv2.
+> - All environment variables may also be prefixed with `CALICO_`, for example
+>   `CALICO_DATASTORE_TYPE` and `CALICO_ETCD_ENDPOINTS` etc. may also be used.
+>   This is useful if the non-prefixed names clash with existing environment
+>   variables defined on your system
+> - Previous versions of `calicoctl` supported `ETCD_SCHEME` and `ETC_AUTHORITY` environment
+>   variables as a mechanism for specifying the etcd endpoints. These variables are
+>   deprecated in favor of the `ETCD_ENDPOINTS` list.
+{: .alert .alert-info}
+
 
 ## Examples
 

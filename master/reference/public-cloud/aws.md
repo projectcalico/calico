@@ -4,9 +4,9 @@ title: AWS
 
 Calico provides the following advantages when running in AWS:
 
-- **Network Policy for Containers:** Calico provides fine-grained network security policy for individual containers.
-- **No Overlays:** Within each VPC subnet Calico doesn't need an overlay, which means high performance networking for your containers.
-- **No 50 Node Limit:** Calico allows you to surpass the 50 node limit, which exists as a consequence of the [AWS 50 route limit](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Appendix_Limits.html#vpc-limits-route-tables) when using the VPC routing table.
+- **Network Policy for Containers**: Calico provides fine-grained network security policy for individual containers.
+- **No Overlays**: Within each VPC subnet Calico doesn't need an overlay, which means high performance networking for your containers.
+- **No 50 Node Limit**: Calico allows you to surpass the 50 node limit, which exists as a consequence of the [AWS 50 route limit](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Appendix_Limits.html#vpc-limits-route-tables) when using the VPC routing table.
 
 ## Requirements
 
@@ -20,13 +20,13 @@ on your deployment.
 Calico requires the following security group exceptions to function properly
 in AWS.
 
-| Description      | Type            | Protocol | Port Range |
-|:-----------------|:----------------|:---------|:-----------|
-| BGP              | Custom TCP Rule | TCP      | 179        |
-| \*IPIP           | Custom Protocol | IPIP     | all        |
+| Description   | Type            | Protocol | Port Range |
+|:--------------|:----------------|:---------|:-----------|
+| BGP           | Custom TCP Rule | TCP      | 179        |
+| IPIP*         | Custom Protocol | IPIP     | all        |
 
->\*IPIP: This rule is required only when using Calico with IPIP encapsulation.
-Keep reading for information on when IPIP is required in AWS.
+\* The IPIP exception is required only when using Calico with IPIP encapsulation. Keep reading 
+for information on when IPIP is required in AWS.
 
 #### Routing Traffic Within a Single VPC Subnet
 
@@ -52,10 +52,12 @@ performance, you can configure Calico to perform IPIP encapsulation only across 
 To enable the "cross-subnet" IPIP feature, configure your Calico IP pool resources
 to enable IPIP and set the mode to "cross-subnet".
 
-> This feature was introduced in Calico v2.1, if your deployment was created with 
+> **Note**: This feature was introduced in Calico v2.1, if your deployment was created with 
 > an older version of Calico, or if you if you are unsure whether your deployment 
 > is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip)
 > which discusses this in more detail.
+>
+{: .alert .alert-info}
 
 The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 using IPIP mode `cross-subnet`. Adjust the pool CIDR for your deployment.

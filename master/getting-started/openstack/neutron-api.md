@@ -143,10 +143,11 @@ any Neutron L3 Agents.
 Load Balancer as a Service does not function in a Calico network. Any
 attempt to create one will fail.
 
-> **NOTE**
->
-> It is possible that in a future version of Calico LBaaS may be
+
+> **Note**: It is possible that in a future version of Calico LBaaS may be
 > functional. Watch this space.
+{: .alert .alert-info}
+
 
 ## Horizon
 

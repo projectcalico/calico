@@ -28,8 +28,11 @@ port for your etcd cluster.  If your etcd is configured with TLS then you must
 also [configure the Docker daemon][daemon-cert-config] with the correct
 certificates to allow access.
 
-> For Docker 1.10+, you can use the [daemon configuration file][daemon-config-file],
-> or for 1.9 see the appropriate 'Configuring Docker' section in [configuring docker][configuring-docker-1.9].
+> **Note**: For Docker 1.10+, you can use the [daemon configuration file][daemon-config-file],
+> or for 1.9 see the appropriate 'Configuring Docker' section in 
+> [configuring docker][configuring-docker-1.9].
+{: .alert .alert-info}
+
 
 ## Next Steps
 

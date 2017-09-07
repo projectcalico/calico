@@ -37,9 +37,10 @@ To create the networks, run the following commands on one of the hosts:
     docker network create --driver calico --ipam-driver calico-ipam net2
     docker network create --driver calico --ipam-driver calico-ipam net3
 
-> **NOTE**
->
-> To allocate from a specific Calico IP Pool, the `--subnet a.b.c.d/xx` command can be passed to `docker network create`. For more details see below.
+> **Note**: To allocate from a specific Calico IP Pool, the 
+> `--subnet a.b.c.d/xx` command can be passed to `docker network create`. 
+> For more details see below.
+{: .alert .alert-info}
 
 ## 2. Create the workloads in the networks
 

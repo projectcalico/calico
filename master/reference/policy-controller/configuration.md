@@ -18,9 +18,10 @@ etcd access:
 * `ETCD_CERT_FILE`: The full path to the client certificate file for accessing the etcd cluster.
 * `ETCD_KEY_FILE`: The full path to the client key file for accessing the etcd cluster.
 
-> **NOTE**
->
-> When running etcd with TLS enabled, the addresses in ETCD_ENDPOINTS must be hostname values, NOT an IP address, such as etcd-host:2379.
+> **Note**: When running etcd with TLS enabled, the addresses in 
+> `ETCD_ENDPOINTS` must be hostname values such as `etcd-host:2379`, 
+> NOT IP addresses.
+{: .alert .alert-info}
 
 The `*_FILE` variables are _paths_ to the corresponding certificates / keys.  As such, when the policy controller is running as a Kubernetes pod, you
 must ensure that the files exist within the pod.  This is usually done in one of two ways:
