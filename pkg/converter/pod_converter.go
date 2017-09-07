@@ -27,7 +27,11 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	endpoint := api.NewWorkloadEndpoint()
 
 	endpoint.Metadata.Workload = fmt.Sprintf("%s.%s", pod.Namespace, pod.Name)
-	endpoint.Metadata.Labels = pod.ObjectMeta.Labels
+	if pod.ObjectMeta.Labels != nil {
+		endpoint.Metadata.Labels = pod.ObjectMeta.Labels
+	} else {
+		endpoint.Metadata.Labels = map[string]string{}
+	}
 
 	// Add a special label for the Kubernetes namespace.  This is used
 	// by selector-based policies to select all pods in a given namespace.
