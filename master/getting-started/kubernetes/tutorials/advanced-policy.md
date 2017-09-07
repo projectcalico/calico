@@ -12,7 +12,7 @@ in order to define more complex network policies.
 
 ### Requirements
 
-- This guide is aimed at Calico v2.4 and above, and will not work on Calico v2.3 or below.
+- This guide is aimed at Calico v2.6 and above, and will not work on Calico v2.3 or below.
 - This guide assumes you have a working Kubernetes cluster with Calico for policy. (See: [installation]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation) for help)
 - This guide assumes that your pods have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
@@ -194,6 +194,8 @@ metadata:
 spec:
   selector: calico/k8s_ns == 'advanced-policy-demo'
   order: 500
+  types:      # supported by Calico v2.6+ only
+  - egress
   egress:
   - action: deny
     destination:
@@ -216,6 +218,8 @@ metadata:
 spec:
   selector: calico/k8s_ns == 'advanced-policy-demo'
   order: 400
+  types:      # supported by Calico v2.6+ only
+  - egress
   egress:
   - action: allow
     protocol: udp
