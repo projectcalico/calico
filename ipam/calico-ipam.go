@@ -69,12 +69,25 @@ type ipamArgs struct {
 	IP net.IP `json:"ip,omitempty"`
 }
 
+func determineNodename(conf utils.NetConf) string {
+	nodename, _ := os.Hostname()
+	if conf.Hostname != "" {
+		nodename = conf.Hostname
+		log.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
+	}
+	if conf.Nodename != "" {
+		nodename = conf.Nodename
+	}
+	return nodename
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	conf := utils.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
+	nodename := determineNodename(conf)
 	cniVersion := conf.CNIVersion
 
 	utils.ConfigureLogging(conf.LogLevel)
@@ -99,8 +112,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if ipamArgs.IP != nil {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
 
-		// The hostname will be defaulted to the actual hostname if conf.Hostname is empty
-		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: conf.Hostname}
+		// The hostname will be defaulted to the actual hostname if conf.Nodename is empty
+		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: nodename}
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		err := calicoClient.IPAM().AssignIP(assignArgs)
 		if err != nil {
@@ -157,7 +170,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Num4:      num4,
 			Num6:      num6,
 			HandleID:  &workloadID,
-			Hostname:  conf.Hostname,
+			Hostname:  nodename,
 			IPv4Pools: v4pools,
 			IPv6Pools: v6pools,
 		}
