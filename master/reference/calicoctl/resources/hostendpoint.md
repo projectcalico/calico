@@ -31,9 +31,16 @@ spec:
   profiles:
   - profile1
   - profile2
+  ports:
+  - name: some-port
+    port: 1234
+    protocol: tcp
+  - name: another-port
+    port: 5432
+    protocol: udp
 ```
 
-### HostEndoint Definition
+### HostEndpoint Definition
 
 #### Metadata
 
@@ -50,6 +57,11 @@ spec:
 | interfaceName | The name of the interface on which to apply policy.      |                             | string          |
 | expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list |
 | profiles      | The list of profiles to apply to the endpoint.           |                             | list |
+| ports         | List on named ports that this workload exposes. | | List of [EndpointPorts](#endpointport) |
+
+#### EndpointPort
+
+{% include {{page.version}}/endpointport.md %}
 
 ### Supported operations
 
