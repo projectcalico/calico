@@ -617,7 +617,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 			for _, ns := range nsList.Items {
 				// The Syncer API expects a profile to be broken into its underlying
 				// components - rules, tags, labels.
-				profile, err := syn.converter.namespaceToProfile(&ns)
+				profile, err := syn.converter.NamespaceToProfile(&ns)
 				if err != nil {
 					log.Panicf("%s", err)
 				}
@@ -865,7 +865,7 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	}
 
 	// Convert the received Namespace into a profile KVPair.
-	profile, err := syn.converter.namespaceToProfile(ns)
+	profile, err := syn.converter.NamespaceToProfile(ns)
 	if err != nil {
 		log.Panicf("%s", err)
 	}
