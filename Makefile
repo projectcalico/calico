@@ -79,7 +79,7 @@ binary-containerized: vendor
 ###############################################################################
 
 ## Runs all tests - good for CI. 
-ci: clean docker-image ut-containerized st 
+ci: clean docker-image check-copyright ut-containerized st 
 
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut-containerized: vendor 
@@ -119,6 +119,10 @@ run-etcd: stop-etcd
 
 stop-etcd:
 	@-docker rm -f st-etcd
+
+# Make sure that a copyright statement exists on all go files.
+check-copyright:
+	./check-copyrights.sh 
 
 ###############################################################################
 # Release targets 
