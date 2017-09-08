@@ -41,14 +41,14 @@ contexts:
 current-context: test-context
 EOF
 
-# Run policy controller. TODO: Run all controller types.
+# Run policy controller.
 docker rm -f calico-policy-controller || true
 sleep 2
 docker run --detach --name=calico-policy-controller \
 	-v ${PWD}/st-kubeconfig.yaml:/st-kubeconfig.yaml \
 	-e ETCD_ENDPOINTS=http://${ETCD_IP}:2379 \
 	-e KUBECONFIG=/st-kubeconfig.yaml \
-	-e CONTROLLER_TYPE="profile" \
+	-e ENABLED_CONTROLLERS="endpoint,profile,policy" \
 	-e LOG_LEVEL="debug" \
 	calico/kube-policy-controller
 sleep 2

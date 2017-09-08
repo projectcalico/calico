@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"github.com/projectcalico/k8s-policy/pkg/config"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/namespace"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/networkpolicy"
@@ -42,21 +43,22 @@ func main() {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	// TODO: Allow user define multiple types of controllers.
-	switch config.ControllerType {
-	case "endpoint":
-		podController := pod.NewPodController(k8sClientset, calicoClient)
-		go podController.Run(config.EndpointWorkers, config.ReconcilerPeriod, stop)
-	case "profile":
-		namespaceController := namespace.NewNamespaceController(k8sClientset, calicoClient)
-		go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
-	case "policy":
-		policyController := networkpolicy.NewPolicyController(k8sClientset, calicoClient)
-		go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
-	default:
-		log.Fatal("Not a valid CONTROLLER_TYPE. Valid values are endpoint, profile, policy.")
+	for _, controllerType := range strings.Split(config.EnabledControllers, ",") {
+		switch controllerType {
+		case "endpoint":
+			podController := pod.NewPodController(k8sClientset, calicoClient)
+			go podController.Run(config.EndpointWorkers, config.ReconcilerPeriod, stop)
+		case "profile":
+			namespaceController := namespace.NewNamespaceController(k8sClientset, calicoClient)
+			go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
+		case "policy":
+			policyController := networkpolicy.NewPolicyController(k8sClientset, calicoClient)
+			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
+		default:
+			log.Fatalf("Invalid controller '%s' provided. Valid options are endpoint, profile, policy", controllerType)
+		}
 	}
-
+	
 	// Wait forever.
 	select {}
 }
