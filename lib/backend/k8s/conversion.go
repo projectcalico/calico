@@ -94,10 +94,10 @@ func (c Converter) parseProfileName(profileName string) (string, error) {
 	return strings.TrimPrefix(profileName, "ns.projectcalico.org/"), nil
 }
 
-// namespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
+// NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
 // labels from the Namespace which are inherited by the WorkloadEndpoints within
 // the Profile. This Profile also has the default ingress and egress rules, which are both 'allow'.
-func (c Converter) namespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, error) {
+func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, error) {
 	// Generate the labels to apply to the profile, using a special prefix
 	// to indicate that these are the labels from the parent Kubernetes Namespace.
 	labels := map[string]string{}
