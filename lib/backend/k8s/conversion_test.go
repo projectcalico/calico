@@ -46,13 +46,6 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ns).To(Equal("Namespace"))
 		Expect(polName).To(Equal("policyName"))
-
-		// Parse a Namespace backed Policy.
-		name = "ns.projectcalico.org/Namespace"
-		ns, err = c.parsePolicyNameNamespace(name)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ns).To(Equal("Namespace"))
-
 	})
 
 	It("should not parse invalid policy names", func() {
@@ -63,22 +56,17 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(ns).To(Equal(""))
 		Expect(polName).To(Equal(""))
-
-		// As a Namespace.
-		ns, err = c.parsePolicyNameNamespace(name)
-		Expect(err).To(HaveOccurred())
-		Expect(ns).To(Equal(""))
 	})
 
 	It("should parse valid profile names", func() {
-		name := "ns.projectcalico.org/default"
+		name := "k8s_ns.default"
 		ns, err := c.parseProfileName(name)
 		Expect(ns).To(Equal("default"))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should not parse invalid profile names", func() {
-		name := "k8s_ns.default"
+		name := "ns.projectcalico.org/default"
 		ns, err := c.parseProfileName(name)
 		Expect(err).To(HaveOccurred())
 		Expect(ns).To(Equal(""))
@@ -650,8 +638,8 @@ var _ = Describe("Test Namespace conversion", func() {
 
 		// Check labels.
 		labels := p.Value.(*model.Profile).Labels
-		Expect(labels["k8s_ns/label/foo"]).To(Equal("bar"))
-		Expect(labels["k8s_ns/label/roger"]).To(Equal("rabbit"))
+		Expect(labels["pcns.foo"]).To(Equal("bar"))
+		Expect(labels["pcns.roger"]).To(Equal("rabbit"))
 	})
 
 	It("should parse a Namespace to a Profile with no labels", func() {
