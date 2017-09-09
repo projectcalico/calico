@@ -79,10 +79,10 @@ binary-containerized: vendor
 ###############################################################################
 
 ## Runs all tests - good for CI. 
-ci: clean docker-image test-containerized st 
+ci: clean docker-image ut-containerized st 
 
 ## Run the tests in a container. Useful for CI, Mac dev.
-test-containerized: vendor run-etcd run-k8s-apiserver
+ut-containerized: vendor run-etcd run-k8s-apiserver
 	-mkdir -p .go-pkg-cache
 	docker run --rm --privileged --net=host \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \

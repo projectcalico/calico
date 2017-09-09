@@ -14,33 +14,35 @@ import (
 // are created, modified, or deleted. It de-duplicates updates by ensuring
 // updates are only queued when an object has changed.
 type ResourceCache interface {
-	// Sets the key to the provided value, and generates an update
+	// Set sets the key to the provided value, and generates an update
 	// on the queue the value has changed.
 	Set(key string, value interface{})
 
-	// Gets the value associated with the given key.  Returns nil
+	// Get gets the value associated with the given key.  Returns nil
 	// if the key is not present.
 	Get(key string) (interface{}, bool)
 
-	// Sets the key to the provided value, but does not generate
+	// Prime sets the key to the provided value, but does not generate
 	// and update on the queue ever.
 	Prime(key string, value interface{})
 
-	// Deletes the value identified by the given key from the cache, and
+	// Delete deletes the value identified by the given key from the cache, and
 	// generates an update on the queue if a value was deleted.
 	Delete(key string)
 
-	// Cleans up the object identified by the given key from the cache.
-	// It does not update the queue.
+	// Clean removes the object identified by the given key from the cache.
+	// It does not generate an update on the queue.
 	Clean(key string)
 
-	// Lists the keys currently in the cache.
+	// ListKeys lists the keys currently in the cache.
 	ListKeys() []string
 
-	// Starts the cache.
+	// Run enables the generation of events on the output queue starts
+	// cache reconciliation.
 	Run(reconcilerPeriod string)
 
-	// Get workqueue
+	// GetQueue returns the cache's output queue, which emits a stream
+	// of any keys which have been created, modified, or deleted.
 	GetQueue() workqueue.RateLimitingInterface
 }
 
@@ -146,7 +148,7 @@ func (c *calicoCache) GetQueue() workqueue.RateLimitingInterface {
 	return c.workqueue
 }
 
-// Run starts the cache.  And Set calls prior to calling Run will
+// Run starts the cache.  Any Set() calls prior to calling Run() will
 // prime the cache, but not trigger any updates on the output queue.
 func (c *calicoCache) Run(reconcilerPeriod string) {
 	go c.reconcile(reconcilerPeriod)

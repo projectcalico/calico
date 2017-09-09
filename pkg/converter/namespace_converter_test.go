@@ -16,20 +16,21 @@ var _ = Describe("NamespaceConverter", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Labels: map[string]string{
-					"foo":   "bar",
-					"roger": "rabbit",
+					"foo.org/bar": "baz",
+					"roger":       "rabbit",
 				},
 				Annotations: map[string]string{},
 			},
 			Spec: k8sapi.NamespaceSpec{},
 		}
+
 		p, err := nsConverter.Convert(&ns)
 		It("should not generate a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Ensure correct profile name
-		expectedName := "ns.projectcalico.org/default"
+		expectedName := "k8s_ns.default"
 		actualName := p.(api.Profile).Metadata.Name
 		It("should return calico profile with expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
@@ -52,10 +53,11 @@ var _ = Describe("NamespaceConverter", func() {
 		// Check labels.
 		labels := p.(api.Profile).Metadata.Labels
 		It("should return calico profile with correct labels", func() {
-			Expect(labels["k8s_ns/label/foo"]).To(Equal("bar"))
-			Expect(labels["k8s_ns/label/roger"]).To(Equal("rabbit"))
+			Expect(labels["pcns.foo.org/bar"]).To(Equal("baz"))
+			Expect(labels["pcns.roger"]).To(Equal("rabbit"))
 		})
 	})
+
 	Context("should parse a Namespace to a Profile with no labels", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +72,7 @@ var _ = Describe("NamespaceConverter", func() {
 		})
 
 		// Ensure correct profile name
-		expectedName := "ns.projectcalico.org/default"
+		expectedName := "k8s_ns.default"
 		actualName := p.(api.Profile).Metadata.Name
 		It("should return calico profile with expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
@@ -97,8 +99,8 @@ var _ = Describe("NamespaceConverter", func() {
 		})
 	})
 
-	Context("GetKey", func() {
-		profileName := "default"
+	Context("GetKey should return the right key", func() {
+		profileName := "k8s_ns.default"
 		profile := api.Profile{
 			Metadata: api.ProfileMetadata{
 				Name: profileName,

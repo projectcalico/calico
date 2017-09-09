@@ -3,11 +3,14 @@ package pod
 import (
 	"reflect"
 
+	"time"
+
 	calicocache "github.com/projectcalico/k8s-policy/pkg/cache"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/controller"
 	"github.com/projectcalico/k8s-policy/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -72,8 +75,8 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 			log.Debugf("Got ADD event for pod: %s", key)
 
 			// Ignore updates for host networked pods.
-			if !isReadyCalicoPod(obj.(*v1.Pod)) {
-				log.Debugf("Skipping irrelevant pod pod %s", key)
+			if isHostNetworked(obj.(*v1.Pod)) {
+				log.Debugf("Skipping irrelevant pod %s", key)
 				return
 			}
 
@@ -98,9 +101,9 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 			log.Debugf("Old object: \n%#v\n", oldObj)
 			log.Debugf("New object: \n%#v\n", newObj)
 
-			// Ignore updates for host networked pods.
+			// Ignore updates for not ready / irrelevant pods.
 			if !isReadyCalicoPod(newObj.(*v1.Pod)) {
-				log.Debugf("Skipping irrelevant pod pod %s", key)
+				log.Debugf("Skipping irrelevant pod %s", key)
 				return
 			}
 
@@ -124,8 +127,8 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 			log.Debugf("Got DELETE event for pod: %s", key)
 
 			// Ignore updates for host networked pods.
-			if !isReadyCalicoPod(obj.(*v1.Pod)) {
-				log.Debugf("Skipping irrelevant pod pod %s", key)
+			if isHostNetworked(obj.(*v1.Pod)) {
+				log.Debugf("Skipping irrelevant pod %s", key)
 				return
 			}
 
@@ -160,7 +163,8 @@ func (c *PodController) Run(threadiness int, reconcilerPeriod string, stopCh cha
 	// Load endpoint cache. Retry when failed.
 	log.Debug("Loading endpoint cache at start of day")
 	for err := c.populateEndpointCache(); err != nil; {
-		log.WithError(err).Errorf("Failed to load workload endpoint cache, retrying")
+		log.WithError(err).Errorf("Failed to load workload endpoint cache, retrying in 5s")
+		time.Sleep(5 * time.Second)
 	}
 
 	// Wait till k8s cache is synced
@@ -213,12 +217,13 @@ func (c *PodController) syncToCalico(key string) error {
 	// since CNI handles deletion of workload endpoints.
 	if labels, exists := c.labelCache.Get(key); exists {
 		// Get workloadEndpoint from cache
+		clog := log.WithField("wep", key)
 		endpoint, exists := c.endpointCache[key]
 		if !exists {
 			// Load endpoint cache.
-			log.Warnf("No WorkloadEndpoint for %s in cache, re-loading cache from datastore", key)
+			clog.Warnf("No corresponding WorkloadEndpoint in cache, re-loading cache from datastore")
 			if err := c.populateEndpointCache(); err != nil {
-				log.WithError(err).Error("Failed to load workload endpoint cache")
+				clog.WithError(err).Error("Failed to load workload endpoint cache")
 				return err
 			}
 
@@ -229,7 +234,7 @@ func (c *PodController) syncToCalico(key string) error {
 				// created by the CNI plugin yet. Just wait until it has been.
 				// This can only be hit when labels for a pod change before
 				//  the pod has been deployed, so should be pretty uncommon.
-				log.Infof("Pod %s hasn't been created by the CNI plugin yet.", key)
+				clog.Infof("Pod hasn't been created by the CNI plugin yet.")
 				return nil
 			}
 		}
@@ -243,12 +248,31 @@ func (c *PodController) syncToCalico(key string) error {
 			endpoint.Metadata.Labels = newLabels
 			_, err := c.calicoClient.WorkloadEndpoints().Update(&endpoint)
 			if err != nil {
-				log.WithError(err).Errorf("failed to update workload endpoint %s", key)
+				if _, ok := err.(errors.ErrorResourceUpdateConflict); !ok {
+					// Not an update conflict - return the error right away.
+					clog.WithError(err).Errorf("failed to update workload endpoint")
+					return err
+				}
+
+				// We hit an update conflict, re-query the WorkloadEndpoint before we try again.
+				clog.Warn("Update conflict, re-querying workload endpoint")
+				qwep, gErr := c.calicoClient.WorkloadEndpoints().Get(endpoint.Metadata)
+				if gErr != nil {
+					log.WithError(err).Errorf("failed to query workload endpoint %s", key)
+					return gErr
+				}
+				clog.Warn("Updated cache with latest wep from datastore.")
+				c.endpointCache[key] = *qwep
 				return err
 			}
 
-			// Update endpoint cache as well with modified endpoint.
-			c.endpointCache[key] = endpoint
+			// Update endpoint cache as well with the modified endpoint.
+			updatedWep, err := c.calicoClient.WorkloadEndpoints().Get(endpoint.Metadata)
+			if err != nil {
+				log.WithError(err).Errorf("failed to query workload endpoint %s", key)
+				return err
+			}
+			c.endpointCache[key] = *updatedWep
 			return nil
 		}
 	}
@@ -273,28 +297,27 @@ func (c *PodController) populateEndpointCache() error {
 func (c *PodController) handleErr(err error, key string) {
 	workqueue := c.labelCache.GetQueue()
 	if err == nil {
-
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.
 		// This ensures that future processing of updates for this key is not delayed because of
 		// an outdated error history.
+		log.WithField("key", key).Debug("Error for key is no more, drop from retry queue")
 		workqueue.Forget(key)
 		return
 	}
 
 	// This controller retries 5 times if something goes wrong. After that, it stops trying.
 	if workqueue.NumRequeues(key) < 5 {
-		log.WithError(err).Errorf("Error syncing pod %v: %v", key, err)
+		log.WithError(err).Errorf("Error syncing pod, will retry: %v: %v", key, err)
 		// Re-enqueue the key rate limited. Based on the rate limiter on the
 		// queue and the re-enqueue history, the key will be processed later again.
 		workqueue.AddRateLimited(key)
 		return
 	}
-
 	workqueue.Forget(key)
 
 	// Report to an external entity that, even after several retries, we could not successfully process this key
 	uruntime.HandleError(err)
-	log.WithError(err).Errorf("Dropping pod %q out of the queue: %v", key, err)
+	log.WithError(err).Errorf("Dropping pod %q out of the retry queue: %v", key, err)
 }
 
 func isReadyCalicoPod(pod *v1.Pod) bool {
