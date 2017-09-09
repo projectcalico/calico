@@ -6,13 +6,15 @@ CONTAINER_NAME=calico/kube-policy-controller
 PACKAGE_NAME?=github.com/projectcalico/k8s-policy
 GO_BUILD_VER:=latest
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
-LDFLAGS=
 LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 # Determine which OS / ARCH.
 OS?=$(shell uname -s | tr A-Z a-z)
 ARCH?=amd64
+
+# Get version from git.
+GIT_VERSION?=$(shell git describe --tags --dirty)
 
 ###############################################################################
 # Build targets 
@@ -55,7 +57,8 @@ binary: vendor
 	if [ "$(OS)" == "linux" ]; then \
 		INSTALL_FLAG=" -i "; \
 	fi; \
-	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-policy-controller-$(OS)-$(ARCH) $(LDFLAGS) "./main.go"
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-policy-controller-$(OS)-$(ARCH) \
+	-ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
 
 ## Build the controller binary in a container.
 binary-containerized: vendor
