@@ -113,12 +113,12 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 	// and tags an empty slice.
 	tags := ap.Metadata.Tags
 	if tags == nil {
-		log.Info("Tags is nil - convert to empty map for backend")
+		log.Debug("Tags is nil - convert to empty map for backend")
 		tags = []string{}
 	}
 	labels := ap.Metadata.Labels
 	if labels == nil {
-		log.Info("Labels is nil - convert to empty map for backend")
+		log.Debug("Labels is nil - convert to empty map for backend")
 		labels = map[string]string{}
 	}
 
