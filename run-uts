@@ -34,7 +34,7 @@ echo '| All coverage |'
 echo '+==============+'
 echo
 go tool cover -func combined.coverprofile | \
-  sed 's=github.com/projectcalico/libcalico-go/==' | \
+  sed 's=github.com/projectcalico/k8s-policy/==' | \
   column -t
 
 echo

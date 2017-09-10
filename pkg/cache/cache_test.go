@@ -35,6 +35,8 @@ var _ = Describe("Cache", func() {
 	Context("Get operation", func() {
 		Context("With non-existing key", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			returnedObject, exists := rc.Get("nokey")
 			It("should return nil", func() {
 				Expect(exists).Should(BeFalse())
@@ -44,6 +46,8 @@ var _ = Describe("Cache", func() {
 
 		Context("With empty key", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			returnedObject, exists := rc.Get("")
 			It("should return nil", func() {
 				Expect(exists).Should(BeFalse())
@@ -51,8 +55,10 @@ var _ = Describe("Cache", func() {
 			})
 		})
 
-		Context("With valid key", func() {
+		Context("With key/value present in cache", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,
@@ -69,6 +75,8 @@ var _ = Describe("Cache", func() {
 	Context("Prime operation", func() {
 		Context("When key not present in cache", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,
@@ -88,6 +96,8 @@ var _ = Describe("Cache", func() {
 
 		Context("With the duplicate key", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,
@@ -109,6 +119,8 @@ var _ = Describe("Cache", func() {
 	Context("Set Operation", func() {
 		Context("when resource already not present in cache", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,
@@ -132,6 +144,8 @@ var _ = Describe("Cache", func() {
 
 		Context("when exact resource already present in cache", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,
@@ -157,6 +171,8 @@ var _ = Describe("Cache", func() {
 	Context("Delete Operation", func() {
 		Context("delete valid resource in cache", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,
@@ -189,6 +205,8 @@ var _ = Describe("Cache", func() {
 	Context("Clean Operation", func() {
 		Context("With resource present in cache", func() {
 			rc := NewResourceCache(rcargs)
+			rc.Run("0m")
+
 			resourceName := "namespace1"
 			obj := resource{
 				name: resourceName,

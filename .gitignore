@@ -14,3 +14,4 @@ vendor/
 dist/kube-policy-controller
 .go-pkg-cache
 st-kubeconfig.yaml
+*.coverprofile
