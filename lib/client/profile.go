@@ -19,7 +19,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/converter"
-	log "github.com/sirupsen/logrus"
 )
 
 // ProfileInterface has methods to work with Profile resources.
@@ -34,12 +33,13 @@ type ProfileInterface interface {
 
 // profiles implements ProfileInterface
 type profiles struct {
+	converter.ProfileConverter
 	c *Client
 }
 
 // newProfiles returns a new ProfileInterface bound to the supplied client.
 func newProfiles(c *Client) ProfileInterface {
-	return &profiles{c}
+	return &profiles{c: c}
 }
 
 // Create creates a new profile.
@@ -80,7 +80,8 @@ func (h *profiles) List(metadata api.ProfileMetadata) (*api.ProfileList, error) 
 }
 
 // convertMetadataToListInterface converts a ProfileMetadata to a ProfileListOptions.
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the profiles struct).
 func (h *profiles) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.ProfileMetadata)
 	l := model.ProfileListOptions{
@@ -90,70 +91,23 @@ func (h *profiles) convertMetadataToListInterface(m unversioned.ResourceMetadata
 }
 
 // convertMetadataToKey converts a ProfileMetadata to a ProfileKey
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the profiles struct).
 func (h *profiles) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
-	hm := m.(api.ProfileMetadata)
-	k := model.ProfileKey{
-		Name: hm.Name,
-	}
-	return k, nil
+	return h.ConvertMetadataToKey(m)
 }
 
 // convertMetadataToKey converts a ProfileMetadata to a ProfileKey
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the profiles struct).
 func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
-	ap := a.(api.Profile)
-	k, err := h.convertMetadataToKey(ap.Metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	// Fix up tags and labels so to be empty values rather than nil.  Felix does not
-	// expect a null value in the JSON, so we fix up to make Labels an empty map
-	// and tags an empty slice.
-	tags := ap.Metadata.Tags
-	if tags == nil {
-		log.Debug("Tags is nil - convert to empty map for backend")
-		tags = []string{}
-	}
-	labels := ap.Metadata.Labels
-	if labels == nil {
-		log.Debug("Labels is nil - convert to empty map for backend")
-		labels = map[string]string{}
-	}
-
-	d := model.KVPair{
-		Key: k,
-		Value: &model.Profile{
-			Rules: model.ProfileRules{
-				InboundRules:  converter.RulesAPIToBackend(ap.Spec.IngressRules),
-				OutboundRules: converter.RulesAPIToBackend(ap.Spec.EgressRules),
-			},
-			Tags:   tags,
-			Labels: labels,
-		},
-	}
-
-	return &d, nil
+	return h.ConvertAPIToKVPair(a)
 }
 
 // convertKVPairToAPI converts a KVPair containing a backend Profile and ProfileKey
 // to an API Profile structure.
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the profiles struct).
 func (h *profiles) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bp := d.Value.(*model.Profile)
-	bk := d.Key.(model.ProfileKey)
-
-	ap := api.NewProfile()
-	ap.Metadata.Name = bk.Name
-	ap.Metadata.Labels = bp.Labels
-	if len(bp.Tags) == 0 {
-		ap.Metadata.Tags = nil
-	} else {
-		ap.Metadata.Tags = bp.Tags
-	}
-	ap.Spec.IngressRules = converter.RulesBackendToAPI(bp.Rules.InboundRules)
-	ap.Spec.EgressRules = converter.RulesBackendToAPI(bp.Rules.OutboundRules)
-
-	return ap, nil
+	return h.ConvertKVPairToAPI(d)
 }
