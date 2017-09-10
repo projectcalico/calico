@@ -182,9 +182,12 @@ spec:
               value: "ACCEPT"
             # Configure the IP Pool from which Pod IPs will be chosen.
             - name: CALICO_IPV4POOL_CIDR
-              value: "192.168.0.0/16"
+              value: "10.244.0.0/16"
             - name: CALICO_IPV4POOL_IPIP
               value: "always"
+            # Wait for etcd to come up.
+            - name: WAIT_FOR_DATASTORE
+              value: "true"
             # Disable IPv6 on Kubernetes.
             - name: FELIX_IPV6SUPPORT
               value: "false"
