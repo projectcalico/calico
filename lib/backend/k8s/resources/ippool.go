@@ -112,16 +112,13 @@ func (i IPPoolConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error
 
 	crd := custom.IPPool{
 		Metadata: metav1.ObjectMeta{
-			Name: crdName,
+			Name:            crdName,
+			ResourceVersion: kvp.Revision,
 		},
 		Spec: custom.IPPoolSpec{
 			IPPoolSpec: r.(*api.IPPool).Spec,
 			CIDR:       r.(*api.IPPool).Metadata.CIDR,
 		},
-	}
-
-	if kvp.Revision != nil {
-		crd.Metadata.ResourceVersion = kvp.Revision.(string)
 	}
 	return &crd, nil
 }

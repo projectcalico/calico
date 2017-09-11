@@ -15,13 +15,9 @@
 package testutils
 
 import (
-	"net"
-
 	etcdclient "github.com/coreos/etcd/client"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/backend"
 	log "github.com/sirupsen/logrus"
 
 	"errors"
@@ -33,57 +29,13 @@ import (
 	"golang.org/x/net/context"
 )
 
-// CreateNewIPPool takes a client.Client with a poolSubnet CIDR (in "192.168.1.0/24" format) with
-// ipip, natOut, and ipam bools for the pool to be setup and creates a new pool.
-func CreateNewIPPool(c client.Client, poolSubnet string, ipip, natOut, ipam bool) {
-
-	_, cidr, err := net.ParseCIDR(poolSubnet)
-	if err != nil {
-		log.Printf("Error parsing CIDR: %s\n", err)
-	}
-
-	pool := api.IPPool{
-		TypeMetadata: unversioned.TypeMetadata{
-			Kind:       "pool",
-			APIVersion: "v1",
-		},
-		Metadata: api.IPPoolMetadata{
-			ObjectMetadata: unversioned.ObjectMetadata{},
-			CIDR:           cnet.IPNet{*cidr},
-		},
-		Spec: api.IPPoolSpec{
-			IPIP: &api.IPIPConfiguration{
-				Enabled: ipip,
-			},
-			NATOutgoing: natOut,
-			Disabled:    !ipam,
-		},
-	}
-
-	_, err = c.IPPools().Create(&pool)
-
-	if err != nil {
-		log.Printf("Error creating pool: %s\n", err)
-	}
-}
-
-func CreateClient(config api.CalicoAPIConfig) *client.Client {
-	c, err := client.New(config)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return c
-}
-
-func CleanDatastore(config api.CalicoAPIConfig) {
+func CleanDatastore(config apiconfig.CalicoAPIConfig) {
 	var err error
 
 	log.Println(fmt.Sprintf("Cleaning datastore: %v", config.Spec.DatastoreType))
 
 	switch config.Spec.DatastoreType {
-	case api.EtcdV2:
+	case apiconfig.EtcdV2:
 		// To clean etcd, just create a new etcd client and delete the entire calico tree.
 		cfg := etcdclient.Config{
 			Endpoints: []string{config.Spec.EtcdScheme + "://" + config.Spec.EtcdAuthority},
@@ -99,11 +51,11 @@ func CleanDatastore(config api.CalicoAPIConfig) {
 		} else {
 			log.Errorf("Can't create etcd backend %v", err)
 		}
-	case api.Kubernetes:
+	case apiconfig.Kubernetes:
 		// To clean Kuberenetes, we create a Client and use the backend interface to
 		// list and remove each of the resource types currently supported by the KDD.  We
 		// can't remove everything though because some of the resources are owned by Kubernetes.
-		backend := CreateClient(config).Backend
+		backend, _ := backend.NewClient(config)
 
 		types := []model.ListInterface{
 			model.GlobalBGPConfigListOptions{},
@@ -114,10 +66,10 @@ func CleanDatastore(config api.CalicoAPIConfig) {
 			model.IPPoolListOptions{},
 		}
 		for _, t := range types {
-			rs, _ := backend.List(t)
-			for _, r := range rs {
+			rs, _ := backend.List(t, "")
+			for _, r := range rs.KVPairs {
 				log.WithField("Key", r.Key).Info("Deleting from KDD")
-				backend.Delete(r)
+				backend.Delete(r.Key, r.Revision)
 			}
 		}
 
@@ -130,23 +82,15 @@ func CleanDatastore(config api.CalicoAPIConfig) {
 	}
 }
 
-// CreateCleanClient is a utility function to wipe clean "/calico" recursively from backend
-// and to return confugred client to it
-func CreateCleanClient(config api.CalicoAPIConfig) *client.Client {
-	CleanDatastore(config)
-
-	return CreateClient(config)
-}
-
 // DumpDatastore prints out a recursive dump of the contents of backend.
-func DumpDatastore(config api.CalicoAPIConfig) error {
+func DumpDatastore(config apiconfig.CalicoAPIConfig) error {
 	var output []byte
 	var err error
 
 	log.Println(fmt.Sprintf("Dumping datastore: %v", config.Spec.DatastoreType))
 
 	switch config.Spec.DatastoreType {
-	case api.EtcdV2:
+	case apiconfig.EtcdV2:
 		output, err = exec.Command("curl", "http://127.0.0.1:2379/v2/keys?recursive=true").Output()
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v", config.Spec.DatastoreType))

@@ -90,8 +90,14 @@ type ListInterface interface {
 type KVPair struct {
 	Key      Key
 	Value    interface{}
-	Revision interface{}
+	Revision string
 	TTL      time.Duration // For writes, if non-zero, key has a TTL.
+}
+
+// KVPairList hosts a slice of KVPair structs and a Revision, returned from a Ls
+type KVPairList struct {
+	KVPairs  []*KVPair
+	Revision string
 }
 
 // KeyToDefaultPath converts one of the Keys from this package into a unique

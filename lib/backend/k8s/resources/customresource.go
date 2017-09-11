@@ -118,26 +118,19 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 	// Create storage for the updated resource.
 	resOut := reflect.New(c.k8sResourceType).Interface().(CustomK8sResource)
 
-	providedRV := ""
-	if kvp.Revision != nil {
-		if rv, ok := kvp.Revision.(string); ok {
-			providedRV = rv
-		}
-	}
-
 	var updateError error
 	for i := 0; i < 5; i++ {
 		// If no revision was passed, get the object to use its latest Revision number.
 		// If a revision was passed, then we should just use that.
-		if providedRV == "" {
+		if len(kvp.Revision) == 0 {
 			logContext.Debug("Querying for resource version")
 			k, err := c.Get(kvp.Key)
 			if err != nil {
 				return nil, err
 			}
 
-			if k.Revision != nil {
-				kvp.Revision = k.Revision.(string)
+			if len(k.Revision) != 0 {
+				kvp.Revision = k.Revision
 				logContext.Debugf("Set resource version to %s", kvp.Revision)
 			}
 		}
@@ -163,7 +156,7 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 			// Update the revision information from the response.
 			kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
 			return kvp, nil
-		} else if _, ok := updateError.(errors.ErrorResourceUpdateConflict); ok && providedRV == "" {
+		} else if _, ok := updateError.(errors.ErrorResourceUpdateConflict); ok && len(kvp.Revision) == 0 {
 			// We only want to retry if there was no Revision provided with
 			// the KVP AND there was a CAS error while updating.
 			logContext.WithError(updateError).Warnf("Update failed for %s, retrying", kvp.Key.String())
@@ -297,7 +290,7 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 			return kvps, "", nil
 		} else {
 			kvps = append(kvps, kvp)
-			return kvps, kvp.Revision.(string), nil
+			return kvps, kvp.Revision, nil
 		}
 	}
 

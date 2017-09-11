@@ -83,15 +83,13 @@ func (c GlobalFelixConfigConverter) FromKVPair(kvp *model.KVPair) (CustomK8sReso
 	}
 	crd := custom.GlobalFelixConfig{
 		Metadata: metav1.ObjectMeta{
-			Name: name,
+			Name:            name,
+			ResourceVersion: kvp.Revision,
 		},
 		Spec: custom.GlobalFelixConfigSpec{
 			Name:  kvp.Key.(model.GlobalConfigKey).Name,
 			Value: kvp.Value.(string),
 		},
-	}
-	if kvp.Revision != nil {
-		crd.Metadata.ResourceVersion = kvp.Revision.(string)
 	}
 	return &crd, nil
 }

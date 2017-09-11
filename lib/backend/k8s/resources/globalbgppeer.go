@@ -115,7 +115,8 @@ func (c GlobalBGPPeerConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource
 
 	crd := custom.BGPPeer{
 		Metadata: metav1.ObjectMeta{
-			Name: crdName,
+			Name:            crdName,
+			ResourceVersion: kvp.Revision,
 		},
 		Spec: custom.BGPPeerSpec{
 			BGPPeerSpec: r.(*api.BGPPeer).Spec,
@@ -123,9 +124,6 @@ func (c GlobalBGPPeerConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource
 			PeerIP:      r.(*api.BGPPeer).Metadata.PeerIP,
 			Node:        "",
 		},
-	}
-	if kvp.Revision != nil {
-		crd.Metadata.ResourceVersion = kvp.Revision.(string)
 	}
 	return &crd, nil
 }

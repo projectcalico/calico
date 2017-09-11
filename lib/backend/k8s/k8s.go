@@ -159,8 +159,23 @@ func (c *KubeClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *KubeClient) EnsureCalicoNodeInitialized(node string) error {
-	log.WithField("Node", node).Info("Ensuring node is initialized")
+func (c *KubeClient) Clean() error {
+	/*types := []model.ListInterface{
+		model.GlobalBGPConfigListOptions{},
+		model.NodeBGPConfigListOptions{},
+		model.GlobalBGPPeerListOptions{},
+		model.NodeBGPPeerListOptions{},
+		model.GlobalConfigListOptions{},
+		model.IPPoolListOptions{},
+	}
+	for _, t := range types {
+		rs, _ := c.List(t, "")
+		for _, r := range rs.KVPairs {
+			log.WithField("Key", r.Key).Info("Deleting from KDD")
+			backend.Delete(r.Key, r.Revision)
+		}
+	}
+	*/
 	return nil
 }
 
@@ -195,7 +210,7 @@ func (c *KubeClient) ensureClusterType() (bool, error) {
 			existingValue = fmt.Sprintf("%s,KDD", existingValue)
 		}
 		value = existingValue
-		rv = ct.Revision.(string)
+		rv = ct.Revision
 	}
 	log.WithField("value", value).Debug("Setting ClusterType")
 	_, err = c.Apply(&model.KVPair{

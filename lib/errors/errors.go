@@ -124,7 +124,7 @@ type ErrorResourceUpdateConflict struct {
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
-	return fmt.Sprintf("update conflict: '%s'", e.Identifier)
+	return fmt.Sprintf("update conflict: %s", e.Identifier)
 }
 
 // UpdateErrorIdentifier modifies the supplied error to use the new resource
