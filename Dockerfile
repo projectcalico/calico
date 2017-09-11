@@ -1,6 +1,6 @@
 FROM busybox
 
-MAINTAINER Tom Denham <tom@tigera.io>
+LABEL maintainer "Tom Denham <tom@tigera.io>"
 
 ADD dist/calico /opt/cni/bin/calico
 ADD dist/flannel /opt/cni/bin/flannel
