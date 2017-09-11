@@ -91,7 +91,7 @@ ut-containerized: vendor
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make WHAT=$(WHAT) SKIP=$(SKIP) ut'
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-K8S_VERSION=1.7.4
+K8S_VERSION=1.7.5
 ## Runs system tests.
 st: docker-image run-etcd run-k8s-apiserver
 	./tests/system/apiserver-reconnection.sh
