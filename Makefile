@@ -1,27 +1,102 @@
-.PHONY: all policy-controller docker-image clean
+.PHONY: all binary test clean help docker-image
+default: help
 
-SRCDIR=.
+# Makefile configuration options 
 CONTAINER_NAME=calico/kube-policy-controller
+PACKAGE_NAME?=github.com/projectcalico/k8s-policy
+GO_BUILD_VER:=latest
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+LIBCALICOGO_PATH?=none
+LOCAL_USER_ID?=$(shell id -u $$USER)
 
-default: all
-all: policy-controller
+# Determine which OS / ARCH.
+OS?=$(shell uname -s | tr A-Z a-z)
+ARCH?=amd64
 
-# Build the calico/kube-policy-controller Docker container.
+# Get version from git.
+GIT_VERSION?=$(shell git describe --tags --dirty)
+
+###############################################################################
+# Build targets 
+###############################################################################
+## Builds the controller binary and docker image.
 docker-image: image.created
+image.created: dist/kube-policy-controller
+	# Build the docker image for the policy controller.
+	docker build -t $(CONTAINER_NAME) .
+	touch image.created
 
-# Run the unit tests.
-ut: update-version
-	docker run --rm -v `pwd`:/code \
-	calico/test \
-	nosetests tests/unit -c nose.cfg
+dist/kube-policy-controller:
+	$(MAKE) OS=linux ARCH=amd64 binary-containerized
+	mv dist/kube-policy-controller-linux-amd64 dist/kube-policy-controller
 
-# Run system tests.
+## Populates the vendor directory.
+vendor: glide.yaml
+	# Ensure that the glide cache directory exists.
+	mkdir -p $(HOME)/.glide
+
+	# To build without Docker just run "glide install -strip-vendor"
+	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
+          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	fi; \
+
+	docker run --rm \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+		-v $(HOME)/.glide:/home/user/.glide:rw \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		$(CALICO_BUILD) \
+		/bin/sh -c 'cd /go/src/$(PACKAGE_NAME) && glide install -strip-vendor'
+
+ut: vendor
+	./run-uts
+
+# Build the controller binary.
+binary: vendor
+	# Don't try to "install" the intermediate build files (.a .o) when not on linux
+	# since there are no write permissions for them in our linux build container.
+	if [ "$(OS)" == "linux" ]; then \
+		INSTALL_FLAG=" -i "; \
+	fi; \
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-policy-controller-$(OS)-$(ARCH) \
+	-ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
+
+## Build the controller binary in a container.
+binary-containerized: vendor
+	mkdir -p dist
+	-mkdir -p .go-pkg-cache
+	docker run --rm \
+	  -e OS=$(OS) -e ARCH=$(ARCH) \
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
+	  -v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+	  $(CALICO_BUILD) sh -c '\
+	    cd /go/src/$(PACKAGE_NAME) && \
+	    make OS=$(OS) ARCH=$(ARCH) binary'
+
+###############################################################################
+# Test targets 
+###############################################################################
+
+## Runs all tests - good for CI. 
+ci: clean docker-image check-copyright ut-containerized st 
+
+## Run the tests in a container. Useful for CI, Mac dev.
+ut-containerized: vendor 
+	-mkdir -p .go-pkg-cache
+	docker run --rm --privileged --net=host \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make WHAT=$(WHAT) SKIP=$(SKIP) ut'
+
+GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+K8S_VERSION=1.7.5
+## Runs system tests.
 st: docker-image run-etcd run-k8s-apiserver
 	./tests/system/apiserver-reconnection.sh
 	$(MAKE) stop-k8s-apiserver stop-etcd
 
-GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-K8S_VERSION=1.6.4
 .PHONY: run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
 run-k8s-apiserver: stop-k8s-apiserver
 	ETCD_IP=`$(GET_CONTAINER_IP) st-etcd` && \
@@ -45,28 +120,13 @@ run-etcd: stop-etcd
 stop-etcd:
 	@-docker rm -f st-etcd
 
-# Makes tests on Circle CI.
-test-circle: update-version
-	# Can't use --rm on circle
-	# Circle also requires extra options for reporting.
-	docker run \
-	-v `pwd`:/code \
-	-v $(CIRCLE_TEST_REPORTS):/circle_output \
-	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
-	calico/test sh -c \
-	'nosetests tests/unit -c nose.cfg \
-	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
-	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
+# Make sure that a copyright statement exists on all go files.
+check-copyright:
+	./check-copyrights.sh 
 
-image.created: update-version
-	# Build the docker image for the policy controller.
-	docker build -t $(CONTAINER_NAME) .
-	touch image.created
-
-# Update the version file.
-update-version:
-	echo "VERSION='`git describe --tags --dirty`'" > version.py
-
+###############################################################################
+# Release targets 
+###############################################################################
 release: clean
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
@@ -84,9 +144,33 @@ endif
 	@echo "docker push calico/kube-policy-controller:$(VERSION)"
 	@echo "docker push quay.io/calico/kube-policy-controller:$(VERSION)"
 
+## Removes all build artifacts.
 clean:
-	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf dist image.created
 	-docker rmi $(CONTAINER_NAME)
+	rm -f st-kubeconfig.yaml
 
-ci: clean docker-image ut st
+.PHONY: help
+## Display this help text.
+help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
+	$(info Available targets)
+	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
+		nb = sub( /^## /, "", helpMsg );                                \
+		if(nb == 0) {                                                   \
+			helpMsg = $$0;                                              \
+			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
+		}                                                               \
+		if (nb)                                                         \
+			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
+	}                                                                   \
+	{ helpMsg = $$0 }'                                                  \
+	width=20                                                            \
+	$(MAKEFILE_LIST)
+
+###############################################################################
+# Utilities 
+###############################################################################
+
+goimports:
+	goimports -l -w ./pkg
+	goimports -l -w ./main.go

@@ -1,27 +1,31 @@
-## Calico Network Policy for Kubernetes 
+# Calico Network Policy Controllers for Kubernetes
+<img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
-<blockquote>
-Note that the documentation in this repo is targeted at Calico contributors.
-<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
-</blockquote>
+This repository contains a collection of kubernetes controllers which implement the Kubernetes NetworkPolicy API for Calico deployed using the
+etcd datastore.  Note that when using Calico configured to use the [Kubernetes datastore][kdd], the controllers in this repository are not needed.
 
-This repository contains the Calico Kubernetes policy controller, which implements the Kubernetes network policy API.  
+## Get Started Using Calico
 
-![calico-policy-controller](calico-policy-controller.png)
+For users who want to learn more about the project or get started with Calico, see the documentation on [docs.projectcalico.org](https://docs.projectcalico.org).
 
-The controller uses the Kubernetes v1beta1 network policy API to configure Calico network policy.  The policy controller addon is deployed on top of Kubernetes as a pod. 
+## Get Started Developing Calico
 
-Calico can enforce NetworkPolicy on top of:
-- [Calico BGP networking](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/KubernetesIntegration.md)
-- [Flannel networking](https://github.com/tigera/canal)
-- [GCE native cloud-provider networking](http://kubernetes.io/docs/getting-started-guides/gce/)
+### Dependencies
 
-See the documentation on [network policy in Kubernetes](http://kubernetes.io/docs/user-guide/networkpolicies/) for more information on how to use NetworkPolicy. 
+The entire build can be run within a container, which means the only dependencies you'll need are a [functioning Docker installation](https://docs.docker.com/engine/installation/).
 
-Calico also supports a [mode](http://docs.projectcalico.org/v2.4/getting-started/kubernetes/installation/hosted/kubernetes-datastore/) which 
-uses the Kubernetes API directly without the need for its own
-etcd cluster. When running in this mode, the policy controller is not required.
+If you'd like to run the build and tests locally outside of a container, you'll need the following dependencies:
 
-### Resources
+- [go v1.8+](https://golang.org/doc/install)
+- [glide](https://github.com/Masterminds/glide/)
 
-* [Configuration guide](configuration.md)
+### Building
+
+Contributions to this code are welcome!  The code in this repository can be built and tested using the Makefile.
+
+- `make docker-image` will produce a docker image containing the artifacts suitable for deploying to kubernetes.
+- `make binary` will build just the controller binary so it can be run locally.
+
+For more information, see `make help`.
+
+[kdd]: http://docs.projectcalico.org/v2.0/getting-started/kubernetes/installation/hosted/k8s-backend/
