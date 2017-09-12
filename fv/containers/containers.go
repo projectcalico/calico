@@ -32,8 +32,7 @@ type Container struct {
 	Name     string
 	IP       string
 	Hostname string
-	Stop     func()
-	stopped  bool
+	runCmd   *exec.Cmd
 	binaries set.Set
 }
 
@@ -41,20 +40,33 @@ var containerIdx = 0
 
 var runningContainers = []*Container{}
 
+func (c *Container) Stop() {
+	if c == nil {
+		log.Info("Stop no-op because nil container")
+	} else if c.runCmd == nil {
+		log.WithField("container", c).Info("Stop no-op because container is not running")
+	} else {
+		log.WithField("container", c).Info("Stop")
+		c.runCmd.Process.Signal(os.Interrupt)
+		c.WaitNotRunning(10 * time.Second)
+		c.runCmd = nil
+
+		// And now to be really sure that the container is cleaned up.
+		utils.RunMayFail("docker", "rm", "-f", c.Name)
+	}
+}
+
 func Run(namePrefix string, args ...string) (c *Container) {
 
 	// Build unique container name and struct.
 	containerIdx++
 	c = &Container{Name: fmt.Sprintf("%v-%d-%d-", namePrefix, os.Getpid(), containerIdx)}
-	c.Stop = func() {
-		log.WithField("container", c).Info("Stop no-op because container failed to start")
-	}
 
 	// Start the container.
 	log.WithField("container", c).Info("About to run container")
 	runArgs := append([]string{"run", "--name", c.Name}, args...)
-	runCmd := exec.Command("docker", runArgs...)
-	err := runCmd.Start()
+	c.runCmd = exec.Command("docker", runArgs...)
+	err := c.runCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
 
 	// It might take a very long time for the container to show as running, if the image needs
@@ -67,17 +79,6 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
 	c.Hostname = c.GetHostname()
-	c.Stop = func() {
-		if !c.stopped {
-			// We haven't previously tried to stop this container.
-			c.stopped = true
-			runCmd.Process.Signal(os.Interrupt)
-			c.WaitNotRunning(10 * time.Second)
-
-			// And now to be really sure that the container is cleaned up.
-			utils.RunMayFail("docker", "rm", "-f", c.Name)
-		}
-	}
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
 	return

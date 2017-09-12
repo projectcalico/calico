@@ -28,6 +28,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
+// So that we can say 'HaveConnectivityTo' without the 'workload.' prefix...
+var HaveConnectivityTo = workload.HaveConnectivityTo
+
 var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 
 	var (
@@ -93,10 +96,10 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	})
 
 	It("full connectivity to and from workload 0", func() {
-		Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
-		Expect(w[2]).To(workload.HaveConnectivityTo(w[0]))
-		Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
-		Expect(w[0]).To(workload.HaveConnectivityTo(w[2]))
+		Expect(w[1]).To(HaveConnectivityTo(w[0]))
+		Expect(w[2]).To(HaveConnectivityTo(w[0]))
+		Expect(w[0]).To(HaveConnectivityTo(w[1]))
+		Expect(w[0]).To(HaveConnectivityTo(w[2]))
 	})
 
 	Context("with ingress-only restriction for workload 0", func() {
@@ -117,10 +120,10 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		})
 
 		It("only w1 can connect into w0, but egress from w0 is unrestricted", func() {
-			Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
-			Expect(w[2]).NotTo(workload.HaveConnectivityTo(w[0]))
-			Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
-			Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
+			Expect(w[1]).To(HaveConnectivityTo(w[0]))
+			Expect(w[2]).NotTo(HaveConnectivityTo(w[0]))
+			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+			Expect(w[0]).To(HaveConnectivityTo(w[1]))
 		})
 	})
 
@@ -142,10 +145,10 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		})
 
 		It("ingress to w0 is unrestricted, but w0 can only connect out to w1", func() {
-			Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
-			Expect(w[2]).To(workload.HaveConnectivityTo(w[0]))
-			Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
-			Expect(w[0]).NotTo(workload.HaveConnectivityTo(w[2]))
+			Expect(w[1]).To(HaveConnectivityTo(w[0]))
+			Expect(w[2]).To(HaveConnectivityTo(w[0]))
+			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+			Expect(w[0]).NotTo(HaveConnectivityTo(w[2]))
 		})
 	})
 
@@ -168,10 +171,10 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		})
 
 		It("only w1 can connect into w0, and all egress from w0 is denied", func() {
-			Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
-			Expect(w[2]).NotTo(workload.HaveConnectivityTo(w[0]))
-			Expect(w[0]).NotTo(workload.HaveConnectivityTo(w[1]))
-			Expect(w[0]).NotTo(workload.HaveConnectivityTo(w[2]))
+			Expect(w[1]).To(HaveConnectivityTo(w[0]))
+			Expect(w[2]).NotTo(HaveConnectivityTo(w[0]))
+			Expect(w[0]).NotTo(HaveConnectivityTo(w[1]))
+			Expect(w[0]).NotTo(HaveConnectivityTo(w[2]))
 		})
 	})
 })

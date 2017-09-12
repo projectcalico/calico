@@ -37,13 +37,39 @@ type Workload struct {
 	InterfaceName string
 	IP            string
 	Port          string
-	Stop          func()
+	runCmd        *exec.Cmd
 	outPipe       io.ReadCloser
 	errPipe       io.ReadCloser
 	namespacePath string
 }
 
 var workloadIdx = 0
+
+func (w *Workload) Stop() {
+	if w == nil {
+		log.Info("Stop no-op because nil workload")
+	} else if w.runCmd == nil {
+		log.WithField("workload", w).Info("Stop no-op because workload is not running")
+	} else {
+		log.WithField("workload", w).Info("Stop")
+		outputBytes, err := exec.Command("docker", "exec", w.C.Name,
+			"cat",
+			fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
+		Expect(err).NotTo(HaveOccurred())
+		pid := strings.TrimSpace(string(outputBytes))
+		err = exec.Command("docker", "exec", w.C.Name, "kill", pid).Run()
+		Expect(err).NotTo(HaveOccurred())
+		w.runCmd.Process.Wait()
+		wOut, err := ioutil.ReadAll(w.outPipe)
+		Expect(err).NotTo(HaveOccurred())
+		wErr, err := ioutil.ReadAll(w.errPipe)
+		Expect(err).NotTo(HaveOccurred())
+		log.WithFields(log.Fields{
+			"workload": w,
+			"stdout":   string(wOut),
+			"stderr":   string(wErr)}).Info("Workload now stopped")
+	}
+}
 
 func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) {
 
@@ -56,16 +82,13 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 		IP:            ip,
 		Port:          port,
 	}
-	w.Stop = func() {
-		log.WithField("workload", w).Info("Stop no-op because workload failed to start")
-	}
 
 	// Ensure that the host has the 'test-workload' binary.
 	w.C.EnsureBinary("test-workload")
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
-	workloadCmd := exec.Command("docker", "exec", w.C.Name,
+	runCmd := exec.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
 		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v",
 			w.Name,
@@ -73,39 +96,19 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 			w.IP,
 			w.Port))
 	var err error
-	w.outPipe, err = workloadCmd.StdoutPipe()
+	w.outPipe, err = runCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
-	w.errPipe, err = workloadCmd.StderrPipe()
+	w.errPipe, err = runCmd.StderrPipe()
 	Expect(err).NotTo(HaveOccurred())
-	err = workloadCmd.Start()
+	err = runCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
-
-	// Fill in rest of container struct.
-	w.Stop = func() {
-		outputBytes, err := exec.Command("docker", "exec", w.C.Name,
-			"cat",
-			fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
-		Expect(err).NotTo(HaveOccurred())
-		pid := strings.TrimSpace(string(outputBytes))
-		err = exec.Command("docker", "exec", w.C.Name, "kill", pid).Run()
-		Expect(err).NotTo(HaveOccurred())
-		workloadCmd.Process.Wait()
-		wOut, err := ioutil.ReadAll(w.outPipe)
-		Expect(err).NotTo(HaveOccurred())
-		wErr, err := ioutil.ReadAll(w.errPipe)
-		Expect(err).NotTo(HaveOccurred())
-		log.WithFields(log.Fields{
-			"workload": w,
-			"stdout":   string(wOut),
-			"stderr":   string(wErr)}).Info("Workload now stopped")
-	}
-	log.WithField("workload", w).Info("Workload now running")
 
 	// Read the workload's namespace path, which it writes to its standard output.
 	namespacePath, err := bufio.NewReader(w.outPipe).ReadString('\n')
 	Expect(err).NotTo(HaveOccurred())
 	w.namespacePath = strings.TrimSpace(namespacePath)
-	log.Infof("with namespace %v", w.namespacePath)
+
+	log.WithField("workload", w).Info("Workload now running")
 
 	return
 }
