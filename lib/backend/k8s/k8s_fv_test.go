@@ -320,12 +320,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Performing a Get on the Profile and ensure no error in the Calico API", func() {
-			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
+			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking the correct entries are in our cache", func() {
-			expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
+			expectedName := "k8s_ns.test-syncer-namespace-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
@@ -337,7 +337,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking the correct entries are no longer in our cache", func() {
-			expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
+			expectedName := "k8s_ns.test-syncer-namespace-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
@@ -377,13 +377,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Perform a Get and ensure no error in the Calico API.
 		By("getting a Profile", func() {
-			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
+			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Expect corresponding Profile updates over the syncer for this Namespace.
 		By("Checking the correct entries are in our cache", func() {
-			expectedName := "ns.projectcalico.org/test-syncer-namespace-no-default-deny"
+			expectedName := "k8s_ns.test-syncer-namespace-no-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
@@ -395,7 +395,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking the correct entries are in no longer in our cache", func() {
-			expectedName := "ns.projectcalico.org/test-syncer-namespace-no-default-deny"
+			expectedName := "k8s_ns.test-syncer-namespace-no-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())

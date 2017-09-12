@@ -56,17 +56,6 @@ func (c Converter) parseWorkloadID(workloadID string) (string, string) {
 	return splits[0], splits[1]
 }
 
-// parsePolicyNameNamespace extracts the Kubernetes Namespace that backs the given Policy.
-func (c Converter) parsePolicyNameNamespace(name string) (string, error) {
-	// Policy objects backed by Namespaces have form "ns.projectcalico.org/<ns_name>"
-	if !strings.HasPrefix(name, "ns.projectcalico.org/") {
-		// This is not backed by a Kubernetes Namespace.
-		return "", fmt.Errorf("Policy %s not backed by a Namespace", name)
-	}
-
-	return strings.TrimPrefix(name, "ns.projectcalico.org/"), nil
-}
-
 // parsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
 func (c Converter) parsePolicyNameNetworkPolicy(name string) (string, string, error) {
 	// Policies backed by NetworkPolicies have form "knp.default.<ns_name>.<np_name>"
@@ -85,13 +74,13 @@ func (c Converter) parsePolicyNameNetworkPolicy(name string) (string, string, er
 
 // parseProfileName extracts the Namespace name from the given Profile name.
 func (c Converter) parseProfileName(profileName string) (string, error) {
-	// Profile objects backed by Namespaces have form "ns.projectcalico.org/<ns_name>"
-	if !strings.HasPrefix(profileName, "ns.projectcalico.org/") {
+	// Profile objects backed by Namespaces have form "k8s_ns.<ns_name>"
+	if !strings.HasPrefix(profileName, "k8s_ns.") {
 		// This is not backed by a Kubernetes Namespace.
 		return "", fmt.Errorf("Profile %s not backed by a Namespace", profileName)
 	}
 
-	return strings.TrimPrefix(profileName, "ns.projectcalico.org/"), nil
+	return strings.TrimPrefix(profileName, "k8s_ns."), nil
 }
 
 // NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
@@ -102,10 +91,10 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	// to indicate that these are the labels from the parent Kubernetes Namespace.
 	labels := map[string]string{}
 	for k, v := range ns.ObjectMeta.Labels {
-		labels[fmt.Sprintf("k8s_ns/label/%s", k)] = v
+		labels[fmt.Sprintf("pcns.%s", k)] = v
 	}
 
-	name := fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)
+	name := fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name)
 	kvp := model.KVPair{
 		Key: model.ProfileKey{Name: name},
 		Value: &model.Profile{
@@ -152,7 +141,7 @@ func (c Converter) hasIPAddress(pod *kapiv1.Pod) bool {
 // has verified that the provided Pod is valid to convert to a WorkloadEndpoint.
 func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
 	// Pull out the profile and workload ID based on pod name and Namespace.
-	profile := fmt.Sprintf("ns.projectcalico.org/%s", pod.ObjectMeta.Namespace)
+	profile := fmt.Sprintf("k8s_ns.%s", pod.ObjectMeta.Namespace)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
 	// We do, in some circumstances, want to parse Pods without an IP address.  For example,
@@ -235,7 +224,7 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) stri
 	// If this is a podSelector, it needs to be namespaced, and it
 	// uses a different prefix.  Otherwise, treat this as a NamespaceSelector.
 	selectors := []string{}
-	prefix := "k8s_ns/label/"
+	prefix := "pcns."
 	if ns != nil {
 		prefix = ""
 		selectors = append(selectors, fmt.Sprintf("calico/k8s_ns == '%s'", *ns))
