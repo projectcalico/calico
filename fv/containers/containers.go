@@ -53,7 +53,10 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	runCmd := exec.Command("docker", runArgs...)
 	err := runCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
-	c.WaitRunning(10 * time.Second)
+
+	// It might take a very long time for the container to show as running, if the image needs
+	// to be downloaded - e.g. when running on semaphore.
+	c.WaitRunning(20 * 60 * time.Second)
 
 	// Remember that this container is now running.
 	runningContainers = append(runningContainers, c)
