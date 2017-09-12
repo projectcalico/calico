@@ -96,7 +96,7 @@ type RouteTable struct {
 	// Testing shims, swapped with mock versions for UT
 
 	newNetlinkHandle  func() (HandleIface, error)
-	addStaticArpEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
+	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 	conntrack         conntrackIface
 	time              timeIface
 }
@@ -107,7 +107,7 @@ func New(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Durati
 		ipVersion,
 		newNetlinkHandle,
 		netlinkTimeout,
-		addStaticArpEntry,
+		addStaticARPEntry,
 		conntrack.New(),
 		realTime{},
 	)
@@ -119,7 +119,7 @@ func NewWithShims(
 	ipVersion uint8,
 	newNetlinkHandle func() (HandleIface, error),
 	netlinkTimeout time.Duration,
-	addStaticArpEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
+	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
 	timeShim timeIface,
 ) *RouteTable {
@@ -155,7 +155,7 @@ func NewWithShims(
 		pendingConntrackCleanups:  map[ip.Addr]chan struct{}{},
 		newNetlinkHandle:          newNetlinkHandle,
 		netlinkTimeout:            netlinkTimeout,
-		addStaticArpEntry:         addStaticArpEntry,
+		addStaticARPEntry:         addStaticARPEntry,
 		conntrack:                 conntrack,
 		time:                      timeShim,
 	}
@@ -209,7 +209,7 @@ func (r *RouteTable) getNetlinkHandle() (HandleIface, error) {
 		if err != nil {
 			r.numConsistentNetlinkFailures++
 			log.WithError(err).WithField("numFailures", r.numConsistentNetlinkFailures).Error(
-				"Failed to connect to netlink")
+				"Failed to set netlink timeout")
 			nlHandle.Delete()
 			return nil, err
 		}
@@ -480,7 +480,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		}
 		if r.ipVersion == 4 && target.DestMAC != nil {
 			// TODO(smc) clean up/sync old ARP entries
-			err := r.addStaticArpEntry(cidr, target.DestMAC, ifaceName)
+			err := r.addStaticARPEntry(cidr, target.DestMAC, ifaceName)
 			if err != nil {
 				logCxt.WithError(err).Warn("Failed to set ARP entry")
 				updatesFailed = true

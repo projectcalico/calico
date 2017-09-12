@@ -48,7 +48,7 @@ func newNetlinkHandle() (HandleIface, error) {
 	return netlink.NewHandle(syscall.NETLINK_ROUTE)
 }
 
-func addStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
+func addStaticARPEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
 	cmd := exec.Command("arp",
 		"-s", cidr.Addr().String(), destMAC.String(),
 		"-i", ifaceName)
