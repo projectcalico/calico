@@ -66,7 +66,7 @@ func main() {
 
 		const testMessage = "hello"
 
-		conn, err := net.DialTimeout("tcp", ipAddress+":"+port, 1*time.Second)
+		conn, err := net.DialTimeout("tcp", ipAddress+":"+port, 5*time.Second)
 		if err != nil {
 			return err
 		}
