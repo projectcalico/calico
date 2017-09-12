@@ -62,9 +62,6 @@ func GetEtcdClient(etcdIP string) *client.Client {
 	return client
 }
 
-func PrintDiags(etcdName, felixName string) {
-}
-
 func MetricsPortReachable(felixName, felixIP string) bool {
 	// Delete existing conntrack state for the metrics port.
 	utils.Run("docker", "exec", felixName,
@@ -196,13 +193,3 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		})
 	})
 })
-
-// Setup for planned further FV tests:
-//
-//     | +-----------+ +-----------+ |  | +-----------+ +-----------+ |
-//     | | service A | | service B | |  | | service C | | service D | |
-//     | | 10.65.0.2 | | 10.65.0.3 | |  | | 10.65.0.4 | | 10.65.0.5 | |
-//     | | port 9002 | | port 9003 | |  | | port 9004 | | port 9005 | |
-//     | | np 109002 | | port 9003 | |  | | port 9004 | | port 9005 | |
-//     | +-----------+ +-----------+ |  | +-----------+ +-----------+ |
-//     +-----------------------------+  +-----------------------------+

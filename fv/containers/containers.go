@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,6 +34,7 @@ type Container struct {
 	Hostname string
 	Stop     func()
 	stopped  bool
+	binaries set.Set
 }
 
 var containerIdx = 0
@@ -65,11 +67,12 @@ func Run(namePrefix string, args ...string) (c *Container) {
 			c.stopped = true
 			runCmd.Process.Signal(os.Interrupt)
 			c.WaitNotRunning(10 * time.Second)
+
+			// And now to be really sure that the container is cleaned up.
+			utils.RunMayFail("docker", "rm", "-f", c.Name)
 		}
-		// And now to be really sure that the container is cleaned up - and regardless of
-		// whether we already tried before...
-		utils.RunMayFail("docker", "rm", "-f", c.Name)
 	}
+	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
 	return
 }
@@ -132,3 +135,10 @@ var _ = AfterEach(func() {
 	}
 	runningContainers = []*Container{}
 })
+
+func (c *Container) EnsureBinary(name string) {
+	if !c.binaries.Contains(name) {
+		exec.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
+		c.binaries.Add(name)
+	}
+}
