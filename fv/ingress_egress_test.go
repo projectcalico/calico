@@ -93,10 +93,10 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	})
 
 	It("full connectivity to and from workload 0", func() {
-		Expect(w[1].CanConnectTo(w[0].IP, w[0].Port)).To(BeTrue())
-		Expect(w[2].CanConnectTo(w[0].IP, w[0].Port)).To(BeTrue())
-		Expect(w[0].CanConnectTo(w[1].IP, w[1].Port)).To(BeTrue())
-		Expect(w[0].CanConnectTo(w[2].IP, w[2].Port)).To(BeTrue())
+		Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
+		Expect(w[2]).To(workload.HaveConnectivityTo(w[0]))
+		Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
+		Expect(w[0]).To(workload.HaveConnectivityTo(w[2]))
 	})
 
 	Context("with ingress-only restriction for workload 0", func() {
@@ -107,20 +107,20 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			allowFromW1 := api.Rule{
 				Action: "allow",
 				Source: api.EntityRule{
-					Selector: "name=='" + w[1].Name + "'",
+					Selector: w[1].NameSelector(),
 				},
 			}
 			policy.Spec.IngressRules = []api.Rule{allowFromW1}
-			policy.Spec.Selector = "name=='" + w[0].Name + "'"
+			policy.Spec.Selector = w[0].NameSelector()
 			_, err := client.Policies().Create(policy)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("only w1 can connect into w0, but egress from w0 is unrestricted", func() {
-			Expect(w[1].CanConnectTo(w[0].IP, w[0].Port)).To(BeTrue())
-			Expect(w[2].CanConnectTo(w[0].IP, w[0].Port)).To(BeFalse())
-			Expect(w[0].CanConnectTo(w[1].IP, w[1].Port)).To(BeTrue())
-			Expect(w[0].CanConnectTo(w[2].IP, w[2].Port)).To(BeTrue())
+			Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
+			Expect(w[2]).NotTo(workload.HaveConnectivityTo(w[0]))
+			Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
+			Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
 		})
 	})
 
@@ -132,20 +132,20 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			allowToW1 := api.Rule{
 				Action: "allow",
 				Destination: api.EntityRule{
-					Selector: "name=='" + w[1].Name + "'",
+					Selector: w[1].NameSelector(),
 				},
 			}
 			policy.Spec.EgressRules = []api.Rule{allowToW1}
-			policy.Spec.Selector = "name=='" + w[0].Name + "'"
+			policy.Spec.Selector = w[0].NameSelector()
 			_, err := client.Policies().Create(policy)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("ingress to w0 is unrestricted, but w0 can only connect out to w1", func() {
-			Expect(w[1].CanConnectTo(w[0].IP, w[0].Port)).To(BeTrue())
-			Expect(w[2].CanConnectTo(w[0].IP, w[0].Port)).To(BeTrue())
-			Expect(w[0].CanConnectTo(w[1].IP, w[1].Port)).To(BeTrue())
-			Expect(w[0].CanConnectTo(w[2].IP, w[2].Port)).To(BeFalse())
+			Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
+			Expect(w[2]).To(workload.HaveConnectivityTo(w[0]))
+			Expect(w[0]).To(workload.HaveConnectivityTo(w[1]))
+			Expect(w[0]).NotTo(workload.HaveConnectivityTo(w[2]))
 		})
 	})
 
@@ -157,21 +157,21 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			allowFromW1 := api.Rule{
 				Action: "allow",
 				Source: api.EntityRule{
-					Selector: "name=='" + w[1].Name + "'",
+					Selector: w[1].NameSelector(),
 				},
 			}
 			policy.Spec.IngressRules = []api.Rule{allowFromW1}
-			policy.Spec.Selector = "name=='" + w[0].Name + "'"
+			policy.Spec.Selector = w[0].NameSelector()
 			policy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
 			_, err := client.Policies().Create(policy)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("only w1 can connect into w0, and all egress from w0 is denied", func() {
-			Expect(w[1].CanConnectTo(w[0].IP, w[0].Port)).To(BeTrue())
-			Expect(w[2].CanConnectTo(w[0].IP, w[0].Port)).To(BeFalse())
-			Expect(w[0].CanConnectTo(w[1].IP, w[1].Port)).To(BeFalse())
-			Expect(w[0].CanConnectTo(w[2].IP, w[2].Port)).To(BeFalse())
+			Expect(w[1]).To(workload.HaveConnectivityTo(w[0]))
+			Expect(w[2]).NotTo(workload.HaveConnectivityTo(w[0]))
+			Expect(w[0]).NotTo(workload.HaveConnectivityTo(w[1]))
+			Expect(w[0]).NotTo(workload.HaveConnectivityTo(w[2]))
 		})
 	})
 })

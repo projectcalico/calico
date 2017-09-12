@@ -46,6 +46,9 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	// Build unique container name and struct.
 	containerIdx++
 	c = &Container{Name: fmt.Sprintf("%v-%d-%d-", namePrefix, os.Getpid(), containerIdx)}
+	c.Stop = func() {
+		log.WithField("container", c).Info("Stop no-op because container failed to start")
+	}
 
 	// Start the container.
 	log.WithField("container", c).Info("About to run container")

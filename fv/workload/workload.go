@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -55,6 +56,9 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 		IP:            ip,
 		Port:          port,
 	}
+	w.Stop = func() {
+		log.WithField("workload", w).Info("Stop no-op because workload failed to start")
+	}
 
 	// Ensure that the host has the 'test-workload' binary.
 	w.C.EnsureBinary("test-workload")
@@ -76,11 +80,6 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 	err = workloadCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
 
-	// Read the workload's namespace path, which it writes to its standard output.
-	namespacePath, err := bufio.NewReader(w.outPipe).ReadString('\n')
-	Expect(err).NotTo(HaveOccurred())
-	w.namespacePath = strings.TrimSpace(namespacePath)
-
 	// Fill in rest of container struct.
 	w.Stop = func() {
 		outputBytes, err := exec.Command("docker", "exec", w.C.Name,
@@ -101,6 +100,13 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 			"stderr":   string(wErr)}).Info("Workload now stopped")
 	}
 	log.WithField("workload", w).Info("Workload now running")
+
+	// Read the workload's namespace path, which it writes to its standard output.
+	namespacePath, err := bufio.NewReader(w.outPipe).ReadString('\n')
+	Expect(err).NotTo(HaveOccurred())
+	w.namespacePath = strings.TrimSpace(namespacePath)
+	log.Infof("with namespace %v", w.namespacePath)
+
 	return
 }
 
@@ -116,6 +122,10 @@ func (w *Workload) Configure(client *client.Client) {
 	wep.Spec.Profiles = []string{"default"}
 	_, err := client.WorkloadEndpoints().Create(wep)
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func (w *Workload) NameSelector() string {
+	return "name=='" + w.Name + "'"
 }
 
 func (w *Workload) CanConnectTo(ip, port string) bool {
@@ -144,4 +154,30 @@ func (w *Workload) CanConnectTo(ip, port string) bool {
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
 	return err == nil
+}
+
+func HaveConnectivityTo(target *Workload) types.GomegaMatcher {
+	return &connectivityMatcher{target.IP, target.Port}
+}
+
+type connectivityMatcher struct {
+	ip, port string
+}
+
+func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error) {
+	w := actual.(*Workload)
+	success = w.CanConnectTo(m.ip, m.port)
+	return
+}
+
+func (m *connectivityMatcher) FailureMessage(actual interface{}) (message string) {
+	w := actual.(*Workload)
+	message = fmt.Sprintf("Expected %v to have connectivity to %v:%v, but it doesn't", w, m.ip, m.port)
+	return
+}
+
+func (m *connectivityMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	w := actual.(*Workload)
+	message = fmt.Sprintf("Expected %v not to have connectivity to %v:%v, but it does", w, m.ip, m.port)
+	return
 }
