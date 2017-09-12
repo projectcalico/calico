@@ -15,12 +15,9 @@
 package converter
 
 import (
-	"reflect"
-
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
@@ -33,10 +30,6 @@ func NewPolicyConverter() Converter {
 }
 
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	if reflect.TypeOf(k8sObj) != reflect.TypeOf(&v1beta1.NetworkPolicy{}) {
-		log.Fatalf("can not convert object %#v to calico policy. Object is not of type *v1beta1.NetworkPolicy", k8sObj)
-	}
-
 	np := k8sObj.(*v1beta1.NetworkPolicy)
 
 	var policyConverter k8s.Converter
@@ -58,9 +51,6 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 // and backed by NetworkPolicy objects, the name is of the format
 // `knp.default.namespace.name`.
 func (p *policyConverter) GetKey(obj interface{}) string {
-	if reflect.TypeOf(obj) != reflect.TypeOf(api.Policy{}) {
-		log.Fatalf("can not construct key for object %#v. Object is not of type api.Policy", obj)
-	}
 	policy := obj.(api.Policy)
 	return policy.Metadata.Name
 }
