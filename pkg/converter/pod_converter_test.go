@@ -20,42 +20,42 @@ import (
 	"github.com/projectcalico/k8s-policy/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8sapi "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/api/v1"
 )
 
 var _ = Describe("PodConverter", func() {
 
-	wepConverter := converter.NewPodConverter()
+	c := converter.NewPodConverter()
 
 	Context("Pod with no labels", func() {
-		pod := k8sapi.Pod{
+		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
 				Namespace: "default",
 			},
-			Spec: k8sapi.PodSpec{
+			Spec: v1.PodSpec{
 				NodeName: "nodeA",
 			},
 		}
 
-		wep, err := wepConverter.Convert(&pod)
+		wepData, err := c.Convert(&pod)
 		It("should not generate a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Assert workloadID.
-		It("should return workloadendpoint with correct workloadID", func() {
-			Expect(wep.(api.WorkloadEndpoint).Metadata.Workload).To(Equal("default.podA"))
+		It("should return a WorkloadEndpointData with the correct Key", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Key).To(Equal("default.podA"))
 		})
 
 		// Assert labels.
-		It("should return workloadendpoint with namespace label", func() {
-			Expect(wep.(api.WorkloadEndpoint).Metadata.Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
+		It("should return a WorkloadEndpointData with the Namespace label present", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
 		})
 	})
 
 	Context("Pod with labels", func() {
-		pod := k8sapi.Pod{
+		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
 				Namespace: "default",
@@ -64,22 +64,27 @@ var _ = Describe("PodConverter", func() {
 					"roger": "rabbit",
 				},
 			},
-			Spec: k8sapi.PodSpec{
+			Spec: v1.PodSpec{
 				NodeName: "nodeA",
 			},
 		}
 
-		wep, err := wepConverter.Convert(&pod)
+		wepData, err := c.Convert(&pod)
 		It("should not generate a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		// Assert workloadID.
-		It("should return workloadendpoint with correct workloadID", func() {
-			Expect(wep.(api.WorkloadEndpoint).Metadata.Workload).To(Equal("default.podA"))
+		// Assert that the returned Key is the same as the workload ID.
+		It("should return a WorkloadEndpointData with the correct Key", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Key).To(Equal("default.podA"))
 		})
 
-		// Assert labels.
+		// Assert that GetKey returns the right value.
+		It("should support getting a Key with GetKey", func() {
+			Expect(c.GetKey(wepData)).To(Equal("default.podA"))
+		})
+
+		// Assert labels are correct.
 		var labels = map[string]string{
 			"foo":           "bar",
 			"roger":         "rabbit",
@@ -87,24 +92,28 @@ var _ = Describe("PodConverter", func() {
 		}
 
 		It("should return workloadendpoint with correct labels", func() {
-			Expect(wep.(api.WorkloadEndpoint).Metadata.Labels).To(Equal(labels))
+			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(labels))
 		})
 	})
 
-	Context("GetKey", func() {
-		workloadID := "default.nginx"
-		wep := api.WorkloadEndpoint{
-			Metadata: api.WorkloadEndpointMetadata{
-				Name:     "nginx",
-				Workload: workloadID,
-			},
-			Spec: api.WorkloadEndpointSpec{},
+	Context("MergeWorkloadEndpointData", func() {
+		expectedKey := "default.testwep"
+		expectedLabels := map[string]string{
+			"key": "value",
+			"foo": "bar",
+		}
+		wep := api.NewWorkloadEndpoint()
+		wep.Metadata.Workload = expectedKey
+		wepData := converter.WorkloadEndpointData{
+			Key:    "default.testwep",
+			Labels: expectedLabels,
 		}
 
-		// Get key
-		key := wepConverter.GetKey(wep)
-		It("should return WorkloadID as key", func() {
-			Expect(key).To(Equal(workloadID))
+		// Merge the wep and the updated data.
+		converter.MergeWorkloadEndpointData(wep, wepData)
+
+		It("should update the wep's labels", func() {
+			Expect(wep.Metadata.Labels).To(Equal(expectedLabels))
 		})
 	})
 })
