@@ -41,14 +41,3 @@ spec:
             # your etcd cluster.
             - name: ETCD_ENDPOINTS
               value: "<ETCD_ENDPOINTS>"
-            # Location of the Kubernetes API - this shouldn't need to be
-            # changed so long as it is used in conjunction with
-            # CONFIGURE_ETC_HOSTS="true".
-            - name: K8S_API
-              value: "https://kubernetes.default:443"
-            # Configure /etc/hosts within the container to resolve
-            # the kubernetes.default Service to the correct clusterIP
-            # using the environment provided by the kubelet.
-            # This removes the need for KubeDNS to resolve the Service.
-            - name: CONFIGURE_ETC_HOSTS
-              value: "true"
