@@ -71,7 +71,7 @@ func init() {
 		Entry("should accept 65535 port as int", "65535", portType, numorstring.SinglePort(65535)),
 		Entry("should accept 0:65535 port range as string", "\"0:65535\"", portType, portFromRange(0, 65535)),
 		Entry("should accept 1:10 port range as string", "\"1:10\"", portType, portFromRange(1, 10)),
-		Entry("should accept foo-bar port range as named port", "\"foo-bar\"", portType, numorstring.NamedPort("foo-bar")),
+		Entry("should accept foo-bar as named port", "\"foo-bar\"", portType, numorstring.NamedPort("foo-bar")),
 		Entry("should reject -1 port as int", "-1", portType, nil),
 		Entry("should reject 65536 port as int", "65536", portType, nil),
 		Entry("should reject 0:65536 port range as string", "\"0:65536\"", portType, nil),

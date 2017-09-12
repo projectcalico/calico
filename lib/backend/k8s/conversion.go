@@ -186,9 +186,9 @@ func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 				var modelProto numorstring.Protocol
 				switch containerPort.Protocol {
 				case kapiv1.ProtocolUDP:
-					numorstring.ProtocolFromString("udp")
+					modelProto = numorstring.ProtocolFromString("udp")
 				case kapiv1.ProtocolTCP, kapiv1.Protocol("") /* K8s default is TCP. */ :
-					numorstring.ProtocolFromString("tcp")
+					modelProto = numorstring.ProtocolFromString("tcp")
 				default:
 					log.WithFields(log.Fields{
 						"protocol": containerPort.Protocol,
@@ -197,10 +197,7 @@ func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 					}).Debug("Ignoring named port with unknown protocol")
 					continue
 				}
-				modelProto = numorstring.ProtocolFromString("tcp")
-				if containerPort.Protocol == kapiv1.ProtocolUDP {
-					modelProto = numorstring.ProtocolFromString("udp")
-				}
+
 				endpointPorts = append(endpointPorts, model.EndpointPort{
 					Name:     containerPort.Name,
 					Protocol: modelProto,
@@ -353,7 +350,7 @@ func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 		ports = []*extensions.NetworkPolicyPort{nil}
 	}
 
-	// Combine destintations with sources to generate rules.
+	// Combine destinations with sources to generate rules.
 	// TODO: This currently creates a lot of rules by making every combination of from / ports
 	// into a rule.  We can combine these so that we don't need as many rules!
 	for _, port := range ports {

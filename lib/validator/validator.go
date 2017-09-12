@@ -103,22 +103,27 @@ func init() {
 	registerFieldValidator("policytype", validatePolicyType)
 
 	// Register struct validators.
+	// Shared types.
 	registerStructValidator(validateProtocol, numorstring.Protocol{})
 	registerStructValidator(validatePort, numorstring.Port{})
+
+	// Frontend API types.
 	registerStructValidator(validateIPNAT, api.IPNAT{})
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validateIPPool, api.IPPool{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
-	registerStructValidator(validateBackendRule, model.Rule{})
-	registerStructValidator(validateBackendEndpointPort, model.EndpointPort{})
 	registerStructValidator(validateEndpointPort, api.EndpointPort{})
-	registerStructValidator(validateWorkloadEndpoint, model.WorkloadEndpoint{})
-	registerStructValidator(validateHostEndpoint, model.HostEndpoint{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
 	registerStructValidator(validateBGPPeerMeta, api.BGPPeerMetadata{})
 	registerStructValidator(validatePolicySpec, api.PolicySpec{})
+
+	// Backend model types.
+	registerStructValidator(validateBackendRule, model.Rule{})
+	registerStructValidator(validateBackendEndpointPort, model.EndpointPort{})
+	registerStructValidator(validateBackendWorkloadEndpoint, model.WorkloadEndpoint{})
+	registerStructValidator(validateBackendHostEndpoint, model.HostEndpoint{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -582,7 +587,7 @@ func validateEndpointPort(v *validator.Validate, structLevel *validator.StructLe
 	}
 }
 
-func validateWorkloadEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
+func validateBackendWorkloadEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
 	ep := structLevel.CurrentStruct.Interface().(model.WorkloadEndpoint)
 
 	seenPortNames := map[string]bool{}
@@ -599,7 +604,7 @@ func validateWorkloadEndpoint(v *validator.Validate, structLevel *validator.Stru
 	}
 }
 
-func validateHostEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
+func validateBackendHostEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
 	ep := structLevel.CurrentStruct.Interface().(model.HostEndpoint)
 
 	seenPortNames := map[string]bool{}
