@@ -33,10 +33,14 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-const cleanupGracePeriod = 10 * time.Second
+const (
+	cleanupGracePeriod = 10 * time.Second
+	maxConnFailures    = 3
+)
 
 var (
 	GetFailed       = errors.New("netlink get operation failed")
+	ConnectFailed   = errors.New("connect to netlink failed")
 	ListFailed      = errors.New("netlink list operation failed")
 	UpdateFailed    = errors.New("netlink update operation failed")
 	IfaceNotPresent = errors.New("interface not present")
@@ -67,8 +71,14 @@ type Target struct {
 type RouteTable struct {
 	logCxt *log.Entry
 
-	ipVersion     uint8
-	netlinkFamily int
+	ipVersion      uint8
+	netlinkFamily  int
+	netlinkTimeout time.Duration
+	// numConsistentNetlinkFailures counts the number of repeated netlink connection failures.
+	// reset on successful connection.
+	numConsistentNetlinkFailures int
+	// Current netlink handle, or nil if we need to reconnect.
+	cachedNetlinkHandle HandleIface
 
 	dirtyIfaces set.Set
 
@@ -83,19 +93,36 @@ type RouteTable struct {
 
 	inSync bool
 
-	// dataplane is our shim for the netlink/arp interface.  In production, it maps directly
-	// through to calls to the netlink package and the arp command.
-	dataplane dataplaneIface
-	// time is our shim for the time package, allowing it to be mocked for UT.
-	time timeIface
+	// Testing shims, swapped with mock versions for UT
+
+	newNetlinkHandle  func() (HandleIface, error)
+	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
+	conntrack         conntrackIface
+	time              timeIface
 }
 
-func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
-	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{conntrack: conntrack.New()}, realTime{})
+func New(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration) *RouteTable {
+	return NewWithShims(
+		interfacePrefixes,
+		ipVersion,
+		newNetlinkHandle,
+		netlinkTimeout,
+		addStaticARPEntry,
+		conntrack.New(),
+		realTime{},
+	)
 }
 
 // NewWithShims is a test constructor, which allows netlink, arp and time to be replaced by shims.
-func NewWithShims(interfacePrefixes []string, ipVersion uint8, dpShim dataplaneIface, timeShim timeIface) *RouteTable {
+func NewWithShims(
+	interfacePrefixes []string,
+	ipVersion uint8,
+	newNetlinkHandle func() (HandleIface, error),
+	netlinkTimeout time.Duration,
+	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
+	conntrack conntrackIface,
+	timeShim timeIface,
+) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
 	for _, prefix := range interfacePrefixes {
@@ -126,7 +153,10 @@ func NewWithShims(interfacePrefixes []string, ipVersion uint8, dpShim dataplaneI
 		pendingIfaceNameToTargets: map[string][]Target{},
 		dirtyIfaces:               set.New(),
 		pendingConntrackCleanups:  map[ip.Addr]chan struct{}{},
-		dataplane:                 dpShim,
+		newNetlinkHandle:          newNetlinkHandle,
+		netlinkTimeout:            netlinkTimeout,
+		addStaticARPEntry:         addStaticARPEntry,
+		conntrack:                 conntrack,
 		time:                      timeShim,
 	}
 }
@@ -161,13 +191,59 @@ func (r *RouteTable) QueueResync() {
 	r.inSync = false
 }
 
+func (r *RouteTable) getNetlinkHandle() (HandleIface, error) {
+	if r.cachedNetlinkHandle == nil {
+		if r.numConsistentNetlinkFailures >= maxConnFailures {
+			log.WithField("numFailures", r.numConsistentNetlinkFailures).Panic(
+				"Repeatedly failed to connect to netlink.")
+		}
+		log.Info("Trying to connect to netlink")
+		nlHandle, err := r.newNetlinkHandle()
+		if err != nil {
+			r.numConsistentNetlinkFailures++
+			log.WithError(err).WithField("numFailures", r.numConsistentNetlinkFailures).Error(
+				"Failed to connect to netlink")
+			return nil, err
+		}
+		err = nlHandle.SetSocketTimeout(r.netlinkTimeout)
+		if err != nil {
+			r.numConsistentNetlinkFailures++
+			log.WithError(err).WithField("numFailures", r.numConsistentNetlinkFailures).Error(
+				"Failed to set netlink timeout")
+			nlHandle.Delete()
+			return nil, err
+		}
+		r.cachedNetlinkHandle = nlHandle
+	}
+	if r.numConsistentNetlinkFailures > 0 {
+		log.WithField("numFailures", r.numConsistentNetlinkFailures).Info(
+			"Connected to netlink after previous failures.")
+		r.numConsistentNetlinkFailures = 0
+	}
+	return r.cachedNetlinkHandle, nil
+}
+
+func (r *RouteTable) closeNetlinkHandle() {
+	if r.cachedNetlinkHandle == nil {
+		return
+	}
+	r.cachedNetlinkHandle.Delete()
+	r.cachedNetlinkHandle = nil
+}
+
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
 		listStartTime := monotime.Now()
 
-		links, err := r.dataplane.LinkList()
+		nl, err := r.getNetlinkHandle()
+		if err != nil {
+			r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
+			return ConnectFailed
+		}
+		links, err := nl.LinkList()
 		if err != nil {
 			r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
+			r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
 			return ListFailed
 		}
 		// Clear the dirty set; there's no point trying to update non-existent interfaces.
@@ -311,13 +387,19 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	})
 
 	// Try to get the link.  This may fail if it's been deleted out from under us.
-	link, err := r.dataplane.LinkByName(ifaceName)
+	nl, err := r.getNetlinkHandle()
+	if err != nil {
+		r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
+		return ConnectFailed
+	}
+	link, err := nl.LinkByName(ifaceName)
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed)
 		if filteredErr == GetFailed {
 			logCxt.WithError(err).Error("Failed to get interface.")
+			r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to get interface; it's down/gone.")
 		}
@@ -329,13 +411,14 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	// routes from an interface in some corner cases (such as being admin up but oper
 	// down).
 	linkAttrs := link.Attrs()
-	oldRoutes, err := r.dataplane.RouteList(link, r.netlinkFamily)
+	oldRoutes, err := nl.RouteList(link, r.netlinkFamily)
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
 		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed)
 		if filteredErr == ListFailed {
 			logCxt.WithError(err).Error("Error listing routes")
+			r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
 		} else {
 			logCxt.WithError(err).Info("Failed to list routes; interface down/gone.")
 		}
@@ -362,7 +445,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			continue
 		}
 		logCxt.Info("Syncing routes: removing old route.")
-		if err := r.dataplane.RouteDel(&route); err != nil {
+		if err := nl.RouteDel(&route); err != nil {
 			// Probably a race with the interface being deleted.
 			logCxt.WithError(err).Info(
 				"Route deletion failed, assuming someone got there first.")
@@ -390,14 +473,14 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			// In case this IP is being re-used, wait for any previous conntrack entry
 			// to be cleaned up.  (No-op if there are no pending deletes.)
 			r.waitForPendingConntrackDeletion(cidr.Addr())
-			if err := r.dataplane.RouteAdd(&route); err != nil {
+			if err := nl.RouteAdd(&route); err != nil {
 				logCxt.WithError(err).Warn("Failed to add route")
 				updatesFailed = true
 			}
 		}
 		if r.ipVersion == 4 && target.DestMAC != nil {
 			// TODO(smc) clean up/sync old ARP entries
-			err := r.dataplane.AddStaticArpEntry(cidr, target.DestMAC, ifaceName)
+			err := r.addStaticARPEntry(cidr, target.DestMAC, ifaceName)
 			if err != nil {
 				logCxt.WithError(err).Warn("Failed to set ARP entry")
 				updatesFailed = true
@@ -406,6 +489,8 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	}
 
 	if updatesFailed {
+		r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
+
 		// Recheck whether the interface exists so we don't produce spammy logs during
 		// interface removal.
 		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed)
@@ -431,7 +516,7 @@ func (r *RouteTable) startConntrackDeletion(ipAddr ip.Addr) {
 	r.pendingConntrackCleanups[ipAddr] = done
 	go func() {
 		defer close(done)
-		r.dataplane.RemoveConntrackFlows(r.ipVersion, ipAddr.AsNetIP())
+		r.conntrack.RemoveConntrackFlows(r.ipVersion, ipAddr.AsNetIP())
 		log.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
 	}()
 }
@@ -475,7 +560,15 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, currentErr, defau
 	}
 	// If the current error wasn't clear, try to look up the interface to see if there's a
 	// well-understood reason for the failure.
-	if link, err := r.dataplane.LinkByName(ifaceName); err == nil {
+	nl, err := r.getNetlinkHandle()
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"ifaceName":  ifaceName,
+			"currentErr": currentErr,
+		}).Error("Failed to (re)connect to netlink while processing another error")
+		return ConnectFailed
+	}
+	if link, err := nl.LinkByName(ifaceName); err == nil {
 		// Link still exists.  Check if it's up.
 		logCxt.WithField("link", link).Debug("Interface still exists")
 		if link.Attrs().Flags&net.FlagUp != 0 {

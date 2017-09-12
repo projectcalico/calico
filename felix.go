@@ -302,6 +302,8 @@ configRetry:
 			IPv6Enabled:                    configParams.Ipv6Support,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 
+			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
+
 			PostInSyncCallback: func() { dumpHeapMemoryProfile(configParams) },
 			HealthAggregator:   healthAggregator,
 		}

@@ -17,60 +17,43 @@ package routetable
 import (
 	"net"
 	"os/exec"
+	"syscall"
 	"time"
 
-	. "github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ip"
 )
 
-type dataplaneIface interface {
-	LinkList() ([]Link, error)
-	LinkByName(name string) (Link, error)
-	RouteList(link Link, family int) ([]Route, error)
-	RouteAdd(route *Route) error
-	RouteDel(route *Route) error
-	AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
+type conntrackIface interface {
 	RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP)
+}
+
+type HandleIface interface {
+	SetSocketTimeout(to time.Duration) error
+	LinkList() ([]netlink.Link, error)
+	LinkByName(name string) (netlink.Link, error)
+	RouteList(link netlink.Link, family int) ([]netlink.Route, error)
+	RouteAdd(route *netlink.Route) error
+	RouteDel(route *netlink.Route) error
+	Delete()
 }
 
 type realDataplane struct {
 	conntrack *conntrack.Conntrack
 }
 
-func (r realDataplane) LinkList() ([]Link, error) {
-	return LinkList()
+func newNetlinkHandle() (HandleIface, error) {
+	return netlink.NewHandle(syscall.NETLINK_ROUTE)
 }
 
-func (r realDataplane) LinkByName(name string) (Link, error) {
-	return LinkByName(name)
-}
-
-func (r realDataplane) RouteList(link Link, family int) ([]Route, error) {
-	return RouteList(link, family)
-}
-
-func (r realDataplane) RouteAdd(route *Route) error {
-	return RouteAdd(route)
-}
-
-func (r realDataplane) RouteDel(route *Route) error {
-	return RouteDel(route)
-}
-
-func (r realDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
+func addStaticARPEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
 	cmd := exec.Command("arp",
 		"-s", cidr.Addr().String(), destMAC.String(),
 		"-i", ifaceName)
 	return cmd.Run()
 }
-
-func (r realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
-	r.conntrack.RemoveConntrackFlows(ipVersion, ipAddr)
-}
-
-var _ dataplaneIface = realDataplane{}
 
 // timeIface is our shim interface to the time package.
 type timeIface interface {
