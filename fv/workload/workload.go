@@ -48,8 +48,6 @@ var workloadIdx = 0
 func (w *Workload) Stop() {
 	if w == nil {
 		log.Info("Stop no-op because nil workload")
-	} else if w.runCmd == nil {
-		log.WithField("workload", w).Info("Stop no-op because workload is not running")
 	} else {
 		log.WithField("workload", w).Info("Stop")
 		outputBytes, err := exec.Command("docker", "exec", w.C.Name,
@@ -88,7 +86,7 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
-	runCmd := exec.Command("docker", "exec", w.C.Name,
+	w.runCmd = exec.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
 		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v",
 			w.Name,
@@ -96,11 +94,11 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 			w.IP,
 			w.Port))
 	var err error
-	w.outPipe, err = runCmd.StdoutPipe()
+	w.outPipe, err = w.runCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
-	w.errPipe, err = runCmd.StderrPipe()
+	w.errPipe, err = w.runCmd.StderrPipe()
 	Expect(err).NotTo(HaveOccurred())
-	err = runCmd.Start()
+	err = w.runCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Read the workload's namespace path, which it writes to its standard output.
