@@ -106,6 +106,8 @@ type Config struct {
 	IptablesLockTimeout            time.Duration
 	IptablesLockProbeInterval      time.Duration
 
+	NetlinkTimeout time.Duration
+
 	RulesConfig rules.Config
 
 	StatusReportingInterval time.Duration
@@ -279,7 +281,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4)
+	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, config.NetlinkTimeout)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
@@ -340,7 +342,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
-		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
+		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, config.NetlinkTimeout)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
