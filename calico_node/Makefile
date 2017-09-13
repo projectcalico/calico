@@ -236,7 +236,9 @@ dist/allocate-ipip-addr: $(ALLOCATE_IPIP_FILES) vendor
 # Default value: directory with Makefile
 SOURCE_DIR?=$(dir $(lastword $(MAKEFILE_LIST)))
 SOURCE_DIR:=$(abspath $(SOURCE_DIR))
+CRD_PATH=$(CURDIR)/vendor/github.com/projectcalico/libcalico-go/test/
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+K8S_VERSION=v1.7.4
 ST_TO_RUN?=tests/st/
 
 # Can exclude the slower tests with "-a '!slow'"
@@ -396,6 +398,39 @@ run-etcd-host:
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"
 
+## Kubernetes apiserver used for tests
+run-k8s-apiserver: stop-k8s-apiserver run-etcd vendor
+	docker run \
+		--net=host --name st-apiserver \
+		--detach \
+		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
+		/hyperkube apiserver \
+			--bind-address=0.0.0.0 \
+			--insecure-bind-address=0.0.0.0 \
+				--etcd-servers=http://127.0.0.1:2379 \
+			--admission-control=NamespaceLifecycle,LimitRanger,DefaultStorageClass,ResourceQuota \
+			--authorization-mode=RBAC \
+			--service-cluster-ip-range=10.101.0.0/16 \
+			--v=10 \
+			--logtostderr=true
+
+	# Wait until we can configure a cluster role binding which allows anonymous auth.
+	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
+
+	# Create CustomResourceDefinition (CRD) for Calico resources
+	# from the manifest crds.yaml
+	docker run \
+		--net=host \
+		--rm \
+		-v  $(CRD_PATH):/manifests \
+		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		--server=http://localhost:8080 \
+		apply -f /manifests/crds.yaml
+
+## Stop Kubernetes apiserver
+stop-k8s-apiserver:
+	@-docker rm -f st-apiserver
+
 ###############################################################################
 # calico_node FVs
 ###############################################################################
@@ -421,7 +456,7 @@ node-fv:
 
 PHONY: node-test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-node-test-containerized: vendor run-etcd-host
+node-test-containerized: vendor run-etcd-host run-k8s-apiserver
 	docker run --rm \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	-v $(VERSIONS_FILE):/versions.yaml:ro \

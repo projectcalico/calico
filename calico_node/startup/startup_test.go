@@ -15,9 +15,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -29,6 +31,12 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"k8s.io/client-go/tools/clientcmd"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 var exitCode int
@@ -453,4 +461,83 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with same IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, false),
 		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with different IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7349/32"}}, true),
 	)
+})
+
+var _ = Describe("FV tests against K8s API server.", func() {
+	It("should not throw an error when multiple Nodes configure the same global CRD value.", func() {
+		// How many Nodes we want to "create".
+		numNodes := 10
+
+		// Create a K8s client.
+		configOverrides := &clientcmd.ConfigOverrides{
+			ClusterInfo: clientcmdapi.Cluster{
+				Server:                "http://127.0.0.1:8080",
+				InsecureSkipTLSVerify: true,
+			},
+		}
+
+		kcfg, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(&clientcmd.ClientConfigLoadingRules{}, configOverrides).ClientConfig()
+		if err != nil {
+			Fail(fmt.Sprintf("Failed to create K8s config: %v", err))
+		}
+
+		cs, err := kubernetes.NewForConfig(kcfg)
+		if err != nil {
+			Fail(fmt.Sprintf("Could not create K8s client: %v", err))
+		}
+
+		// Create Calico client with k8s backend.
+		cfg := api.NewCalicoAPIConfig()
+		cfg.Spec = api.CalicoAPIConfigSpec{
+			DatastoreType: api.Kubernetes,
+			KubeConfig: api.KubeConfig{
+				K8sAPIEndpoint:           "http://127.0.0.1:8080",
+				K8sInsecureSkipTLSVerify: true,
+			},
+		}
+
+		c := testutils.CreateClient(*cfg)
+
+		// Create some Nodes using K8s client, Calico client does not support Node creation for KDD.
+		kNodes := []*v1.Node{}
+		for i := 0; i < numNodes; i++ {
+			n := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("raceNode%02d", i+1),
+				},
+			}
+			kNodes = append(kNodes, n)
+			cs.Nodes().Create(n)
+		}
+
+		// Pull above Nodes using Calico client.
+		nodes, err := c.Nodes().List(api.NodeMetadata{})
+		if err != nil {
+			Fail(fmt.Sprintf("Could not retrieve Nodes %v", err))
+		}
+
+		// Run ensureDefaultConfig against each of the Nodes using goroutines to simulate multiple Nodes coming online.
+		var wg sync.WaitGroup
+		errors := []error{}
+		for _, node := range nodes.Items {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err = ensureDefaultConfig(cfg, c, &node)
+				if err != nil {
+					errors = append(errors, err)
+				}
+			}()
+		}
+
+		wg.Wait()
+
+		// Verify all runs complete without error.
+		Expect(len(errors)).To(Equal(0))
+
+		// Clean up our Nodes.
+		for _, node := range nodes.Items {
+			cs.Nodes().Delete(node.Metadata.Name, &metav1.DeleteOptions{})
+		}
+	})
 })

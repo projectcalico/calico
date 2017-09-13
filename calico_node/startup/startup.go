@@ -788,12 +788,12 @@ func ensureDefaultConfig(cfg *api.CalicoAPIConfig, c *client.Client, node *api.N
 	}
 
 	// Store the Calico Version as a global felix config setting.
-	if err := c.Config().SetFelixConfig("CalicoVersion", "", VERSION); err != nil {
+	if err := checkConflictError(c.Config().SetFelixConfig("CalicoVersion", "", VERSION)); err != nil {
 		return err
 	}
 
 	// Update the ClusterType with the type in CLUSTER_TYPE
-	if err := updateClusterType(c, "ClusterType", os.Getenv("CLUSTER_TYPE")); err != nil {
+	if err := checkConflictError(updateClusterType(c, "ClusterType", os.Getenv("CLUSTER_TYPE"))); err != nil {
 		return err
 	}
 
@@ -818,7 +818,7 @@ func ensureGlobalFelixConfig(c *client.Client, key, def string) error {
 	if val, assigned, err := c.Config().GetFelixConfig(key, ""); err != nil {
 		return err
 	} else if !assigned {
-		return c.Config().SetFelixConfig(key, "", def)
+		return checkConflictError(c.Config().SetFelixConfig(key, "", def))
 	} else {
 		log.WithField(key, val).Debug("Global Felix value already assigned")
 		return nil
@@ -889,11 +889,22 @@ func ensureGlobalBGPConfig(c *client.Client, key, def string) error {
 	if val, assigned, err := c.Config().GetBGPConfig(key, ""); err != nil {
 		return err
 	} else if !assigned {
-		return c.Config().SetBGPConfig(key, "", def)
+		return checkConflictError(c.Config().SetBGPConfig(key, "", def))
 	} else {
 		log.WithField(key, val).Debug("Global BGP value already assigned")
 		return nil
 	}
+}
+
+// checkConflictError checks to see if the given error is of the type ErrorResourceUpdateConflict
+// and ignore it if so. This is to allow our global configs to ignore conflict from multiple Nodes
+// trying to set the same value at the same time.
+func checkConflictError(err error) error {
+	if conflict, ok := err.(errors.ErrorResourceUpdateConflict); ok {
+		log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
+		return nil
+	}
+	return err
 }
 
 // message prints a message to screen and to log.  A newline terminator is
