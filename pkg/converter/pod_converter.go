@@ -15,16 +15,12 @@
 package converter
 
 import (
-	"fmt"
-	"reflect"
-
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
 	log "github.com/sirupsen/logrus"
 	k8sApiV1 "k8s.io/client-go/pkg/api/v1"
 )
-
-// Label which represents the namespace a given pod belongs to.
-const k8sNamespaceLabel = "calico/k8s_ns"
 
 // WorkloadEndpointData is an internal struct used to store the various bits
 // of information that the policy controller cares about on a workload endpoint.
@@ -60,26 +56,23 @@ func NewPodConverter() Converter {
 }
 
 func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	if reflect.TypeOf(k8sObj) != reflect.TypeOf(&k8sApiV1.Pod{}) {
-		log.Fatalf("can not convert object %#v to workloadEndpoint. Object is not of type *v1.Pod", k8sObj)
-	}
-
+	// Convert Pod into a workload endpoint.
+	var c k8s.Converter
+	var bc backendConverter.WorkloadEndpointConverter
 	pod := k8sObj.(*k8sApiV1.Pod)
-	endpoint := api.NewWorkloadEndpoint()
-
-	endpoint.Metadata.Workload = fmt.Sprintf("%s.%s", pod.Namespace, pod.Name)
-	if pod.ObjectMeta.Labels != nil {
-		endpoint.Metadata.Labels = pod.ObjectMeta.Labels
-	} else {
-		endpoint.Metadata.Labels = map[string]string{}
+	kvp, err := c.PodToWorkloadEndpoint(pod)
+	if err != nil {
+		return nil, err
 	}
 
-	// Add a special label for the Kubernetes namespace.  This is used
-	// by selector-based policies to select all pods in a given namespace.
-	endpoint.Metadata.Labels[k8sNamespaceLabel] = pod.Namespace
+	fwep, err := bc.ConvertKVPairToAPI(kvp)
+	if err != nil {
+		return nil, err
+	}
+	wep := fwep.(*api.WorkloadEndpoint)
 
 	// Build and return a WorkloadEndpointData struct using the data.
-	return BuildWorkloadEndpointData(*endpoint), nil
+	return BuildWorkloadEndpointData(*wep), nil
 }
 
 // GetKey returns workloadID of the object as the key.
