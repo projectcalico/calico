@@ -34,11 +34,11 @@ import (
 )
 
 // PodController implements the Controller interface.  It is responsible for monitoring
-// kubernetes pods and updating labels in the Calico datastore if changed.
+// kubernetes pods and updating workload endpoints in the Calico datastore if changed.
 type PodController struct {
 	indexer       cache.Indexer
 	informer      cache.Controller
-	labelCache    calicocache.ResourceCache
+	wepDataCache  calicocache.ResourceCache
 	endpointCache map[string]api.WorkloadEndpoint
 	calicoClient  *client.Client
 	k8sClientset  *kubernetes.Clientset
@@ -48,7 +48,7 @@ type PodController struct {
 func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.Client) controller.Controller {
 	podConverter := converter.NewPodConverter()
 
-	// Function returns map of key->workload.labels from the Calico datastore.
+	// Function returns map of key->WorkloadEndpointData from the Calico datastore.
 	listFunc := func() (map[string]interface{}, error) {
 		// Get all workloadEndpoints for kubernetes orchestrator from the Calico datastore
 		workloadEndpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{Orchestrator: "k8s"})
@@ -56,22 +56,23 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 			return nil, err
 		}
 
-		// Iterate through and collect all the labels.
-		labels := make(map[string]interface{})
+		// Iterate through and collect data from workload endpoints that we care about.
+		m := make(map[string]interface{})
 		for _, endpoint := range workloadEndpoints.Items {
-			key := podConverter.GetKey(endpoint)
-			labels[key] = endpoint.Metadata.Labels
+			d := converter.BuildWorkloadEndpointData(endpoint)
+			key := podConverter.GetKey(d)
+			m[key] = d
 		}
-		log.Debugf("Found %d workload endpoints in Calico datastore:", len(labels))
-		return labels, nil
+		log.Debugf("Found %d workload endpoints in Calico datastore:", len(m))
+		return m, nil
 	}
 
 	cacheArgs := calicocache.ResourceCacheArgs{
 		ListFunc:   listFunc,
-		ObjectType: reflect.TypeOf(map[string]string{}),
+		ObjectType: reflect.TypeOf(converter.WorkloadEndpointData{}),
 	}
 
-	labelCache := calicocache.NewResourceCache(cacheArgs)
+	wepDataCache := calicocache.NewResourceCache(cacheArgs)
 	endpointCache := make(map[string]api.WorkloadEndpoint)
 
 	// Create a Pod watcher.
@@ -100,10 +101,11 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 				return
 			}
 
-			// Prime the cache with the labels.
-			wep := wepInterface.(api.WorkloadEndpoint)
-			k := podConverter.GetKey(wep)
-			labelCache.Prime(k, wep.Metadata.Labels)
+			// Prime the cache - we only need to make changes to the datastore when the controller
+			// receives an update, because initial state is written to the datastore by the CNI plugin.
+			wepData := wepInterface.(converter.WorkloadEndpointData)
+			k := podConverter.GetKey(wepData)
+			wepDataCache.Prime(k, wepData)
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
@@ -127,10 +129,10 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 				return
 			}
 
-			// Update the labels in the cache.
-			wep := wepInterface.(api.WorkloadEndpoint)
-			k := podConverter.GetKey(wep)
-			labelCache.Set(k, wep.Metadata.Labels)
+			// Update the cache.
+			wepData := wepInterface.(converter.WorkloadEndpointData)
+			k := podConverter.GetKey(wepData)
+			wepDataCache.Set(k, wepData)
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
@@ -153,14 +155,14 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 			}
 
 			// Clean up after the deleted workload endpoint.
-			wep := wepInterface.(api.WorkloadEndpoint)
+			wep := wepInterface.(converter.WorkloadEndpointData)
 			k := podConverter.GetKey(wep)
-			labelCache.Clean(k)
+			wepDataCache.Clean(k)
 			delete(endpointCache, k)
 		},
 	}, cache.Indexers{})
 
-	return &PodController{indexer, informer, labelCache, endpointCache, calicoClient, k8sClientset}
+	return &PodController{indexer, informer, wepDataCache, endpointCache, calicoClient, k8sClientset}
 }
 
 // Run starts controller.Internally it starts syncing
@@ -169,7 +171,7 @@ func (c *PodController) Run(threadiness int, reconcilerPeriod string, stopCh cha
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
-	workqueue := c.labelCache.GetQueue()
+	workqueue := c.wepDataCache.GetQueue()
 	defer workqueue.ShutDown()
 
 	log.Info("Starting Pod/WorkloadEndpoint controller")
@@ -189,7 +191,7 @@ func (c *PodController) Run(threadiness int, reconcilerPeriod string, stopCh cha
 	log.Debug("Finished syncing with Kubernetes API (Pods)")
 
 	// Start Calico cache.
-	c.labelCache.Run(reconcilerPeriod)
+	c.wepDataCache.Run(reconcilerPeriod)
 
 	// Start a number of worker threads to read from the queue.
 	for i := 0; i < threadiness; i++ {
@@ -208,7 +210,7 @@ func (c *PodController) runWorker() {
 
 func (c *PodController) processNextItem() bool {
 	// Wait until there is a new item in the work queue.
-	workqueue := c.labelCache.GetQueue()
+	workqueue := c.wepDataCache.GetQueue()
 	key, quit := workqueue.Get()
 	if quit {
 		return false
@@ -227,9 +229,9 @@ func (c *PodController) processNextItem() bool {
 
 // syncToCalico syncs the given update to the Calico datastore.
 func (c *PodController) syncToCalico(key string) error {
-	// Check if the labels exist in our cache.  If it doesn't, then we don't need to do anything,
+	// Check if the wep data exists in our cache.  If it doesn't, then we don't need to do anything,
 	// since CNI handles deletion of workload endpoints.
-	if labels, exists := c.labelCache.Get(key); exists {
+	if wepData, exists := c.wepDataCache.Get(key); exists {
 		// Get workloadEndpoint from cache
 		clog := log.WithField("wep", key)
 		endpoint, exists := c.endpointCache[key]
@@ -246,20 +248,20 @@ func (c *PodController) syncToCalico(key string) error {
 			if !exists {
 				// No endpoint in datastore - this means the pod hasn't been
 				// created by the CNI plugin yet. Just wait until it has been.
-				// This can only be hit when labels for a pod change before
-				//  the pod has been deployed, so should be pretty uncommon.
+				// This can only be hit when pod changes before
+				// the pod has been deployed, so should be pretty uncommon.
 				clog.Infof("Pod hasn't been created by the CNI plugin yet.")
 				return nil
 			}
 		}
 
-		// Compare labels to see if they have changed.
-		oldLabels := endpoint.Metadata.Labels
-		newLabels := labels.(map[string]string)
-		if !reflect.DeepEqual(oldLabels, newLabels) {
-			// The labels have changed - update the wep in the datastore.
-			log.Infof("Writing endpoint %s with updated labels %#v to Calico datastore", key, newLabels)
-			endpoint.Metadata.Labels = newLabels
+		// Compare to see if the workload endpoint data has changed.
+		old := converter.BuildWorkloadEndpointData(endpoint)
+		new := wepData.(converter.WorkloadEndpointData)
+		if !reflect.DeepEqual(old, new) {
+			// The relevant wep data has changed - update the wep and write it to the datastore.
+			log.Infof("Writing endpoint %s with updated data %#v to Calico datastore", key, new)
+			converter.MergeWorkloadEndpointData(&endpoint, new)
 			_, err := c.calicoClient.WorkloadEndpoints().Update(&endpoint)
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); !ok {
@@ -309,7 +311,7 @@ func (c *PodController) populateEndpointCache() error {
 
 // handleErr checks if an error happened and makes sure we will retry later.
 func (c *PodController) handleErr(err error, key string) {
-	workqueue := c.labelCache.GetQueue()
+	workqueue := c.wepDataCache.GetQueue()
 	if err == nil {
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.
 		// This ensures that future processing of updates for this key is not delayed because of

@@ -26,13 +26,39 @@ import (
 // Label which represents the namespace a given pod belongs to.
 const k8sNamespaceLabel = "calico/k8s_ns"
 
+// WorkloadEndpointData is an internal struct used to store the various bits
+// of information that the policy controller cares about on a workload endpoint.
+type WorkloadEndpointData struct {
+	Key    string
+	Labels map[string]string
+}
+
 type podConverter struct {
+}
+
+// BuildWorkloadEndpointData generates the correct WorkloadEndpointData for the given
+// WorkloadEndpoint, extracting fields that the policy controller is responsible for syncing.
+func BuildWorkloadEndpointData(wep api.WorkloadEndpoint) WorkloadEndpointData {
+	return WorkloadEndpointData{
+		Key:    wep.Metadata.Workload,
+		Labels: wep.Metadata.Labels,
+	}
+}
+
+// MergeWorkloadEndpointData applies the given WorkloadEndpointData to the provided
+// WorkloadEndpoint, updating relevant fields with new values.
+func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointData) {
+	if wep.Metadata.Workload != upd.Key {
+		log.Fatalf("Bad attempt to merge data for %s into wep %s", upd.Key, wep.Metadata.Workload)
+	}
+	wep.Metadata.Labels = upd.Labels
 }
 
 // NewPodConverter Constructor for podConverter
 func NewPodConverter() Converter {
 	return &podConverter{}
 }
+
 func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	if reflect.TypeOf(k8sObj) != reflect.TypeOf(&k8sApiV1.Pod{}) {
 		log.Fatalf("can not convert object %#v to workloadEndpoint. Object is not of type *v1.Pod", k8sObj)
@@ -52,15 +78,13 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	// by selector-based policies to select all pods in a given namespace.
 	endpoint.Metadata.Labels[k8sNamespaceLabel] = pod.Namespace
 
-	return *endpoint, nil
+	// Build and return a WorkloadEndpointData struct using the data.
+	return BuildWorkloadEndpointData(*endpoint), nil
 }
 
-// GetKey returns workloadID of the object as  the key.
+// GetKey returns workloadID of the object as the key.
 // For pods, the workloadID is of the form `namespace.name`.
 func (p *podConverter) GetKey(obj interface{}) string {
-	if reflect.TypeOf(obj) != reflect.TypeOf(api.WorkloadEndpoint{}) {
-		log.Fatalf("can not construct key for object %#v. Object is not of type api.WorkloadEndpoint", obj)
-	}
-	endpoint := obj.(api.WorkloadEndpoint)
-	return endpoint.Metadata.Workload
+	e := obj.(WorkloadEndpointData)
+	return e.Key
 }
