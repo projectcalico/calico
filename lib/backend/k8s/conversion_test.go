@@ -138,7 +138,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.podToWorkloadEndpoint(&pod)
+		wep, err := c.PodToWorkloadEndpoint(&pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
@@ -192,7 +192,7 @@ var _ = Describe("Test Pod conversion", func() {
 			Status: k8sapi.PodStatus{},
 		}
 
-		_, err := c.podToWorkloadEndpoint(&pod)
+		_, err := c.PodToWorkloadEndpoint(&pod)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -210,7 +210,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		wep, err := c.podToWorkloadEndpoint(&pod)
+		wep, err := c.PodToWorkloadEndpoint(&pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
@@ -238,7 +238,7 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 		}
 
-		_, err := c.podToWorkloadEndpoint(&pod)
+		_, err := c.PodToWorkloadEndpoint(&pod)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

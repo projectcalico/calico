@@ -702,7 +702,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 				}
 
 				// Convert to a workload endpoint.
-				wep, err := syn.converter.podToWorkloadEndpoint(&po)
+				wep, err := syn.converter.PodToWorkloadEndpoint(&po)
 				if err != nil {
 					log.WithError(err).Error("Failed to convert pod to workload endpoint")
 					continue
@@ -964,7 +964,7 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 	}
 
 	// Convert the received Pod into a KVPair.
-	kvp, err := syn.converter.podToWorkloadEndpoint(pod)
+	kvp, err := syn.converter.PodToWorkloadEndpoint(pod)
 	if err != nil {
 		// If we fail to parse, then ignore this update and emit a log.
 		log.WithField("error", err).Error("Failed to parse Pod event")

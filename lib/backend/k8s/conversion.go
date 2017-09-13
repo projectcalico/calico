@@ -137,9 +137,9 @@ func (c Converter) hasIPAddress(pod *kapiv1.Pod) bool {
 	return pod.Status.PodIP != ""
 }
 
-// podToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
+// PodToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
 // has verified that the provided Pod is valid to convert to a WorkloadEndpoint.
-func (c Converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
+func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
 	// Pull out the profile and workload ID based on pod name and Namespace.
 	profile := fmt.Sprintf("k8s_ns.%s", pod.ObjectMeta.Namespace)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
