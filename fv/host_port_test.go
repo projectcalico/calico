@@ -32,6 +32,9 @@ import (
 
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
+		"--privileged", // So that we can add routes inside the etcd container,
+		// when using the etcd container to model an external client connecting
+		// into the cluster.
 		"quay.io/coreos/etcd",
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
