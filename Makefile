@@ -1,17 +1,29 @@
+###############################################################################
+# The build architecture is select by setting the ARCH variable.
+# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
+# When ARCH is undefined it defaults to amd64.
+ARCH?=amd64
+ifeq ($(ARCH),amd64)
+        ARCHTAG?=
+endif
+
+ifeq ($(ARCH),ppc64le)
+        ARCHTAG:=-ppc64le
+endif
+
 .PHONY: all binary test clean help docker-image
 default: help
 
 # Makefile configuration options 
-CONTAINER_NAME=calico/kube-policy-controller
+CONTAINER_NAME=calico/kube-policy-controller$(ARCHTAG)
 PACKAGE_NAME?=github.com/projectcalico/k8s-policy
 GO_BUILD_VER:=latest
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
-# Determine which OS / ARCH.
+# Determine which OS.
 OS?=$(shell uname -s | tr A-Z a-z)
-ARCH?=amd64
 
 # Get version from git.
 GIT_VERSION?=$(shell git describe --tags --dirty)
@@ -23,12 +35,12 @@ GIT_VERSION?=$(shell git describe --tags --dirty)
 docker-image: image.created
 image.created: dist/kube-policy-controller
 	# Build the docker image for the policy controller.
-	docker build -t $(CONTAINER_NAME) .
+	docker build -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
 	touch image.created
 
 dist/kube-policy-controller:
-	$(MAKE) OS=linux ARCH=amd64 binary-containerized
-	mv dist/kube-policy-controller-linux-amd64 dist/kube-policy-controller
+	$(MAKE) OS=linux ARCH=$(ARCH) binary-containerized
+	mv dist/kube-policy-controller-linux-$(ARCH) dist/kube-policy-controller
 
 ## Populates the vendor directory.
 vendor: glide.yaml
@@ -92,9 +104,18 @@ ut-containerized: vendor
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
+
+ifeq ($(ARCH),amd64)
+        ETCD_CONTAINER?=quay.io/coreos/etcd:v3.1.5
+endif
+
+ifeq ($(ARCH),ppc64le)
+        ETCD_CONTAINER?=quay.io/coreos/etcd:v3.2.5-ppc64le
+endif
+
 ## Runs system tests.
 st: docker-image run-etcd run-k8s-apiserver
-	./tests/system/apiserver-reconnection.sh
+	./tests/system/apiserver-reconnection.sh $(ARCHTAG)
 	$(MAKE) stop-k8s-apiserver stop-etcd
 
 .PHONY: run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
@@ -102,7 +123,7 @@ run-k8s-apiserver: stop-k8s-apiserver
 	ETCD_IP=`$(GET_CONTAINER_IP) st-etcd` && \
 	docker run --detach \
 	  --name st-apiserver \
-	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+	gcr.io/google_containers/hyperkube-$(ARCH):v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$${ETCD_IP}:2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 -v=10 \
 		  --authorization-mode=RBAC
@@ -112,7 +133,7 @@ stop-k8s-apiserver:
 
 run-etcd: stop-etcd
 	docker run --detach \
-	--name st-etcd quay.io/coreos/etcd:v3.1.5 \
+	--name st-etcd $(ETCD_CONTAINER) \
 	etcd \
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -137,7 +158,7 @@ endif
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
 
 # Ensure reported version is correct.
-	if ! docker run calico/kube-policy-controller:$(VERSION) version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-policy-controller:$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+	if ! docker run $(CONTAINER_NAME):$(VERSION) version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
 
 	@echo "Now push the tag and images."
 	@echo "git push $(VERSION)"
