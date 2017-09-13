@@ -44,11 +44,11 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 
 		etcd = RunEtcd()
 
-		felix = RunFelix(etcd.IP)
-
 		client = GetEtcdClient(etcd.IP)
 		err := client.EnsureInitialized()
 		Expect(err).NotTo(HaveOccurred())
+
+		felix = RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
