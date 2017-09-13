@@ -31,11 +31,11 @@ import (
 	"io/ioutil"
 	"net"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	log "github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -48,11 +48,7 @@ import (
 )
 
 type EnvConfig struct {
-	FelixVersion string
-	K8sVersion   string `default:"1.6.4"`
-	PromPGURL    string
-	CodeLevel    string
-	UseTypha     bool
+	K8sVersion string `default:"1.6.4"`
 }
 
 var config EnvConfig
@@ -596,11 +592,6 @@ func getHealthStatus(ip, port, endpoint string) func() int {
 	}
 }
 
-//
-//func getTyphaStatus(endpoint string) func() int {
-//	return getHealthStatus(typhaIP, "9098", endpoint)
-//}
-
 func BeErr() types.GomegaMatcher {
 	return BeNumerically("==", statusErr)
 }
@@ -612,135 +603,3 @@ func BeBad() types.GomegaMatcher {
 func BeGood() types.GomegaMatcher {
 	return BeNumerically("==", health.StatusGood)
 }
-
-//var _ = Describe("health", func() {
-//
-//	var (
-//		clientset *kubernetes.Clientset
-//	)
-//
-//	BeforeEach(func() {
-//		log.Info(">>> BeforeEach <<<")
-//		clientset = initialize(k8sServerEndpoint)
-//	})
-//
-//	It("Felix should be not ready", func() {
-//		// Because there is no config for the local node.
-//		triggerFelixRestart()
-//		for i := 0; i < 8; i++ {
-//			Expect(getFelixStatus("readiness")()).To(BeBad())
-//			time.Sleep(500 * time.Millisecond)
-//		}
-//	})
-//
-//	It("Felix should be not live", func() {
-//		// Because there is no config for the local node.
-//		triggerFelixRestart()
-//		for i := 0; i < 8; i++ {
-//			Expect(getFelixStatus("liveness")()).To(BeBad())
-//			time.Sleep(500 * time.Millisecond)
-//		}
-//	})
-//
-//	It("Typha should be ready", func() {
-//		skipIfNoTypha()
-//		Eventually(getTyphaStatus("readiness"), "8s", "0.5s").Should(BeGood())
-//	})
-//
-//	It("Typha should be live", func() {
-//		skipIfNoTypha()
-//		Eventually(getTyphaStatus("liveness"), "8s", "0.5s").Should(BeGood())
-//	})
-//
-//	Context("with a local host", func() {
-//		BeforeEach(func() {
-//			log.Info(">>> BeforeEach with a local host <<<")
-//			triggerFelixRestart()
-//			_ = NewDeployment(clientset, 0, true)
-//		})
-//
-//		It("Felix should be ready", func() {
-//			Eventually(getFelixStatus("readiness"), "8s", "0.5s").Should(BeGood())
-//		})
-//
-//		Context("with API server hidden", func() {
-//			BeforeEach(func() {
-//				log.Info(">>> BeforeEach hiding the API server <<<")
-//				hideAPIServer()
-//
-//				// We need to restart the daemons here because the Syncer doesn't currently
-//				// move to non-ready due to network failures.
-//				triggerTyphaRestart()
-//				triggerFelixRestart()
-//			})
-//
-//			AfterEach(func() {
-//				revealAPIServer()
-//
-//				// Restart the daemons again to leave them in a clean state.
-//				triggerTyphaRestart()
-//				triggerFelixRestart()
-//			})
-//
-//			It("Felix should be non-ready", func() {
-//				Eventually(getFelixStatus("readiness"), "60s", "5s").Should(BeBad())
-//			})
-//
-//			It("Typha should be non-ready", func() {
-//				skipIfNoTypha()
-//				Eventually(getTyphaStatus("readiness"), "60s", "5s").Should(BeBad())
-//			})
-//		})
-//
-//		It("Felix should be live", func() {
-//			Eventually(getFelixStatus("liveness"), "8s", "0.5s").Should(BeGood())
-//		})
-//
-//		It("Typha should be ready", func() {
-//			skipIfNoTypha()
-//			Eventually(getTyphaStatus("readiness"), "8s", "0.5s").Should(BeGood())
-//		})
-//
-//		It("Typha should be live", func() {
-//			skipIfNoTypha()
-//			Eventually(getTyphaStatus("liveness"), "8s", "0.5s").Should(BeGood())
-//		})
-//	})
-//
-//	AfterEach(func() {
-//		log.Info(">>> AfterEach <<<")
-//	})
-//})
-//
-//
-//
-//func triggerFelixRestart() {
-//	log.Info("Killing felix")
-//	exec.Command("pkill", "-TERM", "calico-felix").Run()
-//	time.Sleep(1 * time.Second)
-//}
-//
-//func triggerTyphaRestart() {
-//	log.Info("Killing typha")
-//	exec.Command("pkill", "-TERM", "calico-typha").Run()
-//	time.Sleep(1 * time.Second)
-//}
-//
-//func skipIfNoTypha() {
-//	if typhaIP == "" {
-//		Skip("No Typha in this test run")
-//	}
-//}
-//
-//func hideAPIServer() {
-//	log.Info("Hiding API server")
-//	err := exec.Command("iptables", "-A", "OUTPUT", "-p", "tcp", "-d", k8sServerIP, "-j", "REJECT", "--reject-with", "tcp-reset").Run()
-//	Expect(err).NotTo(HaveOccurred())
-//	exec.Command("conntrack", "-D", "-d", k8sServerIP).Run()
-//}
-//
-//func revealAPIServer() {
-//	log.Info("Revealing API server")
-//	err := exec.Command("iptables", "-D", "OUTPUT",  "-p", "tcp", "-d", k8sServerIP, "-j", "REJECT", "--reject-with", "tcp-reset").Run()
-//	Expect(err).NotTo(HaveOccurred())
-//}

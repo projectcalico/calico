@@ -17,32 +17,16 @@
 package k8s_test
 
 import (
-	"os"
 	"testing"
 
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func init() {
-	//testutils.HookLogrusForGinkgo()
-	logutils.ConfigureEarlyLogging()
-	logLevel, err := log.ParseLevel(os.Getenv("K8SFV_LOG_LEVEL"))
-	if err == nil {
-		log.SetLevel(logLevel)
-	}
-	log.SetLevel(log.InfoLevel)
-	//flag.StringVar(&k8sServerIP, "k8s-apiserver-ip", "", "")
-	//flag.StringVar(&k8sServerEndpoint, "k8s-api-endpoint", "", "")
-	//flag.StringVar(&felixIP, "felix-ip", "", "")
-	//flag.StringVar(&felixHostname, "felix-hostname", "", "")
-	//flag.StringVar(&prometheusPushURL, "prometheus-push-url", "", "")
-	//flag.StringVar(&codeLevel, "code-level", "", "")
-	//flag.StringVar(&typhaIP, "typha-ip", "", "")
+	testutils.HookLogrusForGinkgo()
 }
 
 func TestWithKubernetesServer(t *testing.T) {

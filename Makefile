@@ -93,6 +93,8 @@ help:
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 
+TOPDIR:=$(shell pwd)
+
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
 .SUFFIXES:
@@ -372,17 +374,22 @@ ut combined.coverprofile: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
 
-fv/fv.test: vendor/.up-to-date $(FELIX_GO_FILES)
-	$(DOCKER_GO_BUILD) go test ./fv -c --tags fvtests -o fv/fv.test
+FV_TESTS=$(subst _suite_test.go,.test,$(shell find fv -name "*_suite_test.go"))
+
+$(FV_TESTS): vendor/.up-to-date $(FELIX_GO_FILES)
+	# We pre-build the FV test binaries so that we can run them
+	# outside a container and allow them to interact with docker.
+	$(DOCKER_GO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
-fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
+fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test fv/k8s/k8s.test
 	@echo Running Go FVs.
-	# We pre-build the test binary so that we can run it outside a container and allow it
-	# to interact with docker.
 	# fv.test is not expecting a container name with an ARCHTAG.
 	-docker tag calico/felix$(ARCHTAG) calico/felix
-	cd fv && ./fv.test -ginkgo.slowSpecThreshold 30
+	for t in $(FV_TESTS); do \
+	    cd $(TOPDIR)/`dirname $$t` && \
+	    ./`basename $$t` -ginkgo.slowSpecThreshold 30 || exit; \
+	done
 
 bin/check-licenses: $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"
