@@ -20,7 +20,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/converter"
 )
 
 // WorkloadEndpointInterface has methods to work with WorkloadEndpoint resources.
@@ -35,12 +35,13 @@ type WorkloadEndpointInterface interface {
 
 // workloadEndpoints implements WorkloadEndpointInterface
 type workloadEndpoints struct {
+	converter.WorkloadEndpointConverter
 	c *Client
 }
 
 // newWorkloadEndpoints returns a new WorkloadEndpointInterface bound to the supplied client.
 func newWorkloadEndpoints(c *Client) WorkloadEndpointInterface {
-	return &workloadEndpoints{c}
+	return &workloadEndpoints{c: c}
 }
 
 // Create creates a new workload endpoint.
@@ -106,114 +107,19 @@ func (w *workloadEndpoints) convertMetadataToListInterface(m unversioned.Resourc
 // convertMetadataToKey converts a WorkloadEndpointMetadata to a WorkloadEndpointKey
 // This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
-	hm := m.(api.WorkloadEndpointMetadata)
-	k := model.WorkloadEndpointKey{
-		Hostname:       hm.Node,
-		OrchestratorID: hm.Orchestrator,
-		WorkloadID:     hm.Workload,
-		EndpointID:     hm.Name,
-	}
-	return k, nil
+	return w.ConvertMetadataToKey(m)
 }
 
 // convertAPIToKVPair converts an API WorkloadEndpoint structure to a KVPair containing a
 // backend WorkloadEndpoint and WorkloadEndpointKey.
 // This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
-	ah := a.(api.WorkloadEndpoint)
-	k, err := w.convertMetadataToKey(ah.Metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	// IP networks are stored in the datastore in separate IPv4 and IPv6
-	// fields.  We normalise the network to ensure the IP is correctly
-	// masked.
-	ipv4Nets := []net.IPNet{}
-	ipv6Nets := []net.IPNet{}
-	for _, n := range ah.Spec.IPNetworks {
-		n = *(n.Network())
-		if n.Version() == 4 {
-			ipv4Nets = append(ipv4Nets, n)
-		} else {
-			ipv6Nets = append(ipv6Nets, n)
-		}
-	}
-
-	ipv4NAT := []model.IPNAT{}
-	ipv6NAT := []model.IPNAT{}
-	for _, n := range ah.Spec.IPNATs {
-		nat := model.IPNAT{IntIP: n.InternalIP, ExtIP: n.ExternalIP}
-		if n.InternalIP.Version() == 4 {
-			ipv4NAT = append(ipv4NAT, nat)
-		} else {
-			ipv6NAT = append(ipv6NAT, nat)
-		}
-	}
-
-	d := model.KVPair{
-		Key: k,
-		Value: &model.WorkloadEndpoint{
-			Labels:           ah.Metadata.Labels,
-			ActiveInstanceID: ah.Metadata.ActiveInstanceID,
-			State:            "active",
-			Name:             ah.Spec.InterfaceName,
-			Mac:              ah.Spec.MAC,
-			ProfileIDs:       ah.Spec.Profiles,
-			IPv4Nets:         ipv4Nets,
-			IPv6Nets:         ipv6Nets,
-			IPv4NAT:          ipv4NAT,
-			IPv6NAT:          ipv6NAT,
-			IPv4Gateway:      ah.Spec.IPv4Gateway,
-			IPv6Gateway:      ah.Spec.IPv6Gateway,
-		},
-		Revision: ah.Metadata.Revision,
-	}
-
-	return &d, nil
+	return w.ConvertAPIToKVPair(a)
 }
 
 // convertKVPairToAPI converts a KVPair containing a backend WorkloadEndpoint and WorkloadEndpointKey
 // to an API WorkloadEndpoint structure.
 // This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bh := d.Value.(*model.WorkloadEndpoint)
-	bk := d.Key.(model.WorkloadEndpointKey)
-
-	nets := bh.IPv4Nets
-	nets = append(nets, bh.IPv6Nets...)
-
-	nats := []api.IPNAT{}
-	mnats := bh.IPv4NAT
-	mnats = append(mnats, bh.IPv6NAT...)
-	for _, mnat := range mnats {
-		nat := api.IPNAT{InternalIP: mnat.IntIP, ExternalIP: mnat.ExtIP}
-		nats = append(nats, nat)
-	}
-
-	ah := api.NewWorkloadEndpoint()
-	ah.Metadata.Node = bk.Hostname
-	ah.Metadata.Orchestrator = bk.OrchestratorID
-	ah.Metadata.Workload = bk.WorkloadID
-	ah.Metadata.Name = bk.EndpointID
-	ah.Metadata.Labels = bh.Labels
-	ah.Spec.InterfaceName = bh.Name
-	ah.Metadata.ActiveInstanceID = bh.ActiveInstanceID
-	ah.Spec.MAC = bh.Mac
-	ah.Spec.Profiles = bh.ProfileIDs
-	if len(nets) == 0 {
-		ah.Spec.IPNetworks = nil
-	} else {
-		ah.Spec.IPNetworks = nets
-	}
-	if len(nats) == 0 {
-		ah.Spec.IPNATs = nil
-	} else {
-		ah.Spec.IPNATs = nats
-	}
-	ah.Spec.IPv4Gateway = bh.IPv4Gateway
-	ah.Spec.IPv6Gateway = bh.IPv6Gateway
-	ah.Metadata.Revision = d.Revision
-
-	return ah, nil
+	return w.ConvertKVPairToAPI(d)
 }
