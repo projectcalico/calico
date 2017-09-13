@@ -16,6 +16,7 @@ package containers
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -167,4 +168,36 @@ func (c *Container) ExecMayFail(cmd ...string) {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	utils.RunMayFail("docker", arg...)
+}
+
+func (c *Container) SourceName() string {
+	return c.Name
+}
+
+func (c *Container) CanConnectTo(ip, port string) bool {
+
+	// Ensure that the container has the 'test-connection' binary.
+	c.EnsureBinary("test-connection")
+
+	// Run 'test-connection' to the target.
+	connectionCmd := exec.Command("docker", "exec", c.Name,
+		"/test-connection", "-", ip, port)
+	outPipe, err := connectionCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	errPipe, err := connectionCmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	wOut, err := ioutil.ReadAll(outPipe)
+	Expect(err).NotTo(HaveOccurred())
+	wErr, err := ioutil.ReadAll(errPipe)
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Wait()
+
+	log.WithFields(log.Fields{
+		"stdout": string(wOut),
+		"stderr": string(wErr)}).WithError(err).Info("Connection test")
+
+	return err == nil
 }
