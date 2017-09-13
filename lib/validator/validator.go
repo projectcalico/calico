@@ -262,7 +262,7 @@ func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 
 	// Check that the port range is in the correct order.  The YAML parsing also checks this,
 	// but this protects against misuse of the programmatic API.
-	log.Debugf("Validate port: %s")
+	log.Debugf("Validate port: %v", p)
 	if p.MinPort > p.MaxPort {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
 			"Port", "", reason("port range invalid"))
