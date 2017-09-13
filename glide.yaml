@@ -29,4 +29,4 @@ import:
   - tools/cache
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: 52ada4f5d18767b02a67eaa7af80bbbcf156de84
+  version: a3291af5e19321a381b4ee9c2828c8a179c27bec
