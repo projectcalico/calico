@@ -69,7 +69,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create three workloads, using that profile.
-		for ii := 0; ii < 3; ii++ {
+		for ii := range w {
 			iiStr := strconv.Itoa(ii)
 			w[ii] = workload.Run(felix, "w"+iiStr, "cali1"+iiStr, "10.65.0.1"+iiStr, "8055")
 			w[ii].Configure(client)
@@ -84,7 +84,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			felix.Exec("ip", "r")
 		}
 
-		for ii := 0; ii < 3; ii++ {
+		for ii := range w {
 			w[ii].Stop()
 		}
 		felix.Stop()
