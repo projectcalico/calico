@@ -512,7 +512,7 @@ func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, erro
 			return nil, resources.K8sErrorToCalico(err, k.Key)
 		}
 		log.Debugf("Successfully applied pod: %+v", pod)
-		return c.converter.podToWorkloadEndpoint(pod)
+		return c.converter.PodToWorkloadEndpoint(pod)
 	}
 	return k, nil
 }
@@ -553,7 +553,7 @@ func (c *KubeClient) listWorkloadEndpoints(l model.WorkloadEndpointListOptions) 
 			continue
 		}
 
-		kvp, err := c.converter.podToWorkloadEndpoint(&pod)
+		kvp, err := c.converter.PodToWorkloadEndpoint(&pod)
 		if err != nil {
 			return nil, err
 		}
@@ -577,7 +577,7 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 	if !c.converter.isReadyCalicoPod(pod) {
 		return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
 	}
-	return c.converter.podToWorkloadEndpoint(pod)
+	return c.converter.PodToWorkloadEndpoint(pod)
 }
 
 // listPolicies lists the Policies from the k8s API based on NetworkPolicy objects.
