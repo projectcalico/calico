@@ -156,3 +156,15 @@ func (c *Container) EnsureBinary(name string) {
 		c.binaries.Add(name)
 	}
 }
+
+func (c *Container) Exec(cmd ...string) {
+	arg := []string{"exec", c.Name}
+	arg = append(arg, cmd...)
+	utils.Run("docker", arg...)
+}
+
+func (c *Container) ExecMayFail(cmd ...string) {
+	arg := []string{"exec", c.Name}
+	arg = append(arg, cmd...)
+	utils.RunMayFail("docker", arg...)
+}

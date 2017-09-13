@@ -80,8 +80,8 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 
 		if CurrentGinkgoTestDescription().Failed {
 			utils.Run("docker", "logs", felix.Name)
-			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
-			utils.Run("docker", "exec", felix.Name, "ip", "r")
+			felix.Exec("iptables-save", "-c")
+			felix.Exec("ip", "r")
 		}
 
 		for ii := 0; ii < 3; ii++ {
@@ -90,7 +90,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
 	})
