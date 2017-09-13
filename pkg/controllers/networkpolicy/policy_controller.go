@@ -15,17 +15,21 @@
 package networkpolicy
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
 
 	calicocache "github.com/projectcalico/k8s-policy/pkg/cache"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/controller"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/k8s-policy/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -49,26 +53,68 @@ type PolicyController struct {
 func NewPolicyController(k8sClientset *kubernetes.Clientset, calicoClient *client.Client) controller.Controller {
 	policyConverter := converter.NewPolicyConverter()
 
+	// Create a NetworkPolicy watcher.
+	listWatcher := cache.NewListWatchFromClient(k8sClientset.Extensions().RESTClient(), "networkpolicies", "", fields.Everything())
+
 	// Function returns map of policyName:policy stored by policy controller
 	// in datastore.
 	listFunc := func() (map[string]interface{}, error) {
+		var policyMap map[string]bool
+
 		// Get all policies from datastore
 		calicoPolicies, err := calicoClient.Policies().List(api.PolicyMetadata{})
 		if err != nil {
 			return nil, err
 		}
 
-		// Filter out only objects that are written by policy controller
-		npMap := make(map[string]interface{})
+		// Filter in only objects that are written by policy controller.
+		m := make(map[string]interface{})
 		for _, policy := range calicoPolicies.Items {
 			policyName := policyConverter.GetKey(policy)
 			if strings.HasPrefix(policyName, "knp.default.") {
-				npMap[policyName] = policy
+				m[policyName] = policy
+			} else if len(strings.Split(policyName, ".")) > 1 {
+				// Older versions of the controller used the name format `namespace.name`.
+				// This is a best-effort attempt to sync those policies as well.  If it has a `.` and
+				// exists in the k8s API, then sync the policy.
+				// TODO: Remove this section once we don't care about upgrade from the Python controller.
+				l, err := listWatcher.List(metav1.ListOptions{})
+				if err != nil {
+					log.WithError(err).Warnf("Failed to process policy %s", policyName)
+				}
+				items, err := meta.ExtractList(l)
+				if err != nil {
+					log.WithError(err).Warnf("Failed to process policy %s", policyName)
+				}
+				if policyMap == nil {
+					// Populate the policy map with data from the API so we can do a lookup
+					// on whether or not this policy exists in the k8s API.  Only do this if we haven't
+					// already populated the map in order to minimize work.
+					policyMap = map[string]bool{}
+					for _, i := range items {
+						k := fmt.Sprintf("%s.%s", i.(*v1beta1.NetworkPolicy).Namespace, i.(*v1beta1.NetworkPolicy).Name)
+						policyMap[k] = true
+					}
+				}
+				log.Debugf("Checking if we care about policy %s", policyName)
+				log.Debugf("Policies we might care about: %#v", policyMap)
+				if _, ok := policyMap[policyName]; ok {
+					// The policy exists in the API and in etcd - assume it was created by the old policy
+					// controller and add it to the batch so that we sync it away.
+					log.Infof("Assuming we're responsible for policy %s", policyName)
+					m[policyName] = policy
+				}
+			} else if policyName == "k8s-policy-no-match" {
+				// Older versions of the controller programmed this policy, but we don't
+				// want it around any more.  TODO: Remove this section once we don't care about
+				// upgrade from the Python controller.
+				log.Infof("Assuming we're responsible for policy %s", policyName)
+				m[policyName] = policy
 			}
 		}
 
-		log.Debugf("Found %d policies in Calico datastore:", len(npMap))
-		return npMap, nil
+		log.Debugf("Found %d policies in Calico datastore:", len(m))
+		return m, nil
 	}
 
 	cacheArgs := calicocache.ResourceCacheArgs{
@@ -76,9 +122,6 @@ func NewPolicyController(k8sClientset *kubernetes.Clientset, calicoClient *clien
 		ObjectType: reflect.TypeOf(api.Policy{}),
 	}
 	ccache := calicocache.NewResourceCache(cacheArgs)
-
-	// Create a NetworkPolicy watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.Extensions().RESTClient(), "networkpolicies", "", fields.Everything())
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
