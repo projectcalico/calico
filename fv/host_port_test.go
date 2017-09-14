@@ -110,14 +110,13 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		etcd = RunEtcd()
 
 		client = GetEtcdClient(etcd.IP)
-		err := client.EnsureInitialized()
-		Expect(err).NotTo(HaveOccurred())
+		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
 
 		felix = RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
-		_, err = client.Nodes().Create(felixNode)
+		_, err := client.Nodes().Create(felixNode)
 		Expect(err).NotTo(HaveOccurred())
 
 		metricsPortReachable = func() bool {

@@ -45,14 +45,13 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		etcd = RunEtcd()
 
 		client = GetEtcdClient(etcd.IP)
-		err := client.EnsureInitialized()
-		Expect(err).NotTo(HaveOccurred())
+		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
 
 		felix = RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
-		_, err = client.Nodes().Create(felixNode)
+		_, err := client.Nodes().Create(felixNode)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Install a default profile that allows workloads with this profile to talk to each
