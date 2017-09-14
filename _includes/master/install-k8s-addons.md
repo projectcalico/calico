@@ -30,5 +30,5 @@ calico-policy-controller-so4gl   1/1       Running   0          1m
 To install KubeDNS, use the provided manifest.  This enables Kubernetes Service discovery.
 
 ```shell
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/skydns.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/kubedns.yaml
 ```
