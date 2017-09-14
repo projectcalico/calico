@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,13 +32,29 @@ type Container struct {
 	Name     string
 	IP       string
 	Hostname string
-	Stop     func()
-	stopped  bool
+	runCmd   *exec.Cmd
+	binaries set.Set
 }
 
 var containerIdx = 0
 
 var runningContainers = []*Container{}
+
+func (c *Container) Stop() {
+	if c == nil {
+		log.Info("Stop no-op because nil container")
+	} else if c.runCmd == nil {
+		log.WithField("container", c).Info("Stop no-op because container is not running")
+	} else {
+		log.WithField("container", c).Info("Stop")
+		c.runCmd.Process.Signal(os.Interrupt)
+		c.WaitNotRunning(10 * time.Second)
+		c.runCmd = nil
+
+		// And now to be really sure that the container is cleaned up.
+		utils.RunMayFail("docker", "rm", "-f", c.Name)
+	}
+}
 
 func Run(namePrefix string, args ...string) (c *Container) {
 
@@ -48,10 +65,13 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	// Start the container.
 	log.WithField("container", c).Info("About to run container")
 	runArgs := append([]string{"run", "--name", c.Name}, args...)
-	runCmd := exec.Command("docker", runArgs...)
-	err := runCmd.Start()
+	c.runCmd = exec.Command("docker", runArgs...)
+	err := c.runCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
-	c.WaitRunning(10 * time.Second)
+
+	// It might take a very long time for the container to show as running, if the image needs
+	// to be downloaded - e.g. when running on semaphore.
+	c.WaitRunning(20 * 60 * time.Second)
 
 	// Remember that this container is now running.
 	runningContainers = append(runningContainers, c)
@@ -59,17 +79,7 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
 	c.Hostname = c.GetHostname()
-	c.Stop = func() {
-		if !c.stopped {
-			// We haven't previously tried to stop this container.
-			c.stopped = true
-			runCmd.Process.Signal(os.Interrupt)
-			c.WaitNotRunning(10 * time.Second)
-		}
-		// And now to be really sure that the container is cleaned up - and regardless of
-		// whether we already tried before...
-		utils.RunMayFail("docker", "rm", "-f", c.Name)
-	}
+	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
 	return
 }
@@ -132,3 +142,10 @@ var _ = AfterEach(func() {
 	}
 	runningContainers = []*Container{}
 })
+
+func (c *Container) EnsureBinary(name string) {
+	if !c.binaries.Contains(name) {
+		exec.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
+		c.binaries.Add(name)
+	}
+}
