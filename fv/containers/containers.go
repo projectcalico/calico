@@ -15,7 +15,9 @@
 package containers
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -23,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -37,13 +38,11 @@ type Container struct {
 	Hostname string
 	runCmd   *exec.Cmd
 
-	binariesMutex sync.Mutex
-	binaries      set.Set
+	mutex    sync.Mutex
+	binaries set.Set
 }
 
 var containerIdx = 0
-
-var runningContainers = []*Container{}
 
 func (c *Container) Stop() {
 	if c == nil {
@@ -54,10 +53,6 @@ func (c *Container) Stop() {
 		log.WithField("container", c).Info("Stop")
 		c.runCmd.Process.Signal(os.Interrupt)
 		c.WaitNotRunning(10 * time.Second)
-		c.runCmd = nil
-
-		// And now to be really sure that the container is cleaned up.
-		utils.RunMayFail("docker", "rm", "-f", c.Name)
 	}
 }
 
@@ -65,21 +60,30 @@ func Run(namePrefix string, args ...string) (c *Container) {
 
 	// Build unique container name and struct.
 	containerIdx++
-	c = &Container{Name: fmt.Sprintf("%v-%d-%d-", namePrefix, os.Getpid(), containerIdx)}
+	c = &Container{Name: fmt.Sprintf("%v-%d-%d-felixfv", namePrefix, os.Getpid(), containerIdx)}
 
-	// Start the container.
+	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := append([]string{"run", "--name", c.Name}, args...)
-	c.runCmd = exec.Command("docker", runArgs...)
-	err := c.runCmd.Start()
+	runArgs := append([]string{"run", "--rm", "--name", c.Name, "--hostname", c.Name}, args...)
+	c.runCmd = utils.Command("docker", runArgs...)
+
+	// Get the command's output pipes, so we can merge those into the test's own logging.
+	stdout, err := c.runCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	stderr, err := c.runCmd.StderrPipe()
 	Expect(err).NotTo(HaveOccurred())
 
-	// It might take a very long time for the container to show as running, if the image needs
-	// to be downloaded - e.g. when running on semaphore.
-	c.WaitRunning(20 * 60 * time.Second)
+	// Start the container running.
+	err = c.runCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
 
-	// Remember that this container is now running.
-	runningContainers = append(runningContainers, c)
+	// Merge container's output into our own logging.
+	go copyOutputToLog(c.Name, "stdout", stdout)
+	go copyOutputToLog(c.Name, "stderr", stderr)
+
+	// Note: it might take a long time for the container to start running, e.g. if the image
+	// needs to be downloaded.
+	c.WaitUntilRunning()
 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
@@ -89,8 +93,23 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	return
 }
 
+func copyOutputToLog(name string, streamName string, stream io.Reader) {
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		log.Info(name, "[", streamName, "] ", scanner.Text())
+	}
+	logCxt := log.WithFields(log.Fields{
+		"name":   name,
+		"stream": stream,
+	})
+	if scanner.Err() != nil {
+		logCxt.WithError(scanner.Err()).Warn("Error reading container stream")
+	}
+	logCxt.Info("Stream finished")
+}
+
 func (c *Container) DockerInspect(format string) string {
-	inspectCmd := exec.Command("docker", "inspect",
+	inspectCmd := utils.Command("docker", "inspect",
 		"--format="+format,
 		c.Name,
 	)
@@ -109,27 +128,44 @@ func (c *Container) GetHostname() string {
 	return strings.TrimSpace(output)
 }
 
-func (c *Container) WaitRunning(timeout time.Duration) {
+func (c *Container) WaitUntilRunning() {
 	log.Info("Wait for container to be listed in docker ps")
-	start := time.Now()
+
+	// Set up so we detect if container startup fails.
+	stoppedChan := make(chan struct{})
+	go func() {
+		defer close(stoppedChan)
+		err := c.runCmd.Wait()
+		log.WithError(err).WithField("name", c.Name).Info("Container stopped")
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		c.runCmd = nil
+	}()
+
 	for {
-		cmd := exec.Command("docker", "ps")
+		Expect(stoppedChan).NotTo(BeClosed())
+
+		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		if strings.Contains(string(out), c.Name) {
 			break
 		}
-		if time.Since(start) > timeout {
-			log.Panic("Timed out waiting for container to be listed.")
-		}
+		time.Sleep(1 * time.Second)
 	}
+}
+
+func (c *Container) Stopped() bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.runCmd == nil
 }
 
 func (c *Container) WaitNotRunning(timeout time.Duration) {
 	log.Info("Wait for container not to be listed in docker ps")
 	start := time.Now()
 	for {
-		cmd := exec.Command("docker", "ps")
+		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		if !strings.Contains(string(out), c.Name) {
@@ -141,21 +177,19 @@ func (c *Container) WaitNotRunning(timeout time.Duration) {
 	}
 }
 
-var _ = AfterEach(func() {
-	for _, c := range runningContainers {
-		c.Stop()
-	}
-	runningContainers = []*Container{}
-})
-
 func (c *Container) EnsureBinary(name string) {
-	c.binariesMutex.Lock()
-	defer c.binariesMutex.Unlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	if !c.binaries.Contains(name) {
-		exec.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
+		utils.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
 		c.binaries.Add(name)
 	}
+}
+
+func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error {
+	cmd := utils.Command("docker", "cp", hostPath, c.Name+":"+containerPath)
+	return cmd.Run()
 }
 
 func (c *Container) Exec(cmd ...string) {
@@ -164,10 +198,10 @@ func (c *Container) Exec(cmd ...string) {
 	utils.Run("docker", arg...)
 }
 
-func (c *Container) ExecMayFail(cmd ...string) {
+func (c *Container) ExecMayFail(cmd ...string) error {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
-	utils.RunMayFail("docker", arg...)
+	return utils.RunMayFail("docker", arg...)
 }
 
 func (c *Container) SourceName() string {
@@ -180,7 +214,7 @@ func (c *Container) CanConnectTo(ip, port string) bool {
 	c.EnsureBinary("test-connection")
 
 	// Run 'test-connection' to the target.
-	connectionCmd := exec.Command("docker", "exec", c.Name,
+	connectionCmd := utils.Command("docker", "exec", c.Name,
 		"/test-connection", "-", ip, port)
 	outPipe, err := connectionCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
@@ -200,4 +234,28 @@ func (c *Container) CanConnectTo(ip, port string) bool {
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
 	return err == nil
+}
+
+func RunEtcd() *Container {
+	return Run("etcd",
+		"--privileged", // So that we can add routes inside the etcd container,
+		// when using the etcd container to model an external client connecting
+		// into the cluster.
+		"quay.io/coreos/etcd",
+		"etcd",
+		"--advertise-client-urls", "http://127.0.0.1:2379",
+		"--listen-client-urls", "http://0.0.0.0:2379")
+}
+
+func RunFelix(etcdIP string) *Container {
+	return Run("felix",
+		"--privileged",
+		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
+		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
+		"-e", "FELIX_DATASTORETYPE=etcdv2",
+		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
+		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
+		"-e", "FELIX_USAGEREPORTINGENABLED=false",
+		"-e", "FELIX_IPV6SUPPORT=false",
+		"calico/felix:latest")
 }
