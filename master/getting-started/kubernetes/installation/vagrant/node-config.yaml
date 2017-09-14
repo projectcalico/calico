@@ -25,6 +25,20 @@ coreos:
   update:
     reboot-strategy: off
   units:
+    - name: k8s-binary-installation.service
+      command: start
+      content: |
+        [Unit]
+        Description=Downloads Kubernetes binaries
+        Before=kubelet.service kube-proxy.service
+
+        [Service]
+        Type=oneshot
+        TimeoutStartSec=1800
+        ExecStart=/opt/k8s/setup/fetch_k8s_binaries.sh --install --dl-dir /k8s --binaries kubelet kube-proxy
+        # Ensure that this service remains running so the dependent
+        # services are not blocked waiting for this service.
+        RemainAfterExit=true
     - name: etcd-member.service
       command: start
       drop-ins:
@@ -47,8 +61,6 @@ coreos:
         TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/containernetworking/cni/releases/download/v0.5.1/cni-v0.5.1.tgz
         ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.5.1.tgz -C /opt/cni/bin
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.7.0/bin/linux/amd64/kubelet
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin
         ExecStart=/opt/bin/kubelet \
         --address=0.0.0.0 \
@@ -75,8 +87,6 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.7.0/bin/linux/amd64/kube-proxy
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
         --master=http://172.18.18.101:8080 \
