@@ -333,6 +333,12 @@ bin/test-workload: $(FELIX_GO_FILES) vendor/.up-to-date
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/fv/test-workload"'
 
+bin/test-connection: $(FELIX_GO_FILES) vendor/.up-to-date
+	@echo Building test-connection...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/fv/test-connection"'
+
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
@@ -370,7 +376,7 @@ fv/fv.test: vendor/.up-to-date $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go test ./fv -c --tags fvtests -o fv/fv.test
 
 .PHONY: fv
-fv: calico/felix bin/iptables-locker bin/test-workload fv/fv.test
+fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
 	@echo Running Go FVs.
 	# We pre-build the test binary so that we can run it outside a container and allow it
 	# to interact with docker.

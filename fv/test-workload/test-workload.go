@@ -15,12 +15,12 @@
 package main
 
 import (
+	"fmt"
 	"net"
-	"os/exec"
-	"strings"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/felix/fv/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -32,6 +32,8 @@ Usage:
 `
 
 func main() {
+	log.SetLevel(log.DebugLevel)
+
 	arguments, err := docopt.Parse(usage, nil, true, "v0.1", false)
 	if err != nil {
 		println(usage)
@@ -63,23 +65,23 @@ func main() {
 	err = netlink.LinkSetNsFd(workloadIf, int(namespace.Fd()))
 	panicIfError(err)
 	err = namespace.Do(func(_ ns.NetNS) (err error) {
-		err = runCommand("ip", "link", "set", veth.PeerName, "name", "eth0")
+		err = utils.RunCommand("ip", "link", "set", veth.PeerName, "name", "eth0")
 		if err != nil {
 			return
 		}
-		err = runCommand("ip", "link", "set", "eth0", "up")
+		err = utils.RunCommand("ip", "link", "set", "eth0", "up")
 		if err != nil {
 			return
 		}
-		err = runCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
+		err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
 		if err != nil {
 			return
 		}
-		err = runCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
+		err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
 		if err != nil {
 			return
 		}
-		err = runCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
+		err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
 		return
 	})
 	panicIfError(err)
@@ -90,6 +92,11 @@ func main() {
 	panicIfError(err)
 	err = netlink.LinkSetUp(hostIf)
 	panicIfError(err)
+
+	// Print out the namespace path, so that test code can pick it up and execute subsequent
+	// operations in the same namespace - which (in the context of this FV framework)
+	// effectively means _as_ this workload.
+	fmt.Println(namespace.Path())
 
 	// Now listen on the specified port in the workload namespace.
 	err = namespace.Do(func(_ ns.NetNS) error {
@@ -111,7 +118,7 @@ func main() {
 			}
 		}
 
-		l, err := net.Listen("tcp", ":"+port)
+		l, err := net.Listen("tcp", ipAddress+":"+port)
 		if err != nil {
 			return err
 		}
@@ -137,12 +144,4 @@ func panicIfError(err error) {
 		panic(err)
 	}
 	return
-}
-
-func runCommand(command string, args ...string) error {
-	cmd := exec.Command(command, args...)
-	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
-	output, err := cmd.CombinedOutput()
-	log.Infof("output: %v", string(output))
-	return err
 }

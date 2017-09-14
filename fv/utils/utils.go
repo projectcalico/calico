@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -60,3 +61,11 @@ var _ = AfterEach(func() {
 		os.Stdout.WriteString("===== end output from failed test =====\n\n")
 	}
 })
+
+func RunCommand(command string, args ...string) error {
+	cmd := exec.Command(command, args...)
+	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
+	output, err := cmd.CombinedOutput()
+	log.Infof("output: %v", string(output))
+	return err
+}
