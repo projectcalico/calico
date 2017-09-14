@@ -1,5 +1,5 @@
 hash: 6d980076ac5ec8236dde278276a0a2f4df0ac256bc1779c5947000109c822cd8
-updated: 2017-09-05T17:26:17.089786342Z
+updated: 2017-09-14T09:00:49.052755803Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -155,7 +155,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2798ea999324fd43f89f2f71e9efa1ba1cb22d90
+  version: 1b108d7cd00957f03325a70017532bd42a06eb11
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
@@ -202,7 +202,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: bc8b88226a1210b016e9993b1d75f858c9c8f778
+  version: 2f17f4a9d485bf34b4bfaccc273805040e4f86c8
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -226,11 +226,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: f5a6f697a596c788d474984a38a0ac4ba0719e93
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
@@ -255,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: 062cd7e4e68206d8bab9b18396626e855c992658
   subpackages:
   - unix
 - name: golang.org/x/text
