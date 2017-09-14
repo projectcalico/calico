@@ -48,7 +48,7 @@ import (
 )
 
 type EnvConfig struct {
-	K8sVersion string `default:"1.6.4"`
+	K8sVersion string `default:"1.7.5"`
 }
 
 var config EnvConfig
@@ -101,6 +101,7 @@ var _ = BeforeSuite(func() {
 
 	// Start the k8s API server.
 	apiServerContainer, err = NewContainer("apiserver",
+		"-v", "/home/neil/go/src/github.com/projectcalico/felix/vendor/github.com/projectcalico/libcalico-go/test:/testm",
 		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
@@ -121,6 +122,20 @@ var _ = BeforeSuite(func() {
 		)
 		if err != nil {
 			log.Info("Waiting for API server to accept cluster role binding")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		break
+	}
+
+	// Allow anonymous connections to the API server.  We also use this command to wait
+	// for the API server to be up.
+	for {
+		err := apiServerContainer.RunInContainer(
+			"kubectl", "apply", "-f", "/testm/crds.yaml",
+		)
+		if err != nil {
+			log.Info("Waiting for API server to accept CRDs")
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -310,7 +325,7 @@ var _ = Describe("health tests", func() {
 			"-e", "K8S_API_ENDPOINT="+endpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-v", k8sCertFilename+":/tmp/apiserver.crt",
-			"calico/typha:v0.3.0", // TODO typha version
+			"calico/typha:latest", // TODO typha version
 			"calico-typha")
 		Expect(err).NotTo(HaveOccurred())
 		typhaReady = getHealthStatus(typhaContainer.IP, "9098", "readiness")
