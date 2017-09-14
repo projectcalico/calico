@@ -7,11 +7,11 @@ of the host itself (as opposed to those of any container/VM workloads
 that are present on the host). We call such interfaces "host endpoints",
 to distinguish them from "workload endpoints" (such as containers or VMs).
 
-Calico supports the same rich security policy model for host endpoints
-that it supports for workload endpoints.  Host endpoints can have labels, and
-their labels are in the same "namespace" as those of workload endpoints. This
-allows security rules for either type of endpoint to refer to the other type
-(or a mix of the two) using labels and selectors.
+Calico supports the same rich security policy model for host endpoints (host 
+endpoint policy) that it supports for workload endpoints. Host endpoints can 
+have labels, and their labels are in the same "namespace" as those of workload 
+endpoints. This allows security rules for either type of endpoint to refer to 
+the other type (or a mix of the two) using labels and selectors.
 
 Calico does not support setting IPs or policing MAC addresses for host
 interfaces, it assumes that the interfaces are configured by the
@@ -31,21 +31,22 @@ However, for host endpoints, Calico is more lenient; it only polices
 traffic to/from interfaces that it's been explicitly told about. Traffic
 to/from other interfaces is left alone.
 
-As of Calico v2.1.0, Calico applies host endpoint security policy both to traffic
-that is terminated locally, and to traffic that is forwarded between host
-endpoints.  Previously, policy was only applied to traffic that was terminated
-locally.  The change allows Calico to be used to secure a NAT gateway or router.
-Calico supports selector-based policy as normal when running on a gateway or router
-allowing for rich, dynamic security policy based on the labels attached to your
-workloads.
+You can use host endpoint policy to secure a NAT gateway or router. Calico
+supports selector-based policy when running on a gateway or router, allowing for
+rich, dynamic security policy based on the labels attached to your host endpoints. 
 
-> **Note**: If you have a host with workloads on it then traffic that is forwarded to
-> workloads bypasses the policy applied to host endpoints. If that weren't the
-> case, the host endpoint policy would need to be very broad to allow all
-> traffic destined for any possible workload.
->
-> Since version 2.1.0, Calico applies host endpoint policy to traffic that is
-> being forwarded between host interfaces.
+You can apply host endpoint policies to three types of traffic:
+- Traffic that is terminated locally.
+- Traffic that is forwarded between host endpoints.
+- Traffic that is forwarded between a host endpoint and a workload endpoint on the 
+same host.
+
+Set the `applyOnForward` flag to `true` to apply a policy to forwarded traffic.
+See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy#spec).
+
+> **Note**: Both traffic forwarded between host endpoints and traffic forwarded 
+> between a host endpoint and a workload endpoint on the same host is regarded as
+> `forwarded traffic`. 
 >
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
 {: .alert .alert-info}
@@ -479,28 +480,82 @@ outside the cluster:
    then be accepted or dropped according to workload policy (if it is going to
    a local workload) or to normal host endpoint policy (if not).
 
+## Policy on forwarded traffic
+If `applyOnForward` is `false`, the host endpoint policy applies to traffic to/from
+ local processes only. 
+
+If `applyOnForward` is `true`, the host endpoint policy applies to forwarded traffic:
+- Incoming traffic from a host endpoint to a local workload (container/pod/VM).
+- Outgoing traffic from a local workload to a host endpoint.
+- Traffic from one host endpoint that is forwarded to another host endpoint.
+
+By default, `applyOnForward` is `false`. 
+
+Untracked policies and pre-DNAT policies must have `applyOnForward` set to `true`
+because they apply to all forwarded traffic.
+
+Forwarded traffic is allowed by default. In other words, if a host endpoint is
+configured, but there are no rules that explicitly allow or deny a particular
+forwarding flow (in any of policies with `applyOnForward` set to `true` that apply
+to that host endpoint), that flow is still allowed. This is different from how Calico
+treats traffic to or from a local process: traffic to or from a local process is
+denied by default, if a host endpoint is configured but there is no applicable
+policy that explicitly allows that traffic.
+
+> **Note**: Calico's handling of host endpoint policy has changed, since before
+> Calico v2.7.0, in two ways:
+> - It will not apply at all to forwarded traffic, by default. If you have an existing
+> policy and you want it to apply to forwarded traffic, you need to add `applyOnForward: true` to the policy.
+> - Even with `applyOnForward: true`, the treatment is not quite the same in
+> Calico v2.7.0 as in previous releases, because–once a host endpoint is configured–
+> Calico v2.7.0 allows forwarded traffic through that endpoint by default, whereas
+> previous releases denied forwarded traffic through that endpoint by default.
+> If you want to maintain the default-deny behavior for all host-endpoint forwarded
+> traffic, you can create an empty policy with `applyOnForward` set to `true`
+> that applies to all traffic on all host endpoints.
+{: .alert .alert-info}
+```
+calicoctl apply -f - <<EOF
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: empty-default-deny
+  spec:
+    types: 
+      - ingress
+      - egress
+    selector: has(host-endpoint)
+    applyOnForward: true
+EOF
+```
+> **Note**: This policy has no `order` field specified which causes it to default
+> to the highest value. Because higher order values have the lowest order of precedence,
+> Calico will apply this policy after all other policies. Refer to the 
+> [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy#spec) for
+> more discussion.
+{: .alert .alert-info}
+
 ## When do host endpoint policies apply?
 
 As stated above, normal host endpoint policies apply to traffic that arrives on
-and/or is sent to a host interface, except if that traffic comes from or is
-destined for a workload on the same host; but the rules for applying untracked
-and pre-DNAT policies are different in some cases.  Here we present and
-summarize all of those rules together, for all possible flows and all types of
-host endpoints policy.
+and/or is sent to a host interface, but the rules for applying untracked and
+pre-DNAT policies differ in some cases. Here we present and summarize all of
+those rules together, for all possible flows and all types of host endpoints 
+policy.
 
 For packets that arrive on a host interface and are destined for a local
 workload - i.e. a locally-hosted pod, container or VM:
 
 - Pre-DNAT policies apply.
 
-- Normal policies do not apply - by design, because Calico enforces the
-  destination workload's ingress policy in this case.
+- Normal policies do apply if `applyOnForward` is `true`. 
+  Normal policies do not apply if `applyOnForward` is `false`.
 
 - Untracked policies technically do apply, but never have any net positive
   effect for such flows.
   
-  > **Note**: To be precise, untracked policy for the incoming host interface may apply
-  > in the forwards direction, and if so it will have the effect of forwarding
+  > **Note**: To be precise, untracked policy for the incoming host interface may
+  > apply in the forwards direction, and if so it will have the effect of forwarding
   > the packet to the workload without any connection tracking. But then, in
   > the reverse direction, there will be no conntrack state for the return
   > packets to match, and there is no application of any egress rules that may
@@ -536,9 +591,11 @@ same or another host interface (B):
   policies that apply to interface A.  (The reverse direction is allowed by
   conntrack state.)
 
-- Normal policies apply, specifically the ingress rules of the normal policies
-  that apply to interface A, and the egress rules of the normal policies that
-  apply to interface B.  (The reverse direction is allowed by conntrack state.)
+- Normal policies apply if `applyOnForward` is `true`: specifically, the ingress
+  rules of the normal policies that apply to interface A, and the egress rules of
+  the normal policies that apply to interface B. (The reverse direction is
+  allowed by conntrack state.) Normal policies do not apply if `applyOnForward`
+  is `false`.
 
 - If a packet is explicitly allowed by untracked policy, it skips over any
   pre-DNAT and normal policy.
@@ -559,7 +616,12 @@ out of a host interface:
 
 For packets that are sent from a local workload out of a host interface:
 
-- No host endpoint policies apply.
+- No untracked or pre-DNAT host endpoint policies apply.
+
+- Normal policies apply if `applyOnForward` is `true`: specifically, the egress 
+  rules of the normal policies that apply to the outgoing interface. (The reverse
+  direction is allowed by conntrack state.) Normal policies do not apply if 
+  `applyOnForward` is `false`.
 
 ## Host endpoint policy: a worked example
 
@@ -606,6 +668,7 @@ calicoctl apply -f - <<EOF
   spec:
     order: 10
     preDNAT: true
+    applyOnForward: true
     ingress:
       - action: allow
         source:
@@ -618,6 +681,7 @@ calicoctl apply -f - <<EOF
   spec:
     order: 20
     preDNAT: true
+    applyOnForward: true
     ingress:
       - action: deny
     selector: has(host-endpoint)
@@ -643,8 +707,9 @@ are in use in your own cluster.
 
 We also need policy to allow _egress_ traffic through each node's external
 interface.  Otherwise, when we define host endpoints for those interfaces, no
-egress traffic will be allowed (except for traffic that is allowed by
-the [failsafe rules](#failsafe-rules)).
+egress traffic will be allowed from local processes (except for traffic that is
+allowed by the [failsafe rules](#failsafe-rules)). Because there is no default-deny
+rule for forwarded traffic, forwarded traffic will be allowed for host endpoints.
 
 ```
 calicoctl apply -f - <<EOF
@@ -666,10 +731,9 @@ EOF
 > stack where it is not yet determined what a packet's outgoing interface will
 > be.)
 >
-> Because these are normal host endpoint policies, they are not enforced for
-> traffic that is sent from a local pod.  Calico does not yet have a form of
-> host endpoint protection that can be used to restrict outbound traffic from a
-> local workload.
+> Because these are normal host endpoint policies which do not
+> apply to forwarded traffic (`applyOnForward` is `false`), they
+> are not enforced for traffic that is sent from a local pod.
 >
 > The policy above allows applications or server processes running on the nodes
 > themselves (as opposed to in pods) to connect outbound to any destination.
@@ -716,6 +780,7 @@ calicoctl apply -f - <<EOF
     name: allow-nodeport
   spec:
     preDNAT: true
+    applyOnForward: true
     order: 10
     ingress:
       - action: allow
