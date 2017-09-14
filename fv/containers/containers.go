@@ -19,11 +19,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/utils"
@@ -35,7 +35,9 @@ type Container struct {
 	IP       string
 	Hostname string
 	runCmd   *exec.Cmd
-	binaries set.Set
+
+	binariesMutex sync.Mutex
+	binaries      set.Set
 }
 
 var containerIdx = 0
@@ -146,6 +148,9 @@ var _ = AfterEach(func() {
 })
 
 func (c *Container) EnsureBinary(name string) {
+	c.binariesMutex.Lock()
+	defer c.binariesMutex.Unlock()
+
 	if !c.binaries.Contains(name) {
 		exec.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
 		c.binaries.Add(name)

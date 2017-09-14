@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"strings"
+	"sync"
 
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -207,4 +208,61 @@ func (m *connectivityMatcher) NegatedFailureMessage(actual interface{}) (message
 	w := actual.(*Workload)
 	message = fmt.Sprintf("Expected %v\n\t%+v\nnot to have connectivity to %v\n\t%v:%v\nbut it does", w.Name, w, m.targetName, m.ip, m.port)
 	return
+}
+
+type expectation struct {
+	from, to *Workload
+	port     uint16
+	expected bool
+}
+
+// ConnectivityChecker records a set of connectivity expectations and supports calculating the
+// actual state of the connectivity between the given workloads.  It is expected to be used like so:
+//
+//     var cc = &workload.ConnectivityChecker{}
+//     cc.ExpectNone(w[2], w[0], 1234)
+//     cc.ExpectSome(w[1], w[0], 5678)
+//     Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+//
+// Note that the ActualConnectivity method is passed to Eventually as a function pointer to allow
+// Ginkgo to re-evaluate the result as needed.
+type ConnectivityChecker struct {
+	expectations []expectation
+}
+
+func (c *ConnectivityChecker) ExpectSome(from, to *Workload, toPort uint16) {
+	c.expectations = append(c.expectations, expectation{from, to, toPort, true})
+}
+
+func (c *ConnectivityChecker) ExpectNone(from, to *Workload, toPort uint16) {
+	c.expectations = append(c.expectations, expectation{from, to, toPort, false})
+}
+
+// ActualConnectivity calculates the current connectivity for all the expected paths.  One string is
+// returned for each expectation, in the order they were recorded.  The strings are intended to be
+// human readable, and they are in the same order and format as those returned by
+// ExpectedConnectivity().
+func (c *ConnectivityChecker) ActualConnectivity() []string {
+	var wg sync.WaitGroup
+	result := make([]string, len(c.expectations))
+	for i, exp := range c.expectations {
+		wg.Add(1)
+		go func(i int, exp expectation) {
+			defer wg.Done()
+			hasConnectivity := exp.from.CanConnectTo(exp.to.IP, fmt.Sprint(exp.port))
+			result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.Name, exp.to.Name, hasConnectivity)
+		}(i, exp)
+	}
+	wg.Wait()
+	return result
+}
+
+// ExpectedConnectivity returns one string per recorded expection in order, encoding the expected
+// connectivity in the same format used by ActualConnectivity().
+func (c *ConnectivityChecker) ExpectedConnectivity() []string {
+	result := make([]string, len(c.expectations))
+	for i, exp := range c.expectations {
+		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.Name, exp.to.Name, exp.expected)
+	}
+	return result
 }
