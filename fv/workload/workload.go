@@ -53,21 +53,13 @@ func (w *Workload) Stop() {
 	} else {
 		log.WithField("workload", w).Info("Stop")
 		outputBytes, err := exec.Command("docker", "exec", w.C.Name,
-			"cat",
-			fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
+			"cat", fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		pid := strings.TrimSpace(string(outputBytes))
 		err = exec.Command("docker", "exec", w.C.Name, "kill", pid).Run()
 		Expect(err).NotTo(HaveOccurred())
 		w.runCmd.Process.Wait()
-		wOut, err := ioutil.ReadAll(w.outPipe)
-		Expect(err).NotTo(HaveOccurred())
-		wErr, err := ioutil.ReadAll(w.errPipe)
-		Expect(err).NotTo(HaveOccurred())
-		log.WithFields(log.Fields{
-			"workload": w,
-			"stdout":   string(wOut),
-			"stderr":   string(wErr)}).Info("Workload now stopped")
+		log.WithField("workload", w).Info("Workload now stopped")
 	}
 }
 
