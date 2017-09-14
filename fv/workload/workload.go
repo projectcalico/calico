@@ -24,23 +24,25 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	log "github.com/sirupsen/logrus"
 )
 
 type Workload struct {
-	C             *containers.Container
-	Name          string
-	InterfaceName string
-	IP            string
-	Port          string
-	runCmd        *exec.Cmd
-	outPipe       io.ReadCloser
-	errPipe       io.ReadCloser
-	namespacePath string
+	C                *containers.Container
+	Name             string
+	InterfaceName    string
+	IP               string
+	Ports            string
+	runCmd           *exec.Cmd
+	outPipe          io.ReadCloser
+	errPipe          io.ReadCloser
+	namespacePath    string
+	WorkloadEndpoint *api.WorkloadEndpoint
 }
 
 var workloadIdx = 0
@@ -69,16 +71,16 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) {
+func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Workload) {
 
 	// Build unique workload name and struct.
 	workloadIdx++
 	w = &Workload{
 		C:             c,
-		Name:          fmt.Sprintf("w%v", workloadIdx),
+		Name:          fmt.Sprintf("%s-idx%v", name, workloadIdx),
 		InterfaceName: interfaceName,
 		IP:            ip,
-		Port:          port,
+		Ports:         ports,
 	}
 
 	// Ensure that the host has the 'test-workload' binary.
@@ -92,7 +94,7 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 			w.Name,
 			w.InterfaceName,
 			w.IP,
-			w.Port))
+			w.Ports))
 	var err error
 	w.outPipe, err = w.runCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
@@ -102,16 +104,35 @@ func Run(c *containers.Container, interfaceName, ip, port string) (w *Workload) 
 	Expect(err).NotTo(HaveOccurred())
 
 	// Read the workload's namespace path, which it writes to its standard output.
-	namespacePath, err := bufio.NewReader(w.outPipe).ReadString('\n')
+	stdoutReader := bufio.NewReader(w.outPipe)
+	stderrReader := bufio.NewReader(w.errPipe)
+	namespacePath, err := stdoutReader.ReadString('\n')
 	Expect(err).NotTo(HaveOccurred())
 	w.namespacePath = strings.TrimSpace(namespacePath)
 
+	go func() {
+		for {
+			line, err := stderrReader.ReadString('\n')
+			if err != nil {
+				log.WithError(err).Info("End of workload stderr")
+				return
+			}
+			log.Infof("Workload %s stderr: %s", name, strings.TrimSpace(string(line)))
+		}
+	}()
+	go func() {
+		for {
+			line, err := stdoutReader.ReadString('\n')
+			if err != nil {
+				log.WithError(err).Info("End of workload stdout")
+				return
+			}
+			log.Infof("Workload %s stdout: %s", name, strings.TrimSpace(string(line)))
+		}
+	}()
+
 	log.WithField("workload", w).Info("Workload now running")
 
-	return
-}
-
-func (w *Workload) Configure(client *client.Client) {
 	wep := api.NewWorkloadEndpoint()
 	wep.Metadata.Name = w.Name
 	wep.Metadata.Workload = w.Name
@@ -121,7 +142,13 @@ func (w *Workload) Configure(client *client.Client) {
 	wep.Spec.IPNetworks = []net.IPNet{net.MustParseNetwork(w.IP + "/32")}
 	wep.Spec.InterfaceName = w.InterfaceName
 	wep.Spec.Profiles = []string{"default"}
-	_, err := client.WorkloadEndpoints().Create(wep)
+	w.WorkloadEndpoint = wep
+
+	return
+}
+
+func (w *Workload) Configure(client *client.Client) {
+	_, err := client.WorkloadEndpoints().Apply(w.WorkloadEndpoint)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -157,12 +184,19 @@ func (w *Workload) CanConnectTo(ip, port string) bool {
 	return err == nil
 }
 
+func HaveConnectivityToPort(target *Workload, port uint16) types.GomegaMatcher {
+	return &connectivityMatcher{target.IP, fmt.Sprintf("%d", port), fmt.Sprintf("%s on port %d", target.Name, port)}
+}
+
 func HaveConnectivityTo(target *Workload) types.GomegaMatcher {
-	return &connectivityMatcher{target.IP, target.Port}
+	if strings.Contains(target.Ports, ",") {
+		panic("HaveConnectivityTo only supports a single port")
+	}
+	return &connectivityMatcher{target.IP, target.Ports, target.Name}
 }
 
 type connectivityMatcher struct {
-	ip, port string
+	ip, port, targetName string
 }
 
 func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error) {
@@ -173,12 +207,12 @@ func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error
 
 func (m *connectivityMatcher) FailureMessage(actual interface{}) (message string) {
 	w := actual.(*Workload)
-	message = fmt.Sprintf("Expected %v to have connectivity to %v:%v, but it doesn't", w, m.ip, m.port)
+	message = fmt.Sprintf("Expected %v\n\t%+v\nto have connectivity to %v\n\t%v:%v\nbut it doesn't", w.Name, w, m.targetName, m.ip, m.port)
 	return
 }
 
 func (m *connectivityMatcher) NegatedFailureMessage(actual interface{}) (message string) {
 	w := actual.(*Workload)
-	message = fmt.Sprintf("Expected %v not to have connectivity to %v:%v, but it does", w, m.ip, m.port)
+	message = fmt.Sprintf("Expected %v\n\t%+v\nnot to have connectivity to %v\n\t%v:%v\nbut it does", w.Name, w, m.targetName, m.ip, m.port)
 	return
 }

@@ -23,9 +23,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/set"
-	log "github.com/sirupsen/logrus"
 )
 
 type Container struct {
