@@ -14,5 +14,5 @@
 FROM alpine:3.5
 MAINTAINER Casey Davenport <casey@tigera.io> 
 
-ADD dist/kube-policy-controller /usr/bin
+ADD dist/kube-policy-controller-linux-amd64 /usr/bin/kube-policy-controller
 ENTRYPOINT ["/usr/bin/kube-policy-controller"]

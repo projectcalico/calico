@@ -14,5 +14,5 @@
 FROM ppc64le/alpine:3.6
 MAINTAINER Casey Davenport <casey@tigera.io> 
 
-ADD dist/kube-policy-controller /usr/bin
+ADD dist/kube-policy-controller-linux-ppc64le /usr/bin/kube-policy-controller
 ENTRYPOINT ["/usr/bin/kube-policy-controller"]

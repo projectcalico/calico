@@ -32,15 +32,14 @@ GIT_VERSION?=$(shell git describe --tags --dirty)
 # Build targets 
 ###############################################################################
 ## Builds the controller binary and docker image.
-docker-image: image.created
-image.created: dist/kube-policy-controller
+docker-image: image.created$(ARCHTAG)
+image.created$(ARCHTAG): dist/kube-policy-controller-linux-$(ARCH)
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
-	touch image.created
+	touch $@
 
-dist/kube-policy-controller:
+dist/kube-policy-controller-linux-$(ARCH):
 	$(MAKE) OS=linux ARCH=$(ARCH) binary-containerized
-	mv dist/kube-policy-controller-linux-$(ARCH) dist/kube-policy-controller
 
 ## Populates the vendor directory.
 vendor: glide.yaml
@@ -105,14 +104,6 @@ ut-containerized: vendor
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
 
-ifeq ($(ARCH),amd64)
-        ETCD_CONTAINER?=quay.io/coreos/etcd:v3.1.5
-endif
-
-ifeq ($(ARCH),ppc64le)
-        ETCD_CONTAINER?=quay.io/coreos/etcd:v3.2.5-ppc64le
-endif
-
 ## Runs system tests.
 st: docker-image run-etcd run-k8s-apiserver
 	./tests/system/apiserver-reconnection.sh $(ARCHTAG)
@@ -133,7 +124,7 @@ stop-k8s-apiserver:
 
 run-etcd: stop-etcd
 	docker run --detach \
-	--name st-etcd $(ETCD_CONTAINER) \
+	--name st-etcd quay.io/coreos/etcd:v3.2.5$(ARCHTAG) \
 	etcd \
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -167,7 +158,7 @@ endif
 
 ## Removes all build artifacts.
 clean:
-	rm -rf dist image.created
+	rm -rf dist image.created$(ARCHTAG)
 	-docker rmi $(CONTAINER_NAME)
 	rm -f st-kubeconfig.yaml
 
