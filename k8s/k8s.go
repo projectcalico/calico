@@ -364,7 +364,8 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 		return ipamErr
 	}
 
-	logger.WithField("endpoint", wep).Info("Teardown processing complete.")
+	logger.Info("Teardown processing complete.")
+
 	return nil
 }
 
