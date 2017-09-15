@@ -17,15 +17,14 @@
 package fv_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 
-	"fmt"
-
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	. "github.com/onsi/ginkgo/extensions/table"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
@@ -91,6 +90,8 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				fmt.Sprintf("3000,4000,1100,%d", workloadTCPPort),
 			)
 
+			// Includes some named ports on each workload.  Each workload gets its own named port,
+			// which is unique and a shared one.
 			w[ii].WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
 				{
 					Port:     sharedPort,
@@ -301,7 +302,12 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			cc.ExpectSome(w[0], w[1], w1Port)
 			cc.ExpectSome(w[0], w[2], w2Port)
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+			jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+				Equal(cc.ExpectedConnectivity()),
+				fmt.Sprintf("Active policy:\n\tMetadata: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
+					pol.Metadata, pol.Spec, string(jsonPol)),
+			)
 		},
 
 		// Non-negated named port match.  The rule will allow traffic to the named port.
