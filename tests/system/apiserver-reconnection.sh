@@ -1,5 +1,7 @@
 #!/bin/bash -ex
 
+ARCHTAG=$1
+
 function get_container_ip {
     docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $1
 }
@@ -50,7 +52,7 @@ docker run --detach --name=calico-policy-controller \
 	-e KUBECONFIG=/st-kubeconfig.yaml \
 	-e ENABLED_CONTROLLERS="endpoint,profile,policy" \
 	-e LOG_LEVEL="debug" \
-	calico/kube-policy-controller
+	calico/kube-policy-controller$ARCHTAG
 sleep 2
 
 # Create a trap which emits policy controller logs on failure.

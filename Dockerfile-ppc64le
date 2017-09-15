@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM alpine:3.5
+FROM ppc64le/alpine:3.6
 MAINTAINER Casey Davenport <casey@tigera.io> 
 
-ADD dist/kube-policy-controller-linux-amd64 /usr/bin/kube-policy-controller
+ADD dist/kube-policy-controller-linux-ppc64le /usr/bin/kube-policy-controller
 ENTRYPOINT ["/usr/bin/kube-policy-controller"]
