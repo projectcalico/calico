@@ -382,7 +382,7 @@ $(FV_TESTS): vendor/.up-to-date $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
-fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test fv/k8s/k8s.test
+fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_TESTS)
 	@echo Running Go FVs.
 	# fv.test is not expecting a container name with an ARCHTAG.
 	-docker tag calico/felix$(ARCHTAG) calico/felix
