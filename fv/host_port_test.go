@@ -19,6 +19,8 @@ package fv_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/metrics"
 	"github.com/projectcalico/felix/fv/utils"
@@ -26,7 +28,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 )
 
 func RunEtcd() *containers.Container {
@@ -41,6 +42,7 @@ func RunFelix(etcdIP string) *containers.Container {
 	return containers.Run("felix-fv",
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
+		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
 		"-e", "FELIX_DATASTORETYPE=etcdv2",
 		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
@@ -143,7 +145,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	})
 
 	It("with a local workload, port should be reachable", func() {
-		w := workload.Run(felix, "cali12345", "10.65.0.2", "8055")
+		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055")
 		w.Configure(client)
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 		w.Stop()
