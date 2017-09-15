@@ -67,7 +67,7 @@ spec:
         # a failure.  This annotation works in tandem with the toleration below.
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
-      # Only run this pod on the master.
+      # Toleration allows the pod to run on master 
       tolerations:
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
@@ -75,6 +75,7 @@ spec:
       # This, along with the annotation above marks this pod as a critical add-on.
       - key: CriticalAddonsOnly
         operator: Exists
+      # Only run this pod on the master. 
       nodeSelector:
         node-role.kubernetes.io/master: ""
       hostNetwork: true
