@@ -82,6 +82,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	logger.WithFields(log.Fields{
 		"Orchestrator": orchestrator,
 		"Node":         nodename,
+		"Workload":     workload,
+		"ContainerID":  args.ContainerID,
 	}).Info("Extracted identifiers")
 
 	logger.WithFields(log.Fields{"NetConfg": conf}).Info("Loaded CNI NetConf")
@@ -306,9 +308,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	updateNodename(conf, logger)
 
 	logger.WithFields(log.Fields{
-		"Workload":     workload,
 		"Orchestrator": orchestrator,
 		"Node":         nodename,
+		"Workload":     workload,
+		"ContainerID":  args.ContainerID,
 	}).Info("Extracted identifiers")
 
 	calicoClient, err := CreateClient(conf)
