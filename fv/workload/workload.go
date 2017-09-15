@@ -250,7 +250,7 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 		go func(i int, exp expectation) {
 			defer wg.Done()
 			hasConnectivity := exp.from.CanConnectTo(exp.to.IP, fmt.Sprint(exp.port))
-			result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.Name, exp.to.Name, hasConnectivity)
+			result[i] = fmt.Sprintf("%s -> %s:%d = %v", exp.from.Name, exp.to.Name, exp.port, hasConnectivity)
 		}(i, exp)
 	}
 	wg.Wait()
@@ -262,7 +262,7 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
-		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.Name, exp.to.Name, exp.expected)
+		result[i] = fmt.Sprintf("%s -> %s:%d = %v", exp.from.Name, exp.to.Name, exp.port, exp.expected)
 	}
 	return result
 }
