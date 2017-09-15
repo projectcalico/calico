@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -373,7 +374,7 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 
 		// This spec establishes a baseline for the connectivity, then the specs below run
 		// with tweaked versions of the policy.
-		It("should have expected connectivity", func() {
+		expectBaselineConnectivity := func() {
 			cc.ExpectSome(w[0], w[1], sharedPort) // Allowed by named port in list.
 			cc.ExpectSome(w[1], w[0], sharedPort) // Allowed by named port in list.
 			cc.ExpectSome(w[3], w[1], sharedPort) // Allowed by named port in list.
@@ -392,7 +393,8 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(policy),
 			)
-		})
+		}
+		It("should have expected connectivity", expectBaselineConnectivity)
 
 		Describe("with a negative dest selector, removing w[2]", func() {
 			BeforeEach(func() {
@@ -444,6 +446,25 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			})
 		})
 
+		expectW2AndW3Blocked := func() {
+			cc.ExpectSome(w[0], w[1], sharedPort) // No change
+			cc.ExpectSome(w[1], w[0], sharedPort) // No change
+
+			// Everything blocked from w[2] and w[3].
+			cc.ExpectNone(w[3], w[1], sharedPort)
+			cc.ExpectNone(w[3], w[2], sharedPort)
+			cc.ExpectNone(w[2], w[3], sharedPort)
+			cc.ExpectNone(w[3], w[0], w0Port)
+			cc.ExpectNone(w[3], w[2], w2Port)
+			cc.ExpectNone(w[2], w[0], 4000)
+			cc.ExpectNone(w[2], w[0], 3000)
+
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+				Equal(cc.ExpectedConnectivity()),
+				dumpPolicy(policy),
+			)
+		}
+
 		Describe("with source selectors, removing w[2] and w[3]", func() {
 			BeforeEach(func() {
 				policy.Spec.IngressRules[0].Source = api.EntityRule{
@@ -453,23 +474,92 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				}
 			})
 
-			It("should have expected connectivity", func() {
-				cc.ExpectSome(w[0], w[1], sharedPort) // No change
-				cc.ExpectSome(w[1], w[0], sharedPort) // No change
+			It("should have expected connectivity", expectW2AndW3Blocked)
+		})
 
-				// Everything blocked from w[2] and w[3].
-				cc.ExpectNone(w[3], w[1], sharedPort)
-				cc.ExpectNone(w[3], w[2], sharedPort)
-				cc.ExpectNone(w[2], w[3], sharedPort)
-				cc.ExpectNone(w[3], w[0], w0Port)
-				cc.ExpectNone(w[3], w[2], w2Port)
-				cc.ExpectNone(w[2], w[0], 4000)
-				cc.ExpectNone(w[2], w[0], 3000)
+		Describe("with source CIDRs, allowing only w[0] and w[1]", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Source = api.EntityRule{
+					Nets: []*net.IPNet{
+						w[0].IPNet(),
+						w[1].IPNet(),
+					},
+				}
+			})
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
-				)
+			It("should have expected connectivity", expectW2AndW3Blocked)
+		})
+
+		Describe("with negated source CIDRs, allowing only w[0] and w[1]", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Source = api.EntityRule{
+					NotNets: []*net.IPNet{
+						w[2].IPNet(),
+						w[3].IPNet(),
+					},
+				}
+			})
+
+			It("should have expected connectivity", expectW2AndW3Blocked)
+		})
+
+		Describe("with positive and negative CIDRs, allowing only w[0] and w[1]", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Source = api.EntityRule{
+					Nets: []*net.IPNet{
+						w[0].IPNet(),
+						w[1].IPNet(),
+						w[2].IPNet(), // Allowed here but excluded below.
+					},
+					NotNets: []*net.IPNet{
+						w[2].IPNet(),
+					},
+				}
+			})
+
+			It("should have expected connectivity", expectW2AndW3Blocked)
+		})
+
+		Describe("with all positive dest CIDRs replacing the selector", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Destination.Selector = ""
+				policy.Spec.IngressRules[0].Destination.Nets = []*net.IPNet{
+					w[0].IPNet(),
+					w[1].IPNet(),
+					w[2].IPNet(),
+				}
+			})
+
+			It("should have expected connectivity", expectBaselineConnectivity)
+
+			Describe("with negative destination nets blocking w[2] and w[3]", func() {
+				BeforeEach(func() {
+					policy.Spec.IngressRules[0].Destination.NotNets = []*net.IPNet{
+						w[2].IPNet(),
+						w[3].IPNet(),
+					}
+				})
+
+				It("should give expected connectivity", func() {
+					cc.ExpectSome(w[0], w[1], sharedPort) // No change.
+					cc.ExpectSome(w[1], w[0], sharedPort) // No change.
+					cc.ExpectSome(w[3], w[1], sharedPort) // No change.
+					cc.ExpectSome(w[3], w[0], sharedPort) // No change.
+					cc.ExpectNone(w[3], w[2], sharedPort) // Blocked by NotNets.
+					cc.ExpectNone(w[1], w[3], sharedPort) // Blocked by w[3] not being in Nets.
+					cc.ExpectNone(w[2], w[3], sharedPort) // Blocked by w[3] not being in Nets.
+					cc.ExpectSome(w[3], w[0], w0Port)     // No change.
+					cc.ExpectSome(w[3], w[1], w1Port)     // No change.
+					cc.ExpectNone(w[3], w[2], w2Port)     // Blocked by NotNets.
+					cc.ExpectSome(w[2], w[0], 4000)       // No change.
+					cc.ExpectSome(w[3], w[0], 4000)       // No change.
+					cc.ExpectNone(w[2], w[0], 3000)       // No change.
+
+					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+						Equal(cc.ExpectedConnectivity()),
+						dumpPolicy(policy),
+					)
+				})
 			})
 		})
 
@@ -502,6 +592,9 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		})
 	})
 })
+
+// TODO Source ports
+// TODO UDP
 
 func dumpPolicy(pol *api.Policy) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")

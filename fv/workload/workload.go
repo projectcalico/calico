@@ -140,6 +140,11 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 	return
 }
 
+func (w *Workload) IPNet() *net.IPNet {
+	ipNet := net.MustParseCIDR(w.IP + "/32")
+	return &ipNet
+}
+
 func (w *Workload) Configure(client *client.Client) {
 	_, err := client.WorkloadEndpoints().Apply(w.WorkloadEndpoint)
 	Expect(err).NotTo(HaveOccurred())
