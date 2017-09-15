@@ -64,17 +64,14 @@ func GetEtcdClient(etcdIP string) *client.Client {
 	return client
 }
 
-func MetricsPortReachable(felixName, felixIP string) bool {
+func MetricsPortReachable(felix *containers.Container) bool {
 	// Delete existing conntrack state for the metrics port.
-	utils.Run("docker", "exec", felixName,
-		"conntrack", "-L")
-	utils.Run("docker", "exec", felixName,
-		"conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
-	utils.RunMayFail("docker", "exec", felixName,
-		"conntrack", "-D", "-p", "tcp", "--orig-port-dst", metrics.PortString())
+	felix.Exec("conntrack", "-L")
+	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
+	felix.ExecMayFail("conntrack", "-D", "-p", "tcp", "--orig-port-dst", metrics.PortString())
 
 	// Now try to get a metric.
-	m, err := metrics.GetFelixMetric(felixIP, "felix_active_local_endpoints")
+	m, err := metrics.GetFelixMetric(felix.IP, "felix_active_local_endpoints")
 	if err != nil {
 		log.WithError(err).Info("Metrics port not reachable")
 		return false
@@ -122,7 +119,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		metricsPortReachable = func() bool {
-			return MetricsPortReachable(felix.Name, felix.IP)
+			return MetricsPortReachable(felix)
 		}
 	})
 
@@ -130,12 +127,12 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 
 		if CurrentGinkgoTestDescription().Failed {
 			utils.Run("docker", "logs", felix.Name)
-			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
+			felix.Exec("iptables-save", "-c")
 		}
 		felix.Stop()
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+			etcd.Exec("etcdctl", "ls", "--recursive", "/")
 		}
 		etcd.Stop()
 	})

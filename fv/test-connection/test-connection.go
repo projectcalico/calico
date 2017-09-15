@@ -49,44 +49,55 @@ func main() {
 	namespacePath := arguments["<namespace-path>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
 	port := arguments["<port>"].(string)
+	log.Infof("Test connection from %v to IP %v port %v", namespacePath, ipAddress, port)
 
-	// Get the specified network namespace (representing a workload).
-	namespace, err := ns.GetNS(namespacePath)
-	if err != nil {
-		panic(err)
+	if namespacePath == "-" {
+		// Test connection from wherever we are already running.
+		err = tryConnect(ipAddress, port)
+	} else {
+		// Get the specified network namespace (representing a workload).
+		var namespace ns.NetNS
+		namespace, err = ns.GetNS(namespacePath)
+		if err != nil {
+			panic(err)
+		}
+		log.WithField("namespace", namespace).Debug("Got namespace")
+
+		// Now, in that namespace, try connecting to the target.
+		err = namespace.Do(func(_ ns.NetNS) error {
+			return tryConnect(ipAddress, port)
+		})
 	}
-	log.WithField("namespace", namespace).Debug("Got namespace")
-
-	// Now, in that namespace, try connecting to the target.
-	err = namespace.Do(func(_ ns.NetNS) error {
-
-		err := utils.RunCommand("ip", "r")
-		if err != nil {
-			return err
-		}
-
-		const testMessage = "hello"
-
-		conn, err := net.DialTimeout("tcp", ipAddress+":"+port, 5*time.Second)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-
-		fmt.Fprintf(conn, testMessage+"\n")
-		reply, err := bufio.NewReader(conn).ReadString('\n')
-		if err != nil {
-			return err
-		}
-		reply = strings.TrimSpace(reply)
-		if reply != testMessage {
-			return errors.New("Unexpected reply: " + reply)
-		}
-
-		return nil
-	})
 
 	if err != nil {
 		panic(err)
 	}
+}
+
+func tryConnect(ipAddress, port string) error {
+
+	err := utils.RunCommand("ip", "r")
+	if err != nil {
+		return err
+	}
+
+	const testMessage = "hello"
+
+	conn, err := net.DialTimeout("tcp", ipAddress+":"+port, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	fmt.Fprintf(conn, testMessage+"\n")
+	reply, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		return err
+	}
+	reply = strings.TrimSpace(reply)
+	if reply != testMessage {
+		return errors.New("Unexpected reply: " + reply)
+	}
+
+	return nil
 }
