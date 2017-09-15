@@ -40,11 +40,13 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		etcd   *containers.Container
 		felix  *containers.Container
 		client *client.Client
-		w      [3]*workload.Workload
+		w      [4]*workload.Workload
 	)
 
 	const (
 		sharedPortName = "shared-tcp"
+		w0PortName     = "w0-tcp"
+		w1PortName     = "w1-tcp"
 		sharedPort     = 1100
 		w0Port         = 1000
 		w1Port         = 1001
@@ -79,7 +81,7 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create three workloads, using that profile.
-		for ii := 0; ii < 3; ii++ {
+		for ii := range w {
 			iiStr := strconv.Itoa(ii)
 			workloadTCPPort := uint16(1000 + ii)
 			w[ii] = workload.Run(
@@ -176,45 +178,6 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	buildSharedPortPolicy := func(negated bool, ie ingressEgress, numNumericPorts int, useDestSel bool) *api.Policy {
-		protoTCP := numorstring.ProtocolFromString("tcp")
-		policy := api.NewPolicy()
-		policy.Metadata.Name = "policy-1"
-		ports := []numorstring.Port{
-			numorstring.NamedPort(sharedPortName),
-		}
-		for i := 0; i < numNumericPorts; i++ {
-			ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
-		}
-		entRule := api.EntityRule{}
-		if negated {
-			entRule.NotPorts = ports
-		} else {
-			entRule.Ports = ports
-		}
-		if useDestSel {
-			entRule.Selector = w[0].NameSelector()
-		}
-		apiRule := api.Rule{
-			Action:      "allow",
-			Protocol:    &protoTCP,
-			Destination: entRule,
-		}
-		rules := []api.Rule{
-			apiRule,
-		}
-		if ie == ingress {
-			// Ingress rules, apply only to w[0].
-			policy.Spec.IngressRules = rules
-			policy.Spec.Selector = w[0].NameSelector()
-		} else {
-			// Egress rules, to get same result, apply everywhere but w[0].
-			policy.Spec.EgressRules = rules
-			policy.Spec.Selector = fmt.Sprintf("!(%s)", w[0].NameSelector())
-		}
-		return policy
-	}
-
 	DescribeTable("with a policy that matches on the shared named port",
 		// negated controls whether we put the named port in the Ports or NotPorts list.
 		//
@@ -225,7 +188,41 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		//
 		// useDestSel if set, adds a destination selector (picking out w[0]) to the rule.
 		func(negated bool, ingressOrEgress ingressEgress, numNumericPorts int, useDestSel bool) {
-			pol := buildSharedPortPolicy(negated, ingressOrEgress, numNumericPorts, useDestSel)
+			protoTCP := numorstring.ProtocolFromString("tcp")
+			pol := api.NewPolicy()
+			pol.Metadata.Name = "policy-1"
+			ports := []numorstring.Port{
+				numorstring.NamedPort(sharedPortName),
+			}
+			for i := 0; i < numNumericPorts; i++ {
+				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
+			}
+			entRule := api.EntityRule{}
+			if negated {
+				entRule.NotPorts = ports
+			} else {
+				entRule.Ports = ports
+			}
+			if useDestSel {
+				entRule.Selector = w[0].NameSelector()
+			}
+			apiRule := api.Rule{
+				Action:      "allow",
+				Protocol:    &protoTCP,
+				Destination: entRule,
+			}
+			rules := []api.Rule{
+				apiRule,
+			}
+			if ingressOrEgress == ingress {
+				// Ingress rules, apply only to w[0].
+				pol.Spec.IngressRules = rules
+				pol.Spec.Selector = w[0].NameSelector()
+			} else {
+				// Egress rules, to get same result, apply everywhere but w[0].
+				pol.Spec.EgressRules = rules
+				pol.Spec.Selector = fmt.Sprintf("!(%s)", w[0].NameSelector())
+			}
 			createPolicy(pol)
 
 			var cc = &workload.ConnectivityChecker{}
@@ -302,11 +299,9 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			cc.ExpectSome(w[0], w[1], w1Port)
 			cc.ExpectSome(w[0], w[2], w2Port)
 
-			jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
-				fmt.Sprintf("Active policy:\n\tMetadata: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
-					pol.Metadata, pol.Spec, string(jsonPol)),
+				dumpPolicy(pol),
 			)
 		},
 
@@ -341,4 +336,176 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		Entry("(negated) egress, no-numeric with a dest selector", true, egress, 0, true),
 		Entry("(negated) egress, 16 numeric with a dest selector", true, egress, 16, true),
 	)
+
+	Describe("with a policy that combines named ports and selectors", func() {
+		var policy *api.Policy
+		var cc *workload.ConnectivityChecker
+
+		BeforeEach(func() {
+			cc = &workload.ConnectivityChecker{}
+			protoTCP := numorstring.ProtocolFromString("tcp")
+			policy = api.NewPolicy()
+			policy.Metadata.Name = "policy-1"
+
+			apiRule := api.Rule{
+				Action:   "allow",
+				Protocol: &protoTCP,
+				Destination: api.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort(sharedPortName),
+						numorstring.NamedPort(w0PortName),
+						numorstring.NamedPort(w1PortName),
+						numorstring.SinglePort(4000),
+					},
+					Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
+						w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
+				},
+			}
+			policy.Spec.IngressRules = []api.Rule{
+				apiRule,
+			}
+			policy.Spec.Selector = "all()"
+		})
+
+		JustBeforeEach(func() {
+			createPolicy(policy)
+		})
+
+		// This spec establishes a baseline for the connectivity, then the specs below run
+		// with tweaked versions of the policy.
+		It("should have expected connectivity", func() {
+			cc.ExpectSome(w[0], w[1], sharedPort) // Allowed by named port in list.
+			cc.ExpectSome(w[1], w[0], sharedPort) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1], sharedPort) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[0], sharedPort) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[2], sharedPort) // Allowed by named port in list.
+			cc.ExpectNone(w[1], w[3], sharedPort) // Disallowed by positive selector.
+			cc.ExpectNone(w[2], w[3], sharedPort) // Disallowed by positive selector.
+			cc.ExpectSome(w[3], w[0], w0Port)     // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1], w1Port)     // Allowed by named port in list.
+			cc.ExpectNone(w[3], w[2], w2Port)     // Not in ports list.
+			cc.ExpectSome(w[2], w[0], 4000)       // Numeric port in list.
+			cc.ExpectSome(w[3], w[0], 4000)       // Numeric port in list.
+			cc.ExpectNone(w[2], w[0], 3000)       // Numeric port not in list.
+
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+				Equal(cc.ExpectedConnectivity()),
+				dumpPolicy(policy),
+			)
+		})
+
+		Describe("with a negative dest selector, removing w[2]", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+			})
+
+			It("should have expected connectivity", func() {
+				cc.ExpectSome(w[3], w[1], sharedPort) // No change.
+				cc.ExpectSome(w[3], w[0], sharedPort) // No change.
+				cc.ExpectNone(w[3], w[2], sharedPort) // Disallowed by negative selector.
+				cc.ExpectNone(w[2], w[3], sharedPort) // No change.
+				cc.ExpectSome(w[3], w[0], w0Port)     // No change.
+				cc.ExpectSome(w[3], w[1], w1Port)     // No change.
+				cc.ExpectNone(w[3], w[2], w2Port)     // No change.
+				cc.ExpectSome(w[2], w[0], 4000)       // No change.
+				cc.ExpectSome(w[3], w[0], 4000)       // No change.
+				cc.ExpectNone(w[2], w[0], 3000)       // No change.
+
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+					Equal(cc.ExpectedConnectivity()),
+					dumpPolicy(policy),
+				)
+			})
+		})
+
+		Describe("with only a negative dest selector, removing w[2]", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Destination.Selector = ""
+				policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+			})
+
+			It("should have expected connectivity", func() {
+				cc.ExpectSome(w[3], w[1], sharedPort) // No change.
+				cc.ExpectSome(w[3], w[0], sharedPort) // No change.
+				cc.ExpectNone(w[3], w[2], sharedPort) // Disallowed by negative selector.
+				cc.ExpectSome(w[2], w[3], sharedPort) // Now allowed.
+				cc.ExpectSome(w[1], w[3], sharedPort) // Now allowed.
+				cc.ExpectSome(w[3], w[0], w0Port)     // No change.
+				cc.ExpectSome(w[3], w[1], w1Port)     // No change.
+				cc.ExpectNone(w[3], w[2], w2Port)     // No change.
+				cc.ExpectSome(w[2], w[0], 4000)       // No change.
+				cc.ExpectSome(w[3], w[0], 4000)       // No change.
+				cc.ExpectNone(w[2], w[0], 3000)       // No change.
+
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+					Equal(cc.ExpectedConnectivity()),
+					dumpPolicy(policy),
+				)
+			})
+		})
+
+		Describe("with source selectors, removing w[2] and w[3]", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Source = api.EntityRule{
+					Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
+						w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
+					NotSelector: w[2].NameSelector(),
+				}
+			})
+
+			It("should have expected connectivity", func() {
+				cc.ExpectSome(w[0], w[1], sharedPort) // No change
+				cc.ExpectSome(w[1], w[0], sharedPort) // No change
+
+				// Everything blocked from w[2] and w[3].
+				cc.ExpectNone(w[3], w[1], sharedPort)
+				cc.ExpectNone(w[3], w[2], sharedPort)
+				cc.ExpectNone(w[2], w[3], sharedPort)
+				cc.ExpectNone(w[3], w[0], w0Port)
+				cc.ExpectNone(w[3], w[2], w2Port)
+				cc.ExpectNone(w[2], w[0], 4000)
+				cc.ExpectNone(w[2], w[0], 3000)
+
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+					Equal(cc.ExpectedConnectivity()),
+					dumpPolicy(policy),
+				)
+			})
+		})
+
+		Describe("with negated ports conflicting with positive ports", func() {
+			BeforeEach(func() {
+				policy.Spec.IngressRules[0].Destination.NotPorts = []numorstring.Port{
+					numorstring.NamedPort(w0PortName),
+					numorstring.SinglePort(w1Port),
+					numorstring.SinglePort(4000),
+				}
+			})
+
+			It("should have expected connectivity", func() {
+				cc.ExpectSome(w[3], w[1], sharedPort) // No change
+				cc.ExpectSome(w[3], w[0], sharedPort) // No change
+				cc.ExpectNone(w[2], w[3], sharedPort) // No change
+				cc.ExpectSome(w[3], w[2], sharedPort) // No change
+				cc.ExpectNone(w[3], w[0], w0Port)     // Disallowed by named port in NotPorts list.
+				cc.ExpectNone(w[3], w[1], w1Port)     // Disallowed by numeric port in NotPorts list.
+				cc.ExpectNone(w[3], w[2], w2Port)     // No change
+				cc.ExpectNone(w[2], w[0], 4000)       // Numeric port in NotPorts list.
+				cc.ExpectNone(w[3], w[0], 4000)       // Numeric port in NotPorts list.
+				cc.ExpectNone(w[2], w[0], 3000)       // No change
+
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+					Equal(cc.ExpectedConnectivity()),
+					dumpPolicy(policy),
+				)
+			})
+		})
+	})
 })
+
+func dumpPolicy(pol *api.Policy) string {
+	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
+	polDump := fmt.Sprintf("Active policy:\n\tMetadata: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
+		pol.Metadata, pol.Spec, string(jsonPol))
+	return polDump
+}
