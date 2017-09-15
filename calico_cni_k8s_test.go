@@ -576,7 +576,7 @@ var _ = Describe("CalicoCni", func() {
 			})
 
 			Context("Using host-local IPAM: request an IP then release it, and then request it again", func() {
-				It("Should successfully assign IP both times and successfully release it in the middle", func() {
+				It("should successfully assign IP both times and successfully release it in the middle", func() {
 					netconfHostLocalIPAM := fmt.Sprintf(`
 				  {
 					"cniVersion": "%s",
