@@ -17,18 +17,21 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/felix/fv/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/felix/fv/utils"
 )
 
 const usage = `test-workload, test workload for Felix FV testing.
 
 Usage:
-  test-workload <interface-name> <ip-address> <port>
+  test-workload <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -41,8 +44,10 @@ func main() {
 	}
 	interfaceName := arguments["<interface-name>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
-	port := arguments["<port>"].(string)
+	portsStr := arguments["<ports>"].(string)
 	panicIfError(err)
+
+	ports := strings.Split(portsStr, ",")
 
 	// Create a new network namespace for the workload.
 	namespace, err := ns.NewNS()
@@ -98,13 +103,18 @@ func main() {
 	// effectively means _as_ this workload.
 	fmt.Println(namespace.Path())
 
-	// Now listen on the specified port in the workload namespace.
+	// Now listen on the specified ports in the workload namespace.
 	err = namespace.Do(func(_ ns.NetNS) error {
 
 		handleRequest := func(conn net.Conn) {
-			log.Info("Accepted new connection.")
-			defer conn.Close()
-			defer log.Info("Closed connection.")
+			log.WithFields(log.Fields{
+				"localAddr":  conn.LocalAddr(),
+				"remoteAddr": conn.RemoteAddr(),
+			}).Info("Accepted new connection.")
+			defer func() {
+				conn.Close()
+				log.Info("Closed connection.")
+			}()
 
 			for {
 				buf := make([]byte, 1024)
@@ -118,20 +128,25 @@ func main() {
 			}
 		}
 
-		l, err := net.Listen("tcp", ipAddress+":"+port)
-		if err != nil {
-			return err
+		// Listen on each port.
+		for _, port := range ports {
+			log.WithField("port", port).Info("About to listen for connections")
+			l, err := net.Listen("tcp", ipAddress+":"+port)
+			panicIfError(err)
+			log.WithField("port", port).Info("Listening for connections")
+
+			go func() {
+				defer l.Close()
+				for {
+					conn, err := l.Accept()
+					panicIfError(err)
+					go handleRequest(conn)
+				}
+			}()
 		}
-		log.WithField("port", port).Info("Listening for connections")
-		defer l.Close()
 
 		for {
-			conn, err := l.Accept()
-			if err != nil {
-				return err
-			}
-
-			go handleRequest(conn)
+			time.Sleep(10 * time.Second)
 		}
 
 		return nil

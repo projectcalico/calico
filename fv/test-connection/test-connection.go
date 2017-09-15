@@ -24,8 +24,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/felix/fv/utils"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/fv/utils"
 )
 
 const usage = `test-connection: test connection to some target, for Felix FV testing.
