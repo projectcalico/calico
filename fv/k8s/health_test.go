@@ -92,7 +92,6 @@ var _ = BeforeSuite(func() {
 
 	// Start the k8s API server.
 	apiServerContainer = containers.Run("apiserver",
-		"-v", "/home/neil/go/src/github.com/projectcalico/felix/vendor/github.com/projectcalico/libcalico-go/test:/testm",
 		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
@@ -122,8 +121,10 @@ var _ = BeforeSuite(func() {
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
 	for {
-		err := apiServerContainer.ExecMayFail(
-			"kubectl", "apply", "-f", "/testm/crds.yaml",
+		err := apiServerContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
+		Expect(err).NotTo(HaveOccurred())
+		err = apiServerContainer.ExecMayFail(
+			"kubectl", "apply", "-f", "/crds.yaml",
 		)
 		if err != nil {
 			log.Info("Waiting for API server to accept CRDs")
