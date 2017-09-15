@@ -149,6 +149,10 @@ func (w *Workload) NameSelector() string {
 	return "name=='" + w.Name + "'"
 }
 
+func (w *Workload) SourceName() string {
+	return w.Name
+}
+
 func (w *Workload) CanConnectTo(ip, port string) bool {
 
 	// Ensure that the host has the 'test-connection' binary.
@@ -177,42 +181,65 @@ func (w *Workload) CanConnectTo(ip, port string) bool {
 	return err == nil
 }
 
-func HaveConnectivityToPort(target *Workload, port uint16) types.GomegaMatcher {
-	return &connectivityMatcher{target.IP, fmt.Sprintf("%d", port), fmt.Sprintf("%s on port %d", target.Name, port)}
+type connectionTarget interface {
+	ToMatcher(explicitPort ...uint16) *connectivityMatcher
 }
 
-func HaveConnectivityTo(target *Workload) types.GomegaMatcher {
-	if strings.Contains(target.Ports, ",") {
-		panic("HaveConnectivityTo only supports a single port")
+type IP string // Just so we can define methods on it...
+
+func (s IP) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
+	if len(explicitPort) != 1 {
+		panic("Explicit port needed with IP as a connectivity target")
 	}
-	return &connectivityMatcher{target.IP, target.Ports, target.Name}
+	port := fmt.Sprintf("%d", explicitPort[0])
+	return &connectivityMatcher{string(s), port, string(s) + ":" + port}
+}
+
+func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
+	var port string
+	if len(explicitPort) == 1 {
+		port = fmt.Sprintf("%d", explicitPort[0])
+	} else if !strings.Contains(w.Ports, ",") {
+		port = w.Ports
+	} else {
+		panic("Explicit port needed for workload with multiple ports")
+	}
+	return &connectivityMatcher{w.IP, port, fmt.Sprintf("%s on port %s", w.Name, port)}
+}
+
+func HaveConnectivityTo(target connectionTarget, explicitPort ...uint16) types.GomegaMatcher {
+	return target.ToMatcher(explicitPort...)
 }
 
 type connectivityMatcher struct {
 	ip, port, targetName string
 }
 
+type connectionSource interface {
+	CanConnectTo(ip, port string) bool
+	SourceName() string
+}
+
 func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error) {
-	w := actual.(*Workload)
-	success = w.CanConnectTo(m.ip, m.port)
+	success = actual.(connectionSource).CanConnectTo(m.ip, m.port)
 	return
 }
 
 func (m *connectivityMatcher) FailureMessage(actual interface{}) (message string) {
-	w := actual.(*Workload)
-	message = fmt.Sprintf("Expected %v\n\t%+v\nto have connectivity to %v\n\t%v:%v\nbut it doesn't", w.Name, w, m.targetName, m.ip, m.port)
+	src := actual.(connectionSource)
+	message = fmt.Sprintf("Expected %v\n\t%+v\nto have connectivity to %v\n\t%v:%v\nbut it does not", src.SourceName(), src, m.targetName, m.ip, m.port)
 	return
 }
 
 func (m *connectivityMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	w := actual.(*Workload)
-	message = fmt.Sprintf("Expected %v\n\t%+v\nnot to have connectivity to %v\n\t%v:%v\nbut it does", w.Name, w, m.targetName, m.ip, m.port)
+	src := actual.(connectionSource)
+	message = fmt.Sprintf("Expected %v\n\t%+v\nnot to have connectivity to %v\n\t%v:%v\nbut it does", src.SourceName(), src, m.targetName, m.ip, m.port)
 	return
 }
 
 type expectation struct {
-	from, to *Workload
-	port     uint16
+	from     connectionSource     // Workload or Container
+	to       *connectivityMatcher // Workload or IP, + port
 	expected bool
 }
 
@@ -230,12 +257,12 @@ type ConnectivityChecker struct {
 	expectations []expectation
 }
 
-func (c *ConnectivityChecker) ExpectSome(from, to *Workload, toPort uint16) {
-	c.expectations = append(c.expectations, expectation{from, to, toPort, true})
+func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true})
 }
 
-func (c *ConnectivityChecker) ExpectNone(from, to *Workload, toPort uint16) {
-	c.expectations = append(c.expectations, expectation{from, to, toPort, false})
+func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false})
 }
 
 // ActualConnectivity calculates the current connectivity for all the expected paths.  One string is
@@ -249,8 +276,8 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 		wg.Add(1)
 		go func(i int, exp expectation) {
 			defer wg.Done()
-			hasConnectivity := exp.from.CanConnectTo(exp.to.IP, fmt.Sprint(exp.port))
-			result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.Name, exp.to.Name, hasConnectivity)
+			hasConnectivity := exp.from.CanConnectTo(exp.to.ip, exp.to.port)
+			result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, hasConnectivity)
 		}(i, exp)
 	}
 	wg.Wait()
@@ -262,7 +289,7 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
-		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.Name, exp.to.Name, exp.expected)
+		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
 	}
 	return result
 }
