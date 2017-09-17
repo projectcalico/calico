@@ -36,20 +36,26 @@ clean_etcd() {
 populate_kdd() {
     to_test=$1
 
-    until kubectl version; do
-      echo "Waiting for API server to come online"
-      sleep 1
-    done
-
     echo "Creating CRDs and dummy Nodes"
     # This will create the dummy nodes and the custom resource definitions we can populate
-    kubectl apply -f /tests/mock_data/kdd/${to_test}/crds.yaml > /dev/null 2>&1
-    kubectl apply -f /tests/mock_data/kdd/${to_test}/nodes.yaml > /dev/null 2>&1
+    local i=0
+    until kubectl apply -f /tests/mock_data/kdd/${to_test}/crds.yaml; do
+	i=$(($i+1))
+	[ $i -gt 30 ] && echo ERROR: The API server failed to come online after $i seconds. && exit 1
+	echo "Waiting for API server to come online"
+	sleep 1
+    done
+
+    kubectl apply -f /tests/mock_data/kdd/${to_test}/nodes.yaml 
+    [ $? -ne 0 ] && ERROR: kubectl apply failed. && exit 1
 
     echo "Waiting for CRDs to apply"
     # There is a delay when creating the CRDs and them being ready for use, so we
     # try to apply the data until it finally makes it into the API server
-    until kubectl apply -f /tests/mock_data/kdd/${to_test}/crd_data.yaml > /dev/null 2>&1; do
+    i=0
+    until kubectl apply -f /tests/mock_data/kdd/${to_test}/crd_data.yaml; do
+      i=$(($i+1))
+      [ $i -gt 30 ] && echo ERROR: kubectl apply failed after $i tries. && exit 1
       sleep 1
     done
 }
