@@ -1,13 +1,29 @@
+###############################################################################
+# The build architecture is select by setting the ARCH variable.
+# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
+# When ARCH is undefined it defaults to amd64.
+ARCH?=amd64
+
+ifeq ($(ARCH),amd64)
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.4
+endif
+
+ifeq ($(ARCH),ppc64le)
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+endif
+
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
 .SUFFIXES:
 
 all: clean test
 
-GO_BUILD_CONTAINER?=calico/go-build:v0.4
+GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
 K8S_VERSION=v1.7.4
-ETCDCTL_VER=v3.1.8
+ETCD_VER=v3.2.5
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
@@ -53,7 +69,8 @@ bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ "github.com/kelseyhightower/confd" && \
-               ( ldd bin/confd 2>&1 | grep -q "Not a valid dynamic program" || \
+		( ldd bin/confd 2>&1 | grep -q -e "Not a valid dynamic program" \
+			-e "not a dynamic executable" || \
 	             ( echo "Error: bin/confd was not statically linked"; false ) )'
 
 .PHONY: test
@@ -82,7 +99,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 run-etcd
 run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name calico-etcd quay.io/coreos/etcd:$(ETCD_VER)$(ARCHTAG) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -95,7 +112,7 @@ stop-etcd:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-  	gcr.io/google_containers/hyperkube-amd64:$(K8S_VERSION) \
+	gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 
 
@@ -104,9 +121,10 @@ stop-k8s-apiserver:
 	@-docker rm -f calico-k8s-apiserver
 
 bin/kubectl:
-	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
+# If bird release is not available bin must be pre-populated with bird and bird6.
 bin/bird:
 	curl -sSf -L --retry 5 https://github.com/projectcalico/bird/releases/download/$(BIRD_VER)/bird -o $@
 	chmod +x $@
@@ -116,7 +134,7 @@ bin/bird6:
 	chmod +x $@
 
 bin/etcdctl:
-	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCDCTL_VER)/etcd-$(ETCDCTL_VER)-linux-amd64.tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCDCTL_VER)-linux-amd64/etcdctl 
+	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VER)/etcd-$(ETCD_VER)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VER)-linux-$(ARCH)/etcdctl 
 
 .PHONY: clean
 clean:
