@@ -165,6 +165,14 @@ func ListOptionsToDefaultPathRoot(listOptions ListInterface) string {
 	return listOptions.defaultPathRoot()
 }
 
+// ListOptionsIsFullyQualified returns true if the options actually specify a fully
+// qualified resource rather than a partial match.
+func ListOptionsIsFullyQualified(listOptions ListInterface) bool {
+	// Contruct the path prefix and then check to see if that actually corresponds to
+	// the path of a resource instance.
+	return listOptions.KeyFromDefaultPath(listOptions.defaultPathRoot()) != nil
+}
+
 // KeyFromDefaultPath parses the default path representation of a key into one
 // of our <Type>Key structs.  Returns nil if the string doesn't match one of
 // our key types.

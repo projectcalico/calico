@@ -14,6 +14,8 @@
 
 package options
 
+import "time"
+
 // ListOptions is the query options a List or Watch operation in the Calico API.
 type ListOptions struct {
 	// The resource version to List or Watch from.
@@ -24,5 +26,5 @@ type ListOptions struct {
 	ResourceVersion string
 	// Timeout for the list/watch call.
 	// +optional
-	TimeoutSeconds *int64
+	Timeout time.Duration
 }

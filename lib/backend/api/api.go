@@ -94,6 +94,10 @@ type Client interface {
 	// Non-zero fields in the struct are used as filters.
 	List(list model.ListInterface, revision string) (*model.KVPairList, error)
 
+	// Watch returns a WatchInterface used for watching a resources matching the
+	// input list options.
+	Watch(list model.ListInterface, revision string) (WatchInterface, error)
+
 	// Syncer creates an object that generates a series of KVPair updates,
 	// which paint an eventually-consistent picture of the full state of
 	// the datastore and then generates subsequent KVPair updates for
@@ -153,3 +157,42 @@ const (
 	UpdateTypeKVUpdated
 	UpdateTypeKVDeleted
 )
+
+// Interface can be implemented by anything that knows how to watch and report changes.
+type WatchInterface interface {
+	// Stops watching. Will close the channel returned by ResultChan(). Releases
+	// any resources used by the watch.
+	Stop()
+
+	// Returns a chan which will receive all the events. If an error occurs
+	// or Stop() is called, this channel will be closed, in which case the
+	// watch should be completely cleaned up.
+	ResultChan() <-chan WatchEvent
+}
+
+// WatchEventType defines the possible types of events.
+type WatchEventType string
+
+const (
+	WatchAdded    WatchEventType = "ADDED"
+	WatchModified WatchEventType = "MODIFIED"
+	WatchDeleted  WatchEventType = "DELETED"
+	WatchError    WatchEventType = "ERROR"
+)
+
+// Event represents a single event to a watched resource.
+type WatchEvent struct {
+	Type WatchEventType
+
+	// Old is:
+	// * If Type is Added or Error: nil
+	// * If Type is Modified or Deleted: the previous state of the object
+	// New is:
+	//  * If Type is Added or Modified: the new state of the object.
+	//  * If Type is Deleted or Error: nil
+	Old *model.KVPair
+	New *model.KVPair
+
+	// The error, if EventType is Error.
+	Error error
+}
