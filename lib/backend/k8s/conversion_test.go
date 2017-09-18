@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 )
 
 var _ = Describe("Test parsing strings", func() {
@@ -419,8 +419,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with multiple peers and ports", func() {
-		tcp := k8sapi.ProtocolTCP
-		udp := k8sapi.ProtocolUDP
+		tcp := extensions.ProtocolTCP
+		udp := extensions.ProtocolUDP
 		eighty := intstr.FromInt(80)
 		ninety := intstr.FromInt(90)
 
@@ -621,7 +621,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with Ports only", func() {
-		protocol := k8sapi.ProtocolTCP
+		protocol := extensions.ProtocolTCP
 		port := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{

@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -66,7 +66,7 @@ func (k *realKubeAPI) PodWatch(namespace string, opts metav1.ListOptions) (watch
 
 func (k *realKubeAPI) NetworkPolicyWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	netpolListWatcher := cache.NewListWatchFromClient(
-		k.kc.clientSet.Extensions().RESTClient(),
+		k.kc.extensionsClientV1Beta1,
 		"networkpolicies",
 		"",
 		fields.Everything())
@@ -106,7 +106,7 @@ func (k *realKubeAPI) NamespaceList(opts metav1.ListOptions) (list *k8sapi.Names
 
 func (k *realKubeAPI) NetworkPolicyList() (list extensions.NetworkPolicyList, err error) {
 	list = extensions.NetworkPolicyList{}
-	err = k.kc.clientSet.Extensions().RESTClient().
+	err = k.kc.extensionsClientV1Beta1.
 		Get().
 		Resource("networkpolicies").
 		Timeout(10 * time.Second).
