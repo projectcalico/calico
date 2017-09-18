@@ -10,24 +10,37 @@ all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe
 # - Building the calicoctl binary outside a container ("simple-binary")
 # - Building the calico/ctl image
 ###############################################################################
-# Determine which OS / ARCH.
-OS := $(shell uname -s | tr A-Z a-z)
-ARCH := amd64
+
 ###############################################################################
-# Subcomponent versions:
-GO_BUILD_VER:=v0.9
+# The build architecture is select by setting the ARCH variable.
+# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
+# When ARCH is undefined it defaults to amd64.
+ARCH?=amd64
+ifeq ($(ARCH),amd64)
+	ARCHTAG?=
+	GO_BUILD_VER:=v0.9
+endif
+
+ifeq ($(ARCH),ppc64le)
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER:=latest
+endif
+
+# Determine which OS.
+OS := $(shell uname -s | tr A-Z a-z)
+
 ###############################################################################
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_DIR=calicoctl
-CTL_CONTAINER_NAME?=calico/ctl
+CTL_CONTAINER_NAME?=calico/ctl$(ARCHTAG)
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
-CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
+CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
 
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calicoctl
@@ -63,8 +76,8 @@ vendor: glide.yaml
       glide install -strip-vendor'
 
 # build calico_ctl image
-$(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
-	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
+$(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl$(ARCHTAG) dist/calicoctl
+	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl$(ARCHTAG) .
 	touch $@
 
 ## Build calicoctl
@@ -77,17 +90,20 @@ binary: $(CALICOCTL_FILES) vendor
 	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 dist/calicoctl: $(CALICOCTL_FILES) vendor
-	$(MAKE) dist/calicoctl-linux-amd64
-	mv dist/calicoctl-linux-amd64 dist/calicoctl
+	$(MAKE) dist/calicoctl-linux-$(ARCH)
+	cp dist/calicoctl-linux-$(ARCH) dist/calicoctl
 
 dist/calicoctl-linux-amd64: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=linux ARCH=amd64 binary-containerized
+	$(MAKE) OS=linux ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
+
+dist/calicoctl-linux-ppc64le: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=linux ARCH=ppc64le ARCHTAG=$(ARCHTAG) binary-containerized
 
 dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=darwin ARCH=amd64 binary-containerized
+	$(MAKE) OS=darwin ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
 
 dist/calicoctl-windows-amd64.exe: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=windows ARCH=amd64 binary-containerized
+	$(MAKE) OS=windows ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
 	mv dist/calicoctl-windows-amd64 dist/calicoctl-windows-amd64.exe
 
 ## Run the build in a container. Useful for CI
@@ -172,9 +188,9 @@ st: dist/calicoctl run-etcd-host
 	#   - This also provides access to calicoctl and the docker client
 	docker run --net=host --privileged \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
-	           --rm -ti \
+	           --rm -t \
 	           -v $(SOURCE_DIR):/code \
-	           calico/test \
+	           calico/test$(ARCHTAG) \
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 
 	$(MAKE) stop-etcd
@@ -185,7 +201,7 @@ run-etcd-host:
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name calico-etcd quay.io/coreos/etcd:v3.2.5$(ARCHTAG) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"
@@ -205,8 +221,10 @@ semaphore: clean
 
 	$(MAKE) calico/ctl
 
-	# Make sure that calicoctl builds cross-platform.
-	$(MAKE) dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe
+ifeq ($(ARCH),amd64)
+		# Make sure that calicoctl builds cross-platform on amd64.
+		$(MAKE) dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe
+endif
 
 release: clean
 ifndef VERSION
@@ -264,7 +282,7 @@ endif
 
 ## Clean enough that a new release build will be clean
 clean: clean-calicoctl
-	find . -name '*.created' -exec rm -f {} +
+	find . -name '*.created-$(ARCH)' -exec rm -f {} +
 	rm -rf dist build certs *.tar vendor
 
 .PHONY: help
@@ -283,3 +301,4 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
+	@echo "Building for $(OS)-$(ARCH) INSTALL_FLAG=$(INSTALL_FLAG). Use: ARCH=xyz make <...> to change the build architecture."
