@@ -154,20 +154,20 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			var cc = &workload.ConnectivityChecker{}
 
 			// Outbound, w0 should be able to reach all ports on w1 & w2
-			cc.ExpectSome(w[0], w[1], sharedPort)
-			cc.ExpectSome(w[0], w[2], sharedPort)
-			cc.ExpectSome(w[0], w[1], w1Port)
-			cc.ExpectSome(w[0], w[2], w2Port)
+			cc.ExpectSome(w[0], w[1].Port(sharedPort))
+			cc.ExpectSome(w[0], w[2].Port(sharedPort))
+			cc.ExpectSome(w[0], w[1].Port(w1Port))
+			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
-			cc.ExpectNone(w[0], w[2], 9999) // Not a port we open
+			cc.ExpectNone(w[0], w[2].Port(9999)) // Not a port we open
 
 			// Inbound, w1 and w2 should be able to reach all ports on w0.
-			cc.ExpectSome(w[1], w[0], sharedPort)
-			cc.ExpectSome(w[2], w[0], sharedPort)
-			cc.ExpectSome(w[1], w[0], w0Port)
-			cc.ExpectSome(w[2], w[0], w0Port)
-			cc.ExpectSome(w[1], w[0], 4000)
-			cc.ExpectSome(w[2], w[0], 4000)
+			cc.ExpectSome(w[1], w[0].Port(sharedPort))
+			cc.ExpectSome(w[2], w[0].Port(sharedPort))
+			cc.ExpectSome(w[1], w[0].Port(w0Port))
+			cc.ExpectSome(w[2], w[0].Port(w0Port))
+			cc.ExpectSome(w[1], w[0].Port(4000))
+			cc.ExpectSome(w[2], w[0].Port(4000))
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 		})
@@ -233,39 +233,39 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 
 				// Shared port is listed so w1 and w2 should not be able to reach the shared port
 				// on w0.
-				cc.ExpectNone(w[1], w[0], sharedPort)
-				cc.ExpectNone(w[2], w[0], sharedPort)
+				cc.ExpectNone(w[1], w[0].Port(sharedPort))
+				cc.ExpectNone(w[2], w[0].Port(sharedPort))
 				// Inbound to w0 port should still be allowed.
-				cc.ExpectSome(w[1], w[0], w0Port)
-				cc.ExpectSome(w[2], w[0], w0Port)
+				cc.ExpectSome(w[1], w[0].Port(w0Port))
+				cc.ExpectSome(w[2], w[0].Port(w0Port))
 				// Inbound to unlisted numeric should still be allowed.
-				cc.ExpectSome(w[1], w[0], 4000)
-				cc.ExpectSome(w[2], w[0], 4000)
+				cc.ExpectSome(w[1], w[0].Port(4000))
+				cc.ExpectSome(w[2], w[0].Port(4000))
 
 				if numNumericPorts > 0 {
-					cc.ExpectNone(w[1], w[0], 3000)
+					cc.ExpectNone(w[1], w[0].Port(3000))
 				} else {
-					cc.ExpectSome(w[1], w[0], 3000)
+					cc.ExpectSome(w[1], w[0].Port(3000))
 				}
 			} else {
 				// Only traffic to listed ports is allowed.
 
 				// Inbound to w0Port should now be blocked.
-				cc.ExpectNone(w[1], w[0], w0Port)
-				cc.ExpectNone(w[2], w[0], w0Port)
+				cc.ExpectNone(w[1], w[0].Port(w0Port))
+				cc.ExpectNone(w[2], w[0].Port(w0Port))
 
 				// Inbound to unlisted numeric should now be blocked.
-				cc.ExpectNone(w[1], w[0], 4000)
-				cc.ExpectNone(w[2], w[0], 4000)
+				cc.ExpectNone(w[1], w[0].Port(4000))
+				cc.ExpectNone(w[2], w[0].Port(4000))
 
 				// w1 and w2 should still be able to reach the shared port on w0.
-				cc.ExpectSome(w[1], w[0], sharedPort)
-				cc.ExpectSome(w[2], w[0], sharedPort)
+				cc.ExpectSome(w[1], w[0].Port(sharedPort))
+				cc.ExpectSome(w[2], w[0].Port(sharedPort))
 
 				if numNumericPorts > 0 {
-					cc.ExpectSome(w[1], w[0], 3000)
+					cc.ExpectSome(w[1], w[0].Port(3000))
 				} else {
-					cc.ExpectNone(w[1], w[0], 3000)
+					cc.ExpectNone(w[1], w[0].Port(3000))
 				}
 			}
 
@@ -275,30 +275,30 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				if useDestSel {
 					// We're limiting the destination to the w[0] pod so there should be no
 					// connectivity between w[1] and w[2].  Test a couple of sample paths:
-					cc.ExpectNone(w[1], w[2], sharedPort)
-					cc.ExpectNone(w[2], w[1], w1Port)
+					cc.ExpectNone(w[1], w[2].Port(sharedPort))
+					cc.ExpectNone(w[2], w[1].Port(w1Port))
 				} else if negated {
 					// We're not using the destination selector but the port list is negated so
 					// we're explicitly excluding the shared port.
-					cc.ExpectNone(w[1], w[2], sharedPort)
-					cc.ExpectSome(w[1], w[2], w2Port)
+					cc.ExpectNone(w[1], w[2].Port(sharedPort))
+					cc.ExpectSome(w[1], w[2].Port(w2Port))
 				} else {
 					// Positive policy with no destination selector, should allow the shared port.
-					cc.ExpectSome(w[1], w[2], sharedPort)
-					cc.ExpectNone(w[2], w[1], w1Port)
+					cc.ExpectSome(w[1], w[2].Port(sharedPort))
+					cc.ExpectNone(w[2], w[1].Port(w1Port))
 				}
 			} else {
 				// Policy being applied at ingress on w[0], shouldn't affect w[1] <-> w[2]
 				// connectivity.
-				cc.ExpectSome(w[1], w[2], w2Port)
-				cc.ExpectSome(w[2], w[1], sharedPort)
+				cc.ExpectSome(w[1], w[2].Port(w2Port))
+				cc.ExpectSome(w[2], w[1].Port(sharedPort))
 			}
 
 			// Outbound, w0 should be able to reach all ports on w1 & w2
-			cc.ExpectSome(w[0], w[1], sharedPort)
-			cc.ExpectSome(w[0], w[2], sharedPort)
-			cc.ExpectSome(w[0], w[1], w1Port)
-			cc.ExpectSome(w[0], w[2], w2Port)
+			cc.ExpectSome(w[0], w[1].Port(sharedPort))
+			cc.ExpectSome(w[0], w[2].Port(sharedPort))
+			cc.ExpectSome(w[0], w[1].Port(w1Port))
+			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
@@ -375,19 +375,19 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		// This spec establishes a baseline for the connectivity, then the specs below run
 		// with tweaked versions of the policy.
 		expectBaselineConnectivity := func() {
-			cc.ExpectSome(w[0], w[1], sharedPort) // Allowed by named port in list.
-			cc.ExpectSome(w[1], w[0], sharedPort) // Allowed by named port in list.
-			cc.ExpectSome(w[3], w[1], sharedPort) // Allowed by named port in list.
-			cc.ExpectSome(w[3], w[0], sharedPort) // Allowed by named port in list.
-			cc.ExpectSome(w[3], w[2], sharedPort) // Allowed by named port in list.
-			cc.ExpectNone(w[1], w[3], sharedPort) // Disallowed by positive selector.
-			cc.ExpectNone(w[2], w[3], sharedPort) // Disallowed by positive selector.
-			cc.ExpectSome(w[3], w[0], w0Port)     // Allowed by named port in list.
-			cc.ExpectSome(w[3], w[1], w1Port)     // Allowed by named port in list.
-			cc.ExpectNone(w[3], w[2], w2Port)     // Not in ports list.
-			cc.ExpectSome(w[2], w[0], 4000)       // Numeric port in list.
-			cc.ExpectSome(w[3], w[0], 4000)       // Numeric port in list.
-			cc.ExpectNone(w[2], w[0], 3000)       // Numeric port not in list.
+			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[0].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[2].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectNone(w[1], w[3].Port(sharedPort)) // Disallowed by positive selector.
+			cc.ExpectNone(w[2], w[3].Port(sharedPort)) // Disallowed by positive selector.
+			cc.ExpectSome(w[3], w[0].Port(w0Port))     // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1].Port(w1Port))     // Allowed by named port in list.
+			cc.ExpectNone(w[3], w[2].Port(w2Port))     // Not in ports list.
+			cc.ExpectSome(w[2], w[0].Port(4000))       // Numeric port in list.
+			cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
+			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
@@ -402,16 +402,16 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			})
 
 			It("should have expected connectivity", func() {
-				cc.ExpectSome(w[3], w[1], sharedPort) // No change.
-				cc.ExpectSome(w[3], w[0], sharedPort) // No change.
-				cc.ExpectNone(w[3], w[2], sharedPort) // Disallowed by negative selector.
-				cc.ExpectNone(w[2], w[3], sharedPort) // No change.
-				cc.ExpectSome(w[3], w[0], w0Port)     // No change.
-				cc.ExpectSome(w[3], w[1], w1Port)     // No change.
-				cc.ExpectNone(w[3], w[2], w2Port)     // No change.
-				cc.ExpectSome(w[2], w[0], 4000)       // No change.
-				cc.ExpectSome(w[3], w[0], 4000)       // No change.
-				cc.ExpectNone(w[2], w[0], 3000)       // No change.
+				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
+				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
+				cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Disallowed by negative selector.
+				cc.ExpectNone(w[2], w[3].Port(sharedPort)) // No change.
+				cc.ExpectSome(w[3], w[0].Port(w0Port))     // No change.
+				cc.ExpectSome(w[3], w[1].Port(w1Port))     // No change.
+				cc.ExpectNone(w[3], w[2].Port(w2Port))     // No change.
+				cc.ExpectSome(w[2], w[0].Port(4000))       // No change.
+				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
+				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
 				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
@@ -427,17 +427,17 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			})
 
 			It("should have expected connectivity", func() {
-				cc.ExpectSome(w[3], w[1], sharedPort) // No change.
-				cc.ExpectSome(w[3], w[0], sharedPort) // No change.
-				cc.ExpectNone(w[3], w[2], sharedPort) // Disallowed by negative selector.
-				cc.ExpectSome(w[2], w[3], sharedPort) // Now allowed.
-				cc.ExpectSome(w[1], w[3], sharedPort) // Now allowed.
-				cc.ExpectSome(w[3], w[0], w0Port)     // No change.
-				cc.ExpectSome(w[3], w[1], w1Port)     // No change.
-				cc.ExpectNone(w[3], w[2], w2Port)     // No change.
-				cc.ExpectSome(w[2], w[0], 4000)       // No change.
-				cc.ExpectSome(w[3], w[0], 4000)       // No change.
-				cc.ExpectNone(w[2], w[0], 3000)       // No change.
+				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
+				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
+				cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Disallowed by negative selector.
+				cc.ExpectSome(w[2], w[3].Port(sharedPort)) // Now allowed.
+				cc.ExpectSome(w[1], w[3].Port(sharedPort)) // Now allowed.
+				cc.ExpectSome(w[3], w[0].Port(w0Port))     // No change.
+				cc.ExpectSome(w[3], w[1].Port(w1Port))     // No change.
+				cc.ExpectNone(w[3], w[2].Port(w2Port))     // No change.
+				cc.ExpectSome(w[2], w[0].Port(4000))       // No change.
+				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
+				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
 				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
@@ -447,17 +447,17 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		})
 
 		expectW2AndW3Blocked := func() {
-			cc.ExpectSome(w[0], w[1], sharedPort) // No change
-			cc.ExpectSome(w[1], w[0], sharedPort) // No change
+			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // No change
+			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // No change
 
 			// Everything blocked from w[2] and w[3].
-			cc.ExpectNone(w[3], w[1], sharedPort)
-			cc.ExpectNone(w[3], w[2], sharedPort)
-			cc.ExpectNone(w[2], w[3], sharedPort)
-			cc.ExpectNone(w[3], w[0], w0Port)
-			cc.ExpectNone(w[3], w[2], w2Port)
-			cc.ExpectNone(w[2], w[0], 4000)
-			cc.ExpectNone(w[2], w[0], 3000)
+			cc.ExpectNone(w[3], w[1].Port(sharedPort))
+			cc.ExpectNone(w[3], w[2].Port(sharedPort))
+			cc.ExpectNone(w[2], w[3].Port(sharedPort))
+			cc.ExpectNone(w[3], w[0].Port(w0Port))
+			cc.ExpectNone(w[3], w[2].Port(w2Port))
+			cc.ExpectNone(w[2], w[0].Port(4000))
+			cc.ExpectNone(w[2], w[0].Port(3000))
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
@@ -541,19 +541,19 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				})
 
 				It("should give expected connectivity", func() {
-					cc.ExpectSome(w[0], w[1], sharedPort) // No change.
-					cc.ExpectSome(w[1], w[0], sharedPort) // No change.
-					cc.ExpectSome(w[3], w[1], sharedPort) // No change.
-					cc.ExpectSome(w[3], w[0], sharedPort) // No change.
-					cc.ExpectNone(w[3], w[2], sharedPort) // Blocked by NotNets.
-					cc.ExpectNone(w[1], w[3], sharedPort) // Blocked by w[3] not being in Nets.
-					cc.ExpectNone(w[2], w[3], sharedPort) // Blocked by w[3] not being in Nets.
-					cc.ExpectSome(w[3], w[0], w0Port)     // No change.
-					cc.ExpectSome(w[3], w[1], w1Port)     // No change.
-					cc.ExpectNone(w[3], w[2], w2Port)     // Blocked by NotNets.
-					cc.ExpectSome(w[2], w[0], 4000)       // No change.
-					cc.ExpectSome(w[3], w[0], 4000)       // No change.
-					cc.ExpectNone(w[2], w[0], 3000)       // No change.
+					cc.ExpectSome(w[0], w[1].Port(sharedPort)) // No change.
+					cc.ExpectSome(w[1], w[0].Port(sharedPort)) // No change.
+					cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change.
+					cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change.
+					cc.ExpectNone(w[3], w[2].Port(sharedPort)) // Blocked by NotNets.
+					cc.ExpectNone(w[1], w[3].Port(sharedPort)) // Blocked by w[3] not being in Nets.
+					cc.ExpectNone(w[2], w[3].Port(sharedPort)) // Blocked by w[3] not being in Nets.
+					cc.ExpectSome(w[3], w[0].Port(w0Port))     // No change.
+					cc.ExpectSome(w[3], w[1].Port(w1Port))     // No change.
+					cc.ExpectNone(w[3], w[2].Port(w2Port))     // Blocked by NotNets.
+					cc.ExpectSome(w[2], w[0].Port(4000))       // No change.
+					cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
+					cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
 					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 						Equal(cc.ExpectedConnectivity()),
@@ -573,16 +573,16 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			})
 
 			It("should have expected connectivity", func() {
-				cc.ExpectSome(w[3], w[1], sharedPort) // No change
-				cc.ExpectSome(w[3], w[0], sharedPort) // No change
-				cc.ExpectNone(w[2], w[3], sharedPort) // No change
-				cc.ExpectSome(w[3], w[2], sharedPort) // No change
-				cc.ExpectNone(w[3], w[0], w0Port)     // Disallowed by named port in NotPorts list.
-				cc.ExpectNone(w[3], w[1], w1Port)     // Disallowed by numeric port in NotPorts list.
-				cc.ExpectNone(w[3], w[2], w2Port)     // No change
-				cc.ExpectNone(w[2], w[0], 4000)       // Numeric port in NotPorts list.
-				cc.ExpectNone(w[3], w[0], 4000)       // Numeric port in NotPorts list.
-				cc.ExpectNone(w[2], w[0], 3000)       // No change
+				cc.ExpectSome(w[3], w[1].Port(sharedPort)) // No change
+				cc.ExpectSome(w[3], w[0].Port(sharedPort)) // No change
+				cc.ExpectNone(w[2], w[3].Port(sharedPort)) // No change
+				cc.ExpectSome(w[3], w[2].Port(sharedPort)) // No change
+				cc.ExpectNone(w[3], w[0].Port(w0Port))     // Disallowed by named port in NotPorts list.
+				cc.ExpectNone(w[3], w[1].Port(w1Port))     // Disallowed by numeric port in NotPorts list.
+				cc.ExpectNone(w[3], w[2].Port(w2Port))     // No change
+				cc.ExpectNone(w[2], w[0].Port(4000))       // Numeric port in NotPorts list.
+				cc.ExpectNone(w[3], w[0].Port(4000))       // Numeric port in NotPorts list.
+				cc.ExpectNone(w[2], w[0].Port(3000))       // No change
 
 				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),

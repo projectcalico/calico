@@ -32,7 +32,10 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port>
+  test-connection <namespace-path> <ip-address> <port> [--source-port=<source>]
+
+Options:
+  --source-port=<source>  Source port to use for the connection [default: 0].
 
 If connection is successful, test-connection exits successfully.
 
@@ -46,14 +49,16 @@ func main() {
 		println(usage)
 		log.WithError(err).Fatal("Failed to parse usage")
 	}
+	log.WithField("args", arguments).Info("Parsed arguments")
 	namespacePath := arguments["<namespace-path>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
 	port := arguments["<port>"].(string)
-	log.Infof("Test connection from %v to IP %v port %v", namespacePath, ipAddress, port)
+	sourcePort := arguments["--source-port"].(string)
+	log.Infof("Test connection from %v:%v to IP %v port %v", namespacePath, sourcePort, ipAddress, port)
 
 	if namespacePath == "-" {
 		// Test connection from wherever we are already running.
-		err = tryConnect(ipAddress, port)
+		err = tryConnect(ipAddress, port, sourcePort)
 	} else {
 		// Get the specified network namespace (representing a workload).
 		var namespace ns.NetNS
@@ -65,7 +70,7 @@ func main() {
 
 		// Now, in that namespace, try connecting to the target.
 		err = namespace.Do(func(_ ns.NetNS) error {
-			return tryConnect(ipAddress, port)
+			return tryConnect(ipAddress, port, sourcePort)
 		})
 	}
 
@@ -74,7 +79,7 @@ func main() {
 	}
 }
 
-func tryConnect(ipAddress, port string) error {
+func tryConnect(ipAddress, port string, sourcePort string) error {
 
 	err := utils.RunCommand("ip", "r")
 	if err != nil {
@@ -83,7 +88,13 @@ func tryConnect(ipAddress, port string) error {
 
 	const testMessage = "hello"
 
-	conn, err := net.DialTimeout("tcp", ipAddress+":"+port, 5*time.Second)
+	var d net.Dialer
+	d.Timeout = 5 * time.Second
+	d.LocalAddr, err = net.ResolveTCPAddr("tcp", "0.0.0.0:"+sourcePort)
+	if err != nil {
+		log.WithError(err).Panic("Failed to resolve local port")
+	}
+	conn, err := d.Dial("tcp", ipAddress+":"+port)
 	if err != nil {
 		return err
 	}

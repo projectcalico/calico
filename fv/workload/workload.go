@@ -159,13 +159,45 @@ func (w *Workload) SourceName() string {
 }
 
 func (w *Workload) CanConnectTo(ip, port string) bool {
+	anyPort := Port{
+		Workload: w,
+	}
+	return anyPort.CanConnectTo(ip, port)
+}
+
+func (w *Workload) Port(port uint16) *Port {
+	return &Port{
+		Workload: w,
+		Port:     port,
+	}
+}
+
+type Port struct {
+	*Workload
+	Port uint16
+}
+
+func (w *Port) SourceName() string {
+	if w.Port == 0 {
+		return w.Name
+	}
+	return fmt.Sprintf("%s:%d", w.Name, w.Port)
+}
+
+func (p *Port) CanConnectTo(ip, port string) bool {
 
 	// Ensure that the host has the 'test-connection' binary.
-	w.C.EnsureBinary("test-connection")
+	p.C.EnsureBinary("test-connection")
 
 	// Run 'test-connection' to the target.
-	connectionCmd := exec.Command("docker", "exec", w.C.Name,
-		"/test-connection", w.namespacePath, ip, port)
+	args := []string{
+		"exec", p.C.Name, "/test-connection", p.namespacePath, ip, port,
+	}
+	if p.Port != 0 {
+		// If we are using a particular source port, fill it in.
+		args = append(args, fmt.Sprintf("--source-port=%d", p.Port))
+	}
+	connectionCmd := exec.Command("docker", args...)
 	outPipe, err := connectionCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
 	errPipe, err := connectionCmd.StderrPipe()
@@ -184,6 +216,19 @@ func (w *Workload) CanConnectTo(ip, port string) bool {
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
 	return err == nil
+}
+
+// ToMatcher implements the connectionTarget interface, allowing this port to be used as
+// target.
+func (p *Port) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
+	if p.Port == 0 {
+		return p.Workload.ToMatcher(explicitPort...)
+	}
+	return &connectivityMatcher{
+		ip:         p.Workload.IP,
+		port:       fmt.Sprint(p.Port),
+		targetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
+	}
 }
 
 type connectionTarget interface {
