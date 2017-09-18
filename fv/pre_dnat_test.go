@@ -121,10 +121,12 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		})
 
 		It("everyone can connect to node ports", func() {
-			Expect(w[0]).To(HaveConnectivityTo(w[1], 32011))
-			Expect(w[1]).To(HaveConnectivityTo(w[0], 32010))
-			Expect(etcd).To(HaveConnectivityTo(w[1], 32011))
-			Expect(etcd).To(HaveConnectivityTo(w[0], 32010))
+			cc := &workload.ConnectivityChecker{}
+			cc.ExpectSome(w[0], w[1], 32011)
+			cc.ExpectSome(w[1], w[0], 32010)
+			cc.ExpectSome(etcd, w[1], 32011)
+			cc.ExpectSome(etcd, w[0], 32010)
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 		})
 
 		Context("with pre-DNAT policy to prevent access from outside", func() {
@@ -150,10 +152,12 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 			})
 
 			It("etcd cannot connect", func() {
-				Expect(w[0]).To(HaveConnectivityTo(w[1], 32011))
-				Expect(w[1]).To(HaveConnectivityTo(w[0], 32010))
-				Expect(etcd).NotTo(HaveConnectivityTo(w[1], 32011))
-				Expect(etcd).NotTo(HaveConnectivityTo(w[0], 32010))
+				cc := &workload.ConnectivityChecker{}
+				cc.ExpectSome(w[0], w[1], 32011)
+				cc.ExpectSome(w[1], w[0], 32010)
+				cc.ExpectNone(etcd, w[1], 32011)
+				cc.ExpectNone(etcd, w[0], 32010)
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 			})
 
 			Context("with pre-DNAT policy to open pinhole to 32010", func() {
@@ -165,11 +169,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					policy.Spec.Order = &order
 					policy.Spec.PreDNAT = true
 					protocol := numorstring.ProtocolFromString("tcp")
-					ports, _ := numorstring.PortFromRange(1, 65535)   // pass
-					ports, _ = numorstring.PortFromRange(1, 10000)    // pass
-					ports, _ = numorstring.PortFromRange(8000, 8055)  // pass
-					ports, _ = numorstring.PortFromRange(8056, 10000) // fail
-					ports = numorstring.SinglePort(8055)
+					ports := numorstring.SinglePort(32010)
 					policy.Spec.IngressRules = []api.Rule{{
 						Action:   "allow",
 						Protocol: &protocol,
@@ -182,26 +182,45 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				// Pending because currently fails - investigation needed.
-				PIt("etcd can connect to 32010 but not 32011", func() {
-					Expect(w[0]).To(HaveConnectivityTo(w[1], 32011))
-					Expect(w[1]).To(HaveConnectivityTo(w[0], 32010))
-					//Expect(etcd).NotTo(HaveConnectivityTo(w[1], 32011))
-					var success bool
-					var err error
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					success, err = HaveConnectivityTo(w[0], 32010).Match(etcd)
-					Expect(success).To(BeTrue())
+				It("etcd can connect to 32010 but not 32011", func() {
+					cc := &workload.ConnectivityChecker{}
+					cc.ExpectSome(w[0], w[1], 32011)
+					cc.ExpectSome(w[1], w[0], 32010)
+					cc.ExpectNone(etcd, w[1], 32011)
+					cc.ExpectSome(etcd, w[0], 32010)
+					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+				})
+			})
+
+			Context("with pre-DNAT policy to open pinhole to 8055", func() {
+
+				BeforeEach(func() {
+					policy := api.NewPolicy()
+					policy.Metadata.Name = "allow-ingress-8055"
+					order := float64(10)
+					policy.Spec.Order = &order
+					policy.Spec.PreDNAT = true
+					protocol := numorstring.ProtocolFromString("tcp")
+					ports := numorstring.SinglePort(8055)
+					policy.Spec.IngressRules = []api.Rule{{
+						Action:   "allow",
+						Protocol: &protocol,
+						Destination: api.EntityRule{Ports: []numorstring.Port{
+							ports,
+						}},
+					}}
+					policy.Spec.Selector = "has(host-endpoint)"
+					_, err := client.Policies().Create(policy)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(etcd).NotTo(HaveConnectivityTo(w[0], 32010))
+				})
+
+				It("etcd cannot connect", func() {
+					cc := &workload.ConnectivityChecker{}
+					cc.ExpectSome(w[0], w[1], 32011)
+					cc.ExpectSome(w[1], w[0], 32010)
+					cc.ExpectNone(etcd, w[1], 32011)
+					cc.ExpectNone(etcd, w[0], 32010)
+					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 				})
 			})
 		})
