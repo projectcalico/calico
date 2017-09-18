@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -147,7 +148,6 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type WorkloadEndpoint struct {
-	// TODO: Validation for workload endpoint.
 	State            string            `json:"state"`
 	Name             string            `json:"name"`
 	ActiveInstanceID string            `json:"active_instance_id"`
@@ -160,6 +160,13 @@ type WorkloadEndpoint struct {
 	Labels           map[string]string `json:"labels,omitempty"`
 	IPv4Gateway      *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
 	IPv6Gateway      *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
+	Ports            []EndpointPort    `json:"ports,omitempty" validate:"dive"`
+}
+
+type EndpointPort struct {
+	Name     string               `json:"name" validate:"name"`
+	Protocol numorstring.Protocol `json:"protocol"`
+	Port     uint16               `json:"port" validate:"gt=0"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.

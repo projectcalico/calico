@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -108,4 +108,5 @@ type HostEndpoint struct {
 	ExpectedIPv6Addrs []net.IP          `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`
 	Labels            map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 	ProfileIDs        []string          `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
+	Ports             []EndpointPort    `json:"ports,omitempty" validate:"dive"`
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 type WorkloadEndpoint struct {
@@ -104,6 +105,9 @@ type WorkloadEndpointSpec struct {
 
 	// MAC is the MAC address of the endpoint interface.
 	MAC *net.MAC `json:"mac,omitempty" validate:"omitempty,mac"`
+
+	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	Ports []EndpointPort `json:"ports,omitempty" validate:"omitempty,dive"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
@@ -114,6 +118,12 @@ type IPNAT struct {
 
 	// The external IP address.
 	ExternalIP net.IP `json:"externalIP"`
+}
+
+type EndpointPort struct {
+	Name     string               `json:"name" validate:"name"`
+	Protocol numorstring.Protocol `json:"protocol"`
+	Port     uint16               `json:"port" validate:"gt=0"`
 }
 
 // String returns a friendly form of an IPNAT.
