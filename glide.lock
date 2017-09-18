@@ -1,5 +1,5 @@
-hash: 6d980076ac5ec8236dde278276a0a2f4df0ac256bc1779c5947000109c822cd8
-updated: 2017-09-14T09:00:49.052755803Z
+hash: ab33a9a67c865624f37f15704d3c1ead20bbe23266f52487ec0e88cda7d1c00c
+updated: 2017-09-18T17:03:48.875922553Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -82,15 +82,31 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 17ce1425424ab154092bbb43af630bd647f3bb0d
+  version: 11b8df160996e00fd4b55cbaafb3d84ec6d50fa8
   subpackages:
   - proto
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
+- name: github.com/gxed/eventfd
+  version: 80a92cca79a8041496ccc9dd773fcb52a57ec6f9
+- name: github.com/gxed/GoEndian
+  version: 0f5c6873267e5abf306ffcdfcfa4bf77517ef4a7
 - name: github.com/howeyc/gopass
   version: 3ca23474a7c7203e0a0a070fd33508f6efdb9b3d
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
+- name: github.com/ipfs/go-log
+  version: 48d644b006ba26f1793bffc46396e981801078e3
+- name: github.com/jbenet/go-reuseport
+  version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
+  repo: https://github.com/fasaxc/go-reuseport.git
+  subpackages:
+  - poll
+  - singlepoll
+- name: github.com/jbenet/go-sockaddr
+  version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
+  subpackages:
+  - net
 - name: github.com/jonboulle/clockwork
   version: 72f9bd7c4e0c2a40055ab3d0f09654f730cce982
 - name: github.com/juju/ratelimit
@@ -231,6 +247,8 @@ imports:
   - nl
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+- name: github.com/whyrusleeping/go-logging
+  version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:

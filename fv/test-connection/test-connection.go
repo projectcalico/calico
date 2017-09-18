@@ -24,6 +24,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/docopt/docopt-go"
+	reuse "github.com/jbenet/go-reuseport"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/utils"
@@ -88,11 +89,14 @@ func tryConnect(ipAddress, port string, sourcePort string) error {
 
 	const testMessage = "hello"
 
-	var d net.Dialer
-	d.Timeout = 5 * time.Second
-	d.LocalAddr, err = net.ResolveTCPAddr("tcp", "0.0.0.0:"+sourcePort)
+	// The reuse library implements a version of net.Dialer that can reuse TCP ports, which we
+	// need in order to make connection retries work.  (Without that, the TCP port gets stuck in
+	// one of the wait states and we're not allowed to reuse the same port.)
+	var d reuse.Dialer
+	d.D.Timeout = 5 * time.Second
+	d.D.LocalAddr, err = net.ResolveTCPAddr("tcp", "0.0.0.0:"+sourcePort)
 	if err != nil {
-		log.WithError(err).Panic("Failed to resolve local port")
+		return err
 	}
 	conn, err := d.Dial("tcp", ipAddress+":"+port)
 	if err != nil {

@@ -35,13 +35,31 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+var _ = Context("Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(false)
+})
+var _ = Context("Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(true)
+})
+
+// describeNamedPortTests describes tests for either source or destination named ports.
+// If testSourcePorts is true then the direction of all the connectivity tests is flipped.
+// The set-up and policy generation is parametrised:
+//
+//     - If testSourcePorts is true then the workloads only open a single target port so that we
+//       can use the named ports as sources.  Otherwise, they open all the named ports as
+//       listeners.
+//
+//     - The policy generation is parametrised to move the match criteria from destination port
+//       to source port (and from ingress/egress to the opposite) if the flag is set.
+func describeNamedPortTests(testSourcePorts bool) {
 
 	var (
 		etcd   *containers.Container
 		felix  *containers.Container
 		client *client.Client
 		w      [4]*workload.Workload
+		cc     *workload.ConnectivityChecker
 	)
 
 	const (
@@ -85,12 +103,19 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
 			workloadTCPPort := uint16(1000 + ii)
+
+			var ports string
+			if testSourcePorts {
+				ports = "10000"
+			} else {
+				ports = fmt.Sprintf("3000,4000,1100,%d", workloadTCPPort)
+			}
 			w[ii] = workload.Run(
 				felix,
 				"w"+iiStr,
-				"cali1"+iiStr,
+				"cali0"+iiStr,
 				"10.65.0.1"+iiStr,
-				fmt.Sprintf("3000,4000,1100,%d", workloadTCPPort),
+				ports,
 			)
 
 			// Includes some named ports on each workload.  Each workload gets its own named port,
@@ -117,7 +142,12 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 					Protocol: numorstring.ProtocolFromString("udp"),
 				},
 			}
+			w[ii].DefaultPort = "10000"
 			w[ii].Configure(client)
+		}
+
+		cc = &workload.ConnectivityChecker{
+			ReverseDirection: testSourcePorts,
 		}
 	})
 
@@ -144,22 +174,22 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 
 	type ingressEgress int
 	const (
-		ingress ingressEgress = iota
-		egress
+		applyAtW0 ingressEgress = iota
+		applyAtOthers
 	)
 
 	// Baseline test with no named ports policy.
 	Context("with no named port policy", func() {
 		It("should give full connectivity to and from workload 0", func() {
-			var cc = &workload.ConnectivityChecker{}
-
 			// Outbound, w0 should be able to reach all ports on w1 & w2
 			cc.ExpectSome(w[0], w[1].Port(sharedPort))
 			cc.ExpectSome(w[0], w[2].Port(sharedPort))
 			cc.ExpectSome(w[0], w[1].Port(w1Port))
 			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
-			cc.ExpectNone(w[0], w[2].Port(9999)) // Not a port we open
+			if !testSourcePorts {
+				cc.ExpectNone(w[0], w[2].Port(9999)) // Not a port we open
+			}
 
 			// Inbound, w1 and w2 should be able to reach all ports on w0.
 			cc.ExpectSome(w[1], w[0].Port(sharedPort))
@@ -188,7 +218,7 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		// numNumericPorts controls the number of extra numeric ports we include in the list.
 		//
 		// useDestSel if set, adds a destination selector (picking out w[0]) to the rule.
-		func(negated bool, ingressOrEgress ingressEgress, numNumericPorts int, useDestSel bool) {
+		func(negated bool, applyRulesAt ingressEgress, numNumericPorts int, useDestSel bool) {
 			protoTCP := numorstring.ProtocolFromString("tcp")
 			pol := api.NewPolicy()
 			pol.Metadata.Name = "policy-1"
@@ -208,25 +238,35 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				entRule.Selector = w[0].NameSelector()
 			}
 			apiRule := api.Rule{
-				Action:      "allow",
-				Protocol:    &protoTCP,
-				Destination: entRule,
+				Action:   "allow",
+				Protocol: &protoTCP,
+			}
+			if testSourcePorts {
+				apiRule.Source = entRule
+			} else {
+				apiRule.Destination = entRule
 			}
 			rules := []api.Rule{
 				apiRule,
 			}
-			if ingressOrEgress == ingress {
-				// Ingress rules, apply only to w[0].
-				pol.Spec.IngressRules = rules
-				pol.Spec.Selector = w[0].NameSelector()
-			} else {
-				// Egress rules, to get same result, apply everywhere but w[0].
-				pol.Spec.EgressRules = rules
-				pol.Spec.Selector = fmt.Sprintf("!(%s)", w[0].NameSelector())
-			}
-			createPolicy(pol)
 
-			var cc = &workload.ConnectivityChecker{}
+			if applyRulesAt == applyAtW0 {
+				pol.Spec.Selector = w[0].NameSelector()
+				if testSourcePorts {
+					pol.Spec.EgressRules = rules
+				} else {
+					pol.Spec.IngressRules = rules
+				}
+			} else {
+				pol.Spec.Selector = fmt.Sprintf("!(%s)", w[0].NameSelector())
+				if testSourcePorts {
+					pol.Spec.IngressRules = rules
+				} else {
+					pol.Spec.EgressRules = rules
+				}
+			}
+
+			createPolicy(pol)
 
 			if negated {
 				// Only traffic _not_ going to listed ports is allowed.
@@ -269,7 +309,7 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 				}
 			}
 
-			if ingressOrEgress == egress {
+			if applyRulesAt == applyAtOthers {
 				// When we render the policy at egress, we can piggy-back some additional tests
 				// on the connectivity between w[1] and w[2].
 				if useDestSel {
@@ -309,58 +349,71 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		// Non-negated named port match.  The rule will allow traffic to the named port.
 
 		// No numeric ports in the rule, the IP set match will be rendered in the main rule.
-		Entry("(positive) ingress, no-numeric", false, ingress, 0, false),
-		Entry("(positive) egress, no-numeric", false, egress, 0, false),
+		Entry("(positive) ingress, no-numeric", false, applyAtW0, 0, false),
+		Entry("(positive) egress, no-numeric", false, applyAtOthers, 0, false),
 		// Adding a numeric port changes the way we render iptables rules to use blocks.
-		Entry("(positive) ingress, 1 numeric", false, ingress, 1, false),
-		Entry("(positive) egress, 1 numeric", false, egress, 1, false),
+		Entry("(positive) ingress, 1 numeric", false, applyAtW0, 1, false),
+		Entry("(positive) egress, 1 numeric", false, applyAtOthers, 1, false),
 		// Adding >15 numeric ports requires more than one block.
-		Entry("(positive) ingress, 16 numeric", false, ingress, 16, false),
-		Entry("(positive) egress, 16 numeric", false, egress, 16, false),
+		Entry("(positive) ingress, 16 numeric", false, applyAtW0, 16, false),
+		Entry("(positive) egress, 16 numeric", false, applyAtOthers, 16, false),
 
 		// Negated named port match.  The rule will not match traffic to the named port (so traffic
 		// to the named port will fall through to the default deny rule).
 
 		// No numeric ports in the rule, the IP set match will be rendered in the main rule.
-		Entry("(negated) ingress, no-numeric", true, ingress, 0, false),
-		Entry("(negated) egress, no-numeric", true, egress, 0, false),
+		Entry("(negated) ingress, no-numeric", true, applyAtW0, 0, false),
+		Entry("(negated) egress, no-numeric", true, applyAtOthers, 0, false),
 		// Adding a numeric port changes the way we render iptables rules to use blocks.
-		Entry("(negated) ingress, 1 numeric", true, ingress, 1, false),
-		Entry("(negated) egress, 1 numeric", true, egress, 1, false),
+		Entry("(negated) ingress, 1 numeric", true, applyAtW0, 1, false),
+		Entry("(negated) egress, 1 numeric", true, applyAtOthers, 1, false),
 		// Adding >15 numeric ports requires more than one block.
-		Entry("(negated) ingress, 16 numeric", true, ingress, 16, false),
-		Entry("(negated) egress, 16 numeric", true, egress, 16, false),
+		Entry("(negated) ingress, 16 numeric", true, applyAtW0, 16, false),
+		Entry("(negated) egress, 16 numeric", true, applyAtOthers, 16, false),
 
 		// Selection of tests that include a destination selector too.
-		Entry("(positive) egress, no-numeric with a dest selector", false, egress, 0, true),
-		Entry("(positive) egress, 16 numeric with a dest selector", false, egress, 16, true),
-		Entry("(negated) egress, no-numeric with a dest selector", true, egress, 0, true),
-		Entry("(negated) egress, 16 numeric with a dest selector", true, egress, 16, true),
+		Entry("(positive) egress, no-numeric with a dest selector", false, applyAtOthers, 0, true),
+		Entry("(positive) egress, 16 numeric with a dest selector", false, applyAtOthers, 16, true),
+		Entry("(negated) egress, no-numeric with a dest selector", true, applyAtOthers, 0, true),
+		Entry("(negated) egress, 16 numeric with a dest selector", true, applyAtOthers, 16, true),
 	)
 
 	Describe("with a policy that combines named ports and selectors", func() {
 		var policy *api.Policy
-		var cc *workload.ConnectivityChecker
+		var oppositeDir, sameDir string
+		if testSourcePorts {
+			oppositeDir = "destination"
+			sameDir = "source"
+		} else {
+			oppositeDir = "source"
+			sameDir = "destination"
+		}
 
 		BeforeEach(func() {
-			cc = &workload.ConnectivityChecker{}
+
 			protoTCP := numorstring.ProtocolFromString("tcp")
 			policy = api.NewPolicy()
 			policy.Metadata.Name = "policy-1"
 
+			entityRule := api.EntityRule{
+				Ports: []numorstring.Port{
+					numorstring.NamedPort(sharedPortName),
+					numorstring.NamedPort(w0PortName),
+					numorstring.NamedPort(w1PortName),
+					numorstring.SinglePort(4000),
+				},
+				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
+					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
+			}
+
 			apiRule := api.Rule{
 				Action:   "allow",
 				Protocol: &protoTCP,
-				Destination: api.EntityRule{
-					Ports: []numorstring.Port{
-						numorstring.NamedPort(sharedPortName),
-						numorstring.NamedPort(w0PortName),
-						numorstring.NamedPort(w1PortName),
-						numorstring.SinglePort(4000),
-					},
-					Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
-						w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
-				},
+			}
+			if testSourcePorts {
+				apiRule.Source = entityRule
+			} else {
+				apiRule.Destination = entityRule
 			}
 			policy.Spec.IngressRules = []api.Rule{
 				apiRule,
@@ -396,9 +449,13 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 		}
 		It("should have expected connectivity", expectBaselineConnectivity)
 
-		Describe("with a negative dest selector, removing w[2]", func() {
+		Describe("with a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Source.NotSelector = w[2].NameSelector()
+				} else {
+					policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+				}
 			})
 
 			It("should have expected connectivity", func() {
@@ -420,10 +477,15 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			})
 		})
 
-		Describe("with only a negative dest selector, removing w[2]", func() {
+		Describe("with only a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Destination.Selector = ""
-				policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Source.Selector = ""
+					policy.Spec.IngressRules[0].Source.NotSelector = w[2].NameSelector()
+				} else {
+					policy.Spec.IngressRules[0].Destination.Selector = ""
+					policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+				}
 			})
 
 			It("should have expected connectivity", func() {
@@ -465,47 +527,62 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			)
 		}
 
-		Describe("with source selectors, removing w[2] and w[3]", func() {
+		Describe("with "+oppositeDir+" selectors, removing w[2] and w[3]", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Source = api.EntityRule{
+				rule := api.EntityRule{
 					Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
 						w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
 					NotSelector: w[2].NameSelector(),
+				}
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Destination = rule
+				} else {
+					policy.Spec.IngressRules[0].Source = rule
 				}
 			})
 
 			It("should have expected connectivity", expectW2AndW3Blocked)
 		})
 
-		Describe("with source CIDRs, allowing only w[0] and w[1]", func() {
+		Describe("with "+oppositeDir+" CIDRs, allowing only w[0] and w[1]", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Source = api.EntityRule{
+				rule := api.EntityRule{
 					Nets: []*net.IPNet{
 						w[0].IPNet(),
 						w[1].IPNet(),
 					},
 				}
-			})
-
-			It("should have expected connectivity", expectW2AndW3Blocked)
-		})
-
-		Describe("with negated source CIDRs, allowing only w[0] and w[1]", func() {
-			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Source = api.EntityRule{
-					NotNets: []*net.IPNet{
-						w[2].IPNet(),
-						w[3].IPNet(),
-					},
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Destination = rule
+				} else {
+					policy.Spec.IngressRules[0].Source = rule
 				}
 			})
 
 			It("should have expected connectivity", expectW2AndW3Blocked)
 		})
 
-		Describe("with positive and negative CIDRs, allowing only w[0] and w[1]", func() {
+		Describe("with negated "+oppositeDir+" CIDRs, allowing only w[0] and w[1]", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Source = api.EntityRule{
+				rule := api.EntityRule{
+					NotNets: []*net.IPNet{
+						w[2].IPNet(),
+						w[3].IPNet(),
+					},
+				}
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Destination = rule
+				} else {
+					policy.Spec.IngressRules[0].Source = rule
+				}
+			})
+
+			It("should have expected connectivity", expectW2AndW3Blocked)
+		})
+
+		Describe("with positive and negative "+oppositeDir+" CIDRs, allowing only w[0] and w[1]", func() {
+			BeforeEach(func() {
+				rule := api.EntityRule{
 					Nets: []*net.IPNet{
 						w[0].IPNet(),
 						w[1].IPNet(),
@@ -515,18 +592,28 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 						w[2].IPNet(),
 					},
 				}
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Destination = rule
+				} else {
+					policy.Spec.IngressRules[0].Source = rule
+				}
 			})
-
 			It("should have expected connectivity", expectW2AndW3Blocked)
 		})
 
-		Describe("with all positive dest CIDRs replacing the selector", func() {
+		Describe("with all positive CIDRs replacing the selector", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Destination.Selector = ""
-				policy.Spec.IngressRules[0].Destination.Nets = []*net.IPNet{
+				nets := []*net.IPNet{
 					w[0].IPNet(),
 					w[1].IPNet(),
 					w[2].IPNet(),
+				}
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Source.Selector = ""
+					policy.Spec.IngressRules[0].Source.Nets = nets
+				} else {
+					policy.Spec.IngressRules[0].Destination.Selector = ""
+					policy.Spec.IngressRules[0].Destination.Nets = nets
 				}
 			})
 
@@ -534,9 +621,14 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 
 			Describe("with negative destination nets blocking w[2] and w[3]", func() {
 				BeforeEach(func() {
-					policy.Spec.IngressRules[0].Destination.NotNets = []*net.IPNet{
+					nets := []*net.IPNet{
 						w[2].IPNet(),
 						w[3].IPNet(),
+					}
+					if testSourcePorts {
+						policy.Spec.IngressRules[0].Source.NotNets = nets
+					} else {
+						policy.Spec.IngressRules[0].Destination.NotNets = nets
 					}
 				})
 
@@ -565,10 +657,15 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 
 		Describe("with negated ports conflicting with positive ports", func() {
 			BeforeEach(func() {
-				policy.Spec.IngressRules[0].Destination.NotPorts = []numorstring.Port{
+				ports := []numorstring.Port{
 					numorstring.NamedPort(w0PortName),
 					numorstring.SinglePort(w1Port),
 					numorstring.SinglePort(4000),
+				}
+				if testSourcePorts {
+					policy.Spec.IngressRules[0].Source.NotPorts = ports
+				} else {
+					policy.Spec.IngressRules[0].Destination.NotPorts = ports
 				}
 			})
 
@@ -591,10 +688,10 @@ var _ = Context("Named ports: with initialized Felix, etcd datastore, 3 workload
 			})
 		})
 	})
-})
+}
 
-// TODO Source ports
 // TODO UDP
+// TODO Corner case: UDP named port with TCP match
 
 func dumpPolicy(pol *api.Policy) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")

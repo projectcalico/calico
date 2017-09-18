@@ -39,6 +39,7 @@ type Workload struct {
 	InterfaceName    string
 	IP               string
 	Ports            string
+	DefaultPort      string
 	runCmd           *exec.Cmd
 	outPipe          io.ReadCloser
 	errPipe          io.ReadCloser
@@ -249,6 +250,8 @@ func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
 	var port string
 	if len(explicitPort) == 1 {
 		port = fmt.Sprintf("%d", explicitPort[0])
+	} else if w.DefaultPort != "" {
+		port = w.DefaultPort
 	} else if !strings.Contains(w.Ports, ",") {
 		port = w.Ports
 	} else {
@@ -304,14 +307,21 @@ type expectation struct {
 // Note that the ActualConnectivity method is passed to Eventually as a function pointer to allow
 // Ginkgo to re-evaluate the result as needed.
 type ConnectivityChecker struct {
-	expectations []expectation
+	ReverseDirection bool
+	expectations     []expectation
 }
 
 func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	if c.ReverseDirection {
+		from, to = to.(connectionSource), from.(connectionTarget)
+	}
 	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true})
 }
 
 func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	if c.ReverseDirection {
+		from, to = to.(connectionSource), from.(connectionTarget)
+	}
 	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false})
 }
 
