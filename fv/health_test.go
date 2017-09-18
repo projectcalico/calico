@@ -327,6 +327,7 @@ var _ = Describe("health tests", func() {
 		felixContainer = containers.Run("felix",
 			"--privileged",
 			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
+			"-e", "FELIX_IPV6SUPPORT=false",
 			"-e", "FELIX_HEALTHENABLED=true",
 			"-e", "FELIX_LOGSEVERITYSCREEN=info",
 			"-e", "FELIX_DATASTORETYPE=kubernetes",
