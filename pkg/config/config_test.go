@@ -123,7 +123,7 @@ var _ = Describe("Config", func() {
 		err := config.Parse()
 
 		// Assert error is generated
-		It("shoud not generate error", func() {
+		It("shoud generate error", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
