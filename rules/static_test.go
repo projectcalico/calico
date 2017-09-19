@@ -509,9 +509,9 @@ var _ = Describe("Static", func() {
 
 						// Accept if workload policy matched.
 						{Match: Match().InInterface("cali+"),
-							Action: AcceptAction{}},
+							Action: ReturnAction{}},
 						{Match: Match().OutInterface("cali+"),
-							Action: AcceptAction{}},
+							Action: ReturnAction{}},
 
 						// Non-workload through-traffic, pass to host endpoint chains.
 						{Action: ClearMarkAction{Mark: 0xe0}},
@@ -533,7 +533,7 @@ var _ = Describe("Static", func() {
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
 						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+							Action: ReturnAction{}},
 
 						// Per-prefix workload jump rules.  Note use of goto so that we
 						// don't return here.
@@ -557,7 +557,7 @@ var _ = Describe("Static", func() {
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
 						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+							Action: ReturnAction{}},
 
 						// Return if to workload.
 						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
