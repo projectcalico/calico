@@ -4,7 +4,8 @@ default: all
 all: test
 test: ut
 
-K8S_VERSION=v1.7.3
+K8S_VERSION=v1.8.0-beta.1
+KUBECTL_VERSION=v1.7.3
 CALICO_BUILD?=calico/go-build
 PACKAGE_NAME?=projectcalico/libcalico-go
 LOCAL_USER_ID?=$(shell id -u $$USER)
@@ -83,7 +84,7 @@ run-kubernetes-master: stop-kubernetes-master
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--server=http://localhost:8080 \
 		apply -f manifests/test/crds.yaml
 
@@ -92,7 +93,7 @@ run-kubernetes-master: stop-kubernetes-master
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
 		--server=http://localhost:8080 \
 		apply -f manifests/test/mock-node.yaml
 

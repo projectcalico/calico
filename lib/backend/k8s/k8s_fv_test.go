@@ -34,7 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 )
 
 var (
@@ -429,7 +429,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		res := c.clientSet.Extensions().RESTClient().
+		res := c.extensionsClientV1Beta1.
 			Post().
 			Resource("networkpolicies").
 			Namespace("default").
@@ -438,7 +438,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			res := c.clientSet.Extensions().RESTClient().
+			res := c.extensionsClientV1Beta1.
 				Delete().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -459,12 +459,82 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	It("should handle a basic NetworkPolicy with egress rules", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-syncer-basic-net-with-egress-policy",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Egress: []extensions.NetworkPolicyEgressRule{
+					{
+						To: []extensions.NetworkPolicyPeer{
+							{
+								IPBlock: &extensions.IPBlock{
+									CIDR:   "192.168.0.0/16",
+									Except: []string{"192.168.3.0/24", "192.168.4.0/24"},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress, extensions.PolicyTypeEgress},
+			},
+		}
+		res := c.extensionsClientV1Beta1.
+			Post().
+			Resource("networkpolicies").
+			Namespace("default").
+			Body(&np).
+			Do()
+
+		// Make sure we clean up after ourselves.
+		defer func() {
+			res := c.extensionsClientV1Beta1.
+				Delete().
+				Resource("networkpolicies").
+				Namespace("default").
+				Name(np.ObjectMeta.Name).
+				Do()
+			Expect(res.Error()).NotTo(HaveOccurred())
+		}()
+
+		// Check to see if the create succeeded.
+		Expect(res.Error()).NotTo(HaveOccurred())
+
+		By("Getting the NetworkPolicy", func() {
+			newNP := extensions.NetworkPolicy{}
+			c.extensionsClientV1Beta1.Get().
+				Resource("networkpolicies").
+				Namespace("default").
+				Name(np.ObjectMeta.Name).Do().
+				Into(&newNP)
+			Expect(len(newNP.Spec.Egress)).To(Equal(1))
+		})
+
+		By("Listing the Calico API policy", func() {
+			// Perform a List and ensure it shows up in the Calico API.
+			_, err := c.List(model.PolicyListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Perform a Get and ensure no error in the Calico API.
+			p, err := c.Get(model.PolicyKey{Name: fmt.Sprintf("knp.default.default.%s", np.ObjectMeta.Name)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(p).NotTo(BeNil())
+			// TODO: enable OutboundRules test once Egress rule conversion is present
+			//policy := p.Value.(*model.Policy)
+			//Expect(len(policy.OutboundRules)).To(Equal(1))
+		})
+	})
+
 	// Add a defer to wait for policies to clean up.
 	defer func() {
 		log.Warnf("[TEST] Waiting for policies to tear down")
 		It("should clean up all policies", func() {
 			nps := extensions.NetworkPolicyList{}
-			err := c.clientSet.Extensions().RESTClient().
+			err := c.extensionsClientV1Beta1.
 				Get().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -478,7 +548,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 					return
 				}
 				nps := extensions.NetworkPolicyList{}
-				err := c.clientSet.Extensions().RESTClient().
+				err := c.extensionsClientV1Beta1.
 					Get().
 					Resource("networkpolicies").
 					Namespace("default").
@@ -1021,9 +1091,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			},
 		}
 
-		By("Expecting an update with type 'KVUpdated' on the Syncer API", func() {
+		By("Expecting an update with type 'KVNew' on the Syncer API", func() {
 			cb.ExpectExists([]api.Update{
-				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVUpdated},
+				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVNew},
 			})
 		})
 
