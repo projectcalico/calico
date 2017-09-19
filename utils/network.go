@@ -148,6 +148,11 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 			return fmt.Errorf("failed to move veth to host netns: %v", err)
 		}
 
+		err = configureContainerSysctls(hasIPv4, hasIPv6)
+		if err != nil {
+			return fmt.Errorf("error configuring sysctls for the container netns, error: %s", err)
+		}
+
 		return nil
 	})
 
@@ -267,6 +272,28 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", hostVethName), "1"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// configureContainerSysctls configures necessary sysctls required inside the container netns.
+func configureContainerSysctls(hasIPv4, hasIPv6 bool) error {
+	var err error
+
+	// Globally disable IP forwarding of packets inside the container netns.
+	// Generally, we don't expect containers to be routing anything.
+
+	if hasIPv4 {
+		if err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "0"); err != nil {
+			return err
+		}
+	}
+
+	if hasIPv6 {
+		if err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "0"); err != nil {
 			return err
 		}
 	}
