@@ -16,6 +16,15 @@ ARCH?=amd64
 # Get version from git.
 GIT_VERSION?=$(shell git describe --tags --dirty)
 
+DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
+                   docker run --rm \
+                              --net=host \
+                              -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+                              -v $${PWD}:/go/src/github.com/projectcalico/k8s-policy:rw \
+                              -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
+                              -w /go/src/github.com/projectcalico/k8s-policy \
+                              $(CALICO_BUILD)
+
 ###############################################################################
 # Build targets 
 ###############################################################################
@@ -79,7 +88,7 @@ binary-containerized: vendor
 ###############################################################################
 
 ## Runs all tests - good for CI. 
-ci: clean docker-image check-copyright ut-containerized st 
+ci: clean docker-image check-copyright ut-containerized fv
 
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut-containerized: vendor 
@@ -89,6 +98,16 @@ ut-containerized: vendor
 		-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make WHAT=$(WHAT) SKIP=$(SKIP) ut'
+
+tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
+	# We pre-build the test binary so that we can run it outside a container and allow it
+	# to interact with docker.
+	$(DOCKER_GO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
+		
+.PHONY: fv
+fv: tests/fv/fv.test
+	@echo Running Go FVs.
+	cd tests/fv && ./fv.test -ginkgo.slowSpecThreshold 30
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
