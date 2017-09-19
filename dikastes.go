@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
@@ -23,22 +24,26 @@ import (
 const usage = `Dikastes - the decider.
 
 Usage:
-  dikastes server <label>... [options]
+  dikastes server <path> [options]
   dikastes client [options]
 
 Options:
+  <path>              Path to file with pod labels.
   -h --help           Show this screen.
   -l --listen <port>  IP/port to listen on. [default: :50051]
   -s --socket <sock>  Type of socket [default: tcp]
-  -d --dial <target>  Target to dial. [default: localhost:50051]`
+  -d --dial <target>  Target to dial. [default: localhost:50051]
+  --debug             Log at Debug level.`
 const version = "0.1"
 
 func main() {
-	log.SetLevel(log.DebugLevel)
 	arguments, err := docopt.Parse(usage, nil, true, version, false)
 	if err != nil {
 		println(usage)
 		return
+	}
+	if arguments["--debug"].(bool) {
+		log.SetLevel(log.DebugLevel)
 	}
 	if arguments["server"].(bool) {
 		runServer(arguments)
@@ -49,15 +54,14 @@ func main() {
 }
 
 func runServer(arguments map[string]interface{}) {
-	labels, err := parseLabels(arguments["<label>"].([]string))
+	labels, err := parseLabels(arguments["<path>"].(string))
 	if err != nil {
-		println(usage)
-		fmt.Printf("Invalid <label> format: %v", err)
+		log.Fatalf("Unable to load labels. %v", err)
 	}
 	lis, err := net.Listen(arguments["--socket"].(string), arguments["--listen"].(string))
 	defer lis.Close()
 	if err != nil {
-		log.Fatalf("Unable to listen on %v")
+		log.Fatalf("Unable to listen on %v", arguments["--listen"])
 	}
 	gs := grpc.NewServer()
 	ds, err := server.NewServer(labels)
@@ -85,9 +89,16 @@ func runServer(arguments map[string]interface{}) {
 
 // Parse labels in the form key=value and return a map.
 // Based on https://github.com/kubernetes/kubernetes/blob/master/pkg/kubectl/cmd/label.go
-func parseLabels(spec []string) (map[string]string, error) {
+func parseLabels(path string) (map[string]string, error) {
+	f, err := os.Open(path)
+	defer f.Close()
+	if err != nil {
+		return nil, err
+	}
 	labels := map[string]string{}
-	for _, labelSpec := range spec {
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		labelSpec := scanner.Text()
 		if strings.Contains(labelSpec, "=") {
 			parts := strings.Split(labelSpec, "=")
 			if len(parts) != 2 {
@@ -100,6 +111,9 @@ func parseLabels(spec []string) (map[string]string, error) {
 		} else {
 			return nil, fmt.Errorf("unknown label spec: %v", labelSpec)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 	return labels, nil
 }

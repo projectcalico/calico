@@ -44,6 +44,10 @@ func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Re
 	}
 	status := checkPolicies(policies, req)
 	resp.Status.Code = status
+	log.WithFields(log.Fields{
+		"Request":  req,
+		"Response": resp,
+	}).Info("Check complete")
 	return &resp, nil
 }
 
