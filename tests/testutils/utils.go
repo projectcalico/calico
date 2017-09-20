@@ -20,8 +20,10 @@ package testutils
 
 import (
 	"fmt"
+	"os/exec"
 
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -78,4 +80,25 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 	}
 
 	return k8sClientset, nil
+}
+
+func Stop(c *containers.Container) {
+	log.WithField("container", c.Name).Info("Stopping container")
+	args := append([]string{"stop", c.Name})
+	cmd := exec.Command("docker", args...)
+	err := cmd.Run()
+	Expect(err).NotTo(HaveOccurred())
+	out, _ := cmd.CombinedOutput()
+	log.Info(out)
+
+}
+
+func Start(c *containers.Container) {
+	log.WithField("container", c.Name).Info("Starting container")
+	args := append([]string{"start", c.Name})
+	cmd := exec.Command("docker", args...)
+	err := cmd.Run()
+	Expect(err).NotTo(HaveOccurred())
+	out, _ := cmd.CombinedOutput()
+	log.Info(out)
 }

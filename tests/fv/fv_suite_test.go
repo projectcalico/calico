@@ -18,12 +18,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 
 	"testing"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
+	logrus.SetLevel(logrus.InfoLevel)
 }
 
 func TestFv(t *testing.T) {

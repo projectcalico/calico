@@ -102,4 +102,35 @@ var _ = Describe("PolicyController", func() {
 			return err
 		}).ShouldNot(HaveOccurred())
 	})
+
+	Context("when etcd data is lost", func() {
+		BeforeEach(func() {
+			// Write some data
+			ns := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "peanutbutter",
+				},
+				Spec: v1.NamespaceSpec{},
+			}
+			_, err := k8sClient.CoreV1().Namespaces().Create(ns)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Wait for it to appear in etcd
+			Eventually(func() *api.Profile {
+				profile, _ := calicoClient.Profiles().Get(api.ProfileMetadata{Name: "k8s_ns.peanutbutter"})
+				return profile
+			}).ShouldNot(BeNil())
+		})
+		It("should recover by rewriting the data to etcd ", func() {
+			Stop(apiserver)
+			err := calicoClient.Profiles().Delete(api.ProfileMetadata{Name: "k8s_ns.peanutbutter"})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Start(apiserver)
+			Eventually(func() error {
+				_, err := calicoClient.Profiles().Get(api.ProfileMetadata{Name: "k8s_ns.peanutbutter"})
+				return err
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
+		})
+	})
 })

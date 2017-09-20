@@ -30,6 +30,7 @@ func RunPolicyController(etcdIP, kconfigfile string) *containers.Container {
 		"-e", "ENABLED_CONTROLLERS=endpoint,profile,policy",
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
+		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		"calico/kube-policy-controller:latest")
 }
