@@ -32,6 +32,14 @@ impact on Calico.
 > before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
 {: .alert .alert-danger}
 
+> **Important**: If you are using the Calico policy controller and upgrading
+> from Calico v2.5.x or earlier to Calico v2.6.x or later, you must ensure that
+> the [Calico Daemonset](#upgrading-the-calico-daemonset)
+> \([calico-node](#upgrading-the-caliconode-container)\) is upgraded
+> prior to upgrading the
+> [policy controller](#upgrading-the-calico-policy-controller).
+{: .alert .alert-danger}
+
 
 ## Upgrading a Hosted Installation of Calico
 
