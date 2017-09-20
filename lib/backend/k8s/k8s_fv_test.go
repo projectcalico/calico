@@ -31,10 +31,10 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 )
 
 var (
@@ -146,10 +146,17 @@ func (c cb) ProcessUpdates() {
 	}
 }
 
+var updateTypeStr = map[api.UpdateType]string{
+	api.UpdateTypeKVDeleted: "Deleted",
+	api.UpdateTypeKVNew:     "New",
+	api.UpdateTypeKVUnknown: "Unknown",
+	api.UpdateTypeKVUpdated: "Updated",
+}
+
 func (c cb) ExpectExists(updates []api.Update) {
 	// For each Key, wait for it to exist.
 	for _, update := range updates {
-		log.Infof("[TEST] Expecting key: %s", update.Key)
+		log.Infof("[TEST] Expecting key: %s, %s", update.Key, updateTypeStr[update.UpdateType])
 		matches := false
 
 		wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
@@ -162,7 +169,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 			// that the key exists and that it's the correct type.
 			matches = ok && update.UpdateType == u.UpdateType
 
-			log.Infof("[TEST] Key exists? %t matches? %t: %+v", ok, matches, u)
+			log.Infof("[TEST] Key exists? %t matches? %t: %+v %s", ok, matches, u, updateTypeStr[u.UpdateType])
 			if matches {
 				// Expected the update to be present, and it is.
 				return true, nil
@@ -523,9 +530,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			p, err := c.Get(model.PolicyKey{Name: fmt.Sprintf("knp.default.default.%s", np.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(p).NotTo(BeNil())
-			// TODO: enable OutboundRules test once Egress rule conversion is present
-			//policy := p.Value.(*model.Policy)
-			//Expect(len(policy.OutboundRules)).To(Equal(1))
+			policy := p.Value.(*model.Policy)
+			Expect(len(policy.OutboundRules)).To(Equal(1))
 		})
 	})
 
