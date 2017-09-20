@@ -25,10 +25,12 @@ const usage = `Dikastes - the decider.
 
 Usage:
   dikastes server <path> [options]
-  dikastes client [options]
+  dikastes client <namespace> <account> [options]
 
 Options:
   <path>              Path to file with pod labels.
+  <namespace>         Service account namespace.
+  <account>           Service account name.
   -h --help           Show this screen.
   -l --listen <port>  IP/port to listen on. [default: :50051]
   -s --socket <sock>  Type of socket [default: tcp]
@@ -130,7 +132,8 @@ func runClient(arguments map[string]interface{}) {
 	client := authz.NewAuthorizationClient(conn)
 	req := authz.Request{
 		Subject: &authz.Request_Subject{
-			ServiceAccount: "spike"}}
+			ServiceAccount: arguments["<account>"].(string),
+			Namespace:      arguments["<namespace>"].(string)}}
 	resp, err := client.Check(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Failed %v", err)

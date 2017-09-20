@@ -15,25 +15,29 @@ func match(rule api.Rule, req *authz.Request) bool {
 }
 
 func matchSubject(er api.EntityRule, subj *authz.Request_Subject) bool {
-	return matchServiceAccounts(er, subj.ServiceAccount)
+	return matchServiceAccounts(er, subj.ServiceAccount, subj.Namespace)
 }
 
 func matchAction(er api.EntityRule, act *authz.Request_Action) bool {
 	return true
 }
 
-func matchServiceAccounts(er api.EntityRule, sa string) bool {
+func matchServiceAccounts(er api.EntityRule, accountName string, namespace string) bool {
 	log.WithFields(log.Fields{
-		"subject": sa,
-		"rule":    er.ServiceAccounts},
+		"subject_account":   accountName,
+		"subject_namespace": namespace,
+		"rule":              er.ServiceAccounts},
 	).Debug("Matching service account.")
 
 	if len(er.ServiceAccounts) == 0 {
 		log.Debug("No service accounts on rule.")
 		return true
 	}
+
+	// Service accounts in the rule are in the format <namespace>:<accountName>
+	both := namespace + ":" + accountName
 	for _, sa2 := range er.ServiceAccounts {
-		if sa2 == sa {
+		if sa2 == both {
 			return true
 		}
 	}
