@@ -17,12 +17,12 @@
 package fv_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"crypto/tls"
-	"io/ioutil"
 	"net"
 
 	"github.com/kelseyhightower/envconfig"
@@ -91,6 +91,15 @@ var _ = BeforeSuite(func() {
 	Expect(etcdContainer).NotTo(BeNil())
 
 	// Start the k8s API server.
+	//
+	// The clients in this test - Felix, Typha and the test code itself - all connect
+	// anonymously to the API server, because (a) they aren't running in pods in a proper
+	// Kubernetes cluster, and (b) they don't provide client TLS certificates, and (c) they
+	// don't use any of the other non-anonymous mechanisms that Kubernetes supports.  But, as of
+	// 1.6, the API server doesn't allow anonymous users with the default "AlwaysAllow"
+	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
+	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
+	// "cluster-admin" role).
 	apiServerContainer = containers.Run("apiserver",
 		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
 		"/hyperkube", "apiserver",
@@ -103,8 +112,8 @@ var _ = BeforeSuite(func() {
 
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
-	for {
-		err := apiServerContainer.ExecMayFail(
+	Eventually(func() (err error) {
+		err = apiServerContainer.ExecMayFail(
 			"kubectl", "create", "clusterrolebinding",
 			"anonymous-admin",
 			"--clusterrole=cluster-admin",
@@ -112,63 +121,47 @@ var _ = BeforeSuite(func() {
 		)
 		if err != nil {
 			log.Info("Waiting for API server to accept cluster role binding")
-			time.Sleep(2 * time.Second)
-			continue
 		}
-		break
-	}
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
 
-	// Allow anonymous connections to the API server.  We also use this command to wait
-	// for the API server to be up.
-	for {
-		err := apiServerContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
-		Expect(err).NotTo(HaveOccurred())
-		err = apiServerContainer.ExecMayFail(
-			"kubectl", "apply", "-f", "/crds.yaml",
-		)
-		if err != nil {
-			log.Info("Waiting for API server to accept CRDs")
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		break
-	}
+	// Copy CRD registration manifest into the API server container, and apply it.
+	err = apiServerContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
+	Expect(err).NotTo(HaveOccurred())
+	err = apiServerContainer.ExecMayFail("kubectl", "apply", "-f", "/crds.yaml")
+	Expect(err).NotTo(HaveOccurred())
 
 	k8sAPIEndpoint = fmt.Sprintf("https://%s:6443", apiServerContainer.IP)
 	badK8sAPIEndpoint = fmt.Sprintf("https://%s:1234", apiServerContainer.IP)
-	for {
-		resp, err := insecureHTTPClient.Get(k8sAPIEndpoint + "/apis/extensions/v1beta1/thirdpartyresources")
-		if err != nil {
-			log.WithError(err).Info("Waiting for API server to respond to requests")
-			continue
+	Eventually(func() (err error) {
+		var resp *http.Response
+		resp, err = insecureHTTPClient.Get(k8sAPIEndpoint + "/apis/crd.projectcalico.org/v1/globalfelixconfigs")
+		if resp.StatusCode != 200 {
+			err = errors.New(fmt.Sprintf("Bad status (%v) for CRD GET request", resp.StatusCode))
 		}
-		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != 200 {
+			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
+		}
 		resp.Body.Close()
-		if err != nil {
-			log.WithError(err).Info("Waiting for API server to respond to requests")
-			continue
-		}
-		log.WithField("body", string(body)).Info("Response from API server")
-		break
-	}
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
 	log.Info("API server is up.")
 
 	// Get the API server's cert, which we need to pass to Felix/Typha
 	k8sCertFilename = "/tmp/" + apiServerContainer.Name + ".crt"
-	for {
+	Eventually(func() (err error) {
 		cmd := utils.Command("docker", "cp",
 			apiServerContainer.Name+":/var/run/kubernetes/apiserver.crt",
 			k8sCertFilename,
 		)
-		err := cmd.Run()
+		err = cmd.Run()
 		if err != nil {
 			log.WithError(err).Warn("Waiting for API cert to appear")
-			continue
 		}
-		break
-	}
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
 
-	for {
+	Eventually(func() (err error) {
 		calicoClient, err = client.New(api.CalicoAPIConfig{
 			Spec: api.CalicoAPIConfigSpec{
 				DatastoreType: api.Kubernetes,
@@ -179,26 +172,29 @@ var _ = BeforeSuite(func() {
 			},
 		})
 		if err != nil {
-			log.WithError(err).Warn("Failed to init datastore")
-			continue
+			log.WithError(err).Warn("Waiting to create Calico client")
 		}
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
+
+	Eventually(func() (err error) {
 		err = calicoClient.EnsureInitialized()
 		if err != nil {
-			log.WithError(err).Warn("Failed to init datastore")
-			continue
+			log.WithError(err).Warn("Waiting to initialize datastore")
 		}
-		break
-	}
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
 
-	for {
+	Eventually(func() (err error) {
 		k8sClient, err = kubernetes.NewForConfig(&rest.Config{
 			Transport: insecureTransport,
 			Host:      "https://" + apiServerContainer.IP + ":6443",
 		})
-		if err == nil {
-			break
+		if err != nil {
+			log.WithError(err).Warn("Waiting to create k8s client")
 		}
-	}
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
@@ -242,12 +238,12 @@ var _ = Describe("health tests", func() {
 
 			It("should become ready and stay ready", func() {
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
-				Consistently(felixReady, "30s", "1s").Should(BeGood())
+				Consistently(felixReady, "10s", "1s").Should(BeGood())
 			})
 
 			It("should become live and stay live", func() {
 				Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
-				Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+				Consistently(felixLiveness, "10s", "1s").Should(BeGood())
 			})
 		})
 
@@ -290,12 +286,12 @@ var _ = Describe("health tests", func() {
 			It("should delay readiness", func() {
 				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
 				Eventually(felixReady, "10s", "100ms").Should(BeGood())
-				Consistently(felixReady, "20s", "1s").Should(BeGood())
+				Consistently(felixReady, "10s", "1s").Should(BeGood())
 			})
 
 			It("should become live as normal", func() {
 				Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
-				Consistently(felixLiveness, "30s", "1s").Should(BeGood())
+				Consistently(felixLiveness, "10s", "1s").Should(BeGood())
 			})
 		})
 	}
@@ -374,7 +370,7 @@ var _ = Describe("health tests", func() {
 		It("should report live initially, then become non-live", func() {
 			Eventually(felixLiveness, "10s", "100ms").Should(BeGood())
 			Eventually(felixLiveness, "30s", "100ms").Should(BeBad())
-			Consistently(felixLiveness, "30s", "100ms").Should(BeBad())
+			Consistently(felixLiveness, "10s", "100ms").Should(BeBad())
 		})
 	})
 
@@ -392,7 +388,7 @@ var _ = Describe("health tests", func() {
 		It("should report live initially, then become non-live", func() {
 			Eventually(felixLiveness, "10s", "100ms").Should(BeGood())
 			Eventually(felixLiveness, "30s", "100ms").Should(BeBad())
-			Consistently(felixLiveness, "30s", "100ms").Should(BeBad())
+			Consistently(felixLiveness, "10s", "100ms").Should(BeBad())
 		})
 	})
 
@@ -411,12 +407,12 @@ var _ = Describe("health tests", func() {
 
 		It("typha should report ready", func() {
 			Eventually(typhaReady, "5s", "100ms").Should(BeGood())
-			Consistently(typhaReady, "30s", "1s").Should(BeGood())
+			Consistently(typhaReady, "10s", "1s").Should(BeGood())
 		})
 
 		It("typha should report live", func() {
 			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
-			Consistently(typhaLiveness, "30s", "1s").Should(BeGood())
+			Consistently(typhaLiveness, "10s", "1s").Should(BeGood())
 		})
 	})
 
@@ -430,13 +426,13 @@ var _ = Describe("health tests", func() {
 		})
 
 		It("typha should not report ready", func() {
-			Consistently(typhaReady, "30s", "1s").ShouldNot(BeGood())
+			Consistently(typhaReady, "10s", "1s").ShouldNot(BeGood())
 		})
 
 		// Pending because currently fails - investigation needed.
 		PIt("typha should report live", func() {
 			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
-			Consistently(typhaLiveness, "30s", "1s").Should(BeGood())
+			Consistently(typhaLiveness, "10s", "1s").Should(BeGood())
 		})
 	})
 })

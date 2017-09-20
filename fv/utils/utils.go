@@ -42,7 +42,9 @@ func run(checkNoError bool, command string, args ...string) error {
 	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
 	currentTestOutput = append(currentTestOutput, string(outputBytes))
 	if err != nil {
-		log.WithError(err).Warning("Command failed")
+		log.WithFields(log.Fields{
+			"command": command,
+			"args":    args}).WithError(err).Warning("Command failed")
 	}
 	if checkNoError {
 		Expect(err).NotTo(HaveOccurred())

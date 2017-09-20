@@ -151,7 +151,7 @@ func (c *Container) WaitUntilRunning() {
 		if strings.Contains(string(out), c.Name) {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
