@@ -308,8 +308,19 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 	log.Info("Starting Kubernetes API read loop")
 	for {
+		needSync := false
+
+		// Find out if we need to resync.
+		for _, resync := range syn.needsResync {
+			// We found something that needs resync, we can stop and move on.
+			if resync {
+				needSync = true
+				break
+			}
+		}
+
 		// If we need to resync, do so.
-		if len(syn.needsResync) != 0 {
+		if needSync {
 			// Set status to ResyncInProgress.
 			log.Debugf("Resync required - latest versions: %+v", latestVersions)
 			syn.callbacks.OnStatusUpdated(api.ResyncInProgress)
@@ -336,9 +347,12 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				return
 			}
 
-			// Close the previous crop of watchers to avoid leaking resources when we
-			// recreate them below.
-			syn.closeAllWatchers()
+			// Close out any watches that needed resync.
+			for k, resync := range syn.needsResync {
+				if _, exists := syn.openWatchers[k]; exists && resync {
+					syn.closeWatcher(k)
+				}
+			}
 		}
 
 		// Create the Kubernetes API watchers.
@@ -353,6 +367,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_NS] = nsWatch
 			nsChan = nsWatch.ResultChan()
+			syn.needsResync[KEY_NS] = false
 		}
 
 		if _, exists := syn.openWatchers[KEY_PO]; !exists {
@@ -366,6 +381,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_PO] = poWatch
 			poChan = poWatch.ResultChan()
+			syn.needsResync[KEY_PO] = false
 		}
 
 		if _, exists := syn.openWatchers[KEY_NP]; !exists {
@@ -380,6 +396,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_NP] = npWatch
 			npChan = npWatch.ResultChan()
+			syn.needsResync[KEY_NP] = false
 		}
 
 		if _, exists := syn.openWatchers[KEY_GNP]; !exists {
@@ -394,6 +411,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_GNP] = gnpWatch
 			gnpChan = gnpWatch.ResultChan()
+			syn.needsResync[KEY_GNP] = false
 		}
 
 		if _, exists := syn.openWatchers[KEY_GC]; !exists {
@@ -408,6 +426,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_GC] = globalFelixConfigWatch
 			gcChan = globalFelixConfigWatch.ResultChan()
+			syn.needsResync[KEY_GC] = false
 		}
 
 		if _, exists := syn.openWatchers[KEY_IP]; !exists {
@@ -422,6 +441,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_IP] = ipPoolWatch
 			poolChan = ipPoolWatch.ResultChan()
+			syn.needsResync[KEY_IP] = false
 		}
 
 		if _, exists := syn.openWatchers[KEY_NO]; !exists && !syn.disableNodePoll {
@@ -436,11 +456,9 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			syn.openWatchers[KEY_NO] = nodeWatch
 			noChan = nodeWatch.ResultChan()
+			syn.needsResync[KEY_NO] = false
+			syn.needsResync[KEY_HC] = false
 		}
-
-		// We resynced if we needed to, and have a complete set of watchers, so reset the
-		// needsResync flag.
-		syn.needsResync = map[string]bool{}
 
 		// Select on the various watch channels.
 		select {
