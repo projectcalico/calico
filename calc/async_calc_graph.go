@@ -106,7 +106,7 @@ func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}, hea
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
 		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
 			"Simulating a calculation graph hang.")
-		g.debugHangC = time.After(conf.DebugSimulateDataplaneHangAfter)
+		g.debugHangC = time.After(conf.DebugSimulateCalcGraphHangAfter)
 	}
 	eventBuffer.Callback = g.onEvent
 	if healthAggregator != nil {
