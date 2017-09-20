@@ -26,10 +26,12 @@ import (
 	"github.com/projectcalico/k8s-policy/pkg/controllers/pod"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
+	k8s "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
 // VERSION is filled out during the build process (using git describe output)
@@ -70,7 +72,7 @@ func main() {
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, calicoClient, err := getClients(config.Kubeconfig)
+	k8sClientset, calicoClient, extensionsClient, err := getClients(config.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
 	}
@@ -87,7 +89,7 @@ func main() {
 			namespaceController := namespace.NewNamespaceController(k8sClientset, calicoClient)
 			go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
 		case "policy":
-			policyController := networkpolicy.NewPolicyController(k8sClientset, calicoClient)
+			policyController := networkpolicy.NewPolicyController(extensionsClient, calicoClient)
 			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are endpoint, profile, policy", controllerType)
@@ -98,32 +100,38 @@ func main() {
 	select {}
 }
 
-// getClients builds and returns both Kubernetes and Calico clients.
-func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, error) {
+// getClients builds and returns Kubernetes, Calico and Extensions clients.
+func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, *rest.RESTClient, error) {
 	// First, build the Calico client using the configured environment variables.
 	cconfig, err := client.LoadClientConfig("")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Get Calico client
 	calicoClient, err := client.New(*cconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
+		return nil, nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
 
 	// Now build the Kubernetes client, we support in-cluster config and kubeconfig
 	// as means of configuring the client.
 	k8sconfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
+		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
 	// Get kubenetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
+		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
 
-	return k8sClientset, calicoClient, nil
+	// Get extensions client
+	extensionsClient, err := k8s.BuildExtensionsClientV1(*k8sconfig)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to build extensions client: %s", err)
+	}
+
+	return k8sClientset, calicoClient, extensionsClient, nil
 }
