@@ -30,3 +30,9 @@ import:
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
   version: a3291af5e19321a381b4ee9c2828c8a179c27bec
+- package: github.com/projectcalico/felix
+  repo: https://github.com/ozdanborne/felix
+  version: fv-improvements
+  subpackages:
+  - fv
+  - fv.containers
