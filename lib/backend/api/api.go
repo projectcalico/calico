@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,9 +70,7 @@ type Client interface {
 
 	// Apply updates or creates the object specified in the KVPair.
 	// On success, returns a KVPair for the object with revision
-	// information filled-in.  If the input KVPair has revision
-	// information then the update only succeeds if the revision is still
-	// current.
+	// information filled-in.  Revision information is ignored on an Apply.
 	Apply(object *model.KVPair) (*model.KVPair, error)
 
 	// Delete removes the object specified by the KVPair.  If the KVPair
@@ -85,16 +83,16 @@ type Client interface {
 	// also be removed when deleting the objects that implicitly created it.
 	// For example, deleting the last WorkloadEndpoint in a Workload will
 	// also remove the Workload.
-	Delete(object *model.KVPair) error
+	Delete(key model.Key, revision string) error
 
 	// Get returns the object identified by the given key as a KVPair with
 	// revision information.
-	Get(key model.Key) (*model.KVPair, error)
+	Get(key model.Key, revision string) (*model.KVPair, error)
 
 	// List returns a slice of KVPairs matching the input list options.
 	// list should be passed one of the model.<Type>ListOptions structs.
 	// Non-zero fields in the struct are used as filters.
-	List(list model.ListInterface) ([]*model.KVPair, error)
+	List(list model.ListInterface, revision string) (*model.KVPairList, error)
 
 	// Syncer creates an object that generates a series of KVPair updates,
 	// which paint an eventually-consistent picture of the full state of
@@ -106,10 +104,11 @@ type Client interface {
 	// any ready to be used.
 	EnsureInitialized() error
 
-	// Perform any "backdoor" initialization required by the components
-	// used in calico/node.  This is a temporary mechanism and will be
-	// removed.
-	EnsureCalicoNodeInitialized(node string) error
+	// Clean removes Calico data from the backend datastore.  Used for test purposes.
+	Clean() error
+
+	// Close the client.
+	//Close()
 }
 
 type Syncer interface {

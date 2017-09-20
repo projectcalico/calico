@@ -85,7 +85,7 @@ func (options GlobalBGPConfigListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
-	return GlobalConfigKey{Name: name}
+	return GlobalBGPConfigKey{Name: name}
 }
 
 type NodeBGPConfigKey struct {

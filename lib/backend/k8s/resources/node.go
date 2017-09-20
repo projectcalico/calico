@@ -70,7 +70,7 @@ func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 
 		// If this is an update conflict and we didn't specify a revision in the
 		// request, indicate to the nodeRetryWrapper that we can retry the action.
-		if _, ok := err.(errors.ErrorResourceUpdateConflict); ok && kvp.Revision == nil {
+		if _, ok := err.(errors.ErrorResourceUpdateConflict); ok && len(kvp.Revision) == 0 {
 			err = retryError{err: err}
 		}
 		return nil, err
@@ -140,7 +140,7 @@ func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, string, er
 			return kvps, "", nil
 		}
 		kvps = append(kvps, kvp)
-		return kvps, kvp.Revision.(string), nil
+		return kvps, kvp.Revision, nil
 	}
 
 	// Listing all nodes.

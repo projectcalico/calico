@@ -25,10 +25,13 @@ import (
 	yaml "github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/validator"
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
@@ -45,7 +48,7 @@ type Client struct {
 
 // New returns a connected Client. The ClientConfig can either be created explicitly,
 // or can be loaded from a config file or environment variables using the LoadClientConfig() function.
-func New(config api.CalicoAPIConfig) (*Client, error) {
+func New(config apiconfig.CalicoAPIConfig) (*Client, error) {
 	var err error
 	cc := Client{}
 	if cc.Backend, err = backend.NewClient(config); err != nil {
@@ -57,7 +60,7 @@ func New(config api.CalicoAPIConfig) (*Client, error) {
 // NewFromEnv loads the config from ENV variables and returns a connected Client.
 func NewFromEnv() (*Client, error) {
 
-	config, err := LoadClientConfigFromEnvironment()
+	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +104,28 @@ func (c *Client) BGPPeers() BGPPeerInterface {
 }
 
 // IPAM returns an interface for managing IP address assignment and releasing.
-func (c *Client) IPAM() IPAMInterface {
-	return newIPAM(c)
+func (c *Client) IPAM() ipam.Interface {
+	return ipam.NewIPAM(c.Backend, poolAccessor{})
+}
+
+type poolAccessor struct {
+	client *Client
+}
+
+func (p poolAccessor) GetEnabledPools(ipVersion int) ([]net.IPNet, error) {
+	pools, err := p.client.IPPools().List(api.IPPoolMetadata{})
+	if err != nil {
+		return nil, err
+	}
+	enabled := []net.IPNet{}
+	for _, pool := range pools.Items {
+		if pool.Spec.Disabled {
+			continue
+		} else {
+			enabled = append(enabled, pool.Metadata.CIDR)
+		}
+	}
+	return enabled, nil
 }
 
 // Config returns an interface for managing system configuration..
@@ -299,7 +322,7 @@ func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversion
 	// operations fills in the revision information.
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return err
-	} else if err := c.Backend.Delete(&model.KVPair{Key: k, Revision: metadata.GetObjectMetadata().Revision}); err != nil {
+	} else if err := c.Backend.Delete(k, metadata.GetObjectMetadata().Revision); err != nil {
 		return err
 	} else {
 		return nil
@@ -320,7 +343,7 @@ func (c *Client) get(metadata unversioned.ResourceMetadata, helper conversionHel
 
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return nil, err
-	} else if d, err := c.Backend.Get(k); err != nil {
+	} else if d, err := c.Backend.Get(k, ""); err != nil {
 		return nil, err
 	} else if a, err := helper.convertKVPairToAPI(d); err != nil {
 		return nil, err
@@ -339,7 +362,7 @@ func (c *Client) list(metadata unversioned.ResourceMetadata, helper conversionHe
 
 	if l, err := helper.convertMetadataToListInterface(metadata); err != nil {
 		return err
-	} else if dos, err := c.Backend.List(l); err != nil {
+	} else if dos, err := c.Backend.List(l, ""); err != nil {
 		return err
 	} else {
 		// The supplied resource list object will have an Items field.  Append the
@@ -348,7 +371,7 @@ func (c *Client) list(metadata unversioned.ResourceMetadata, helper conversionHe
 		f := e.FieldByName("Items")
 		i := reflect.ValueOf(f.Interface())
 
-		for _, d := range dos {
+		for _, d := range dos.KVPairs {
 			if a, err := helper.convertKVPairToAPI(d); err != nil {
 				return err
 			} else {

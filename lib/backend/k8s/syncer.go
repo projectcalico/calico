@@ -459,7 +459,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it.
 			kvps := syn.parseNamespaceEvent(event)
-			latestVersions.namespaceVersion = kvps[0].Revision.(string)
+			latestVersions.namespaceVersion = kvps[0].Revision
 			syn.sendUpdates(kvps, KEY_NS)
 			continue
 		case event = <-poChan:
@@ -475,7 +475,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			if kvp := syn.parsePodEvent(event); kvp != nil {
 				// Only send the update if we care about it.  We filter
 				// out a number of events that aren't useful for us.
-				latestVersions.podVersion = kvp.Revision.(string)
+				latestVersions.podVersion = kvp.Revision
 				syn.sendUpdates([]model.KVPair{*kvp}, KEY_PO)
 			}
 		case event = <-npChan:
@@ -489,7 +489,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			kvp := syn.parseNetworkPolicyEvent(event)
-			latestVersions.networkPolicyVersion = kvp.Revision.(string)
+			latestVersions.networkPolicyVersion = kvp.Revision
 			syn.sendUpdates([]model.KVPair{*kvp}, KEY_NP)
 		case event = <-gnpChan:
 			log.Debugf("Incoming GlobalNetworkPolicy watch event. Type=%s", event.Type)
@@ -504,7 +504,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			if kvp := syn.parseGlobalNetworkPolicyEvent(event); kvp != nil {
-				latestVersions.globalNetworkPolicyVersion = kvp.Revision.(string)
+				latestVersions.globalNetworkPolicyVersion = kvp.Revision
 				syn.sendUpdates([]model.KVPair{*kvp}, KEY_GNP)
 			}
 		case event = <-gcChan:
@@ -520,7 +520,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			kvp := syn.parseGlobalFelixConfigEvent(event)
-			latestVersions.globalFelixConfigVersion = kvp.Revision.(string)
+			latestVersions.globalFelixConfigVersion = kvp.Revision
 			syn.sendUpdates([]model.KVPair{*kvp}, KEY_GC)
 		case event = <-poolChan:
 			log.Debugf("Incoming IPPool watch event. Type=%s", event.Type)
@@ -535,7 +535,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			if kvp := syn.parseIPPoolEvent(event); kvp != nil {
-				latestVersions.poolVersion = kvp.Revision.(string)
+				latestVersions.poolVersion = kvp.Revision
 				syn.sendUpdates([]model.KVPair{*kvp}, KEY_IP)
 			}
 		case event = <-noChan:
@@ -556,7 +556,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				"kvpHostIP":   kvpHostIP,
 				"kvpIPIPAddr": kvpIPIPAddr,
 			}).Debug("Got node KVs.")
-			latestVersions.nodeVersion = kvpHostIP.Revision.(string)
+			latestVersions.nodeVersion = kvpHostIP.Revision
 			syn.sendUpdates([]model.KVPair{*kvpHostIP}, KEY_NO)
 			syn.sendUpdates([]model.KVPair{*kvpIPIPAddr}, KEY_HC)
 		}

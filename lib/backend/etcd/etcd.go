@@ -16,13 +16,13 @@ package etcd
 
 import (
 	goerrors "errors"
+	"strconv"
 	"strings"
-
 	"time"
 
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
-	capi "github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -46,7 +46,7 @@ type EtcdClient struct {
 	etcdKeysAPI etcd.KeysAPI
 }
 
-func NewEtcdClient(config *capi.EtcdConfig) (*EtcdClient, error) {
+func NewEtcdClient(config *apiconfig.EtcdConfig) (*EtcdClient, error) {
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
 	etcdLocation := []string{}
@@ -156,8 +156,11 @@ func (c *EtcdClient) Create(d *model.KVPair) (*model.KVPair, error) {
 func (c *EtcdClient) Update(d *model.KVPair) (*model.KVPair, error) {
 	// If the request includes a revision, set it as the etcd previous index.
 	options := etcd.SetOptions{PrevExist: etcd.PrevExist}
-	if d.Revision != nil {
-		options.PrevIndex = d.Revision.(uint64)
+	if len(d.Revision) != 0 {
+		var err error
+		if options.PrevIndex, err = strconv.ParseUint(d.Revision, 10, 64); err != nil {
+			return nil, err
+		}
 		log.Debugf("Performing CAS against etcd index: %v\n", options.PrevIndex)
 	}
 
@@ -177,8 +180,11 @@ func (c *EtcdClient) Delete(d *model.KVPair) error {
 		return err
 	}
 	etcdDeleteOpts := &etcd.DeleteOptions{Recursive: true}
-	if d.Revision != nil {
-		etcdDeleteOpts.PrevIndex = d.Revision.(uint64)
+	if len(d.Revision) != 0 {
+		var err error
+		if etcdDeleteOpts.PrevIndex, err = strconv.ParseUint(d.Revision, 10, 64); err != nil {
+			return err
+		}
 	}
 	log.Debugf("Delete Key: %s", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
@@ -234,7 +240,7 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 		return nil, err
 	}
 
-	return &model.KVPair{Key: k, Value: v, Revision: r.Node.ModifiedIndex}, nil
+	return &model.KVPair{Key: k, Value: v, Revision: strconv.FormatUint(r.Node.ModifiedIndex, 10)}, nil
 }
 
 // List entries in the datastore.  This may return an empty list of there are
@@ -322,7 +328,7 @@ func (c *EtcdClient) set(d *model.KVPair, options *etcd.SetOptions) (*model.KVPa
 
 	// Datastore object will be identical except for the modified index.
 	logCxt.WithField("newRev", result.Node.ModifiedIndex).Debug("Set succeeded")
-	d.Revision = result.Node.ModifiedIndex
+	d.Revision = strconv.FormatUint(result.Node.ModifiedIndex, 10)
 	return d, nil
 }
 
@@ -336,7 +342,7 @@ func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
 		}
 	} else if k := l.KeyFromDefaultPath(n.Key); k != nil {
 		if v, err := model.ParseValue(k, []byte(n.Value)); err == nil {
-			kv := &model.KVPair{Key: k, Value: v, Revision: n.ModifiedIndex}
+			kv := &model.KVPair{Key: k, Value: v, Revision: strconv.FormatUint(n.ModifiedIndex, 10)}
 			kvs = append(kvs, kv)
 		}
 	}

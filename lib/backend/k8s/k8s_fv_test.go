@@ -778,7 +778,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				log.WithField("Peers", peers).Debug("Deleting resources")
 				for _, peer := range peers {
 					log.WithField("Key", peer.Key).Debug("Deleting resource")
-					peer.Revision = nil
+					peer.Revision = ""
 					_ = c.Delete(peer)
 				}
 			}
@@ -1160,7 +1160,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("applying a new object", func() {
 			// Revision should not be specified when creating.
-			gc.Revision = nil
+			gc.Revision = ""
 			updGC, err = c.Apply(gc)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))

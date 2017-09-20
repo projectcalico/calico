@@ -21,6 +21,8 @@ import (
 
 	"net"
 
+	"strconv"
+
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -546,7 +548,7 @@ func (syn *etcdSyncer) sendUpdate(key string, value string, revision uint64, upd
 			KVPair: model.KVPair{
 				Key:      parsedKey,
 				Value:    parsedValue,
-				Revision: revision,
+				Revision: strconv.FormatUint(revision, 10),
 			},
 			UpdateType: updateType,
 		},
@@ -570,7 +572,7 @@ func (syn *etcdSyncer) sendDeletions(deletedKeys []string, revision uint64) {
 			KVPair: model.KVPair{
 				Key:      parsedKey,
 				Value:    nil,
-				Revision: revision,
+				Revision: strconv.FormatUint(revision, 10),
 			},
 			UpdateType: api.UpdateTypeKVDeleted,
 		})

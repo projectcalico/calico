@@ -1,49 +1,57 @@
 package: github.com/projectcalico/libcalico-go
-homepage: https://projectcalico.org
-license: Apache-2.0
-owners:
-- name: Rob Brockbank
-  email: rob@tigera.io
 import:
-- package: github.com/sirupsen/logrus
-  version: ^0.10.0
 - package: github.com/coreos/etcd
+  version: ^3.2.7
   subpackages:
   - client
+  - clientv3
+  - mvcc/mvccpb
   - pkg/transport
-- package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/kelseyhightower/envconfig
+  version: ^1.3.0
 - package: github.com/onsi/ginkgo
+  version: ^1.4.0
+- package: github.com/projectcalico/go-yaml-wrapper
+- package: github.com/prometheus/client_golang
+  version: ^0.9.0-pre1
+  subpackages:
+  - prometheus
 - package: github.com/satori/go.uuid
+  version: ^1.1.0
+- package: github.com/sirupsen/logrus
+  version: ^1.0.3
 - package: golang.org/x/net
   subpackages:
   - context
 - package: gopkg.in/go-playground/validator.v8
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - package: gopkg.in/tchap/go-patricia.v2
+  version: ^2.2.6
   subpackages:
   - patricia
-- package: golang.org/x/text
-  version: 19e51611da83d6be54ddafce4a4af510cb3e9ea4
-- package: k8s.io/client-go
-  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
+- package: k8s.io/apimachinery
   subpackages:
-  - kubernetes
-  - pkg/api
   - pkg/api/errors
   - pkg/api/meta
-  - pkg/api/unversioned
-  - pkg/api/v1
-  - pkg/apis/extensions/v1beta1
+  - pkg/apis/meta/v1
   - pkg/fields
   - pkg/runtime
   - pkg/runtime/schema
   - pkg/runtime/serializer
+  - pkg/util/intstr
   - pkg/util/wait
   - pkg/watch
+- package: k8s.io/client-go
+  version: ^4.0.0
+  subpackages:
+  - kubernetes
+  - pkg/api
+  - pkg/api/v1
+  - pkg/apis/extensions/v1beta1
+  - plugin/pkg/client/auth
   - rest
   - tools/cache
   - tools/clientcmd
-- package: github.com/prometheus/client_golang
-  version: ^0.8.0
 testImport:
 - package: github.com/onsi/gomega
+  version: ^1.2.0

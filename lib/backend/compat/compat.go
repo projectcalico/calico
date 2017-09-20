@@ -41,8 +41,8 @@ func (c *ModelAdaptor) EnsureInitialized() error {
 	return c.client.EnsureInitialized()
 }
 
-func (c *ModelAdaptor) EnsureCalicoNodeInitialized(node string) error {
-	return c.client.EnsureCalicoNodeInitialized(node)
+func (c *ModelAdaptor) Clean() error {
+	return c.client.Clean()
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.
@@ -195,51 +195,51 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *ModelAdaptor) Delete(d *model.KVPair) error {
+func (c *ModelAdaptor) Delete(k model.Key, rev string) error {
 	var err error
-	switch d.Key.(type) {
+	switch key := k.(type) {
 	case model.NodeKey:
-		p, o := toNodeDeleteComponents(d)
+		p, o := toNodeDeleteComponents(key)
 		if err = c.applyOrDeleteSubcomponents(o); err != nil {
 			return err
 		}
-		if err = c.client.Delete(p); err != nil {
+		if err = c.client.Delete(p.Key, rev); err != nil {
 			return err
 		}
 		return nil
 	case model.GlobalBGPConfigKey:
-		nd := toDatastoreGlobalBGPConfig(*d)
-		err := c.client.Delete(nd)
-		return errors.UpdateErrorIdentifier(err, d.Key)
+		nd := toDatastoreGlobalBGPConfig(model.KVPair{Key: k})
+		err := c.client.Delete(nd.Key, rev)
+		return errors.UpdateErrorIdentifier(err, k)
 	default:
-		return c.client.Delete(d)
+		return c.client.Delete(k, rev)
 	}
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
-func (c *ModelAdaptor) Get(k model.Key) (*model.KVPair, error) {
+func (c *ModelAdaptor) Get(k model.Key, rev string) (*model.KVPair, error) {
 	switch kt := k.(type) {
 	case model.ProfileKey:
 		return c.getProfile(k)
 	case model.NodeKey:
 		return c.getNode(kt)
 	case model.BlockKey:
-		return c.getBlock(k)
+		return c.getBlock(k, rev)
 	case model.GlobalBGPConfigKey:
 		nk := toDatastoreGlobalBGPConfigKey(kt)
-		if kvp, err := c.client.Get(nk); err != nil {
+		if kvp, err := c.client.Get(nk, rev); err != nil {
 			return nil, errors.UpdateErrorIdentifier(err, k)
 		} else {
 			return fromDatastoreGlobalBGPConfig(*kvp), nil
 		}
 	default:
-		return c.client.Get(k)
+		return c.client.Get(k, rev)
 	}
 }
 
 // List entries in the datastore.  This may return an empty list of there are
 // no entries matching the request in the ListInterface.
-func (c *ModelAdaptor) List(l model.ListInterface) ([]*model.KVPair, error) {
+func (c *ModelAdaptor) List(l model.ListInterface, rev string) (*model.KVPairList, error) {
 	switch lt := l.(type) {
 	case model.NodeListOptions:
 		return c.listNodes(lt)
@@ -247,16 +247,16 @@ func (c *ModelAdaptor) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return c.listBlock(lt)
 	case model.GlobalBGPConfigListOptions:
 		nl := toDatastoreGlobalBGPConfigList(lt)
-		if kvps, err := c.client.List(nl); err != nil {
+		if kvps, err := c.client.List(nl, ""); err != nil {
 			return nil, errors.UpdateErrorIdentifier(err, l)
 		} else {
-			for i, kvp := range kvps {
-				kvps[i] = fromDatastoreGlobalBGPConfig(*kvp)
+			for i, kvp := range kvps.KVPairs {
+				kvps.KVPairs[i] = fromDatastoreGlobalBGPConfig(*kvp)
 			}
 			return kvps, nil
 		}
 	default:
-		return c.client.List(l)
+		return c.client.List(l, "")
 	}
 }
 
@@ -271,7 +271,7 @@ func (c *ModelAdaptor) getProfile(k model.Key) (*model.KVPair, error) {
 	var err error
 	pk := k.(model.ProfileKey)
 
-	if t, err = c.client.Get(model.ProfileTagsKey{pk}); err != nil {
+	if t, err = c.client.Get(model.ProfileTagsKey{pk}, ""); err != nil {
 		return nil, err
 	}
 	d := model.KVPair{
@@ -282,10 +282,10 @@ func (c *ModelAdaptor) getProfile(k model.Key) (*model.KVPair, error) {
 		Revision: t.Revision,
 	}
 	p := d.Value.(*model.Profile)
-	if l, err = c.client.Get(model.ProfileLabelsKey{pk}); err == nil {
+	if l, err = c.client.Get(model.ProfileLabelsKey{pk}, ""); err == nil {
 		p.Labels = l.Value.(map[string]string)
 	}
-	if r, err = c.client.Get(model.ProfileRulesKey{pk}); err == nil {
+	if r, err = c.client.Get(model.ProfileRulesKey{pk}, ""); err == nil {
 		p.Rules = *r.Value.(*model.ProfileRules)
 	}
 	return &d, nil
@@ -294,10 +294,10 @@ func (c *ModelAdaptor) getProfile(k model.Key) (*model.KVPair, error) {
 // getBlock gets KVPair for Block. It gets the block value first,
 // then checks for `Affinity` field first, then `HostAffinity` as a backup.
 // For more details see: https://github.com/projectcalico/libcalico-go/issues/226
-func (c *ModelAdaptor) getBlock(k model.Key) (*model.KVPair, error) {
+func (c *ModelAdaptor) getBlock(k model.Key, rev string) (*model.KVPair, error) {
 	bk := k.(model.BlockKey)
 
-	v, err := c.client.Get(model.BlockKey{CIDR: bk.CIDR})
+	v, err := c.client.Get(model.BlockKey{CIDR: bk.CIDR}, rev)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (c *ModelAdaptor) getNode(nk model.NodeKey) (*model.KVPair, error) {
 
 	// Fill in the Metadata specific part of the node configuration.  At the
 	// moment, there is nothing to fill in.
-	if _, err = c.client.Get(model.HostMetadataKey{nk.Hostname}); err != nil {
+	if _, err = c.client.Get(model.HostMetadataKey{nk.Hostname}, ""); err != nil {
 		return nil, err
 	}
 	nv := model.Node{}
@@ -342,15 +342,15 @@ func validateBlockValue(kvp *model.KVPair) error {
 // Note that enumeration of the primary component is horribly inefficient
 // because of the way we do our list queries - we'll enumerate all endpoints on
 // host as well!
-func (c *ModelAdaptor) listNodes(l model.NodeListOptions) ([]*model.KVPair, error) {
+func (c *ModelAdaptor) listNodes(l model.NodeListOptions) (*model.KVPairList, error) {
 	hml := model.HostMetadataListOptions{Hostname: l.Hostname}
-	hmr, err := c.client.List(hml)
+	hmr, err := c.client.List(hml, "")
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*model.KVPair, len(hmr))
-	for idx, hmkv := range hmr {
+	results := make([]*model.KVPair, len(hmr.KVPairs))
+	for idx, hmkv := range hmr.KVPairs {
 		hmk := hmkv.Key.(model.HostMetadataKey)
 
 		// Fill in the metadata part of the node - at the moment there is
@@ -366,30 +366,30 @@ func (c *ModelAdaptor) listNodes(l model.NodeListOptions) ([]*model.KVPair, erro
 		results[idx] = &model.KVPair{Key: nk, Value: &nv}
 	}
 
-	return results, nil
+	return &model.KVPairList{KVPairs: results}, nil
 }
 
 // listBlock returns list of KVPairs for Block, includes making sure
 // backwards compatiblity. See getBlock for more details.
-func (c *ModelAdaptor) listBlock(l model.BlockListOptions) ([]*model.KVPair, error) {
+func (c *ModelAdaptor) listBlock(l model.BlockListOptions) (*model.KVPairList, error) {
 
 	// Get a list of block KVPairs.
-	blockList, err := c.client.List(l)
+	blockList, err := c.client.List(l, "")
 	if err != nil {
 		return nil, err
 	}
 
 	// Create an empty slice of KVPair.
-	results := make([]*model.KVPair, len(blockList))
+	results := make([]*model.KVPair, len(blockList.KVPairs))
 
 	// Go through the list to make sure Affinity field has a proper value,
 	// and maps the value to Affinity if the deprecated HostAffinity field is used
 	// by calling ensureBlockAffinity, and populate the KVPair slice to return.
-	for i, bkv := range blockList {
+	for i, bkv := range blockList.KVPairs {
 		results[i] = ensureBlockAffinity(bkv)
 	}
 
-	return results, nil
+	return &model.KVPairList{KVPairs: results}, nil
 }
 
 // ensureBlockAffinity ensures Affinity field has a proper value,
@@ -418,7 +418,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 	var strval string
 
 	// Fill in the Metadata specific part of the node configuration.
-	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "ip_addr_v4"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "ip_addr_v4"}, ""); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			nv.BGPIPv4Addr = &net.IP{}
@@ -432,7 +432,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "network_v4"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "network_v4"}, ""); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			_, nv.BGPIPv4Net, err = net.ParseCIDR(strval)
@@ -445,7 +445,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "ip_addr_v6"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "ip_addr_v6"}, ""); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			nv.BGPIPv6Addr = &net.IP{}
@@ -459,7 +459,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "network_v6"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "network_v6"}, ""); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			_, nv.BGPIPv6Net, err = net.ParseCIDR(strval)
@@ -472,7 +472,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "as_num"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "as_num"}, ""); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			asn, err := numorstring.ASNumberFromString(strval)
@@ -499,7 +499,7 @@ func (c *ModelAdaptor) applyOrDeleteSubcomponents(components []*model.KVPair) er
 			if _, err := c.client.Apply(component); err != nil {
 				return err
 			}
-		} else if err := c.client.Delete(component); err != nil {
+		} else if err := c.client.Delete(component.Key, component.Revision); err != nil {
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 				return err
 			}
@@ -652,42 +652,40 @@ func toNodeComponents(d *model.KVPair) (primary *model.KVPair, optional []*model
 
 // toNodeDeleteComponents is similar to function toNodeComponents, but returns nil
 // interface values which the applyOrDeleteSubcomponents method will treat as a delete.
-func toNodeDeleteComponents(d *model.KVPair) (primary *model.KVPair, optional []*model.KVPair) {
-	nk := d.Key.(model.NodeKey)
+func toNodeDeleteComponents(nk model.NodeKey) (primary *model.KVPair, optional []*model.KVPair) {
 
 	primary = &model.KVPair{
-		Key:      model.HostMetadataKey{nk.Hostname},
-		Revision: d.Revision,
+		Key: model.HostMetadataKey{nk.Hostname},
 	}
 	optional = []*model.KVPair{
-		&model.KVPair{
+		{
 			Key: model.HostIPKey{nk.Hostname},
 		},
-		&model.KVPair{
+		{
 			Key: model.NodeBGPConfigKey{
 				Nodename: nk.Hostname,
 				Name:     "ip_addr_v4",
 			},
 		},
-		&model.KVPair{
+		{
 			Key: model.NodeBGPConfigKey{
 				Nodename: nk.Hostname,
 				Name:     "ip_addr_v6",
 			},
 		},
-		&model.KVPair{
+		{
 			Key: model.NodeBGPConfigKey{
 				Nodename: nk.Hostname,
 				Name:     "as_num",
 			},
 		},
-		&model.KVPair{
+		{
 			Key: model.NodeBGPConfigKey{
 				Nodename: nk.Hostname,
 				Name:     "network_v4",
 			},
 		},
-		&model.KVPair{
+		{
 			Key: model.NodeBGPConfigKey{
 				Nodename: nk.Hostname,
 				Name:     "network_v6",

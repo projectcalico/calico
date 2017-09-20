@@ -86,15 +86,13 @@ func (c GlobalBGPConfigConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResour
 			APIVersion: "crd.projectcalico.org/v1",
 		},
 		Metadata: metav1.ObjectMeta{
-			Name: name,
+			Name:            name,
+			ResourceVersion: kvp.Revision,
 		},
 		Spec: custom.GlobalBGPConfigSpec{
 			Name:  kvp.Key.(model.GlobalBGPConfigKey).Name,
 			Value: kvp.Value.(string),
 		},
-	}
-	if kvp.Revision != nil {
-		crd.Metadata.ResourceVersion = kvp.Revision.(string)
 	}
 	return &crd, nil
 }
