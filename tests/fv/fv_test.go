@@ -28,28 +28,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/k8s-policy/tests/testutils"
+	"github.com/projectcalico/k8s-policy/tests/testutils"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/k8s-policy/tests/testutils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
-
-const kubeconfigTemplate = `apiVersion: v1
-kind: Config
-clusters:
-- name: test 
-  cluster:
-    server: http://%s:8080
-users:
-- name: calico
-contexts:
-- name: test-context
-  context:
-    cluster: test  
-    user: calico
-current-context: test-context`
 
 var _ = Describe("PolicyController", func() {
 	var (
@@ -63,7 +47,7 @@ var _ = Describe("PolicyController", func() {
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
-		calicoClient = GetCalicoClient(etcd.IP)
+		calicoClient = testutils.GetCalicoClient(etcd.IP)
 		err := calicoClient.EnsureInitialized()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -74,12 +58,12 @@ var _ = Describe("PolicyController", func() {
 		kfconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kfconfigfile.Name())
-		data := fmt.Sprintf(kubeconfigTemplate, apiserver.IP)
+		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
 		kfconfigfile.Write([]byte(data))
 
-		policyController = RunPolicyController(etcd.IP, kfconfigfile.Name())
+		policyController = testutils.RunPolicyController(etcd.IP, kfconfigfile.Name())
 
-		k8sClient, err = GetK8sClient(kfconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
 		// TODO: Use upcoming port checker functions to wait until apiserver is responding to requests.
