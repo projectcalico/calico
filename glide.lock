@@ -1,5 +1,5 @@
-hash: 9cefe4613dbc6971c6a73326f66084aa9beaf35eb23027188e0af6a0fe70bb54
-updated: 2017-08-30T10:36:24.865627131Z
+hash: f450730f2284441fecf108a7733af83332ecf64c3a42bea4d16931b76e98bb58
+updated: 2017-09-21T17:54:38.238205289Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: ab9f9a6dab164b7d1246e0e688b0ab7b94d8553e
+  version: 130e6b02ab059e7b717a096f397c5b60111cae74
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -155,7 +155,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: fc4a3648215b9beda5d08e26d76e91f12fb45079
+  version: aeceb9b7a909df4845a562a55299fd605139fcf0
   subpackages:
   - lib
   - lib/api
@@ -164,6 +164,7 @@ imports:
   - lib/backend/api
   - lib/backend/compat
   - lib/backend/etcd
+  - lib/backend/extensions
   - lib/backend/k8s
   - lib/backend/k8s/custom
   - lib/backend/k8s/resources
@@ -186,7 +187,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: f8f62de1fd1b263b089a3453d1932dd2d8e08cdb
+  version: 8a6de511ce81f162995c7091d58339cc7d0e998d
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -201,7 +202,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 61f87aac8082fa8c3c5655c7608d7478d46ac2ad
+  version: 2f17f4a9d485bf34b4bfaccc273805040e4f86c8
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -225,11 +226,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: f5a6f697a596c788d474984a38a0ac4ba0719e93
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
@@ -254,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: ab9e364efd8b52800ff7ee48a9ffba4e0ed78dfb
+  version: b6e1ae21643682ce023deb8d152024597b0e9bb4
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -435,4 +436,8 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
+- name: k8s.io/kube-openapi
+  version: 80f07ef71bb4f781233c65aa8d0369e4ecafab87
+  subpackages:
+  - pkg/common
 testImports: []
