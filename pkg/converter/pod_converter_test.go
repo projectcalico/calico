@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 var _ = Describe("PodConverter", func() {
@@ -93,6 +94,56 @@ var _ = Describe("PodConverter", func() {
 
 		It("should return workloadendpoint with correct labels", func() {
 			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(labels))
+		})
+	})
+
+	Context("should handle cache.DeletedFinalStateUnknown conversion", func() {
+		pod := cache.DeletedFinalStateUnknown{
+			Key: "cache.DeletedFinalStateUnknown",
+			Obj: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "default",
+					Labels: map[string]string{
+						"foo":   "bar",
+						"roger": "rabbit",
+					},
+				},
+				Spec: v1.PodSpec{
+					NodeName: "nodeA",
+				},
+			},
+		}
+
+		wepData, err := c.Convert(pod)
+		It("should not generate a conversion error", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Assert that the returned Key is the same as the workload ID.
+		It("should return a WorkloadEndpointData with the correct Key", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Key).To(Equal("default.podA"))
+		})
+	})
+
+	Context("should handle cache.DeletedFinalStateUnknown with non-Pod Obj", func() {
+		pod := cache.DeletedFinalStateUnknown{
+			Key: "cache.DeletedFinalStateUnknown",
+			Obj: "just a string",
+		}
+
+		_, err := c.Convert(pod)
+		It("should generate a conversion error", func() {
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("should handle bad ojbect conversion", func() {
+		pod := "just a string"
+
+		_, err := c.Convert(pod)
+		It("should generate a conversion error", func() {
+			Expect(err).To(HaveOccurred())
 		})
 	})
 

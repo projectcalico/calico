@@ -16,6 +16,7 @@ package pod
 
 import (
 	"reflect"
+	"sync"
 
 	"time"
 
@@ -33,13 +34,18 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+type EndpointCache struct {
+	sync.RWMutex
+	m map[string]api.WorkloadEndpoint
+}
+
 // PodController implements the Controller interface.  It is responsible for monitoring
 // kubernetes pods and updating workload endpoints in the Calico datastore if changed.
 type PodController struct {
 	indexer       cache.Indexer
 	informer      cache.Controller
 	wepDataCache  calicocache.ResourceCache
-	endpointCache map[string]api.WorkloadEndpoint
+	endpointCache EndpointCache
 	calicoClient  *client.Client
 	k8sClientset  *kubernetes.Clientset
 }
@@ -73,7 +79,7 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 	}
 
 	wepDataCache := calicocache.NewResourceCache(cacheArgs)
-	endpointCache := make(map[string]api.WorkloadEndpoint)
+	endpointCache := EndpointCache{m: make(map[string]api.WorkloadEndpoint)}
 
 	// Create a Pod watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "pods", "", fields.Everything())
@@ -158,7 +164,9 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 			wep := wepInterface.(converter.WorkloadEndpointData)
 			k := podConverter.GetKey(wep)
 			wepDataCache.Clean(k)
-			delete(endpointCache, k)
+			endpointCache.Lock()
+			delete(endpointCache.m, k)
+			endpointCache.Unlock()
 		},
 	}, cache.Indexers{})
 
@@ -234,7 +242,7 @@ func (c *PodController) syncToCalico(key string) error {
 	if wepData, exists := c.wepDataCache.Get(key); exists {
 		// Get workloadEndpoint from cache
 		clog := log.WithField("wep", key)
-		endpoint, exists := c.endpointCache[key]
+		endpoint, exists := c.endpointCache.m[key]
 		if !exists {
 			// Load endpoint cache.
 			clog.Warnf("No corresponding WorkloadEndpoint in cache, re-loading cache from datastore")
@@ -244,7 +252,9 @@ func (c *PodController) syncToCalico(key string) error {
 			}
 
 			// See if it is in the cache now.
-			endpoint, exists = c.endpointCache[key]
+			c.endpointCache.RLock()
+			endpoint, exists = c.endpointCache.m[key]
+			c.endpointCache.RUnlock()
 			if !exists {
 				// No endpoint in datastore - this means the pod hasn't been
 				// created by the CNI plugin yet. Just wait until it has been.
@@ -278,7 +288,9 @@ func (c *PodController) syncToCalico(key string) error {
 					return gErr
 				}
 				clog.Warn("Updated cache with latest wep from datastore.")
-				c.endpointCache[key] = *qwep
+				c.endpointCache.Lock()
+				c.endpointCache.m[key] = *qwep
+				c.endpointCache.Unlock()
 				return err
 			}
 
@@ -288,7 +300,9 @@ func (c *PodController) syncToCalico(key string) error {
 				log.WithError(err).Errorf("failed to query workload endpoint %s", key)
 				return err
 			}
-			c.endpointCache[key] = *updatedWep
+			c.endpointCache.Lock()
+			c.endpointCache.m[key] = *updatedWep
+			c.endpointCache.Unlock()
 			return nil
 		}
 	}
@@ -303,9 +317,11 @@ func (c *PodController) populateEndpointCache() error {
 		return err
 	}
 
+	c.endpointCache.Lock()
 	for _, wep := range workloadEndpointList.Items {
-		c.endpointCache[wep.Metadata.Workload] = wep
+		c.endpointCache.m[wep.Metadata.Workload] = wep
 	}
+	c.endpointCache.Unlock()
 	return nil
 }
 

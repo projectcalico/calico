@@ -15,10 +15,13 @@
 package converter
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
 	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 // ProfileNameFormat Format used by policy controller to name Calico profiles
@@ -36,7 +39,17 @@ func NewNamespaceConverter() Converter {
 }
 func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	var c k8s.Converter
-	namespace := k8sObj.(*v1.Namespace)
+	namespace, ok := k8sObj.(*v1.Namespace)
+	if !ok {
+		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
+		}
+		namespace, ok = tombstone.Obj.(*v1.Namespace)
+		if !ok {
+			return nil, fmt.Errorf("tombstone contained object that is not a Namespace %+v", k8sObj)
+		}
+	}
 	kvpair, err := c.NamespaceToProfile(namespace)
 	if err != nil {
 		return nil, err

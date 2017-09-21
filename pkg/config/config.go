@@ -29,7 +29,7 @@ type Config struct {
 	EnabledControllers string `default:"policy,profile,endpoint" split_words:"true"`
 
 	// Number of workers to run for each controller.
-	EndpointWorkers int `default:"3" split_words:"true"`
+	EndpointWorkers int `default:"1" split_words:"true"`
 	ProfileWorkers  int `default:"1" split_words:"true"`
 	PolicyWorkers   int `default:"1" split_words:"true"`
 
