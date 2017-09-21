@@ -168,8 +168,10 @@ type Config struct {
 	ClusterType           string `config:"string;"`
 	CalicoVersion         string `config:"string;"`
 
-	DebugMemoryProfilePath  string `config:"file;;"`
-	DebugDisableLogDropping bool   `config:"bool;false"`
+	DebugMemoryProfilePath          string        `config:"file;;"`
+	DebugDisableLogDropping         bool          `config:"bool;false"`
+	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
+	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 
 	// State tracking.
 

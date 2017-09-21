@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -49,13 +50,13 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 
 	BeforeEach(func() {
 
-		etcd = RunEtcd()
+		etcd = containers.RunEtcd()
 
-		client = GetEtcdClient(etcd.IP)
+		client = utils.GetEtcdClient(etcd.IP)
 		err := client.EnsureInitialized()
 		Expect(err).NotTo(HaveOccurred())
 
-		felix = RunFelix(etcd.IP)
+		felix = containers.RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname

@@ -43,12 +43,12 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 
 	BeforeEach(func() {
 
-		etcd = RunEtcd()
+		etcd = containers.RunEtcd()
 
-		client = GetEtcdClient(etcd.IP)
+		client = utils.GetEtcdClient(etcd.IP)
 		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
 
-		felix = RunFelix(etcd.IP)
+		felix = containers.RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
@@ -79,7 +79,6 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "logs", felix.Name)
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ip", "r")
 		}
