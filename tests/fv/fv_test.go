@@ -102,7 +102,6 @@ var _ = Describe("PolicyController", func() {
 			}
 			_, err := k8sClient.CoreV1().Namespaces().Create(ns)
 			Expect(err).NotTo(HaveOccurred())
-
 			Eventually(func() *api.Profile {
 				profile, _ := calicoClient.Profiles().Get(api.ProfileMetadata{Name: "k8s_ns.peanutbutter"})
 				return profile
@@ -128,7 +127,7 @@ var _ = Describe("PolicyController", func() {
 		})
 	})
 
-	Context("policies", func() {
+	Describe("policies", func() {
 		var policyName string
 		var genPolicyName string
 
@@ -165,7 +164,7 @@ var _ = Describe("PolicyController", func() {
 			}).ShouldNot(BeNil())
 		})
 
-		It("should write new policies in etcd to match policies in k8s", func() {
+		It("should re-write policies in etcd to match policies in k8s", func() {
 			// Delete the Policy.
 			err := calicoClient.Policies().Delete(api.PolicyMetadata{Name: genPolicyName})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -177,7 +176,7 @@ var _ = Describe("PolicyController", func() {
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
 		})
 
-		It("should update existing policies in etcd to match policies in k8s", func() {
+		It("should re-program policies", func() {
 			// Change the selector of the policy in etcd.
 			_, err := calicoClient.Policies().Update(&api.Policy{
 				Metadata: api.PolicyMetadata{Name: genPolicyName},
@@ -191,7 +190,7 @@ var _ = Describe("PolicyController", func() {
 			Eventually(func() string {
 				p, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
 				return p.Spec.Selector
-			}, time.Second*15, 500*time.Millisecond).ShouldNot(Equal("calico/k8s_ns == 'default' && ping == 'pong'"))
+			}, time.Second*15, 500*time.Millisecond).Should(Equal("calico/k8s_ns == 'default' && fools == 'gold'"))
 		})
 	})
 })
