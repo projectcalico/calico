@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"tigera.io/dikastes/proto"
+	authz "tigera.io/dikastes/proto"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"

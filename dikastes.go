@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"tigera.io/dikastes/proto"
+	authz "tigera.io/dikastes/proto"
 	"tigera.io/dikastes/server"
 
 	"context"
