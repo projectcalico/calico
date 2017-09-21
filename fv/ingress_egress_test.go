@@ -176,4 +176,53 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			Expect(w[0]).NotTo(HaveConnectivityTo(w[2]))
 		})
 	})
+
+	Context("with an egress deny rule", func() {
+		var policy *api.Policy
+
+		BeforeEach(func() {
+			policy = api.NewPolicy()
+			policy.Metadata.Name = "policy-1"
+			allowFromW1 := api.Rule{
+				Action: "allow",
+				Source: api.EntityRule{
+					Selector: w[1].NameSelector(),
+				},
+			}
+			policy.Spec.IngressRules = []api.Rule{allowFromW1}
+			policy.Spec.EgressRules = []api.Rule{{Action: "deny"}}
+			policy.Spec.Selector = w[0].NameSelector()
+		})
+
+		JustBeforeEach(func() {
+			_, err := client.Policies().Create(policy)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Describe("and types [ingress] (i.e. disabling the egress rule)", func() {
+			BeforeEach(func() {
+				policy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+			})
+
+			It("only w1 can connect into w0, and all egress from w0 is allowed", func() {
+				Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
+				Expect(w[1]).To(HaveConnectivityTo(w[0]))
+				Expect(w[0]).To(HaveConnectivityTo(w[1]))
+				Expect(w[0]).To(HaveConnectivityTo(w[2]))
+			})
+		})
+
+		Describe("and types [ingress, egress]", func() {
+			BeforeEach(func() {
+				policy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+			})
+
+			It("only w1 can connect into w0, and all egress from w0 is blocked", func() {
+				Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
+				Expect(w[1]).To(HaveConnectivityTo(w[0]))
+				Expect(w[0]).NotTo(HaveConnectivityTo(w[1]))
+				Expect(w[0]).NotTo(HaveConnectivityTo(w[2]))
+			})
+		})
+	})
 })
