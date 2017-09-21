@@ -18,6 +18,7 @@ message Request {
 		string pod = 4;
 		string ip_address = 5;
 		string port = 6;
+		map<string, string> service_account_labels = 7;
 	}
 
 	message Action {

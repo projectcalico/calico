@@ -15,31 +15,45 @@ func match(rule api.Rule, req *authz.Request) bool {
 }
 
 func matchSubject(er api.EntityRule, subj *authz.Request_Subject) bool {
-	return matchServiceAccounts(er, subj.ServiceAccount, subj.Namespace)
+	return matchServiceAccounts(er.ServiceAccounts, subj.ServiceAccount, subj.Namespace)
 }
 
 func matchAction(er api.EntityRule, act *authz.Request_Action) bool {
 	return true
 }
 
-func matchServiceAccounts(er api.EntityRule, accountName string, namespace string) bool {
+func matchServiceAccounts(saMatch api.ServiceAccountMatch, accountName, namespace string) bool {
 	log.WithFields(log.Fields{
-		"subject_account":   accountName,
-		"subject_namespace": namespace,
-		"rule":              er.ServiceAccounts},
+		"account":   accountName,
+		"namespace": namespace,
+		"rule":      saMatch},
 	).Debug("Matching service account.")
+	return matchServiceAccountName(saMatch.Names, accountName) &&
+		matchServiceAccountNamespace(saMatch.Namespace, namespace) &&
+		matchServiceAccountLabels(saMatch.Selector, map[string]string{})
+}
 
-	if len(er.ServiceAccounts) == 0 {
-		log.Debug("No service accounts on rule.")
+func matchServiceAccountName(names []string, name string) bool {
+	if len(names) == 0 {
+		log.Debug("No service account names on rule.")
 		return true
 	}
-
-	// Service accounts in the rule are in the format <namespace>:<accountName>
-	both := namespace + ":" + accountName
-	for _, sa2 := range er.ServiceAccounts {
-		if sa2 == both {
+	for _, name2 := range names {
+		if name2 == name {
 			return true
 		}
 	}
 	return false
+}
+
+func matchServiceAccountNamespace(matchNamespace, namespace string) bool {
+	if matchNamespace == "" {
+		log.Debug("No sercice account namespace in rule.")
+		return true
+	}
+	return matchNamespace == namespace
+}
+
+func matchServiceAccountLabels(selector string, labels map[string]string) bool {
+	return true
 }
