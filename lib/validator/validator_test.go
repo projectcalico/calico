@@ -674,16 +674,22 @@ func init() {
 		Entry("allow ingress+egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}}, true),
 		Entry("disallow repeated egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress}}, false),
 		Entry("disallow unexpected value", api.PolicySpec{Types: []api.PolicyType{"unexpected"}}, false),
-		Entry("disallow Types without ingress when IngressRules present",
+
+		// In the initial implementation, we validated against the following two cases but we found
+		// that prevented us from doing a smooth upgrade from type-less to typed policy since we
+		// couldn't write a policy that would work for back-level Felix instances while also
+		// specifying the type for up-level Felix instances.
+		Entry("allow Types without ingress when IngressRules present",
 			api.PolicySpec{
 				IngressRules: []api.Rule{{Action: "allow"}},
 				Types:        []api.PolicyType{api.PolicyTypeEgress},
-			}, false),
-		Entry("disallow Types without egress when EgressRules present",
+			}, true),
+		Entry("allow Types without egress when EgressRules present",
 			api.PolicySpec{
 				EgressRules: []api.Rule{{Action: "allow"}},
 				Types:       []api.PolicyType{api.PolicyTypeIngress},
-			}, false),
+			}, true),
+
 		Entry("allow Types with ingress when IngressRules present",
 			api.PolicySpec{
 				IngressRules: []api.Rule{{Action: "allow"}},

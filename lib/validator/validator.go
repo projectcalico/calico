@@ -552,21 +552,4 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 			mp[t] = true
 		}
 	}
-
-	// When Types is explicitly specified:
-	if len(m.Types) > 0 {
-		var exists bool
-		// 'ingress' type must be there if Policy has any ingress rules.
-		_, exists = mp[api.PolicyTypeIngress]
-		if len(m.IngressRules) > 0 && !exists {
-			structLevel.ReportError(reflect.ValueOf(m.Types),
-				"PolicySpec.Types", "", reason("'ingress' must be specified when policy has ingress rules"))
-		}
-		// 'egress' type must be there if Policy has any egress rules.
-		_, exists = mp[api.PolicyTypeEgress]
-		if len(m.EgressRules) > 0 && !exists {
-			structLevel.ReportError(reflect.ValueOf(m.Types),
-				"PolicySpec.Types", "", reason("'egress' must be specified when policy has egress rules"))
-		}
-	}
 }
