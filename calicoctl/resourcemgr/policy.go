@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,12 @@
 package resourcemgr
 
 import (
+	"strings"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 func init() {
@@ -33,18 +36,42 @@ func init() {
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.Policy)
+			if strings.HasPrefix(r.Metadata.Name, "knp.default.") {
+				return nil, calicoErrors.ErrorOperationNotSupported{
+					Identifier: r.Metadata.Name,
+					Operation:  "Apply",
+				}
+			}
 			return client.Policies().Apply(&r)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.Policy)
+			if strings.HasPrefix(r.Metadata.Name, "knp.default.") {
+				return nil, calicoErrors.ErrorOperationNotSupported{
+					Identifier: r.Metadata.Name,
+					Operation:  "Create",
+				}
+			}
 			return client.Policies().Create(&r)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.Policy)
+			if strings.HasPrefix(r.Metadata.Name, "knp.default.") {
+				return nil, calicoErrors.ErrorOperationNotSupported{
+					Identifier: r.Metadata.Name,
+					Operation:  "Update",
+				}
+			}
 			return client.Policies().Update(&r)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.Policy)
+			if strings.HasPrefix(r.Metadata.Name, "knp.default.") {
+				return nil, calicoErrors.ErrorOperationNotSupported{
+					Identifier: r.Metadata.Name,
+					Operation:  "Delete",
+				}
+			}
 			return nil, client.Policies().Delete(r.Metadata)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
