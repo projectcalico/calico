@@ -1,5 +1,5 @@
-hash: eae906dc08d4370486ff9c619ebbe7d090fe978eb12d5b4fc53a14acae976208
-updated: 2017-08-17T20:42:50.432753137Z
+hash: 0739df0216d68c81ba2d4c473e91e7453fdb3532a2993cfcf45a767f6a0f40b4
+updated: 2017-09-22T13:49:54.523389191-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -60,7 +60,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
+  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -160,12 +160,13 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/projectcalico/libcalico-go
-  version: 25a8c377d7b3299a50197a92704d606f5f5ca691
+  version: fb0f93099e89eec0379f2b30e21e8427c8dc952d
   subpackages:
   - lib/api
   - lib/api/unversioned
   - lib/backend/api
   - lib/backend/compat
+  - lib/backend/extensions
   - lib/backend/k8s
   - lib/backend/k8s/custom
   - lib/backend/k8s/resources
@@ -329,10 +330,7 @@ imports:
   - kubernetes/typed/storage/v1
   - kubernetes/typed/storage/v1beta1
   - pkg/api
-  - pkg/api/errors
   - pkg/api/install
-  - pkg/api/meta
-  - pkg/api/unversioned
   - pkg/api/v1
   - pkg/apis/apps
   - pkg/apis/apps/install
@@ -373,15 +371,9 @@ imports:
   - pkg/apis/storage/install
   - pkg/apis/storage/v1
   - pkg/apis/storage/v1beta1
-  - pkg/fields
-  - pkg/runtime
-  - pkg/runtime/schema
-  - pkg/runtime/serializer
   - pkg/util
   - pkg/util/parsers
-  - pkg/util/wait
   - pkg/version
-  - pkg/watch
   - plugin/pkg/client/auth
   - plugin/pkg/client/auth/gcp
   - plugin/pkg/client/auth/oidc
