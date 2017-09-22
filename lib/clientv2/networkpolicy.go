@@ -24,8 +24,8 @@ import (
 
 // NetworkPolicyInterface has methods to work with NetworkPolicy resources.
 type NetworkPolicyInterface interface {
-	Create(ctx context.Context, peer *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
-	Update(ctx context.Context, peer *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
+	Create(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
+	Update(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts options.DeleteOptions) error
 	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.NetworkPolicy, error)
 	List(ctx context.Context, opts options.ListOptions) (*apiv2.NetworkPolicyList, error)

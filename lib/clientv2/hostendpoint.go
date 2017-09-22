@@ -40,39 +40,50 @@ type hostEndpoints struct {
 // Create takes the representation of a HostEndpoint and creates it.  Returns the stored
 // representation of the HostEndpoint, and an error, if there is any.
 func (r hostEndpoints) Create(ctx context.Context, res *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error) {
-	panic("Create not implemented for HostEndpointInterface")
-	return nil, nil
+	out, err := r.client.resources.Create(ctx, opts, apiv2.KindHostEndpoint, NoNamespace, res)
+	if out != nil {
+		return out.(*apiv2.HostEndpoint), err
+	}
+	return nil, err
 }
 
 // Update takes the representation of a HostEndpoint and updates it. Returns the stored
 // representation of the HostEndpoint, and an error, if there is any.
 func (r hostEndpoints) Update(ctx context.Context, res *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error) {
-	panic("Update not implemented for HostEndpointInterface")
-	return nil, nil
+	out, err := r.client.resources.Update(ctx, opts, apiv2.KindHostEndpoint, NoNamespace, res)
+	if out != nil {
+		return out.(*apiv2.HostEndpoint), err
+	}
+	return nil, err
 }
 
 // Delete takes name of the HostEndpoint and deletes it. Returns an error if one occurs.
 func (r hostEndpoints) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
-	panic("Delete not implemented for HostEndpointInterface")
-	return nil
+	err := r.client.resources.Delete(ctx, opts, apiv2.KindHostEndpoint, NoNamespace, name)
+	return err
 }
 
 // Get takes name of the HostEndpoint, and returns the corresponding HostEndpoint object,
 // and an error if there is any.
 func (r hostEndpoints) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.HostEndpoint, error) {
-	panic("Get not implemented for HostEndpointInterface")
-	return nil, nil
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindHostEndpoint, NoNamespace, name)
+	if out != nil {
+		return out.(*apiv2.HostEndpoint), err
+	}
+	return nil, err
 }
 
 // List returns the list of HostEndpoint objects that match the supplied options.
 func (r hostEndpoints) List(ctx context.Context, opts options.ListOptions) (*apiv2.HostEndpointList, error) {
-	panic("List not implemented for HostEndpointInterface")
-	return nil, nil
+	res := &apiv2.HostEndpointList{}
+	if err := r.client.resources.List(ctx, opts, apiv2.KindHostEndpoint, apiv2.KindHostEndpointList, NoNamespace, AllNames, res); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Watch returns a watch.Interface that watches the HostEndpoints that match the
 // supplied options.
 func (r hostEndpoints) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	panic("Watch not implemented for HostEndpointInterface")
-	return nil, nil
+	return r.client.resources.Watch(ctx, opts, apiv2.KindHostEndpoint, NoNamespace, AllNames)
 }

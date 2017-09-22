@@ -31,11 +31,12 @@ var (
 	matchNamespacedResource = regexp.MustCompile("^/calico/resources/v2/([^/]+)/([^/]+)/([^/]+)$")
 	kindToType              = map[string]reflect.Type{
 		strings.ToLower(apiv2.KindBGPPeer):             reflect.TypeOf(apiv2.BGPPeer{}),
-		strings.ToLower(apiv2.KindIPPool):              reflect.TypeOf(apiv2.IPPool{}),
-		strings.ToLower(apiv2.KindNode):                reflect.TypeOf(apiv2.Node{}),
-		strings.ToLower(apiv2.KindHostEndpoint):        reflect.TypeOf(apiv2.HostEndpoint{}),
-		strings.ToLower(apiv2.KindNetworkPolicy):       reflect.TypeOf(apiv2.NetworkPolicy{}),
 		strings.ToLower(apiv2.KindGlobalNetworkPolicy): reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
+		strings.ToLower(apiv2.KindHostEndpoint):        reflect.TypeOf(apiv2.HostEndpoint{}),
+		strings.ToLower(apiv2.KindIPPool):              reflect.TypeOf(apiv2.IPPool{}),
+		strings.ToLower(apiv2.KindNetworkPolicy):       reflect.TypeOf(apiv2.NetworkPolicy{}),
+		strings.ToLower(apiv2.KindNode):                reflect.TypeOf(apiv2.Node{}),
+		strings.ToLower(apiv2.KindProfile):             reflect.TypeOf(apiv2.Profile{}),
 		strings.ToLower(apiv2.KindWorkloadEndpoint):    reflect.TypeOf(apiv2.WorkloadEndpoint{}),
 	}
 )

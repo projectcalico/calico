@@ -40,39 +40,50 @@ type ipPools struct {
 // Create takes the representation of a IPPool and creates it.  Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
-	panic("Create not implemented for IPPoolInterface")
-	return nil, nil
+	out, err := r.client.resources.Create(ctx, opts, apiv2.KindIPPool, NoNamespace, res)
+	if out != nil {
+		return out.(*apiv2.IPPool), err
+	}
+	return nil, err
 }
 
 // Update takes the representation of a IPPool and updates it. Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Update(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
-	panic("Update not implemented for IPPoolInterface")
-	return nil, nil
+	out, err := r.client.resources.Update(ctx, opts, apiv2.KindIPPool, NoNamespace, res)
+	if out != nil {
+		return out.(*apiv2.IPPool), err
+	}
+	return nil, err
 }
 
 // Delete takes name of the IPPool and deletes it. Returns an error if one occurs.
 func (r ipPools) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
-	panic("Delete not implemented for IPPoolInterface")
-	return nil
+	err := r.client.resources.Delete(ctx, opts, apiv2.KindIPPool, NoNamespace, name)
+	return err
 }
 
 // Get takes name of the IPPool, and returns the corresponding IPPool object,
 // and an error if there is any.
 func (r ipPools) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.IPPool, error) {
-	panic("Get not implemented for IPPoolInterface")
-	return nil, nil
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindIPPool, NoNamespace, name)
+	if out != nil {
+		return out.(*apiv2.IPPool), err
+	}
+	return nil, err
 }
 
 // List returns the list of IPPool objects that match the supplied options.
 func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv2.IPPoolList, error) {
-	panic("List not implemented for IPPoolInterface")
-	return nil, nil
+	res := &apiv2.IPPoolList{}
+	if err := r.client.resources.List(ctx, opts, apiv2.KindIPPool, apiv2.KindIPPoolList, NoNamespace, AllNames, res); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // Watch returns a watch.Interface that watches the IPPools that match the
 // supplied options.
 func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	panic("Watch not implemented for IPPoolInterface")
-	return nil, nil
+	return r.client.resources.Watch(ctx, opts, apiv2.KindIPPool, NoNamespace, AllNames)
 }
