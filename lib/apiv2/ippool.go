@@ -56,11 +56,11 @@ type IPIPConfiguration struct {
 type IPIPMode string
 
 const (
-	Off         IPIPMode = "Off"
-	Always               = "Always"
-	CrossSubnet          = "CrossSubnet"
+	IPIPModeOff         IPIPMode = "Off"
+	IPIPModeAlways               = "Always"
+	IPIPModeCrossSubnet          = "CrossSubnet"
 )
-const DefaultMode = Always
+const DefaultMode = IPIPModeAlways
 
 // IPPoolList contains a list of IPPool resources.
 type IPPoolList struct {

@@ -40,39 +40,50 @@ type globalnetworkpolicies struct {
 // Create takes the representation of a GlobalNetworkPolicy and creates it.  Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	panic("Create not implemented for GlobalNetworkPolicyInterface")
-	return nil, nil
+	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, res)
+	if out != nil {
+		return out.(*apiv2.GlobalNetworkPolicy), err
+	}
+	return nil, err
 }
 
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	panic("Update not implemented for GlobalNetworkPolicyInterface")
-	return nil, nil
+	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, res)
+	if out != nil {
+		return out.(*apiv2.GlobalNetworkPolicy), err
+	}
+	return nil, err
 }
 
 // Delete takes name of the GlobalNetworkPolicy and deletes it. Returns an error if one occurs.
 func (r globalnetworkpolicies) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
-	panic("Delete not implemented for GlobalNetworkPolicyInterface")
-	return nil
+	err := r.client.resources.Delete(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, name)
+	return err
 }
 
 // Get takes name of the GlobalNetworkPolicy, and returns the corresponding GlobalNetworkPolicy object,
 // and an error if there is any.
 func (r globalnetworkpolicies) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	panic("Get not implemented for GlobalNetworkPolicyInterface")
-	return nil, nil
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, name)
+	if out != nil {
+		return out.(*apiv2.GlobalNetworkPolicy), err
+	}
+	return nil, err
 }
 
 // List returns the list of GlobalNetworkPolicy objects that match the supplied options.
 func (r globalnetworkpolicies) List(ctx context.Context, opts options.ListOptions) (*apiv2.GlobalNetworkPolicyList, error) {
-	panic("List not implemented for GlobalNetworkPolicyInterface")
-	return nil, nil
+	res := &apiv2.GlobalNetworkPolicyList{}
+	if err := r.client.resources.List(ctx, opts, apiv2.KindGlobalNetworkPolicy, apiv2.KindGlobalNetworkPolicyList, NoNamespace, AllNames, res); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
-// Watch returns a watch.Interface that watches the GlobalNetworkPolicys that match the
+// Watch returns a watch.Interface that watches the globalnetworkpolicies that match the
 // supplied options.
 func (r globalnetworkpolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	panic("Watch not implemented for GlobalNetworkPolicyInterface")
-	return nil, nil
+	return r.client.resources.Watch(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, AllNames)
 }
