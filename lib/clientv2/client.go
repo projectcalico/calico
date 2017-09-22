@@ -21,6 +21,8 @@ import (
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -116,7 +118,7 @@ type poolAccessor struct {
 }
 
 func (p poolAccessor) GetEnabledPools(ipVersion int) ([]net.IPNet, error) {
-	pools, err := p.client.IPPools().List(options.ListOptions{})
+	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +152,7 @@ func (c client) EnsureInitialized() error {
 		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
 		Value: fmt.Sprintf("%v", hex.EncodeToString(uuid.NewV4().Bytes())),
 	}
-	if _, err := c.Backend.Create(kv); err == nil {
+	if _, err := c.Backend.Create(context.Background(), kv); err == nil {
 		log.WithField("ClusterGUID", kv.Value).Info("Assigned cluster GUID")
 	} else {
 		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {

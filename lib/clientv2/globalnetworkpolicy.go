@@ -15,6 +15,8 @@
 package clientv2
 
 import (
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -22,12 +24,12 @@ import (
 
 // GlobalNetworkPolicyInterface has methods to work with GlobalNetworkPolicy resources.
 type GlobalNetworkPolicyInterface interface {
-	Create(peer *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error)
-	Update(peer *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error)
-	Delete(name string, opts options.DeleteOptions) error
-	Get(name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error)
-	List(opts options.ListOptions) (*apiv2.GlobalNetworkPolicyList, error)
-	Watch(opts options.ListOptions) (watch.Interface, error)
+	Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error)
+	Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) error
+	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error)
+	List(ctx context.Context, opts options.ListOptions) (*apiv2.GlobalNetworkPolicyList, error)
+	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
 // globalnetworkpolicies implements GlobalNetworkPolicyInterface
@@ -37,40 +39,40 @@ type globalnetworkpolicies struct {
 
 // Create takes the representation of a GlobalNetworkPolicy and creates it.  Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
-func (r globalnetworkpolicies) Create(peer *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
+func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
 	panic("Create not implemented for GlobalNetworkPolicyInterface")
 	return nil, nil
 }
 
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
-func (r globalnetworkpolicies) Update(peer *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
+func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
 	panic("Update not implemented for GlobalNetworkPolicyInterface")
 	return nil, nil
 }
 
 // Delete takes name of the GlobalNetworkPolicy and deletes it. Returns an error if one occurs.
-func (r globalnetworkpolicies) Delete(name string, opts options.DeleteOptions) error {
+func (r globalnetworkpolicies) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
 	panic("Delete not implemented for GlobalNetworkPolicyInterface")
 	return nil
 }
 
 // Get takes name of the GlobalNetworkPolicy, and returns the corresponding GlobalNetworkPolicy object,
 // and an error if there is any.
-func (r globalnetworkpolicies) Get(name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error) {
+func (r globalnetworkpolicies) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error) {
 	panic("Get not implemented for GlobalNetworkPolicyInterface")
 	return nil, nil
 }
 
 // List returns the list of GlobalNetworkPolicy objects that match the supplied options.
-func (r globalnetworkpolicies) List(opts options.ListOptions) (*apiv2.GlobalNetworkPolicyList, error) {
+func (r globalnetworkpolicies) List(ctx context.Context, opts options.ListOptions) (*apiv2.GlobalNetworkPolicyList, error) {
 	panic("List not implemented for GlobalNetworkPolicyInterface")
 	return nil, nil
 }
 
 // Watch returns a watch.Interface that watches the GlobalNetworkPolicys that match the
 // supplied options.
-func (r globalnetworkpolicies) Watch(opts options.ListOptions) (watch.Interface, error) {
+func (r globalnetworkpolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	panic("Watch not implemented for GlobalNetworkPolicyInterface")
 	return nil, nil
 }

@@ -30,7 +30,7 @@ const (
 )
 
 // Watch entries in the datastore matching the resources specified by the ListInterface.
-func (c *etcdV3Client) Watch(l model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *etcdV3Client) Watch(cxt context.Context, l model.ListInterface, revision string) (api.WatchInterface, error) {
 	var rev int64
 	if len(revision) != 0 {
 		var err error
@@ -47,7 +47,7 @@ func (c *etcdV3Client) Watch(l model.ListInterface, revision string) (api.WatchI
 		resultChan: make(chan api.WatchEvent, outgoingBufSize),
 		errChan:    make(chan error, 1),
 	}
-	wc.ctx, wc.cancel = context.WithCancel(context.Background())
+	wc.ctx, wc.cancel = context.WithCancel(cxt)
 	go wc.run()
 	return wc, nil
 }
@@ -112,7 +112,7 @@ func (wc *watcher) ResultChan() <-chan api.WatchEvent {
 // listCurrent retrieves the existing entries and sends an event for each listed
 func (wc *watcher) listCurrent() error {
 	log.Info("Performing initial list with no revision")
-	list, err := wc.client.List(wc.list, "")
+	list, err := wc.client.List(wc.ctx, wc.list, "")
 	if err != nil {
 		return err
 	}

@@ -16,7 +16,6 @@ package clientv2
 
 import (
 	"context"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -53,12 +52,12 @@ type resourceList interface {
 
 // resourceInterface has methods to work with generic resource types.
 type resourceInterface interface {
-	Create(opts options.SetOptions, kind, ns string, in resource) (resource, error)
-	Update(opts options.SetOptions, kind, ns string, in resource) (resource, error)
-	Delete(opts options.DeleteOptions, kind, ns, name string) error
-	Get(opts options.GetOptions, kind, ns, name string) (resource, error)
-	List(opts options.ListOptions, kind, listkind, ns, name string, inout resourceList) error
-	Watch(opts options.ListOptions, kind, ns, name string) (watch.Interface, error)
+	Create(ctx context.Context, opts options.SetOptions, kind, ns string, in resource) (resource, error)
+	Update(ctx context.Context, opts options.SetOptions, kind, ns string, in resource) (resource, error)
+	Delete(ctx context.Context, opts options.DeleteOptions, kind, ns, name string) error
+	Get(ctx context.Context, opts options.GetOptions, kind, ns, name string) (resource, error)
+	List(ctx context.Context, opts options.ListOptions, kind, listkind, ns, name string, inout resourceList) error
+	Watch(ctx context.Context, opts options.ListOptions, kind, ns, name string) (watch.Interface, error)
 }
 
 // resources implements resourceInterface.
@@ -67,7 +66,7 @@ type resources struct {
 }
 
 // Create creates a resource in the backend datastore.
-func (c *resources) Create(opts options.SetOptions, kind, ns string, in resource) (resource, error) {
+func (c *resources) Create(ctx context.Context, opts options.SetOptions, kind, ns string, in resource) (resource, error) {
 	// A ResourceVersion should never be specified on a Create.
 	if len(in.GetObjectMeta().GetResourceVersion()) != 0 {
 		logWithResource(in).Info("Rejecting Create request with non-empty resource version")
@@ -87,7 +86,7 @@ func (c *resources) Create(opts options.SetOptions, kind, ns string, in resource
 
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
-	kvp, err := c.backend.Create(c.resourceToKVPair(opts, kind, in))
+	kvp, err := c.backend.Create(ctx, c.resourceToKVPair(opts, kind, in))
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
 	}
@@ -95,7 +94,7 @@ func (c *resources) Create(opts options.SetOptions, kind, ns string, in resource
 }
 
 // Update updates a resource in the backend datastore.
-func (c *resources) Update(opts options.SetOptions, kind, ns string, in resource) (resource, error) {
+func (c *resources) Update(ctx context.Context, opts options.SetOptions, kind, ns string, in resource) (resource, error) {
 	// A ResourceVersion should always be specified on an Update.
 	if len(in.GetObjectMeta().GetResourceVersion()) == 0 {
 		logWithResource(in).Info("Rejecting Update request with empty resource version")
@@ -115,7 +114,7 @@ func (c *resources) Update(opts options.SetOptions, kind, ns string, in resource
 
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
-	kvp, err := c.backend.Update(c.resourceToKVPair(opts, kind, in))
+	kvp, err := c.backend.Update(ctx, c.resourceToKVPair(opts, kind, in))
 	if kvp != nil {
 		return c.kvPairToResource(kvp), err
 	}
@@ -123,24 +122,24 @@ func (c *resources) Update(opts options.SetOptions, kind, ns string, in resource
 }
 
 // Delete deletes a resource from the backend datastore.
-func (c *resources) Delete(opts options.DeleteOptions, kind, ns, name string) error {
+func (c *resources) Delete(ctx context.Context, opts options.DeleteOptions, kind, ns, name string) error {
 	// Create a ResourceKey and pass that to the backend datastore.
 	key := model.ResourceKey{
 		Kind:      kind,
 		Name:      name,
 		Namespace: ns,
 	}
-	return c.backend.Delete(key, opts.ResourceVersion)
+	return c.backend.Delete(ctx, key, opts.ResourceVersion)
 }
 
 // Get gets a resource from the backend datastore.
-func (c *resources) Get(opts options.GetOptions, kind, ns, name string) (resource, error) {
+func (c *resources) Get(ctx context.Context, opts options.GetOptions, kind, ns, name string) (resource, error) {
 	key := model.ResourceKey{
 		Kind:      kind,
 		Name:      name,
 		Namespace: ns,
 	}
-	kvp, err := c.backend.Get(key, opts.ResourceVersion)
+	kvp, err := c.backend.Get(ctx, key, opts.ResourceVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +148,7 @@ func (c *resources) Get(opts options.GetOptions, kind, ns, name string) (resourc
 }
 
 // List lists a resource from the backend datastore.
-func (c *resources) List(opts options.ListOptions, kind, listKind, ns, name string, listObj resourceList) error {
+func (c *resources) List(ctx context.Context, opts options.ListOptions, kind, listKind, ns, name string, listObj resourceList) error {
 	list := model.ResourceListOptions{
 		Kind:      kind,
 		Name:      name,
@@ -157,7 +156,7 @@ func (c *resources) List(opts options.ListOptions, kind, listKind, ns, name stri
 	}
 
 	// Query the backend.
-	kvps, err := c.backend.List(list, opts.ResourceVersion)
+	kvps, err := c.backend.List(ctx, list, opts.ResourceVersion)
 	if err != nil {
 		return err
 	}
@@ -184,7 +183,7 @@ func (c *resources) List(opts options.ListOptions, kind, listKind, ns, name stri
 }
 
 // Watch watches a specific resource or resource type.
-func (c *resources) Watch(opts options.ListOptions, kind, ns, name string) (watch.Interface, error) {
+func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind, ns, name string) (watch.Interface, error) {
 	list := model.ResourceListOptions{
 		Kind:      kind,
 		Name:      name,
@@ -192,7 +191,7 @@ func (c *resources) Watch(opts options.ListOptions, kind, ns, name string) (watc
 	}
 
 	// Create the backend watcher.  We need to process the results to add revision data etc.
-	bw, err := c.backend.Watch(list, opts.ResourceVersion)
+	bw, err := c.backend.Watch(ctx, list, opts.ResourceVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -201,11 +200,7 @@ func (c *resources) Watch(opts options.ListOptions, kind, ns, name string) (watc
 		results: make(chan watch.Event, 100),
 		client:  c,
 	}
-	if opts.Timeout > 0 {
-		w.context, w.cancel = context.WithDeadline(context.Background(), time.Now().Add(opts.Timeout))
-	} else {
-		w.context, w.cancel = context.WithCancel(context.Background())
-	}
+	w.context, w.cancel = context.WithCancel(ctx)
 	go w.run()
 	return w, nil
 }

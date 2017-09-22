@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -603,7 +604,7 @@ func assignIPutil(ic Interface, assignIP net.IP, host string) {
 // getAffineBlocks gets all the blocks affined to the host passed in.
 func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: 4}
-	datastoreObjs, err := backend.List(opts, "")
+	datastoreObjs, err := backend.List(context.Background(), opts, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			log.Printf("No affined blocks found")

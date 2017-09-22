@@ -17,6 +17,8 @@ package api
 import (
 	"fmt"
 
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
@@ -59,14 +61,14 @@ type Client interface {
 	// Create creates the object specified in the KVPair, which must not
 	// already exist. On success, returns a KVPair for the object with
 	// revision  information filled-in.
-	Create(object *model.KVPair) (*model.KVPair, error)
+	Create(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 
 	// Update modifies the existing object specified in the KVPair.
 	// On success, returns a KVPair for the object with revision
 	// information filled-in.  If the input KVPair has revision
 	// information then the update only succeeds if the revision is still
 	// current.
-	Update(object *model.KVPair) (*model.KVPair, error)
+	Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 
 	// Apply updates or creates the object specified in the KVPair.
 	// On success, returns a KVPair for the object with revision
@@ -83,20 +85,20 @@ type Client interface {
 	// also be removed when deleting the objects that implicitly created it.
 	// For example, deleting the last WorkloadEndpoint in a Workload will
 	// also remove the Workload.
-	Delete(key model.Key, revision string) error
+	Delete(ctx context.Context, key model.Key, revision string) error
 
 	// Get returns the object identified by the given key as a KVPair with
 	// revision information.
-	Get(key model.Key, revision string) (*model.KVPair, error)
+	Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
 
 	// List returns a slice of KVPairs matching the input list options.
 	// list should be passed one of the model.<Type>ListOptions structs.
 	// Non-zero fields in the struct are used as filters.
-	List(list model.ListInterface, revision string) (*model.KVPairList, error)
+	List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
 
 	// Watch returns a WatchInterface used for watching a resources matching the
 	// input list options.
-	Watch(list model.ListInterface, revision string) (WatchInterface, error)
+	Watch(ctx context.Context, list model.ListInterface, revision string) (WatchInterface, error)
 
 	// Syncer creates an object that generates a series of KVPair updates,
 	// which paint an eventually-consistent picture of the full state of

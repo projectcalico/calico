@@ -15,6 +15,8 @@
 package clientv2
 
 import (
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -22,12 +24,12 @@ import (
 
 // HostEndpointInterface has methods to work with HostEndpoint resources.
 type HostEndpointInterface interface {
-	Create(peer *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error)
-	Update(peer *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error)
-	Delete(name string, opts options.DeleteOptions) error
-	Get(name string, opts options.GetOptions) (*apiv2.HostEndpoint, error)
-	List(opts options.ListOptions) (*apiv2.HostEndpointList, error)
-	Watch(opts options.ListOptions) (watch.Interface, error)
+	Create(ctx context.Context, res *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error)
+	Update(ctx context.Context, res *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) error
+	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.HostEndpoint, error)
+	List(ctx context.Context, opts options.ListOptions) (*apiv2.HostEndpointList, error)
+	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
 // hostEndpoints implements HostEndpointInterface
@@ -37,40 +39,40 @@ type hostEndpoints struct {
 
 // Create takes the representation of a HostEndpoint and creates it.  Returns the stored
 // representation of the HostEndpoint, and an error, if there is any.
-func (r hostEndpoints) Create(peer *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error) {
+func (r hostEndpoints) Create(ctx context.Context, res *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error) {
 	panic("Create not implemented for HostEndpointInterface")
 	return nil, nil
 }
 
 // Update takes the representation of a HostEndpoint and updates it. Returns the stored
 // representation of the HostEndpoint, and an error, if there is any.
-func (r hostEndpoints) Update(peer *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error) {
+func (r hostEndpoints) Update(ctx context.Context, res *apiv2.HostEndpoint, opts options.SetOptions) (*apiv2.HostEndpoint, error) {
 	panic("Update not implemented for HostEndpointInterface")
 	return nil, nil
 }
 
 // Delete takes name of the HostEndpoint and deletes it. Returns an error if one occurs.
-func (r hostEndpoints) Delete(name string, opts options.DeleteOptions) error {
+func (r hostEndpoints) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
 	panic("Delete not implemented for HostEndpointInterface")
 	return nil
 }
 
 // Get takes name of the HostEndpoint, and returns the corresponding HostEndpoint object,
 // and an error if there is any.
-func (r hostEndpoints) Get(name string, opts options.GetOptions) (*apiv2.HostEndpoint, error) {
+func (r hostEndpoints) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.HostEndpoint, error) {
 	panic("Get not implemented for HostEndpointInterface")
 	return nil, nil
 }
 
 // List returns the list of HostEndpoint objects that match the supplied options.
-func (r hostEndpoints) List(opts options.ListOptions) (*apiv2.HostEndpointList, error) {
+func (r hostEndpoints) List(ctx context.Context, opts options.ListOptions) (*apiv2.HostEndpointList, error) {
 	panic("List not implemented for HostEndpointInterface")
 	return nil, nil
 }
 
 // Watch returns a watch.Interface that watches the HostEndpoints that match the
 // supplied options.
-func (r hostEndpoints) Watch(opts options.ListOptions) (watch.Interface, error) {
+func (r hostEndpoints) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	panic("Watch not implemented for HostEndpointInterface")
 	return nil, nil
 }

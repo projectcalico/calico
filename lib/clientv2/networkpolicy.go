@@ -15,6 +15,8 @@
 package clientv2
 
 import (
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -22,12 +24,12 @@ import (
 
 // NetworkPolicyInterface has methods to work with NetworkPolicy resources.
 type NetworkPolicyInterface interface {
-	Create(peer *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
-	Update(peer *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
-	Delete(name string, opts options.DeleteOptions) error
-	Get(name string, opts options.GetOptions) (*apiv2.NetworkPolicy, error)
-	List(opts options.ListOptions) (*apiv2.NetworkPolicyList, error)
-	Watch(opts options.ListOptions) (watch.Interface, error)
+	Create(ctx context.Context, peer *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
+	Update(ctx context.Context, peer *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) error
+	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.NetworkPolicy, error)
+	List(ctx context.Context, opts options.ListOptions) (*apiv2.NetworkPolicyList, error)
+	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
 // networkPolicies implements NetworkPolicyInterface
@@ -38,8 +40,8 @@ type networkPolicies struct {
 
 // Create takes the representation of a NetworkPolicy and creates it.  Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
-func (r networkPolicies) Create(res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
-	out, err := r.client.resources.Create(opts, apiv2.KindNetworkPolicy, r.namespace, res)
+func (r networkPolicies) Create(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
+	out, err := r.client.resources.Create(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, res)
 	if out != nil {
 		return out.(*apiv2.NetworkPolicy), err
 	}
@@ -48,8 +50,8 @@ func (r networkPolicies) Create(res *apiv2.NetworkPolicy, opts options.SetOption
 
 // Update takes the representation of a NetworkPolicy and updates it. Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
-func (r networkPolicies) Update(res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
-	out, err := r.client.resources.Update(opts, apiv2.KindNetworkPolicy, r.namespace, res)
+func (r networkPolicies) Update(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
+	out, err := r.client.resources.Update(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, res)
 	if out != nil {
 		return out.(*apiv2.NetworkPolicy), err
 	}
@@ -57,15 +59,15 @@ func (r networkPolicies) Update(res *apiv2.NetworkPolicy, opts options.SetOption
 }
 
 // Delete takes name of the NetworkPolicy and deletes it. Returns an error if one occurs.
-func (r networkPolicies) Delete(name string, opts options.DeleteOptions) error {
-	err := r.client.resources.Delete(opts, apiv2.KindNetworkPolicy, r.namespace, name)
+func (r networkPolicies) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
+	err := r.client.resources.Delete(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, name)
 	return err
 }
 
 // Get takes name of the NetworkPolicy, and returns the corresponding NetworkPolicy object,
 // and an error if there is any.
-func (r networkPolicies) Get(name string, opts options.GetOptions) (*apiv2.NetworkPolicy, error) {
-	out, err := r.client.resources.Get(opts, apiv2.KindNetworkPolicy, r.namespace, name)
+func (r networkPolicies) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.NetworkPolicy, error) {
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, name)
 	if out != nil {
 		return out.(*apiv2.NetworkPolicy), err
 	}
@@ -73,9 +75,9 @@ func (r networkPolicies) Get(name string, opts options.GetOptions) (*apiv2.Netwo
 }
 
 // List returns the list of NetworkPolicy objects that match the supplied options.
-func (r networkPolicies) List(opts options.ListOptions) (*apiv2.NetworkPolicyList, error) {
+func (r networkPolicies) List(ctx context.Context, opts options.ListOptions) (*apiv2.NetworkPolicyList, error) {
 	res := &apiv2.NetworkPolicyList{}
-	if err := r.client.resources.List(opts, apiv2.KindNetworkPolicy, apiv2.KindNetworkPolicyList, r.namespace, AllNames, res); err != nil {
+	if err := r.client.resources.List(ctx, opts, apiv2.KindNetworkPolicy, apiv2.KindNetworkPolicyList, r.namespace, AllNames, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -83,6 +85,6 @@ func (r networkPolicies) List(opts options.ListOptions) (*apiv2.NetworkPolicyLis
 
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
-func (r networkPolicies) Watch(opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(opts, apiv2.KindNetworkPolicy, r.namespace, AllNames)
+func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
+	return r.client.resources.Watch(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, AllNames)
 }
