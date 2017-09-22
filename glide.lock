@@ -1,5 +1,5 @@
-hash: fddfa0aafb32340fd19d572139b52a80e5abede1cbe4a0316b57102a3a15ff3a
-updated: 2017-08-25T14:45:46.666523186-07:00
+hash: 5fd3b9ba72e91924d4f799865daacf212928d5b9bec931f07c0a858b881421dc
+updated: 2017-09-22T05:41:22.84924549Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -172,7 +172,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: da18e6e179b08697d589aad3172b241de5e4d8d9
+  version: fb0f93099e89eec0379f2b30e21e8427c8dc952d
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -180,6 +180,7 @@ imports:
   - lib/backend/api
   - lib/backend/compat
   - lib/backend/etcd
+  - lib/backend/extensions
   - lib/backend/k8s
   - lib/backend/k8s/custom
   - lib/backend/k8s/resources
