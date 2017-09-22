@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -954,6 +954,21 @@ class InvalidData(TestBase):
                        'kind': 'policy',
                        'metadata': {'name': 'policy2'},
                        'spec': {'egress': [{'action': 'jumpupanddown',  # invalid action
+                                            'destination': {},
+                                            'protocol': 'tcp',
+                                            'source': {},
+                                            }],
+                                'ingress': [{'action': 'allow',
+                                             'destination': {},
+                                             'protocol': 'udp',
+                                             'source': {}}],
+                                'order': 100000,
+                                'selector': ""}}),
+                   ("policy-NetworkPolicyNameRejected", {
+                       'apiVersion': 'v1',
+                       'kind': 'policy',
+                       'metadata': {'name': 'knp.default.rejectmeplease'},
+                       'spec': {'egress': [{'action': 'allow',
                                             'destination': {},
                                             'protocol': 'tcp',
                                             'source': {},
