@@ -45,6 +45,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("SrcAddrType no limit iface", Match().SrcAddrType(AddrTypeLocal, false), "-m addrtype --src-type LOCAL"),
 	Entry("NotSrcAddrType limit iface", Match().NotSrcAddrType(AddrTypeLocal, true), "-m addrtype ! --src-type LOCAL --limit-iface-out"),
 	Entry("NotSrcAddrType no limit iface", Match().NotSrcAddrType(AddrTypeLocal, false), "-m addrtype ! --src-type LOCAL"),
+	Entry("DestAddrType no limit iface", Match().DestAddrType(AddrTypeLocal), "-m addrtype --dst-type LOCAL"),
 	// Protocol.
 	Entry("Protocol", Match().Protocol("tcp"), "-p tcp"),
 	Entry("NotProtocol", Match().NotProtocol("tcp"), "! -p tcp"),

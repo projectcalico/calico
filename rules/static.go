@@ -57,15 +57,22 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// IPIP is enabled, filter incoming IPIP packets to ensure they come from a
-		// recognised host.  We use the protocol number rather than its name because the
-		// name is not guaranteed to be known by the kernel.
-		match := Match().ProtocolNum(ProtoIPIP).
-			NotSourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs))
-		inputRules = append(inputRules, Rule{
-			Match:   match,
-			Action:  DropAction{},
-			Comment: "Drop IPIP packets from non-Calico hosts",
-		})
+		// recognised host and are going to a local address on the host.  We use the protocol
+		// number rather than its name because the name is not guaranteed to be known by the kernel.
+		inputRules = append(inputRules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoIPIP).
+					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs)).
+					DestAddrType(AddrTypeLocal),
+				Action:  r.filterAllowAction,
+				Comment: "Allow IPIP packets from Calico hosts",
+			},
+			Rule{
+				Match:   Match().ProtocolNum(ProtoIPIP),
+				Action:  DropAction{},
+				Comment: "Drop IPIP packets from non-Calico hosts",
+			},
+		)
 	}
 
 	// Apply our policy to packets coming from workload endpoints.
