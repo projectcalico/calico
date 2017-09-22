@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 var _ = Describe("NamespaceConverter", func() {
@@ -110,6 +111,51 @@ var _ = Describe("NamespaceConverter", func() {
 		labels := p.(api.Profile).Metadata.Labels
 		It("should return calico profile with no labels", func() {
 			Expect(len(labels)).To(Equal(0))
+		})
+	})
+
+	Context("should handle cache.DeletedFinalStateUnknown conversion", func() {
+		ns := cache.DeletedFinalStateUnknown{
+			Key: "cache.DeletedFinalStateUnknown",
+			Obj: &k8sapi.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "default",
+					Annotations: map[string]string{},
+				},
+				Spec: k8sapi.NamespaceSpec{},
+			},
+		}
+		p, err := nsConverter.Convert(ns)
+		It("should not generate a conversion error", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Ensure correct profile name
+		expectedName := "k8s_ns.default"
+		actualName := p.(api.Profile).Metadata.Name
+		It("should return calico profile with expected name", func() {
+			Expect(actualName).Should(Equal(expectedName))
+		})
+	})
+
+	Context("should handle cache.DeletedFinalStateUnknown with non-Namespace Obj", func() {
+		ns := cache.DeletedFinalStateUnknown{
+			Key: "cache.DeletedFinalStateUnknown",
+			Obj: "just a string",
+		}
+
+		_, err := nsConverter.Convert(ns)
+		It("should generate a conversion error", func() {
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("should handle invalid object conversion", func() {
+		ns := "just a string"
+
+		_, err := nsConverter.Convert(ns)
+		It("should not generate a conversion error", func() {
+			Expect(err).To(HaveOccurred())
 		})
 	})
 

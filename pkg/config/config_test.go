@@ -15,10 +15,11 @@
 package config_test
 
 import (
+	"os"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/k8s-policy/pkg/config"
-	"os"
 )
 
 var _ = Describe("Config", func() {
@@ -41,7 +42,7 @@ var _ = Describe("Config", func() {
 		os.Setenv("LOG_LEVEL", "debug")
 		os.Setenv("RECONCILER_PERIOD", "2m5s")
 		os.Setenv("ENABLED_CONTROLLERS", "policy")
-		os.Setenv("ENDPOINT_WORKERS", "1")
+		os.Setenv("ENDPOINT_WORKERS", "3")
 		os.Setenv("PROFILE_WORKERS", "3")
 		os.Setenv("POLICY_WORKERS", "3")
 		os.Setenv("KUBECONFIG", "/home/user/.kube/config")
@@ -74,7 +75,7 @@ var _ = Describe("Config", func() {
 			Expect(config.LogLevel).To(Equal("info"))
 			Expect(config.ReconcilerPeriod).To(Equal("5m"))
 			Expect(config.EnabledControllers).To(Equal("policy,profile,endpoint"))
-			Expect(config.EndpointWorkers).To(Equal(3))
+			Expect(config.EndpointWorkers).To(Equal(1))
 			Expect(config.ProfileWorkers).To(Equal(1))
 			Expect(config.PolicyWorkers).To(Equal(1))
 			Expect(config.Kubeconfig).To(Equal(""))
@@ -103,7 +104,7 @@ var _ = Describe("Config", func() {
 			Expect(config.LogLevel).To(Equal("debug"))
 			Expect(config.ReconcilerPeriod).To(Equal("2m5s"))
 			Expect(config.EnabledControllers).To(Equal("policy"))
-			Expect(config.EndpointWorkers).To(Equal(1))
+			Expect(config.EndpointWorkers).To(Equal(3))
 			Expect(config.ProfileWorkers).To(Equal(3))
 			Expect(config.PolicyWorkers).To(Equal(3))
 			Expect(config.Kubeconfig).To(Equal("/home/user/.kube/config"))

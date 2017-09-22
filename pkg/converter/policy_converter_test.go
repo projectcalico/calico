@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/tools/cache"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -274,6 +275,54 @@ var _ = Describe("PolicyConverter", func() {
 		It("should return calico policy with ingress type", func() {
 			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
 			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+		})
+	})
+
+	Context("should handle cache.DeletedFinalStateUnknown conversion", func() {
+		np := cache.DeletedFinalStateUnknown{
+			Key: "cache.DeletedFinalStateUnknown",
+			Obj: &extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "testPolicy",
+					Namespace: "default",
+				},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := npConverter.Convert(np)
+		It("should not generate a conversion error", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Assert policy name.
+		It("should return calico policy with expected name", func() {
+			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+		})
+	})
+
+	Context("should handle cache.DeletedFinalStateUnknown with non-NetworkPolicy Obj", func() {
+		np := cache.DeletedFinalStateUnknown{
+			Key: "cache.DeletedFinalStateUnknown",
+			Obj: "just a string",
+		}
+
+		_, err := npConverter.Convert(np)
+		It("should generate a conversion error", func() {
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("should handle invalid obj for conversion", func() {
+		np := "anything"
+
+		// Parse the policy.
+		_, err := npConverter.Convert(np)
+		It("should generate a conversion error", func() {
+			Expect(err).To(HaveOccurred())
 		})
 	})
 

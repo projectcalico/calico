@@ -15,10 +15,13 @@
 package converter
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
 	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/tools/cache"
 )
 
 type policyConverter struct {
@@ -30,7 +33,17 @@ func NewPolicyConverter() Converter {
 }
 
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	np := k8sObj.(*v1beta1.NetworkPolicy)
+	np, ok := k8sObj.(*v1beta1.NetworkPolicy)
+	if !ok {
+		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
+		}
+		np, ok = tombstone.Obj.(*v1beta1.NetworkPolicy)
+		if !ok {
+			return nil, fmt.Errorf("tombstone contained object that is not a NetworkPolicy %+v", k8sObj)
+		}
+	}
 
 	var policyConverter k8s.Converter
 	kvpair, err := policyConverter.NetworkPolicyToPolicy(np)

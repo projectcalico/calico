@@ -15,11 +15,14 @@
 package converter
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
 	log "github.com/sirupsen/logrus"
 	k8sApiV1 "k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 // WorkloadEndpointData is an internal struct used to store the various bits
@@ -59,7 +62,17 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	// Convert Pod into a workload endpoint.
 	var c k8s.Converter
 	var bc backendConverter.WorkloadEndpointConverter
-	pod := k8sObj.(*k8sApiV1.Pod)
+	pod, ok := k8sObj.(*k8sApiV1.Pod)
+	if !ok {
+		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
+		}
+		pod, ok = tombstone.Obj.(*k8sApiV1.Pod)
+		if !ok {
+			return nil, fmt.Errorf("tombstone contained object that is not a Pod %+v", k8sObj)
+		}
+	}
 	kvp, err := c.PodToWorkloadEndpoint(pod)
 	if err != nil {
 		return nil, err
