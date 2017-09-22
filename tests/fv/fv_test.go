@@ -69,7 +69,7 @@ var _ = Describe("PolicyController", func() {
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
-		extensionsClient, err = GetExtensionsClient(kfconfigfile.Name())
+		extensionsClient, err = testutils.GetExtensionsClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
 		// TODO: Use upcoming port checker functions to wait until apiserver is responding to requests.
