@@ -15,12 +15,14 @@
 package clientv2
 
 import (
+	"context"
+	"time"
+
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -28,6 +30,7 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/namespace"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
 const (
@@ -147,14 +150,14 @@ func (c *resources) Get(opts options.GetOptions, kind, ns, name string) (resourc
 
 // List lists a resource from the backend datastore.
 func (c *resources) List(opts options.ListOptions, kind, listKind, ns, name string, listObj resourceList) error {
-	key := model.ResourceListOptions{
+	list := model.ResourceListOptions{
 		Kind:      kind,
 		Name:      name,
 		Namespace: ns,
 	}
 
 	// Query the backend.
-	kvps, err := c.backend.List(key, opts.ResourceVersion)
+	kvps, err := c.backend.List(list, opts.ResourceVersion)
 	if err != nil {
 		return err
 	}
@@ -182,8 +185,29 @@ func (c *resources) List(opts options.ListOptions, kind, listKind, ns, name stri
 
 // Watch watches a specific resource or resource type.
 func (c *resources) Watch(opts options.ListOptions, kind, ns, name string) (watch.Interface, error) {
-	panic("Not implemented")
-	return nil, nil
+	list := model.ResourceListOptions{
+		Kind:      kind,
+		Name:      name,
+		Namespace: ns,
+	}
+
+	// Create the backend watcher.  We need to process the results to add revision data etc.
+	bw, err := c.backend.Watch(list, opts.ResourceVersion)
+	if err != nil {
+		return nil, err
+	}
+	w := &watcher{
+		backend: bw,
+		results: make(chan watch.Event, 100),
+		client:  c,
+	}
+	if opts.Timeout > 0 {
+		w.context, w.cancel = context.WithDeadline(context.Background(), time.Now().Add(opts.Timeout))
+	} else {
+		w.context, w.cancel = context.WithCancel(context.Background())
+	}
+	go w.run()
+	return w, nil
 }
 
 // resourceToKVPair converts the resource to a KVPair that can be consumed by the
@@ -271,11 +295,77 @@ func (c *resources) handleNamespace(ns, kind string, in resource) error {
 	return nil
 }
 
+type watcher struct {
+	backend bapi.WatchInterface
+	context context.Context
+	cancel  context.CancelFunc
+	results chan watch.Event
+	client  *resources
+}
+
+func (w *watcher) Stop() {
+	w.cancel()
+}
+
+func (w *watcher) ResultChan() <-chan watch.Event {
+	return w.results
+}
+
+func (w *watcher) run() {
+	log.Info("Main client watcher loop")
+mainloop:
+	for {
+		select {
+		case event := <-w.backend.ResultChan():
+			e := w.processEvent(event)
+			select {
+			case w.results <- e:
+			case <-w.context.Done():
+				log.Info("Process backend watcher done event during watch event in main client")
+				break mainloop
+			}
+		case <-w.context.Done(): // user cancel
+			log.Info("Process backend watcher done event in main client")
+			break mainloop
+		}
+	}
+
+	log.Info("Exiting main client watcher loop")
+	w.cancel()
+	w.backend.Stop()
+	close(w.results)
+}
+
+func (w *watcher) processEvent(backendEvent bapi.WatchEvent) watch.Event {
+	apiEvent := watch.Event{
+		Error: backendEvent.Error,
+	}
+	switch backendEvent.Type {
+	case bapi.WatchError:
+		apiEvent.Type = watch.Error
+	case bapi.WatchAdded:
+		apiEvent.Type = watch.Added
+	case bapi.WatchDeleted:
+		apiEvent.Type = watch.Deleted
+	case bapi.WatchModified:
+		apiEvent.Type = watch.Modified
+	}
+
+	if backendEvent.Old != nil {
+		apiEvent.Previous = w.client.kvPairToResource(backendEvent.Old)
+	}
+	if backendEvent.New != nil {
+		apiEvent.Object = w.client.kvPairToResource(backendEvent.New)
+	}
+
+	return apiEvent
+}
+
 func logWithResource(res resource) *log.Entry {
 	return log.WithFields(log.Fields{
-		"Kind": res.GetObjectKind().GroupVersionKind(),
-		"Name": res.GetObjectMeta().GetName(),
-		"Namespace": res.GetObjectMeta().GetNamespace(),
+		"Kind":            res.GetObjectKind().GroupVersionKind(),
+		"Name":            res.GetObjectMeta().GetName(),
+		"Namespace":       res.GetObjectMeta().GetNamespace(),
 		"ResourceVersion": res.GetObjectMeta().GetResourceVersion(),
 	})
 }

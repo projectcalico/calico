@@ -260,6 +260,10 @@ func (c *ModelAdaptor) List(l model.ListInterface, rev string) (*model.KVPairLis
 	}
 }
 
+func (c *ModelAdaptor) Watch(l model.ListInterface, revision string) (api.WatchInterface, error) {
+	return c.client.Watch(l, revision)
+}
+
 func (c *ModelAdaptor) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	return c.client.Syncer(callbacks)
 }

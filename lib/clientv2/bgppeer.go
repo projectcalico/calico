@@ -15,10 +15,9 @@
 package clientv2
 
 import (
-	"k8s.io/apimachinery/pkg/watch"
-
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
 // BGPPeerInterface has methods to work with BGPPeer resources.
@@ -84,6 +83,5 @@ func (r bgpPeers) List(opts options.ListOptions) (*apiv2.BGPPeerList, error) {
 // Watch returns a watch.Interface that watches the BGPPeers that match the
 // supplied options.
 func (r bgpPeers) Watch(opts options.ListOptions) (watch.Interface, error) {
-	panic("Watch not implemented for BGPPeerInterface")
-	return nil, nil
+	return r.client.resources.Watch(opts, apiv2.KindBGPPeer, NoNamespace, AllNames)
 }

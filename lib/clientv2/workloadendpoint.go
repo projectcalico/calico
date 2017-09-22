@@ -15,10 +15,9 @@
 package clientv2
 
 import (
-	"k8s.io/apimachinery/pkg/watch"
-
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
 // WorkloadEndpointInterface has methods to work with WorkloadEndpoint resources.

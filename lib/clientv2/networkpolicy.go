@@ -15,10 +15,9 @@
 package clientv2
 
 import (
-	"k8s.io/apimachinery/pkg/watch"
-
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
 // NetworkPolicyInterface has methods to work with NetworkPolicy resources.
@@ -85,6 +84,5 @@ func (r networkPolicies) List(opts options.ListOptions) (*apiv2.NetworkPolicyLis
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
 func (r networkPolicies) Watch(opts options.ListOptions) (watch.Interface, error) {
-	panic("Watch not implemented for NetworkPolicyInterface")
-	return nil, nil
+	return r.client.resources.Watch(opts, apiv2.KindNetworkPolicy, r.namespace, AllNames)
 }

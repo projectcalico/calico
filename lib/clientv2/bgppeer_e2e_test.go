@@ -29,12 +29,26 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
 // Perform CRUD operations on Global and Node-specific BGP Peer Resources.
 var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
-	DescribeTable("BGPPeer e2e tests",
+	name1 := "bgpnode-1"
+	name2 := "bgpnode-2"
+	spec1 := apiv2.BGPPeerSpec{
+		Node:     "node1",
+		PeerIP:   "10.0.0.1",
+		ASNumber: numorstring.ASNumber(6512),
+	}
+	spec2 := apiv2.BGPPeerSpec{
+		Node:     "node2",
+		PeerIP:   "20.0.0.1",
+		ASNumber: numorstring.ASNumber(6511),
+	}
+
+	DescribeTable("BGPPeer e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv2.BGPPeerSpec) {
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
@@ -67,10 +81,10 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res1, name1, spec1)
+			testutils.ExpectResource(res1, apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
 
 			// Track the version of the original data for name1.
-			rv1_1 := res1.ObjectMeta.ResourceVersion
+			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same BGPPeer with name1 but with spec2")
 			res1, outError = c.BGPPeers().Create(&apiv2.BGPPeer{
@@ -80,14 +94,14 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: BGPPeer(" + name1 + ")"))
 			// Check return value is actually the previously stored value.
-			assertBGPPeer(res1, name1, spec1)
-			Expect(res1.ObjectMeta.ResourceVersion).To(Equal(rv1_1))
+			testutils.ExpectResource(res1, apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
+			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting BGPPeer (name1) and comparing the output against spec1")
 			res, outError = c.BGPPeers().Get(name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res, name1, spec1)
-			Expect(res.ObjectMeta.ResourceVersion).To(Equal(res1.ObjectMeta.ResourceVersion))
+			testutils.ExpectResource(res, apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
+			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting BGPPeer (name2) before it is created")
 			res, outError = c.BGPPeers().Get(name2, options.GetOptions{})
@@ -98,7 +112,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			outList, outError := c.BGPPeers().List(options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(1))
-			assertBGPPeer(&outList.Items[0], name1, spec1)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
 
 			By("Creating a new BGPPeer with name2/spec2")
 			res2, outError := c.BGPPeers().Create(&apiv2.BGPPeer{
@@ -106,29 +120,29 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res2, name2, spec2)
+			testutils.ExpectResource(res2, apiv2.KindBGPPeer, clientv2.NoNamespace, name2, spec2)
 
 			By("Getting BGPPeer (name2) and comparing the output against spec2")
 			res, outError = c.BGPPeers().Get(name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res, name2, spec2)
-			Expect(res.ObjectMeta.ResourceVersion).To(Equal(res2.ObjectMeta.ResourceVersion))
+			testutils.ExpectResource(res2, apiv2.KindBGPPeer, clientv2.NoNamespace, name2, spec2)
+			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the BGPPeers, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.BGPPeers().List(options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			assertBGPPeer(&outList.Items[0], name1, spec1)
-			assertBGPPeer(&outList.Items[1], name2, spec2)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(&outList.Items[1], apiv2.KindBGPPeer, clientv2.NoNamespace, name2, spec2)
 
 			By("Updating BGPPeer name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.BGPPeers().Update(res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res1, name1, spec2)
+			testutils.ExpectResource(res1, apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec2)
 
 			// Track the version of the updated name1 data.
-			rv1_2 := res1.ObjectMeta.ResourceVersion
+			rv1_2 := res1.ResourceVersion
 
 			By("Updating BGPPeer name1 without specifying a resource version")
 			res1.Spec = spec1
@@ -140,36 +154,36 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 
 			By("Updating BGPPeer name1 using the previous resource version")
 			res1.Spec = spec1
-			res1.ObjectMeta.ResourceVersion = rv1_1
+			res1.ResourceVersion = rv1_1
 			res1, outError = c.BGPPeers().Update(res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: BGPPeer(" + name1 + ")"))
-			Expect(res1.ObjectMeta.ResourceVersion).To(Equal(rv1_2))
+			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
 			By("Getting BGPPeer (name1) with the original resource version and comparing the output against spec1")
 			res, outError = c.BGPPeers().Get(name1, options.GetOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res, name1, spec1)
-			Expect(res.ObjectMeta.ResourceVersion).To(Equal(rv1_1))
+			testutils.ExpectResource(res, apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
+			Expect(res.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting BGPPeer (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.BGPPeers().Get(name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			assertBGPPeer(res, name1, spec2)
-			Expect(res.ObjectMeta.ResourceVersion).To(Equal(rv1_2))
+			testutils.ExpectResource(res, apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec2)
+			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			By("Listing BGPPeers with the original resource version and checking for a single result with name1/spec1")
 			outList, outError = c.BGPPeers().List(options.ListOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(1))
-			assertBGPPeer(&outList.Items[0], name1, spec1)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec1)
 
 			By("Listing BGPPeers with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.BGPPeers().List(options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			assertBGPPeer(&outList.Items[0], name1, spec2)
-			assertBGPPeer(&outList.Items[1], name2, spec2)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPPeer, clientv2.NoNamespace, name1, spec2)
+			testutils.ExpectResource(&outList.Items[1], apiv2.KindBGPPeer, clientv2.NoNamespace, name2, spec2)
 
 			By("Deleting BGPPeer (name1) with the old resource version")
 			outError = c.BGPPeers().Delete(name1, options.DeleteOptions{ResourceVersion: rv1_1})
@@ -222,26 +236,153 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		},
 
 		// Test 1: Pass two fully populated BGPPeerSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated BGPPeerSpecs",
-			"bgpnode-1",
-			"bgpnode-2",
-			apiv2.BGPPeerSpec{
-				Node:     "node1",
-				PeerIP:   "10.0.0.1",
-				ASNumber: numorstring.ASNumber(6512),
-			},
-			apiv2.BGPPeerSpec{
-				Node:     "node2",
-				PeerIP:   "20.0.0.1",
-				ASNumber: numorstring.ASNumber(6511),
-			}),
+		Entry("Two fully populated BGPPeerSpecs", name1, name2, spec1, spec2),
 	)
-})
 
-func assertBGPPeer(res *apiv2.BGPPeer, name string, spec apiv2.BGPPeerSpec) {
-	Expect(res.ObjectMeta.Name).To(Equal(name))
-	Expect(res.Spec).To(Equal(spec))
-	Expect(res.ObjectMeta.ResourceVersion).NotTo(BeEmpty())
-	Expect(res.TypeMeta.Kind).To(Equal("BGPPeer"))
-	Expect(res.TypeMeta.APIVersion).To(Equal("projectcalico.org/v2"))
-}
+	Describe("BGPPeer watch functionality", func() {
+		It("should handle watch events for different resource versions and event types", func() {
+			c, err := clientv2.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+
+			By("Listing BGPPeers with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
+			outList, outError := c.BGPPeers().List(options.ListOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(outList.Items).To(HaveLen(0))
+			rev0 := outList.ResourceVersion
+
+			By("Configuring a BGPPeer name1/spec1 and storing the response")
+			outRes1, err := c.BGPPeers().Create(
+				&apiv2.BGPPeer{
+					ObjectMeta: metav1.ObjectMeta{Name: name1},
+					Spec:       spec1,
+				},
+				options.SetOptions{},
+			)
+			rev1 := outRes1.ResourceVersion
+
+			By("Configuring a BGPPeer name2/spec2 and storing the response")
+			outRes2, err := c.BGPPeers().Create(
+				&apiv2.BGPPeer{
+					ObjectMeta: metav1.ObjectMeta{Name: name2},
+					Spec:       spec2,
+				},
+				options.SetOptions{},
+			)
+
+			By("Starting a watcher from revision rev1 - this should skip the first creation")
+			w, err := c.BGPPeers().Watch(options.ListOptions{ResourceVersion: rev1})
+			Expect(err).NotTo(HaveOccurred())
+			testWatcher1 := testutils.TestResourceWatch(w)
+			defer testWatcher1.Stop()
+
+			By("Deleting res1")
+			err = c.BGPPeers().Delete(name1, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking for two events, create res2 and delete re1")
+			testWatcher1.ExpectEvents(apiv2.KindBGPPeer, []watch.Event{
+				{
+					Type:   watch.Added,
+					Object: outRes2,
+				},
+				{
+					Type:     watch.Deleted,
+					Previous: outRes1,
+				},
+			})
+			testWatcher1.Stop()
+
+			By("Starting a watcher from rev0 - this should get all events")
+			w, err = c.BGPPeers().Watch(options.ListOptions{ResourceVersion: rev0})
+			Expect(err).NotTo(HaveOccurred())
+			testWatcher2 := testutils.TestResourceWatch(w)
+			defer testWatcher2.Stop()
+
+			By("Modifying res2")
+			outRes3, err := c.BGPPeers().Update(
+				&apiv2.BGPPeer{
+					ObjectMeta: outRes2.ObjectMeta,
+					Spec:       spec1,
+				},
+				options.SetOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			testWatcher2.ExpectEvents(apiv2.KindBGPPeer, []watch.Event{
+				{
+					Type:   watch.Added,
+					Object: outRes1,
+				},
+				{
+					Type:   watch.Added,
+					Object: outRes2,
+				},
+				{
+					Type:     watch.Deleted,
+					Previous: outRes1,
+				},
+				{
+					Type:     watch.Modified,
+					Previous: outRes2,
+					Object:   outRes3,
+				},
+			})
+			testWatcher2.Stop()
+
+			By("Starting a watcher not specifying a rev - expect the current snapshot")
+			w, err = c.BGPPeers().Watch(options.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			testWatcher3 := testutils.TestResourceWatch(w)
+			defer testWatcher3.Stop()
+			testWatcher3.ExpectEvents(apiv2.KindBGPPeer, []watch.Event{
+				{
+					Type:   watch.Added,
+					Object: outRes3,
+				},
+			})
+			testWatcher3.Stop()
+
+			By("Configuring BGPPeer name1/spec1 again and storing the response")
+			outRes1, err = c.BGPPeers().Create(
+				&apiv2.BGPPeer{
+					ObjectMeta: metav1.ObjectMeta{Name: name1},
+					Spec:       spec1,
+				},
+				options.SetOptions{},
+			)
+
+			By("Starting a watcher not specifying a rev - expect the current snapshot")
+			w, err = c.BGPPeers().Watch(options.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			testWatcher4 := testutils.TestResourceWatch(w)
+			defer testWatcher4.Stop()
+			testWatcher4.ExpectEvents(apiv2.KindBGPPeer, []watch.Event{
+				{
+					Type:   watch.Added,
+					Object: outRes1,
+				},
+				{
+					Type:   watch.Added,
+					Object: outRes3,
+				},
+			})
+
+			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
+			be.Clean()
+			testWatcher4.ExpectEvents(apiv2.KindBGPPeer, []watch.Event{
+				{
+					Type:     watch.Deleted,
+					Previous: outRes1,
+				},
+				{
+					Type:     watch.Deleted,
+					Previous: outRes3,
+				},
+			})
+			testWatcher4.Stop()
+		})
+	})
+})

@@ -16,27 +16,26 @@ package etcdv3
 
 import (
 	"context"
-	goerrors "errors"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 var (
 	clientTimeout = 30 * time.Second
 )
 
-type EtcdV3Client struct {
+type etcdV3Client struct {
 	etcdClient *clientv3.Client
 }
 
@@ -50,7 +49,7 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 
 	if len(etcdLocation) == 0 {
 		log.Info("No etcd endpoints specified in etcdv3 API config")
-		return nil, goerrors.New("no etcd endpoints specified")
+		return nil, errors.New("no etcd endpoints specified")
 	}
 
 	// Create the etcd client
@@ -78,26 +77,26 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		return nil, err
 	}
 
-	return &EtcdV3Client{etcdClient: client}, nil
+	return &etcdV3Client{etcdClient: client}, nil
 }
 
 // Create an entry in the datastore.  If the entry already exists, this will return
 // an ErrorResourceAlreadyExists error and the current entry.
-func (c *EtcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
-	logCxt := log.WithFields(log.Fields{"model-key": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
+func (c *etcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
 	}
-	logCxt = logCxt.WithField("etcdv3-key", key)
+	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
 	putOpts, err := c.getTTLOption(d)
 	if err != nil {
 		return nil, err
 	}
 
-	// Checking for 0 version of the key, which means it doesn't exists yet,
+	// Checking for 0 version of the etcdKey, which means it doesn't exists yet,
 	// and if it does, get the current value.
 	logCxt.Debug("Performing etcdv3 transaction for Create request")
 	txnResp, err := c.etcdClient.Txn(context.Background()).If(
@@ -109,11 +108,11 @@ func (c *EtcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
 	).Commit()
 	if err != nil {
 		logCxt.WithError(err).Warning("Create failed")
-		return nil, errors.ErrorDatastoreError{Err: err}
+		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 
 	if !txnResp.Succeeded {
-		// The resource must already exist.  Extract the current value and
+		// The resource must already exist.  Extract the current newValue and
 		// return that if possible.
 		logCxt.Info("Create transaction failed due to resource already existing")
 		var existing *model.KVPair
@@ -128,7 +127,7 @@ func (c *EtcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
 				}
 			}
 		}
-		return existing, errors.ErrorResourceAlreadyExists{Identifier: d.Key}
+		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: d.Key}
 	}
 
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
@@ -139,14 +138,14 @@ func (c *EtcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
 // Update an entry in the datastore.  If the entry does not exist, this will return
 // an ErrorResourceDoesNotExist error.  The ResourceVersion must be specified, and if
 // incorrect will return a ErrorResourceUpdateConflict error and the current entry.
-func (c *EtcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
-	logCxt := log.WithFields(log.Fields{"model-key": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
+func (c *etcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
 	}
-	logCxt = logCxt.WithField("etcdv3-key", key)
+	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
 	opts, err := c.getTTLOption(d)
 	if err != nil {
@@ -172,7 +171,7 @@ func (c *EtcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
 
 	if err != nil {
 		logCxt.WithError(err).Warning("Update failed")
-		return nil, errors.ErrorDatastoreError{Err: err}
+		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 
 	// Etcd V3 does not return a error when compare condition fails we must verify the
@@ -182,7 +181,7 @@ func (c *EtcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
 		getResp := (*clientv3.GetResponse)(txnResp.Responses[0].GetResponseRange())
 		if len(getResp.Kvs) == 0 {
 			logCxt.Info("Update transaction failed due to resource not existing")
-			return nil, errors.ErrorResourceDoesNotExist{Identifier: d.Key}
+			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: d.Key}
 		}
 
 		logCxt.Info("Update transaction failed due to resource update conflict")
@@ -195,7 +194,7 @@ func (c *EtcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
 				Revision: strconv.FormatInt(getResp.Kvs[0].ModRevision, 10),
 			}
 		}
-		return existing, errors.ErrorResourceUpdateConflict{Identifier: d.Key}
+		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: d.Key}
 	}
 
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
@@ -208,8 +207,8 @@ func (c *EtcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
 // by performing a Get/Create or Update to ensure we don't lose certain read-only Metadata.
 // It's possible that we will just perform that processing in the clients (e.g. calicoctl),
 // but that is to be decided.
-func (c *EtcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
-	logCxt := log.WithFields(log.Fields{"key": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
+func (c *etcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
+	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -220,7 +219,7 @@ func (c *EtcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
 	resp, err := c.etcdClient.Put(context.Background(), key, value)
 	if err != nil {
 		logCxt.WithError(err).Warning("Apply failed")
-		return nil, errors.ErrorDatastoreError{Err: err}
+		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 
 	d.Revision = strconv.FormatInt(resp.Header.Revision, 10)
@@ -229,14 +228,14 @@ func (c *EtcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *EtcdV3Client) Delete(k model.Key, revision string) error {
-	logCxt := log.WithFields(log.Fields{"model-key": k, "rev": revision})
+func (c *etcdV3Client) Delete(k model.Key, revision string) error {
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
 		return err
 	}
-	logCxt = logCxt.WithField("etcdv3-key", key)
+	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
 	conds := []clientv3.Cmp{}
 	if len(revision) != 0 {
@@ -257,34 +256,34 @@ func (c *EtcdV3Client) Delete(k model.Key, revision string) error {
 	).Commit()
 	if err != nil {
 		logCxt.WithError(err).Warning("Delete failed")
-		return errors.ErrorDatastoreError{Err: err, Identifier: k}
+		return cerrors.ErrorDatastoreError{Err: err, Identifier: k}
 	}
 
 	if !txnResp.Succeeded {
 		logCxt.Info("Delete transaction failed due to resource update conflict")
-		return errors.ErrorResourceUpdateConflict{Identifier: k}
+		return cerrors.ErrorResourceUpdateConflict{Identifier: k}
 	}
 
 	delResp := txnResp.Responses[0].GetResponseDeleteRange()
 	if delResp.Deleted == 0 {
 		logCxt.Info("Delete transaction failed due resource not existing")
-		return errors.ErrorResourceDoesNotExist{Identifier: k}
+		return cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 
 	return nil
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
-func (c *EtcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) {
-	logCxt := log.WithFields(log.Fields{"model-key": k, "rev": revision})
+func (c *etcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) {
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
-		logCxt.Error("Unable to convert model.Key to an etcdv3 key")
+		logCxt.Error("Unable to convert model.Key to an etcdv3 etcdKey")
 		return nil, err
 	}
-	logCxt = logCxt.WithField("etcdv3-key", key)
+	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
 	ops := []clientv3.OpOption{}
 	if len(revision) != 0 {
@@ -300,11 +299,11 @@ func (c *EtcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) 
 	resp, err := c.etcdClient.Get(context.Background(), key, ops...)
 	if err != nil {
 		logCxt.WithError(err).Info("Error returned from etcdv3 client")
-		return nil, errors.ErrorDatastoreError{Err: err}
+		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 	if len(resp.Kvs) == 0 {
 		logCxt.Info("No results returned from etcdv3 client")
-		return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 
 	kv := resp.Kvs[0]
@@ -323,7 +322,7 @@ func (c *EtcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) 
 
 // List entries in the datastore.  This may return an empty list of there are
 // no entries matching the request in the ListInterface.
-func (c *EtcdV3Client) List(l model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *etcdV3Client) List(l model.ListInterface, revision string) (*model.KVPairList, error) {
 	logCxt := log.WithFields(log.Fields{"list-interface": l, "rev": revision})
 	logCxt.Debug("Processing List request")
 
@@ -331,20 +330,20 @@ func (c *EtcdV3Client) List(l model.ListInterface, revision string) (*model.KVPa
 	// IDs, and then filter the results.
 	key := model.ListOptionsToDefaultPathRoot(l)
 
-	// If the key is actually fully qualified, then do not perform a prefix Get.
-	// If the key is just a prefix, then append a terminating "/" and perform a prefix Get.
+	// If the etcdKey is actually fully qualified, then do not perform a prefix Get.
+	// If the etcdKey is just a prefix, then append a terminating "/" and perform a prefix Get.
 	// The terminating / for a prefix Get ensures for a prefix of "/a" we only return "child entries"
 	// of "/a" such as "/a/x" and not siblings such as "/ab".
 	ops := []clientv3.OpOption{}
 	if l.KeyFromDefaultPath(key) == nil {
-		// The key not a fully qualified key - it must be a prefix.
+		// The etcdKey not a fully qualified etcdKey - it must be a prefix.
 		logCxt.Info("Performing a prefix query")
 		if !strings.HasSuffix(key, "/") {
 			key += "/"
 		}
 		ops = append(ops, clientv3.WithPrefix())
 	}
-	logCxt = logCxt.WithField("etcdv3-key", key)
+	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
 	// We may also need to perform a get based on a particular revision.
 	if len(revision) != 0 {
@@ -360,11 +359,18 @@ func (c *EtcdV3Client) List(l model.ListInterface, revision string) (*model.KVPa
 	resp, err := c.etcdClient.Get(context.Background(), key, ops...)
 	if err != nil {
 		logCxt.WithError(err).Info("Error returned from etcdv3 client")
-		return nil, errors.ErrorDatastoreError{Err: err}
+		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 	logCxt.WithField("numResults", len(resp.Kvs)).Debug("Processing response from etcdv3")
 
-	list := filterEtcdV3List(resp.Kvs, l)
+	// Filter/process the results.
+	list := []*model.KVPair{}
+	for _, p := range resp.Kvs {
+		if kv := convertListResponse(p, l); kv != nil {
+			list = append(list, kv)
+		}
+	}
+
 	return &model.KVPairList{
 		KVPairs:  list,
 		Revision: strconv.FormatInt(resp.Header.Revision, 10),
@@ -373,7 +379,7 @@ func (c *EtcdV3Client) List(l model.ListInterface, revision string) (*model.KVPa
 
 // EnsureInitialized makes sure that the etcd data is initialized for use by
 // Calico.
-func (c *EtcdV3Client) EnsureInitialized() error {
+func (c *etcdV3Client) EnsureInitialized() error {
 	// Make sure the Ready flag is initialized in the datastore
 	kv := &model.KVPair{
 		Key:   model.ReadyFlagKey{},
@@ -381,7 +387,7 @@ func (c *EtcdV3Client) EnsureInitialized() error {
 	}
 
 	if _, err := c.Create(kv); err != nil {
-		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 			log.WithError(err).Warn("Failed to set ready flag")
 			return err
 		}
@@ -392,52 +398,32 @@ func (c *EtcdV3Client) EnsureInitialized() error {
 }
 
 // Clean removes all of the Calico data from the datastore.
-func (c *EtcdV3Client) Clean() error {
+func (c *etcdV3Client) Clean() error {
 	log.Warning("Cleaning etcdv3 datastore of all Calico data")
 	_, err := c.etcdClient.Txn(context.Background()).If().Then(
 		clientv3.OpDelete("/calico", clientv3.WithPrefix()),
 	).Commit()
 
 	if err != nil {
-		return errors.ErrorDatastoreError{Err: err}
+		return cerrors.ErrorDatastoreError{Err: err}
 	}
 	return nil
 }
 
 // Syncer returns a v1 Syncer used to stream resource updates.
-func (c *EtcdV3Client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
+func (c *etcdV3Client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	return newSyncerV3(c.etcdClient, callbacks)
 }
 
-// Process a node returned from a list to filter results based on the List type and to
-// compile and return the required results.
-func filterEtcdV3List(pairs []*mvccpb.KeyValue, l model.ListInterface) []*model.KVPair {
-	kvs := []*model.KVPair{}
-	for _, p := range pairs {
-		log.WithField("etcdv3-key", p.Key).Debug("Processing etcdv3 entry")
-		if k := l.KeyFromDefaultPath(string(p.Key)); k != nil {
-			log.WithField("model-key", k).Debugf("Key is valid and converted to model-key")
-			if v, err := model.ParseValue(k, p.Value); err == nil {
-				log.Debug("Value is valid - filter value into list")
-				kv := &model.KVPair{Key: k, Value: v, Revision: strconv.FormatInt(p.ModRevision, 10)}
-				kvs = append(kvs, kv)
-			}
-		}
-	}
-
-	log.Debugf("Returning filtered list: %#v", kvs)
-	return kvs
-}
-
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.
-func (c *EtcdV3Client) getTTLOption(d *model.KVPair) ([]clientv3.OpOption, error) {
+func (c *etcdV3Client) getTTLOption(d *model.KVPair) ([]clientv3.OpOption, error) {
 	putOpts := []clientv3.OpOption{}
 
 	if d.TTL != 0 {
 		resp, err := c.etcdClient.Lease.Grant(context.Background(), int64(d.TTL.Seconds()))
 		if err != nil {
 			log.WithError(err).Error("Failed to grant a lease")
-			return nil, errors.ErrorDatastoreError{Err: err}
+			return nil, cerrors.ErrorDatastoreError{Err: err}
 		}
 
 		putOpts = append(putOpts, clientv3.WithLease(resp.ID))
@@ -446,13 +432,13 @@ func (c *EtcdV3Client) getTTLOption(d *model.KVPair) ([]clientv3.OpOption, error
 	return putOpts, nil
 }
 
-// getKeyValueStrings returns the etcdv3 key and serialized value calculated from the
+// getKeyValueStrings returns the etcdv3 etcdKey and serialized value calculated from the
 // KVPair.
 func getKeyValueStrings(d *model.KVPair) (string, string, error) {
-	logCxt := log.WithFields(log.Fields{"model-key": d.Key, "value": d.Value})
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value})
 	key, err := model.KeyToDefaultPath(d.Key)
 	if err != nil {
-		logCxt.WithError(err).Error("Failed to convert model-key to etcdv3 key")
+		logCxt.WithError(err).Error("Failed to convert model-etcdKey to etcdv3 etcdKey")
 		return "", "", err
 	}
 	bytes, err := model.SerializeValue(d)
