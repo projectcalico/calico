@@ -98,9 +98,9 @@ var _ = Describe("PolicyConverter", func() {
 			}))
 		})
 
-		// There should be no OutboundRules
+		// There should be one OutboundRule
 		It("should return calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
 		})
 
 		// Check that Types field exists and has only 'ingress'
@@ -152,9 +152,9 @@ var _ = Describe("PolicyConverter", func() {
 			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(0))
 		})
 
-		// There should be no OutboundRules
+		// There should be one OutboundRule
 		It("should return calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
 		})
 
 		var policyType api.PolicyType = "ingress"
@@ -203,9 +203,9 @@ var _ = Describe("PolicyConverter", func() {
 			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(0))
 		})
 
-		// There should be no OutboundRules
+		// There should be one OutboundRule
 		It("should return calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
 		})
 
 		var policyType api.PolicyType = "ingress"
@@ -269,9 +269,9 @@ var _ = Describe("PolicyConverter", func() {
 			Expect(pol.(api.Policy).Spec.IngressRules[0].Source.Selector).To(Equal("has(calico/k8s_ns)"))
 		})
 
-		// There should be no OutboundRules
+		// There should be one OutboundRule
 		It("should return calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
 		})
 
 		var policyType api.PolicyType = "ingress"
