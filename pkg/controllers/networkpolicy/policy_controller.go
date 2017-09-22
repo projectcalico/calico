@@ -26,16 +26,17 @@ import (
 
 	"github.com/projectcalico/k8s-policy/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 )
 
 // PolicyController Implements Controller interface
@@ -54,6 +55,15 @@ func NewPolicyController(extensionsClient *rest.RESTClient, calicoClient *client
 
 	// Create a NetworkPolicy watcher.
 	listWatcher := cache.NewListWatchFromClient(extensionsClient, "networkpolicies", "", fields.Everything())
+	listWatcher.ListFunc = func(options metav1.ListOptions) (runtime.Object, error) {
+		list := extensions.NetworkPolicyList{}
+		err := extensionsClient.
+			Get().
+			Resource("networkpolicies").
+			Timeout(10 * time.Second).
+			Do().Into(&list)
+		return &list, err
+	}
 
 	// Function returns map of policyName:policy stored by policy controller
 	// in datastore.
