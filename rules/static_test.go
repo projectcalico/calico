@@ -394,8 +394,15 @@ var _ = Describe("Static", func() {
 				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
 
-				// IPIP rule
-				{Match: Match().ProtocolNum(4).NotSourceIPSet("cali4-all-hosts"),
+				// IPIP rules
+				{Match: Match().
+					ProtocolNum(4).
+					SourceIPSet("cali4-all-hosts").
+					DestAddrType("LOCAL"),
+
+					Action:  AcceptAction{},
+					Comment: "Allow IPIP packets from Calico hosts"},
+				{Match: Match().ProtocolNum(4),
 					Action:  DropAction{},
 					Comment: "Drop IPIP packets from non-Calico hosts"},
 
