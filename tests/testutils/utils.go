@@ -34,6 +34,21 @@ import (
 
 const vK8sApiserver = "v1.7.5"
 
+const KubeconfigTemplate = `apiVersion: v1
+kind: Config
+clusters:
+- name: test
+  cluster:
+    server: http://%s:8080
+users:
+- name: calico
+contexts:
+- name: test-context
+  context:
+    cluster: test
+    user: calico
+current-context: test-context`
+
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
 		fmt.Sprintf("gcr.io/google_containers/hyperkube-amd64:%s", vK8sApiserver),
