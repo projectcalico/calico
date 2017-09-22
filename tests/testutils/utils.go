@@ -28,11 +28,13 @@ import (
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
-const vK8sApiserver = "v1.7.5"
+const vK8sApiserver = "v1.8.0-beta.1"
 
 const KubeconfigTemplate = `apiVersion: v1
 kind: Config
@@ -95,6 +97,20 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 	}
 
 	return k8sClientset, nil
+}
+
+func GetExtensionsClient(kubeconfig string) (*rest.RESTClient, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
+	}
+
+	extensionsClient, err := k8s.BuildExtensionsClientV1(*config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build extensions client config: %s", err)
+	}
+
+	return extensionsClient, nil
 }
 
 func Stop(c *containers.Container) {

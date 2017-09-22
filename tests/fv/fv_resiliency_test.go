@@ -64,8 +64,6 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
 		kfconfigfile.Write([]byte(data))
 
-		policyController = testutils.RunPolicyController(calicoEtcd.IP, kfconfigfile.Name())
-
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
@@ -96,6 +94,8 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			Body(np).
 			Do().Error()
 		Expect(err).NotTo(HaveOccurred())
+
+		policyController = testutils.RunPolicyController(calicoEtcd.IP, kfconfigfile.Name())
 
 		// Wait for it to appear in Calico's etcd.
 		Eventually(func() *api.Policy {

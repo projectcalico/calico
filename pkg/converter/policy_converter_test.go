@@ -20,8 +20,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -62,6 +62,7 @@ var _ = Describe("PolicyConverter", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -120,6 +121,7 @@ var _ = Describe("PolicyConverter", func() {
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -171,6 +173,7 @@ var _ = Describe("PolicyConverter", func() {
 			},
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -234,6 +237,7 @@ var _ = Describe("PolicyConverter", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -270,8 +274,8 @@ var _ = Describe("PolicyConverter", func() {
 			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(0))
 		})
 
-		// Check that Types field exists and has only 'ingress'
 		var policyType api.PolicyType = "ingress"
+		// Check that Types field exists and has only 'ingress'
 		It("should return calico policy with ingress type", func() {
 			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
 			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
@@ -339,6 +343,86 @@ var _ = Describe("PolicyConverter", func() {
 		key := npConverter.GetKey(policy)
 		It("should return name of policy as key", func() {
 			Expect(key).To(Equal(policyName))
+		})
+	})
+
+	Context("NetworkPolicy with Egress rule", func() {
+		port80 := intstr.FromInt(80)
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"label":  "value",
+						"label2": "value2",
+					},
+				},
+				Egress: []extensions.NetworkPolicyEgressRule{
+					{
+						Ports: []extensions.NetworkPolicyPort{
+							{Port: &port80},
+						},
+						To: []extensions.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := npConverter.Convert(&np)
+		It("should not generate a conversion error", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Assert policy name.
+		It("should return calico policy with expected name", func() {
+			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+		})
+
+		// Assert policy order.
+		It("should return calico policy with correct order", func() {
+			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+		})
+
+		// Check the selector is correct, and that the matches are sorted.
+		It("should return calico policy with correct selector", func() {
+			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+				"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
+		})
+
+		protoTCP := numorstring.ProtocolFromString("tcp")
+		It("should return calico policy with correct egress rules", func() {
+			Expect(pol.(api.Policy).Spec.EgressRules).To(ConsistOf(api.Rule{
+				Action:      "allow",
+				Protocol:    &protoTCP, // Defaulted to TCP.
+				Destination: api.EntityRule{Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+				                            Ports:    []numorstring.Port{numorstring.SinglePort(80)}},
+			}))
+		})
+
+		// There should be no InboundRules
+		It("should return calico policy with no egress rules", func() {
+			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(0))
+		})
+
+		// Check that Types field exists and has only 'egress'
+		var policyType api.PolicyType = "egress"
+		It("should return calico policy with ingress type", func() {
+			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
 		})
 	})
 })

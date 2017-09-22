@@ -26,15 +26,16 @@ import (
 
 	"github.com/projectcalico/k8s-policy/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -46,15 +47,23 @@ type PolicyController struct {
 	informer       cache.Controller
 	calicoObjCache calicocache.ResourceCache
 	calicoClient   *client.Client
-	k8sClientset   *kubernetes.Clientset
 }
 
 // NewPolicyController Constructor for PolicyController
-func NewPolicyController(k8sClientset *kubernetes.Clientset, calicoClient *client.Client) controller.Controller {
+func NewPolicyController(extensionsClient *rest.RESTClient, calicoClient *client.Client) controller.Controller {
 	policyConverter := converter.NewPolicyConverter()
 
 	// Create a NetworkPolicy watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.Extensions().RESTClient(), "networkpolicies", "", fields.Everything())
+	listWatcher := cache.NewListWatchFromClient(extensionsClient, "networkpolicies", "", fields.Everything())
+	listWatcher.ListFunc = func(options metav1.ListOptions) (runtime.Object, error) {
+		list := extensions.NetworkPolicyList{}
+		err := extensionsClient.
+			Get().
+			Resource("networkpolicies").
+			Timeout(10 * time.Second).
+			Do().Into(&list)
+		return &list, err
+	}
 
 	// Function returns map of policyName:policy stored by policy controller
 	// in datastore.
@@ -92,7 +101,7 @@ func NewPolicyController(k8sClientset *kubernetes.Clientset, calicoClient *clien
 					// already populated the map in order to minimize work.
 					policyMap = map[string]bool{}
 					for _, i := range items {
-						k := fmt.Sprintf("%s.%s", i.(*v1beta1.NetworkPolicy).Namespace, i.(*v1beta1.NetworkPolicy).Name)
+						k := fmt.Sprintf("%s.%s", i.(*extensions.NetworkPolicy).Namespace, i.(*extensions.NetworkPolicy).Name)
 						policyMap[k] = true
 					}
 				}
@@ -125,7 +134,7 @@ func NewPolicyController(k8sClientset *kubernetes.Clientset, calicoClient *clien
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	indexer, informer := cache.NewIndexerInformer(listWatcher, &v1beta1.NetworkPolicy{}, 0, cache.ResourceEventHandlerFuncs{
+	indexer, informer := cache.NewIndexerInformer(listWatcher, &extensions.NetworkPolicy{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			log.Debugf("Got ADD event for network policy: %#v", obj)
 			policy, err := policyConverter.Convert(obj)
@@ -166,7 +175,7 @@ func NewPolicyController(k8sClientset *kubernetes.Clientset, calicoClient *clien
 		},
 	}, cache.Indexers{})
 
-	return &PolicyController{indexer, informer, ccache, calicoClient, k8sClientset}
+	return &PolicyController{indexer, informer, ccache, calicoClient}
 }
 
 // Run starts the controller.

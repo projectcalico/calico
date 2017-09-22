@@ -23,7 +23,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
+
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,6 +34,7 @@ import (
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"k8s.io/client-go/rest"
 )
 
 var _ = Describe("PolicyController", func() {
@@ -42,6 +44,7 @@ var _ = Describe("PolicyController", func() {
 		apiserver        *containers.Container
 		calicoClient     *client.Client
 		k8sClient        *kubernetes.Clientset
+		extensionsClient *rest.RESTClient
 	)
 
 	BeforeEach(func() {
@@ -64,6 +67,9 @@ var _ = Describe("PolicyController", func() {
 		policyController = testutils.RunPolicyController(etcd.IP, kfconfigfile.Name())
 
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
+		Expect(err).NotTo(HaveOccurred())
+
+		extensionsClient, err = testutils.GetExtensionsClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
 		// TODO: Use upcoming port checker functions to wait until apiserver is responding to requests.
@@ -133,7 +139,7 @@ var _ = Describe("PolicyController", func() {
 					},
 				},
 			}
-			err := k8sClient.Extensions().RESTClient().
+			err := extensionsClient.
 				Post().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -175,6 +181,84 @@ var _ = Describe("PolicyController", func() {
 				p, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
 				return p.Spec.Selector
 			}, time.Second*15, 500*time.Millisecond).Should(Equal("calico/k8s_ns == 'default' && fools == 'gold'"))
+		})
+	})
+
+	Describe("policies", func() {
+		var policyName string
+		var genPolicyName string
+
+		BeforeEach(func() {
+			// Create a Kubernetes NetworkPolicy.
+			policyName = "jelly"
+			genPolicyName = "knp.default.default." + policyName
+			var np *extensions.NetworkPolicy
+			np = &extensions.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      policyName,
+					Namespace: "default",
+				},
+				Spec: extensions.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"fools": "gold",
+						},
+					},
+					Egress: []extensions.NetworkPolicyEgressRule{
+						{
+							To: []extensions.NetworkPolicyPeer{
+								{
+									IPBlock: &extensions.IPBlock{
+										CIDR:   "192.168.0.0/16",
+										Except: []string{"192.168.3.0/24"},
+									},
+								},
+							},
+						},
+					},
+					PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+				},
+			}
+
+			err := extensionsClient.
+				Post().
+				Resource("networkpolicies").
+				Namespace("default").
+				Body(np).
+				Do().Error()
+			Expect(err).NotTo(HaveOccurred())
+
+			// Wait for it to appear in Calico's etcd.
+			Eventually(func() *api.Policy {
+				policy, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				return policy
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
+		})
+
+		It("contains correct egress rule", func() {
+			// Verify policy controller indicates correct namespace
+			Eventually(func() string {
+				p, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				return p.Spec.Selector
+			}, time.Second*10, 500*time.Millisecond).Should(Equal("calico/k8s_ns == 'default' && fools == 'gold'"))
+
+			// Verify one egress rule
+			Eventually(func() int {
+				p, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				return len(p.Spec.EgressRules)
+			}, time.Second*10, 500*time.Millisecond).Should(Equal(1))
+
+			// Verify egress rule's types
+			Eventually(func() []api.PolicyType {
+				p, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				return p.Spec.Types
+			}, time.Second*10, 500*time.Millisecond).Should(Equal([]api.PolicyType{"egress"}))
+
+			// Verify no ingress rule
+			Eventually(func() int {
+				p, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				return len(p.Spec.IngressRules)
+			}, time.Second*10, 500*time.Millisecond).Should(Equal(0))
 		})
 	})
 })
