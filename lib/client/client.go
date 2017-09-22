@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/validator"
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
+	"context"
 )
 
 // Client contains
@@ -152,7 +153,7 @@ func (c *Client) EnsureInitialized() error {
 		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
 		Value: fmt.Sprintf("%v", hex.EncodeToString(uuid.NewV4().Bytes())),
 	}
-	if _, err := c.Backend.Create(kv); err == nil {
+	if _, err := c.Backend.Create(context.Background(), kv); err == nil {
 		log.WithField("ClusterGUID", kv.Value).Info("Assigned cluster GUID")
 	} else {
 		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
@@ -256,7 +257,7 @@ func (c *Client) create(apiObject unversioned.ResourceObject, helper conversionH
 
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
-	} else if d, err = c.Backend.Create(d); err != nil {
+	} else if d, err = c.Backend.Create(context.Background(), d); err != nil {
 		return err
 	} else {
 		return nil
@@ -277,7 +278,7 @@ func (c *Client) update(apiObject unversioned.ResourceObject, helper conversionH
 
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
-	} else if d, err = c.Backend.Update(d); err != nil {
+	} else if d, err = c.Backend.Update(context.Background(), d); err != nil {
 		return err
 	} else {
 		return nil
@@ -322,7 +323,7 @@ func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversion
 	// operations fills in the revision information.
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return err
-	} else if err := c.Backend.Delete(k, metadata.GetObjectMetadata().Revision); err != nil {
+	} else if err := c.Backend.Delete(context.Background(), k, metadata.GetObjectMetadata().Revision); err != nil {
 		return err
 	} else {
 		return nil
@@ -343,7 +344,7 @@ func (c *Client) get(metadata unversioned.ResourceMetadata, helper conversionHel
 
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return nil, err
-	} else if d, err := c.Backend.Get(k, ""); err != nil {
+	} else if d, err := c.Backend.Get(context.Background(), k, ""); err != nil {
 		return nil, err
 	} else if a, err := helper.convertKVPairToAPI(d); err != nil {
 		return nil, err
@@ -362,7 +363,7 @@ func (c *Client) list(metadata unversioned.ResourceMetadata, helper conversionHe
 
 	if l, err := helper.convertMetadataToListInterface(metadata); err != nil {
 		return err
-	} else if dos, err := c.Backend.List(l, ""); err != nil {
+	} else if dos, err := c.Backend.List(context.Background(), l, ""); err != nil {
 		return err
 	} else {
 		// The supplied resource list object will have an Items field.  Append the

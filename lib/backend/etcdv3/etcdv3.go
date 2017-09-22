@@ -82,7 +82,7 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 
 // Create an entry in the datastore.  If the entry already exists, this will return
 // an ErrorResourceAlreadyExists error and the current entry.
-func (c *etcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
+func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 	key, value, err := getKeyValueStrings(d)
@@ -91,7 +91,7 @@ func (c *etcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
 	}
 	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
-	putOpts, err := c.getTTLOption(d)
+	putOpts, err := c.getTTLOption(ctx, d)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (c *etcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
 	// Checking for 0 version of the etcdKey, which means it doesn't exists yet,
 	// and if it does, get the current value.
 	logCxt.Debug("Performing etcdv3 transaction for Create request")
-	txnResp, err := c.etcdClient.Txn(context.Background()).If(
+	txnResp, err := c.etcdClient.Txn(ctx).If(
 		clientv3.Compare(clientv3.Version(key), "=", 0),
 	).Then(
 		clientv3.OpPut(key, value, putOpts...),
@@ -138,7 +138,7 @@ func (c *etcdV3Client) Create(d *model.KVPair) (*model.KVPair, error) {
 // Update an entry in the datastore.  If the entry does not exist, this will return
 // an ErrorResourceDoesNotExist error.  The ResourceVersion must be specified, and if
 // incorrect will return a ErrorResourceUpdateConflict error and the current entry.
-func (c *etcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
+func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
 	key, value, err := getKeyValueStrings(d)
@@ -147,7 +147,7 @@ func (c *etcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
 	}
 	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
-	opts, err := c.getTTLOption(d)
+	opts, err := c.getTTLOption(ctx, d)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (c *etcdV3Client) Update(d *model.KVPair) (*model.KVPair, error) {
 	conds := []clientv3.Cmp{clientv3.Compare(clientv3.ModRevision(key), "=", rev)}
 
 	logCxt.Debug("Performing etcdv3 transaction for Update request")
-	txnResp, err := c.etcdClient.Txn(context.Background()).If(
+	txnResp, err := c.etcdClient.Txn(ctx).If(
 		conds...,
 	).Then(
 		clientv3.OpPut(key, value, opts...),
@@ -228,7 +228,7 @@ func (c *etcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *etcdV3Client) Delete(k model.Key, revision string) error {
+func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) error {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
 	key, err := model.KeyToDefaultDeletePath(k)
@@ -249,7 +249,7 @@ func (c *etcdV3Client) Delete(k model.Key, revision string) error {
 
 	// Perform the delete transaction - note that this is an exact delete, not a prefix delete.
 	logCxt.Debug("Performing etcdv3 transaction for Delete request")
-	txnResp, err := c.etcdClient.Txn(context.Background()).If(
+	txnResp, err := c.etcdClient.Txn(ctx).If(
 		conds...,
 	).Then(
 		clientv3.OpDelete(key),
@@ -274,7 +274,7 @@ func (c *etcdV3Client) Delete(k model.Key, revision string) error {
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
-func (c *etcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) {
+func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
 
@@ -296,7 +296,7 @@ func (c *etcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) 
 	}
 
 	logCxt.Debug("Calling Get on etcdv3 client")
-	resp, err := c.etcdClient.Get(context.Background(), key, ops...)
+	resp, err := c.etcdClient.Get(ctx, key, ops...)
 	if err != nil {
 		logCxt.WithError(err).Info("Error returned from etcdv3 client")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
@@ -322,7 +322,7 @@ func (c *etcdV3Client) Get(k model.Key, revision string) (*model.KVPair, error) 
 
 // List entries in the datastore.  This may return an empty list of there are
 // no entries matching the request in the ListInterface.
-func (c *etcdV3Client) List(l model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision string) (*model.KVPairList, error) {
 	logCxt := log.WithFields(log.Fields{"list-interface": l, "rev": revision})
 	logCxt.Debug("Processing List request")
 
@@ -356,7 +356,7 @@ func (c *etcdV3Client) List(l model.ListInterface, revision string) (*model.KVPa
 	}
 
 	logCxt.Debug("Calling Get on etcdv3 client")
-	resp, err := c.etcdClient.Get(context.Background(), key, ops...)
+	resp, err := c.etcdClient.Get(ctx, key, ops...)
 	if err != nil {
 		logCxt.WithError(err).Info("Error returned from etcdv3 client")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
@@ -386,7 +386,7 @@ func (c *etcdV3Client) EnsureInitialized() error {
 		Value: true,
 	}
 
-	if _, err := c.Create(kv); err != nil {
+	if _, err := c.Create(context.Background(), kv); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 			log.WithError(err).Warn("Failed to set ready flag")
 			return err
@@ -416,11 +416,11 @@ func (c *etcdV3Client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 }
 
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.
-func (c *etcdV3Client) getTTLOption(d *model.KVPair) ([]clientv3.OpOption, error) {
+func (c *etcdV3Client) getTTLOption(ctx context.Context, d *model.KVPair) ([]clientv3.OpOption, error) {
 	putOpts := []clientv3.OpOption{}
 
 	if d.TTL != 0 {
-		resp, err := c.etcdClient.Lease.Grant(context.Background(), int64(d.TTL.Seconds()))
+		resp, err := c.etcdClient.Lease.Grant(ctx, int64(d.TTL.Seconds()))
 		if err != nil {
 			log.WithError(err).Error("Failed to grant a lease")
 			return nil, cerrors.ErrorDatastoreError{Err: err}
