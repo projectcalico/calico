@@ -219,14 +219,19 @@ func (c *Config) InterfacePrefixes() []string {
 
 func (config *Config) OpenstackActive() bool {
 	if strings.Contains(strings.ToLower(config.ClusterType), "openstack") {
+		// OpenStack is explicitly known to be present.  Newer versions of the OpenStack plugin
+		// set this flag.
 		log.Debug("Cluster type contains OpenStack")
 		return true
 	}
-	if config.MetadataAddr != "127.0.0.1" {
+	// If we get here, either OpenStack isn't present or we're running against an old version
+	// of the OpenStack plugin, which doesn't set the flag.  Use heuristics based on the
+	// presence of the OpenStack-related parameters.
+	if config.MetadataAddr != "" && config.MetadataAddr != "127.0.0.1" {
 		log.Debug("OpenStack metadata IP set to non-default, assuming OpenStack active")
 		return true
 	}
-	if config.MetadataPort != 8775 {
+	if config.MetadataPort != 0 && config.MetadataPort != 8775 {
 		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
 		return true
 	}
