@@ -242,7 +242,6 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		endpoint = api.NewWorkloadEndpoint()
 		endpoint.Metadata.Name = args.IfName
 		endpoint.Metadata.Node = nodename
-		endpoint.Metadata.ActiveInstanceID = args.ContainerID
 		endpoint.Metadata.Orchestrator = orchestrator
 		endpoint.Metadata.Workload = workload
 		endpoint.Metadata.Labels = labels
@@ -285,7 +284,8 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 	}
 	endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
-	logger.WithField("endpoint", endpoint).Info("Added Mac and interface name to endpoint")
+	endpoint.Metadata.ActiveInstanceID = args.ContainerID
+	logger.WithField("endpoint", endpoint).Info("Added Mac, interface name, and active container ID to endpoint")
 
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {

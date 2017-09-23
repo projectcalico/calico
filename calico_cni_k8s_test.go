@@ -799,6 +799,145 @@ var _ = Describe("CalicoCni", func() {
 				})
 			})
 
+			// This specific test case is for an issue where k8s would send two ADDs with different container IDs for the same Pod.
+			Context("Multiple ADD calls with different container IDs followed by DEL calls for stale container IDs", func() {
+				It("Use different CNI_ContainerIDs to ADD and DEL the container", func() {
+					netconf := fmt.Sprintf(`
+				{
+			      "cniVersion": "%s",
+				  "name": "net7",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			 	  "ipam": {
+			    	 "type": "calico-ipam"
+			         },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"))
+
+					// Create a new ipPool.
+					ipPool := "10.0.0.0/24"
+					c, _ := client.NewFromEnv()
+					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod.
+					name := fmt.Sprintf("run%d-pool", rand.Uint32())
+
+					cniContainerIDX := "container-id-00X"
+					cniContainerIDY := "container-id-00Y"
+
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(
+						&v1.Pod{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: name,
+							},
+							Spec: v1.PodSpec{Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name),
+								Image: "ignore",
+							}}},
+						})
+
+					Expect(err).NotTo(HaveOccurred())
+
+					log.Infof("Created POD object: %v", pod)
+
+					// ADD the container with passing a CNI_CONTAINERID of "X".
+					_, session, _, _, _, contNs, err := CreateContainerWithId(netconf, name, "", cniContainerIDX)
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					result, err := GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+					log.Printf("Unmarshaled result: %v\n", result)
+
+					// Assert that the endpoint is created in the backend datastore with ContainerID "X".
+					endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					// Set the Revision to nil since we can't assert it's exact value.
+					endpoints.Items[0].Metadata.Revision = nil
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:             hostname,
+						Name:             "eth0",
+						Workload:         fmt.Sprintf("test.%s", name),
+						ActiveInstanceID: cniContainerIDX,
+						Orchestrator:     "k8s",
+						Labels:           map[string]string{"calico/k8s_ns": "test"},
+					}))
+
+					// ADD the container with passing a CNI_CONTAINERID of "Y"
+					_, session, _, _, _, contNs, err = CreateContainerWithId(netconf, name, "", cniContainerIDY)
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					result, err = GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+					log.Printf("Unmarshaled result: %v\n", result)
+
+					// Assert that the endpoint is created in the backend datastore with ContainerID "Y".
+					endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					// Set the Revision to nil since we can't assert it's exact value.
+					endpoints.Items[0].Metadata.Revision = nil
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:             hostname,
+						Name:             "eth0",
+						Workload:         fmt.Sprintf("test.%s", name),
+						ActiveInstanceID: cniContainerIDY,
+						Orchestrator:     "k8s",
+						Labels:           map[string]string{"calico/k8s_ns": "test"},
+					}))
+
+					// Delete the container with the CNI_CONTAINERID "X".
+					exitCode, err := DeleteContainerWithId(netconf, contNs.Path(), name, cniContainerIDX)
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).Should(Equal(0))
+
+					// Assert that the endpoint in the backend datastore still has ContainerID "Y".
+					endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					// Set the Revision to nil since we can't assert it's exact value.
+					endpoints.Items[0].Metadata.Revision = nil
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:             hostname,
+						Name:             "eth0",
+						Workload:         fmt.Sprintf("test.%s", name),
+						ActiveInstanceID: cniContainerIDY,
+						Orchestrator:     "k8s",
+						Labels:           map[string]string{"calico/k8s_ns": "test"},
+					}))
+
+					// Delete the container with the CNI_CONTAINERID "Y".
+					exitCode, err = DeleteContainerWithId(netconf, contNs.Path(), name, cniContainerIDY)
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).Should(Equal(0))
+
+					// Assert that the endpoint in the backend datastore is now gone.
+					endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(0))
+
+				})
+			})
+
 			Context("Create a container then send another ADD for the same container", func() {
 				netconf := fmt.Sprintf(`
 				{
