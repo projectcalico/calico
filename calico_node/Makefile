@@ -9,10 +9,6 @@ VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
 # Read current stream version from _data/versions.yml
 RELEASE_STREAM?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
 
-.PHONY: print-version
-print-version:
-	$(info $$RELEASE_STREAM is ${RELEASE_STREAM})
-
 ###############################################################################
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
@@ -29,7 +25,7 @@ TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREA
 K8S_POLICY_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-policy-controller.version')
 CNI_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
-CONFD_VER ?= v0.12.1-calico-0.3.0
+CONFD_VER ?= v0.12.1-calico-0.4.0
 
 SYSTEMTEST_CONTAINER_VER ?= latest
 # we can use "custom" build image and test image name
@@ -37,6 +33,17 @@ SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 
 # Ensure that the dist directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist)
+
+.PHONY: print-version
+print-version:
+	$(info $$RELEASE_STREAM is ${RELEASE_STREAM})
+    $(info $$BIRD_VER is ${BIRD_VER})
+    $(info $$CALICOCTL_VER is ${CALICOCTL_VER})
+    $(info $$CALICO_VER is ${CALICO_VER})
+    $(info $$CONFD_VER is ${CONFD_VER})
+    $(info $$FELIX_VER is ${FELIX_VER})
+    $(info $$K8S_POLICY_VER is ${K8S_POLICY_VER})
+    $(info $$TYPHA_VER is ${TYPHA_VER})
 
 ###############################################################################
 # URL for Calico binaries
