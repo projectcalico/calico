@@ -106,7 +106,7 @@ func (c *Client) BGPPeers() BGPPeerInterface {
 
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c *Client) IPAM() ipam.Interface {
-	return ipam.NewIPAM(c.Backend, poolAccessor{})
+	return ipam.NewIPAMClient(c.Backend, poolAccessor{})
 }
 
 type poolAccessor struct {

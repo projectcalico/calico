@@ -35,7 +35,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-// Implement an IP pools accessor for the IPAM client.
+// Implement an IP pools accessor for the IPAM client.  This is a "mock" version
+// of the accessor that we populate directly, rather than requiring the pool
+// data to be persisted in etcd.
 type ipPoolAccessor struct {
 	pools map[string]bool
 }
@@ -50,7 +52,9 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]cnet.IPNet, error) {
 	}
 	sort.Strings(sorted)
 
-	// Convert to IPNets and sort out the correct IP versions.
+	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
+	// mimics more closely the behavior of etcd and allows the tests to be
+	// deterministic.
 	cidrs := []cnet.IPNet{}
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
@@ -85,7 +89,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 	if err != nil {
 		panic(err)
 	}
-	ic := NewIPAM(bc, ipPools)
+	ic := NewIPAMClient(bc, ipPools)
 
 	// We're assigning one IP which should be from the only ipPool created at the time, second one
 	// should be from the same /26 block since they're both from the same host, then delete
@@ -144,7 +148,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Expect(len(p)).To(Equal(1))
 				Expect(p[0].String()).To(Equal(pool2.String()))
 				p, _ = ipPools.GetEnabledPools(6)
-				Expect(len(p)).To(Equal(0))
+				Expect(len(p)).To(BeZero())
 
 				args := AutoAssignArgs{
 					Num4:     1,
@@ -488,9 +492,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			}
 
 			if autoAssignNumIPv4 != 0 {
-				assignedIPv4, _, _ := ic.AutoAssign(AutoAssignArgs{
+				assignedIPv4, _, err := ic.AutoAssign(AutoAssignArgs{
 					Num4: autoAssignNumIPv4,
 				})
+				Expect(err).ToNot(HaveOccurred())
 				inIPs = assignedIPv4
 			}
 

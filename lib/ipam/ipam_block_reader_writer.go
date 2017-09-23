@@ -80,13 +80,13 @@ func (rw blockReaderWriter) claimNewAffineBlock(host string, version ipVersion, 
 	pools := []cnet.IPNet{}
 
 	// Get all the configured pools.
-	allPools, err := rw.pools.GetEnabledPools(version.Number)
+	enabledPools, err := rw.pools.GetEnabledPools(version.Number)
 	if err != nil {
 		log.Errorf("Error reading configured pools: %s", err)
 		return nil, err
 	}
 
-	for _, p := range allPools {
+	for _, p := range enabledPools {
 		if isPoolInRequestedPools(p, requestedPools) {
 			pools = append(pools, p)
 		}
@@ -94,7 +94,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(host string, version ipVersion, 
 
 	// Build a map so we can lookup existing pools.
 	pm := map[string]bool{}
-	for _, p := range allPools {
+	for _, p := range enabledPools {
 		pm[p.String()] = true
 	}
 
@@ -290,8 +290,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 // withinConfiguredPools returns true if the given IP is within a configured
 // Calico pool, and false otherwise.
 func (rw blockReaderWriter) withinConfiguredPools(ip cnet.IP) bool {
-	allPools, _ := rw.pools.GetEnabledPools(ip.Version())
-	for _, p := range allPools {
+	enabledPools, _ := rw.pools.GetEnabledPools(ip.Version())
+	for _, p := range enabledPools {
 		// Compare any enabled pools.
 		if p.Contains(ip.IP) {
 			return true
