@@ -33,7 +33,7 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 		if err = netlink.LinkDel(oldHostVeth); err != nil {
 			return "", "", fmt.Errorf("failed to delete old hostVeth %v: %v", hostVethName, err)
 		}
-		logger.Infof("clean old hostVeth: %v", hostVethName)
+		logger.Infof("cleaning old hostVeth: %v", hostVethName)
 	}
 
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
@@ -109,12 +109,27 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 
 			// Handle IPv6 routes
 			if addr.Version == "6" {
+				// Make sure ipv6 is enabled in the container/pod network namespace.
+				// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address
+				// which is required to add the default IPv6 route.
+				if err = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0"); err != nil {
+					return fmt.Errorf("failed to set net.ipv6.conf.all.disable_ipv6=0: %s", err)
+				}
+
+				if err = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0"); err != nil {
+					return fmt.Errorf("failed to set net.ipv6.conf.default.disable_ipv6=0: %s", err)
+				}
+
+				if err = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0"); err != nil {
+					return fmt.Errorf("failed to set net.ipv6.conf.lo.disable_ipv6=0: %s", err)
+				}
+
 				// No need to add a dummy next hop route as the host veth device will already have an IPv6
 				// link local address that can be used as a next hop.
 				// Just fetch the address of the host end of the veth and use it as the next hop.
 				addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
 				if err != nil {
-					logger.Errorf("Error listing IPv6 addresses: %s", err)
+					logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
 					return err
 				}
 
@@ -129,11 +144,11 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 
 				_, defNet, _ := net.ParseCIDR("::/0")
 				if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
-					return fmt.Errorf("failed to add default gateway to %v %v", hostIPv6Addr, err)
+					return fmt.Errorf("failed to add IPv6 default gateway to %v %v", hostIPv6Addr, err)
 				}
 
 				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
-					return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
+					return fmt.Errorf("failed to add IPv6 addr to %q: %v", contVeth, err)
 				}
 
 				// Set hasIPv6 to true so sysctls for IPv6 can be programmed when the host side of
@@ -240,34 +255,40 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 		// host side of the veth, which is one fewer thing to maintain and one fewer
 		// thing we may clash over.
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", hostVethName), "1"); err != nil {
-			return err
+			return fmt.Errorf("failed to set net.ipv4.conf.%s.proxy_arp=1: %s", hostVethName, err)
 		}
 
 		// Normally, the kernel has a delay before responding to proxy ARP but we know
 		// that's not needed in a Calico network so we disable it.
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", hostVethName), "0"); err != nil {
-			return err
+			return fmt.Errorf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", hostVethName, err)
 		}
 
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", hostVethName), "1"); err != nil {
-			return err
+			return fmt.Errorf("failed to set net.ipv4.conf.%s.forwarding=1: %s", hostVethName, err)
 		}
 	}
 
 	if hasIPv6 {
+		// Make sure ipv6 is enabled on the hostVeth interface in the host network namespace.
+		// Interfaces won't get a link local address without this sysctl set to 0.
+		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/disable_ipv6", hostVethName), "0"); err != nil {
+			return fmt.Errorf("failed to set net.ipv6.conf.%s.disable_ipv6=0: %s", hostVethName, err)
+		}
+
 		// Enable proxy NDP, similarly to proxy ARP, described above in IPv4 section.
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", hostVethName), "1"); err != nil {
-			return err
+			return fmt.Errorf("failed to set net.ipv6.conf.%s.proxy_ndp=1: %s", hostVethName, err)
 		}
 
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", hostVethName), "1"); err != nil {
-			return err
+			return fmt.Errorf("failed to set net.ipv6.conf.%s.forwarding=1: %s", hostVethName, err)
 		}
 	}
 
