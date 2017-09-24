@@ -223,13 +223,21 @@ func (c Converter) NetworkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.K
 	types := []string{}
 	if ingress {
 		types = append(types, "ingress")
-	} else if len(inboundRules) > 0 {
-		log.Warn("K8s PolicyTypes don't include 'ingress', but NetworkPolicy has ingress rules.")
 	}
 	if egress {
 		types = append(types, "egress")
 	} else if len(outboundRules) > 0 {
+		// Egress was introduced at the same time as policyTypes.  It shouldn't be possible to
+		// receive a NetworkPolicy with an egress rule but without "egress" specified in its types,
+		// but we'll warn about it anyway.
 		log.Warn("K8s PolicyTypes don't include 'egress', but NetworkPolicy has egress rules.")
+	}
+
+	// If no types were specified in the policy, then we're running on a cluster that doesn't
+	// include support for that field in the API.  In that case, the correct behavior is for the policy
+	// to apply to only ingress traffic.
+	if len(types) == 0 {
+		types = append(types, "ingress")
 	}
 
 	// Build and return the KVPair.
