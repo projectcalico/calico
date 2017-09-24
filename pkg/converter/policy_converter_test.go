@@ -27,11 +27,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("PolicyConverter", func() {
+var _ = Describe("NetworkPolicy conversion tests", func() {
 
 	npConverter := converter.NewPolicyConverter()
 
-	It("basic NetworkPolicy", func() {
+	It("should parse a basic NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -165,7 +165,7 @@ var _ = Describe("PolicyConverter", func() {
 		})
 	})
 
-	It("should parse a NetworkPolicy with empty podSelector", func() {
+	It("should parse a NetworkPolicy with an empty podSelector", func() {
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
@@ -320,7 +320,7 @@ var _ = Describe("PolicyConverter", func() {
 		})
 	})
 
-	It("should handle invalid obj for conversion", func() {
+	It("should handle conversion of an invalid type", func() {
 		np := "anything"
 
 		// Parse the policy.
@@ -330,7 +330,7 @@ var _ = Describe("PolicyConverter", func() {
 		})
 	})
 
-	It("GetKey", func() {
+	It("should return the correct key", func() {
 		policyName := "allow-all"
 		policy := api.Policy{
 			Metadata: api.PolicyMetadata{
@@ -346,7 +346,7 @@ var _ = Describe("PolicyConverter", func() {
 		})
 	})
 
-	It("NetworkPolicy with Egress rule", func() {
+	It("should parse a NetworkPolicy with an Egress rule", func() {
 		port80 := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -421,6 +421,80 @@ var _ = Describe("PolicyConverter", func() {
 		// Check that Types field exists and has only 'egress'
 		var policyType api.PolicyType = "egress"
 		By("returning a calico policy with ingress type", func() {
+			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+		})
+	})
+})
+
+var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
+
+	npConverter := converter.NewPolicyConverter()
+
+	It("should parse a k8s v1.7 NetworkPolicy with an ingress rule", func() {
+		// <= v1.7 didn't include a polityTypes field, so it always comes back as an
+		// empty list.
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := npConverter.Convert(&np)
+		By("not generating an error", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Assert policy name.
+		By("generating the expected name", func() {
+			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+		})
+
+		// Assert policy order.
+		By("generating the correct order", func() {
+			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+		})
+
+		// Assert selectors
+		By("generating the correct selector", func() {
+			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+				"calico/k8s_ns == 'default' && label == 'value'"))
+		})
+
+		// There should be one inbound rule.
+		By("returning a policy with a single ingress rule", func() {
+			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(1))
+		})
+
+		// There should be one OutboundRule to allow all egress traffic.
+		By("returning a policy with a single egress rule", func() {
+			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
+		})
+
+		var policyType api.PolicyType = "ingress"
+		// Check that Types field exists and has only 'ingress'
+		By("returning a policy with types=[ingress]", func() {
 			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
 			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
 		})
