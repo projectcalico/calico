@@ -1,5 +1,5 @@
-hash: f450730f2284441fecf108a7733af83332ecf64c3a42bea4d16931b76e98bb58
-updated: 2017-09-21T17:54:38.238205289Z
+hash: ae19a6683f4e7b7589fb56478cb4567390928b1da0b7348ddac3f9fad5e32468
+updated: 2017-09-24T18:23:31.096170181-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
+  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 130e6b02ab059e7b717a096f397c5b60111cae74
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -155,7 +155,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: aeceb9b7a909df4845a562a55299fd605139fcf0
+  version: 5cabf71a9999834727d83036e986836084e0a13a
   subpackages:
   - lib
   - lib/api
@@ -187,7 +187,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 8a6de511ce81f162995c7091d58339cc7d0e998d
+  version: 049f0ad98022129ccb29f7fb3d9859c8dd967728
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -202,13 +202,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 2f17f4a9d485bf34b4bfaccc273805040e4f86c8
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -255,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: b6e1ae21643682ce023deb8d152024597b0e9bb4
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -296,7 +296,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
@@ -436,8 +436,4 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
-- name: k8s.io/kube-openapi
-  version: 80f07ef71bb4f781233c65aa8d0369e4ecafab87
-  subpackages:
-  - pkg/common
 testImports: []
