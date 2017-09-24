@@ -10,7 +10,7 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 CURL=curl -sSf
 
 K8S_VERSION=1.6.1
-CNI_VERSION=v0.5.2
+CNI_VERSION=v0.6.0
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
@@ -109,16 +109,9 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 .PHONY: fetch-cni-bins
 fetch-cni-bins: dist/flannel dist/loopback dist/host-local dist/portmap
 
-# For now we've got a checked in version of the plugin.  Eventually
-# this should pull from upstream releases.
-dist/portmap:
+dist/flannel dist/loopback dist/host-local dist/portmap:
 	mkdir -p dist
-	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.9.0/portmap -o $@
-	chmod +x dist/portmap
-
-dist/flannel dist/loopback dist/host-local:
-	mkdir -p dist
-	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/$(CNI_VERSION)/cni-amd64-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-amd64-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local ./portmap
 
 # Useful for CI but currently slow for local development because the
 # .go-pkg-cache can't be used (since tests run as root)
