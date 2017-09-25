@@ -1,7 +1,20 @@
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package testutils
 
 import (
-	"fmt"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -61,6 +74,7 @@ type testResourceWatcher struct {
 	events        []watch.Event
 	watchClosedCh chan struct{}
 	closing       bool
+	lock          sync.Mutex
 }
 
 // run is the main loop that consumes and stores the watch events.
@@ -68,7 +82,9 @@ func (t *testResourceWatcher) run() {
 	for {
 		select {
 		case event := <-t.watch.ResultChan():
+			t.lock.Lock()
 			t.events = append(t.events, event)
+			t.lock.Unlock()
 		case <-t.watchClosedCh:
 			log.Info("Exiting test watch loop")
 			return
@@ -78,6 +94,8 @@ func (t *testResourceWatcher) run() {
 
 // Stop closes down the Watcher and the main watch loop.
 func (t *testResourceWatcher) Stop() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
 	if !t.closing {
 		t.watch.Stop()
 		close(t.watchClosedCh)
@@ -90,10 +108,14 @@ func (t *testResourceWatcher) Stop() {
 func (t *testResourceWatcher) ExpectEvents(kind string, events []watch.Event) {
 	By("Waiting for the correct number of events")
 	log.Infof("Start waiting at %s", time.Now())
+	t.lock.Lock()
 	cur := len(t.events)
+	t.lock.Unlock()
 	for ii := 0; ii < 10 && cur != len(events); ii++ {
 		time.Sleep(100 * time.Millisecond)
+		t.lock.Lock()
 		newcur := len(t.events)
+		t.lock.Unlock()
 		if newcur != cur {
 			// We've got new events, so reset the counter.
 			ii = 0
@@ -102,9 +124,12 @@ func (t *testResourceWatcher) ExpectEvents(kind string, events []watch.Event) {
 	}
 	log.Infof("Finish waiting at %s", time.Now())
 
+	// We either have the correct number of events now, or we don't.  In any case
+	// lock the events list and compare the events.
+	t.lock.Lock()
+	defer t.lock.Unlock()
 	Expect(t.events).To(HaveLen(len(events)))
 	for i, event := range events {
-		By(fmt.Sprintf("Validating the contents of event %d", i))
 		Expect(t.events[i].Type).To(Equal(event.Type))
 		if event.Object != nil {
 			Expect(t.events[i].Object).NotTo(BeNil())

@@ -15,6 +15,7 @@
 package client
 
 import (
+	"context"
 	"encoding/hex"
 	goerrors "errors"
 	"fmt"
@@ -35,7 +36,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/validator"
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
-	"context"
 )
 
 // Client contains

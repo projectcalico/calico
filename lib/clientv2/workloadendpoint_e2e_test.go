@@ -41,13 +41,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 	name1 := "wep-1"
 	name2 := "wep-2"
 	spec1 := apiv2.WorkloadEndpointSpec{
-		Pod: "abcdef",
-		ContainerID: "12345",
+		Pod:           "abcdef",
+		ContainerID:   "12345",
 		InterfaceName: "cali09123",
 	}
 	spec2 := apiv2.WorkloadEndpointSpec{
-		Pod: "defgh",
-		ContainerID: "232323",
+		Pod:           "defgh",
+		ContainerID:   "232323",
 		InterfaceName: "cali09122",
 	}
 

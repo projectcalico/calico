@@ -191,16 +191,18 @@ func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind, n
 	}
 
 	// Create the backend watcher.  We need to process the results to add revision data etc.
-	bw, err := c.backend.Watch(ctx, list, opts.ResourceVersion)
+	ctx, cancel := context.WithCancel(ctx)
+	backend, err := c.backend.Watch(ctx, list, opts.ResourceVersion)
 	if err != nil {
 		return nil, err
 	}
 	w := &watcher{
-		backend: bw,
 		results: make(chan watch.Event, 100),
 		client:  c,
+		cancel:  cancel,
+		context: ctx,
+		backend: backend,
 	}
-	w.context, w.cancel = context.WithCancel(ctx)
 	go w.run()
 	return w, nil
 }
@@ -290,12 +292,14 @@ func (c *resources) handleNamespace(ns, kind string, in resource) error {
 	return nil
 }
 
+// watcher implements the watch.Interface.
 type watcher struct {
-	backend bapi.WatchInterface
-	context context.Context
-	cancel  context.CancelFunc
-	results chan watch.Event
-	client  *resources
+	backend    bapi.WatchInterface
+	context    context.Context
+	cancel     context.CancelFunc
+	results    chan watch.Event
+	client     *resources
+	terminated bool
 }
 
 func (w *watcher) Stop() {
@@ -306,32 +310,41 @@ func (w *watcher) ResultChan() <-chan watch.Event {
 	return w.results
 }
 
+// run is the main watch loop, pulling events from the backend watcher and sending
+// down the results channel.
 func (w *watcher) run() {
 	log.Info("Main client watcher loop")
-mainloop:
+
+	// Make sure we terminate resources if we exit.
+	defer w.terminate()
+
 	for {
 		select {
 		case event := <-w.backend.ResultChan():
-			e := w.processEvent(event)
+			e := w.convertEvent(event)
 			select {
 			case w.results <- e:
 			case <-w.context.Done():
 				log.Info("Process backend watcher done event during watch event in main client")
-				break mainloop
+				return
 			}
 		case <-w.context.Done(): // user cancel
 			log.Info("Process backend watcher done event in main client")
-			break mainloop
+			return
 		}
 	}
-
-	log.Info("Exiting main client watcher loop")
-	w.cancel()
-	w.backend.Stop()
-	close(w.results)
 }
 
-func (w *watcher) processEvent(backendEvent bapi.WatchEvent) watch.Event {
+// terminate all resources associated with this watcher.
+func (w *watcher) terminate() {
+	log.Info("Exiting main client watcher loop")
+	w.cancel()
+	close(w.results)
+	w.terminated = true
+}
+
+// convertEvent converts a backend watch event into a client watch event.
+func (w *watcher) convertEvent(backendEvent bapi.WatchEvent) watch.Event {
 	apiEvent := watch.Event{
 		Error: backendEvent.Error,
 	}
@@ -356,6 +369,16 @@ func (w *watcher) processEvent(backendEvent bapi.WatchEvent) watch.Event {
 	return apiEvent
 }
 
+// hasTerminated returns true if the watcher has terminated, release all resources.
+// Used for test purposes.
+func (w *watcher) hasTerminated() bool {
+	t := w.terminated
+	bt := w.backend.HasTerminated()
+	log.Infof("hasTerminated() terminated=%v; backend-terminated=%v", t, bt)
+	return t && bt
+}
+
+// logWithResource returns a logrus entry with key resource attributes included.
 func logWithResource(res resource) *log.Entry {
 	return log.WithFields(log.Fields{
 		"Kind":            res.GetObjectKind().GroupVersionKind(),

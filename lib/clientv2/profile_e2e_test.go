@@ -38,12 +38,12 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreAll, 
 	name1 := "profile-1"
 	name2 := "profile-2"
 	spec1 := apiv2.ProfileSpec{
-		LabelsToApply: map[string]string {
+		LabelsToApply: map[string]string{
 			"aa": "bb",
 		},
 	}
 	spec2 := apiv2.ProfileSpec{
-		LabelsToApply: map[string]string {
+		LabelsToApply: map[string]string{
 			"bb": "cc",
 		},
 	}
