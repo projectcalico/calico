@@ -20,11 +20,10 @@ import (
 	"os"
 	"time"
 
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
-
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -260,5 +259,151 @@ var _ = Describe("PolicyController", func() {
 				return len(p.Spec.IngressRules)
 			}, time.Second*10, 500*time.Millisecond).Should(Equal(0))
 		})
+	})
+
+	Describe("pod", func() {
+		It("labels are updated and active instance ids are respected", func() {
+			// Create a Pod
+			var wep api.WorkloadEndpoint
+			podName := "pod"
+			pod := v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: "default",
+					Labels: map[string]string{
+						"foo": "label1",
+					},
+				},
+				Spec: v1.PodSpec{
+					NodeName: "127.0.0.1",
+					Containers: []v1.Container{
+						v1.Container{
+							Name:    "container1",
+							Image:   "busybox",
+							Command: []string{"sleep", "3600"},
+						},
+					},
+				},
+			}
+			_, err := k8sClient.CoreV1().Pods("default").Create(&pod)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Update the Pod to 'running' and an IP.
+			pod.Status.PodIP = "192.168.1.1"
+			pod.Status.Phase = v1.PodRunning
+			_, err = k8sClient.Pods("default").UpdateStatus(&pod)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Mock the job of the CNI plugin by creating the wep in etcd, and assign the ActiveInstanceID.
+			wep = api.WorkloadEndpoint{
+				Metadata: api.WorkloadEndpointMetadata{
+					Name:             "eth0",
+					Node:             pod.Spec.NodeName,
+					Orchestrator:     "k8s",
+					Workload:         "default." + podName,
+					ActiveInstanceID: "aii1",
+					Labels: map[string]string{
+						"foo": "label1",
+					},
+				},
+				Spec: api.WorkloadEndpointSpec{
+					InterfaceName: "eth0",
+				},
+			}
+			_, err = calicoClient.WorkloadEndpoints().Create(&wep)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Definitively trigger a policy controller cache update by updating a pod's labels
+			idMetadata := api.WorkloadEndpointMetadata{
+				Name:         "eth0",
+				Node:         pod.Spec.NodeName,
+				Orchestrator: "k8s",
+				Workload:     "default." + podName,
+			}
+			pod.ObjectMeta.Labels["foo"] = "label2"
+			_, err = k8sClient.CoreV1().Pods("default").Update(&pod)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Wait for the policy controller to update the web with the new labels
+			Eventually(func() error {
+				w, err := calicoClient.WorkloadEndpoints().Get(idMetadata)
+				if err != nil {
+					return err
+				}
+				if w.Metadata.Labels["foo"] != "label2" {
+					return fmt.Errorf("%v should equal 'label2'", w.Metadata.Labels["foo"])
+				}
+				return nil
+			}, 3*time.Second).ShouldNot(HaveOccurred())
+
+			// Update the wep's ActiveInstanceID.
+			wep.Metadata.ActiveInstanceID = "aii2"
+			_, err = calicoClient.WorkloadEndpoints().Update(&wep)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Trigger a pod 'update' in policy controller by updating the pods labels
+			pod.Labels["foo"] = "label3"
+			_, err = k8sClient.CoreV1().Pods("default").Update(&pod)
+			Expect(err).NotTo(HaveOccurred())
+
+			var w *api.WorkloadEndpoint
+			Eventually(func() error {
+				var err error
+				w, err = calicoClient.WorkloadEndpoints().Get(idMetadata)
+				if err != nil {
+					return err
+				}
+				if w.Metadata.Labels["foo"] != "label3" {
+					return fmt.Errorf("%v should equal 'label3'", w.Metadata.Labels["foo"])
+				}
+				return nil
+			}, 3*time.Second).ShouldNot(HaveOccurred())
+
+			// Check that the policy controller updated its cache to the new ActiveInstanceID.
+			Expect(w.Metadata.ActiveInstanceID).To(Equal("aii2"))
+		})
+	})
+
+	It("doesn't create a wep when it hears a label update for a pod that is not running yet", func() {
+		// Create a Pod
+		podName := "pod"
+		pod := v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: "default",
+				Labels: map[string]string{
+					"foo": "label1",
+				},
+			},
+			Spec: v1.PodSpec{
+				NodeName: "127.0.0.1",
+				Containers: []v1.Container{
+					v1.Container{
+						Name:    "container1",
+						Image:   "busybox",
+						Command: []string{"sleep", "3600"},
+					},
+				},
+			},
+		}
+		_, err := k8sClient.CoreV1().Pods("default").Create(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Update the pod's labels
+		pod.ObjectMeta.Labels["foo"] = "label2"
+		_, err = k8sClient.CoreV1().Pods("default").Update(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check that policy controller *does not* write the wep
+		idMetadata := api.WorkloadEndpointMetadata{
+			Name:         "eth0",
+			Node:         pod.Spec.NodeName,
+			Orchestrator: "k8s",
+			Workload:     "default." + podName,
+		}
+		Consistently(func() error {
+			_, err := calicoClient.WorkloadEndpoints().Get(idMetadata)
+			return err
+		}, 10*time.Second).Should(HaveOccurred())
 	})
 })
