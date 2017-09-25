@@ -21,6 +21,7 @@ package testutils
 import (
 	"fmt"
 	"os/exec"
+	"os"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -33,8 +34,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/rest"
 )
-
-const vK8sApiserver = "v1.8.0-beta.1"
 
 const KubeconfigTemplate = `apiVersion: v1
 kind: Config
@@ -53,7 +52,7 @@ current-context: test-context`
 
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
-		fmt.Sprintf("gcr.io/google_containers/hyperkube-amd64:%s", vK8sApiserver),
+		fmt.Sprintf("%s",os.Getenv("HYPERKUBE_IMAGE")),
 		"/hyperkube", "apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=AlwaysAllow",
@@ -65,7 +64,7 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
-		"quay.io/coreos/etcd",
+		fmt.Sprintf("%s",os.Getenv("ETCD_IMAGE")),
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379")

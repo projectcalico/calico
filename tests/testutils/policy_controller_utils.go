@@ -19,6 +19,7 @@ package testutils
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/projectcalico/felix/fv/containers"
 )
@@ -32,5 +33,5 @@ func RunPolicyController(etcdIP, kconfigfile string) *containers.Container {
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
-		"calico/kube-policy-controller:latest")
+		fmt.Sprintf("%s",os.Getenv("CONTAINER_NAME")))
 }
