@@ -1,5 +1,5 @@
-hash: fe8ed12a4d5f91541e7ad4270e02ddfc5d02c8f9b4fa17860944e884a2934c33
-updated: 2017-09-22T15:54:32.530067007-07:00
+hash: 08ead48d6f41fcc525a57b287c1e4dbd6374b06b1ebfe2b2700cf9c637174a6f
+updated: 2017-09-24T18:48:42.14088973-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -7,14 +7,14 @@ imports:
   - compute/metadata
   - internal
 - name: github.com/coreos/etcd
-  version: 17ae440991da3bdb2df4309936dd2074f66ec394
+  version: d267ca9c184e953554257d0acdd1dc9c47d38229
   subpackages:
   - client
+  - pkg/fileutil
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
-  - version
 - name: github.com/coreos/go-oidc
   version: be73733bb8cc830d0205609b95d125215f8e9c70
   subpackages:
@@ -23,10 +23,12 @@ imports:
   - key
   - oauth2
   - oidc
-- name: github.com/coreos/go-semver
-  version: 568e959cd89871e61434c1143528d9162da89ef2
+- name: github.com/coreos/go-systemd
+  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
   subpackages:
-  - semver
+  - daemon
+  - journal
+  - util
 - name: github.com/coreos/pkg
   version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
   subpackages:
@@ -89,7 +91,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/onsi/ginkgo
-  version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
+  version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
   - config
   - extensions/table
@@ -109,11 +111,6 @@ imports:
   - reporters/stenographer/support/go-colorable
   - reporters/stenographer/support/go-isatty
   - types
-- name: github.com/projectcalico/calico
-  version: 2dd6696a6970b9a7d7a3b1cbe8dc6963a9fffd4b
-  subpackages:
-  - calico_node/calicoclient
-  - calico_node/startup/autodetection
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -123,7 +120,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: fb0f93099e89eec0379f2b30e21e8427c8dc952d
+  version: 5cabf71a9999834727d83036e986836084e0a13a
   subpackages:
   - lib/api
   - lib/api/unversioned
