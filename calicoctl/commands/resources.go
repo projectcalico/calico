@@ -18,20 +18,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
-	"strings"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/scope"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
+	"context"
 )
 
 type action int
@@ -41,125 +38,42 @@ const (
 	actionCreate
 	actionUpdate
 	actionDelete
-	actionList
+	actionGetOrList
 )
 
 // Convert loaded resources to a slice of resources for easier processing.
 // The loaded resources may be a slice containing resources and resource lists, or
 // may be a single resource or a single resource list.  This function handles the
 // different possible options to convert to a single slice of resources.
-func convertToSliceOfResources(loaded interface{}) []unversioned.Resource {
-	r := []unversioned.Resource{}
+func convertToSliceOfResources(loaded interface{}) ([]resourcemgr.ResourceObject, error) {
+	res := []resourcemgr.ResourceObject{}
 	log.Infof("Converting resource to slice: %v", loaded)
-
-	switch reflect.TypeOf(loaded).Kind() {
-	case reflect.Slice:
-		// Recursively call this to add each resource in the supplied slice to
-		// return slice.
-		s := reflect.ValueOf(loaded)
-		for i := 0; i < s.Len(); i++ {
-			r = append(r, convertToSliceOfResources(s.Index(i).Interface())...)
-		}
-	case reflect.Struct:
-		// This is a resource or resource list.  If a resource, add to our return
-		// slice.  If a resource list, add each item to our return slice.
-		lr := loaded.(unversioned.Resource)
-		if strings.HasSuffix(lr.GetTypeMetadata().Kind, "List") {
-			items := reflect.ValueOf(loaded).Elem().FieldByName("Items")
-			for i := 0; i < items.Len(); i++ {
-				r = append(r, items.Index(i).Interface().(unversioned.Resource))
-			}
-		} else {
-			r = append(r, lr)
-		}
-	case reflect.Ptr:
-		// This is a resource or resource list.  If a resource, add to our return
-		// slice.  If a resource list, add each item to our return slice.
-		lr := reflect.ValueOf(loaded).Elem().Interface().(unversioned.Resource)
-		if strings.HasSuffix(lr.GetTypeMetadata().Kind, "List") {
-			items := reflect.ValueOf(loaded).Elem().FieldByName("Items")
-			for i := 0; i < items.Len(); i++ {
-				r = append(r, items.Index(i).Interface().(unversioned.Resource))
-			}
-		} else {
-			r = append(r, lr)
-		}
-	default:
-		panic(errors.New(fmt.Sprintf("unhandled type %v converting to resource slice",
-			reflect.TypeOf(loaded).Kind())))
-	}
-
-	log.Infof("Returning slice: %v", r)
-	return r
-}
-
-// getResourceFromArguments returns a resource instance from the command line arguments.
-func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource, error) {
-	kind := args["<KIND>"].(string)
-	name := argutils.ArgStringOrBlank(args, "<NAME>")
-	node := argutils.ArgStringOrBlank(args, "--node")
-	workload := argutils.ArgStringOrBlank(args, "--workload")
-	orchestrator := argutils.ArgStringOrBlank(args, "--orchestrator")
-	resScope := argutils.ArgStringOrBlank(args, "--scope")
-	switch strings.ToLower(kind) {
-	case "node", "nodes", "no", "nos":
-		p := api.NewNode()
-		p.Metadata.Name = name
-		return *p, nil
-	case "hostendpoint", "hostendpoints", "hep", "heps":
-		h := api.NewHostEndpoint()
-		h.Metadata.Name = name
-		h.Metadata.Node = node
-		return *h, nil
-	case "workloadendpoint", "workloadendpoints", "wep", "weps":
-		h := api.NewWorkloadEndpoint()
-		h.Metadata.Name = name
-		h.Metadata.Orchestrator = orchestrator
-		h.Metadata.Workload = workload
-		h.Metadata.Node = node
-		return *h, nil
-	case "profile", "profiles", "pro", "pros":
-		p := api.NewProfile()
-		p.Metadata.Name = name
-		return *p, nil
-	case "policy", "policies", "pol", "pols":
-		p := api.NewPolicy()
-		p.Metadata.Name = name
-		return *p, nil
-	case "ippool", "ippools", "ipp", "ipps", "pool", "pools":
-		p := api.NewIPPool()
-		if name != "" {
-			_, cidr, err := net.ParseCIDR(name)
+	switch r := loaded.(type) {
+	case []runtime.Object:
+		for i := 0; i < len(r); i++ {
+			r, err := convertToSliceOfResources(r[i])
 			if err != nil {
 				return nil, err
 			}
-			p.Metadata.CIDR = *cidr
+			res = append(res, r...)
 		}
-		return *p, nil
-	case "bgppeer", "bgppeers", "bgpp", "bgpps", "bp", "bps":
-		p := api.NewBGPPeer()
-		if name != "" {
-			err := p.Metadata.PeerIP.UnmarshalText([]byte(name))
-			if err != nil {
-				return nil, err
-			}
-		}
-		p.Metadata.Node = node
-		switch resScope {
-		case "node":
-			p.Metadata.Scope = scope.Node
-		case "global":
-			p.Metadata.Scope = scope.Global
-		case "":
-			p.Metadata.Scope = scope.Undefined
-		default:
-			return nil, fmt.Errorf("Unrecognized scope '%s', must be one of: global, node", resScope)
-		}
-		return *p, nil
 
-	default:
-		return nil, fmt.Errorf("Resource type '%s' is not supported", kind)
+	case resourcemgr.ResourceObject:
+		res = append(res, r)
+
+	case resourcemgr.ResourceListObject:
+		ret, err := meta.ExtractList(r)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range ret {
+			res = append(res, v.(resourcemgr.ResourceObject))
+		}
 	}
+
+	log.Infof("Returning slice: %v", res)
+	return res, nil
 }
 
 // commandResults contains the results from executing a CLI command
@@ -182,11 +96,11 @@ type commandResults struct {
 	singleKind string
 
 	// The results returned from each invocation
-	resources []unversioned.Resource
+	resources []runtime.Object
 
 	// The Calico API client used for the requests (useful if required
 	// again).
-	client *client.Client
+	client client.Interface
 }
 
 // executeConfigCommand is main function called by all of the resource management commands
@@ -200,7 +114,7 @@ type commandResults struct {
 func executeConfigCommand(args map[string]interface{}, action action) commandResults {
 	var r interface{}
 	var err error
-	var resources []unversioned.Resource
+	var resources []resourcemgr.ResourceObject
 
 	log.Info("Executing config command")
 
@@ -211,9 +125,12 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 			return commandResults{err: err, fileInvalid: true}
 		}
 
-		resources = convertToSliceOfResources(r)
-	} else if r, err := getResourceFromArguments(args); err != nil {
-		// Filename is not specific so extract the resource from the arguments.  This
+		resources, err = convertToSliceOfResources(r)
+		if err != nil {
+			return commandResults{err: err}
+		}
+	} else if r, err := resourcemgr.GetResourceFromArgs(args); err != nil {
+		// Filename is not specific so extract the resource from the arguments. This
 		// is only useful for delete and get functions - but we don't need to check that
 		// here since the command syntax requires a filename for the other resource
 		// management commands.
@@ -221,7 +138,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	} else {
 		// We extracted a single resource type with identifiers from the CLI, convert to
 		// a list for simpler handling.
-		resources = []unversioned.Resource{r}
+		resources = []resourcemgr.ResourceObject{r}
 	}
 
 	if len(resources) == 0 {
@@ -229,7 +146,10 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	}
 
 	if log.GetLevel() >= log.DebugLevel {
-		log.Debugf("Resources: %v", resources)
+		for _, v := range resources {
+			log.Debugf("Resource: %s", v.GetObjectKind().GroupVersionKind().String())
+		}
+
 		d, err := yaml.Marshal(resources)
 		if err != nil {
 			return commandResults{err: err}
@@ -252,7 +172,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	var kind string
 	count := make(map[string]int)
 	for _, r := range resources {
-		kind = r.GetTypeMetadata().Kind
+		kind = r.GetObjectKind().GroupVersionKind().Kind
 		count[kind] = count[kind] + 1
 		results.numResources = results.numResources + 1
 	}
@@ -263,36 +183,43 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	// Now execute the command on each resource in order, exiting as soon as we hit an
 	// error.
 	for _, r := range resources {
-		r, err = executeResourceAction(args, client, r, action)
+		res, err := executeResourceAction(args, client, r, action)
 		if err != nil {
 			results.err = err
 			break
 		}
-		results.resources = append(results.resources, r)
-		results.numHandled = results.numHandled + 1
+		results.resources = append(results.resources, res...)
+		results.numHandled = results.numHandled + len(res)
 	}
 
 	return results
 }
 
-// execureResourceAction fans out the specific resource action to the appropriate method
+// executeResourceAction fans out the specific resource action to the appropriate method
 // on the ResourceManager for the specific resource.
-func executeResourceAction(args map[string]interface{}, client *client.Client, resource unversioned.Resource, action action) (unversioned.Resource, error) {
+func executeResourceAction(args map[string]interface{}, client client.Interface, resource resourcemgr.ResourceObject, action action) ([]runtime.Object, error) {
 	rm := resourcemgr.GetResourceManager(resource)
-	var err error
-	var resourceOut unversioned.Resource
+
+	err := handleNamespace(resource, rm, args)
+	if err != nil {
+		return nil, err
+	}
+
+	var resOut runtime.Object
+	ctx := context.Background()
 
 	switch action {
 	case actionApply:
-		resourceOut, err = rm.Apply(client, resource)
+		resOut, err = rm.Apply(ctx, client, resource)
 	case actionCreate:
-		resourceOut, err = rm.Create(client, resource)
+		resOut, err = rm.Create(ctx, client, resource)
 	case actionUpdate:
-		resourceOut, err = rm.Update(client, resource)
+		resOut, err = rm.Update(ctx, client, resource)
 	case actionDelete:
-		resourceOut, err = rm.Delete(client, resource)
-	case actionList:
-		resourceOut, err = rm.List(client, resource)
+		resOut, err = rm.Delete(ctx, client, resource)
+	case actionGetOrList:
+		resOut, err = rm.GetOrList(ctx, client, resource)
+
 	}
 
 	// Skip over some errors depending on command line options.
@@ -305,10 +232,52 @@ func executeResourceAction(args map[string]interface{}, client *client.Client, r
 			skip = argutils.ArgBoolOrFalse(args, "--skip-not-exists")
 		}
 		if skip {
-			resourceOut = resource
+			resOut = resource
 			err = nil
 		}
 	}
 
-	return resourceOut, err
+	return []runtime.Object{resOut}, err
+}
+
+// handleNamespace fills in the namespace information in the resource (if required),
+// and validates the namespace depending on whether or not a namespace should be
+// provided based on the resource kind.
+func handleNamespace(resource resourcemgr.ResourceObject, rm resourcemgr.ResourceManager, args map[string]interface{}) error {
+	allNs := argutils.ArgBoolOrFalse(args, "--all-namespaces")
+	cliNs := argutils.ArgStringOrBlank(args, "--namespace")
+	resNs := resource.GetObjectMeta().GetNamespace()
+
+	if rm.IsNamespaced() {
+		switch {
+		case allNs && cliNs != "":
+			// Check if --namespace and --all-namespaces flags are used together.
+			return fmt.Errorf("cannot use both --namespace and --all-namespaces flags at the same time")
+		case resNs == "" && cliNs != "":
+			// If resource doesn't have a namespace specified
+			// but it's passed in through the -n flag then use that one.
+			resource.GetObjectMeta().SetNamespace(cliNs)
+		case resNs != "" && allNs:
+			// If --all-namespaces is used then we must set namespace to "" so
+			// list operation can list resources from all the namespaces.
+			resource.GetObjectMeta().SetNamespace("")
+		case resNs == "" && allNs:
+			// no-op
+		case resNs == "" && cliNs == "" && !allNs:
+			// Set the namespace to "default" if not specified.
+			resource.GetObjectMeta().SetNamespace("default")
+		case resNs != "" && cliNs == "":
+			// Use the namespace specified in the resource, which is already set.
+		case resNs != cliNs:
+			// If both resource and the CLI pass in the namespace but they don't match then return an error.
+			return fmt.Errorf("resource namespace does not match client namespace. %s != %s", resNs, cliNs)
+		}
+	} else if resNs != "" {
+		return fmt.Errorf("namespace should not be specified for a non-namespaced resource. %s is not a namespaced resource",
+			resource.GetObjectKind().GroupVersionKind().Kind)
+	} else if allNs || cliNs != "" {
+		return fmt.Errorf("%s is not namespaced", resource.GetObjectKind().GroupVersionKind().Kind)
+	}
+
+	return nil
 }

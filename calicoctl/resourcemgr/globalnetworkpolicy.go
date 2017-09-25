@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,36 +24,35 @@ import (
 
 func init() {
 	registerResource(
-		api.NewBGPPeer(),
-		api.NewBGPPeerList(),
+		api.NewGlobalNetworkPolicy(),
+		api.NewGlobalNetworkPolicyList(),
 		false,
-		[]string{"bgppeer", "bgppeers", "bgpp", "bgpps", "bp", "bps"},
-		[]string{"NAME", "PEERIP", "NODE", "ASN"},
-		[]string{"NAME", "PEERIP", "NODE", "ASN"},
+		[]string{"globalnetworkpolicy", "globalnetworkpolicies", "gnp", "gnps"},
+		[]string{"NAME"},
+		[]string{"NAME", "ORDER", "SELECTOR"},
 		map[string]string{
-			"NAME":   "{{.ObjectMeta.Name}}",
-			"PEERIP": "{{.Spec.PeerIP}}",
-			"NODE":   "{{ if eq .Spec.Node `` }}(global){{ else }}{{.Spec.Node}}{{ end }}",
-			"ASN":    "{{.Spec.ASNumber}}",
+			"NAME":     "{{.ObjectMeta.Name}}",
+			"ORDER":    "{{.Spec.Order}}",
+			"SELECTOR": "{{.Spec.Selector}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Delete(ctx, r.Name, options.DeleteOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Get(ctx, r.Name, options.GetOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Get(ctx, r.Name, options.GetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.BGPPeers().List(ctx, options.ListOptions{})
+			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{})
 		},
 	)
 }

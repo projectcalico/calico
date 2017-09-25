@@ -28,25 +28,20 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type resourcePrinter interface {
-	print(client *client.Client, resources []unversioned.Resource) error
+	print(client client.Interface, resources []runtime.Object) error
 }
 
 // resourcePrinterJSON implements the resourcePrinter interface and is used to display
 // a slice of resources in JSON format.
 type resourcePrinterJSON struct{}
 
-func (r resourcePrinterJSON) print(client *client.Client, resources []unversioned.Resource) error {
-	// The supplied slice of resources may contain actual resource types as well as
-	// resource lists (which themselves contain a slice of actual resources).
-	// For simplicity, expand any resource lists so that we have a flat slice of
-	// real resources.
-	resources = convertToSliceOfResources(resources)
+func (r resourcePrinterJSON) print(client client.Interface, resources []runtime.Object) error {
 	if output, err := json.MarshalIndent(resources, "", "  "); err != nil {
 		return err
 	} else {
@@ -59,12 +54,7 @@ func (r resourcePrinterJSON) print(client *client.Client, resources []unversione
 // a slice of resources in YAML format.
 type resourcePrinterYAML struct{}
 
-func (r resourcePrinterYAML) print(client *client.Client, resources []unversioned.Resource) error {
-	// The supplied slice of resources may contain actual resource types as well as
-	// resource lists (which themselves contain a slice of actual resources).
-	// For simplicity, expand any resource lists so that we have a flat slice of
-	// real resources.
-	resources = convertToSliceOfResources(resources)
+func (r resourcePrinterYAML) print(client client.Interface, resources []runtime.Object) error {
 	if output, err := yaml.Marshal(resources); err != nil {
 		return err
 	} else {
@@ -86,7 +76,7 @@ type resourcePrinterTable struct {
 	wide bool
 }
 
-func (r resourcePrinterTable) print(client *client.Client, resources []unversioned.Resource) error {
+func (r resourcePrinterTable) print(client client.Interface, resources []runtime.Object) error {
 	log.Infof("Output in table format (wide=%v)", r.wide)
 	for _, resource := range resources {
 		// Get the resource manager for the resource type.
@@ -142,7 +132,7 @@ type resourcePrinterTemplateFile struct {
 	templateFile string
 }
 
-func (r resourcePrinterTemplateFile) print(client *client.Client, resources []unversioned.Resource) error {
+func (r resourcePrinterTemplateFile) print(client client.Interface, resources []runtime.Object) error {
 	template, err := ioutil.ReadFile(r.templateFile)
 	if err != nil {
 		return err
@@ -157,7 +147,7 @@ type resourcePrinterTemplate struct {
 	template string
 }
 
-func (r resourcePrinterTemplate) print(client *client.Client, resources []unversioned.Resource) error {
+func (r resourcePrinterTemplate) print(client client.Interface, resources []runtime.Object) error {
 	// We include a join function in the template as it's useful for multi
 	// value columns.
 	fns := template.FuncMap{
@@ -207,17 +197,19 @@ func join(items interface{}, separator string) string {
 
 // config returns a function that returns the current global named config
 // value.
-func config(client *client.Client) func(string) string {
+func config(client client.Interface) func(string) string {
 	var asValue string
 	return func(name string) string {
 		switch strings.ToLower(name) {
 		case "asnumber":
 			if asValue == "" {
-				if asn, err := client.Config().GetGlobalASNumber(); err != nil {
-					asValue = "unknown"
-				} else {
-					asValue = asn.String()
-				}
+				// TODO: fix this once config stuff is available in libcalico-g0
+				//if asn, err := client.Config().GetGlobalASNumber(); err != nil {
+				//	asValue = "unknown"
+				//} else {
+				//	asValue = asn.String()
+				//}
+				asValue = "1234"
 			}
 			return asValue
 		}

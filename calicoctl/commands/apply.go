@@ -27,7 +27,7 @@ import (
 
 func Apply(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl apply --filename=<FILENAME> [--config=<CONFIG>]
+  calicoctl apply --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Apply a policy using the data in policy.yaml.
@@ -43,6 +43,9 @@ Options:
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: ` + constants.DefaultConfigPath + `]
+  -n --namespace=<NS>       Namespace of the resource.
+                            Only applicable to NetworkPolicy and WorkloadEndpoint.
+                            Uses the default namespace if not specified.
 
 Description:
   The apply command is used to create or replace a set of resources by filename
@@ -55,7 +58,8 @@ Description:
     * hostEndpoint
     * workloadEndpoint
     * ipPool
-    * policy
+    * networkPolicy
+    * globalNetworkPolicy
     * profile
 
   When applying a resource:

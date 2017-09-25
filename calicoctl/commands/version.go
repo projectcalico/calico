@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	//"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )
 
@@ -58,26 +58,27 @@ Description:
 	fmt.Println("Git commit:       ", GIT_REVISION)
 
 	// Load the client config and connect.
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	cfg := client.Config()
-
-	val, assigned, err := cfg.GetFelixConfig("CalicoVersion", "")
-	if err != nil {
-		val = fmt.Sprintf("unknown (%s)", err)
-	} else if !assigned {
-		val = "unknown"
-	}
-	fmt.Println("Cluster Version:  ", val)
-	val, assigned, err = cfg.GetFelixConfig("ClusterType", "")
-	if err != nil {
-		val = fmt.Sprintf("unknown (%s)", err)
-	} else if !assigned {
-		val = "unknown"
-	}
-	fmt.Println("Cluster Type:     ", val)
+	//cf := parsedArgs["--config"].(string)
+	//client, err := clientmgr.NewClient(cf)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	os.Exit(1)
+	//}
+	//cfg := client.Config()
+	//a := apiconfig.NewCalicoAPIConfig()
+	//
+	//val, assigned, err := cfg.GetFelixConfig("CalicoVersion", "")
+	//if err != nil {
+	//	val = fmt.Sprintf("unknown (%s)", err)
+	//} else if !assigned {
+	//	val = "unknown"
+	//}
+	//fmt.Println("Cluster Version:  ", val)
+	//val, assigned, err = cfg.GetFelixConfig("ClusterType", "")
+	//if err != nil {
+	//	val = fmt.Sprintf("unknown (%s)", err)
+	//} else if !assigned {
+	//	val = "unknown"
+	//}
+	//fmt.Println("Cluster Type:     ", val)
 }

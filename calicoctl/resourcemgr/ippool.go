@@ -15,41 +15,46 @@
 package resourcemgr
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"context"
+
+	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
 		api.NewIPPool(),
 		api.NewIPPoolList(),
-		[]string{"CIDR"},
-		[]string{"CIDR", "NAT", "IPIP"},
+		false,
+		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
+		[]string{"NAME", "CIDR"},
+		[]string{"NAME", "CIDR", "NAT", "IPIP", "DISABLED"},
 		map[string]string{
-			"CIDR": "{{.Metadata.CIDR}}",
-			"NAT":  "{{.Spec.NATOutgoing}}",
-			"IPIP": "{{if .Spec.IPIP}}{{.Spec.IPIP.Enabled}}{{else}}false{{end}}",
+			"NAME":     "{{.ObjectMeta.Name}}",
+			"CIDR":     "{{.Spec.CIDR}}",
+			"NAT":      "{{.Spec.NATOutgoing}}",
+			"IPIP":     "{{if .Spec.IPIP}}{{.Spec.IPIP.Mode}}{{else}}Always{{end}}",
+			"DISABLED": "{{.Spec.Disabled}}",
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.IPPool)
-			return client.IPPools().Apply(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.IPPool)
+			return client.IPPools().Create(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.IPPool)
-			return client.IPPools().Create(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.IPPool)
+			return client.IPPools().Update(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.IPPool)
-			return client.IPPools().Update(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.IPPool)
+			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.IPPool)
-			return nil, client.IPPools().Delete(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.IPPool)
+			return client.IPPools().Get(ctx, r.Name, options.GetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.IPPool)
-			return client.IPPools().List(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
+			return client.IPPools().List(ctx, options.ListOptions{})
 		},
 	)
 }

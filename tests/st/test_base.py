@@ -45,16 +45,26 @@ class TestBase(TestCase):
     def wipe_etcd(self):
         wipe_etcd(self.ip)
 
-    def check_data_in_datastore(self, data, resource, yaml_format=True):
-        if yaml_format:
-            out = calicoctl(
-                "get %s --output=yaml" % resource)
-            output = yaml.safe_load(out)
-        else:
-            out = calicoctl(
-                "get %s --output=json" % resource)
-            output = json.loads(out)
-        self.assert_same(data, output)
+    def check_data_in_datastore(self, data_in, resource, yaml_format=True):
+        for data in data_in:
+            if yaml_format:
+                out = calicoctl(
+                    "get %s %s --output=yaml" % (resource, data['metadata']['name']))
+                output = yaml.safe_load(out)
+            else:
+                out = calicoctl(
+                    "get %s %s --output=json" % (resource, data['metadata']['name']))
+                output = json.loads(out)
+
+            # Remove any empty fields from the output.
+            output_clean_spec = {k: v for k, v in output[0]['spec'].items() if v}
+
+            # Remove creationTimestamp and resourceVersion from metada as they cannot be asserted.
+            del output[0]['metadata']['creationTimestamp']
+            del output[0]['metadata']['resourceVersion']
+            
+            output[0]['spec']=output_clean_spec
+            self.assert_same(data, output[0])
 
     @staticmethod
     def assert_same(thing1, thing2):

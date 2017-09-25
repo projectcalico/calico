@@ -89,7 +89,7 @@ Description:
 		case "ipam":
 			commands.IPAM(args)
 		case "config":
-			commands.Config(args)
+			//commands.Config(args)
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
 			fmt.Println(doc)
