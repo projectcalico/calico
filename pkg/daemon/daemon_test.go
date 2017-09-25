@@ -15,6 +15,8 @@
 package daemon_test
 
 import (
+	"sync"
+
 	. "github.com/projectcalico/typha/pkg/daemon"
 
 	"context"
@@ -103,7 +105,11 @@ var _ = Describe("Daemon", func() {
 		})
 
 		It("should load the configuration and connect to the datastore", func() {
-			Expect(backend.initCalled).To(BeTrue())
+			Eventually(func() bool {
+				backend.mutex.Lock()
+				defer backend.mutex.Unlock()
+				return backend.initCalled
+			}).Should(BeTrue())
 		})
 
 		It("should create the server components", func() {
@@ -155,16 +161,21 @@ var _ = Describe("Daemon", func() {
 })
 
 type mockBackend struct {
+	mutex        sync.Mutex
 	syncerCalled bool
 	initCalled   bool
 }
 
 func (b *mockBackend) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
 	b.syncerCalled = true
 	return &dummySyncer{}
 }
 
 func (b *mockBackend) EnsureInitialized() error {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
 	b.initCalled = true
 	return nil
 }
