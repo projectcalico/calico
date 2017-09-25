@@ -68,7 +68,7 @@ import (
 
 type EnvConfig struct {
 	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"latest"`
+	TyphaVersion string `default:"v0.5.1-3-g00cc5d2"`
 }
 
 var config EnvConfig
@@ -452,8 +452,7 @@ var _ = Describe("health tests", func() {
 			Consistently(typhaReady, "10s", "1s").ShouldNot(BeGood())
 		})
 
-		// Pending because currently fails - investigation needed.
-		PIt("typha should report live", func() {
+		It("typha should report live", func() {
 			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
 			Consistently(typhaLiveness, "10s", "1s").Should(BeGood())
 		})
