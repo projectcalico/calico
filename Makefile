@@ -11,6 +11,9 @@ ifeq ($(ARCH),ppc64le)
         ARCHTAG:=-ppc64le
 endif
 
+HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.8.0-beta.1
+ETCD_IMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+
 .PHONY: all binary test clean help docker-image
 default: help
 
@@ -118,7 +121,7 @@ tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
 .PHONY: fv
 fv: tests/fv/fv.test
 	@echo Running Go FVs.
-	cd tests/fv && ./fv.test -ginkgo.slowSpecThreshold 30
+	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME) ./fv.test -ginkgo.slowSpecThreshold 30
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
@@ -143,7 +146,7 @@ stop-k8s-apiserver:
 
 run-etcd: stop-etcd
 	docker run --detach \
-	--name st-etcd quay.io/coreos/etcd:v3.2.5$(ARCHTAG) \
+	--name st-etcd $(ETCD_IMAGE) \
 	etcd \
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -180,6 +183,7 @@ clean:
 	rm -rf dist image.created$(ARCHTAG)
 	-docker rmi $(CONTAINER_NAME)
 	rm -f st-kubeconfig.yaml
+	rm -f tests/fv/fv.test
 
 .PHONY: help
 ## Display this help text.
