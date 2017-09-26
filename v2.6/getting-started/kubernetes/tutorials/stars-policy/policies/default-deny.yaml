@@ -4,3 +4,4 @@ metadata:
   name: default-deny
 spec:
   podSelector:
+    matchLabels: {}
