@@ -170,6 +170,10 @@ type WatchInterface interface {
 	// or Stop() is called, this channel will be closed, in which case the
 	// watch should be completely cleaned up.
 	ResultChan() <-chan WatchEvent
+
+	// HasTerminated returns true if the watcher has terminated and released all
+	// resources.  This is used for test purposes.
+	HasTerminated() bool
 }
 
 // WatchEventType defines the possible types of events.

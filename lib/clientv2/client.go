@@ -15,13 +15,12 @@
 package clientv2
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
-
-	"context"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend"

@@ -39,11 +39,11 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 	name1 := "hep-1"
 	name2 := "hep-2"
 	spec1 := apiv2.HostEndpointSpec{
-		Node:     "node1",
+		Node:          "node1",
 		InterfaceName: "eth0",
 	}
 	spec2 := apiv2.HostEndpointSpec{
-		Node:     "node2",
+		Node:          "node2",
 		InterfaceName: "eth1",
 	}
 
