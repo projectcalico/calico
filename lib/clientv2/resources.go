@@ -264,11 +264,15 @@ func (c *resources) handleNamespace(ns, kind string, in resource) error {
 		// client then use that namespace.
 		// If the namespace is specified in both the resource and the resource-specific client
 		// then check that they are the same.
-		if in.GetObjectMeta().GetNamespace() == "" && ns == "" {
+		resNS := in.GetObjectMeta().GetNamespace()
+		switch {
+		case resNS == "" && ns == "":
 			in.GetObjectMeta().SetNamespace(defaultNamespace)
-		} else if in.GetObjectMeta().GetNamespace() == "" {
+		case resNS == "" && ns != "":
 			in.GetObjectMeta().SetNamespace(ns)
-		} else if in.GetObjectMeta().GetNamespace() != ns {
+		case resNS != "" && ns == "":
+			// Use the namespace specified in the resource, which is already set.
+		case resNS != ns:
 			return cerrors.ErrorValidation{
 				ErroredFields: []cerrors.ErroredField{{
 					Name:   "Metadata.Namespace",
