@@ -125,7 +125,7 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 					_, err := c.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					err = c.BGPPeers().Delete(ctx, "name1", options.DeleteOptions{})
+					_, err = c.BGPPeers().Delete(ctx, "name1", options.DeleteOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
 					if finishctx.Err() != nil {

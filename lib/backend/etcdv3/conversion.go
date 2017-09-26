@@ -29,7 +29,7 @@ import (
 // If the etcdv3 key or value does not represent the resource specified by the ListInterface,
 // or if value cannot be parsed, this method returns nil.
 func convertListResponse(ekv *mvccpb.KeyValue, l model.ListInterface) *model.KVPair {
-	log.WithField("etcdv3-etcdKey", ekv.Key).Debug("Processing etcdv3 entry")
+	log.WithField("etcdv3-etcdKey", string(ekv.Key)).Debug("Processing etcdv3 entry")
 	if k := l.KeyFromDefaultPath(string(ekv.Key)); k != nil {
 		log.WithField("model-etcdKey", k).Debug("Key is valid and converted to model-etcdKey")
 		if v, err := model.ParseValue(k, ekv.Value); err == nil {

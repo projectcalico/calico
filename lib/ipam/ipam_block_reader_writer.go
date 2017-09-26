@@ -203,7 +203,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 			}
 
 			// Some other host beat us to this block.  Cleanup and return error.
-			err = rw.client.Delete(context.Background(), model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
+			_, err = rw.client.Delete(context.Background(), model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
 			if err != nil {
 				log.Errorf("Error cleaning up block affinity: %s", err)
 				return err
@@ -242,7 +242,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 
 		if b.empty() {
 			// If the block is empty, we can delete it.
-			err := rw.client.Delete(context.Background(), model.BlockKey{CIDR: b.CIDR}, "")
+			_, err := rw.client.Delete(context.Background(), model.BlockKey{CIDR: b.CIDR}, "")
 			if err != nil {
 				// Return the error unless the block didn't exist.
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -273,7 +273,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 
 		// We've removed / updated the block, so update the host config
 		// to remove the CIDR.
-		err = rw.client.Delete(context.Background(), model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
+		_, err = rw.client.Delete(context.Background(), model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
 		if err != nil {
 			// Return the error unless the affinity didn't exist.
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {

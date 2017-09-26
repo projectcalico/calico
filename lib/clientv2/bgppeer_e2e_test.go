@@ -188,13 +188,14 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			testutils.ExpectResource(&outList.Items[1], apiv2.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
 
 			By("Deleting BGPPeer (name1) with the old resource version")
-			outError = c.BGPPeers().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
+			_, outError = c.BGPPeers().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: BGPPeer(" + name1 + ")"))
 
 			By("Deleting BGPPeer (name1) with the new resource version")
-			outError = c.BGPPeers().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
+			dres, outError := c.BGPPeers().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
+			testutils.ExpectResource(dres, apiv2.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec2)
 
 			By("Updating BGPPeer name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.BGPPeers().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
@@ -222,7 +223,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
 
 			By("Attempting to deleting BGPPeer (name2) again")
-			outError = c.BGPPeers().Delete(ctx, name2, options.DeleteOptions{})
+			_, outError = c.BGPPeers().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
 
@@ -284,7 +285,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
-			err = c.BGPPeers().Delete(ctx, name1, options.DeleteOptions{})
+			_, err = c.BGPPeers().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking for two events, create res2 and delete re1")
@@ -336,6 +337,23 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				},
 			})
 			testWatcher2.Stop()
+
+			By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
+			w, err = c.BGPPeers().Watch(ctx, options.ListOptions{Name: name1, ResourceVersion: rev0})
+			Expect(err).NotTo(HaveOccurred())
+			testWatcher2_1 := testutils.TestResourceWatch(w)
+			defer testWatcher2_1.Stop()
+			testWatcher2_1.ExpectEvents(apiv2.KindBGPPeer, []watch.Event{
+				{
+					Type:   watch.Added,
+					Object: outRes1,
+				},
+				{
+					Type:     watch.Deleted,
+					Previous: outRes1,
+				},
+			})
+			testWatcher2_1.Stop()
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.BGPPeers().Watch(ctx, options.ListOptions{})

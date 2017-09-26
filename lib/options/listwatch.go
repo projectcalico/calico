@@ -16,6 +16,14 @@ package options
 
 // ListOptions is the query options a List or Watch operation in the Calico API.
 type ListOptions struct {
+	// The namespace of the resource to List or Watch.  If blank, the list or watch wildcards
+	// the namespace.  Only used for namespaced resource types.
+	Namespace string
+
+	// The name of the resource to List or Watch.  If blank, the list or watch wildcards
+	// the name.
+	Name string
+
 	// The resource version to List or Watch from.
 	// When specified for list:
 	// - if unset, then the result is returned from remote storage based on quorum-read flag;

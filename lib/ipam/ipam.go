@@ -364,7 +364,7 @@ func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP,
 		var updateErr error
 		if b.empty() && b.Affinity == nil {
 			log.Debugf("Deleting non-affine block '%s'", b.CIDR.String())
-			updateErr = c.client.Delete(context.Background(), obj.Key, obj.Revision)
+			_, updateErr = c.client.Delete(context.Background(), obj.Key, obj.Revision)
 		} else {
 			log.Debugf("Updating assignments in block '%s'", b.CIDR.String())
 			_, updateErr = c.client.Update(context.Background(), obj)
@@ -600,7 +600,7 @@ func (c ipams) RemoveIPAMHost(host string) error {
 	c.ReleaseHostAffinities(hostname)
 
 	// Remove the host tree from the datastore.
-	err := c.client.Delete(context.Background(), model.IPAMHostKey{Host: hostname}, "")
+	_, err := c.client.Delete(context.Background(), model.IPAMHostKey{Host: hostname}, "")
 	if err != nil {
 		// Return the error unless the resource does not exist.
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -702,7 +702,7 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
 		}
 
 		if block.empty() && block.Affinity == nil {
-			err = c.client.Delete(context.Background(), model.BlockKey{blockCIDR}, "")
+			_, err = c.client.Delete(context.Background(), model.BlockKey{blockCIDR}, "")
 			if err != nil {
 				// Return the error unless the resource does not exist.
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -793,7 +793,7 @@ func (c ipams) decrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 		// data in the KVPair, just pass this straight back to the client.
 		if handle.empty() {
 			log.Debugf("Deleting handle: %s", handleID)
-			err = c.client.Delete(context.Background(), obj.Key, obj.Revision)
+			_, err = c.client.Delete(context.Background(), obj.Key, obj.Revision)
 		} else {
 			log.Debugf("Updating handle: %s", handleID)
 			_, err = c.client.Update(context.Background(), obj)
