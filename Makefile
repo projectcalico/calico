@@ -170,13 +170,23 @@ endif
 	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
 
+	# Generate the `latest` images.
+	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
+
 # Ensure reported version is correct.
-	if ! docker run $(CONTAINER_NAME):$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+	if ! docker run $(CONTAINER_NAME):$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	@echo "Now push the tag and images."
-	@echo "git push $(VERSION)"
-	@echo "docker push calico/kube-policy-controller:$(VERSION)"
-	@echo "docker push quay.io/calico/kube-policy-controller:$(VERSION)"
+	@echo ""
+	@echo "  git push $(VERSION)"
+	@echo "  docker push calico/kube-policy-controller:$(VERSION)"
+	@echo "  docker push quay.io/calico/kube-policy-controller:$(VERSION)"
+	@echo ""
+	@echo "If this is a stable release, also push the latest images."
+	@echo ""
+	@echo "  docker push calico/kube-policy-controller:latest"
+	@echo "  docker push quay.io/calico/kube-policy-controller:latest"
+
 
 ## Removes all build artifacts.
 clean:
