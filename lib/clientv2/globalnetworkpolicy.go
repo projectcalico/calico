@@ -40,7 +40,7 @@ type globalnetworkpolicies struct {
 // Create takes the representation of a GlobalNetworkPolicy and creates it.  Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, res)
+	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, res)
 	if out != nil {
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
@@ -50,7 +50,7 @@ func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetw
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, res)
+	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, res)
 	if out != nil {
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
@@ -59,14 +59,14 @@ func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetw
 
 // Delete takes name of the GlobalNetworkPolicy and deletes it. Returns an error if one occurs.
 func (r globalnetworkpolicies) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
-	err := r.client.resources.Delete(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, name)
+	err := r.client.resources.Delete(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, name)
 	return err
 }
 
 // Get takes name of the GlobalNetworkPolicy, and returns the corresponding GlobalNetworkPolicy object,
 // and an error if there is any.
 func (r globalnetworkpolicies) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	out, err := r.client.resources.Get(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, name)
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, name)
 	if out != nil {
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
@@ -76,7 +76,7 @@ func (r globalnetworkpolicies) Get(ctx context.Context, name string, opts option
 // List returns the list of GlobalNetworkPolicy objects that match the supplied options.
 func (r globalnetworkpolicies) List(ctx context.Context, opts options.ListOptions) (*apiv2.GlobalNetworkPolicyList, error) {
 	res := &apiv2.GlobalNetworkPolicyList{}
-	if err := r.client.resources.List(ctx, opts, apiv2.KindGlobalNetworkPolicy, apiv2.KindGlobalNetworkPolicyList, NoNamespace, AllNames, res); err != nil {
+	if err := r.client.resources.List(ctx, opts, apiv2.KindGlobalNetworkPolicy, apiv2.KindGlobalNetworkPolicyList, noNamespace, allNames, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -85,5 +85,5 @@ func (r globalnetworkpolicies) List(ctx context.Context, opts options.ListOption
 // Watch returns a watch.Interface that watches the globalnetworkpolicies that match the
 // supplied options.
 func (r globalnetworkpolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv2.KindGlobalNetworkPolicy, NoNamespace, AllNames)
+	return r.client.resources.Watch(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, allNames)
 }

@@ -40,8 +40,7 @@ type etcdV3Client struct {
 }
 
 func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
-	// Determine the location from the authority or the endpoints.  The endpoints
-	// takes precedence if both are specified.
+	// Split the endpoints into a location slice.
 	etcdLocation := []string{}
 	if config.EtcdEndpoints != "" {
 		etcdLocation = strings.Split(config.EtcdEndpoints, ",")

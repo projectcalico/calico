@@ -77,7 +77,7 @@ func (r networkPolicies) Get(ctx context.Context, name string, opts options.GetO
 // List returns the list of NetworkPolicy objects that match the supplied options.
 func (r networkPolicies) List(ctx context.Context, opts options.ListOptions) (*apiv2.NetworkPolicyList, error) {
 	res := &apiv2.NetworkPolicyList{}
-	if err := r.client.resources.List(ctx, opts, apiv2.KindNetworkPolicy, apiv2.KindNetworkPolicyList, r.namespace, AllNames, res); err != nil {
+	if err := r.client.resources.List(ctx, opts, apiv2.KindNetworkPolicy, apiv2.KindNetworkPolicyList, r.namespace, allNames, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -86,5 +86,5 @@ func (r networkPolicies) List(ctx context.Context, opts options.ListOptions) (*a
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
 func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, AllNames)
+	return r.client.resources.Watch(ctx, opts, apiv2.KindNetworkPolicy, r.namespace, allNames)
 }

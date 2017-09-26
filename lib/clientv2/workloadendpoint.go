@@ -77,7 +77,7 @@ func (r workloadEndpoints) Get(ctx context.Context, name string, opts options.Ge
 // List returns the list of WorkloadEndpoint objects that match the supplied options.
 func (r workloadEndpoints) List(ctx context.Context, opts options.ListOptions) (*apiv2.WorkloadEndpointList, error) {
 	res := &apiv2.WorkloadEndpointList{}
-	if err := r.client.resources.List(ctx, opts, apiv2.KindWorkloadEndpoint, apiv2.KindWorkloadEndpointList, r.namespace, AllNames, res); err != nil {
+	if err := r.client.resources.List(ctx, opts, apiv2.KindWorkloadEndpoint, apiv2.KindWorkloadEndpointList, r.namespace, allNames, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -86,5 +86,5 @@ func (r workloadEndpoints) List(ctx context.Context, opts options.ListOptions) (
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
 func (r workloadEndpoints) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv2.KindWorkloadEndpoint, r.namespace, AllNames)
+	return r.client.resources.Watch(ctx, opts, apiv2.KindWorkloadEndpoint, r.namespace, allNames)
 }

@@ -40,7 +40,7 @@ type ipPools struct {
 // Create takes the representation of a IPPool and creates it.  Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
-	out, err := r.client.resources.Create(ctx, opts, apiv2.KindIPPool, NoNamespace, res)
+	out, err := r.client.resources.Create(ctx, opts, apiv2.KindIPPool, noNamespace, res)
 	if out != nil {
 		return out.(*apiv2.IPPool), err
 	}
@@ -50,7 +50,7 @@ func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.Set
 // Update takes the representation of a IPPool and updates it. Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Update(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
-	out, err := r.client.resources.Update(ctx, opts, apiv2.KindIPPool, NoNamespace, res)
+	out, err := r.client.resources.Update(ctx, opts, apiv2.KindIPPool, noNamespace, res)
 	if out != nil {
 		return out.(*apiv2.IPPool), err
 	}
@@ -59,14 +59,14 @@ func (r ipPools) Update(ctx context.Context, res *apiv2.IPPool, opts options.Set
 
 // Delete takes name of the IPPool and deletes it. Returns an error if one occurs.
 func (r ipPools) Delete(ctx context.Context, name string, opts options.DeleteOptions) error {
-	err := r.client.resources.Delete(ctx, opts, apiv2.KindIPPool, NoNamespace, name)
+	err := r.client.resources.Delete(ctx, opts, apiv2.KindIPPool, noNamespace, name)
 	return err
 }
 
 // Get takes name of the IPPool, and returns the corresponding IPPool object,
 // and an error if there is any.
 func (r ipPools) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.IPPool, error) {
-	out, err := r.client.resources.Get(ctx, opts, apiv2.KindIPPool, NoNamespace, name)
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindIPPool, noNamespace, name)
 	if out != nil {
 		return out.(*apiv2.IPPool), err
 	}
@@ -76,7 +76,7 @@ func (r ipPools) Get(ctx context.Context, name string, opts options.GetOptions) 
 // List returns the list of IPPool objects that match the supplied options.
 func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv2.IPPoolList, error) {
 	res := &apiv2.IPPoolList{}
-	if err := r.client.resources.List(ctx, opts, apiv2.KindIPPool, apiv2.KindIPPoolList, NoNamespace, AllNames, res); err != nil {
+	if err := r.client.resources.List(ctx, opts, apiv2.KindIPPool, apiv2.KindIPPoolList, noNamespace, allNames, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -85,5 +85,5 @@ func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv2.IPP
 // Watch returns a watch.Interface that watches the IPPools that match the
 // supplied options.
 func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv2.KindIPPool, NoNamespace, AllNames)
+	return r.client.resources.Watch(ctx, opts, apiv2.KindIPPool, noNamespace, allNames)
 }

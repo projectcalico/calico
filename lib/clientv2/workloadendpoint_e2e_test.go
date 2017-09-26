@@ -262,7 +262,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			be.Clean()
 
 			By("Listing WorkloadEndpoints with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
-			outList, outError := c.WorkloadEndpoints(clientv2.AllNamespaces).List(ctx, options.ListOptions{})
+			outList, outError := c.WorkloadEndpoints(apiv2.AllNamespaces).List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(0))
 			rev0 := outList.ResourceVersion
@@ -289,7 +289,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			)
 
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
-			w, err := c.WorkloadEndpoints(clientv2.AllNamespaces).Watch(ctx, options.ListOptions{ResourceVersion: rev1})
+			w, err := c.WorkloadEndpoints(apiv2.AllNamespaces).Watch(ctx, options.ListOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher1 := testutils.TestResourceWatch(w)
 			defer testWatcher1.Stop()
@@ -312,7 +312,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			testWatcher1.Stop()
 
 			By("Starting a watcher from rev0 - this should get all events")
-			w, err = c.WorkloadEndpoints(clientv2.AllNamespaces).Watch(ctx, options.ListOptions{ResourceVersion: rev0})
+			w, err = c.WorkloadEndpoints(apiv2.AllNamespaces).Watch(ctx, options.ListOptions{ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher2 := testutils.TestResourceWatch(w)
 			defer testWatcher2.Stop()
@@ -349,7 +349,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			testWatcher2.Stop()
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
-			w, err = c.WorkloadEndpoints(clientv2.AllNamespaces).Watch(ctx, options.ListOptions{})
+			w, err = c.WorkloadEndpoints(apiv2.AllNamespaces).Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher3 := testutils.TestResourceWatch(w)
 			defer testWatcher3.Stop()

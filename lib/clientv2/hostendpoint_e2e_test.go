@@ -80,7 +80,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -93,13 +93,13 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: HostEndpoint(" + name1 + ")"))
 			// Check return value is actually the previously stored value.
-			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
 			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting HostEndpoint (name1) and comparing the output against spec1")
 			res, outError = c.HostEndpoints().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(res, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting HostEndpoint (name2) before it is created")
@@ -111,7 +111,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			outList, outError := c.HostEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
 
 			By("Creating a new HostEndpoint with name2/spec2")
 			res2, outError := c.HostEndpoints().Create(ctx, &apiv2.HostEndpoint{
@@ -119,26 +119,26 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv2.KindHostEndpoint, clientv2.NoNamespace, name2, spec2)
+			testutils.ExpectResource(res2, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
 
 			By("Getting HostEndpoint (name2) and comparing the output against spec2")
 			res, outError = c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv2.KindHostEndpoint, clientv2.NoNamespace, name2, spec2)
+			testutils.ExpectResource(res2, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the HostEndpoints, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.HostEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
-			testutils.ExpectResource(&outList.Items[1], apiv2.KindHostEndpoint, clientv2.NoNamespace, name2, spec2)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
+			testutils.ExpectResource(&outList.Items[1], apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
 
 			By("Updating HostEndpoint name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.HostEndpoints().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec2)
+			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
@@ -162,27 +162,27 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			By("Getting HostEndpoint (name1) with the original resource version and comparing the output against spec1")
 			res, outError = c.HostEndpoints().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(res, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
 			Expect(res.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting HostEndpoint (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.HostEndpoints().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec2)
+			testutils.ExpectResource(res, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			By("Listing HostEndpoints with the original resource version and checking for a single result with name1/spec1")
 			outList, outError = c.HostEndpoints().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec1)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
 
 			By("Listing HostEndpoints with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.HostEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, clientv2.NoNamespace, name1, spec2)
-			testutils.ExpectResource(&outList.Items[1], apiv2.KindHostEndpoint, clientv2.NoNamespace, name2, spec2)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
+			testutils.ExpectResource(&outList.Items[1], apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
 
 			By("Deleting HostEndpoint (name1) with the old resource version")
 			outError = c.HostEndpoints().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
