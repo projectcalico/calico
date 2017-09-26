@@ -24,14 +24,14 @@ import (
 	"github.com/projectcalico/k8s-policy/pkg/controllers/namespace"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/k8s-policy/pkg/controllers/pod"
+	k8s "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
-	k8s "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // VERSION is filled out during the build process (using git describe output)

@@ -16,10 +16,11 @@ package cache_test
 
 import (
 	"fmt"
+	"reflect"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/k8s-policy/pkg/cache"
-	"reflect"
 )
 
 type resource struct {
