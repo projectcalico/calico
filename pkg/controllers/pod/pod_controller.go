@@ -76,6 +76,14 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 	cacheArgs := calicocache.ResourceCacheArgs{
 		ListFunc:   listFunc,
 		ObjectType: reflect.TypeOf(converter.WorkloadEndpointData{}),
+
+		// We don't handle the cases where data is missing in the cache
+		// or in the datastore, so disable those events in the reconciler. They
+		// just cause unecessary work for us.
+		ReconcilerConfig: calicocache.ReconcilerConfig{
+			DisableMissingInCache:     true,
+			DisableMissingInDatastore: true,
+		},
 	}
 
 	wepDataCache := calicocache.NewResourceCache(cacheArgs)

@@ -68,29 +68,48 @@ type ResourceCacheArgs struct {
 
 	// ObjectType is the type of object which is to be stored in this cache.
 	ObjectType reflect.Type
+
+	ReconcilerConfig ReconcilerConfig
+}
+
+// ReconcilerConfig contains configuration for the periodic reconciler.
+type ReconcilerConfig struct {
+	// DisableUpdateOnChange disables the queuing of updates when the reconciler
+	// detects that a value has changed in the datastore.
+	DisableUpdateOnChange bool
+
+	// DisableMissingInDatastore disables queueing of updates when the reconciler
+	// detects that a value is no longer in the datastore but still exists in the cache.
+	DisableMissingInDatastore bool
+
+	// DisableMissingInCache disables queueing of updates when reconciler detects
+	// that a value that is still in the datastore no longer is in the cache.
+	DisableMissingInCache bool
 }
 
 // calicoCache implements the ResourceCache interface
 type calicoCache struct {
-	threadSafeCache *cache.Cache
-	workqueue       workqueue.RateLimitingInterface
-	ListFunc        func() (map[string]interface{}, error)
-	ObjectType      reflect.Type
-	log             *log.Entry
-	running         bool
-	mut             *sync.Mutex
+	threadSafeCache  *cache.Cache
+	workqueue        workqueue.RateLimitingInterface
+	ListFunc         func() (map[string]interface{}, error)
+	ObjectType       reflect.Type
+	log              *log.Entry
+	running          bool
+	mut              *sync.Mutex
+	reconcilerConfig ReconcilerConfig
 }
 
 // NewResourceCache builds and returns a resource cache using the provided arguments.
 func NewResourceCache(args ResourceCacheArgs) ResourceCache {
 	// Make sure logging is context aware.
 	return &calicoCache{
-		threadSafeCache: cache.New(cache.NoExpiration, cache.DefaultExpiration),
-		workqueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-		ListFunc:        args.ListFunc,
-		ObjectType:      args.ObjectType,
-		log:             log.WithFields(log.Fields{"type": args.ObjectType}),
-		mut:             &sync.Mutex{},
+		threadSafeCache:  cache.New(cache.NoExpiration, cache.DefaultExpiration),
+		workqueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		ListFunc:         args.ListFunc,
+		ObjectType:       args.ObjectType,
+		log:              log.WithFields(log.Fields{"type": args.ObjectType}),
+		mut:              &sync.Mutex{},
+		reconcilerConfig: args.ReconcilerConfig,
 	}
 }
 
@@ -231,28 +250,34 @@ func (c *calicoCache) performDatastoreSync() error {
 
 	c.log.Debugf("Reconciling %d keys in total", len(allKeys))
 	for key := range allKeys {
-		cachedObj, exists := c.Get(key)
-		if !exists {
+		cachedObj, existsInCache := c.Get(key)
+		if !existsInCache {
 			// Key does not exist in the cache, queue an update to
-			// remove it from the datastore.
-			c.log.WithField("key", key).Warn("Value for key should not exist, queueing update to remove")
-			c.workqueue.Add(key)
+			// remove it from the datastore if configured to do so.
+			if !c.reconcilerConfig.DisableMissingInCache {
+				c.log.WithField("key", key).Warn("Value for key should not exist, queueing update to remove")
+				c.workqueue.Add(key)
+			}
 			continue
 		}
 
-		if _, exists := objMap[key]; !exists {
+		obj, existsInDatastore := objMap[key]
+		if !existsInDatastore {
 			// Key exists in the cache but not in the datastore - queue an update
-			// to re-add it.
-			c.log.WithField("key", key).Warn("Value for key is missing in datastore, queueing update to reprogram")
-			c.workqueue.Add(key)
+			// to re-add it if configured to do so.
+			if !c.reconcilerConfig.DisableMissingInDatastore {
+				c.log.WithField("key", key).Warn("Value for key is missing in datastore, queueing update to reprogram")
+				c.workqueue.Add(key)
+			}
 			continue
 		}
 
-		obj := objMap[key]
 		if !reflect.DeepEqual(obj, cachedObj) {
-			// Objects differ - queue an update to re-program.
-			c.log.WithField("key", key).Warn("Value for key has changed, queueing update to reprogram")
-			c.workqueue.Add(key)
+			// Objects differ - queue an update to re-program if configured to do so.
+			if !c.reconcilerConfig.DisableUpdateOnChange {
+				c.log.WithField("key", key).Warn("Value for key has changed, queueing update to reprogram")
+				c.workqueue.Add(key)
+			}
 			continue
 		}
 	}
