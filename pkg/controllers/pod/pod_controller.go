@@ -45,7 +45,7 @@ type PodController struct {
 	indexer       cache.Indexer
 	informer      cache.Controller
 	wepDataCache  calicocache.ResourceCache
-	endpointCache EndpointCache
+	endpointCache *EndpointCache
 	calicoClient  *client.Client
 	k8sClientset  *kubernetes.Clientset
 }
@@ -170,7 +170,7 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 		},
 	}, cache.Indexers{})
 
-	return &PodController{indexer, informer, wepDataCache, endpointCache, calicoClient, k8sClientset}
+	return &PodController{indexer, informer, wepDataCache, &endpointCache, calicoClient, k8sClientset}
 }
 
 // Run starts controller.Internally it starts syncing
