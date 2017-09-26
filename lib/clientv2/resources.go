@@ -34,9 +34,9 @@ import (
 )
 
 const (
-	AllNames      = ""
-	AllNamespaces = ""
-	NoNamespace   = ""
+	allNames         = ""
+	noNamespace      = ""
+	defaultNamespace = "default"
 )
 
 // All Calico resources implement the resource interface.
@@ -256,27 +256,23 @@ func (c *resources) kvPairToResource(kvp *model.KVPair) resource {
 // and validates the namespace depending on whether or not a namespace should be
 // provided based on the resource kind.
 func (c *resources) handleNamespace(ns, kind string, in resource) error {
-	// If the namespace is not specified in the resource, assign it using the namespace supplied,
-	// otherwise validate that they match.
-	if in.GetObjectMeta().GetNamespace() == "" {
-		in.GetObjectMeta().SetNamespace(ns)
-	} else if in.GetObjectMeta().GetNamespace() != ns {
-		return cerrors.ErrorValidation{
-			ErroredFields: []cerrors.ErroredField{{
-				Name:   "Metadata.Namespace",
-				Reason: "Namespace does not match client namespace",
-				Value:  in.GetObjectMeta().GetNamespace(),
-			}},
-		}
-	}
 
-	// Validate that a namespace is supplied if one is required for the resource kind.
 	if namespace.IsNamespaced(kind) {
-		if in.GetObjectMeta().GetNamespace() == "" {
+		// If the namespace is not specified in either the resource or the resource-specific
+		// client then use the default namespace.
+		// If the namespace is specified in one of the resource or the resource-specific
+		// client then use that namespace.
+		// If the namespace is specified in both the resource and the resource-specific client
+		// then check that they are the same.
+		if in.GetObjectMeta().GetNamespace() == "" && ns == "" {
+			in.GetObjectMeta().SetNamespace(defaultNamespace)
+		} else if in.GetObjectMeta().GetNamespace() == "" {
+			in.GetObjectMeta().SetNamespace(ns)
+		} else if in.GetObjectMeta().GetNamespace() != ns {
 			return cerrors.ErrorValidation{
 				ErroredFields: []cerrors.ErroredField{{
 					Name:   "Metadata.Namespace",
-					Reason: "Namespace should be specified",
+					Reason: "Namespace does not match client namespace",
 					Value:  in.GetObjectMeta().GetNamespace(),
 				}},
 			}

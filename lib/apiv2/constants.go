@@ -18,4 +18,5 @@ const (
 	Group               = "projectcalico.org"
 	VersionCurrent      = "v2"
 	GroupVersionCurrent = Group + "/" + VersionCurrent
+	AllNamespaces       = ""
 )

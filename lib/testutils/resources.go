@@ -31,6 +31,7 @@ import (
 // ExpectResource is a test validation function that checks the specified resource
 // matches the key attributes: kind, namespace, name and the supplied Spec.  This
 // should be called within a Ginkgo test.
+const ExpectNoNamespace = ""
 func ExpectResource(res runtime.Object, kind, namespace, name string, spec interface{}) {
 	ma := res.(v1.ObjectMetaAccessor)
 	Expect(ma.GetObjectMeta().GetNamespace()).To(Equal(namespace))
