@@ -168,7 +168,7 @@ endif
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
 
 # Ensure reported version is correct.
-	if ! docker run $(CONTAINER_NAME):$(VERSION) version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+	if ! docker run $(CONTAINER_NAME):$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
 
 	@echo "Now push the tag and images."
 	@echo "git push $(VERSION)"
