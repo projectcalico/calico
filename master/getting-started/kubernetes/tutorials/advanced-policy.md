@@ -30,7 +30,7 @@ We'll use a new namespace for this guide.  Run the following command to create i
 kubectl create ns advanced-policy-demo
 ```
 
-And then enable isolation on the Namespace using a [default policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-policies).
+And then enable isolation on the namespace using a [default policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-policies).
 
 ```
 kubectl create -f - <<EOF
@@ -46,7 +46,7 @@ EOF
 
 #### Run an nginx Service
 
-We'll run an nginx Service in the Namespace.
+We'll run an nginx Service in the namespace.
 
 ```shell
 kubectl run --namespace=advanced-policy-demo nginx --replicas=2 --image=nginx
@@ -59,23 +59,23 @@ kubectl expose --namespace=advanced-policy-demo deployment nginx --port=80
 > For example: `export ETCD_ENDPOINTS=http://10.96.232.136:6666`.
 {: .alert .alert-info}
 
-Now that we've created a Namespace and a set of pods, we should see those objects show up in the
+Now that we've created a namespace and a set of pods, we should see those objects show up in the
 Calico API using `calicoctl`.
 
-We can see that the Namespace has a corresponding [Profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile).
+We can see that the namespace has a corresponding [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile).
 
 ```shell
 $ calicoctl get profile -o wide
 NAME                          TAGS
-k8s_ns.advanced-policy-demo   k8s_ns.advanced-policy-demo
-k8s_ns.default                k8s_ns.default
-k8s_ns.kube-public            k8s_ns.kube-public
-k8s_ns.kube-system            k8s_ns.kube-system
+k8s_ns.advanced-policy-demo
+k8s_ns.default
+k8s_ns.kube-public
+k8s_ns.kube-system
 ```
 
 Because all pods in the namespace are now selected, any traffic which is not explicitly allowed by a policy will be denied.
 
-We can see that this is the case by running another pod in the Namespace and attempting to
+We can see that this is the case by running another pod in the namespace and attempting to
 access the nginx Service.
 
 ```
@@ -100,10 +100,10 @@ k8s-node-02   k8s            advanced-policy-demo.nginx-701339712-xeeay   eth0
 k8s-node-01   k8s            kube-system.kube-dns-v19-mjd8x               eth0
 ```
 
-Taking a closer look, we can see that they reference the correct profile for the Namespace,
+Taking a closer look, we can see that they reference the correct profile for the namespace,
 and that the correct label information has been filled in.  Notice that the endpoint also
 includes a special label `calico/k8s_ns`, which is automatically populated with the
-pod's Kubernetes Namespace.
+pod's Kubernetes namespace.
 
 ```
 $ calicoctl get wep --workload advanced-policy-demo.nginx-701339712-x1uqe -o yaml
@@ -130,7 +130,7 @@ $ calicoctl get wep --workload advanced-policy-demo.nginx-701339712-x1uqe -o yam
 ### Define Kubernetes policy
 
 We'll define some network policy through the Kubernetes API.  Run the following to create
-a NetworkPolicy which allows traffic to nginx pods from any pods in the advanced-policy-demo Namespace.
+a NetworkPolicy which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
 
 ```shell
 kubectl create -f - <<EOF
@@ -150,7 +150,7 @@ spec:
 EOF
 ```
 
-It now shows up as a [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) object in the Calico API.
+It now shows up as a [policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) object in the Calico API.
 
 ```shell
 $ calicoctl get policy -o wide
@@ -178,33 +178,34 @@ PING google.com (216.58.219.206): 56 data bytes
 ### Prevent outgoing connections from pods
 
 Kubernetes NetworkPolicy does not provide a way to prevent outgoing connections from pods.  However,
-Calico does. In this section we'll create a Policy using `calicoctl` which prevents all outgoing
-connections from Kubernetes pods in the advanced-policy-demo Namespace.
+Calico does. In this section we'll create egress policies using `calicoctl`
+that allow the outgoing connections in the `advanced-policy-demo` namespace we
+want; all other egress traffic will be denied.
 
-To do this, we'll need to create a Policy which selects all pods in the Namespace, and denies
-traffic that doesn't match another Pod in the Namespace.
+To do this, we'll need to create a policy which selects all pods in the namespace, and allows
+egress traffic to other pods in the namespace.
 
 ```
 calicoctl apply -f - <<EOF
 apiVersion: v1
 kind: policy
 metadata:
-  name: advanced-policy-demo.deny-egress
+  name: advanced-policy-demo.allow-egress
 spec:
   selector: calico/k8s_ns == 'advanced-policy-demo'
   order: 500
   egress:
-  - action: deny
+  - action: allow
     destination:
-      notSelector: calico/k8s_ns == 'advanced-policy-demo'
+      selector: calico/k8s_ns == 'advanced-policy-demo'
 EOF
 ```
 
 Notice that we've specified an order of 500.  This means that this policy will be applied before any
 of the Kubernetes policies.
 
-We also need to create a policy which allows traffic to access kube-dns. Let's create one now in the kube-system Namespace.
-We'll specify an order of 400 so that it takes precendent over other policies.
+We also need to create a policy which allows traffic to access kube-dns. Let's create one now in the kube-system namespace.
+We'll specify an order of 500 so that it also takes precedence over the Kubernetes policies.
 
 ```
 calicoctl apply -f - <<EOF
@@ -214,7 +215,7 @@ metadata:
   name: advanced-policy-demo.allow-dns
 spec:
   selector: calico/k8s_ns == 'advanced-policy-demo'
-  order: 400
+  order: 500
   egress:
   - action: allow
     protocol: udp
@@ -224,7 +225,7 @@ spec:
 EOF
 ```
 
-We should see now that traffic still works for pods within the Namespace, but we can no longer
+We should see now that traffic still works for pods within the namespace, but we can no longer
 access the public internet.
 
 ```
@@ -241,7 +242,7 @@ PING google.com (216.58.219.206): 56 data bytes
 
 ## Teardown
 
-You can clean up after this guide by deleteing the advanced policy demo Namespace.
+You can clean up after this guide by deleteing the advanced policy demo namespace.
 
 ```
 kubectl delete ns advanced-policy-demo
