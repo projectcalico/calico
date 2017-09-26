@@ -201,17 +201,28 @@ configRetry:
 	t.BuildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
-	// Make sure the datastore is initialized, otherwise the Syncer may spin, looking for
-	// non-existent resources.
-	for {
-		err := t.DatastoreClient.EnsureInitialized()
-		if err != nil {
-			log.WithError(err).Error("Failed to ensure datastore was initialized")
-			time.Sleep(1 * time.Second)
-			continue
+	// Ensure that, as soon as we are able to connect to the datastore at all, it is
+	// initialized; otherwise the Syncer may spin, looking for non-existent resources.
+	//
+	// But, do this in a background goroutine so as not to block Typha overall; specifically, we
+	// want Typha to report itself as live even if there is an initial problem connecting to the
+	// datastore.
+	//
+	// Note that Typha should cope with intermittent loss of connectivity to the datastore,
+	// because - apart from this EnsureInitialized call here - all of its interaction with the
+	// datastore is via a Syncer, and the Syncer is designed to handle HTTP request errors by
+	// reconnecting.
+	go func() {
+		for {
+			err := t.DatastoreClient.EnsureInitialized()
+			if err != nil {
+				log.WithError(err).Error("Failed to ensure datastore was initialized")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			break
 		}
-		break
-	}
+	}()
 	t.ConfigParams = configParams
 }
 
