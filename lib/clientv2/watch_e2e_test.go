@@ -17,13 +17,13 @@ package clientv2
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
-	"math/rand"
 
-	log "github.com/sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -76,7 +76,8 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 			Expect(outList.Items).To(HaveLen(numEvents))
 
 			By("Creating a watcher, watching the current resource version")
-			w, _ := c.BGPPeers().Watch(ctx, options.ListOptions{ResourceVersion: outList.ResourceVersion})
+			w, outError := c.BGPPeers().Watch(ctx, options.ListOptions{ResourceVersion: outList.ResourceVersion})
+			Expect(outError).NotTo(HaveOccurred())
 			testWatcher := testutils.TestResourceWatch(w)
 			defer testWatcher.Stop()
 
@@ -109,26 +110,31 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 			// Create a goroutine to generate add/delete events.
 			wg.Add(1)
 			go func() {
+				log.Info("Running test event generator")
 				defer wg.Done()
 				for {
-					if _, err := c.BGPPeers().Create(ctx, &apiv2.BGPPeer{
+					// Loop until told to exit creating and deleting a BGPPeer to create some
+					// watch events.
+					bgpPeer := &apiv2.BGPPeer{
 						ObjectMeta: metav1.ObjectMeta{Name: "name1"},
 						Spec: apiv2.BGPPeerSpec{
 							PeerIP:   "1.2.3.4",
 							ASNumber: numorstring.ASNumber(12345),
 						},
-					}, options.SetOptions{}); err != nil {
-						panic(err)
 					}
-					time.Sleep(5 * time.Millisecond)
-					if err := c.BGPPeers().Delete(ctx, "name1", options.DeleteOptions{}); err != nil {
-						panic(err)
-					}
-					time.Sleep(5 * time.Millisecond)
+					_, err := c.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					err = c.BGPPeers().Delete(ctx, "name1", options.DeleteOptions{})
+					Expect(err).NotTo(HaveOccurred())
 
 					if finishctx.Err() != nil {
+						log.Info("Exiting test event generator goroutine")
 						break
 					}
+
+					// Pause to prevent tight-looping.
+					time.Sleep(5 * time.Millisecond)
 				}
 
 			}()
@@ -143,25 +149,19 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 
 				wg.Add(1)
 				go func(w watch.Interface) {
+					log.Info("Running test event consumer")
 					defer wg.Done()
 					for e := range w.ResultChan() {
 						if e.Type == watch.Deleted {
-							if e.Previous == nil {
-								panic("No previous value on deleted event")
-							}
-							if e.Previous.(*apiv2.BGPPeer).Name != "name1" {
-								panic("Deleted event has wrong peer name")
-							}
+							Expect(e.Previous).NotTo(BeNil())
+							Expect(e.Previous.(*apiv2.BGPPeer).Name).To(Equal("name1"))
 						}
 						if e.Type == watch.Added {
-							if e.Object == nil {
-								panic("No current value on added event")
-							}
-							if e.Object.(*apiv2.BGPPeer).Name != "name1" {
-								panic("Added event has wrong peer name")
-							}
+							Expect(e.Object).NotTo(BeNil())
+							Expect(e.Object.(*apiv2.BGPPeer).Name).To(Equal("name1"))
 						}
 					}
+					log.Info("Exiting test event consumer goroutine")
 				}(watchers[i])
 			}
 

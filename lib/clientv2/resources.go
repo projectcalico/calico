@@ -16,6 +16,7 @@ package clientv2
 
 import (
 	"context"
+	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -299,7 +300,7 @@ type watcher struct {
 	cancel     context.CancelFunc
 	results    chan watch.Event
 	client     *resources
-	terminated bool
+	terminated uint32
 }
 
 func (w *watcher) Stop() {
@@ -337,10 +338,10 @@ func (w *watcher) run() {
 
 // terminate all resources associated with this watcher.
 func (w *watcher) terminate() {
-	log.Info("Exiting main client watcher loop")
+	log.Info("Terminating main client watcher loop")
 	w.cancel()
 	close(w.results)
-	w.terminated = true
+	atomic.AddUint32(&w.terminated, 1)
 }
 
 // convertEvent converts a backend watch event into a client watch event.
@@ -372,7 +373,7 @@ func (w *watcher) convertEvent(backendEvent bapi.WatchEvent) watch.Event {
 // hasTerminated returns true if the watcher has terminated, release all resources.
 // Used for test purposes.
 func (w *watcher) hasTerminated() bool {
-	t := w.terminated
+	t := atomic.LoadUint32(&w.terminated) != 0
 	bt := w.backend.HasTerminated()
 	log.Infof("hasTerminated() terminated=%v; backend-terminated=%v", t, bt)
 	return t && bt

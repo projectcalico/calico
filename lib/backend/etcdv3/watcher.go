@@ -17,6 +17,7 @@ package etcdv3
 import (
 	"context"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/coreos/etcd/clientv3"
 	log "github.com/sirupsen/logrus"
@@ -26,7 +27,7 @@ import (
 )
 
 const (
-	outgoingBufSize = 100
+	resultsBufSize = 100
 )
 
 // Watch entries in the datastore matching the resources specified by the ListInterface.
@@ -44,7 +45,7 @@ func (c *etcdV3Client) Watch(cxt context.Context, l model.ListInterface, revisio
 		client:     c,
 		list:       l,
 		initialRev: rev,
-		resultChan: make(chan api.WatchEvent, outgoingBufSize),
+		resultChan: make(chan api.WatchEvent, resultsBufSize),
 	}
 	wc.ctx, wc.cancel = context.WithCancel(cxt)
 	go wc.watchLoop()
@@ -59,24 +60,23 @@ type watcher struct {
 	cancel     context.CancelFunc
 	resultChan chan api.WatchEvent
 	list       model.ListInterface
-	terminated bool
+	terminated uint32
 }
 
-// Stop implements the api.WatchInterface.
+// Stop stops the watcher and releases associated resources.
 // This calls through to the context cancel function.
 func (wc *watcher) Stop() {
 	wc.cancel()
 }
 
-// ResultChan implements the api.WatchInterface.
+// ResultChan returns a channel used to receive WatchEvents.
 func (wc *watcher) ResultChan() <-chan api.WatchEvent {
 	return wc.resultChan
 }
 
-// HasTerminated implements the api.WatchInterface.
+// HasTerminated returns true when the watcher has completed termination processing.
 func (wc *watcher) HasTerminated() bool {
-	terminated := wc.terminated
-	return terminated
+	return atomic.LoadUint32(&wc.terminated) != 0
 }
 
 // watchLoop starts a watch on the required path prefix and sends a stream of
@@ -160,7 +160,7 @@ func (wc *watcher) listCurrent() error {
 
 // terminateWatcher terminates the resources associated with the watcher.
 func (wc *watcher) terminateWatcher() {
-	log.Debug("Terminate watcher")
+	log.Debug("Terminating etcdv3 watcher")
 	// Cancel the context - which will cancel the etcd Watch, this may have already been
 	// cancelled through an explicit Stop, but it is fine to cancel multiple times.
 	wc.cancel()
@@ -168,13 +168,16 @@ func (wc *watcher) terminateWatcher() {
 	// Close the results channel.
 	close(wc.resultChan)
 
-	// Set the terminated flag.
-	wc.terminated = true
+	// Increment the terminated counter using a goroutine safe operation.
+	atomic.AddUint32(&wc.terminated, 1)
 }
 
 // sendError packages up the error as an event and sends it in the results channel.
 func (wc *watcher) sendError(err error) {
-	// Skip cancelled errors propagating up from etcd.
+	// The response from etcd commands may include a context.Canceled error if the context
+	// was cancelled before completion.  Since with our Watcher we don't include that as
+	// an error type skip over the Canceled error, the error processing in the main
+	// watch thread will terminate the watcher.
 	if err == context.Canceled {
 		return
 	}
@@ -189,8 +192,8 @@ func (wc *watcher) sendError(err error) {
 
 // sendEvent sends an event in the results channel.
 func (wc *watcher) sendEvent(e *api.WatchEvent) {
-	if len(wc.resultChan) == outgoingBufSize {
-		log.Warningf("Watch events backing up: %d events", outgoingBufSize)
+	if len(wc.resultChan) == resultsBufSize {
+		log.Warningf("Watch events backing up: %d events", resultsBufSize)
 	}
 	select {
 	case wc.resultChan <- *e:
