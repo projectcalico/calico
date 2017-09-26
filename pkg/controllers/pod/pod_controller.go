@@ -242,7 +242,9 @@ func (c *PodController) syncToCalico(key string) error {
 	if wepData, exists := c.wepDataCache.Get(key); exists {
 		// Get workloadEndpoint from cache
 		clog := log.WithField("wep", key)
+		c.endpointCache.RLock()
 		endpoint, exists := c.endpointCache.m[key]
+		c.endpointCache.RUnlock()
 		if !exists {
 			// Load endpoint cache.
 			clog.Warnf("No corresponding WorkloadEndpoint in cache, re-loading cache from datastore")
