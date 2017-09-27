@@ -12,7 +12,7 @@ components are:
 
 In addition, we use runit for logging (`svlogd`) and init (`runsv`) services.
 
-The [calicoctl repostiory](https://github.com/projectcalico/calicoctl) contains the Dockerfile for `calico/node` along with various
+The [calico repostiory](https://github.com/projectcalico/calico) contains the Dockerfile for `calico/node` along with various
 configuration files that are used to configure and "glue" these components
 together.
 
