@@ -1,7 +1,7 @@
-# Calico Network Policy Controllers for Kubernetes
+# Calico Controllers for Kubernetes
 <img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
-This repository contains a collection of kubernetes controllers which implement the Kubernetes NetworkPolicy API for Calico deployed using the
+This repository contains a collection of kubernetes controllers for Calico deployed using the
 etcd datastore.  Note that when using Calico configured to use the [Kubernetes datastore][kdd], the controllers in this repository are not needed.
 
 ## Get Started Using Calico

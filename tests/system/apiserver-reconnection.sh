@@ -52,7 +52,7 @@ docker run --detach --name=calico-policy-controller \
 	-e KUBECONFIG=/st-kubeconfig.yaml \
 	-e ENABLED_CONTROLLERS="endpoint,profile,policy" \
 	-e LOG_LEVEL="debug" \
-	calico/kube-policy-controller$ARCHTAG
+	calico/kube-controllers$ARCHTAG
 sleep 2
 
 # Create a trap which emits policy controller logs on failure.

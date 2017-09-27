@@ -2,7 +2,7 @@
 
 ## Resulting artifacts
 Creating a new release creates the following artifact
-* `calico/kube-policy-controller:$VERSION` container images (and the quay.io variant)
+* `calico/kube-controllers:$VERSION` container images (and the quay.io variant)
 
 ## Preparing for a release
 Ensure that the branch you want to release from (typically master) is in a good state.

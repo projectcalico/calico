@@ -18,7 +18,7 @@ ETCD_IMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 default: help
 
 # Makefile configuration options 
-CONTAINER_NAME=calico/kube-policy-controller$(ARCHTAG)
+CONTAINER_NAME=calico/kube-controllers$(ARCHTAG)
 PACKAGE_NAME?=github.com/projectcalico/k8s-policy
 GO_BUILD_VER:=latest
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
@@ -45,12 +45,12 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
 ###############################################################################
 ## Builds the controller binary and docker image.
 docker-image: image.created$(ARCHTAG)
-image.created$(ARCHTAG): dist/kube-policy-controller-linux-$(ARCH)
+image.created$(ARCHTAG): dist/kube-controllers-linux-$(ARCH)
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
 	touch $@
 
-dist/kube-policy-controller-linux-$(ARCH):
+dist/kube-controllers-linux-$(ARCH):
 	$(MAKE) OS=linux ARCH=$(ARCH) binary-containerized
 
 ## Populates the vendor directory.
@@ -80,7 +80,7 @@ binary: vendor
 	if [ "$(OS)" == "linux" ]; then \
 		INSTALL_FLAG=" -i "; \
 	fi; \
-	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-policy-controller-$(OS)-$(ARCH) \
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-controllers-$(OS)-$(ARCH) \
 	-ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
 
 ## Build the controller binary in a container.
@@ -179,13 +179,13 @@ endif
 	@echo "Now push the tag and images."
 	@echo ""
 	@echo "  git push $(VERSION)"
-	@echo "  docker push calico/kube-policy-controller:$(VERSION)"
-	@echo "  docker push quay.io/calico/kube-policy-controller:$(VERSION)"
+	@echo "  docker push calico/kube-controllers:$(VERSION)"
+	@echo "  docker push quay.io/calico/kube-controllers:$(VERSION)"
 	@echo ""
 	@echo "If this is a stable release, also push the latest images."
 	@echo ""
-	@echo "  docker push calico/kube-policy-controller:latest"
-	@echo "  docker push quay.io/calico/kube-policy-controller:latest"
+	@echo "  docker push calico/kube-controllers:latest"
+	@echo "  docker push quay.io/calico/kube-controllers:latest"
 
 
 ## Removes all build artifacts.
