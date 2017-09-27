@@ -542,6 +542,11 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 		}
 	}
 
+	if !m.ApplyOnForward && (m.DoNotTrack || m.PreDNAT) {
+		structLevel.ReportError(reflect.ValueOf(m.ApplyOnForward),
+			"PolicySpec.ApplyOnForward", "", reason("ApplyOnForward must be true if either PreDNAT or DoNotTrack is true, for a given PolicySpec"))
+	}
+
 	// Check (and disallow) any repeats in Types field.
 	mp := map[api.PolicyType]bool{}
 	for _, t := range m.Types {

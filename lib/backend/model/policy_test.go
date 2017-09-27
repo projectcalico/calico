@@ -26,14 +26,15 @@ var _ = Describe("Policy functions", func() {
 	It("Policy should stringify correctly", func() {
 		order := 10.5
 		p := model.Policy{
-			Order:         &order,
-			InboundRules:  []model.Rule{model.Rule{Action: "deny"}},
-			OutboundRules: []model.Rule{model.Rule{Action: "allow"}},
-			Selector:      "apples=='oranges'",
-			DoNotTrack:    false,
-			PreDNAT:       true,
-			Types:         []string{"ingress", "egress"},
+			Order:          &order,
+			InboundRules:   []model.Rule{model.Rule{Action: "deny"}},
+			OutboundRules:  []model.Rule{model.Rule{Action: "allow"}},
+			Selector:       "apples=='oranges'",
+			DoNotTrack:     false,
+			PreDNAT:        true,
+			ApplyOnForward: true,
+			Types:          []string{"ingress", "egress"},
 		}
-		Expect(p.String()).To(Equal("order:10.5,selector:\"apples=='oranges'\",inbound:deny,outbound:allow,untracked:false,pre_dnat:true,types:ingress;egress"))
+		Expect(p.String()).To(Equal("order:10.5,selector:\"apples=='oranges'\",inbound:deny,outbound:allow,untracked:false,pre_dnat:true,apply_on_forward:true,types:ingress;egress"))
 	})
 })
