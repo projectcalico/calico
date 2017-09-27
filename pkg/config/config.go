@@ -26,12 +26,12 @@ type Config struct {
 	ReconcilerPeriod string `default:"5m" split_words:"true"`
 
 	// Which controllers to run.
-	EnabledControllers string `default:"policy,profile,endpoint" split_words:"true"`
+	EnabledControllers string `default:"policy,profile,workloadendpoint" split_words:"true"`
 
 	// Number of workers to run for each controller.
-	EndpointWorkers int `default:"1" split_words:"true"`
-	ProfileWorkers  int `default:"1" split_words:"true"`
-	PolicyWorkers   int `default:"1" split_words:"true"`
+	WorkloadEndpointWorkers int `default:"1" split_words:"true"`
+	ProfileWorkers          int `default:"1" split_words:"true"`
+	PolicyWorkers           int `default:"1" split_words:"true"`
 
 	// Path to a kubeconfig file to use for accessing the k8s API.
 	Kubeconfig string `default:"" split_words:"false"`

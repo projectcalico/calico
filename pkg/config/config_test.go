@@ -30,7 +30,7 @@ var _ = Describe("Config", func() {
 		os.Unsetenv("LOG_LEVEL")
 		os.Unsetenv("RECONCILER_PERIOD")
 		os.Unsetenv("ENABLED_CONTROLLERS")
-		os.Unsetenv("ENDPOINT_WORKERS")
+		os.Unsetenv("WORKLOAD_ENDPOINT_WORKERS")
 		os.Unsetenv("PROFILE_WORKERS")
 		os.Unsetenv("POLICY_WORKERS")
 		os.Unsetenv("KUBECONFIG")
@@ -42,7 +42,7 @@ var _ = Describe("Config", func() {
 		os.Setenv("LOG_LEVEL", "debug")
 		os.Setenv("RECONCILER_PERIOD", "2m5s")
 		os.Setenv("ENABLED_CONTROLLERS", "policy")
-		os.Setenv("ENDPOINT_WORKERS", "3")
+		os.Setenv("WORKLOAD_ENDPOINT_WORKERS", "3")
 		os.Setenv("PROFILE_WORKERS", "3")
 		os.Setenv("POLICY_WORKERS", "3")
 		os.Setenv("KUBECONFIG", "/home/user/.kube/config")
@@ -51,7 +51,7 @@ var _ = Describe("Config", func() {
 	// setWrongEnv() function sets environment variables
 	// with values of wrong data type
 	setWrongEnv := func() {
-		os.Setenv("ENDPOINT_WORKERS", "somestring")
+		os.Setenv("WORKLOAD_ENDPOINT_WORKERS", "somestring")
 		os.Setenv("PROFILE_WORKERS", "somestring")
 		os.Setenv("POLICY_WORKERS", "somestring")
 	}
@@ -74,8 +74,8 @@ var _ = Describe("Config", func() {
 		It("shoud return default values", func() {
 			Expect(config.LogLevel).To(Equal("info"))
 			Expect(config.ReconcilerPeriod).To(Equal("5m"))
-			Expect(config.EnabledControllers).To(Equal("policy,profile,endpoint"))
-			Expect(config.EndpointWorkers).To(Equal(1))
+			Expect(config.EnabledControllers).To(Equal("policy,profile,workloadendpoint"))
+			Expect(config.WorkloadEndpointWorkers).To(Equal(1))
 			Expect(config.ProfileWorkers).To(Equal(1))
 			Expect(config.PolicyWorkers).To(Equal(1))
 			Expect(config.Kubeconfig).To(Equal(""))
@@ -104,7 +104,7 @@ var _ = Describe("Config", func() {
 			Expect(config.LogLevel).To(Equal("debug"))
 			Expect(config.ReconcilerPeriod).To(Equal("2m5s"))
 			Expect(config.EnabledControllers).To(Equal("policy"))
-			Expect(config.EndpointWorkers).To(Equal(3))
+			Expect(config.WorkloadEndpointWorkers).To(Equal(3))
 			Expect(config.ProfileWorkers).To(Equal(3))
 			Expect(config.PolicyWorkers).To(Equal(3))
 			Expect(config.Kubeconfig).To(Equal("/home/user/.kube/config"))
