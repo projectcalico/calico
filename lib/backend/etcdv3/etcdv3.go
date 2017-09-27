@@ -25,6 +25,7 @@ import (
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -117,14 +118,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 		var existing *model.KVPair
 		getResp := (*clientv3.GetResponse)(txnResp.Responses[0].GetResponseRange())
 		if len(getResp.Kvs) != 0 {
-			if v, err := model.ParseValue(d.Key, getResp.Kvs[0].Value); err == nil {
-				logCxt.Debug("Parsed existing entry to return in response")
-				existing = &model.KVPair{
-					Key:      d.Key,
-					Value:    v,
-					Revision: strconv.FormatInt(getResp.Kvs[0].ModRevision, 10),
-				}
-			}
+			existing, _ = etcdToKVPair(d.Key, getResp.Kvs[0])
 		}
 		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: d.Key}
 	}
@@ -152,9 +146,8 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	}
 
 	// ResourceVersion must be set for an Update.
-	rev, err := strconv.ParseInt(d.Revision, 10, 64)
+	rev, err := parseRevision(d.Revision)
 	if err != nil {
-		logCxt.Info("Unable to parse Revision")
 		return nil, err
 	}
 	conds := []clientv3.Cmp{clientv3.Compare(clientv3.ModRevision(key), "=", rev)}
@@ -184,15 +177,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 		}
 
 		logCxt.Info("Update transaction failed due to resource update conflict")
-		var existing *model.KVPair
-		if v, err := model.ParseValue(d.Key, getResp.Kvs[0].Value); err == nil {
-			logCxt.Debug("Parsed current entry to return in response")
-			existing = &model.KVPair{
-				Key:      d.Key,
-				Value:    v,
-				Revision: strconv.FormatInt(getResp.Kvs[0].ModRevision, 10),
-			}
-		}
+		existing, _ := etcdToKVPair(d.Key, getResp.Kvs[0])
 		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: d.Key}
 	}
 
@@ -227,21 +212,20 @@ func (c *etcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) error {
+func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logCxt = logCxt.WithField("etcdv3-etcdKey", key)
 
 	conds := []clientv3.Cmp{}
 	if len(revision) != 0 {
-		rev, err := strconv.ParseInt(revision, 10, 64)
+		rev, err := parseRevision(revision)
 		if err != nil {
-			logCxt.Info("Unable to parse Revision")
-			return err
+			return nil, err
 		}
 		conds = append(conds, clientv3.Compare(clientv3.ModRevision(key), "=", rev))
 	}
@@ -251,25 +235,43 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	txnResp, err := c.etcdClient.Txn(ctx).If(
 		conds...,
 	).Then(
-		clientv3.OpDelete(key),
+		clientv3.OpDelete(key, clientv3.WithPrevKV()),
+	).Else(
+		clientv3.OpGet(key),
 	).Commit()
 	if err != nil {
 		logCxt.WithError(err).Warning("Delete failed")
-		return cerrors.ErrorDatastoreError{Err: err, Identifier: k}
+		return nil, cerrors.ErrorDatastoreError{Err: err, Identifier: k}
 	}
 
+	// Transaction did not succeed - which means the ModifiedIndex check failed.  We can respond
+	// with the latest settings.
 	if !txnResp.Succeeded {
 		logCxt.Info("Delete transaction failed due to resource update conflict")
-		return cerrors.ErrorResourceUpdateConflict{Identifier: k}
+
+		getResp := txnResp.Responses[0].GetResponseRange()
+		if len(getResp.Kvs) == 0 {
+			logCxt.Info("Delete transaction failed due resource not existing")
+			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+		}
+		latestValue, err := etcdToKVPair(k, getResp.Kvs[0])
+		if err != nil {
+			return nil, err
+		}
+		return latestValue, cerrors.ErrorResourceUpdateConflict{Identifier: k}
 	}
 
+	// The delete response should have succeeded since the Get response did.
 	delResp := txnResp.Responses[0].GetResponseDeleteRange()
 	if delResp.Deleted == 0 {
 		logCxt.Info("Delete transaction failed due resource not existing")
-		return cerrors.ErrorResourceDoesNotExist{Identifier: k}
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 
-	return nil
+	// Parse the deleted value.  Don't propagate the error in this case since the
+	// delete did succeed.
+	previousValue, _ := etcdToKVPair(k, delResp.PrevKvs[0])
+	return previousValue, nil
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
@@ -286,9 +288,8 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 
 	ops := []clientv3.OpOption{}
 	if len(revision) != 0 {
-		rev, err := strconv.ParseInt(revision, 10, 64)
+		rev, err := parseRevision(revision)
 		if err != nil {
-			logCxt.Error("Unable to parse Revision")
 			return nil, err
 		}
 		ops = append(ops, clientv3.WithRev(rev))
@@ -305,18 +306,7 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 
-	kv := resp.Kvs[0]
-	v, err := model.ParseValue(k, kv.Value)
-	if err != nil {
-		logCxt.WithField("Value", string(kv.Value)).Error("Unable to parse Value")
-		return nil, err
-	}
-
-	return &model.KVPair{
-		Key:      k,
-		Value:    v,
-		Revision: strconv.FormatInt(kv.ModRevision, 10),
-	}, nil
+	return etcdToKVPair(k, resp.Kvs[0])
 }
 
 // List entries in the datastore.  This may return an empty list of there are
@@ -346,9 +336,8 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 
 	// We may also need to perform a get based on a particular revision.
 	if len(revision) != 0 {
-		rev, err := strconv.ParseInt(revision, 10, 64)
+		rev, err := parseRevision(revision)
 		if err != nil {
-			logCxt.Error("Unable to parse Revision")
 			return nil, err
 		}
 		ops = append(ops, clientv3.WithRev(rev))
@@ -385,6 +374,7 @@ func (c *etcdV3Client) EnsureInitialized() error {
 		Value: true,
 	}
 
+	//TODO - still need to worry about ready flag.
 	if _, err := c.Create(context.Background(), kv); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 			log.WithError(err).Warn("Failed to set ready flag")
@@ -438,13 +428,54 @@ func getKeyValueStrings(d *model.KVPair) (string, string, error) {
 	key, err := model.KeyToDefaultPath(d.Key)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to convert model-etcdKey to etcdv3 etcdKey")
-		return "", "", err
+		return "", "", cerrors.ErrorDatastoreError{
+			Err:        err,
+			Identifier: d.Key,
+		}
 	}
 	bytes, err := model.SerializeValue(d)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to serialize value")
-		return "", "", err
+		return "", "", cerrors.ErrorDatastoreError{
+			Err:        err,
+			Identifier: d.Key,
+		}
 	}
 
 	return key, string(bytes), nil
+}
+
+// etcdToKVPair converts an etcd KeyValue in to model.KVPair.
+func etcdToKVPair(key model.Key, ekv *mvccpb.KeyValue) (*model.KVPair, error) {
+	v, err := model.ParseValue(key, ekv.Value)
+	if err != nil {
+		return nil, cerrors.ErrorDatastoreError{
+			Identifier: key,
+			Err:        err,
+		}
+	}
+
+	return &model.KVPair{
+		Key:      key,
+		Value:    v,
+		Revision: strconv.FormatInt(ekv.ModRevision, 10),
+	}, nil
+}
+
+// parseRevision parses the model.KVPair revision string and converts to the
+// equivalent etcdv3 int64 value.
+func parseRevision(revs string) (int64, error) {
+	rev, err := strconv.ParseInt(revs, 10, 64)
+	if err != nil {
+		log.WithField("Revision", revs).Info("Unable to parse Revision")
+		return 0, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{
+				{
+					Name:  "ResourceVersion",
+					Value: revs,
+				},
+			},
+		}
+	}
+	return rev, nil
 }

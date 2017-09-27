@@ -376,7 +376,7 @@ func (c *config) setLogLevel(level string, felixKey, bgpKey model.Key) error {
 
 // deleteConfig deletes a resource and ignores deleted errors.
 func (c *config) deleteConfig(key model.Key) error {
-	err := c.c.Backend.Delete(context.Background(), key, "")
+	_, err := c.c.Backend.Delete(context.Background(), key, "")
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			return err

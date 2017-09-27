@@ -197,22 +197,22 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *ModelAdaptor) Delete(ctx context.Context, k model.Key, rev string) error {
+func (c *ModelAdaptor) Delete(ctx context.Context, k model.Key, rev string) (*model.KVPair, error) {
 	var err error
 	switch key := k.(type) {
 	case model.NodeKey:
 		p, o := toNodeDeleteComponents(key)
 		if err = c.applyOrDeleteSubcomponents(ctx, o); err != nil {
-			return err
+			return nil, err
 		}
-		if err = c.client.Delete(ctx, p.Key, rev); err != nil {
-			return err
+		if _, err = c.client.Delete(ctx, p.Key, rev); err != nil {
+			return nil, err
 		}
-		return nil
+		return nil, nil
 	case model.GlobalBGPConfigKey:
 		nd := toDatastoreGlobalBGPConfig(model.KVPair{Key: k})
-		err := c.client.Delete(ctx, nd.Key, rev)
-		return errors.UpdateErrorIdentifier(err, k)
+		_, err := c.client.Delete(ctx, nd.Key, rev)
+		return nil, errors.UpdateErrorIdentifier(err, k)
 	default:
 		return c.client.Delete(ctx, k, rev)
 	}
@@ -505,7 +505,7 @@ func (c *ModelAdaptor) applyOrDeleteSubcomponents(ctx context.Context, component
 			if _, err := c.client.Apply(component); err != nil {
 				return err
 			}
-		} else if err := c.client.Delete(ctx, component.Key, component.Revision); err != nil {
+		} else if _, err := c.client.Delete(ctx, component.Key, component.Revision); err != nil {
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 				return err
 			}

@@ -22,7 +22,7 @@ type Interface interface {
 	// GlobalNetworkPolicies returns an interface for managing global network policy resources.
 	GlobalNetworkPolicies() GlobalNetworkPolicyInterface
 	// NetworkPolicies returns an interface for managing namespaced network policy resources.
-	NetworkPolicies(string) NetworkPolicyInterface
+	NetworkPolicies() NetworkPolicyInterface
 	// IPPools returns an interface for managing IP pool resources.
 	IPPools() IPPoolInterface
 	// Profiles returns an interface for managing profile resources.
@@ -30,7 +30,7 @@ type Interface interface {
 	// HostEndpoints returns an interface for managing host endpoint resources.
 	HostEndpoints() HostEndpointInterface
 	// WorkloadEndpoints returns an interface for managing workload endpoint resources.
-	WorkloadEndpoints(string) WorkloadEndpointInterface
+	WorkloadEndpoints() WorkloadEndpointInterface
 	// BGPPeers returns an interface for managing BGP peer resources.
 	BGPPeers() BGPPeerInterface
 	// IPAM returns an interface for managing IP address assignment and releasing.

@@ -42,7 +42,9 @@ type WorkloadEndpointSpec struct {
 	// The container ID.
 	ContainerID string `json:"containerID,omitempty" validate:"omitempty,name"`
 	// The Pod name.
-	Pod string `json:"podID,omitempty" validate:"omitempty,name"`
+	Pod string `json:"pod,omitempty" validate:"omitempty,name"`
+	// The Endpoint name.
+	Endpoint string `json:"endpoint,omitempty" validate:"omitempty,name"`
 	// IPNetworks is a list of subnets allocated to this endpoint. IP packets will only be
 	// allowed to leave this interface if they come from an address in one of these subnets.
 	// Currently only /32 for IPv4 and /128 for IPv6 networks are supported.

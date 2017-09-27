@@ -85,7 +85,7 @@ type Client interface {
 	// also be removed when deleting the objects that implicitly created it.
 	// For example, deleting the last WorkloadEndpoint in a Workload will
 	// also remove the Workload.
-	Delete(ctx context.Context, key model.Key, revision string) error
+	Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
 
 	// Get returns the object identified by the given key as a KVPair with
 	// revision information.

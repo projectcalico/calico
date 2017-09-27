@@ -323,7 +323,7 @@ func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversion
 	// operations fills in the revision information.
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return err
-	} else if err := c.Backend.Delete(context.Background(), k, metadata.GetObjectMetadata().Revision); err != nil {
+	} else if _, err := c.Backend.Delete(context.Background(), k, metadata.GetObjectMetadata().Revision); err != nil {
 		return err
 	} else {
 		return nil
