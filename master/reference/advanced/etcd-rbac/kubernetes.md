@@ -3,10 +3,10 @@ title: Using etcd RBAC to segment Kubernetes and Calico
 ---
 
 When using etcd with RBAC, all components that access etcd must be configured
-with the proper certificates.  This document describes the users and roles
+with the proper certificates. This document describes the users and roles
 needed to segment etcd so that Kubernetes and Calico can only read and write
-within their respected subtrees/prefixes.  To configure more compartmentalized
-configurations of the Calico components, see this addon
+within their respected subtrees/prefixes. To configure more compartmentalized
+configurations of the Calico components, see this addon:
 [guide](kubernetes-advanced).
 
 This guide assumes you are following the general
@@ -15,8 +15,8 @@ for setting up certificates and etcd cluster, users, and roles.
 
 ## Why you might be interested in this guide
 
-You are using Kubernetes and Calico who share an etcd datastore and wish
-to ensure that Calico and Kubernetes are unable to access each other's etcd
+You are using Kubernetes and Calico that share an etcd datastore and you wish
+to ensure that Calico and Kubernetes are unable to access each others' etcd
 data.
 
 ## Needed etcd Roles
@@ -25,8 +25,8 @@ The following components need certificates with a Common Name that matches an
 etcd user that has been given appropriate roles allowing access to the key
 prefixes or paths listed below.
 - kube-apiserver
-  - Read and Write access to `/registry`.
-    - With Kubernetes v1.6 the etcd v3 API is used, this can be switched
+  - Read and write access to `/registry`.
+    - Kubernetes v1.6 uses the etcd v3 API; this can be switched
 	  to etcd v2 by passing a flag to kube-apiserver.
 	- This key prefix can be changed by passing the proper option to the
 	  kube-apiserver.
@@ -34,7 +34,7 @@ prefixes or paths listed below.
     using the etcd v3 API (this also means that Kubernetes will have
     full read and write access to v3 data).
 - Calico
-  - Read and Write access to `/calico`.
+  - Read and write access to `/calico`.
   - Calico uses the etcd v2 API so the user and roles must be created there
     too.
 
@@ -70,7 +70,7 @@ The pieces that would need updating are:
   ```
 - The Secret named `calico-etcd-secrets` needs to be updated with the CA and
   cert/key. The information stored in `data` in a Secret needs to be base64
-  encoded.  The files can be converted to base64 encoding by doing a command
+  encoded. The files can be converted to base64 encoding by doing a command
   like `cat <file> | base64 -w 0` on each file and then inserting the output
   to the appropriate field.
     - The `etcd-key` field needs the base64 encoded file contents from the

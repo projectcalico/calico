@@ -2,9 +2,9 @@
 title: Setting up etcd certificates for RBAC
 ---
 
-When using etcd it is a good idea to protect the data stored there.  This is
+When using etcd it is a good idea to protect the data stored there. This is
 even more true when you have multiple components using a common etcd cluster.
-This set of tutorials guide you through the process of locking down and
+This set of tutorials guides you through the process of locking down and
 segmenting access to the data in your etcd datastore.
 
 ## Why you might be interested in this guide
@@ -19,17 +19,17 @@ segmenting access to the data in your etcd datastore.
 ## Configuration Concept
 
 The central piece that will link the components together is the Certificate
-Authority(CA).  It will be used to
+Authority(CA). It will be used to
 generate certificates and keys that the etcd members (and proxies) and components
 (like Calico and Kubernetes) will need to authenticate with the etcd cluster.
 Because all the certificates will be generated from the same CA and all the
-components will have the CA certificate, they can authenticate their
-connections with each other.
+components will have the CA certificate, those connections can be mutually
+authenticated.
 
 The certificates and keys generated for the components accessing etcd will allow
-access to particular key prefixes or paths in etcd.  The certificates are linked
+access to particular key prefixes or paths in etcd. The certificates are linked
 with an etcd username by being generated with a Common Name (CN) that matches
-the etcd username.  The etcd username is linked with a role or multiple roles
+the etcd username. The etcd username is linked with a role or multiple roles
 that allow access to the appropriate data in etcd.
 
 ## Requirements
@@ -43,11 +43,11 @@ that allow access to the appropriate data in etcd.
 ## Setup
 
 1. [Generate CA, certificates, and keys](certificate-generation).
-2. Setup etcd with the CA cert and the certificates generated in step 1.
+2. Setup etcd with the CA certificate and the certificates generated in step 1.
    See the
    [etcd security op-guide](https://coreos.com/etcd/docs/latest/op-guide/security.html)
    for help configuing etcd.
 3. [Create Users and Roles in etcd](users-and-roles).
-4. Configure components.  For example:
+4. Configure components. For example:
    - [Setting up Kubernetes with Calico utilizing etcd RBAC](kubernetes).
    - [Advanced Kubernetes set ups utilizing etcd RBAC](kubernetes-advanced).
