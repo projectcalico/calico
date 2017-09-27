@@ -16,8 +16,8 @@ import (
 
 type (
 	auth_server struct {
-		CalicoClient *client.Client
-		Labels       map[string]string
+		Client *client.Client
+		Labels map[string]string
 	}
 )
 
@@ -26,8 +26,8 @@ const (
 	k8s_ca_file = "/var/run/"
 )
 
-func NewServer(labels map[string]string) (*auth_server, error) {
-	c, err := client.NewFromEnv()
+func NewServer(config api.CalicoAPIConfig, labels map[string]string) (*auth_server, error) {
+	c, err := client.New(config)
 	log.Debug("Created Calico Client.")
 	if err != nil {
 		return nil, err
@@ -40,6 +40,7 @@ func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Re
 	resp := authz.Response{Status: &authz.Response_Status{Code: authz.Response_Status_INTERNAL}}
 	policies, err := as.getPolicies()
 	if err != nil {
+		log.Errorf("Failed to get policies. %v", err)
 		return &resp, nil
 	}
 	status := checkPolicies(policies, req)
@@ -71,9 +72,10 @@ func (op orderedPolicies) Less(i, j int) bool {
 // Return the list of active PolicySpecs for this endpoint.  This list should be sorted in the correct application
 // order.
 func (as *auth_server) getPolicies() ([]api.Policy, error) {
-	pi := as.CalicoClient.Policies()
+	pi := as.Client.Policies()
 	p_list, err := pi.List(api.PolicyMetadata{})
 	if err != nil {
+		log.Error("Failed to List.")
 		return nil, err
 	}
 

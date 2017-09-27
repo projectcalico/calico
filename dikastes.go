@@ -2,23 +2,27 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	authz "tigera.io/dikastes/proto"
 	"tigera.io/dikastes/server"
 
-	"context"
+	"github.com/projectcalico/libcalico-go/lib/api"
+
 	docopt "github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"time"
 )
 
 const usage = `Dikastes - the decider.
@@ -28,13 +32,16 @@ Usage:
   dikastes client <namespace> <account> [options]
 
 Options:
-  <path>              Path to file with pod labels.
-  <namespace>         Service account namespace.
-  <account>           Service account name.
-  -h --help           Show this screen.
-  -l --listen <port>  IP/port to listen on. [default: :50051]
-  -s --socket <sock>  Type of socket [default: tcp]
-  -d --dial <target>  Target to dial. [default: localhost:50051]
+  <path>                 Path to file with pod labels.
+  <namespace>            Service account namespace.
+  <account>              Service account name.
+  -h --help              Show this screen.
+  -l --listen <port>     IP/port to listen on. [default: :50051]
+  -s --socket <sock>     Type of socket [default: tcp]
+  -d --dial <target>     Target to dial. [default: localhost:50051]
+  -k --kubernetes <api>  Kubernetes API Endpoint [default: https://kubernetes:443]
+  -c --ca <ca>           Kubernetes CA Cert file [default: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt]
+  -t --token <token>     Kubernetes API Token file [default: /var/run/secrets/kubernetes.io/serviceaccount/token]
   --debug             Log at Debug level.`
 const version = "0.1"
 
@@ -61,12 +68,19 @@ func runServer(arguments map[string]interface{}) {
 		log.Fatalf("Unable to load labels. %v", err)
 	}
 	lis, err := net.Listen(arguments["--socket"].(string), arguments["--listen"].(string))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"socket": arguments["--socket"],
+			"listen": arguments["--listen"],
+			"err":    err,
+		}).Fatal("Unable to listen.")
+	}
 	defer lis.Close()
 	if err != nil {
 		log.Fatalf("Unable to listen on %v", arguments["--listen"])
 	}
 	gs := grpc.NewServer()
-	ds, err := server.NewServer(labels)
+	ds, err := server.NewServer(getConfig(arguments), labels)
 	if err != nil {
 		log.Fatalf("Unable to start server %v", err)
 	}
@@ -106,10 +120,14 @@ func parseLabels(path string) (map[string]string, error) {
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid label spec: %v", labelSpec)
 			}
-			if errs := validation.IsValidLabelValue(parts[1]); len(errs) != 0 {
+			value, uerr := strconv.Unquote(parts[1])
+			if uerr != nil {
+				value = parts[1]
+			}
+			if errs := validation.IsValidLabelValue(value); len(errs) != 0 {
 				return nil, fmt.Errorf("invalid label value: %q: %s", labelSpec, strings.Join(errs, ";"))
 			}
-			labels[parts[0]] = parts[1]
+			labels[parts[0]] = value
 		} else {
 			return nil, fmt.Errorf("unknown label spec: %v", labelSpec)
 		}
@@ -145,5 +163,22 @@ func runClient(arguments map[string]interface{}) {
 func getDialer(proto string) func(string, time.Duration) (net.Conn, error) {
 	return func(target string, timeout time.Duration) (net.Conn, error) {
 		return net.DialTimeout(proto, target, timeout)
+	}
+}
+
+func getConfig(arguments map[string]interface{}) api.CalicoAPIConfig {
+	token, err := ioutil.ReadFile(arguments["--token"].(string))
+	if err != nil {
+		log.Fatalf("Could not open token file %v. %v", arguments["--token"], err)
+	}
+	return api.CalicoAPIConfig{
+		Spec: api.CalicoAPIConfigSpec{
+			DatastoreType: api.Kubernetes,
+			KubeConfig: api.KubeConfig{
+				K8sAPIEndpoint: arguments["--kubernetes"].(string),
+				K8sCAFile:      arguments["--ca"].(string),
+				K8sAPIToken:    string(token),
+			},
+		},
 	}
 }
