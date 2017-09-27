@@ -1095,7 +1095,7 @@ master:
      libnetwork-plugin:
       version: master
       url: ""
-     calico/kube-policy-controller:
+     calico/kube-controllers:
       version: master
       url: ""
      networking-calico:

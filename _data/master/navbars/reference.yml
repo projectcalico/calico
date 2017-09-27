@@ -89,8 +89,8 @@ toc:
     path: /reference/felix/prometheus
 - title: Calico CNI Plugins
   path: /reference/cni-plugin/configuration
-- title: Calico Policy Controller
-  path: /reference/policy-controller/configuration
+- title: Calico Kubernetes Controllers
+  path: /reference/kube-controllers/configuration
 - title: Deploying on Public Cloud
   section:
     - title: AWS
