@@ -41,6 +41,7 @@ metadata:
   namespace: advanced-policy-demo
 spec:
   podSelector:
+    matchLabels: {}
 EOF
 ```
 
