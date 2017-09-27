@@ -9,4 +9,4 @@ dikastes:
 
 .PHONY: image
 image: dikastes
-	docker build -t cluster-local:5000/tigera/dikastes:latest .
+	docker build -t cluster.local:5000/tigera/dikastes:latest .
