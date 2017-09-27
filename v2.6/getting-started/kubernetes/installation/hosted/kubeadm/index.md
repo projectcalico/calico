@@ -1,5 +1,5 @@
 ---
-title: Kubeadm Hosted Install
+title: kubeadm Hosted Install
 ---
 
 This document outlines how to install Calico, as well as a as single node
@@ -19,9 +19,9 @@ You can easily create a cluster compatible with this manifest by following [the 
 #### Installation
 
 To install this Calico and a single node etcd on a run the following command
-depending on your kubeadm / kubernetes version:
+depending on your kubeadm / Kubernetes version:
 
-For Kubeadm stable with Kubernetes version >= v1.6.0:
+For kubeadm stable with Kubernetes version >= v1.6.0:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
@@ -29,7 +29,7 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 >[Click here to view the above yaml directly.](1.6/calico.yaml)
 
-For Kubeadm 1.5 with Kubernetes version v1.5.x:
+For kubeadm 1.5 with Kubernetes version v1.5.x:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.5/calico.yaml
@@ -37,9 +37,9 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 >[Click here to view the above yaml directly.](1.5/calico.yaml)
 
-## Using calicoctl in a Kubeadm Cluster
+## Using calicoctl in a kubeadm Cluster
 
-The simplest way to use calicoctl in Kubeadm is by running it as a pod.
+The simplest way to use calicoctl in kubeadm is by running it as a pod.
 See [using calicoctl with Kubernetes](../../../tutorials/using-calicoctl#b-running-calicoctl-as-a-kubernetes-pod) for more information.
 
 ## About
@@ -64,8 +64,8 @@ $ kubectl get node <master_name> -o yaml
 * This install does not configure etcd TLS
 * This install expects that one Kubernetes master node has been labeled
   (this is usually setup by kubeadm, but `kubectl get node --show-labels` will expose the labels) with:
-  * For Kubeadm 1.5 `kubeadm.alpha.kubernetes.io/role: master`
-  * For Kubeadm 1.6 `node-role.kubernetes.io/master: ""`
+  * For kubeadm 1.5 `kubeadm.alpha.kubernetes.io/role: master`
+  * For kubeadm 1.6 `node-role.kubernetes.io/master: ""`
 * This install assumes no other pod network configurations have been installed
   in /etc/cni/net.d (or equivilent directory).
 * The CIDR(s) specified with the kubeadm flag `--cluster-cidr` (pre 1.6) or

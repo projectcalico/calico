@@ -264,7 +264,7 @@ spec:
 
 ---
 
-# This manifest deploys the Calico kubernetes controllers.
+# This manifest deploys the Calico Kubernetes controllers.
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -333,7 +333,7 @@ metadata:
   labels:
     k8s-app: calico-policy
 spec:
-  # Turn this deployment off in favor of the kube-controllers Deployment above.
+  # Turn this deployment off in favor of the kube-controllers deployment above.
   replicas: 0
   strategy:
     type: Recreate

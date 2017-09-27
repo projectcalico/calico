@@ -43,7 +43,7 @@ Here is a simple etcdv2 example.
 ETCD_ENDPOINTS=http://etcd:2379 calicoctl get nodes
 ```
 
-Here is a simple kubernetes datastore example.
+Here is a simple Kubernetes datastore example.
 
 ```
 DATASTORE_TYPE=kubernetes KUBECONFIG=~/.kube/config calicoctl get nodes

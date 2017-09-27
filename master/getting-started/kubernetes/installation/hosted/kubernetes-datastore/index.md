@@ -151,7 +151,7 @@ The following environment variable configuration options are supported by the va
 | Option                 | Description    | Examples
 |------------------------|----------------|----------
 | DATASTORE_TYPE         | Indicates the datastore to use | kubernetes
-| KUBECONFIG             | When using the kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config
+| KUBECONFIG             | When using the Kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config
 | K8S_API_ENDPOINT       | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443
 | K8S_CERT_FILE          | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert
 | K8S_KEY_FILE           | Location of a client key for accessing the Kubernetes API. | /path/to/key
@@ -173,10 +173,10 @@ kubernetes-minion-group-x7ce   k8s            kube-system.kubernetes-dashboard-v
 ## How it works
 
 Calico typically uses `etcd` to store information about Kubernetes Pods, Namespaces, and NetworkPolicies.  This information
-is populated to etcd by the Calico CNI plugin and the Calico kubernetes controllers, and is interpreted by Felix and BIRD to program the dataplane on
+is populated to etcd by the Calico CNI plugin and the Calico Kubernetes controllers, and is interpreted by Felix and BIRD to program the dataplane on
 each host in the cluster.
 
 The above manifest deploys Calico such that Felix uses the Kubernetes API directly to learn the required information to enforce policy,
-removing Calico's dependency on etcd and the need for the Calico kubernetes controllers.
+removing Calico's dependency on etcd and the need for the Calico Kubernetes controllers.
 
 The Calico CNI plugin is still required to configure each pod's virtual ethernet device and network namespace.

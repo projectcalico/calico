@@ -15,7 +15,7 @@ installation method.
 
 ## Requirements
 
-- An existing Kubernetes cluster running Kubernetes >= v1.1.  To use NetworkPolicy, Kubernetes >= v1.3.0 is required.
+- An existing Kubernetes cluster running Kubernetes >= v1.1.  To use network policy, Kubernetes >= v1.3.0 is required.
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
   - Calico can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up.
     A number of production users do share the etcd cluster between the two, but separating them gives better performance at high scale.
@@ -33,7 +33,7 @@ There are three components of a Calico / Kubernetes integration.
 - The Calico per-node docker container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
 - The [cni-plugin](https://github.com/projectcalico/cni-plugin) network plugin binaries.
   - This is the combination of two binary executables and a configuration file.
-- When using Kubernetes NetworkPolicy, you must also deploy the Calico kubernetes controllers.
+- When using Kubernetes network policy, you must also deploy the Calico Kubernetes controllers.
 
 The `calico/node` docker container must be run on the Kubernetes master and each
 Kubernetes node in your cluster.  It contains the BGP agent necessary for Calico routing to occur,
@@ -43,7 +43,7 @@ The `cni-plugin` plugin integrates directly with the Kubernetes `kubelet` proces
 on each node to discover which pods have been created, and adds them to Calico networking.
 
 The `calico/kube-controllers` container runs as a pod on top of Kubernetes and implements
-the NetworkPolicy API.
+the `NetworkPolicy` API.
 
 ## Installing `calico/node`
 
@@ -171,13 +171,13 @@ sudo cp loopback /opt/cni/bin/
 
 ## Installing the Calico Kubernetes controllers
 
-The `calico/kube-controllers` container implements the Kubernetes NetworkPolicy API by watching the
-Kubernetes API for Pod, Namespace, and NetworkPolicy events and configuring Calico in response. It runs as
+The `calico/kube-controllers` container implements the Kubernetes `NetworkPolicy` API by watching the
+Kubernetes API for `Pod`, `Namespace`, and `NetworkPolicy` events and configuring Calico in response. It runs as
 a single pod managed by a Deployment.
 
 To install the controllers:
 
-- Download the [controller manifest](calico-kube-controllers.yaml).
+- Download the [Calico Kubernetes controllers manifest](calico-kube-controllers.yaml).
 - Modify `<ETCD_ENDPOINTS>` to point to your etcd cluster.
 - Install it using `kubectl`.
 

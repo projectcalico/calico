@@ -40,19 +40,19 @@ This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/
 Note that while a self-hosted installation of Calico is typically done all at once (via calico.yaml), it is
 recommended to perform upgrades one component at a time.
 
-#### Upgrading the Calico kubernetes controllers (previously kube-policy-controller)
+#### Upgrading the Calico Kubernetes controllers
 
-In a self-hosted Calico installation, the calico/kube-controllers container is run as a Deployment.  As such,
-it can be upgraded via the standard [Deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment).
+In a self-hosted Calico installation, the calico/kube-controllers container is run as a deployment.  As such,
+it can be upgraded via the standard [deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment).
 
-To upgrade the controllers, simply apply changes to the Deployment specification and Kubernetes will
+To upgrade the controllers, simply apply changes to the deployment specification and Kubernetes will
 do the rest.
 
 ```
 kubectl apply -f new-controllers.yaml
 ```
 
-> **Note**: The Deployment must use `.spec.strategy.type==Recreate` to
+> **Note**: The deployment must use `.spec.strategy.type==Recreate` to
 > ensure that at most one instance of the controller is running at a time.
 {: .alert .alert-info}
 
@@ -100,7 +100,7 @@ kubectl uncordon node-01
 ```
 
 
-> **Note**: You may want to pre-fetch new Docker image to ensure the new
+> **Note**: You may want to pre-fetch the new Docker image to ensure the new
 > node image is started within BIRD's graceful restart period of 90 seconds.
 {: .alert .alert-info}
 
@@ -111,7 +111,7 @@ Most self-hosted Calico deployments use a ConfigMap for configuration of the Cal
 components.
 
 To update the ConfigMap, make any desired changes and apply the new ConfigMap using
-kubectl.  You will need to restart the Calico kubernetes controllers and each calico/node instance
+kubectl.  You will need to restart the Calico Kubernetes controllers and each calico/node instance
 as described above before new config is reflected.
 
 ## Upgrading Components Individually
@@ -141,7 +141,7 @@ To upgrade the CNI config (typically located in /etc/cni/net.d) simply make the 
 config file.  It will be picked up by the kubelet automatically for Kubernetes v1.4.0+.  For older versions
 of Kubernetes you must restart the kubelet for changes to be applied.
 
-#### Upgrading the Calico policy controller / kube-contollers
+#### Upgrading the Calico Kubernetes controllers
 
 The calico/kube-controllers pod can be stopped and restarted without affecting connectivity or
 policy on existing pods.  New pods in existing Namespaces will correctly have
@@ -162,9 +162,9 @@ To upgrade the controllers:
 - Update the image in your process management to reference the new version.
 - Stop the running container, and start it with the newly pulled version.
 
-We recommend running the controllers as a Kubernetes Deployment with type "recreate", in which
+We recommend running the controllers as a Kubernetes deployment with type "recreate", in which
 case upgrade can be handled entirely through the
-standard [Deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment)
+standard [deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment)
 
 ## Upgrading to v1 NetworkPolicy semantics
 
