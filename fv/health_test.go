@@ -16,6 +16,24 @@
 
 package fv_test
 
+// The tests in this file test Felix's and Typha's health endpoints, http://.../liveness and
+// http://.../readiness.
+//
+// Felix should report itself as live, so long as its calc_graph and int_dataplane loops have not
+// died or hung; and as ready, so long as it has completed its initial dataplane programming, is
+// connected to its datastore, and is not doing a resync (either the initial resync, or a subsequent
+// one).
+//
+// Typha should report itself as live, so long as its Felix-serving loop has not died or hung; and
+// as ready, so long as it is connected to its datastore, and is not doing a resync (either the
+// initial resync, or a subsequent one).
+//
+// (These reports are useful because k8s can detect and handle a pod that is consistently non-live,
+// by killing and restarting it; and can adjust for a pod that is non-ready, by (a) not routing
+// Service traffic to it (when that pod is otherwise one of the possible backends for a Service),
+// and (b) not moving on to the next pod, in a rolling upgrade process, until the just-upgraded pod
+// says that it is ready.)
+
 import (
 	"errors"
 	"fmt"
@@ -45,7 +63,7 @@ import (
 
 type EnvConfig struct {
 	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"latest"`
+	TyphaVersion string `default:"v0.5.1-3-g00cc5d2"`
 }
 
 var config EnvConfig
@@ -429,8 +447,7 @@ var _ = Describe("health tests", func() {
 			Consistently(typhaReady, "10s", "1s").ShouldNot(BeGood())
 		})
 
-		// Pending because currently fails - investigation needed.
-		PIt("typha should report live", func() {
+		It("typha should report live", func() {
 			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
 			Consistently(typhaLiveness, "10s", "1s").Should(BeGood())
 		})
