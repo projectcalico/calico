@@ -5,6 +5,7 @@ metadata:
   name: allow-ui 
 spec:
   podSelector:
+    matchLabels: {}
   ingress:
     - from:
         - namespaceSelector:
