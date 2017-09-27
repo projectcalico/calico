@@ -4,6 +4,7 @@ import (
 	authz "tigera.io/dikastes/proto"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -15,22 +16,26 @@ func match(rule api.Rule, req *authz.Request) bool {
 }
 
 func matchSubject(er api.EntityRule, subj *authz.Request_Subject) bool {
-	return matchServiceAccounts(er.ServiceAccounts, subj.ServiceAccount, subj.Namespace)
+	return matchServiceAccounts(er.ServiceAccounts, subj)
 }
 
 func matchAction(er api.EntityRule, act *authz.Request_Action) bool {
 	return true
 }
 
-func matchServiceAccounts(saMatch api.ServiceAccountMatch, accountName, namespace string) bool {
+func matchServiceAccounts(saMatch api.ServiceAccountMatch, subj *authz.Request_Subject) bool {
+	accountName := subj.ServiceAccount
+	namespace := subj.Namespace
+	labels := subj.ServiceAccountLabels
 	log.WithFields(log.Fields{
 		"account":   accountName,
 		"namespace": namespace,
+		"labels":    labels,
 		"rule":      saMatch},
 	).Debug("Matching service account.")
 	return matchServiceAccountName(saMatch.Names, accountName) &&
 		matchServiceAccountNamespace(saMatch.Namespace, namespace) &&
-		matchServiceAccountLabels(saMatch.Selector, map[string]string{})
+		matchServiceAccountLabels(saMatch.Selector, labels)
 }
 
 func matchServiceAccountName(names []string, name string) bool {
@@ -54,6 +59,17 @@ func matchServiceAccountNamespace(matchNamespace, namespace string) bool {
 	return matchNamespace == namespace
 }
 
-func matchServiceAccountLabels(selector string, labels map[string]string) bool {
-	return true
+func matchServiceAccountLabels(selectorStr string, labels map[string]string) bool {
+	log.WithFields(log.Fields{
+		"selector": selectorStr,
+		"labels":   labels,
+	}).Debug("Matching service account labels.")
+	sel, err := selector.Parse(selectorStr)
+	if err != nil {
+		log.Warnf("Could not parse policy selector %v, %v", selectorStr, err)
+		return false
+	}
+	log.Debugf("Parsed selector.", sel)
+	return sel.Evaluate(labels)
+
 }
