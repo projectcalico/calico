@@ -37,7 +37,7 @@ component needs access to in etcd to function successfully.
 | /calico/v1/ipam\*          |   R    |
 | /calico/ipam/v2\*          |   RW   |
 
-## calico/kube-policy-controller
+## calico/kube-controllers
 
 | Path                       | Access |
 |----------------------------|--------|

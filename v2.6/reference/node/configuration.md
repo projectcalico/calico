@@ -36,7 +36,7 @@ The `calico/node` container is primarily configured through environment variable
 | ETCD_KEY_FILE     | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)        | string |
 | ETCD_CERT_FILE    | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)    | string |
 | ETCD_CA_CERT_FILE | Path to the etcd CA file, e.g. `/etc/calico/ca.pem` (optional)          | string |
-| KUBECONFIG | When using the kubernetes datastore, the location of a kubeconfig file to use. | string |
+| KUBECONFIG | When using the Kubernetes datastore, the location of a kubeconfig file to use. | string |
 | K8S_API_ENDPOINT | Location of the Kubernetes API.  Not required if using kubeconfig.       | string |
 | K8S_CERT_FILE | Location of a client certificate for accessing the Kubernetes API.          | string |
 | K8S_KEY_FILE | Location of a client key for accessing the Kubernetes API.                   | string |

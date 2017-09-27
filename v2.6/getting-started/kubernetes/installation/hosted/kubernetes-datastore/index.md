@@ -27,15 +27,15 @@ You must have a cluster which meets the following requirements:
 - Your Kubernetes controller manager has been provided a cluster-cidr (i.e. by passing `--cluster-cidr=192.168.0.0/16`, which the manifest expects by default).
 
 
-> **Note**: If you are upgrading from Calico v2.1, the cluster-cidr 
+> **Note**: If you are upgrading from Calico v2.1, the cluster-cidr
 > selected for your controller manager should remain
-> unchanged from the v2.1 install (the v2.1 manifests default to 
+> unchanged from the v2.1 install (the v2.1 manifests default to
 > `10.244.0.0/16`).
 {: .alert .alert-info}
 
-> **Important**: If you are using the Kubernetes datastore and upgrading 
-> from Calico v2.4.x or earlier to Calico v2.5.x or later, you must 
-> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md) 
+> **Important**: If you are using the Kubernetes datastore and upgrading
+> from Calico v2.4.x or earlier to Calico v2.5.x or later, you must
+> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
 > before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
 {: .alert .alert-danger}
 
@@ -50,11 +50,11 @@ This document describes three installation options for Calico using Kubernetes A
 
 Ensure you have a cluster which meets the above requirements.  There may be additional requirements based on the installation option you choose.
 
-> **Note**: There is currently no upgrade path to switch between 
-> different installation options. Therefore, if you are upgrading 
-> from Calico v2.1, use the 
+> **Note**: There is currently no upgrade path to switch between
+> different installation options. Therefore, if you are upgrading
+> from Calico v2.1, use the
 > [Calico policy-only with user-supplied networking](#2-calico-policy-only-with-user-supplied-networking)
-> installation instructions to upgrade Calico policy-only which 
+> installation instructions to upgrade Calico policy-only which
 > leaves the networking solution unchanged.
 {: .alert .alert-info}
 
@@ -66,7 +66,7 @@ RBAC roles to allow API access to Calico.
 
 Apply the following manifest to create these necessary RBAC roles and bindings.
 
-> **Note**: The following RBAC policy is compatible with the Kubernetes v1.7+ 
+> **Note**: The following RBAC policy is compatible with the Kubernetes v1.7+
 > manifests only.
 {: .alert .alert-info}
 
@@ -84,7 +84,7 @@ networking with a full node-to-node mesh and/or explicit configuration of peers.
 To install Calico with Calico networking, run one of the commands below based on your Kubernetes version.
 This will install Calico and will initially create a full node-to-node mesh.
 
-> **Note**: Calico v2.5.0 or later with Kubernetes backend requires Kubernetes 
+> **Note**: Calico v2.5.0 or later with Kubernetes backend requires Kubernetes
 > v1.7.0 or higher.
 {: .alert .alert-info}
 
@@ -119,7 +119,7 @@ CIDR allocations, either through static routes, a Kubernetes cloud-provider inte
 
 To install Calico in policy-only mode, run one of the following commands based on your Kubernetes version:
 
-> **Note**: Calico `v2.5.0` or higher with Kubernetes backend requires 
+> **Note**: Calico `v2.5.0` or higher with Kubernetes backend requires
 > Kubernetes `v1.7.0` or higher.
 {: .alert .alert-info}
 
@@ -151,7 +151,7 @@ The following environment variable configuration options are supported by the va
 | Option                 | Description    | Examples
 |------------------------|----------------|----------
 | DATASTORE_TYPE         | Indicates the datastore to use | kubernetes
-| KUBECONFIG             | When using the kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config
+| KUBECONFIG             | When using the Kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config
 | K8S_API_ENDPOINT       | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443
 | K8S_CERT_FILE          | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert
 | K8S_KEY_FILE           | Location of a client key for accessing the Kubernetes API. | /path/to/key
@@ -173,10 +173,10 @@ kubernetes-minion-group-x7ce   k8s            kube-system.kubernetes-dashboard-v
 ## How it works
 
 Calico typically uses `etcd` to store information about Kubernetes Pods, Namespaces, and NetworkPolicies.  This information
-is populated to etcd by the Calico CNI plugin and policy controller, and is interpreted by Felix and BIRD to program the dataplane on
+is populated to etcd by the Calico CNI plugin and the Calico Kubernetes controllers, and is interpreted by Felix and BIRD to program the dataplane on
 each host in the cluster.
 
 The above manifest deploys Calico such that Felix uses the Kubernetes API directly to learn the required information to enforce policy,
-removing Calico's dependency on etcd and the need for the Calico kubernetes policy controller.
+removing Calico's dependency on etcd and the need for the Calico Kubernetes controllers.
 
 The Calico CNI plugin is still required to configure each pod's virtual ethernet device and network namespace.

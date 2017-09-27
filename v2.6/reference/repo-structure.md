@@ -57,8 +57,8 @@ integrations.
 | libnetwork-plugin | binary | Docker networking plugin for use with Docker and Docker Swarm. It provides both network and IPAM drivers which may be used when creating networks through Docker. |
 
 
-## [k8s-policy](https://github.com/projectcalico/k8s-policy)
+## [kube-controllers](https://github.com/projectcalico/kube-controllers)
 
 | Artifact | Type | Description |
 |----------|-----|-------------|
-| calico/kube-policy-controller | Docker Image | Implements the Kubernetes Network Policy API. |
+| calico/kube-controllers | Docker Image | Integrates with the Kubernetes API for additional features. |
