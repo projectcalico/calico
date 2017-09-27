@@ -157,7 +157,8 @@ As a convenience, the API location location can also be configured directly, e.g
 ### Enabling Kubernetes Policy
 
 If you wish to use the Kubernetes NetworkPolicy API then you must set a policy type in the network config.
-There is a single supported policy type, `k8s` which uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
+There is a single supported policy type, `k8s` which uses the Kubernetes NetworkPolicy API. When set,
+you must also run calico/kube-controllers with the policy, profile and pod controllers enabled.
 
 ```json
 {
@@ -165,8 +166,10 @@ There is a single supported policy type, `k8s` which uses the Kubernetes Network
     "cniVersion": "0.1.0",
     "type": "calico",
     "policy": {
-      "type": "k8s",
-      "k8s_api_root": "http://127.0.0.1:8080"
+      "type": "k8s"
+    },
+    "kubernetes": {
+        "kubeconfig": "/path/to/kubeconfig"
     },
     "ipam": {
         "type": "calico-ipam"
@@ -243,9 +246,9 @@ In addition to specifying IP Pools in the CNI config as discussed above, Calico 
 If provided, these IP Pools will override any IP Pools specified in the CNI config.
 
 
-> **Note**: This requires the IP Pools to exist before `ipv4pools` or 
-> `ipv6pools` annotations are used. Requesting a subset of an IP Pool 
-> is not supported. IP Pools requested in the annotations must exactly 
+> **Note**: This requires the IP Pools to exist before `ipv4pools` or
+> `ipv6pools` annotations are used. Requesting a subset of an IP Pool
+> is not supported. IP Pools requested in the annotations must exactly
 > match a configured [IP Pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 {: .alert .alert-info}
 
