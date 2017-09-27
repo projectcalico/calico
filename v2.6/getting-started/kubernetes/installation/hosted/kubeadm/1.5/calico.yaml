@@ -299,7 +299,7 @@ metadata:
   name: calico-policy-controller
   namespace: kube-system
   labels:
-    k8s-app: calico-policy
+    k8s-app: calico-policy-controller
 spec:
   # Turn this deployment off in favor of the kube-controllers deployment above.
   replicas: 0
@@ -310,7 +310,7 @@ spec:
       name: calico-policy-controller
       namespace: kube-system
       labels:
-        k8s-app: calico-policy
+        k8s-app: calico-policy-controller
     spec:
       hostNetwork: true
       containers:
