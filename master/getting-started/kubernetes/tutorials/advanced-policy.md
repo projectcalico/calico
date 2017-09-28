@@ -16,9 +16,9 @@ in order to define more complex network policies.
 - This guide assumes you have a working Kubernetes cluster with Calico for policy. (See: [installation]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation) for help)
 - This guide assumes that your pods have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
+- This guide assumes you are using etcdv2 (or v3) as the Calico backend datastore.
 - You must have configured kubectl access to the cluster.
-- You must have installed and [configured the calicoctl tool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
-  to access the appropriate Calico backend datastore: [etcdv2 (or v3)]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2) or [Kubernetes API]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/kubernetes)
+- You must have installed and [configured the calicoctl tool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
 
 ### Setup
 
@@ -56,7 +56,7 @@ kubectl expose --namespace=advanced-policy-demo deployment nginx --port=80
 
 #### Check using calicoctl
 
-> **Note**: This requires the [calicoctl tool to be configured]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup).
+> **Note**: This requires the [calicoctl tool to be configured]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2).
 > For example: `export ETCD_ENDPOINTS=http://10.96.232.136:6666`.
 {: .alert .alert-info}
 
