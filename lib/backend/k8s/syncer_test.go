@@ -323,19 +323,19 @@ var _ = Describe("Test Syncer", func() {
 			// Simulate error on pod watch.
 			tc.podC <- watch.Event{Type: watch.Error, Object: nil}
 			// Expect a single new list call, but that each watcher is restarted.
-			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+7))
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+1))
 			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS+1))
 
 			// Simulate error on IP Pool watch.
 			tc.poolC <- watch.Event{Type: watch.Error, Object: nil}
 			// Expect a single new list call, but that each watcher is restarted.
-			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+14))
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+2))
 			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS+2))
 
 			// Simulate empty event on IP Pool watch (resourceVersion too old for TPRs)
 			tc.poolC <- watch.Event{Object: nil}
 			// Expect a single new list call, but that each watcher is restarted.
-			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+21))
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+3))
 			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS+3))
 		})
 
@@ -383,15 +383,24 @@ var _ = Describe("Test Syncer", func() {
 			// Check that, after the resync, the old watchers are stopped.
 			tc.stateMutex.Lock()
 			defer tc.stateMutex.Unlock()
-			// We expect 7 old watchers and 7 new. If that changes, we'll assert here
+			// We expect 7 old watchers and 1 new. If that changes, we'll assert here
 			// so the maintainer can re-check the test still matches the logic.
-			Expect(tc.openWatchers).To(HaveLen(14))
-			for _, w := range tc.openWatchers[:len(tc.openWatchers)/2] {
-				w.stopMutex.Lock()
-				stopped := w.stopped
-				w.stopMutex.Unlock()
-				Expect(stopped).To(BeTrue())
+			Expect(tc.openWatchers).To(HaveLen(8))
+
+			// Check and verify the old pod watcher was closed, make sure we ignore the
+			// newest pod watch that was added by only iterating over the old watchers.
+			closed := false
+			for _, w := range tc.openWatchers[:len(tc.openWatchers)-1] {
+				if w.name == "pod" {
+					w.stopMutex.Lock()
+					stopped := w.stopped
+					w.stopMutex.Unlock()
+					Expect(stopped).To(BeTrue())
+					closed = true
+				}
 			}
+			// If for some reason we never found a pod watch we should fail.
+			Expect(closed).To(BeTrue())
 		})
 	})
 })
