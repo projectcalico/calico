@@ -1,5 +1,6 @@
 ---
 title: Running Calico Node Container as a Service
+redirect_from: latest/usage/configuration/as-service
 ---
 
 This guide explains how to run Calico as a system process or service,

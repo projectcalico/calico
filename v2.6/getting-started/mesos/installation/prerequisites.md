@@ -1,5 +1,6 @@
 ---
 title: Requirements for Calico with Mesos
+redirect_from: latest/getting-started/mesos/installation/prerequisites
 ---
 
 #### 1. etcd

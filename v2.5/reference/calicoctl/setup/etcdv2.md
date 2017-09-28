@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl - etcdv2 datastore
-redirect_from: latest/reference/calicoctl/setup/etcdv2
 ---
 
 This document covers the configuration options for calicoctl when using an etcdv2 datastore.

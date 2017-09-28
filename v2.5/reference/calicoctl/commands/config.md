@@ -1,6 +1,5 @@
 ---
 title: calicoctl config
-redirect_from: latest/reference/calicoctl/commands/config
 ---
 
 This sections describes the `calicoctl config` commands.
