@@ -1,5 +1,6 @@
 ---
 title: Installing and Configuring calicoctl
+redirect_from: latest/usage/calicoctl/install-and-configuration
 ---
 
 This document outlines how to install and configure calicoctl which is the
@@ -43,7 +44,7 @@ Here is a simple etcdv2 example.
 ETCD_ENDPOINTS=http://etcd:2379 calicoctl get nodes
 ```
 
-Here is a simple kubernetes datastore example.
+Here is a simple Kubernetes datastore example.
 
 ```
 DATASTORE_TYPE=kubernetes KUBECONFIG=~/.kube/config calicoctl get nodes

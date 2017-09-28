@@ -1,3 +1,188 @@
+v2.6:
+- title: v2.6.0
+  note: |
+    28 September 2017
+
+    Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
+
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+
+  components:
+    felix:
+      version: 2.6.0
+      url: https://github.com/projectcalico/felix/releases/tag/2.6.0
+    typha:
+      version: v0.5.1
+      url: https://github.com/projectcalico/typha/releases/tag/v0.5.1
+    calicoctl:
+      version: v1.6.1
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.1
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.1/calicoctl
+    calico/node:
+      version: v2.6.0
+      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0
+    calico/cni:
+      version: v1.11.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.11.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico-ipam
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    calico/kube-controllers:
+      version: v1.0.0
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0
+    networking-calico:
+      version: 1.4.2
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
+    calico/routereflector:
+      version: v0.4.0
+      url: ""
+
+- title: v2.6.0-rc3
+  note: |
+    27 September 2017
+
+    Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
+
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+
+  components:
+    felix:
+      version: 2.6.0-rc2
+      url: https://github.com/projectcalico/felix/releases/tag/2.6.0-rc2
+    typha:
+      version: v0.5.1
+      url: https://github.com/projectcalico/typha/releases/tag/v0.5.1
+    calicoctl:
+      version: v1.6.0-rc2
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.0-rc2
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.0-rc2/calicoctl
+    calico/node:
+      version: v2.6.0-rc2
+      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0-rc2
+    calico/cni:
+      version: v1.11.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.11.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico-ipam
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    calico/kube-controllers:
+      version: v1.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.0
+    networking-calico:
+      version: 1.4.2
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
+    calico/routereflector:
+      version: v0.4.0
+      url: ""
+
+- title: v2.6.0-rc2
+  note: |
+    24 September 2017
+
+    Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
+
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+
+  components:
+    felix:
+      version: 2.6.0-rc2
+      url: https://github.com/projectcalico/felix/releases/tag/2.6.0-rc2
+    typha:
+      version: v0.5.1
+      url: https://github.com/projectcalico/typha/releases/tag/v0.5.1
+    calicoctl:
+      version: v1.6.0-rc2
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.0-rc2
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.0-rc2/calicoctl
+    calico/node:
+      version: v2.6.0-rc2
+      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0-rc2
+    calico/cni:
+      version: v1.11.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.11.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico-ipam
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    calico/kube-policy-controller:
+      version: v1.0.0-rc2
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0-rc2
+    networking-calico:
+      version: 1.4.2
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
+    calico/routereflector:
+      version: v0.4.0
+      url: ""
+
+- title: v2.6.0-rc1
+  note: |
+    22 September 2017
+
+    Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
+
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+
+  components:
+    felix:
+      version: 2.6.0-rc1
+      url: https://github.com/projectcalico/felix/releases/tag/2.6.0-rc1
+    typha:
+      version: v0.5.0
+      url: https://github.com/projectcalico/typha/releases/tag/v0.5.0
+    calicoctl:
+      version: v1.6.0-rc1
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.0-rc1
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.0-rc1/calicoctl
+    calico/node:
+      version: v2.6.0-rc1
+      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0-rc1
+    calico/cni:
+      version: v1.10.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.10.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico-ipam
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    calico/kube-policy-controller:
+      version: v1.0.0-rc1
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0-rc1
+    networking-calico:
+      version: 1.4.2
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
+    calico/routereflector:
+      version: v0.4.0
+      url: ""
+
 v2.5:
 - title: v2.5.1
   note: |
@@ -1095,7 +1280,7 @@ master:
      libnetwork-plugin:
       version: master
       url: ""
-     calico/kube-policy-controller:
+     calico/kube-controllers:
       version: master
       url: ""
      networking-calico:
@@ -1104,102 +1289,6 @@ master:
      calico/routereflector:
       version: v0.4.0
       url: ""
-
-v2.6:
-- title: v2.6.0-rc2
-  note: |
-    24 September 2017
-
-    Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
-
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
-
-
-  components:
-    felix:
-      version: 2.6.0-rc2
-      url: https://github.com/projectcalico/felix/releases/tag/2.6.0-rc2
-    typha:
-      version: v0.5.1
-      url: https://github.com/projectcalico/typha/releases/tag/v0.5.1
-    calicoctl:
-      version: v1.6.0-rc2
-      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.0-rc2
-      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.0-rc2/calicoctl
-    calico/node:
-      version: v2.6.0-rc2
-      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0-rc2
-    calico/cni:
-      version: v1.11.0
-      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.11.0
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico-ipam
-    calico-bird:
-      version: v0.3.1
-      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
-    calico-bgp-daemon:
-      version: v0.2.1
-      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
-    libnetwork-plugin:
-      version: v1.1.0
-      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
-    calico/kube-policy-controller:
-      version: v1.0.0-rc2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0-rc2
-    networking-calico:
-      version: 1.4.2
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
-    calico/routereflector:
-      version: v0.4.0
-      url: ""
-
-- title: v2.6.0-rc1
-  note: |
-    22 September 2017
-
-    Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
-
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
-
-
-  components:
-    felix:
-      version: 2.6.0-rc1
-      url: https://github.com/projectcalico/felix/releases/tag/2.6.0-rc1
-    typha:
-      version: v0.5.0
-      url: https://github.com/projectcalico/typha/releases/tag/v0.5.0
-    calicoctl:
-      version: v1.6.0-rc1
-      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.0-rc1
-      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.0-rc1/calicoctl
-    calico/node:
-      version: v2.6.0-rc1
-      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0-rc1
-    calico/cni:
-      version: v1.10.0
-      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.10.0
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico-ipam
-    calico-bird:
-      version: v0.3.1
-      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
-    calico-bgp-daemon:
-      version: v0.2.1
-      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
-    libnetwork-plugin:
-      version: v1.1.0
-      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
-    calico/kube-policy-controller:
-      version: v1.0.0-rc1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0-rc1
-    networking-calico:
-      version: 1.4.2
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
-    calico/routereflector:
-      version: v0.4.0
-      url: ""
-
 # vX.Y format: update during major release process
 currentReleaseStream: v2.6
 

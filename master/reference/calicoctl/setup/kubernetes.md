@@ -5,9 +5,9 @@ layout: docwithnav
 
 This document covers the configuration options for calicoctl when using the Kubernetes API as a datastore.
 
-> **Note**: If running Calico on Kubernetes with the etcdv2 
+> **Note**: If running Calico on Kubernetes with the etcdv2
 > datastore, see the [etcdv2 configuration document](etcdv2) instead.
-> For more information on running with the Kubernetes datastore, see 
+> For more information on running with the Kubernetes datastore, see
 > [the installation guide](/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/).
 >
 {: .alert .alert-info}
@@ -56,8 +56,8 @@ See the table below for details on the Kubernetes specific environment variables
 
 | Setting (Environment variable)    | Description                                                                                               | Schema
 | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------
-| datastoreType (DATASTORE_TYPE)    | Indicates the datastore to use (required for kubernetes as the default is etcdv2). [Default: `etcdv2`]    | kubernetes, etcdv2
-| kubeconfig (KUBECONFIG)           | When using the kubernetes datastore, the location of a kubeconfig file to use, e.g. /path/to/kube/config. | string
+| datastoreType (DATASTORE_TYPE)    | Indicates the datastore to use. [Default: `etcdv2`]                                                       | kubernetes, etcdv2
+| kubeconfig (KUBECONFIG)           | When using the Kubernetes datastore, the location of a kubeconfig file to use, e.g. /path/to/kube/config. | string
 | k8sAPIEndpoint (K8S_API_ENDPOINT) | Location of the Kubernetes API. Not required if using kubeconfig. [Default: `https://kubernetes-api:443`] | string
 | k8sCertFile (K8S_CERT_FILE)       | Location of a client certificate for accessing the Kubernetes API, e.g. /path/to/cert.                    | string
 | k8sKeyFile (K8S_KEY_FILE)         | Location of a client key for accessing the Kubernetes API, e.g. /path/to/key.                             | string

@@ -1,5 +1,6 @@
 ---
 title: Decommissioning a Node
+redirect_from: latest/usage/decommissioning-a-node
 ---
 
 ### Why you might be interested in this guide

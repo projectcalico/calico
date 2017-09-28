@@ -1,5 +1,6 @@
 ---
 title: Advanced etcd segmentation for Calico
+redirect_from: latest/reference/advanced/etcd-rbac/kubernetes-advanced
 ---
 
 This document describes advanced segmentation of the etcd roles to limit
@@ -18,7 +19,7 @@ The following components need certificates with a Common Name that matches an
 etcd user that has been given appropriate roles allowing access to the key
 prefixes or paths listed or linked below.
 - [cni-plugin](calico-etcdv2-paths#cni-plugin)
-- [Calico policy controller](calico-etcdv2-paths#calicokube-policy-controller)
+- [Calico Kubernetes controllers](calico-etcdv2-paths#calicokube-controllers)
 - [calico/node](calico-etcdv2-paths#caliconode)
 - It may also be useful to create a certificate key pair for use with
   calicoctl, even creating specific ones for
@@ -35,7 +36,7 @@ Once the certificates are generated and the users and roles have been setup
 in etcd the components using them must be configured.  Here are the same
 components listed above and links to their detailed configuration pages:
 - [cni-plugin]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
-- [Calico policy controller]({{site.baseurl}}/{{page.version}}/reference/policy-controller/configuration)
+- [Calico Kubernetes controllers]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
 - [calico/node]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
 
@@ -48,7 +49,7 @@ that run outside of Kubernetes.
 
 A setup that needs a certificate for each component is possible while using a
 hosted manifest.  This setup requires a certificate for each different Calico
-component type listed above (cni-plugin, Calico policy controller, and
+component type listed above (cni-plugin, Calico Kubernetes controllers, and
 calico/node).
 
 This setup needs similar updates to the manifest like what is described in

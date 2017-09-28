@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico and Kubernetes on GCE
-redirect_from: latest/getting-started/kubernetes/installation/gce
 ---
 
 There are a number of solutions for deploying Calico and Kubernetes on GCE.  We recommend taking

@@ -1,5 +1,6 @@
 ---
 title: Security using Calico Profiles and Policy
+redirect_from: latest/getting-started/docker/tutorials/security-using-calico-profiles-and-policy
 ---
 
 ## Background

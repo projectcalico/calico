@@ -1,5 +1,6 @@
 ---
 title: Installing Calico for Docker
+redirect_from: latest/getting-started/docker/installation/manual
 ---
 
 Calico runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.

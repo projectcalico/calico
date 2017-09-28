@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl - Kubernetes datastore 
-redirect_from: latest/reference/calicoctl/setup/kubernetes
 layout: docwithnav
 ---
 

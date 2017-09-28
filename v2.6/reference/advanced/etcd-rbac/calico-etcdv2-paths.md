@@ -1,5 +1,6 @@
 ---
 title: Calico key and path prefixes in etcd v2
+redirect_from: latest/reference/advanced/etcd-rbac/calico-etcdv2-paths
 ---
 
 The Paths listed here are the key or path prefixes that a particular calico
@@ -37,7 +38,7 @@ component needs access to in etcd to function successfully.
 | /calico/v1/ipam\*          |   R    |
 | /calico/ipam/v2\*          |   RW   |
 
-## calico/kube-policy-controller
+## calico/kube-controllers
 
 | Path                       | Access |
 |----------------------------|--------|
