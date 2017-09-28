@@ -307,8 +307,6 @@ func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'Create' for %+v", d)
 	switch d.Key.(type) {
-	case model.PolicyKey:
-		return c.gnpClient.Create(d)
 	case model.GlobalConfigKey:
 		return c.globalFelixConfigClient.Create(d)
 	case model.IPPoolKey:
@@ -337,8 +335,6 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'Update' for %+v", d)
 	switch d.Key.(type) {
-	case model.PolicyKey:
-		return c.gnpClient.Update(d)
 	case model.GlobalConfigKey:
 		return c.globalFelixConfigClient.Update(d)
 	case model.IPPoolKey:
@@ -369,8 +365,6 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 	switch d.Key.(type) {
 	case model.WorkloadEndpointKey:
 		return c.applyWorkloadEndpoint(d)
-	case model.PolicyKey:
-		return c.gnpClient.Apply(d)
 	case model.GlobalConfigKey:
 		return c.globalFelixConfigClient.Apply(d)
 	case model.IPPoolKey:
@@ -400,12 +394,10 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 	}
 }
 
-// Delete an entry in the datastore. Returns an error if the entry does not exist.
+// Delete an entry in the datastore. This is a no-op when using the k8s backend.
 func (c *KubeClient) Delete(d *model.KVPair) error {
 	log.Debugf("Performing 'Delete' for %+v", d)
 	switch d.Key.(type) {
-	case model.PolicyKey:
-		return c.gnpClient.Delete(d)
 	case model.GlobalConfigKey:
 		return c.globalFelixConfigClient.Delete(d)
 	case model.IPPoolKey:

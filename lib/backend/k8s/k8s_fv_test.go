@@ -594,8 +594,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Make sure we clean up after ourselves.  We allow this to fail because
 		// part of our explicit testing below is to delete the resource.
 		defer func() {
-			c.Delete(kvp1a)
-			c.Delete(kvp2a)
+			c.gnpClient.Delete(kvp1a)
+			c.gnpClient.Delete(kvp2a)
 		}()
 
 		// Check our syncer has the correct GNP entries for the two
@@ -607,7 +607,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Creating a Global Network Policy", func() {
-			_, err := c.Create(kvp1a)
+			_, err := c.gnpClient.Create(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -623,12 +623,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Attempting to recreate an existing Global Network Policy", func() {
-			_, err := c.Create(kvp1a)
+			_, err := c.gnpClient.Create(kvp1a)
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Updating an existing Global Network Policy", func() {
-			_, err := c.Update(kvp1b)
+			_, err := c.gnpClient.Update(kvp1b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -644,7 +644,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Applying a non-existent Global Network Policy", func() {
-			_, err := c.Apply(kvp2a)
+			_, err := c.gnpClient.Apply(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -654,7 +654,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Updating the Global Network Policy created by Apply", func() {
-			_, err := c.Apply(kvp2b)
+			_, err := c.gnpClient.Apply(kvp2b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -664,7 +664,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Deleted the Global Network Policy created by Apply", func() {
-			err := c.Delete(kvp2a)
+			err := c.gnpClient.Delete(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -676,7 +676,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Perform Get operations directly on the main client - this
 		// will fan out requests to the appropriate Policy client
 		// (including the Global Network Policy client).
-		By("Getting a Global Network Policy that does not exist", func() {
+		By("Getting a Global Network Policy that does noe exist", func() {
 			_, err := c.Get(model.PolicyKey{Name: "my-non-existent-test-gnp"})
 			Expect(err).To(HaveOccurred())
 		})
@@ -705,7 +705,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Deleting an existing Global Network Policy", func() {
-			err := c.Delete(kvp1a)
+			err := c.gnpClient.Delete(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
