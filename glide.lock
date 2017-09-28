@@ -1,5 +1,5 @@
-hash: 8ef3cb64891b9ebbbec46ec6d32c4f4301d4ba7c434f073ad70bfd7419de1497
-updated: 2017-09-24T16:51:30.490503721-07:00
+hash: 1f0054fc8ba4c8880b804f5751aee427db43130dcb682245e75814d2b6124df5
+updated: 2017-09-29T13:44:09.386041992-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -152,6 +152,11 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/projectcalico/felix
+  version: 4006dd5a3dfdd39bc0087a9e0a7e2f7623432de4
+  subpackages:
+  - fv
+  - fv.containers
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -190,7 +195,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
+  version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
