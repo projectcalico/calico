@@ -1,5 +1,6 @@
 ---
 title: Red Hat Enterprise Linux 7 Packaged Install Instructions
+redirect_from: latest/getting-started/openstack/installation/redhat
 ---
 
 For this version of Calico, with OpenStack on RHEL 7 or CentOS 7, we recommend

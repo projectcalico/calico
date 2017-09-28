@@ -1,6 +1,5 @@
 ---
 title: Generating Certificates for etcd RBAC
-redirect_from: latest/reference/advanced/etcd-rbac/certificate-generation
 ---
 
 The etcd datastore has the concept of users that are linked to roles, where

@@ -1,5 +1,6 @@
 ---
 title: Network Policy (Universal Containerizer)
+redirect_from: latest/getting-started/mesos/tutorials/policy/universal-containerizer
 ---
 
 This document will demonstrate how to manipulate policy for Calico using

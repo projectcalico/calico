@@ -1,5 +1,6 @@
 ---
 title: calicoctl user reference
+redirect_from: latest/reference/calicoctl/index
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage Calico network

@@ -22,7 +22,7 @@ FELIX_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREA
 CALICOCTL_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
 LIBNETWORK_PLUGIN_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
 TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
-K8S_POLICY_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
+KUBE_CONTROLLERS_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
 CNI_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
 CONFD_VER ?= v0.12.1-calico-0.4.0
@@ -42,7 +42,7 @@ print-version:
     $(info $$CALICO_VER is ${CALICO_VER})
     $(info $$CONFD_VER is ${CONFD_VER})
     $(info $$FELIX_VER is ${FELIX_VER})
-    $(info $$K8S_POLICY_VER is ${K8S_POLICY_VER})
+    $(info $$KUBE_CONTROLLERS_VER is ${KUBE_CONTROLLERS_VER})
     $(info $$TYPHA_VER is ${TYPHA_VER})
 
 ###############################################################################
@@ -566,7 +566,7 @@ $(RELEASE_DIR)/README:
 	@echo "* The calico/node docker image  (version $(CALICO_VER))" >> $@
 	@echo "* The calico/typha docker image  (version $(TYPHA_VER))" >> $@
 	@echo "* The calico/cni docker image  (version $(CNI_VER))" >> $@
-	@echo "* The calico/kube-controllers docker image (version $(K8S_POLICY_VER))" >> $@
+	@echo "* The calico/kube-controllers docker image (version $(KUBE_CONTROLLERS_VER))" >> $@
 	@echo "" >> $@
 	@echo "Binaries (for amd64) (under 'bin')" >> $@
 	@echo "* The calicoctl binary (for Linux) (version $(CALICOCTL_VER))" >> $@
@@ -609,8 +609,8 @@ $(RELEASE_DIR_IMAGES)/calico-cni.tar:
 
 $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/kube-controllers:$(K8S_POLICY_VER)
-	docker save --output $@ calico/kube-controllers:$(K8S_POLICY_VER)
+	docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
+	docker save --output $@ calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
 
 $(RELEASE_DIR_BIN)/%:
 	mkdir -p $(RELEASE_DIR_BIN)

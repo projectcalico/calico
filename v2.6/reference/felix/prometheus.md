@@ -1,5 +1,6 @@
 ---
 title: Felix Prometheus Statistics
+redirect_from: latest/reference/felix/prometheus
 ---
 
 Felix can be configured to report a number of metrics through Prometheus.  See the
