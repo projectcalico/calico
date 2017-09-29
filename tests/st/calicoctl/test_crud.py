@@ -179,6 +179,7 @@ class TestCreateFromFile(TestBase):
                                            'source': {}}],
                               'order': 100000,
                               'selector': "",
+                              'applyOnForward': True,
                               'doNotTrack': True,
                               'types': ['ingress', 'egress']}
         }),
