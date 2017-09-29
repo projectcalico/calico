@@ -32,7 +32,7 @@ created for the specific component with the information above.
 ## Calico components
 
 Once the certificates are generated and the users and roles have been setup
-in etcd the components using them must be configured.  Here are the same
+in etcd the components using them must be configured. Here are the same
 components listed above and links to their detailed configuration pages:
 - [cni-plugin]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
 - [Calico Kubernetes controllers]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
@@ -44,10 +44,10 @@ the Calico components are launched through a Kuberenetes manifest file, this
 is not required and the configuration could be achieved by configuring services
 that run outside of Kubernetes.
 
-### Per component cert setup
+### Per component certificate setup
 
 A setup that needs a certificate for each component is possible while using a
-hosted manifest.  This setup requires a certificate for each different Calico
+hosted manifest. This setup requires a certificate for each different Calico
 component type listed above (cni-plugin, Calico Kubernetes controllers, and
 calico/node).
 
@@ -59,13 +59,13 @@ Then the specific Secret for each component must be in the `volumes` list
 for the correct pod and the `volumeMounts` for the appropriate container must
 reference the volume for the `/calico-secrets` mountPath.
 
-### Per node per component cert setup
+### Per node per component certificate setup
 
 While the above is a good step toward locking down access to etcd and would
-probably satisfy the needs of many there is a third option that could
-utilize a different certificate for each component for each node.  This type
+probably satisfy the needs of many, there is a third option that could
+utilize a different certificate for each component for each node. This type
 of setup can be achieved multiple ways and will be left as an exercise for
-the implementor.  Some possibilities for achieving this are:
+the implementor. Some possibilities for achieving this are:
 - Installing and starting the Calico components with a configuration management
   tool which installs and configures the certificates.
 - Creating a manifest with a side car container that pulls the proper
