@@ -24,36 +24,36 @@ import (
 
 func init() {
 	registerResource(
-		api.NewBGPPeer(),
-		api.NewBGPPeerList(),
-		false,
-		[]string{"bgppeer", "bgppeers", "bgpp", "bgpps", "bp", "bps"},
-		[]string{"NAME", "PEERIP", "NODE", "ASN"},
-		[]string{"NAME", "PEERIP", "NODE", "ASN"},
+		api.NewNetworkPolicy(),
+		api.NewNetworkPolicyList(),
+		true,
+		[]string{"networkpolicy", "networkpolicies", "policy", "np", "policies", "pol", "pols"},
+		[]string{"NAME"},
+		[]string{"NAME", "ORDER", "SELECTOR", "NAMESPACE"},
 		map[string]string{
-			"NAME":   "{{.ObjectMeta.Name}}",
-			"PEERIP": "{{.Spec.PeerIP}}",
-			"NODE":   "{{ if eq .Spec.Node `` }}(global){{ else }}{{.Spec.Node}}{{ end }}",
-			"ASN":    "{{.Spec.ASNumber}}",
+			"NAME":      "{{.ObjectMeta.Name}}",
+			"NAMESPACE": "{{.ObjectMeta.Namespace}}",
+			"ORDER":     "{{.Spec.Order}}",
+			"SELECTOR":  "{{.Spec.Selector}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Delete(ctx, r.Name, options.DeleteOptions{})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Get(ctx, r.Name, options.GetOptions{})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Get(ctx, r.Namespace, r.Name, options.GetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.BGPPeers().List(ctx, options.ListOptions{})
+			return client.NetworkPolicies().List(ctx, options.ListOptions{Namespace: resource.GetObjectMeta().GetNamespace()})
 		},
 	)
 }

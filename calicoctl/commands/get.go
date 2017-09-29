@@ -23,15 +23,15 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+
 	log "github.com/sirupsen/logrus"
 )
 
 func Get(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl get ([--scope=<SCOPE>] [--node=<NODE>] [--orchestrator=<ORCH>]
-                 [--workload=<WORKLOAD>] (<KIND> [<NAME>]) |
+  calicoctl get ( (<KIND> [<NAME>]) |
                 --filename=<FILENAME>)
-                [--output=<OUTPUT>] [--config=<CONFIG>]
+                [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces]
 
 Examples:
   # List all policy in default output format.
@@ -47,18 +47,13 @@ Options:
   -o --output=<OUTPUT FORMAT>  Output format.  One of: yaml, json, ps, wide,
                                custom-columns=..., go-template=...,
                                go-template-file=...   [Default: ps]
-  -n --node=<NODE>             The node (this may be the hostname of the
-                               compute server if your installation does not
-                               explicitly set the names of each Calico node).
-     --orchestrator=<ORCH>     The orchestrator (valid for workload endpoints).
-     --workload=<WORKLOAD>     The workload (valid for workload endpoints).
-     --scope=<SCOPE>           The scope of the resource type.  One of global,
-                               node.  This is only valid for BGP peers and is
-                               used to indicate whether the peer is a global
-                               peer or node-specific.
   -c --config=<CONFIG>         Path to the file containing connection
                                configuration in YAML or JSON format.
                                [default: ` + constants.DefaultConfigPath + `]
+  -n --namespace=<NS>          Namespace of the resource.
+                               Only applicable to NetworkPolicy and WorkloadEndpoint.
+                               Uses the default namespace if not specified.
+  -a --all-namespaces          If present, list the requested object(s) across all namespaces.
 
 Description:
   The get command is used to display a set of resources by filename or stdin,
@@ -72,7 +67,8 @@ Description:
     * hostEndpoint
     * workloadEndpoint
     * ipPool
-    * policy
+    * networkPolicy
+    * globalNetworkPolicy
     * profile
 
   The resource type is case insensitive and may be pluralized.
@@ -121,7 +117,7 @@ Description:
 	var rp resourcePrinter
 	output := parsedArgs["--output"].(string)
 	switch output {
-	case "yaml":
+	case "yaml", "yml":
 		rp = resourcePrinterYAML{}
 	case "json":
 		rp = resourcePrinterJSON{}
@@ -169,7 +165,8 @@ Description:
 		os.Exit(1)
 	}
 
-	results := executeConfigCommand(parsedArgs, actionList)
+	results := executeConfigCommand(parsedArgs, actionGetOrList)
+
 	log.Infof("results: %+v", results)
 
 	if results.fileInvalid {

@@ -15,42 +15,45 @@
 package resourcemgr
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"context"
+
+	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
 		api.NewNode(),
 		api.NewNodeList(),
+		false,
+		[]string{"node", "nodes", "no", "nos"},
 		[]string{"NAME"},
 		[]string{"NAME", "ASN", "IPV4", "IPV6"},
 		map[string]string{
-			"NAME": "{{.Metadata.Name}}",
+			"NAME": "{{.ObjectMeta.Name}}",
 			"ASN":  "{{if .Spec.BGP}}{{if .Spec.BGP.ASNumber}}{{.Spec.BGP.ASNumber}}{{else}}({{config \"asnumber\"}}){{end}}{{end}}",
 			"IPV4": "{{if .Spec.BGP}}{{if .Spec.BGP.IPv4Address}}{{.Spec.BGP.IPv4Address}}{{end}}{{end}}",
 			"IPV6": "{{if .Spec.BGP}}{{if .Spec.BGP.IPv6Address}}{{.Spec.BGP.IPv6Address}}{{end}}{{end}}",
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Node)
-			return client.Nodes().Apply(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.Node)
+			return client.Nodes().Create(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Node)
-			return client.Nodes().Create(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.Node)
+			return client.Nodes().Update(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Node)
-			return client.Nodes().Update(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.Node)
+			return client.Nodes().Delete(ctx, r.Name, options.DeleteOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Node)
-			return nil, client.Nodes().Delete(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.Node)
+			return client.Nodes().Get(ctx, r.Name, options.GetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Node)
-			return client.Nodes().List(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
+			return client.Nodes().List(ctx, options.ListOptions{})
 		},
 	)
 }

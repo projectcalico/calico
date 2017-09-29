@@ -15,43 +15,46 @@
 package resourcemgr
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"context"
+
+	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
 		api.NewHostEndpoint(),
 		api.NewHostEndpointList(),
-		[]string{"NODE", "NAME"},
-		[]string{"NODE", "NAME", "INTERFACE", "IPS", "PROFILES"},
+		false,
+		[]string{"hostendpoint", "hostendpoints", "hep", "heps"},
+		[]string{"NAME", "NODE"},
+		[]string{"NAME", "NODE", "INTERFACE", "IPS", "PROFILES"},
 		map[string]string{
-			"NODE":      "{{.Metadata.Node}}",
-			"NAME":      "{{.Metadata.Name}}",
+			"NAME":      "{{.ObjectMeta.Name}}",
+			"NODE":      "{{.Spec.Node}}",
 			"INTERFACE": "{{.Spec.InterfaceName}}",
 			"IPS":       "{{join .Spec.ExpectedIPs \",\"}}",
 			"PROFILES":  "{{join .Spec.Profiles \",\"}}",
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.HostEndpoint)
-			return client.HostEndpoints().Apply(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.HostEndpoint)
+			return client.HostEndpoints().Create(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.HostEndpoint)
-			return client.HostEndpoints().Create(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.HostEndpoint)
+			return client.HostEndpoints().Update(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.HostEndpoint)
-			return client.HostEndpoints().Update(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.HostEndpoint)
+			return client.HostEndpoints().Delete(ctx, r.Name, options.DeleteOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.HostEndpoint)
-			return nil, client.HostEndpoints().Delete(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.HostEndpoint)
+			return client.HostEndpoints().Get(ctx, r.Name, options.GetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.HostEndpoint)
-			return client.HostEndpoints().List(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
+			return client.HostEndpoints().List(ctx, options.ListOptions{})
 		},
 	)
 }

@@ -6,7 +6,7 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/sirupsen/logrus
-  version: ^0.10.0
+  version: ^1.0.3
 - package: github.com/docopt/docopt-go
 - package: github.com/mcuadros/go-version
 - package: github.com/mitchellh/go-ps
@@ -22,10 +22,14 @@ import:
 - package: github.com/coreos/etcd
   version: 17ae440991da3bdb2df4309936dd2074f66ec394
 - package: github.com/projectcalico/go-yaml-wrapper
+- package: golang.org/x/crypto
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
 - package: github.com/projectcalico/libcalico-go
-  version: da18e6e179b08697d589aad3172b241de5e4d8d9
+  version: v3.0-integration
   subpackages:
   - lib/api
+  - lib/apiv2
+  - lib/clientv2
   - lib/api/unversioned
   - lib/backend
   - lib/backend/api
@@ -38,8 +42,3 @@ import:
   - lib/validator
 - package: github.com/satori/go.uuid
 - package: github.com/termie/go-shutil
-testImport:
-- package: github.com/onsi/ginkgo
-  subpackages:
-  - extensions/table
-- package: github.com/onsi/gomega

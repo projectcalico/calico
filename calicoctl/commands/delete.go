@@ -27,10 +27,9 @@ import (
 
 func Delete(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl delete ([--scope=<SCOPE>] [--node=<NODE>] [--orchestrator=<ORCH>]
-                    [--workload=<WORKLOAD>] (<KIND> [<NAME>]) |
+  calicoctl delete ( (<KIND> [<NAME>]) |
                    --filename=<FILE>)
-                   [--skip-not-exists] [--config=<CONFIG>]
+                   [--skip-not-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Delete a policy using the type and name specified in policy.yaml.
@@ -48,18 +47,12 @@ Options:
                             don't exist.
   -f --filename=<FILENAME>  Filename to use to delete the resource.  If set to
                             "-" loads from stdin.
-  -n --node=<NODE>          The node (this may be the hostname of the compute
-                            server if your installation does not explicitly set
-                            the names of each Calico node).
-     --orchestrator=<ORCH>  The orchestrator (valid for workload endpoints).
-     --workload=<WORKLOAD>  The workload (valid for workload endpoints).
-     --scope=<SCOPE>        The scope of the resource type.  One of global,
-                            node.  This is only valid for BGP peers and is used
-                            to indicate whether the peer is a global peer or
-                            node-specific.
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: ` + constants.DefaultConfigPath + `]
+  -n --namespace=<NS>       Namespace of the resource.
+                            Only applicable to NetworkPolicy and WorkloadEndpoint.
+                            Uses the default namespace if not specified.
 
 Description:
   The delete command is used to delete a set of resources by filename or stdin,
@@ -73,7 +66,8 @@ Description:
     * hostEndpoint
     * workloadEndpoint
     * ipPool
-    * policy
+    * networkPolicy
+    * globalNetworkPolicy
     * profile
 
   The resource type is case insensitive and may be pluralized.

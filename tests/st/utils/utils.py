@@ -19,6 +19,7 @@ import socket
 import sys
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
+from collections import namedtuple
 
 import termios
 
@@ -47,8 +48,7 @@ IPV4_RE = re.compile(r'inet ((?:\d+\.){3}\d+)/\d+')
 # Grabs v6 addresses
 IPV6_RE = re.compile(r'inet6 ([a-fA-F\d:]+)/\d{1,3}')
 
-
-def calicoctl(command):
+def calicoctl(command, filename='', is_stdin=False):
     """
     Convenience function for abstracting away calling the calicoctl
     command.
@@ -60,7 +60,17 @@ def calicoctl(command):
     :return: The output from the command with leading and trailing
     whitespace removed.
     """
-    calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+    stdin = ''
+    option_file = ''
+
+    if is_stdin and filename:
+        stdin = 'cat %s | ' % filename
+        option_file = ' -f -'
+
+    if filename and not is_stdin:
+        option_file = ' -f %s' % filename
+
+    calicoctl_bin = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
 
     if ETCD_SCHEME == "https":
         etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
@@ -70,15 +80,14 @@ def calicoctl(command):
     # use of | or ;
     #
     # Pass in all etcd params, the values will be empty if not set anyway
-    calicoctl = "export ETCD_AUTHORITY=%s; " \
-                "export ETCD_SCHEME=%s; " \
+    calicoctl_env_cmd = "export ETCD_ENDPOINTS=%s; " \
                 "export ETCD_CA_CERT_FILE=%s; " \
                 "export ETCD_CERT_FILE=%s; " \
-                "export ETCD_KEY_FILE=%s; %s" % \
-                (etcd_auth, ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY,
-                 calicoctl)
-
-    return log_and_run(calicoctl + " " + command)
+                "export ETCD_KEY_FILE=%s; " \
+                "export DATASTORE_TYPE=%s; %s %s" % \
+                (ETCD_SCHEME+"://"+etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY, "etcdv3",
+                  stdin, calicoctl_bin)
+    return log_and_run(calicoctl_env_cmd + " " + command + option_file)
 
 
 def get_ip(v6=False):

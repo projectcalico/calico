@@ -15,49 +15,50 @@
 package resourcemgr
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"context"
+
+	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
 		api.NewWorkloadEndpoint(),
 		api.NewWorkloadEndpointList(),
-		[]string{"NODE", "ORCHESTRATOR", "WORKLOAD", "NAME"},
-		[]string{"NODE", "ORCHESTRATOR", "WORKLOAD", "NAME", "NETWORKS", "NATS", "INTERFACE", "PROFILES"},
+		true,
+		[]string{"workloadendpoint", "workloadendpoints", "wep", "weps"},
+		[]string{"NAME", "NODE", "WORKLOAD", "INTERFACE"},
+		[]string{"NAME", "NODE", "NAMESPACE", "WORKLOAD", "NETWORKS", "INTERFACE", "PROFILES", "NATS"},
 		map[string]string{
-			"NODE":         "{{.Metadata.Node}}",
-			"ORCHESTRATOR": "{{.Metadata.Orchestrator}}",
-			"WORKLOAD":     "{{.Metadata.Workload}}",
-			"NAME":         "{{.Metadata.Name}}",
+			"NAME":         "{{.ObjectMeta.Name}}",
+			"NAMESPACE":    "{{.ObjectMeta.Namespace}}",
+			"NODE":         "{{.Spec.Node}}",
+			"ORCHESTRATOR": "{{.Spec.Orchestrator}}",
+			"WORKLOAD":     "{{.Spec.Workload}}",
 			"NETWORKS":     "{{join .Spec.IPNetworks \",\"}}",
 			"NATS":         "{{join .Spec.IPNATs \",\"}}",
-			"IPV4GATEWAY":  "{{.Spec.IPv4Gateway}}",
-			"IPV6GATEWAY":  "{{.Spec.IPv4Gateway}}",
 			"PROFILES":     "{{join .Spec.Profiles \",\"}}",
 			"INTERFACE":    "{{.Spec.InterfaceName}}",
-			"MAC":          "{{.Spec.MAC}}",
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Apply(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.WorkloadEndpoint)
+			return client.WorkloadEndpoints().Create(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Create(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.WorkloadEndpoint)
+			return client.WorkloadEndpoints().Update(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Update(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.WorkloadEndpoint)
+			return client.WorkloadEndpoints().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.WorkloadEndpoint)
-			return nil, client.WorkloadEndpoints().Delete(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.WorkloadEndpoint)
+			return client.WorkloadEndpoints().Get(ctx, r.Namespace, r.Name, options.GetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().List(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
+			return client.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: resource.GetObjectMeta().GetNamespace()})
 		},
 	)
 }
