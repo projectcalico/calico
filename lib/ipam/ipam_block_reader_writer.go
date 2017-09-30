@@ -36,11 +36,11 @@ type blockReaderWriter struct {
 	pools  PoolAccessorInterface
 }
 
-func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pools []cnet.IPNet) ([]cnet.IPNet, error) {
+func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ver ipVersion, pools []cnet.IPNet) ([]cnet.IPNet, error) {
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver.Number}
-	datastoreObjs, err := rw.client.List(context.Background(), opts, "")
+	datastoreObjs, err := rw.client.List(ctx, opts, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// The block path does not exist yet.  This is OK - it means
@@ -74,7 +74,7 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pools []
 	return ids, nil
 }
 
-func (rw blockReaderWriter) claimNewAffineBlock(host string, version ipVersion, requestedPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) claimNewAffineBlock(ctx context.Context, host string, version ipVersion, requestedPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
 
 	// If requestedPools is not empty, use it.  Otherwise, default to all configured pools.
 	pools := []cnet.IPNet{}
@@ -121,12 +121,12 @@ func (rw blockReaderWriter) claimNewAffineBlock(host string, version ipVersion, 
 			// Check if a block already exists for this subnet.
 			log.Debugf("Getting block: %s", subnet.String())
 			key := model.BlockKey{CIDR: *subnet}
-			_, err := rw.client.Get(context.Background(), key, "")
+			_, err := rw.client.Get(ctx, key, "")
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 					// The block does not yet exist in etcd.  Try to grab it.
 					log.Debugf("Found free block: %+v", *subnet)
-					err = rw.claimBlockAffinity(*subnet, host, config)
+					err = rw.claimBlockAffinity(ctx, *subnet, host, config)
 					return subnet, err
 				} else {
 					log.Errorf("Error getting block: %s", err)
@@ -154,7 +154,7 @@ func isPoolInRequestedPools(pool cnet.IPNet, requestedPools []cnet.IPNet) bool {
 	return false
 }
 
-func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, config IPAMConfig) error {
+func (rw blockReaderWriter) claimBlockAffinity(ctx context.Context, subnet cnet.IPNet, host string, config IPAMConfig) error {
 	// Claim the block affinity for this host.  See model.BlockAffinityValue
 	// for details on the hard-coded value that is used.
 	log.Infof("Host %s claiming block affinity for %s", host, subnet)
@@ -162,7 +162,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 		Key:   model.BlockAffinityKey{Host: host, CIDR: subnet},
 		Value: model.BlockAffinityValue,
 	}
-	_, err := rw.client.Create(context.Background(), &obj)
+	_, err := rw.client.Create(ctx, &obj)
 
 	// Create the new block.
 	block := newBlock(subnet)
@@ -181,12 +181,12 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 		Key:   model.BlockKey{block.CIDR},
 		Value: block.AllocationBlock,
 	}
-	_, err = rw.client.Create(context.Background(), &o)
+	_, err = rw.client.Create(ctx, &o)
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
 			// Block already exists, check affinity.
 			log.WithError(err).Warningf("Problem claiming block affinity")
-			obj, err := rw.client.Get(context.Background(), model.BlockKey{subnet}, "")
+			obj, err := rw.client.Get(ctx, model.BlockKey{subnet}, "")
 			if err != nil {
 				log.Errorf("Error reading block:", err)
 				return err
@@ -203,7 +203,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 			}
 
 			// Some other host beat us to this block.  Cleanup and return error.
-			_, err = rw.client.Delete(context.Background(), model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
+			_, err = rw.client.Delete(ctx, model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
 			if err != nil {
 				log.Errorf("Error cleaning up block affinity: %s", err)
 				return err
@@ -216,12 +216,12 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 	return nil
 }
 
-func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPNet) error {
+func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host string, blockCIDR cnet.IPNet) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
 		// Read the model.KVPair containing the block
 		// and pull out the allocationBlock object.  We need to hold on to this
 		// so that we can pass it back to the datastore on Update.
-		obj, err := rw.client.Get(context.Background(), model.BlockKey{CIDR: blockCIDR}, "")
+		obj, err := rw.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
 			log.Errorf("Error getting block %s: %s", blockCIDR.String(), err)
 			return err
@@ -242,7 +242,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 
 		if b.empty() {
 			// If the block is empty, we can delete it.
-			_, err := rw.client.Delete(context.Background(), model.BlockKey{CIDR: b.CIDR}, "")
+			_, err := rw.client.Delete(ctx, model.BlockKey{CIDR: b.CIDR}, "")
 			if err != nil {
 				// Return the error unless the block didn't exist.
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -260,7 +260,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 			// Pass back the original KVPair with the new
 			// block information so we can do a CAS.
 			obj.Value = b.AllocationBlock
-			_, err = rw.client.Update(context.Background(), obj)
+			_, err = rw.client.Update(ctx, obj)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					// CASError - continue.
@@ -273,7 +273,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 
 		// We've removed / updated the block, so update the host config
 		// to remove the CIDR.
-		_, err = rw.client.Delete(context.Background(), model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
+		_, err = rw.client.Delete(ctx, model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
 		if err != nil {
 			// Return the error unless the affinity didn't exist.
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {

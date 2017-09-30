@@ -14,7 +14,11 @@
 
 package ipam
 
-import cnet "github.com/projectcalico/libcalico-go/lib/net"
+import (
+	"context"
+	
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+)
 
 // ipam.Interface has methods to perform IP address management.
 type Interface interface {
@@ -23,61 +27,61 @@ type Interface interface {
 	// in order to satisfy the assignment.  An error will be returned if the IP address
 	// is already assigned, or if StrictAffinity is enabled and the address is within
 	// a block that does not have affinity for the given host.
-	AssignIP(args AssignIPArgs) error
+	AssignIP(ctx context.Context, args AssignIPArgs) error
 
 	// AutoAssign automatically assigns one or more IP addresses as specified by the
 	// provided AutoAssignArgs.  AutoAssign returns the list of the assigned IPv4 addresses,
 	// and the list of the assigned IPv6 addresses.
-	AutoAssign(args AutoAssignArgs) ([]cnet.IP, []cnet.IP, error)
+	AutoAssign(ctx context.Context, args AutoAssignArgs) ([]cnet.IP, []cnet.IP, error)
 
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,
 	// so that they are available to be used in another assignment.
-	ReleaseIPs(ips []cnet.IP) ([]cnet.IP, error)
+	ReleaseIPs(ctx context.Context, ips []cnet.IP) ([]cnet.IP, error)
 
 	// GetAssignmentAttributes returns the attributes stored with the given IP address
 	// upon assignment.
-	GetAssignmentAttributes(addr cnet.IP) (map[string]string, error)
+	GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (map[string]string, error)
 
 	// IPsByHandle returns a list of all IP addresses that have been
 	// assigned using the provided handle.
-	IPsByHandle(handleID string) ([]cnet.IP, error)
+	IPsByHandle(ctx context.Context, handleID string) ([]cnet.IP, error)
 
 	// ReleaseByHandle releases all IP addresses that have been assigned
 	// using the provided handle.  Returns an error if no addresses
 	// are assigned with the given handle.
-	ReleaseByHandle(handleID string) error
+	ReleaseByHandle(ctx context.Context, handleID string) error
 
 	// ClaimAffinity claims affinity to the given host for all blocks
 	// within the given CIDR.  The given CIDR must fall within a configured
 	// pool. If an empty string is passed as the host, then the value returned by os.Hostname is used.
-	ClaimAffinity(cidr cnet.IPNet, host string) ([]cnet.IPNet, []cnet.IPNet, error)
+	ClaimAffinity(ctx context.Context, cidr cnet.IPNet, host string) ([]cnet.IPNet, []cnet.IPNet, error)
 
 	// ReleaseAffinity releases affinity for all blocks within the given CIDR
 	// on the given host.  If an empty string is passed as the host, then the
 	// value returned by os.Hostname will be used.
-	ReleaseAffinity(cidr cnet.IPNet, host string) error
+	ReleaseAffinity(ctx context.Context, cidr cnet.IPNet, host string) error
 
 	// ReleaseHostAffinities releases affinity for all blocks that are affine
 	// to the given host.  If an empty string is passed as the host, the value returned by
 	// os.Hostname will be used.
-	ReleaseHostAffinities(host string) error
+	ReleaseHostAffinities(ctx context.Context, host string) error
 
 	// ReleasePoolAffinities releases affinity for all blocks within
 	// the specified pool across all hosts.
-	ReleasePoolAffinities(pool cnet.IPNet) error
+	ReleasePoolAffinities(ctx context.Context, pool cnet.IPNet) error
 
 	// GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 	// has been set, returns a default configuration with StrictAffinity disabled
 	// and AutoAllocateBlocks enabled.
-	GetIPAMConfig() (*IPAMConfig, error)
+	GetIPAMConfig(ctx context.Context, ) (*IPAMConfig, error)
 
 	// SetIPAMConfig sets global IPAM configuration.  This can only
 	// be done when there are no allocated blocks and IP addresses.
-	SetIPAMConfig(cfg IPAMConfig) error
+	SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error
 
 	// RemoveIPAMHost releases affinity for all blocks on the given host,
 	// and removes all host-specific IPAM data from the datastore.
 	// RemoveIPAMHost does not release any IP addresses claimed on the given host.
 	// If an empty string is passed as the host then the value returned by os.Hostname is used.
-	RemoveIPAMHost(host string) error
+	RemoveIPAMHost(ctx context.Context, host string) error
 }

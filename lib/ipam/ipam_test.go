@@ -116,7 +116,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 					Hostname: hostA,
 				}
 
-				v4, _, outErr := ic.AutoAssign(args)
+				v4, _, outErr := ic.AutoAssign(context.Background(), args)
 
 				blocks := getAffineBlocks(bc, hostA)
 				for _, b := range blocks {
@@ -135,7 +135,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 					Hostname: hostA,
 				}
 
-				v4, _, outErr := ic.AutoAssign(args)
+				v4, _, outErr := ic.AutoAssign(context.Background(), args)
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(block.IPNet.Contains(v4[0].IP)).To(BeTrue())
 			})
@@ -155,7 +155,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 					Num6:     0,
 					Hostname: hostB,
 				}
-				v4, _, outErr := ic.AutoAssign(args)
+				v4, _, outErr := ic.AutoAssign(context.Background(), args)
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(pool2.IPNet.Contains(v4[0].IP)).To(BeTrue())
 			})
@@ -166,7 +166,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 					Num6:     0,
 					Hostname: hostA,
 				}
-				v4, _, outErr := ic.AutoAssign(args)
+				v4, _, outErr := ic.AutoAssign(context.Background(), args)
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(pool1.IPNet.Contains(v4[0].IP)).To(BeTrue())
 			})
@@ -187,14 +187,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			applyPool("10.0.0.0/24", true)
 			applyPool("20.0.0.0/24", true)
 
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(len(v4) == 1).To(BeTrue())
 		})
 
 		// Call again to trigger an assignment from the newly created block.
 		It("should have assigned an IP address with no error", func() {
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(len(v4) == 1).To(BeTrue())
 		})
@@ -219,7 +219,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool1},
 			}
 
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			blocks := getAffineBlocks(bc, host)
 			for _, b := range blocks {
 				if pool1.Contains(b.IPNet.IP) {
@@ -239,7 +239,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool2},
 			}
 
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			blocks := getAffineBlocks(bc, host)
 			for _, b := range blocks {
 				if pool2.Contains(b.IPNet.IP) {
@@ -258,7 +258,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Hostname:  host,
 				IPv4Pools: []cnet.IPNet{pool1},
 			}
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(block1.IPNet.Contains(v4[0].IP)).To(BeTrue())
 		})
@@ -271,7 +271,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool2},
 			}
 
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(block2.IPNet.Contains(v4[0].IP)).To(BeTrue())
 		})
@@ -298,7 +298,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			applyPool(pool2.String(), true)
 			applyPool(pool3.String(), false)
 			applyPool(pool4_v6.String(), true)
-			_, _, outErr := ic.AutoAssign(args)
+			_, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).To(HaveOccurred())
 		})
 
@@ -309,7 +309,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Hostname:  host,
 				IPv6Pools: []cnet.IPNet{pool4_v6, pool1},
 			}
-			_, _, outErr := ic.AutoAssign(args)
+			_, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).To(HaveOccurred())
 		})
 
@@ -320,7 +320,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Hostname:  host,
 				IPv4Pools: []cnet.IPNet{pool1, pool2},
 			}
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			log.Println("IPAM returned: %v", v4)
 
 			Expect(outErr).NotTo(HaveOccurred())
@@ -335,7 +335,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Hostname:  host,
 				IPv4Pools: []cnet.IPNet{pool1, pool2},
 			}
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			log.Println("v4: %d IPs", len(v4))
 
 			Expect(outErr).NotTo(HaveOccurred())
@@ -349,7 +349,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Hostname:  host,
 				IPv4Pools: []cnet.IPNet{pool1, pool2},
 			}
-			v4, _, outErr := ic.AutoAssign(args)
+			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			log.Println("v4: %d IPs", len(v4))
 
 			// Expect 211 entries since we have a total of 512, we requested 1 + 300 already.
@@ -364,7 +364,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Hostname:  host,
 				IPv4Pools: []cnet.IPNet{pool1, pool5_doesnot_exist},
 			}
-			v4, _, err := ic.AutoAssign(args)
+			v4, _, err := ic.AutoAssign(context.Background(), args)
 			log.Println("v4: %d IPs", len(v4))
 
 			Expect(err.Error()).Should(Equal("The given pool (40.0.0.0/24) does not exist, or is not enabled"))
@@ -390,7 +390,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{fromPool},
 			}
 
-			outv4, outv6, outErr := ic.AutoAssign(args)
+			outv4, outv6, outErr := ic.AutoAssign(context.Background(), args)
 			if expError != nil {
 				Expect(outErr).To(HaveOccurred())
 			} else {
@@ -437,7 +437,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				applyPool(v, true)
 			}
 
-			outError := ic.AssignIP(args)
+			outError := ic.AssignIP(context.Background(), args)
 			if expError != nil {
 				Expect(outError).To(HaveOccurred())
 				Expect(outError).To(Equal(expError))
@@ -477,7 +477,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			}
 
 			if len(assignIP) != 0 {
-				err := ic.AssignIP(AssignIPArgs{
+				err := ic.AssignIP(context.Background(), AssignIPArgs{
 					IP: cnet.IP{assignIP},
 				})
 				if err != nil {
@@ -492,14 +492,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			}
 
 			if autoAssignNumIPv4 != 0 {
-				assignedIPv4, _, err := ic.AutoAssign(AutoAssignArgs{
+				assignedIPv4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
 					Num4: autoAssignNumIPv4,
 				})
 				Expect(err).ToNot(HaveOccurred())
 				inIPs = assignedIPv4
 			}
 
-			unallocatedIPs, outErr := ic.ReleaseIPs(inIPs)
+			unallocatedIPs, outErr := ic.ReleaseIPs(context.Background(), inIPs)
 			if outErr != nil {
 				log.Println(outErr)
 			}
@@ -554,7 +554,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 			assignIPutil(ic, args.assignIP, "Host-A")
 
-			outClaimed, outFailed, outError := ic.ClaimAffinity(inIPNet, args.host)
+			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, args.host)
 			log.Println("Claimed IP blocks: ", outClaimed)
 			log.Println("Failed to claim IP blocks: ", outFailed)
 
@@ -595,7 +595,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 // assignIPutil is a utility function to help with assigning a single IP address to a hostname passed in.
 func assignIPutil(ic Interface, assignIP net.IP, host string) {
 	if len(assignIP) != 0 {
-		err := ic.AssignIP(AssignIPArgs{
+		err := ic.AssignIP(context.Background(), AssignIPArgs{
 			IP:       cnet.IP{assignIP},
 			Hostname: host,
 		})
