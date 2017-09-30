@@ -11,19 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
-import logging
+import copy
 import os
-import re
 import socket
 import sys
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
-from collections import namedtuple
 
 import termios
 
-from tests.st.utils.exceptions import CommandExecError
+import json
+import logging
+from pprint import pformat
+
+import yaml
+from deepdiff import DeepDiff
 
 LOCAL_IP_ENV = "MY_IP"
 LOCAL_IPv6_ENV = "MY_IPv6"
@@ -35,40 +37,156 @@ ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
 ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
 ETCD_HOSTNAME_SSL = "etcd-authority-ssl"
 
-"""
-Compile Regexes
-"""
-# Splits into groups that start w/ no whitespace and contain all lines below
-# that start w/ whitespace
-INTERFACE_SPLIT_RE = re.compile(r'(\d+:.*(?:\n\s+.*)+)')
-# Grabs interface name
-IFACE_RE = re.compile(r'^\d+: (\S+):')
-# Grabs v4 addresses
-IPV4_RE = re.compile(r'inet ((?:\d+\.){3}\d+)/\d+')
-# Grabs v6 addresses
-IPV6_RE = re.compile(r'inet6 ([a-fA-F\d:]+)/\d{1,3}')
+API_VERSION = 'projectcalico.org/v2'
+ERROR_CONFLICT = "update conflict"
+NOT_FOUND = "resource does not exist"
+NOT_NAMESPACED = "is not namespaced"
 
-def calicoctl(command, filename='', is_stdin=False):
+class CalicoctlOutput:
+    """
+    CalicoctlOutput contains the output from running a calicoctl command using
+    the calicoctl function below.
+
+    This class contains the command, output and error code (if it failed)
+    along with YAML/JSON decoded output if the output could be decoded.
+    """
+    def __init__(self, command, output, error=None):
+        self.command = command
+        self.output = output
+        self.error = error
+
+        # Attempt to decode the output and store the output format.
+        self.decoded, self.decoded_format = decode_json_yaml(self.output)
+
+    def assert_data(self, data, format="yaml", text=None):
+        """
+        Assert the decoded output from the calicoctl command matches the
+        supplied data and the expected decoder format.
+        Args:
+            data:   The data to compare
+            format: The expected output format of the data.
+            text:   (optional) Expected text in the command output.
+        """
+        self.assert_no_error(text)
+        assert self.decoded is not None, "No value was decoded from calicoctl response."
+        if isinstance(data, str):
+            data, _ = decode_json_yaml(data)
+            assert data is not None, "String data did not decode"
+
+        if format is not None:
+            assert format == self.decoded_format, "Decoded format is different. " \
+                "expect %s; got %s" % (format, self.decoded_format)
+
+        # Copy and clean the decoded data to allow it to be comparable.
+        cleaned = clean_calico_data(self.decoded)
+
+        assert cmp(cleaned, data) == 0, \
+            "Items are not the same.  Difference is:\n %s" % \
+            pformat(DeepDiff(cleaned, data), indent=2)
+
+    def assert_empty_list(self, kind, format="yaml", text=None):
+        """
+        Assert the calicoctl command output an empty list of the specified
+        kind.
+
+        Args:
+            kind:   The resource kind.
+            format: The expected output format of the data.
+            text:   (optional) Expected text in the command output.
+
+        Returns:
+
+        """
+        data = make_list(kind, [])
+        self.assert_data(data, format=format, text=text)
+
+    def assert_list(self, kind, items, format="yaml", text=None):
+        """
+        Assert the calicoctl command output an empty list of the specified
+        kind.
+
+        Args:
+            kind:   The resource kind.
+            items:  A list of the items in the list.
+            format: The expected output format of the data.
+            text:   (optional) Expected text in the command output.
+
+        Returns:
+
+        """
+        data = make_list(kind, items)
+        self.assert_data(data, format=format, text=text)
+
+    def assert_error(self, text=None):
+        """
+        Assert the calicoctl command exited with an error.
+        Args:
+            text:   (optional) Expected text in the command output.
+        """
+        assert self.error, "Expected error running command; \n" \
+            "command=" + self.command + "\noutput=" + self.output
+        self.assert_output_contains(text)
+
+    def assert_no_error(self, text=None):
+        """
+        Assert the calicoctl command did not exit with an error code.
+        Args:
+            text:   (optional) Expected text in the command output.
+        """
+        assert not self.error, "Expected no error running command; \n" \
+            "command=" + self.command + "\noutput=" + self.output
+
+        # If text is supplied, assert it appears in the output
+        if text:
+            self.assert_output_contains(text)
+
+    def assert_output_contains(self, text):
+        """
+        Assert the calicoctl command output contains the supplied text.
+        Args:
+            data:   The data to compare
+            format: The expected output format of the data.
+            text:   (optional) Expected text in the command output.
+        """
+        if not text:
+            return
+        assert text in self.output, "Expected text in output; \n" + \
+            "command=" + self.command + "\noutput=" + self.output + \
+            "expected=" + text
+
+
+def calicoctl(command, data=None, load_as_stdin=False, format="yaml"):
     """
     Convenience function for abstracting away calling the calicoctl
     command.
 
-    Raises a CommandExecError() if the command returns a non-zero
-    return code.
-
     :param command:  The calicoctl command line parms as a single string.
+    :param data:  Input data either as a string or a JSON serializable Python
+    object.
+    :param load_as_stdin:  Load the input data through stdin rather than by
+    loading from file.
+    :param format:  Specify the format for loading the data.
     :return: The output from the command with leading and trailing
     whitespace removed.
     """
+    # If input data is specified, save it to file in the required format.
+    if isinstance(data, str):
+        data, _ = decode_json_yaml(data)
+        assert data is not None, "String data did not decode"
+    if data is not None:
+        if format == "yaml":
+            writeyaml("/tmp/input-data", data)
+        else:
+            writejson("/tmp/input-data", data)
+
     stdin = ''
     option_file = ''
 
-    if is_stdin and filename:
-        stdin = 'cat %s | ' % filename
+    if data and load_as_stdin:
+        stdin = 'cat /tmp/input-data | '
         option_file = ' -f -'
-
-    if filename and not is_stdin:
-        option_file = ' -f %s' % filename
+    elif data and not load_as_stdin:
+        option_file = ' -f /tmp/input-data'
 
     calicoctl_bin = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
 
@@ -85,9 +203,93 @@ def calicoctl(command, filename='', is_stdin=False):
                 "export ETCD_CERT_FILE=%s; " \
                 "export ETCD_KEY_FILE=%s; " \
                 "export DATASTORE_TYPE=%s; %s %s" % \
-                (ETCD_SCHEME+"://"+etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY, "etcdv3",
-                  stdin, calicoctl_bin)
-    return log_and_run(calicoctl_env_cmd + " " + command + option_file)
+                (ETCD_SCHEME+"://"+etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY,
+                 "etcdv3", stdin, calicoctl_bin)
+    full_cmd = calicoctl_env_cmd + " " + command + option_file
+
+    try:
+        output = log_and_run(full_cmd)
+        return CalicoctlOutput(full_cmd, output)
+    except CalledProcessError as e:
+        return CalicoctlOutput(full_cmd, e.output, error=e.returncode)
+
+
+def clean_calico_data(data):
+    """
+    Clean the data returned from a calicoctl get command to remove empty
+    structs, null values and non-configurable fields.  This makes comparison
+    with the input data much simpler.
+
+    Args:
+        data: The data to clean.
+
+    Returns: The cleaned data.
+
+    """
+    new = copy.deepcopy(data)
+
+    # Recursively delete empty structs / nil values and non-configurable
+    # fields.
+    def clean_elem(elem):
+        if isinstance(elem, list):
+            # Loop through each element in the list
+            for i in elem:
+                clean_elem(i)
+        if isinstance(elem, dict):
+            # Remove non-settable fields, and recursively clean each value of
+            # the dictionary, removing nil values or values that are empty
+            # dicts after cleaning.
+            del_keys = ['creationTimestamp', 'resourceVersion']
+            for k, v in elem.iteritems():
+                clean_elem(v)
+                if v is None or v == {}:
+                    del_keys.append(k)
+            for k in del_keys:
+                if k in elem:
+                    del(elem[k])
+    clean_elem(new)
+    return new
+
+
+def decode_json_yaml(value):
+    try:
+        decoded = json.loads(value)
+        return decoded, "json"
+    except ValueError:
+        pass
+    try:
+        decoded = yaml.safe_load(value)
+        return decoded, "yaml"
+    except yaml.YAMLError:
+        pass
+    return None, None
+
+
+def writeyaml(filename, data):
+    """
+    Converts a python dict to yaml and outputs to a file.
+    :param filename: filename to write
+    :param data: dictionary to write out as yaml
+    """
+    with open(filename, 'w') as f:
+        text = yaml.dump(data, default_flow_style=False)
+        logger.debug("Writing %s: \n%s" % (filename, text))
+        f.write(text)
+
+
+def writejson(filename, data):
+    """
+    Converts a python dict to json and outputs to a file.
+    :param filename: filename to write
+    :param data: dictionary to write out as json
+    """
+    with open(filename, 'w') as f:
+        text = json.dumps(data,
+                          sort_keys=True,
+                          indent=2,
+                          separators=(',', ': '))
+        logger.debug("Writing %s: \n%s" % (filename, text))
+        f.write(text)
 
 
 def get_ip(v6=False):
@@ -113,9 +315,9 @@ def get_ip(v6=False):
     return ip
 
 
-# Some of the commands we execute like to mess with the TTY configuration, which can break the
-# output formatting. As a wrokaround, save off the terminal settings and restore them after
-# each command.
+# Some of the commands we execute like to mess with the TTY configuration,
+# which can break the output formatting. As a wrokaround, save off the
+# terminal settings and restore them after each command.
 _term_settings = termios.tcgetattr(sys.stdin.fileno())
 
 
@@ -133,9 +335,10 @@ def log_and_run(command, raise_exception_on_failure=True):
         try:
             results = check_output(command, shell=True, stderr=STDOUT).rstrip()
         finally:
-            # Restore terminal settings in case the command we ran manipulated them.  Note:
-            # under concurrent access, this is still not a perfect solution since another thread's
-            # child process may break the settings again before we log below.
+            # Restore terminal settings in case the command we ran manipulated
+            # them. Note: under concurrent access, this is still not a perfect
+            # solution since another thread's child process may break the
+            # settings again before we log below.
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _term_settings)
         log_output(results)
         return results
@@ -145,7 +348,8 @@ def log_and_run(command, raise_exception_on_failure=True):
         logger.info("  # Return code: %s", e.returncode)
         log_output(e.output)
         if raise_exception_on_failure:
-            raise CommandExecError(e)
+            raise e
+
 
 def curl_etcd(path, options=None, recursive=True, ip=None):
     """
@@ -182,3 +386,32 @@ def wipe_etcd(ip):
     # We want to avoid polluting analytics data with unit test noise
     curl_etcd("calico/v1/config/UsageReportingEnabled",
                    options=["-XPUT -d value=False"], ip=ip)
+
+
+def make_list(kind, items):
+    """
+    Convert the list of resources into a single List resource type.
+    Args:
+        items: A list of the resources in the List object.
+
+    Returns:
+        None
+    """
+    assert isinstance(items, list)
+    if "List" not in kind:
+        kind = kind + "List"
+    return {
+        'kind': kind,
+        'apiVersion': API_VERSION,
+        'items': items,
+    }
+
+def name(data):
+    """
+    Returns the name of the resource in the supplied data
+    Args:
+        data: A dictionary containing the resource.
+
+    Returns: The resource name.
+    """
+    return data['metadata']['name']

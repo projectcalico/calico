@@ -46,14 +46,15 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.Node)
-			return client.Nodes().Delete(ctx, r.Name, options.DeleteOptions{})
+			return client.Nodes().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.Node)
-			return client.Nodes().Get(ctx, r.Name, options.GetOptions{})
+			return client.Nodes().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.Nodes().List(ctx, options.ListOptions{})
+			r := resource.(*api.Node)
+			return client.Nodes().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }
