@@ -1304,7 +1304,7 @@ master:
   note: ""
   components:
      felix:
-      version: 2.5.1-25-gfc653797 
+      version: 2.6.0-8-gecbd512d
       url: ""
      calicoctl:
       version: master
