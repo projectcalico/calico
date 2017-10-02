@@ -28,8 +28,8 @@ import (
 const usage = `Dikastes - the decider.
 
 Usage:
-  dikastes server <path> [options]
-  dikastes client <namespace> <account> [options]
+  dikastes server <path> [-t <token>|--kube <kubeconfig>] [options]
+  dikastes client <namespace> <account> [--method <method>] [options]
 
 Options:
   <path>                 Path to file with pod labels.
@@ -42,6 +42,7 @@ Options:
   -k --kubernetes <api>  Kubernetes API Endpoint [default: https://kubernetes:443]
   -c --ca <ca>           Kubernetes CA Cert file [default: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt]
   -t --token <token>     Kubernetes API Token file [default: /var/run/secrets/kubernetes.io/serviceaccount/token]
+  --kube <kubeconfig>    Path to kubeconfig.
   --debug             Log at Debug level.`
 const version = "0.1"
 
@@ -152,6 +153,13 @@ func runClient(arguments map[string]interface{}) {
 		Subject: &authz.Request_Subject{
 			ServiceAccount: arguments["<account>"].(string),
 			Namespace:      arguments["<namespace>"].(string)}}
+	if arguments["--method"].(bool) {
+		req.Action = &authz.Request_Action{
+			Http: &authz.HTTPRequest{
+				Method: arguments["<method>"].(string),
+			},
+		}
+	}
 	resp, err := client.Check(context.Background(), &req)
 	if err != nil {
 		log.Fatalf("Failed %v", err)
@@ -167,18 +175,22 @@ func getDialer(proto string) func(string, time.Duration) (net.Conn, error) {
 }
 
 func getConfig(arguments map[string]interface{}) api.CalicoAPIConfig {
-	token, err := ioutil.ReadFile(arguments["--token"].(string))
-	if err != nil {
-		log.Fatalf("Could not open token file %v. %v", arguments["--token"], err)
-	}
-	return api.CalicoAPIConfig{
+	cfg := api.CalicoAPIConfig{
 		Spec: api.CalicoAPIConfigSpec{
 			DatastoreType: api.Kubernetes,
-			KubeConfig: api.KubeConfig{
-				K8sAPIEndpoint: arguments["--kubernetes"].(string),
-				K8sCAFile:      arguments["--ca"].(string),
-				K8sAPIToken:    string(token),
-			},
+			KubeConfig:    api.KubeConfig{},
 		},
 	}
+	if arguments["--kube"] != nil {
+		cfg.Spec.KubeConfig.Kubeconfig = arguments["--kube"].(string)
+	} else {
+		token, err := ioutil.ReadFile(arguments["--token"].(string))
+		if err != nil {
+			log.Fatalf("Could not open token file %v. %v", arguments["--token"], err)
+		}
+		cfg.Spec.KubeConfig.K8sAPIToken = string(token)
+		cfg.Spec.KubeConfig.K8sAPIEndpoint = arguments["--kubernetes"].(string)
+		cfg.Spec.KubeConfig.K8sCAFile = arguments["--ca"].(string)
+	}
+	return cfg
 }

@@ -12,21 +12,24 @@ import (
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
 func match(rule api.Rule, req *authz.Request) bool {
 	log.Debugf("Checking rule %v on request %v", rule, req)
-	return matchSubject(rule.Source, req.Subject) && matchAction(rule.Destination, req.Action)
+	return matchSubject(rule.Source, req.GetSubject()) && matchAction(rule, req.GetAction())
 }
 
 func matchSubject(er api.EntityRule, subj *authz.Request_Subject) bool {
 	return matchServiceAccounts(er.ServiceAccounts, subj)
 }
 
-func matchAction(er api.EntityRule, act *authz.Request_Action) bool {
-	return true
+func matchAction(rule api.Rule, act *authz.Request_Action) bool {
+	log.WithFields(log.Fields{
+		"action": act,
+	}).Debug("Matching action.")
+	return matchHTTP(rule.HTTP, act.GetHttp())
 }
 
 func matchServiceAccounts(saMatch api.ServiceAccountMatch, subj *authz.Request_Subject) bool {
-	accountName := subj.ServiceAccount
-	namespace := subj.Namespace
-	labels := subj.ServiceAccountLabels
+	accountName := subj.GetServiceAccount()
+	namespace := subj.GetNamespace()
+	labels := subj.GetServiceAccountLabels()
 	log.WithFields(log.Fields{
 		"account":   accountName,
 		"namespace": namespace,
@@ -72,4 +75,31 @@ func matchServiceAccountLabels(selectorStr string, labels map[string]string) boo
 	log.Debugf("Parsed selector.", sel)
 	return sel.Evaluate(labels)
 
+}
+
+func matchHTTP(rule api.HTTPRule, req *authz.HTTPRequest) bool {
+	return matchHTTPMethods(rule.Methods, req.GetMethod())
+}
+
+func matchHTTPMethods(methods []string, reqMethod string) bool {
+	log.WithFields(log.Fields{
+		"methods":   methods,
+		"reqMethod": reqMethod,
+	}).Debug("Matching HTTP Methods")
+	if len(methods) == 0 {
+		log.Debug("Rule has 0 HTTP Methods, matched.")
+		return true
+	}
+	for _, method := range methods {
+		if method == "*" {
+			log.Debug("Rule matches all methods with wildcard *")
+			return true
+		}
+		if method == reqMethod {
+			log.Debug("HTTP Method matched.")
+			return true
+		}
+	}
+	log.Debug("HTTP Method not matched.")
+	return false
 }
