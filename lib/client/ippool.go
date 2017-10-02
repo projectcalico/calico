@@ -15,6 +15,8 @@
 package client
 
 import (
+	"context"
+	
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -93,7 +95,7 @@ func (h *ipPools) Delete(metadata api.IPPoolMetadata) error {
 
 	// Now release pool affinities.
 	log.Debugf("Releasing affinities for pool %s", metadata.CIDR)
-	err := h.c.IPAM().ReleasePoolAffinities(metadata.CIDR)
+	err := h.c.IPAM().ReleasePoolAffinities(context.Background(), metadata.CIDR)
 	if err != nil {
 		return err
 	}

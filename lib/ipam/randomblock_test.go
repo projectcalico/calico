@@ -20,27 +20,26 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/extensions/table"
 
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Random Block Generator", func() {
 
-	Describe("IPv4 pool", func() {
-		poolTest("10.10.0.0/24")
-	})
+	DescribeTable("Test random block generator with different CIDRs",
+		func (cidr string) {
+			poolTest(cidr)
+		},
 
-	Describe("IPv6 pool", func() {
-		poolTest("fd80:24e2:f998:72d6::/120")
-	})
-
+		Entry("IPv4 CIDR", "10.10.0.0/24"),
+		Entry("IPv6 CIDR", "fd80:24e2:f998:72d6::/120"),
+	)
 })
 
 func poolTest(cidr string) {
 	_, subnet, err := net.ParseCIDR(cidr)
-	if err != nil {
-		fmt.Fprintf(GinkgoWriter, "Error parsing subnet %v\n", err)
-	}
+	Expect(err).NotTo(HaveOccurred())
 	var pools []cnet.IPNet
 	pools = []cnet.IPNet{{*subnet}}
 	host := "testHost"
@@ -57,26 +56,18 @@ func poolTest(cidr string) {
 
 			blockCount.Add(blockCount, big.NewInt(1))
 			ip, sn, err := net.ParseCIDR(blk.String())
-			if err != nil {
-				fmt.Fprintf(GinkgoWriter, "Error parsing subnet %v\n", err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 
-			fmt.Fprintf(GinkgoWriter, "Getting block: %s\n", blk.String())
-			Context("For IP within the block range", func() {
-				It("should be within the pool range", func() {
-					for ip := ip.Mask(sn.Mask); sn.Contains(ip); increment(ip) {
-						Expect(pool.Contains(ip)).To(BeTrue())
-					}
-				})
-			})
+			By(fmt.Sprintf( "Getting block and checking IP is within block: %s\n", blk.String()))
+			for ip := ip.Mask(sn.Mask); sn.Contains(ip); increment(ip) {
+				Expect(pool.Contains(ip)).To(BeTrue())
+			}
 		}
-		Context("For the given pool size", func() {
-			It("number of blocks should be poolSize/blockSize", func() {
-				numBlocks := new(big.Int)
-				numBlocks.Div(numIP, big.NewInt(blockSize))
-				Expect(blockCount).To(Equal(numBlocks))
-			})
-		})
+
+		By(fmt.Sprintf( "Checkig the block count has the correct number of blocka"))
+		numBlocks := new(big.Int)
+		numBlocks.Div(numIP, big.NewInt(blockSize))
+		Expect(blockCount).To(Equal(numBlocks))
 	}
 }
 

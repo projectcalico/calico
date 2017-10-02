@@ -15,6 +15,8 @@
 package client
 
 import (
+	"context"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -100,14 +102,14 @@ func (h *nodes) Delete(metadata api.NodeMetadata) error {
 	}
 
 	log.Debugf("Releasing the following IPs from workload endpoints: %v", ips)
-	_, err = h.c.IPAM().ReleaseIPs(ips)
+	_, err = h.c.IPAM().ReleaseIPs(context.Background(), ips)
 	if err != nil {
 		return err
 	}
 
 	// Remove the node from the IPAM data if it exists.
 	log.Debug("Removing IPAM host data")
-	err = h.c.IPAM().RemoveIPAMHost(metadata.Name)
+	err = h.c.IPAM().RemoveIPAMHost(context.Background(), metadata.Name)
 	if err != nil {
 		log.Debug("Error removing host data: %v", err)
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
