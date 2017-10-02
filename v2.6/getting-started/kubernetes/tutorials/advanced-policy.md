@@ -1,5 +1,5 @@
 ---
-title: Going Beyond `NetworkPolicy` with Calico
+title: Going Beyond NetworkPolicy with Calico
 redirect_from: latest/getting-started/kubernetes/tutorials/advanced-policy
 ---
 
