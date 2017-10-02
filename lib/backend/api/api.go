@@ -184,6 +184,7 @@ const (
 	WatchModified WatchEventType = "MODIFIED"
 	WatchDeleted  WatchEventType = "DELETED"
 	WatchError    WatchEventType = "ERROR"
+	WatchSynced   WatchEventType = "SYNCED"
 )
 
 // Event represents a single event to a watched resource.
@@ -198,6 +199,13 @@ type WatchEvent struct {
 	//  * If Type is Deleted or Error: nil
 	Old *model.KVPair
 	New *model.KVPair
+
+	// Revision is set on a Sync event.  A Synced event is only sent for watchers
+	// that do not specify a Revision to watch from.  In this case, the watcher
+	// first lists the data at the current revision and sends WatchAdded events for
+	// each resource, followed by a Synced event specifying the current revision, and
+	// then watch events following on from the Synced event Revision.
+	Revision string
 
 	// The error, if EventType is Error.
 	Error error
