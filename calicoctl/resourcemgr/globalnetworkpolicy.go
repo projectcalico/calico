@@ -45,14 +45,15 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{})
+			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
-			return client.GlobalNetworkPolicies().Get(ctx, r.Name, options.GetOptions{})
+			return client.GlobalNetworkPolicies().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

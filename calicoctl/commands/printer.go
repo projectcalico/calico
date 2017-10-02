@@ -42,7 +42,14 @@ type resourcePrinter interface {
 type resourcePrinterJSON struct{}
 
 func (r resourcePrinterJSON) print(client client.Interface, resources []runtime.Object) error {
-	if output, err := json.MarshalIndent(resources, "", "  "); err != nil {
+	// If the results contain a single entry then extract the only value.
+	var rs interface{}
+	if len(resources) == 1 {
+		rs = resources[0]
+	} else {
+		rs = resources
+	}
+	if output, err := json.MarshalIndent(rs, "", "  "); err != nil {
 		return err
 	} else {
 		fmt.Printf("%s\n", string(output))
@@ -55,7 +62,14 @@ func (r resourcePrinterJSON) print(client client.Interface, resources []runtime.
 type resourcePrinterYAML struct{}
 
 func (r resourcePrinterYAML) print(client client.Interface, resources []runtime.Object) error {
-	if output, err := yaml.Marshal(resources); err != nil {
+	// If the results contain a single entry then extract the only value.
+	var rs interface{}
+	if len(resources) == 1 {
+		rs = resources[0]
+	} else {
+		rs = resources
+	}
+	if output, err := yaml.Marshal(rs); err != nil {
 		return err
 	} else {
 		fmt.Printf("%s", string(output))

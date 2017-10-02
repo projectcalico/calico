@@ -51,14 +51,15 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{})
+			return client.WorkloadEndpoints().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Get(ctx, r.Namespace, r.Name, options.GetOptions{})
+			return client.WorkloadEndpoints().Get(ctx, r.Namespace, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: resource.GetObjectMeta().GetNamespace()})
+			r := resource.(*api.WorkloadEndpoint)
+			return client.WorkloadEndpoints().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Namespace: r.Namespace, Name: r.Name})
 		},
 	)
 }

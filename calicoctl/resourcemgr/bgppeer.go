@@ -46,14 +46,15 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Delete(ctx, r.Name, options.DeleteOptions{})
+			return client.BGPPeers().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.BGPPeer)
-			return client.BGPPeers().Get(ctx, r.Name, options.GetOptions{})
+			return client.BGPPeers().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.BGPPeers().List(ctx, options.ListOptions{})
+			r := resource.(*api.BGPPeer)
+			return client.BGPPeers().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

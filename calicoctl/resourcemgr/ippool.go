@@ -47,14 +47,15 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.IPPool)
-			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{})
+			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.IPPool)
-			return client.IPPools().Get(ctx, r.Name, options.GetOptions{})
+			return client.IPPools().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.IPPools().List(ctx, options.ListOptions{})
+			r := resource.(*api.IPPool)
+			return client.IPPools().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

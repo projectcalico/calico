@@ -44,14 +44,15 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.Profile)
-			return client.Profiles().Delete(ctx, r.Name, options.DeleteOptions{})
+			return client.Profiles().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.Profile)
-			return client.Profiles().Get(ctx, r.Name, options.GetOptions{})
+			return client.Profiles().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			return client.Profiles().List(ctx, options.ListOptions{})
+			r := resource.(*api.Profile)
+			return client.Profiles().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }
