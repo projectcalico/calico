@@ -61,11 +61,13 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	ifaceName string,
 	ingressPolicyNames []string,
 	egressPolicyNames []string,
+	ingressForwardPolicyNames []string,
+	egressForwardPolicyNames []string,
 	profileIDs []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
 	return []*Chain{
-		// Chain for traffic _to_ the endpoint.
+		// Chain for output traffic _to_ the endpoint.
 		r.endpointIptablesChain(
 			egressPolicyNames,
 			profileIDs,
@@ -77,7 +79,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
 		),
-		// Chain for traffic _from_ the endpoint.
+		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
 			ingressPolicyNames,
 			profileIDs,
@@ -87,6 +89,30 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			HostFromEndpointPfx,
 			ChainFailsafeIn,
 			chainTypeNormal,
+			true, // Host endpoints are always admin up.
+		),
+		// Chain for forward traffic _to_ the endpoint.
+		r.endpointIptablesChain(
+			egressForwardPolicyNames,
+			profileIDs,
+			ifaceName,
+			PolicyOutboundPfx,
+			ProfileOutboundPfx,
+			HostToEndpointForwardPfx,
+			"", // No fail-safe chains for forward traffic.
+			chainTypeForward,
+			true, // Host endpoints are always admin up.
+		),
+		// Chain for forward traffic _from_ the endpoint.
+		r.endpointIptablesChain(
+			ingressForwardPolicyNames,
+			profileIDs,
+			ifaceName,
+			PolicyInboundPfx,
+			ProfileInboundPfx,
+			HostFromEndpointForwardPfx,
+			"", // No fail-safe chains for forward traffic.
+			chainTypeForward,
 			true, // Host endpoints are always admin up.
 		),
 	}
@@ -154,6 +180,7 @@ const (
 	chainTypeNormal endpointChainType = iota
 	chainTypeUntracked
 	chainTypePreDNAT
+	chainTypeForward
 )
 
 func (r *DefaultRuleRenderer) endpointIptablesChain(
@@ -243,8 +270,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			})
 		}
 
-		if chainType == chainTypeNormal {
-			// When rendering normal rules, if no policy marked the packet as "pass", drop the
+		if chainType == chainTypeNormal || chainType == chainTypeForward {
+			// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
 			// packet.
 			//
 			// For untracked and pre-DNAT rules, we don't do that because there may be

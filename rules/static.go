@@ -233,18 +233,31 @@ func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
-	// To handle multiple workload interface prefixes, we want 2 batches of rules.
+	// Rules for filter forward chains dispatches the packet to our dispatch chains if it is going
+	// to/from an interface that we're responsible for.  Note: the dispatch chains represent "allow"
+	// by returning to this chain for further processing; this is required to handle traffic that
+	// is going between endpoints on the same host.  In that case we need to apply the egress policy
+	// for one endpoint and the ingress policy for the other.
 	//
-	// The first dispatches the packet to our dispatch chains if it is going to/from an
-	// interface that we're responsible for.  Note: the dispatch chains represent "allow" by
-	// returning to this chain for further processing; this is required to handle traffic that
-	// is going between endpoints on the same host.  In that case we need to apply the egress
-	// policy for one endpoint and the ingress policy for the other.
-	//
-	// The second batch actually accepts the packets if they passed through the workload policy
+	// Packets will be accepted if they passed through both workload and host endpoint policy
 	// and were returned.
 
-	// Jump to dispatch chains.
+	// Jump to from-host-endpoint dispatch chains.
+	rules = append(rules,
+		Rule{
+			// we're clearing all our mark bits to minimise non-determinism caused by rules in other chains.
+			// We exclude the accept bit because we use that to communicate from the raw/pre-dnat chains.
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits() &^ r.IptablesMarkAccept},
+		},
+		Rule{
+			// Apply forward policy for the incoming Host endpoint if accept bit is clear which means the packet
+			// was not accepted in a previous raw or pre-DNAT chain.
+			Match:  Match().MarkClear(r.IptablesMarkAccept),
+			Action: JumpAction{Target: ChainDispatchFromHostEndPointForward},
+		},
+	)
+
+	// Jump to workload dispatch chains.
 	for _, prefix := range r.WorkloadIfacePrefixes {
 		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
 		ifaceMatch := prefix + "+"
@@ -260,48 +273,20 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		)
 	}
 
-	// Accept if everything above passed.
-	for _, prefix := range r.WorkloadIfacePrefixes {
-		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
-		ifaceMatch := prefix + "+"
-		rules = append(rules,
-			Rule{
-				Match:  Match().InInterface(ifaceMatch),
-				Action: AcceptAction{},
-			},
-			Rule{
-				Match:  Match().OutInterface(ifaceMatch),
-				Action: AcceptAction{},
-			},
-		)
-	}
-
-	// If we get here, the packet is not going to or from a workload, and we are in the FORWARD
-	// chain, so we know that the packet is being forwarded from one host interface to another.
-	// In this scenario we generally apply any normal host endpoint policy that is configured,
-	// for both the incoming and outgoing interfaces; this allows Calico to police traffic
-	// flowing through a NAT gateway or router.  However, the packet may have already been
-	// marked as accepted by untracked or pre-DNAT policy for the incoming host endpoint.  In
-	// that case we skip any normal policy for the incoming host endpoint.
+	// Jump to to-host-endpoint dispatch chains.
 	rules = append(rules,
 		Rule{
-			// Clear marks except for IptablesMarkAccept.
-			Action: ClearMarkAction{Mark: r.allCalicoMarkBits() &^ r.IptablesMarkAccept},
+			// Apply forward policy for the outgoing host endpoint.
+			Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
 		},
-		Rule{
-			// Unless the packet has already been accepted by untracked or pre-DNAT
-			// processing, apply normal policy for the incoming host endpoint.
-			Match:  Match().MarkClear(r.IptablesMarkAccept),
-			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
-		},
-		Rule{
-			// Apply normal policy for the outgoing host endpoint.
-			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
-		},
+	)
+
+	// Accept packet if policies above set ACCEPT mark.
+	rules = append(rules,
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
-			Comment: "Host endpoint policy accepted packet.",
+			Comment: "Policy explicitly accepted packet.",
 		},
 	)
 

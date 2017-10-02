@@ -61,6 +61,7 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 				oldPolicy.Order != newPolicy.Order ||
 				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
 				oldPolicy.PreDNAT != newPolicy.PreDNAT ||
+				oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
 				!policyTypesEqual(oldPolicy, newPolicy) {
 				dirty = true
 			}
@@ -191,6 +192,11 @@ func (t tierInfo) String() string {
 				polType = "u"
 			} else if pol.Value.PreDNAT {
 				polType = "p"
+			}
+
+			//Append ApplyOnForward flag.
+			if pol.Value.ApplyOnForward {
+				polType = polType + "f"
 			}
 		}
 		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, polType)
