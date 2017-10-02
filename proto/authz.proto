@@ -26,7 +26,14 @@ message Request {
 		string service = 2;
 		string port = 3;
 		string ip_address = 4;
+		HTTPRequest http = 5;
 	}
+}
+
+message HTTPRequest {
+	string version = 1;
+	string method = 2;
+	string path = 3;
 }
 
 message Response {

@@ -18,6 +18,12 @@ const (
 // Check a list of policies and return OK if the check passes, or PERMISSION_DENIED if the check fails.
 // Note, if no policy matches, the default is PERMISSION_DENIED.
 func checkPolicies(policies []api.Policy, req *authz.Request) (status authz.Response_Status_Code) {
+	if len(policies) == 0 {
+		log.Debug("0 active policies, allow request.")
+		status = authz.Response_Status_OK
+		return
+	}
+	// If there are active policies, the default is deny if no rules match.
 	status = authz.Response_Status_PERMISSION_DENIED
 	for i, p := range policies {
 		action := checkPolicy(p.Spec, req)
