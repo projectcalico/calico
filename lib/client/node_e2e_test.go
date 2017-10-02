@@ -40,6 +40,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/scope"
+	"os/exec"
 )
 
 var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
@@ -257,6 +260,67 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV2, 
 			err = c.Nodes().Delete(api.NodeMetadata{Name: "abc/def"})
 			Expect(err).To(HaveOccurred())
 			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+		})
+	})
+
+	Describe("Node delete cleans up all related etcd directories", func() {
+		c := testutils.CreateCleanClient(config)
+		It("Should not leak any Node directories", func() {
+			// Create a node.
+			n := &api.Node{
+				Metadata: api.NodeMetadata{Name: "Node1"},
+				Spec: api.NodeSpec{
+					BGP: &api.NodeBGPSpec{
+						IPv4Address: &cidrv4,
+					},
+				},
+			}
+
+			node, _ := c.Nodes().Create(n)
+
+			// Allocate IPs for this Node.
+			c.IPAM().AssignIP(client.AssignIPArgs{
+				Hostname: node.Metadata.Name,
+				IP:       net.MustParseIP("192.168.1.100"),
+			})
+			c.IPAM().AssignIP(client.AssignIPArgs{
+				Hostname: node.Metadata.Name,
+				IP:       net.MustParseIP("192.168.1.101"),
+			})
+
+			// Create a WEP for this Node.
+			c.WorkloadEndpoints().Create(&api.WorkloadEndpoint{
+				Metadata: api.WorkloadEndpointMetadata{
+					Name:             "ep1",
+					Workload:         "workload1",
+					ActiveInstanceID: "container-id-badbeef",
+					Orchestrator:     "kubernetes",
+					Node:             "node1",
+					Labels: map[string]string{
+						"app":  "app-abc",
+						"prod": "no",
+					},
+				},
+			})
+
+			// Create BGP Peer for this Node.
+			c.BGPPeers().Create(&api.BGPPeer{
+				Metadata: api.BGPPeerMetadata{
+					Scope:  scope.Scope("node"),
+					Node:   "node1",
+					PeerIP: net.MustParseIP("10.0.0.1"),
+				},
+				Spec: api.BGPPeerSpec{
+					ASNumber: numorstring.ASNumber(6512),
+				},
+			})
+
+			// Delete this Node.
+			c.Nodes().Delete(n.Metadata)
+
+			// Validate all Node etcd configuration has been removed.
+			out, _ := exec.Command("curl", "http://127.0.0.1:2379/v2/keys/calico?recursive=true").Output()
+			Expect(string(out)).NotTo(ContainSubstring(n.Metadata.Name))
 		})
 	})
 })
