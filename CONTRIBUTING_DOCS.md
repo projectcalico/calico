@@ -22,6 +22,8 @@ The doc contribution process works as follows.
 1. One of the doc repo maintainers will give the PR a final look and then merge it.
 1. The merge into master will kick off a new build of the live site. You should see your changes on the live site shortly after they are merged.
 
+> **Important**: Ensure that your contribution conforms to the [Calico documentation style guide](DOC_STYLE_GUIDE.md).
+
 > **Note**: For contributions that affect just one page, you can use the **Edit this page** buttons in the doc site. This allows you to skip a few steps in the process outlined above, but is suitable only for small contributions.
 
 We also encourage you to review [Doc site organization](#doc-site-organization), [Doc site architecture](#doc-site-architecture), [Linking content](#linking-content), and [RELEASING.md](RELEASING.md) for additional information.
@@ -154,4 +156,3 @@ All links should be absolute links. To link to versioned content, prefix all lin
 ## Releases
 
 See [RELEASING.md](RELEASING.md)
-
