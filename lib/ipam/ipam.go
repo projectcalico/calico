@@ -15,13 +15,12 @@
 package ipam
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 
 	log "github.com/sirupsen/logrus"
-
-	"context"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -36,16 +35,16 @@ const (
 	ipamKeyErrRetries = 3
 )
 
-// NewIPAM returns a new ipamClient, which implements the IPAMInterface.
+// NewIPAMClient returns a new ipamClient, which implements Interface.
 // Consumers of the Calico API should not create this directly, but should
-// access IPAM through the main client IPAM accessor.
-func NewIPAM(client bapi.Client, pools PoolAccessorInterface) *ipams {
-	return &ipams{client: client, pools: pools,
+// access IPAM through the main client IPAM accessor (e.g. clientv2.IPAM())
+func NewIPAMClient(client bapi.Client, pools PoolAccessorInterface) Interface {
+	return &ipamClient{client: client, pools: pools,
 		blockReaderWriter: blockReaderWriter{client: client, pools: pools}}
 }
 
-// ipamClient implements the IPAMInterface
-type ipams struct {
+// ipamClient implements Interface
+type ipamClient struct {
 	client            bapi.Client
 	pools             PoolAccessorInterface
 	blockReaderWriter blockReaderWriter
@@ -54,7 +53,7 @@ type ipams struct {
 // AutoAssign automatically assigns one or more IP addresses as specified by the
 // provided AutoAssignArgs.  AutoAssign returns the list of the assigned IPv4 addresses,
 // and the list of the assigned IPv6 addresses.
-func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
+func (c ipamClient) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	// Determine the hostname to use - prefer the provided hostname if
 	// non-nil, otherwise use the hostname reported by os.
 	hostname := decideHostname(args.Hostname)
@@ -96,7 +95,7 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	return v4list, v6list, nil
 }
 
-func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, pools []net.IPNet, version ipVersion, host string) ([]net.IP, error) {
+func (c ipamClient) autoAssign(num int, handleID *string, attrs map[string]string, pools []net.IPNet, version ipVersion, host string) ([]net.IP, error) {
 
 	// Start by trying to assign from one of the host-affine blocks.  We
 	// always do strict checking at this stage, so it doesn't matter whether
@@ -159,7 +158,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 		}
 
 		if retries == 0 {
-			return nil, errors.New("Max retries hit")
+			return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 		}
 	}
 
@@ -224,7 +223,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 // in order to satisfy the assignment.  An error will be returned if the IP address
 // is already assigned, or if StrictAffinity is enabled and the address is within
 // a block that does not have affinity for the given host.
-func (c ipams) AssignIP(args AssignIPArgs) error {
+func (c ipamClient) AssignIP(args AssignIPArgs) error {
 	hostname := decideHostname(args.Hostname)
 	log.Infof("Assigning IP %s to host: %s", args.IP, hostname)
 
@@ -292,12 +291,12 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 		}
 		return nil
 	}
-	return errors.New("Max retries hit")
+	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
-func (c ipams) ReleaseIPs(ips []net.IP) ([]net.IP, error) {
+func (c ipamClient) ReleaseIPs(ips []net.IP) ([]net.IP, error) {
 	log.Infof("Releasing IP addresses: %v", ips)
 	unallocated := []net.IP{}
 
@@ -330,7 +329,7 @@ func (c ipams) ReleaseIPs(ips []net.IP) ([]net.IP, error) {
 	return unallocated, nil
 }
 
-func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
+func (c ipamClient) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
 	for i := 0; i < ipamEtcdRetries; i++ {
 		obj, err := c.client.Get(context.Background(), model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
@@ -389,10 +388,10 @@ func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP,
 		}
 		return unallocated, nil
 	}
-	return nil, errors.New("Max retries hit")
+	return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-func (c ipams) assignFromExistingBlock(
+func (c ipamClient) assignFromExistingBlock(
 	blockCIDR net.IPNet, num int, handleID *string, attrs map[string]string, host string, affCheck bool) ([]net.IP, error) {
 	// Limit number of retries.
 	var ips []net.IP
@@ -444,7 +443,7 @@ func (c ipams) assignFromExistingBlock(
 // pool.  Returns a list of blocks that were claimed, as well as a
 // list of blocks that were claimed by another host.
 // If an empty string is passed as the host, then the value of os.Hostname is used.
-func (c ipams) ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error) {
+func (c ipamClient) ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error) {
 	// Validate that the given CIDR is at least as big as a block.
 	if !largerThanOrEqualToBlock(cidr) {
 		estr := fmt.Sprintf("The requested CIDR (%s) is smaller than the minimum.", cidr.String())
@@ -493,7 +492,7 @@ func (c ipams) ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IP
 // on the given host.  If a block does not have affinity for the given host,
 // its affinity will not be released and no error will be returned.
 // If an empty string is passed as the host, then the value of os.Hostname is used.
-func (c ipams) ReleaseAffinity(cidr net.IPNet, host string) error {
+func (c ipamClient) ReleaseAffinity(cidr net.IPNet, host string) error {
 	// Validate that the given CIDR is at least as big as a block.
 	if !largerThanOrEqualToBlock(cidr) {
 		estr := fmt.Sprintf("The requested CIDR (%s) is smaller than the minimum.", cidr.String())
@@ -524,7 +523,7 @@ func (c ipams) ReleaseAffinity(cidr net.IPNet, host string) error {
 // ReleaseHostAffinities releases affinity for all blocks that are affine
 // to the given host.  If an empty string is passed as the host,
 // then the value of os.Hostname is used.
-func (c ipams) ReleaseHostAffinities(host string) error {
+func (c ipamClient) ReleaseHostAffinities(host string) error {
 	hostname := decideHostname(host)
 
 	versions := []ipVersion{ipv4, ipv6}
@@ -550,7 +549,7 @@ func (c ipams) ReleaseHostAffinities(host string) error {
 
 // ReleasePoolAffinities releases affinity for all blocks within
 // the specified pool across all hosts.
-func (c ipams) ReleasePoolAffinities(pool net.IPNet) error {
+func (c ipamClient) ReleasePoolAffinities(pool net.IPNet) error {
 	log.Infof("Releasing block affinities within pool '%s'", pool.String())
 	for i := 0; i < ipamKeyErrRetries; i++ {
 		retry := false
@@ -585,14 +584,14 @@ func (c ipams) ReleasePoolAffinities(pool net.IPNet) error {
 			return nil
 		}
 	}
-	return errors.New("Max retries hit")
+	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
 // RemoveIPAMHost releases affinity for all blocks on the given host,
 // and removes all host-specific IPAM data from the datastore.
 // RemoveIPAMHost does not release any IP addresses claimed on the given host.
 // If an empty string is passed as the host, then the value of os.Hostname is used.
-func (c ipams) RemoveIPAMHost(host string) error {
+func (c ipamClient) RemoveIPAMHost(host string) error {
 	// Determine the hostname to use.
 	hostname := decideHostname(host)
 
@@ -611,7 +610,7 @@ func (c ipams) RemoveIPAMHost(host string) error {
 	return nil
 }
 
-func (c ipams) hostBlockPairs(pool net.IPNet) (map[string]string, error) {
+func (c ipamClient) hostBlockPairs(pool net.IPNet) (map[string]string, error) {
 	pairs := map[string]string{}
 
 	// Get all blocks and their affinities.
@@ -639,7 +638,7 @@ func (c ipams) hostBlockPairs(pool net.IPNet) (map[string]string, error) {
 
 // IpsByHandle returns a list of all IP addresses that have been
 // assigned using the provided handle.
-func (c ipams) IPsByHandle(handleID string) ([]net.IP, error) {
+func (c ipamClient) IPsByHandle(handleID string) ([]net.IP, error) {
 	obj, err := c.client.Get(context.Background(), model.IPAMHandleKey{HandleID: handleID}, "")
 	if err != nil {
 		return nil, err
@@ -665,7 +664,7 @@ func (c ipams) IPsByHandle(handleID string) ([]net.IP, error) {
 
 // ReleaseByHandle releases all IP addresses that have been assigned
 // using the provided handle.
-func (c ipams) ReleaseByHandle(handleID string) error {
+func (c ipamClient) ReleaseByHandle(handleID string) error {
 	log.Infof("Releasing all IPs with handle '%s'", handleID)
 	obj, err := c.client.Get(context.Background(), model.IPAMHandleKey{HandleID: handleID}, "")
 	if err != nil {
@@ -680,7 +679,7 @@ func (c ipams) ReleaseByHandle(handleID string) error {
 	return nil
 }
 
-func (c ipams) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
+func (c ipamClient) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
 		obj, err := c.client.Get(context.Background(), model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
@@ -734,7 +733,7 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
 	return errors.New("Hit max retries")
 }
 
-func (c ipams) incrementHandle(handleID string, blockCIDR net.IPNet, num int) error {
+func (c ipamClient) incrementHandle(handleID string, blockCIDR net.IPNet, num int) error {
 	var obj *model.KVPair
 	var err error
 	for i := 0; i < ipamEtcdRetries; i++ {
@@ -772,11 +771,11 @@ func (c ipams) incrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 		}
 		return nil
 	}
-	return errors.New("Max retries hit")
+	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 
 }
 
-func (c ipams) decrementHandle(handleID string, blockCIDR net.IPNet, num int) error {
+func (c ipamClient) decrementHandle(handleID string, blockCIDR net.IPNet, num int) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
 		obj, err := c.client.Get(context.Background(), model.IPAMHandleKey{HandleID: handleID}, "")
 		if err != nil {
@@ -806,12 +805,12 @@ func (c ipams) decrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 		log.Infof("Decremented handle '%s' by %d", handleID, num)
 		return nil
 	}
-	return errors.New("Max retries hit")
+	return errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
 // GetAssignmentAttributes returns the attributes stored with the given IP address
 // upon assignment.
-func (c ipams) GetAssignmentAttributes(addr net.IP) (map[string]string, error) {
+func (c ipamClient) GetAssignmentAttributes(addr net.IP) (map[string]string, error) {
 	blockCIDR := getBlockCIDRForAddress(addr)
 	obj, err := c.client.Get(context.Background(), model.BlockKey{blockCIDR}, "")
 	if err != nil {
@@ -825,7 +824,7 @@ func (c ipams) GetAssignmentAttributes(addr net.IP) (map[string]string, error) {
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
-func (c ipams) GetIPAMConfig() (*IPAMConfig, error) {
+func (c ipamClient) GetIPAMConfig() (*IPAMConfig, error) {
 	obj, err := c.client.Get(context.Background(), model.IPAMConfigKey{}, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -841,7 +840,7 @@ func (c ipams) GetIPAMConfig() (*IPAMConfig, error) {
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
 // be done when there are no allocated blocks and IP addresses.
-func (c ipams) SetIPAMConfig(cfg IPAMConfig) error {
+func (c ipamClient) SetIPAMConfig(cfg IPAMConfig) error {
 	current, err := c.GetIPAMConfig()
 	if err != nil {
 		return err
@@ -873,14 +872,14 @@ func (c ipams) SetIPAMConfig(cfg IPAMConfig) error {
 	return nil
 }
 
-func (c ipams) convertIPAMConfigToBackend(cfg *IPAMConfig) *model.IPAMConfig {
+func (c ipamClient) convertIPAMConfigToBackend(cfg *IPAMConfig) *model.IPAMConfig {
 	return &model.IPAMConfig{
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
 	}
 }
 
-func (c ipams) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfig {
+func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfig {
 	return &IPAMConfig{
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,

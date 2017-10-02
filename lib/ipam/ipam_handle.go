@@ -19,14 +19,14 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 type allocationHandle struct {
 	*model.IPAMHandle
 }
 
-func (h allocationHandle) incrementBlock(blockCidr net.IPNet, num int) int {
+func (h allocationHandle) incrementBlock(blockCidr cnet.IPNet, num int) int {
 	blockId := blockCidr.String()
 	newNum := num
 	if val, ok := h.Block[blockId]; ok {
@@ -38,7 +38,7 @@ func (h allocationHandle) incrementBlock(blockCidr net.IPNet, num int) int {
 	return newNum
 }
 
-func (h allocationHandle) decrementBlock(blockCidr net.IPNet, num int) (*int, error) {
+func (h allocationHandle) decrementBlock(blockCidr cnet.IPNet, num int) (*int, error) {
 	blockId := blockCidr.String()
 	if current, ok := h.Block[blockId]; !ok {
 		// This entry doesn't exist.
