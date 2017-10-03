@@ -139,7 +139,7 @@ When using the Calico CNI plugin with Kubernetes, the plugin must be able to acc
 }
 ```
 
-As a convenience, the API location location can also be configured directly, e.g.
+As a convenience, the API location can also be configured directly, e.g.
 
 ```json
 {
