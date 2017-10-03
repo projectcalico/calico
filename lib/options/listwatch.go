@@ -30,4 +30,10 @@ type ListOptions struct {
 	// - if set to non zero, then the result is at least as fresh as given rv.
 	// +optional
 	ResourceVersion string
+
+	// Whether the Name specified is a prefix rather than the full name.  This is fully supported
+	// for etcdv3, and is supported in a very limited fashion in KDD for WorkloadEndpoints only
+	// as a mechanism for enumerating endpoints within a Pod (since the name construction for a
+	// Workload endpoint is hierarchically constructed).
+	Prefix bool
 }

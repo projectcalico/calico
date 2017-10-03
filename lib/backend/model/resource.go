@@ -87,6 +87,17 @@ type ResourceListOptions struct {
 	Namespace string
 	// The resource kind.
 	Kind string
+	// Whether the name is prefix rather than the full name.
+	Prefix bool
+}
+
+// If the Kind, Namespace and Name are specified, but the Name is a prefix then the
+// last segment of this path is a prefix.
+func (options ResourceListOptions) IsLastSegmentIsPrefix() bool {
+	return len(options.Kind) != 0 &&
+		(len(options.Namespace) != 0 || !namespace.IsNamespaced(options.Kind)) &&
+		len(options.Name) != 0 &&
+		options.Prefix
 }
 
 func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
@@ -115,9 +126,14 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 			log.Debugf("Didn't match namespace %s != %s", options.Namespace, namespace)
 			return nil
 		}
-		if len(options.Name) != 0 && name != options.Name {
-			log.Debugf("Didn't match name %s != %s", options.Name, name)
-			return nil
+		if len(options.Name) != 0 {
+			if options.Prefix && !strings.HasPrefix(name, options.Name) {
+				log.Debugf("Didn't match name prefix %s != prefix(%s)", options.Name, name)
+				return nil
+			} else if !options.Prefix && name != options.Name {
+				log.Debugf("Didn't match name %s != %s", options.Name, name)
+				return nil
+			}
 		}
 		return ResourceKey{Kind: options.Kind, Namespace: namespace, Name: name}
 	}
@@ -134,9 +150,14 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match name %s != %s", options.Kind, kind)
 		return nil
 	}
-	if len(options.Name) != 0 && name != options.Name {
-		log.Debugf("Didn't match name %s != %s", options.Name, name)
-		return nil
+	if len(options.Name) != 0 {
+		if options.Prefix && !strings.HasPrefix(name, options.Name) {
+			log.Debugf("Didn't match name prefix %s != prefix(%s)", options.Name, name)
+			return nil
+		} else if !options.Prefix && name != options.Name {
+			log.Debugf("Didn't match name %s != %s", options.Name, name)
+			return nil
+		}
 	}
 	return ResourceKey{Kind: options.Kind, Name: name}
 }
