@@ -16,7 +16,7 @@ package ipam
 
 import (
 	"context"
-	
+
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -73,7 +73,7 @@ type Interface interface {
 	// GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 	// has been set, returns a default configuration with StrictAffinity disabled
 	// and AutoAllocateBlocks enabled.
-	GetIPAMConfig(ctx context.Context, ) (*IPAMConfig, error)
+	GetIPAMConfig(ctx context.Context) (*IPAMConfig, error)
 
 	// SetIPAMConfig sets global IPAM configuration.  This can only
 	// be done when there are no allocated blocks and IP addresses.

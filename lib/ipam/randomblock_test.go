@@ -19,8 +19,8 @@ import (
 	"net"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
 
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
@@ -28,7 +28,7 @@ import (
 var _ = Describe("Random Block Generator", func() {
 
 	DescribeTable("Test random block generator with different CIDRs",
-		func (cidr string) {
+		func(cidr string) {
 			poolTest(cidr)
 		},
 
@@ -58,13 +58,13 @@ func poolTest(cidr string) {
 			ip, sn, err := net.ParseCIDR(blk.String())
 			Expect(err).NotTo(HaveOccurred())
 
-			By(fmt.Sprintf( "Getting block and checking IP is within block: %s\n", blk.String()))
+			By(fmt.Sprintf("Getting block and checking IP is within block: %s\n", blk.String()))
 			for ip := ip.Mask(sn.Mask); sn.Contains(ip); increment(ip) {
 				Expect(pool.Contains(ip)).To(BeTrue())
 			}
 		}
 
-		By(fmt.Sprintf( "Checkig the block count has the correct number of blocka"))
+		By(fmt.Sprintf("Checkig the block count has the correct number of blocka"))
 		numBlocks := new(big.Int)
 		numBlocks.Div(numIP, big.NewInt(blockSize))
 		Expect(blockCount).To(Equal(numBlocks))

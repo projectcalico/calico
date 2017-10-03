@@ -41,10 +41,10 @@ const (
 func NewIPAMClient(client bapi.Client, pools PoolAccessorInterface) Interface {
 	return &ipamClient{
 		client: client,
-		pools: pools,
+		pools:  pools,
 		blockReaderWriter: blockReaderWriter{
 			client: client,
-			pools: pools,
+			pools:  pools,
 		},
 	}
 }
@@ -398,7 +398,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 }
 
 func (c ipamClient) assignFromExistingBlock(
-	ctx context.Context, blockCIDR net.IPNet, num int, handleID *string, 
+	ctx context.Context, blockCIDR net.IPNet, num int, handleID *string,
 	attrs map[string]string, host string, affCheck bool,
 ) ([]net.IP, error) {
 	// Limit number of retries.
