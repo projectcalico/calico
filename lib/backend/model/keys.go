@@ -173,6 +173,14 @@ func ListOptionsIsFullyQualified(listOptions ListInterface) bool {
 	return listOptions.KeyFromDefaultPath(listOptions.defaultPathRoot()) != nil
 }
 
+// IsListOptionsLastSegmentPrefix returns true if the final segment of the default path
+// root is a name prefix rather than the full name.
+func IsListOptionsLastSegmentPrefix(listOptions ListInterface) bool {
+	// Only supported for ResourceListOptions.
+	rl, ok := listOptions.(ResourceListOptions)
+	return ok && rl.IsLastSegmentIsPrefix()
+}
+
 // KeyFromDefaultPath parses the default path representation of a key into one
 // of our <Type>Key structs.  Returns nil if the string doesn't match one of
 // our key types.

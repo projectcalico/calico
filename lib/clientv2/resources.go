@@ -159,6 +159,7 @@ func (c *resources) List(ctx context.Context, opts options.ListOptions, kind, li
 		Kind:      kind,
 		Name:      opts.Name,
 		Namespace: opts.Namespace,
+		Prefix:    opts.Prefix,
 	}
 
 	// Query the backend.
