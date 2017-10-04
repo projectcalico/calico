@@ -191,6 +191,13 @@ func (h *nodes) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 		v.BGPASNumber = an.Spec.BGP.ASNumber
 	}
 
+	for _, orchRef := range an.Spec.OrchRefs {
+		v.OrchRefs = append(v.OrchRefs, model.OrchRef{
+			Orchestrator: orchRef.Orchestrator,
+			NodeName:     orchRef.NodeName,
+		})
+	}
+
 	return &model.KVPair{Key: k, Value: &v}, nil
 }
 
@@ -236,6 +243,13 @@ func (h *nodes) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error
 				apiNode.Spec.BGP.IPv6Address = bv.BGPIPv6Addr.Network()
 			}
 		}
+	}
+
+	for _, orchref := range bv.OrchRefs {
+		apiNode.Spec.OrchRefs = append(apiNode.Spec.OrchRefs, api.OrchRef{
+			NodeName:     orchref.NodeName,
+			Orchestrator: orchref.Orchestrator,
+		})
 	}
 
 	return apiNode, nil
