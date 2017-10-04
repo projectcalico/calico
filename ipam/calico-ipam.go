@@ -14,24 +14,24 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
-
 	"os"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
+	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
-	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/sirupsen/logrus"
 )
 
 // VERSION is filled out during the build process (using git describe output)
@@ -39,10 +39,10 @@ var VERSION string
 
 func main() {
 	// Set up logging formatting.
-	log.SetFormatter(&logutils.Formatter{})
+	logrus.SetFormatter(&logutils.Formatter{})
 
 	// Install a hook that adds file/line no information.
-	log.AddHook(&logutils.ContextHook{})
+	logrus.AddHook(&logutils.ContextHook{})
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
@@ -65,30 +65,17 @@ func main() {
 }
 
 type ipamArgs struct {
-	types.CommonArgs
+	cnitypes.CommonArgs
 	IP net.IP `json:"ip,omitempty"`
 }
 
-func determineNodename(conf utils.NetConf) string {
-	nodename, _ := os.Hostname()
-	if conf.Hostname != "" {
-		nodename = conf.Hostname
-		log.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
-	}
-	if conf.Nodename != "" {
-		nodename = conf.Nodename
-	}
-	return nodename
-}
-
 func cmdAdd(args *skel.CmdArgs) error {
-	conf := utils.NetConf{}
+	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	nodename := determineNodename(conf)
-	cniVersion := conf.CNIVersion
+	nodename := utils.DetermineNodename(conf)
 
 	utils.ConfigureLogging(conf.LogLevel)
 
@@ -97,25 +84,40 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	workloadID, _, err := utils.GetIdentifiers(args)
+	epIDs, err := utils.GetIdentifiers(args, nodename)
 	if err != nil {
 		return err
 	}
-	logger := utils.CreateContextLogger(workloadID)
+
+	epIDs.WEPName, err = epIDs.CalculateWorkloadEndpointName(false)
+	if err != nil {
+		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
+	}
+
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+	})
 
 	ipamArgs := ipamArgs{}
-	if err = types.LoadArgs(args.Args, &ipamArgs); err != nil {
+	if err = cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
 		return err
 	}
 
+	ctx := context.Background()
 	r := &current.Result{}
 	if ipamArgs.IP != nil {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
 
 		// The hostname will be defaulted to the actual hostname if conf.Nodename is empty
-		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: nodename}
+		assignArgs := ipam.AssignIPArgs{
+			IP:       cnet.IP{IP: ipamArgs.IP},
+			HandleID: &epIDs.WEPName,
+			Hostname: nodename,
+		}
+
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
-		err := calicoClient.IPAM().AssignIP(assignArgs)
+		err := calicoClient.IPAM().AssignIP(ctx, assignArgs)
 		if err != nil {
 			return err
 		}
@@ -166,16 +168,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		assignArgs := client.AutoAssignArgs{
+		assignArgs := ipam.AutoAssignArgs{
 			Num4:      num4,
 			Num6:      num6,
-			HandleID:  &workloadID,
+			HandleID:  &epIDs.WEPName,
 			Hostname:  nodename,
 			IPv4Pools: v4pools,
 			IPv6Pools: v6pools,
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(assignArgs)
+		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v\n", assignedV4, assignedV6)
 		if err != nil {
 			return err
@@ -183,7 +185,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if num4 == 1 {
 			if len(assignedV4) != num4 {
-				return fmt.Errorf("Failed to request %d IPv4 addresses. IPAM allocated only %d.", num4, len(assignedV4))
+				return fmt.Errorf("failed to request %d IPv4 addresses. IPAM allocated only %d", num4, len(assignedV4))
 			}
 			ipV4Network := net.IPNet{IP: assignedV4[0].IP, Mask: net.CIDRMask(32, 32)}
 			r.IPs = append(r.IPs, &current.IPConfig{
@@ -194,7 +196,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		if num6 == 1 {
 			if len(assignedV6) != num6 {
-				return fmt.Errorf("Failed to request %d IPv6 addresses. IPAM allocated only %d.", num6, len(assignedV6))
+				return fmt.Errorf("failed to request %d IPv6 addresses. IPAM allocated only %d", num6, len(assignedV6))
 			}
 			ipV6Network := net.IPNet{IP: assignedV6[0].IP, Mask: net.CIDRMask(128, 128)}
 			r.IPs = append(r.IPs, &current.IPConfig{
@@ -202,15 +204,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 				Address: ipV6Network,
 			})
 		}
-		logger.WithFields(log.Fields{"result.IPs": r.IPs}).Info("IPAM Result")
+		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Info("IPAM Result")
 	}
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
-	return types.PrintResult(r, cniVersion)
+	return cnitypes.PrintResult(r, conf.CNIVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	conf := utils.NetConf{}
+	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
@@ -222,18 +224,29 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
+	nodename := utils.DetermineNodename(conf)
+
 	// Release the IP address by using the handle - which is workloadID.
-	workloadID, _, err := utils.GetIdentifiers(args)
+	epIDs, err := utils.GetIdentifiers(args, nodename)
 	if err != nil {
 		return err
 	}
 
-	logger := utils.CreateContextLogger(workloadID)
+	epIDs.WEPName, err = epIDs.CalculateWorkloadEndpointName(false)
+	if err != nil {
+		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
+	}
+
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+	})
 
 	logger.Info("Releasing address using workloadID")
-	if err := calicoClient.IPAM().ReleaseByHandle(workloadID); err != nil {
+	ctx := context.Background()
+	if err := calicoClient.IPAM().ReleaseByHandle(ctx, epIDs.WEPName); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			logger.WithField("workloadId", workloadID).Warn("Asked to release address but it doesn't exist. Ignoring")
+			logger.WithField("workloadId", epIDs.WEPName).Warn("Asked to release address but it doesn't exist. Ignoring")
 			return nil
 		}
 		return err
@@ -241,5 +254,4 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	logger.Info("Released address using workloadID")
 	return nil
-
 }

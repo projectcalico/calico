@@ -25,6 +25,8 @@ DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
 
 LIBCALICOGO_PATH?=none
 
+DATASTORE_TYPE?=etcdv3
+
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: all binary plugin ipam
@@ -123,12 +125,19 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-loc
 	-e LOCAL_USER_ID=0 \
 	-e PLUGIN=calico \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
+	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
+	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
 			ginkgo'
 	make stop-etcd
 
+.PHONY: test-containerized-all-datastore
+test-containerized-all-datastore:
+	for datastore in "etcdv3" "kubernetes" ; do \
+		make test-containerized DATASTORE_TYPE=datastore; \
+	done
 
 run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	docker run --rm --privileged --net=host \
@@ -136,6 +145,8 @@ run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	-e LOCAL_USER_ID=0 \
 	-e PLUGIN=calico \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
+	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
+	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \

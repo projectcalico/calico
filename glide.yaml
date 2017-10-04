@@ -1,7 +1,7 @@
 package: github.com/projectcalico/cni-plugin
 import:
 - package: github.com/sirupsen/logrus
-  version: ^0.10.0
+  version: ^1.0.3
 - package: github.com/containernetworking/cni
   version: v0.5.2
   subpackages:
@@ -18,10 +18,12 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: 5cabf71a9999834727d83036e986836084e0a13a
+  version: v3.0-integration
   subpackages:
   - lib/api
   - lib/client
+  - lib/apiv2
+  - lib/clientv2
   - lib/errors
   - lib/net
   - lib/logutils

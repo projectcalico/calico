@@ -1,4 +1,4 @@
-package test_utils
+package testutils
 
 import (
 	"bufio"
@@ -21,24 +21,21 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
-	etcdclient "github.com/coreos/etcd/client"
 	version "github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	"github.com/projectcalico/libcalico-go/lib/backend"
 	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
-var kapi etcdclient.KeysAPI
-
 const K8S_TEST_NS = "test"
-
-func init() {
-	cfg := etcdclient.Config{Endpoints: []string{"http://127.0.0.1:2379"}}
-	c, _ := etcdclient.New(cfg)
-	kapi = etcdclient.NewKeysAPI(c)
-}
+const TEST_DEFAULT_NS = "default"
 
 func min(a, b int) int {
 	if a < b {
@@ -47,10 +44,47 @@ func min(a, b int) int {
 	return b
 }
 
-// Delete everything under /calico from etcd
+// Delete everything under /calico from etcd.
 func WipeEtcd() {
-	_, err := kapi.Delete(context.Background(), "/calico", &etcdclient.DeleteOptions{Dir: true, Recursive: true})
-	if err != nil && !etcdclient.IsKeyNotFound(err) {
+	be, err := backend.NewClient(apiconfig.CalicoAPIConfig{
+		Spec: apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.EtcdV3,
+			EtcdConfig: apiconfig.EtcdConfig{
+				EtcdEndpoints: "http://127.0.0.1:2379",
+			},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	_ = be.Clean()
+}
+
+// MustCreateNewIPPool creates a new Calico IPAM IP Pool.
+func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipam bool) {
+	log.SetLevel(log.DebugLevel)
+
+	log.SetOutput(os.Stderr)
+
+	name := strings.Replace(cidr, ".", "-", -1)
+	name = strings.Replace(name, ":", "-", -1)
+	name = strings.Replace(name, "/", "-", -1)
+	var mode api.IPIPMode
+	if ipip {
+		mode = api.IPIPModeAlways
+	} else {
+		mode = api.IPIPModeOff
+	}
+
+	pool := api.NewIPPool()
+	pool.Name = name
+	pool.Spec.CIDR = cidr
+	pool.Spec.NATOutgoing = natOutgoing
+	pool.Spec.Disabled = !ipam
+	pool.Spec.IPIP = &api.IPIPConfiguration{Mode: mode}
+
+	_, err := c.IPPools().Create(context.Background(), pool, options.SetOptions{})
+	if err != nil {
 		panic(err)
 	}
 }
@@ -134,9 +168,19 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 		panic("some error found")
 	}
 
-	io.WriteString(stdin, netconf)
-	io.WriteString(stdin, "\n")
-	stdin.Close()
+	_, err = io.WriteString(stdin, netconf)
+	if err != nil {
+		panic(err)
+	}
+	_, err = io.WriteString(stdin, "\n")
+	if err != nil {
+		panic(err)
+	}
+
+	err = stdin.Close()
+	if err != nil {
+		panic(err)
+	}
 
 	session, err := gexec.Start(cmd, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
 	if err != nil {
@@ -192,31 +236,31 @@ func CreateContainerNamespaceWithCid(container_id string) (containerNs ns.NetNS,
 	return
 }
 
-func CreateContainer(netconf string, k8sName string, ip string) (container_id string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
-	return CreateContainerWithId(netconf, k8sName, ip, "")
+func CreateContainer(netconf, podName, podNamespace string, ip string) (container_id string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+	return CreateContainerWithId(netconf, podName, podNamespace, ip, "")
 }
 
 // Create container with the giving containerId when containerId is not empty
-func CreateContainerWithId(netconf string, k8sName string, ip string, containerId string) (container_id string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainerWithId(netconf, podName, podNamespace, ip, containerId string) (container_id string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	targetNs, container_id, err = CreateContainerNamespaceWithCid(containerId)
 
 	if err != nil {
 		return "", nil, nil, nil, nil, nil, err
 	}
 
-	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, k8sName, ip, container_id, targetNs)
+	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, container_id, "", targetNs)
 
 	return
 }
 
 // RunCNIPluginWithId calls CNI plugin with a containerID and targetNs passed to it.
 // This is for when you want to call CNI for an existing container.
-func RunCNIPluginWithId(netconf, k8sName, ip, containerId string, targetNs ns.NetNS) (session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
+func RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerId, ifName string, targetNs ns.NetNS) (session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
 
 	// Set up the env for running the CNI plugin
 	k8sEnv := ""
-	if k8sName != "" {
-		k8sEnv = fmt.Sprintf("CNI_ARGS=K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever", k8sName)
+	if podName != "" {
+		k8sEnv = fmt.Sprintf("CNI_ARGS=K8S_POD_NAME=%s;K8S_POD_NAMESPACE=%s;K8S_POD_INFRA_CONTAINER_ID=whatever", podName, podNamespace)
 
 		// Append IP=<ip> to CNI_ARGS only if it's not an empty string.
 		if ip != "" {
@@ -224,9 +268,13 @@ func RunCNIPluginWithId(netconf, k8sName, ip, containerId string, targetNs ns.Ne
 		}
 	}
 
+	if ifName == "" {
+		ifName = "eth0"
+	}
+
 	env := []string{
 		"CNI_COMMAND=ADD",
-		"CNI_IFNAME=eth0",
+		fmt.Sprintf("CNI_IFNAME=%s", ifName),
 		"CNI_PATH=dist",
 		fmt.Sprintf("CNI_CONTAINERID=%s", containerId),
 		fmt.Sprintf("CNI_NETNS=%s", targetNs.Path()),
@@ -244,15 +292,25 @@ func RunCNIPluginWithId(netconf, k8sName, ip, containerId string, targetNs ns.Ne
 		panic("some error found")
 	}
 
-	io.WriteString(stdin, netconf)
-	io.WriteString(stdin, "\n")
-	stdin.Close()
+	_, err = io.WriteString(stdin, netconf)
+	if err != nil {
+		panic(err)
+	}
+	_, err = io.WriteString(stdin, "\n")
+	if err != nil {
+		panic(err)
+	}
+
+	err = stdin.Close()
+	if err != nil {
+		panic(err)
+	}
 
 	session, err = gexec.Start(subProcess, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
 	session.Wait(5)
 
 	err = targetNs.Do(func(_ ns.NetNS) error {
-		contVeth, err = netlink.LinkByName("eth0")
+		contVeth, err = netlink.LinkByName(ifName)
 		if err != nil {
 			return err
 		}
@@ -306,19 +364,19 @@ func CreateHostVeth(containerId string, k8sName string, k8sNamespace string) err
 }
 
 // Executes the Calico CNI plugin and return the error code of the command.
-func DeleteContainer(netconf, netnspath, name string) (exitCode int, err error) {
-	return DeleteContainerWithId(netconf, netnspath, name, "")
+func DeleteContainer(netconf, netnspath, podName, podNamespace string) (exitCode int, err error) {
+	return DeleteContainerWithId(netconf, netnspath, podName, podNamespace, "")
 }
 
-func DeleteContainerWithId(netconf, netnspath, name, containerId string) (exitCode int, err error) {
+func DeleteContainerWithId(netconf, netnspath, podName, podNamespace, containerId string) (exitCode int, err error) {
 	netnsname := path.Base(netnspath)
 	container_id := netnsname[:10]
 	if containerId != "" {
 		container_id = containerId
 	}
 	k8sEnv := ""
-	if name != "" {
-		k8sEnv = fmt.Sprintf("CNI_ARGS=K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever", name)
+	if podName != "" {
+		k8sEnv = fmt.Sprintf("CNI_ARGS=K8S_POD_NAME=%s;K8S_POD_NAMESPACE=%s;K8S_POD_INFRA_CONTAINER_ID=whatever", podName, podNamespace)
 	}
 
 	// Set up the env for running the CNI plugin
@@ -340,9 +398,20 @@ func DeleteContainerWithId(netconf, netnspath, name, containerId string) (exitCo
 	if err != nil {
 		return
 	}
-	io.WriteString(stdin, netconf)
-	io.WriteString(stdin, "\n")
-	stdin.Close()
+
+	_, err = io.WriteString(stdin, netconf)
+	if err != nil {
+		return 1, err
+	}
+	_, err = io.WriteString(stdin, "\n")
+	if err != nil {
+		return 1, err
+	}
+
+	err = stdin.Close()
+	if err != nil {
+		return 1, err
+	}
 
 	session, err := gexec.Start(subProcess, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
 	if err != nil {
@@ -357,11 +426,17 @@ func DeleteContainerWithId(netconf, netnspath, name, containerId string) (exitCo
 }
 
 func Cmd(cmd string) string {
-	ginkgo.GinkgoWriter.Write([]byte(fmt.Sprintf("Running command [%s]\n", cmd)))
+	_, _ = ginkgo.GinkgoWriter.Write([]byte(fmt.Sprintf("Running command [%s]\n", cmd)))
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
-		ginkgo.GinkgoWriter.Write(out)
-		ginkgo.GinkgoWriter.Write(err.(*exec.ExitError).Stderr)
+		_, err = ginkgo.GinkgoWriter.Write(out)
+		if err != nil {
+			panic(err)
+		}
+		_, err = ginkgo.GinkgoWriter.Write(err.(*exec.ExitError).Stderr)
+		if err != nil {
+			panic(err)
+		}
 		ginkgo.Fail("Command failed")
 	}
 	return strings.TrimSpace(string(out))
@@ -375,7 +450,6 @@ func CheckSysctlValue(sysctlPath, value string) error {
 	}
 
 	f := bufio.NewReader(fh)
-	defer fh.Close()
 
 	// Ignoring second output (isPrefix) since it's not necessory
 	buf, _, err := f.ReadLine()
@@ -386,6 +460,11 @@ func CheckSysctlValue(sysctlPath, value string) error {
 
 	if string(buf) != value {
 		return fmt.Errorf("error asserting sysctl value: expected: %s, got: %s for sysctl path: %s", value, string(buf), sysctlPath)
+	}
+
+	err = fh.Close()
+	if err != nil {
+		return err
 	}
 
 	return nil
