@@ -48,7 +48,7 @@ See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resource
 > between a host endpoint and a workload endpoint on the same host is regarded as
 > `forwarded traffic`. 
 >
-> ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
+> ![]({{site.baseurl}}/images/bare-metal-packet-flows-AOF.png)
 {: .alert .alert-info}
 
 ## Installation overview
