@@ -30,6 +30,7 @@ import (
 var (
 	typeNode          = reflect.TypeOf(Node{})
 	typeHostMetadata  = reflect.TypeOf(HostMetadata{})
+	typeOrchRefs      = reflect.TypeOf([]OrchRef{})
 	typeHostIp        = rawIPType
 	matchHostMetadata = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/metadata$`)
 	matchHostIp       = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip$`)
@@ -48,6 +49,12 @@ type Node struct {
 	BGPIPv4Net  *net.IPNet
 	BGPIPv6Net  *net.IPNet
 	BGPASNumber *numorstring.ASNumber
+	OrchRefs    []OrchRef `json:"orchRefs,omitempty"`
+}
+
+type OrchRef struct {
+	Orchestrator string `json:"orchestrator,omitempty"`
+	NodeName     string `json:"nodeName,omitempty"`
 }
 
 type NodeKey struct {
@@ -173,4 +180,41 @@ func (key HostIPKey) valueType() reflect.Type {
 
 func (key HostIPKey) String() string {
 	return fmt.Sprintf("Node(name=%s)", key.Hostname)
+}
+
+type OrchRefKey struct {
+	Hostname string
+}
+
+func (key OrchRefKey) defaultPath() (string, error) {
+	return fmt.Sprintf("/calico/v1/host/%s/orchestrator_refs",
+		key.Hostname), nil
+}
+
+func (key OrchRefKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
+}
+
+func (key OrchRefKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
+func (key OrchRefKey) valueType() reflect.Type {
+	return typeOrchRefs
+}
+
+func (key OrchRefKey) String() string {
+	return fmt.Sprintf("OrchRefs(nodename=%s)", key.Hostname)
+}
+
+type OrchRefListOptions struct {
+	Hostname string
+}
+
+func (options OrchRefListOptions) defaultPathRoot() string {
+	return fmt.Sprintf("/calico/v1/host/%s/orchestrator_refs", options.Hostname)
+}
+
+func (options OrchRefListOptions) KeyFromDefaultPath(path string) Key {
+	return OrchRefKey{Hostname: options.Hostname}
 }

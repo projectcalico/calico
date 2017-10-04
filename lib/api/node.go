@@ -65,6 +65,17 @@ type NodeSpec struct {
 	// BGP configuration for this node.  If this omitted, the Calico node
 	// will be run in policy-only mode.
 	BGP *NodeBGPSpec `json:"bgp,omitempty" validate:"omitempty"`
+
+	// OrchRefs for this node.
+	OrchRefs []OrchRef `json:"orchRefs,omitempty" validate:"omitempty"`
+}
+
+// OrchRef is used to correlate a Calico node to its corresponding representation in a given orchestrator
+type OrchRef struct {
+	// NodeName represents the name for this node according to the orchestrator.
+	NodeName string `json:"nodeName,omitempty" validate:"omitempty"`
+	// Orchestrator represents the orchestrator using this node.
+	Orchestrator string `json:"orchestrator"`
 }
 
 // NodeSpec contains the specification for a Calico Node resource.

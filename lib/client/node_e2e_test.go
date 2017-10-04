@@ -96,9 +96,9 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV2, 
 			_, err = c.Nodes().Update(&api.Node{Metadata: meta1, Spec: spec2})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Apply node2 with spec1.
+			// Applying node2 with spec1.
 			By("Applying node2 with spec1")
-			_, err = c.Nodes().Update(&api.Node{Metadata: meta2, Spec: spec1})
+			_, err = c.Nodes().Apply(&api.Node{Metadata: meta2, Spec: spec1})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get node with meta1.
@@ -166,11 +166,31 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV2, 
 				BGP: &api.NodeBGPSpec{
 					IPv4Address: &cidrv4,
 				},
+				OrchRefs: []api.OrchRef{
+					{
+						Orchestrator: "k8s",
+						NodeName:     "node1",
+					},
+					{
+						Orchestrator: "mesos",
+						NodeName:     "node1",
+					},
+				},
 			},
 			api.NodeSpec{
 				BGP: &api.NodeBGPSpec{
 					IPv6Address: &cidrv6,
 					ASNumber:    &asn,
+				},
+				OrchRefs: []api.OrchRef{
+					{
+						Orchestrator: "k8s",
+						NodeName:     "node2",
+					},
+					{
+						Orchestrator: "mesos",
+						NodeName:     "node2",
+					},
 				},
 			}),
 
