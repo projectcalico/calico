@@ -35,6 +35,8 @@ type Interface interface {
 	BGPPeers() BGPPeerInterface
 	// IPAM returns an interface for managing IP address assignment and releasing.
 	IPAM() ipam.Interface
+	// BGPConfigurations returns an interface for managing the BGP configuration resources.
+	BGPConfigurations() BGPConfigurationInterface
 	// EnsureInitialized is used to ensure the backend datastore is correctly
 	// initialized for use by Calico.  This method may be called multiple times, and
 	// will have no effect if the datastore is already correctly initialized.
