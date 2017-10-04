@@ -155,6 +155,14 @@ func (wc *watcher) listCurrent() error {
 			New:  kv,
 		})
 	}
+
+	// We've finished listing the current data.  Send a sync'd event to let the listeners
+	// know they are now watching change events.
+	wc.sendEvent(&api.WatchEvent{
+		Type: api.WatchSynced,
+		Revision: list.Revision,
+	})
+
 	return nil
 }
 
