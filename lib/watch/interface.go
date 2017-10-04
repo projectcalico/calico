@@ -46,17 +46,10 @@ const (
 	// Error
 	// * an error has occurred.  If the error is terminating, the results channel
 	//   will be closed.
-	// Synced
-	// * If the Watcher does not have a specific ResourceVersion to watch from,
-	//   existing entries will first be listed.  The current entries are sent as
-	//   "Added" events followed by a Synced Event, and then followed by events from
-	//   watching the data.  A Synced event will specify the ResourceVersion from which
-	//   the watch begins.
 	Added    EventType = "ADDED"
 	Modified EventType = "MODIFIED"
 	Deleted  EventType = "DELETED"
 	Error    EventType = "ERROR"
-	Synced   EventType = "SYNCED"
 
 	DefaultChanSize int32 = 100
 )
@@ -73,10 +66,6 @@ type Event struct {
 	//  * If Type is Deleted, Error or Synced: nil
 	Previous runtime.Object
 	Object   runtime.Object
-
-	// ResourceVersion is only set when Type is Synced.  See EventType definitions
-	// for details.
-	ResourceVersion string
 
 	// The error, if EventType is Error.
 	Error error

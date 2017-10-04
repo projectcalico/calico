@@ -166,9 +166,11 @@ type WatchInterface interface {
 	// any resources used by the watch.
 	Stop()
 
-	// Returns a chan which will receive all the events. If an error occurs
-	// or Stop() is called, this channel will be closed, in which case the
-	// watch should be completely cleaned up.
+	// Returns a chan which will receive all the events.  This channel is closed when:
+	// -  Stop() is called, or
+	// -  A error of type errors.ErrorWatchTerminated is received.
+	// In both cases the watcher will be cleaned up, and the client should stop receiving
+	// from this channel.
 	ResultChan() <-chan WatchEvent
 
 	// HasTerminated returns true if the watcher has terminated and released all
@@ -184,7 +186,6 @@ const (
 	WatchModified WatchEventType = "MODIFIED"
 	WatchDeleted  WatchEventType = "DELETED"
 	WatchError    WatchEventType = "ERROR"
-	WatchSynced   WatchEventType = "SYNCED"
 )
 
 // Event represents a single event to a watched resource.
@@ -199,13 +200,6 @@ type WatchEvent struct {
 	//  * If Type is Deleted or Error: nil
 	Old *model.KVPair
 	New *model.KVPair
-
-	// Revision is set on a Sync event.  A Synced event is only sent for watchers
-	// that do not specify a Revision to watch from.  In this case, the watcher
-	// first lists the data at the current revision and sends WatchAdded events for
-	// each resource, followed by a Synced event specifying the current revision, and
-	// then watch events following on from the Synced event Revision.
-	Revision string
 
 	// The error, if EventType is Error.
 	Error error

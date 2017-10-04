@@ -404,9 +404,6 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 					Type:   watch.Added,
 					Object: outRes3,
 				},
-				{
-					Type: watch.Synced,
-				},
 			})
 			testWatcher3.Stop()
 
@@ -433,9 +430,6 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				{
 					Type:   watch.Added,
 					Object: outRes3,
-				},
-				{
-					Type: watch.Synced,
 				},
 			})
 

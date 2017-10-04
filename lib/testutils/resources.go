@@ -157,13 +157,6 @@ func (t *testResourceWatcher) ExpectEvents(kind string, events []watch.Event) {
 		} else {
 			Expect(t.events[i].Previous).To(BeNil())
 		}
-
-		// For synced events we can only check that the event contained a resource version
-		// but not what the resource version was (at least it's difficult to assert that in
-		// case other events in the datastore are changing the revision).
-		if t.events[i].Type == watch.Synced {
-			Expect(t.events[i].ResourceVersion).ToNot(Equal(""))
-		}
 	}
 
 	// Remove the events we've already validated.

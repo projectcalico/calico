@@ -364,9 +364,6 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreAll, 
 					Type:   watch.Added,
 					Object: outRes3,
 				},
-				{
-					Type:	watch.Synced,
-				},
 			})
 			testWatcher3.Stop()
 
@@ -393,9 +390,6 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreAll, 
 				{
 					Type:   watch.Added,
 					Object: outRes3,
-				},
-				{
-					Type:	watch.Synced,
 				},
 			})
 

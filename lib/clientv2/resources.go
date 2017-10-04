@@ -327,7 +327,6 @@ func (w *watcher) terminate() {
 func (w *watcher) convertEvent(backendEvent bapi.WatchEvent) watch.Event {
 	apiEvent := watch.Event{
 		Error: backendEvent.Error,
-		ResourceVersion: backendEvent.Revision,
 	}
 	switch backendEvent.Type {
 	case bapi.WatchError:
@@ -338,8 +337,6 @@ func (w *watcher) convertEvent(backendEvent bapi.WatchEvent) watch.Event {
 		apiEvent.Type = watch.Deleted
 	case bapi.WatchModified:
 		apiEvent.Type = watch.Modified
-	case bapi.WatchSynced:
-		apiEvent.Type = watch.Synced
 	}
 
 	if backendEvent.Old != nil {

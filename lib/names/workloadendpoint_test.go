@@ -21,7 +21,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
-var _ =	DescribeTable("WorkloadEndpoint name construction, fully qualified names",
+var _ = DescribeTable("WorkloadEndpoint name construction, fully qualified names",
 	func(ids names.WorkloadEndpointIdentifiers, expectedName string, expectedErroredField string) {
 		name, err := ids.CalculateWorkloadEndpointName(false)
 		if len(expectedErroredField) != 0 {
@@ -80,7 +80,7 @@ var _ =	DescribeTable("WorkloadEndpoint name construction, fully qualified names
 	}, "", "workload"),
 )
 
-var _ =DescribeTable("WorkloadEndpoint name construction, name prefix",
+var _ = DescribeTable("WorkloadEndpoint name construction, name prefix",
 	func(ids names.WorkloadEndpointIdentifiers, expectedName string, expectedErroredField string) {
 		name, err := ids.CalculateWorkloadEndpointName(true)
 		if len(expectedErroredField) != 0 {
@@ -196,4 +196,3 @@ var _ = DescribeTable("WorkloadEndpoint name matching",
 		Endpoint:     "eth0",
 	}, "node--1-k8s-pod-eth0-extra", false, ""),
 )
-
