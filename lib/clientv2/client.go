@@ -109,7 +109,7 @@ func (c client) BGPPeers() BGPPeerInterface {
 
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c client) IPAM() ipam.Interface {
-	return ipam.NewIPAMClient(c.Backend, poolAccessor{})
+	return ipam.NewIPAMClient(c.Backend, poolAccessor{client: &c})
 }
 
 // BGPConfiguration returns an interface for managing the BGP configuration resources.
