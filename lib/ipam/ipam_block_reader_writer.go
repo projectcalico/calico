@@ -85,11 +85,17 @@ func (rw blockReaderWriter) claimNewAffineBlock(ctx context.Context, host string
 		log.Errorf("Error reading configured pools: %s", err)
 		return nil, err
 	}
+	log.Debugf("enabled IPPools: %v", enabledPools)
 
-	for _, p := range enabledPools {
-		if isPoolInRequestedPools(p, requestedPools) {
-			pools = append(pools, p)
+	if len(requestedPools) > 0 {
+		log.Debugf("requested IPPools: %v", requestedPools)
+		for _, p := range enabledPools {
+			if isPoolInRequestedPools(p, requestedPools) {
+				pools = append(pools, p)
+			}
 		}
+	} else {
+		pools = enabledPools
 	}
 
 	// Build a map so we can lookup existing pools.
@@ -102,13 +108,13 @@ func (rw blockReaderWriter) claimNewAffineBlock(ctx context.Context, host string
 	for _, rp := range requestedPools {
 		if _, ok := pm[rp.String()]; !ok {
 			// The requested pool doesn't exist.
-			return nil, fmt.Errorf("The given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
+			return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
 		}
 	}
 
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, errors.New("No configured Calico pools")
+		return nil, errors.New("no configured Calico pools")
 	}
 
 	// Iterate through pools to find a new block.
