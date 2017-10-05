@@ -367,7 +367,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			v4, _, err := ic.AutoAssign(context.Background(), args)
 			log.Println("v4: %d IPs", len(v4))
 
-			Expect(err.Error()).Should(Equal("The given pool (40.0.0.0/24) does not exist, or is not enabled"))
+			Expect(err.Error()).Should(Equal("the given pool (40.0.0.0/24) does not exist, or is not enabled"))
 			Expect(len(v4)).To(Equal(0))
 		})
 	})
