@@ -112,6 +112,11 @@ func (c client) IPAM() ipam.Interface {
 	return ipam.NewIPAMClient(c.Backend, poolAccessor{})
 }
 
+// BGPConfiguration returns an interface for managing the BGP configuration resources.
+func (c client) BGPConfigurations() BGPConfigurationInterface {
+	return bgpConfigurations{client: c}
+}
+
 type poolAccessor struct {
 	client *client
 }
