@@ -37,8 +37,10 @@ type Interface interface {
 	IPAM() ipam.Interface
 	// BGPConfigurations returns an interface for managing the BGP configuration resources.
 	BGPConfigurations() BGPConfigurationInterface
-	// FelixConfiguration returns an interface for managing the Felix configuration resources.
+	// FelixConfigurations returns an interface for managing the Felix configuration resources.
 	FelixConfigurations() FelixConfigurationInterface
+	// ClusterInformation returns an interface for managing the cluster information resource.
+	ClusterInformation() ClusterInformationInterface
 	// EnsureInitialized is used to ensure the backend datastore is correctly
 	// initialized for use by Calico.  This method may be called multiple times, and
 	// will have no effect if the datastore is already correctly initialized.

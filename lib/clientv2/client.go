@@ -112,14 +112,19 @@ func (c client) IPAM() ipam.Interface {
 	return ipam.NewIPAMClient(c.Backend, poolAccessor{client: &c})
 }
 
-// BGPConfiguration returns an interface for managing the BGP configuration resources.
+// BGPConfigurations returns an interface for managing the BGP configuration resources.
 func (c client) BGPConfigurations() BGPConfigurationInterface {
 	return bgpConfigurations{client: c}
 }
 
-// FelixConfiguration returns an interface for managing the Felix configuration resources.
+// FelixConfigurations returns an interface for managing the Felix configuration resources.
 func (c client) FelixConfigurations() FelixConfigurationInterface {
 	return felixConfigurations{client: c}
+}
+
+// ClusterInformation returns an interface for managing the cluster information resource.
+func (c client) ClusterInformation() ClusterInformationInterface {
+	return clusterInformation{client: c}
 }
 
 type poolAccessor struct {
