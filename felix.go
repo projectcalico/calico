@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/extdataplane"
+	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/intdataplane"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
@@ -250,6 +251,9 @@ configRetry:
 			"scratch1Mark": markScratch1,
 		}).Info("Calculated iptables mark bits")
 		dpConfig := intdataplane.Config{
+			IfaceMonitorConfig: ifacemonitor.Config{
+				InterfaceExcludes: configParams.InterfaceExcludes(),
+			},
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 

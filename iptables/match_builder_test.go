@@ -81,4 +81,7 @@ var _ = DescribeTable("MatchBuilder",
 	// Check multiple match criteria are joined correctly.
 	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080),
 		"-p tcp -m multiport --source-ports 1234 -m multiport --destination-ports 8080"),
+	// IPVS.
+	Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
+	Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
 )
