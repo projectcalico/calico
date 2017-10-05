@@ -126,12 +126,16 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]net.IPNet, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debugf("Got list of all IPPools: %v", pools)
 	enabled := []net.IPNet{}
 	for _, pool := range pools.Items {
 		if pool.Spec.Disabled {
 			continue
-		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err != nil {
+		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil {
+			log.Debugf("Adding pool (%s) to the enabled IPPool list", cidr.String())
 			enabled = append(enabled, *cidr)
+		} else {
+			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
 		}
 	}
 	return enabled, nil
