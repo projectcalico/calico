@@ -117,6 +117,11 @@ func (c client) BGPConfigurations() BGPConfigurationInterface {
 	return bgpConfigurations{client: c}
 }
 
+// FelixConfiguration returns an interface for managing the Felix configuration resources.
+func (c client) FelixConfigurations() FelixConfigurationInterface {
+	return felixConfigurations{client: c}
+}
+
 type poolAccessor struct {
 	client *client
 }

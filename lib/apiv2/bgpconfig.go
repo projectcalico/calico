@@ -63,7 +63,7 @@ func NewBGPConfiguration() *BGPConfiguration {
 
 // NewBGPConfigurationList creates a new 9zeroed) BGPConfigurationList struct with the TypeMetadata
 // initialized to the current version.
-func NewBGPConfigurationLits() *BGPConfigurationList {
+func NewBGPConfigurationList() *BGPConfigurationList {
 	return &BGPConfigurationList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindBGPConfigurationList,

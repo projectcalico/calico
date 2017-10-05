@@ -39,7 +39,7 @@ type bgpConfigurations struct {
 	client client
 }
 
-// Create takes the representation of a BGpConfiguration and creates it.
+// Create takes the representation of a BGPConfiguration and creates it.
 // Returns the stored representation of the BGPConfiguration, and an error
 // if there is any.
 func (r bgpConfigurations) Create(ctx context.Context, res *apiv2.BGPConfiguration, opts options.SetOptions) (*apiv2.BGPConfiguration, error) {
