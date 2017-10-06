@@ -429,3 +429,125 @@ node_name1_rev1 = {
         }
     }
 }
+
+#
+# BGPConfigs
+#
+bgpconfig_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'default',
+    },
+    'spec': {
+        'logSeverityScreen': 'Info',
+        'nodeToNodeMeshEnabled': True,
+        'defaultNodeASNumber': 6512,
+    }
+}
+
+bgpconfig_name1_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'default',
+    },
+    'spec': {
+        'logSeverityScreen': 'Info',
+        'nodeToNodeMeshEnabled': False,
+        'defaultNodeASNumber': 6511,
+    }
+}
+
+bgpconfig_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'bgpconfiguration1',
+    },
+    'spec': {
+        'logSeverityScreen': 'Info',
+    }
+}
+
+bgpconfig_name2_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'bgpconfiguration1',
+    },
+    'spec': {
+        'logSeverityScreen': 'Debug',
+    }
+}
+
+bgpconfig_name2_rev3 = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPConfiguration',
+    'metadata': {
+        'name': 'bgpconfiguration1',
+    },
+    'spec': {
+        'logSeverityScreen': 'Debug',
+        'nodeToNodeMeshEnabled': True,
+    }
+}
+
+#
+# FelixConfigs
+#
+felixconfig_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'FelixConfiguration',
+    'metadata': {
+        'name': 'felixconfiguration1',
+    },
+    'spec': {
+        'ipv6Support': True,
+        'logSeverityScreen': 'Info',
+        'netlinkTimeoutSecs': 10,
+    }
+}
+
+felixconfig_name1_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'FelixConfiguration',
+    'metadata': {
+        'name': 'felixconfiguration1',
+    },
+    'spec': {
+        'ipv6Support': False,
+        'logSeverityScreen': 'Debug',
+        'netlinkTimeoutSecs': 11,
+    }
+}
+
+#
+# ClusterInfo
+#
+clusterinfo_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'ClusterInformation',
+    'metadata': {
+        'name': 'default',
+    },
+    'spec': {
+        'clusterGUID': 'cluster-guid1',
+        'clusterType': 'cluster-type1',
+        'calicoVersion': 'calico-version1',
+    }
+}
+
+clusterinfo_name1_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'ClusterInformation',
+    'metadata': {
+        'name': 'default',
+    },
+    'spec': {
+        'clusterGUID': 'cluster-guid2',
+        'clusterType': 'cluster-type2',
+        'calicoVersion': 'calico-version2',
+    }
+}
+

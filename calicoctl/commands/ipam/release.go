@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -57,6 +58,8 @@ Description:
 		return
 	}
 
+	ctx := context.Background()
+
 	// Create a new backend client from env vars.
 	cf := parsedArgs["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
@@ -73,7 +76,7 @@ Description:
 
 	// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
 	// release was successful else it returns back the slice with the IP passed in.
-	unallocatedIPs, err := ipamClient.ReleaseIPs(ips)
+	unallocatedIPs, err := ipamClient.ReleaseIPs(ctx, ips)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)

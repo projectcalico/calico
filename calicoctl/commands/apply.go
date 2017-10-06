@@ -53,14 +53,16 @@ Description:
 
   Valid resource types are:
 
-    * node
+    * bgpConfiguration
     * bgpPeer
+    * felixConfiguration
+    * globalNetworkPolicy
     * hostEndpoint
-    * workloadEndpoint
     * ipPool
     * networkPolicy
-    * globalNetworkPolicy
+    * node
     * profile
+    * workloadEndpoint
 
   When applying a resource:
   -  if the resource does not already exist (as determined by it's primary
