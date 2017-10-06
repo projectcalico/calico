@@ -51,7 +51,6 @@ class TestInterfaceDriver(base.BaseTestCase, _TestInterfaceDriverMixin):
     def setUp(self):
         super(TestInterfaceDriver, self).setUp()
         config.register_interface_driver_opts_helper(cfg.CONF)
-        cfg.CONF.register_opts(interface.OPTS)
 
     @mock.patch('neutron.agent.linux.ip_lib.IPDevice')
     @mock.patch.object(interface.LinuxInterfaceDriver, 'init_l3')
