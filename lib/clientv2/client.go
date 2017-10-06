@@ -136,11 +136,13 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]net.IPNet, error) {
 	for _, pool := range pools.Items {
 		if pool.Spec.Disabled {
 			continue
-		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil {
+		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
 			log.Debugf("Adding pool (%s) to the enabled IPPool list", cidr.String())
 			enabled = append(enabled, *cidr)
-		} else {
+		} else if err != nil {
 			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
+		} else {
+			log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
 		}
 	}
 	return enabled, nil
