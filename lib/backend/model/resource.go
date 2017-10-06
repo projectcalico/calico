@@ -32,6 +32,7 @@ var (
 	kindToType              = map[string]reflect.Type{
 		strings.ToLower(apiv2.KindBGPPeer):             reflect.TypeOf(apiv2.BGPPeer{}),
 		strings.ToLower(apiv2.KindBGPConfiguration):    reflect.TypeOf(apiv2.BGPConfiguration{}),
+		strings.ToLower(apiv2.KindClusterInformation):  reflect.TypeOf(apiv2.ClusterInformation{}),
 		strings.ToLower(apiv2.KindFelixConfiguration):  reflect.TypeOf(apiv2.FelixConfiguration{}),
 		strings.ToLower(apiv2.KindGlobalNetworkPolicy): reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
 		strings.ToLower(apiv2.KindHostEndpoint):        reflect.TypeOf(apiv2.HostEndpoint{}),

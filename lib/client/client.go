@@ -16,7 +16,6 @@ package client
 
 import (
 	"context"
-	"encoding/hex"
 	goerrors "errors"
 	"fmt"
 	"io/ioutil"
@@ -30,11 +29,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/validator"
-	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -145,22 +142,6 @@ func (c *Client) EnsureInitialized() error {
 	// Perform datastore specific initialization first.
 	if err := c.Backend.EnsureInitialized(); err != nil {
 		return err
-	}
-
-	// Ensure a cluster GUID is set for the deployment.  We do this
-	// irrespective of how Calico is deployed.
-	kv := &model.KVPair{
-		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
-		Value: fmt.Sprintf("%v", hex.EncodeToString(uuid.NewV4().Bytes())),
-	}
-	if _, err := c.Backend.Create(context.Background(), kv); err == nil {
-		log.WithField("ClusterGUID", kv.Value).Info("Assigned cluster GUID")
-	} else {
-		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
-			log.WithError(err).WithField("ClusterGUID", kv.Value).Warn("Failed to assign cluster GUID")
-			return err
-		}
-		log.Infof("Using previously configured cluster GUID")
 	}
 
 	return nil
