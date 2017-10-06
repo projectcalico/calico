@@ -37,7 +37,8 @@ type Node struct {
 // NodeSpec contains the specification for a Node resource.
 type NodeSpec struct {
 	// BGP configuration for this node.
-	BGP *NodeBGPSpec `json:"bgp,omitempty" validate:"omitempty"`
+	BGP              *NodeBGPSpec `json:"bgp,omitempty" validate:"omitempty"`
+	IpInIpTunnelAddr string       `json:"ipInIPTunnelAddr,omitempty" validate:"omitempty,ipv4"`
 }
 
 // NodeBGPSpec contains the specification for the Node BGP configuration.
