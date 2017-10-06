@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.4.2
+Version:        1.4.3
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,16 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Oct 06 2017 Neil Jerram <neil@tigera.io> 1:1.4.3-1
+  - networking-calico version 1.4.3 release
+    - Change _log.warn (now somewhat deprecated) to _log.warning
+    - Handle FloatingIP move to neutron.db.models.l3
+    - Handle neutron.context move to neutron-lib
+    - Fix Neutron common config import error
+    - DevStack plugin: fix for recent neutron and devstack changes
+    - Fix networking-calico CI (against master OpenStack)
+    - Fix networking-calico CI (interface.OPTS move)
+
 * Mon Feb 20 2017 Neil Jerram <neil@tigera.io> 1:1.4.2-1
   - networking-calico version 1.4.2 release
     - Retry fill_dhcp_udp_checksums() on failure

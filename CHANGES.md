@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.3
+
+- Change _log.warn (now somewhat deprecated) to _log.warning
+- Handle FloatingIP move to neutron.db.models.l3
+- Handle neutron.context move to neutron-lib
+- Fix Neutron common config import error
+- DevStack plugin: fix for recent neutron and devstack changes
+- Fix networking-calico CI (against master OpenStack)
+- Fix networking-calico CI (interface.OPTS move)
+
 ## 1.4.2
 
 - Retry fill_dhcp_udp_checksums() on failure

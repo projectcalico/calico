@@ -1,3 +1,29 @@
+networking-calico (1:1.4.3~xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit e794848).
+    - Change _log.warn (now somewhat deprecated) to _log.warning
+    - Handle FloatingIP move to neutron.db.models.l3
+    - Handle neutron.context move to neutron-lib
+    - Fix Neutron common config import error
+    - DevStack plugin: fix for recent neutron and devstack changes
+    - Fix networking-calico CI (against master OpenStack)
+    - Fix networking-calico CI (interface.OPTS move)
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 06 Oct 2017 15:27:25 +0100
+
+networking-calico (1:1.4.3~trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit e794848).
+    - Change _log.warn (now somewhat deprecated) to _log.warning
+    - Handle FloatingIP move to neutron.db.models.l3
+    - Handle neutron.context move to neutron-lib
+    - Fix Neutron common config import error
+    - DevStack plugin: fix for recent neutron and devstack changes
+    - Fix networking-calico CI (against master OpenStack)
+    - Fix networking-calico CI (interface.OPTS move)
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 06 Oct 2017 15:27:25 +0100
+
 networking-calico (1:1.4.2~xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit 21f416f).
