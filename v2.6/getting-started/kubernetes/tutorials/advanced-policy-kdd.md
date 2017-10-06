@@ -15,12 +15,12 @@ This guide walks through using only the Kubernetes NetworkPolicy in order to def
 - This guide assumes that your kubernetes nodes have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
 
-### Flow
+### Tutorial Flow
 
 1. Create the Namespace and Nginx Service
 1. Deny all ingress traffic
-1. Deny all egress traffic
 1. Allow ingress traffic to Nginx
+1. Deny all egress traffic
 1. Allow egress traffic to kube-dns
 1. Cleanup Namespace
 
@@ -49,7 +49,7 @@ If you don't see a command prompt, try pressing enter.
 
 Now from within the busybox "access" pod execute the following commands to test access.
 
-```shell 
+```shell
 / # wget -q --timeout=5 nginx -O -
 / # wget -q --timeout=5 google.com -O -
 ```
@@ -81,7 +81,7 @@ Because all pods in the namespace are now selected, any ingress traffic which is
 
 We can see that this is the case by switching over to our "access" pod in the namespace and attempting to access the nginx Service.
 
-```shell 
+```shell
 / # wget -q --timeout=5 nginx -O -
 wget: download timed out
 / # wget -q --timeout=5 google.com -O -
@@ -92,8 +92,7 @@ We can see that the ingress access to the nginx service is denied while egress a
 
 ### 3. Allow ingress traffic to Nginx
 
-Run the following to create
-a NetworkPolicy which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
+Run the following to create a NetworkPolicy which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
 
 ```shell
 kubectl create -f - <<EOF
@@ -117,8 +116,12 @@ EOF
 
 Now ingress traffic to nginx will be allowed.  We can see that this is the case by switching over to our "access" pod in the namespace and attempting to access the nginx service.
 
-```shell 
+```shell
 / # wget -q --timeout=5 nginx -O -
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>...
 ```
 
 After creating the policy, we can now access the nginx Service.
@@ -141,6 +144,7 @@ spec:
   - Egress
 EOF
 ```
+
 #### Verify Access - Denied All Egress
 
 Now any ingress or egress traffic which is not explicitly allowed by a policy will be denied.
@@ -148,7 +152,7 @@ Now any ingress or egress traffic which is not explicitly allowed by a policy wi
 We can see that this is the case by switching over to our "access" pod in the
 namespace and attempting to lookup nginx or access google.com.
 
-```shell 
+```shell
 / # nslookup nginx
 Server:    10.96.0.10
 Address 1: 10.96.0.10
@@ -191,18 +195,23 @@ EOF
 
 Now egress traffic to DNS will be allowed.
 
-We can see that this is the case by switching over to our "access" pod in the namespace and attempting to lookup nginx.
+We can see that this is the case by switching over to our "access" pod in the namespace and attempting to lookup nginx and google.com.
 
-```shell 
+```shell
 / # nslookup nginx
+Server:    10.0.0.10
+Address 1: 10.0.0.10 kube-dns.kube-system.svc.cluster.local
+/ # nslookup google.com
+Name:      google.com
+Address 1: 2607:f8b0:4005:807::200e sfo07s16-in-x0e.1e100.net
+Address 2: 216.58.195.78 sfo07s16-in-f14.1e100.net
 ```
 
-After creating the policy, we can now access google.com.
+Even though DNS is now working, all egress traffic from all pods in the advanced-policy-demo namespace is still blocked other than DNS.  Therefore the `wget` calls will still fail.
 
 ### 6. Allow egress traffic to nginx
 
-Run the following to create a NetworkPolicy which allows egress traffic
-from any pods in the `advanced-policy-demo` namespace to the nginx pods.
+Run the following to create a NetworkPolicy which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `run: nginx` in the same namespace.
 
 ```shell
 kubectl create -f - <<EOF
@@ -219,28 +228,31 @@ spec:
   egress:
   - to:
     - podSelector:
-        matchLabels: {}
+        matchLabels:
+          run: nginx
 EOF
 ```
 
-#### Verify Access - Allowed Egress access
-
-Now egress traffic will be allowed from pods in the `advanced-policy-demo`
-namespace to other pods in the same namespace.
+#### Verify Access - Allowed Egress access to nginx
 
 We can see that this is the case by switching over to our "access" pod in the
-namespace and attempting to access `nginx` and `google.com`.
+namespace and attempting to access `nginx`.
 
-```shell 
+```shell
 / # wget -q --timeout=5 nginx -O -
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>...
 / # wget -q --timeout=5 google.com -O -
+wget: download timed out
 ```
 
-After creating the policy, we can now access our nginx pod but not google.com.
+Access to `google.com` times out because it can resolve DNS but has no egress access to anything outside the kubernetes namespace.
 
 ## 7. Cleanup Namespace
 
-You can clean up after this guide by deleteing the advanced policy demo namespace.
+You can clean up after this tutorial by deleting the advanced policy demo namespace.
 
 ```shell
 kubectl delete ns advanced-policy-demo
