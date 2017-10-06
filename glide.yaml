@@ -35,3 +35,7 @@ import:
   - kubernetes
   - tools/clientcmd
 - package: github.com/mcuadros/go-version
+- package: github.com/projectcalico/felix
+  subpackages:
+  - fv
+  - fv.containers

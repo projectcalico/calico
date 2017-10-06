@@ -5,8 +5,8 @@
 # - Expects the host CNI network config path to be mounted at /host/etc/cni/net.d.
 # - Expects the desired CNI config in the CNI_NETWORK_CONFIG env variable.
 
-# Ensure all variables are defined.
-set -u
+# Ensure all variables are defined, and that the script fails when an error is hit.
+set -u -e
 
 # The directory on the host where CNI networks are installed. Defaults to
 # /etc/cni/net.d, but can be overridden by setting CNI_NET_DIR.  This is used
