@@ -18,7 +18,7 @@ or replaced `$ETCD_IP` and `$ETCD_PORT`:
 docker run --detach \
 	--net=host \
 	--name etcd quay.io/coreos/etcd:v3.1.10 \
-	--advertise-client-urls "http://$ETCD_IP:$ETCD_PORT" \
+	etcd --advertise-client-urls "http://$ETCD_IP:$ETCD_PORT" \
 	--listen-client-urls "http://$ETCD_IP:$ETCD_PORT,http://127.0.0.1:$ETCD_PORT"
 ```
 
