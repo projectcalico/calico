@@ -168,10 +168,11 @@ wget: bad address 'google.com'
 
 ### 5. Allow DNS egress traffic
 
-Run the following to create a `NetworkPolicy` which allows DNS egress traffic
-from any pods in the `advanced-policy-demo` namespace.
+Run the following to create a label of `name: kube-system` on the `kube-system` namespace and a `NetworkPolicy` which allows DNS egress traffic
+from any pods in the `advanced-policy-demo` namespace to the `kube-system` namespace.
 
 ```shell
+kubectl label namespace kube-system name=kube-system
 kubectl create -f - <<EOF
 apiVersion: networking.Kubernetes.io/v1
 kind: NetworkPolicy
