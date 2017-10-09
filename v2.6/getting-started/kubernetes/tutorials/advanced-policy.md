@@ -6,7 +6,7 @@ redirect_from: latest/getting-started/Kubernetes/tutorials/advanced-policy
 The Kubernetes `NetworkPolicy` API allows users to express ingress and egress policies (starting with Kubernetes 1.8.0) to Kubernetes pods
 based on labels and ports.
 
-This guide walks through using only the Kubernetes `NetworkPolicy` in order to define more complex network policies.
+This guide walks through using Kubernetes `NetworkPolicy` to define more complex network policies.
 
 ### Requirements
 
@@ -26,7 +26,7 @@ This guide walks through using only the Kubernetes `NetworkPolicy` in order to d
 
 ### 1. Create the Namespace and Nginx Service
 
-We'll use a new namespace for this guide.  Run the following command to create it and a plain nginx service listening on port 80.
+We'll use a new namespace for this guide.  Run the following commands to create it and a plain nginx service listening on port 80.
 
 ```shell
 kubectl create ns advanced-policy-demo
@@ -185,9 +185,13 @@ spec:
   - Egress
   egress:
   - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
     ports:
     - protocol: UDP
       port: 53
+
 EOF
 ```
 
@@ -207,7 +211,7 @@ Address 1: 2607:f8b0:4005:807::200e sfo07s16-in-x0e.1e100.net
 Address 2: 216.58.195.78 sfo07s16-in-f14.1e100.net
 ```
 
-Even though DNS is now working, all egress traffic from all pods in the advanced-policy-demo namespace is still blocked other than DNS.  Therefore the `wget` calls will still fail.
+Even though DNS egress traffic is now working, all other egress traffic from all pods in the advanced-policy-demo namespace is still blocked.  Therefore the HTTP egress traffic from the `wget` calls will still fail.
 
 ### 6. Allow egress traffic to nginx
 
@@ -248,7 +252,7 @@ namespace and attempting to access `nginx`.
 wget: download timed out
 ```
 
-Access to `google.com` times out because it can resolve DNS but has no egress access to anything outside the Kubernetes namespace.
+Access to `google.com` times out because it can resolve DNS but has no egress access to anything other than pods with labels matching `run: nginx` in the `advanced-policy-demo` namespace.
 
 ## 7. Cleanup Namespace
 
