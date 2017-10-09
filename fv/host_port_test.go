@@ -30,40 +30,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-func RunEtcd() *containers.Container {
-	return containers.Run("etcd-fv",
-		"quay.io/coreos/etcd",
-		"etcd",
-		"--advertise-client-urls", "http://127.0.0.1:2379",
-		"--listen-client-urls", "http://0.0.0.0:2379")
-}
-
-func RunFelix(etcdIP string) *containers.Container {
-	return containers.Run("felix-fv",
-		"--privileged",
-		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
-		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
-		"-e", "FELIX_DATASTORETYPE=etcdv2",
-		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
-		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT=false",
-		"calico/felix:latest")
-}
-
-func GetEtcdClient(etcdIP string) *client.Client {
-	client, err := client.New(api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.EtcdV2,
-			EtcdConfig: api.EtcdConfig{
-				EtcdEndpoints: "http://" + etcdIP + ":2379",
-			},
-		},
-	})
-	Expect(err).NotTo(HaveOccurred())
-	return client
-}
-
 func MetricsPortReachable(felix *containers.Container) bool {
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
@@ -106,12 +72,12 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 
 	BeforeEach(func() {
 
-		etcd = RunEtcd()
+		etcd = containers.RunEtcd()
 
-		client = GetEtcdClient(etcd.IP)
+		client = utils.GetEtcdClient(etcd.IP)
 		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
 
-		felix = RunFelix(etcd.IP)
+		felix = containers.RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
@@ -126,7 +92,6 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "logs", felix.Name)
 			felix.Exec("iptables-save", "-c")
 		}
 		felix.Stop()
@@ -171,6 +136,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 				policy := api.NewPolicy()
 				policy.Metadata.Name = "pre-dnat-policy-1"
 				policy.Spec.PreDNAT = true
+				policy.Spec.ApplyOnForward = true
 				protocol := numorstring.ProtocolFromString("tcp")
 				allowMetricsPortRule := api.Rule{
 					Action:   "allow",

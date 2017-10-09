@@ -209,6 +209,46 @@ var _ = DescribeTable("Config parsing",
 	),
 )
 
+var _ = DescribeTable("OpenStack heuristic tests",
+	func(clusterType, metadataAddr, metadataPort, ifacePrefixes interface{}, expected bool) {
+		c := New()
+		values := make(map[string]string)
+		if clusterType != nil {
+			values["ClusterType"] = clusterType.(string)
+		}
+		if metadataAddr != nil {
+			values["MetadataAddr"] = metadataAddr.(string)
+		}
+		if metadataPort != nil {
+			values["MetadataPort"] = metadataPort.(string)
+		}
+		if ifacePrefixes != nil {
+			values["InterfacePrefix"] = ifacePrefixes.(string)
+		}
+		_, err := c.UpdateFrom(values, EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.OpenstackActive()).To(Equal(expected))
+	},
+	Entry("no config", nil, nil, nil, nil, false),
+
+	Entry("explicit openstack as cluster type", "openstack", nil, nil, nil, true),
+	Entry("explicit openstack at start of cluster type", "openstack,k8s", nil, nil, nil, true),
+	Entry("explicit openstack at end of cluster type", "k8s,openstack", nil, nil, nil, true),
+	Entry("explicit openstack in middle of cluster type", "k8s,openstack,k8s", nil, nil, nil, true),
+
+	Entry("metadataAddr set", nil, "10.0.0.1", nil, nil, true),
+	Entry("metadataAddr = none", nil, "none", nil, nil, false),
+	Entry("metadataAddr = ''", nil, "", nil, nil, false),
+
+	Entry("metadataPort set", nil, nil, "1234", nil, true),
+	Entry("metadataPort = none", nil, nil, "none", nil, false),
+
+	Entry("ifacePrefixes = tap", nil, nil, nil, "tap", true),
+	Entry("ifacePrefixes = cali,tap", nil, nil, nil, "cali,tap", true),
+	Entry("ifacePrefixes = tap,cali ", nil, nil, nil, "tap,cali", true),
+	Entry("ifacePrefixes = cali ", nil, nil, nil, "cali", false),
+)
+
 var _ = DescribeTable("Mark bit calculation tests",
 	func(mask string, bitNum int, expected uint32) {
 		config := New()

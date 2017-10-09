@@ -22,30 +22,34 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	log "github.com/sirupsen/logrus"
 )
 
 func Run(command string, args ...string) {
-	run(true, command, args...)
+	_ = run(true, command, args...)
 }
 
-func RunMayFail(command string, args ...string) {
-	run(false, command, args...)
+func RunMayFail(command string, args ...string) error {
+	return run(false, command, args...)
 }
 
 var currentTestOutput = []string{}
 
-func run(checkNoError bool, command string, args ...string) {
-	log.Infof("Running: %v %v", command, args)
-	outputBytes, err := exec.Command(command, args...).CombinedOutput()
+func run(checkNoError bool, command string, args ...string) error {
+	outputBytes, err := Command(command, args...).CombinedOutput()
 	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
 	currentTestOutput = append(currentTestOutput, string(outputBytes))
 	if err != nil {
-		log.WithError(err).Warning("Command failed")
+		log.WithFields(log.Fields{
+			"command": command,
+			"args":    args}).WithError(err).Warning("Command failed")
 	}
 	if checkNoError {
 		Expect(err).NotTo(HaveOccurred())
 	}
+	return err
 }
 
 var _ = BeforeEach(func() {
@@ -63,9 +67,31 @@ var _ = AfterEach(func() {
 })
 
 func RunCommand(command string, args ...string) error {
-	cmd := exec.Command(command, args...)
+	cmd := Command(command, args...)
 	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
 	log.Infof("output: %v", string(output))
 	return err
+}
+
+func Command(name string, args ...string) *exec.Cmd {
+	log.WithFields(log.Fields{
+		"command":     name,
+		"commandArgs": args,
+	}).Info("Creating Command.")
+
+	return exec.Command(name, args...)
+}
+
+func GetEtcdClient(etcdIP string) *client.Client {
+	client, err := client.New(api.CalicoAPIConfig{
+		Spec: api.CalicoAPIConfigSpec{
+			DatastoreType: api.EtcdV2,
+			EtcdConfig: api.EtcdConfig{
+				EtcdEndpoints: "http://" + etcdIP + ":2379",
+			},
+		},
+	})
+	Expect(err).NotTo(HaveOccurred())
+	return client
 }

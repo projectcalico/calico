@@ -1,5 +1,5 @@
-hash: ab33a9a67c865624f37f15704d3c1ead20bbe23266f52487ec0e88cda7d1c00c
-updated: 2017-09-18T17:03:48.875922553Z
+hash: 9aae2218fb39b837d8200d25a74f268c514506f7843286ed10ac05de7b421084
+updated: 2017-10-09T10:48:39.915242245Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -75,14 +75,14 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 100ba4e885062801d56799d78530b73b178a78f3
+  version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 11b8df160996e00fd4b55cbaafb3d84ec6d50fa8
+  version: 130e6b02ab059e7b717a096f397c5b60111cae74
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -171,7 +171,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 1b108d7cd00957f03325a70017532bd42a06eb11
+  version: e8de693d4a4febdd930014fc4ffa532ce450e103
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
@@ -181,6 +181,7 @@ imports:
   - lib/backend/api
   - lib/backend/compat
   - lib/backend/etcd
+  - lib/backend/extensions
   - lib/backend/k8s
   - lib/backend/k8s/custom
   - lib/backend/k8s/resources
@@ -203,7 +204,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: f8f62de1fd1b263b089a3453d1932dd2d8e08cdb
+  version: f4c649479926210aa8b45a55affee894e2f48ce2
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -218,7 +219,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 2f17f4a9d485bf34b4bfaccc273805040e4f86c8
+  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -273,7 +274,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 062cd7e4e68206d8bab9b18396626e855c992658
+  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -455,7 +456,7 @@ imports:
   - util/integer
   - util/jsonpath
 - name: k8s.io/kube-openapi
-  version: 80f07ef71bb4f781233c65aa8d0369e4ecafab87
+  version: 868f2f29720b192240e18284659231b440f9cda5
   subpackages:
   - pkg/common
 testImports: []

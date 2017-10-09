@@ -28,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -54,11 +55,11 @@ func (w *Workload) Stop() {
 		log.Info("Stop no-op because nil workload")
 	} else {
 		log.WithField("workload", w).Info("Stop")
-		outputBytes, err := exec.Command("docker", "exec", w.C.Name,
+		outputBytes, err := utils.Command("docker", "exec", w.C.Name,
 			"cat", fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
 		Expect(err).NotTo(HaveOccurred())
 		pid := strings.TrimSpace(string(outputBytes))
-		err = exec.Command("docker", "exec", w.C.Name, "kill", pid).Run()
+		err = utils.Command("docker", "exec", w.C.Name, "kill", pid).Run()
 		Expect(err).NotTo(HaveOccurred())
 		w.runCmd.Process.Wait()
 		log.WithField("workload", w).Info("Workload now stopped")
@@ -82,7 +83,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
-	w.runCmd = exec.Command("docker", "exec", w.C.Name,
+	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
 		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v",
 			w.Name,
@@ -198,7 +199,7 @@ func (p *Port) CanConnectTo(ip, port string) bool {
 		// If we are using a particular source port, fill it in.
 		args = append(args, fmt.Sprintf("--source-port=%d", p.Port))
 	}
-	connectionCmd := exec.Command("docker", args...)
+	connectionCmd := utils.Command("docker", args...)
 	outPipe, err := connectionCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
 	errPipe, err := connectionCmd.StderrPipe()

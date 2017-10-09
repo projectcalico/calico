@@ -1,3 +1,48 @@
+felix (2.6.0~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.6.0 (from Git commit 64caa62).
+    [Changes recorded in 2.6.0 tag]
+    By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
+    v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
+    
+    In addition, libcalico-go now supports a new `Types` field which
+    specifies whether a rule should apply to `ingress`, `egress` or
+    both types of traffic.
+    
+    - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
+    - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
+    - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)
+    - Adding support for ppc64le. [#1516](https://github.com/projectcalico/felix/pull/1516)
+
+ -- Brendan Creane <brendan@tigera.io>  Tue, 26 Sep 2017 13:06:57 -0700
+
+felix (2.6.0~rc2~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.6.0-rc2 (from Git commit 5a0cb38).
+
+    This is a pre-release of Calico's per-host agent, Felix.
+
+    By upgrading libcalico-go to v1.7.0 [#1559], we add support for
+    Kubernetes' v1.8.0 NetworkPolicy with Egress rule and IPBlock
+    functionality.
+
+    In addition, libcalico-go now supports a new `Types` field which
+    specifies whether a rule should apply to `ingress`, `egress` or
+    both types of traffic.
+
+    - Allow Policy to explicitly govern ingress and/or egress [#1557]
+
+    Other changes in this pre-release since 2.5.0 are:
+    - Add read/write timeout options for Typha connection. [#1538]
+    - Fix OpenStack detection heuristic to ignore 'none'. [#1556]
+    - Adding support for ppc64le. [#1516]
+    - Add timeouts to Typha/Felix connection to detect silent TCP
+      drops. [#1537, #1538]
+    - Testing enhancements. [#1551]
+    - Add a configurable timeout to netlink operations. [#1526]
+
+ -- Neil Jerram <neil@tigera.io>  Tue, 26 Sep 2017 11:21:25 +0100
+
 felix (2.5.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.5.0 (from Git commit daa250c).

@@ -45,7 +45,7 @@ import:
 - package: k8s.io/client-go
   version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
 - package: github.com/projectcalico/typha
-  version: f8f62de1fd1b263b089a3453d1932dd2d8e08cdb
+  version: f4c649479926210aa8b45a55affee894e2f48ce2
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful

@@ -74,12 +74,12 @@ func describeNamedPortTests(testSourcePorts bool) {
 
 	BeforeEach(func() {
 
-		etcd = RunEtcd()
+		etcd = containers.RunEtcd()
 
-		client = GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized).ShouldNot(HaveOccurred())
+		client = utils.GetEtcdClient(etcd.IP)
+		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
 
-		felix = RunFelix(etcd.IP)
+		felix = containers.RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
