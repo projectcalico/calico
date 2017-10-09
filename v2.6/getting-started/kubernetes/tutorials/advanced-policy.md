@@ -1,18 +1,18 @@
 ---
 title: Going Beyond NetworkPolicy with Calico
-redirect_from: latest/getting-started/kubernetes/tutorials/advanced-policy
+redirect_from: latest/getting-started/Kubernetes/tutorials/advanced-policy
 ---
 
-The Kubernetes NetworkPolicy API allows users to express ingress and egress policies (starting with K8s 1.8.0) to Kubernetes pods
+The Kubernetes `NetworkPolicy` API allows users to express ingress and egress policies (starting with Kubernetes 1.8.0) to Kubernetes pods
 based on labels and ports.
 
-This guide walks through using only the Kubernetes NetworkPolicy in order to define more complex network policies.
+This guide walks through using only the Kubernetes `NetworkPolicy` in order to define more complex network policies.
 
 ### Requirements
 
-- This guide is aimed at Calico v2.6.1+ on top of K8s 1.8+, and will not work on previous versions of calico or K8s
+- This guide is aimed at Calico v2.6.1+ on top of Kubernetes 1.8+, and will not work on previous versions of Calico or Kubernetes
 - This guide assumes you have a working Kubernetes cluster and access to it using kubectl.
-- This guide assumes that your kubernetes nodes have connectivity to the public internet.
+- This guide assumes that your Kubernetes nodes have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
 
 ### Tutorial Flow
@@ -58,11 +58,11 @@ Both of the commands should respond with raw HTML response data from the nginx a
 
 ### 2. Deny all ingress traffic
 
-Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic).
+Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://Kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic).
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.Kubernetes.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-ingress
@@ -92,11 +92,11 @@ We can see that the ingress access to the nginx service is denied while egress a
 
 ### 3. Allow ingress traffic to Nginx
 
-Run the following to create a NetworkPolicy which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
+Run the following to create a `NetworkPolicy` which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.Kubernetes.io/v1
 kind: NetworkPolicy
 metadata:
   name: access-nginx
@@ -128,11 +128,11 @@ After creating the policy, we can now access the nginx Service.
 
 ### 4. Deny all egress traffic
 
-Enable egress isolation on the namespace by deploying a [default deny all egress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#4-deny-all-egress-traffic).
+Enable egress isolation on the namespace by deploying a [default deny all egress traffic policy](https://Kubernetes.io/docs/concepts/services-networking/network-policies/#4-deny-all-egress-traffic).
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.Kubernetes.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-egress
@@ -168,12 +168,12 @@ wget: bad address 'google.com'
 
 ### 5. Allow DNS egress traffic
 
-Run the following to create a NetworkPolicy which allows DNS egress traffic
+Run the following to create a `NetworkPolicy` which allows DNS egress traffic
 from any pods in the `advanced-policy-demo` namespace.
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.Kubernetes.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-dns-access
@@ -211,11 +211,11 @@ Even though DNS is now working, all egress traffic from all pods in the advanced
 
 ### 6. Allow egress traffic to nginx
 
-Run the following to create a NetworkPolicy which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `run: nginx` in the same namespace.
+Run the following to create a `NetworkPolicy` which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `run: nginx` in the same namespace.
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.Kubernetes.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-egress-to-advance-policy-ns
@@ -248,7 +248,7 @@ namespace and attempting to access `nginx`.
 wget: download timed out
 ```
 
-Access to `google.com` times out because it can resolve DNS but has no egress access to anything outside the kubernetes namespace.
+Access to `google.com` times out because it can resolve DNS but has no egress access to anything outside the Kubernetes namespace.
 
 ## 7. Cleanup Namespace
 
