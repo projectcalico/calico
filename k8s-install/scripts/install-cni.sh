@@ -24,7 +24,8 @@ rm -f /host/opt/cni/bin/calico /host/opt/cni/bin/calico-ipam
 rm -f /host/etc/cni/net.d/calico-tls/*
 
 # Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
-if [ -e "${SECRETS_MOUNT_DIR}" ];
+# First check if the dir exists and has anything in it.
+if [ "$(ls -A ${SECRETS_MOUNT_DIR} 2>/dev/null)" ];
 then
 	echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
 	mkdir -p /host/etc/cni/net.d/calico-tls
@@ -148,10 +149,15 @@ while [ "$should_sleep" == "true"  ]; do
 	# Kubernetes Secrets can be updated.  If so, we need to install the updated
 	# version to the host. Just check the timestamp on the certificate to see if it
 	# has been updated.  A bit hokey, but likely good enough.
-	stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
-	sleep 10;
-	if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
-		echo "Updating installed secrets at: $(date)"
-		cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
-	fi
+	if [ "$(ls -A ${SECRETS_MOUNT_DIR} 2>/dev/null)" ];
+	then
+        stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
+        sleep 10;
+        if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
+            echo "Updating installed secrets at: $(date)"
+            cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+        fi
+    else
+        sleep 10
+    fi
 done
