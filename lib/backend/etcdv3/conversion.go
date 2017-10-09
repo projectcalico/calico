@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 // convertListResponse converts etcdv3 Kv to a model.KVPair with parsed values.
@@ -56,22 +57,17 @@ func convertWatchEvent(e *clientv3.Event, l model.ListInterface) (*api.WatchEven
 	}
 
 	var old, new *model.KVPair
+	var err error
 	if k := l.KeyFromDefaultPath(string(e.Kv.Key)); k != nil {
 		log.WithField("model-etcdKey", k).Debug("Key is valid and converted to model-etcdKey")
 
 		if eventType != api.WatchDeleted {
-			if v, err := model.ParseValue(k, e.Kv.Value); err == nil {
-				log.Debug("Value is valid - return KVPair with parsed value")
-				new = &model.KVPair{Key: k, Value: v, Revision: strconv.FormatInt(e.Kv.ModRevision, 10)}
-			} else {
+			if new, err = etcdToKVPair(k, e.Kv); err != nil {
 				return nil, err
 			}
 		}
 		if eventType != api.WatchAdded && e.PrevKv != nil && len(e.PrevKv.Value) != 0 {
-			if v, err := model.ParseValue(k, e.PrevKv.Value); err == nil {
-				log.Debug("Previous value is valid - return KVPair with parsed value")
-				old = &model.KVPair{Key: k, Value: v, Revision: strconv.FormatInt(e.PrevKv.ModRevision, 10)}
-			} else {
+			if old, err = etcdToKVPair(k, e.PrevKv); err != nil {
 				return nil, err
 			}
 		}
@@ -81,5 +77,23 @@ func convertWatchEvent(e *clientv3.Event, l model.ListInterface) (*api.WatchEven
 		Old:  old,
 		New:  new,
 		Type: eventType,
+	}, nil
+}
+
+// etcdToKVPair converts an etcd KeyValue in to model.KVPair.
+func etcdToKVPair(key model.Key, ekv *mvccpb.KeyValue) (*model.KVPair, error) {
+	v, err := model.ParseValue(key, ekv.Value)
+	if err != nil {
+		return nil, errors.ErrorParsingDatastoreEntry{
+			RawKey:   string(ekv.Key),
+			RawValue: string(ekv.Value),
+			Err:      err,
+		}
+	}
+
+	return &model.KVPair{
+		Key:      key,
+		Value:    v,
+		Revision: strconv.FormatInt(ekv.ModRevision, 10),
 	}, nil
 }

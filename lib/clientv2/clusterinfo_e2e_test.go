@@ -15,12 +15,12 @@
 package clientv2_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"context"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
@@ -317,9 +317,6 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 				{
 					Type:   watch.Added,
 					Object: outRes3,
-				},
-				{
-					Type: watch.Synced,
 				},
 			})
 

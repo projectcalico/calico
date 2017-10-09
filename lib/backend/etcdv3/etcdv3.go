@@ -25,7 +25,6 @@ import (
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -452,23 +451,6 @@ func getKeyValueStrings(d *model.KVPair) (string, string, error) {
 	}
 
 	return key, string(bytes), nil
-}
-
-// etcdToKVPair converts an etcd KeyValue in to model.KVPair.
-func etcdToKVPair(key model.Key, ekv *mvccpb.KeyValue) (*model.KVPair, error) {
-	v, err := model.ParseValue(key, ekv.Value)
-	if err != nil {
-		return nil, cerrors.ErrorDatastoreError{
-			Identifier: key,
-			Err:        err,
-		}
-	}
-
-	return &model.KVPair{
-		Key:      key,
-		Value:    v,
-		Revision: strconv.FormatInt(ekv.ModRevision, 10),
-	}, nil
 }
 
 // parseRevision parses the model.KVPair revision string and converts to the

@@ -390,9 +390,6 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 					Type:   watch.Added,
 					Object: outRes3,
 				},
-				{
-					Type:	watch.Synced,
-				},
 			})
 			testWatcher3.Stop()
 
@@ -414,7 +411,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			testWatcher4.Stop()
 		})
 	})
-	
+
 	Describe("WorkloadEndpoint prefix list", func() {
 		It("should handle prefix lists of workload endpoints", func() {
 			c, err := clientv2.New(config)
@@ -429,11 +426,11 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				ctx,
 				&apiv2.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "node--1-k8s-pod-eth0"},
-					Spec:       apiv2.WorkloadEndpointSpec{
-						Node: "node-1",
-						Orchestrator: "k8s",
-						Pod: "pod",
-						Endpoint: "eth0",
+					Spec: apiv2.WorkloadEndpointSpec{
+						Node:          "node-1",
+						Orchestrator:  "k8s",
+						Pod:           "pod",
+						Endpoint:      "eth0",
 						InterfaceName: "cali1234",
 					},
 				},
@@ -445,11 +442,11 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				ctx,
 				&apiv2.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "node--1-k8s-pod--1-eth0"},
-					Spec:       apiv2.WorkloadEndpointSpec{
-						Node: "node-1",
-						Orchestrator: "k8s",
-						Pod: "pod-1",
-						Endpoint: "eth0",
+					Spec: apiv2.WorkloadEndpointSpec{
+						Node:          "node-1",
+						Orchestrator:  "k8s",
+						Pod:           "pod-1",
+						Endpoint:      "eth0",
 						InterfaceName: "cali1234",
 					},
 				},
@@ -462,11 +459,11 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				ctx,
 				&apiv2.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "namespace2", Name: "node--1-k8s-pod--2-eth0"},
-					Spec:       apiv2.WorkloadEndpointSpec{
-						Node: "node-1",
-						Orchestrator: "k8s",
-						Pod: "pod-2",
-						Endpoint: "eth0",
+					Spec: apiv2.WorkloadEndpointSpec{
+						Node:          "node-1",
+						Orchestrator:  "k8s",
+						Pod:           "pod-2",
+						Endpoint:      "eth0",
 						InterfaceName: "cali1235",
 					},
 				},

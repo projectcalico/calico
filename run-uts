@@ -12,13 +12,19 @@ fi
 echo "Removing old coverprofiles..."
 find . -name "*.coverprofile" -type f -delete
 
-echo "Calculating packages to cover..."
-go_dirs=$(find -type f -name '*.go' | \
-	      grep -vE '/vendor/|.glide|.git' | \
-	      xargs -n 1 dirname | \
-	      sort | uniq | \
-	      tr '\n' ',' | \
-	      sed 's/,$//' )
+if [ -z $WHAT ]
+then
+    echo "Calculating packages to cover..."
+    go_dirs=$(find -type f -name '*.go' | \
+	          grep -vE '/vendor/|.glide|.git' | \
+	          xargs -n 1 dirname | \
+	          sort | uniq | \
+	          tr '\n' ',' | \
+	          sed 's/,$//' )
+else
+    go_dirs=$WHAT
+fi
+
 echo "Covering: $go_dirs"
 test ! -z "$go_dirs"
 
