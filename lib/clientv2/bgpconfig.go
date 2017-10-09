@@ -58,7 +58,7 @@ func (r bgpConfigurations) Create(ctx context.Context, res *apiv2.BGPConfigurati
 // Returns the stored representation of the BGPConfiguration, and an error
 // if there is any.
 func (r bgpConfigurations) Update(ctx context.Context, res *apiv2.BGPConfiguration, opts options.SetOptions) (*apiv2.BGPConfiguration, error) {
-	// Check that NodeToNodeMeshEnabled and DefaultNodeASNumber are set. Can only be set on "default".
+	// Check that NodeToNodeMeshEnabled and ASNumber are set. Can only be set on "default".
 	if err := r.ValidateDefaultOnlyFields(res); err != nil {
 		return nil, err
 	}
@@ -119,9 +119,9 @@ func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv2.BGPConfiguration
 			})
 		}
 
-		if res.Spec.DefaultNodeASNumber != nil {
+		if res.Spec.ASNumber != nil {
 			errFields = append(errFields, cerrors.ErroredField{
-				Name:   "BGPConfiguration.Spec.DefaultNodeASNumber",
+				Name:   "BGPConfiguration.Spec.ASNumber",
 				Reason: "Cannot set defaultNodeASNumber on a non default BGP Configuration.",
 			})
 		}

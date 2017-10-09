@@ -29,11 +29,11 @@ const (
 // ResourceType groups together the watch and conversion information for a
 // specific resource type.
 type ResourceType struct {
-	// The ListInterface used to perform a watch on this resource type.
+	// ListInterface specifies the resource type to watch\.
 	ListInterface model.ListInterface
 
-	// An update processor used to convert the update event prior to it being sent in
-	// the Syncer.
+	// UpdateProcessor converts the raw KVPairs returned from the datastore into the appropriate
+	// KVPairs required for the syncer.  This is optional.
 	UpdateProcessor SyncerUpdateProcessor
 }
 
@@ -46,6 +46,8 @@ type SyncerUpdateProcessor interface {
 	// since the WatcherSyncer maintains it's own cache and will swallow duplicates.
 	// A KVPair with a nil value indicates a delete.  A non nil value indicates an add/modified.
 	// The processor may respond with any number of adds or deletes.
+	// If the resource cannot be converted then the update processor should treat this as a
+	// delete event and return the appropriate delete keys where possible.
 	Process(*model.KVPair) ([]*model.KVPair, error)
 
 	// OnSyncerStarting is called when syncer is starting a full sync for the associated resource
@@ -77,24 +79,24 @@ type watcherSyncer struct {
 	callbacks     api.SyncerCallbacks
 }
 
-func (rs *watcherSyncer) Start() {
+func (ws *watcherSyncer) Start() {
 	log.Info("Start called")
-	go rs.run()
+	go ws.run()
 }
 
 // Send a status update and store the status.
-func (rs *watcherSyncer) sendStatusUpdate(status api.SyncStatus) {
+func (ws *watcherSyncer) sendStatusUpdate(status api.SyncStatus) {
 	log.WithField("Status", status).Info("Sending status update")
-	rs.callbacks.OnStatusUpdated(status)
-	rs.status = status
+	ws.callbacks.OnStatusUpdated(status)
+	ws.status = status
 }
 
 // run implements the main syncer loop that loops forever receiving watch events and translating
 // to syncer updates.
-func (rs *watcherSyncer) run() {
+func (ws *watcherSyncer) run() {
 	log.Debug("Sending initial status event and starting watchers")
-	rs.sendStatusUpdate(api.WaitForDatastore)
-	for _, wc := range rs.watcherCaches {
+	ws.sendStatusUpdate(api.WaitForDatastore)
+	for _, wc := range ws.watcherCaches {
 		go wc.run()
 	}
 
@@ -102,19 +104,19 @@ func (rs *watcherSyncer) run() {
 	var updates []api.Update
 	for {
 		// Block until there is data.
-		result := <-rs.results
+		result := <-ws.results
 
 		// Process the data - this will append the data in subsequent calls, and action
 		// it if we hit a non-update event.
-		updates := rs.processResult(updates, result)
+		updates := ws.processResult(updates, result)
 
 		// Append results into the one update until we either flush the channel or we
 		// hit our fixed limit per update.
 	consolidatationloop:
 		for ii := 0; ii < maxUpdatesToConsolidate; ii++ {
 			select {
-			case next := <-rs.results:
-				updates = rs.processResult(updates, next)
+			case next := <-ws.results:
+				updates = ws.processResult(updates, next)
 			default:
 				break consolidatationloop
 			}
@@ -122,14 +124,14 @@ func (rs *watcherSyncer) run() {
 
 		// Perform final processing (pass in a nil result) before we loop and hit the blocking
 		// call again.
-		updates = rs.sendUpdates(updates)
+		updates = ws.sendUpdates(updates)
 	}
 }
 
 // Process a result from the result channel.  We don't immediately action updates, but
 // instead start grouping them together so that we can send a larger single update to
 // Felix.
-func (rs *watcherSyncer) processResult(updates []api.Update, result interface{}) []api.Update {
+func (ws *watcherSyncer) processResult(updates []api.Update, result interface{}) []api.Update {
 
 	// Switch on the result type.
 	switch r := result.(type) {
@@ -137,20 +139,20 @@ func (rs *watcherSyncer) processResult(updates []api.Update, result interface{})
 		// This is an update.  If we don't have previous updates then also check to see
 		// if we need to shift the status into Resync.
 		// We append these updates to the previous if there were any.
-		if len(updates) == 0 && rs.status == api.WaitForDatastore {
-			rs.sendStatusUpdate(api.ResyncInProgress)
+		if len(updates) == 0 && ws.status == api.WaitForDatastore {
+			ws.sendStatusUpdate(api.ResyncInProgress)
 		}
 		updates = append(updates, r...)
 
 	case error:
 		// Received an error.  Firstly, send any updates that we have grouped.
-		updates = rs.sendUpdates(updates)
+		updates = ws.sendUpdates(updates)
 
 		// If this is a parsing error, and if the callbacks support
 		// it, then send the error update.
 		log.WithError(r).Info("Error received in main syncer event processing loop")
-		if ec, ok := rs.callbacks.(api.SyncerParseFailCallbacks); ok {
-			log.Debug("SyncerParseFailCallbacks interface is supported")
+		if ec, ok := ws.callbacks.(api.SyncerParseFailCallbacks); ok {
+			log.Debug("syncer receiver can receive parse failed callbacks")
 			if pe, ok := r.(cerrors.ErrorParsingDatastoreEntry); ok {
 				ec.ParseFailed(pe.RawKey, pe.RawValue)
 			}
@@ -163,19 +165,19 @@ func (rs *watcherSyncer) processResult(updates []api.Update, result interface{})
 		if r == api.InSync {
 			log.Info("Received InSync event from one of the watcher caches")
 
-			if rs.status == api.WaitForDatastore {
-				rs.sendStatusUpdate(api.ResyncInProgress)
+			if ws.status == api.WaitForDatastore {
+				ws.sendStatusUpdate(api.ResyncInProgress)
 			}
 
 			// Increment the count of synced events.
-			rs.numSynced++
+			ws.numSynced++
 
 			// If we have now received synced events from all of our watchers then we are in
 			// sync.  If we have any updates, send them first and then send the status update.
-			if rs.numSynced == len(rs.watcherCaches) {
+			if ws.numSynced == len(ws.watcherCaches) {
 				log.Info("All watchers have sync'd data - sending data and final sync")
-				updates = rs.sendUpdates(updates)
-				rs.sendStatusUpdate(api.InSync)
+				updates = ws.sendUpdates(updates)
+				ws.sendStatusUpdate(api.InSync)
 			}
 		}
 	}
@@ -185,10 +187,10 @@ func (rs *watcherSyncer) processResult(updates []api.Update, result interface{})
 }
 
 // sendUpdates is used to send the consoidated set of updates.  Returns nil.
-func (rs *watcherSyncer) sendUpdates(updates []api.Update) []api.Update {
+func (ws *watcherSyncer) sendUpdates(updates []api.Update) []api.Update {
 	log.WithField("NumUpdates", len(updates)).Debug("Sending syncer updates (if any to send)")
 	if len(updates) > 0 {
-		rs.callbacks.OnUpdates(updates)
+		ws.callbacks.OnUpdates(updates)
 	}
 	return nil
 }
