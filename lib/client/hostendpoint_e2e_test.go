@@ -44,6 +44,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -183,11 +184,30 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				InterfaceName: "eth0",
 				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("10.0.0.0"), cnet.MustParseIP("20.0.0.0")},
 				Profiles:      []string{"profile1", "profile2"},
+				Ports: []api.EndpointPort{
+					{
+						Port:     1234,
+						Name:     "foobar",
+						Protocol: numorstring.ProtocolFromString("tcp"),
+					},
+					{
+						Port:     5432,
+						Name:     "bop",
+						Protocol: numorstring.ProtocolFromString("tcp"),
+					},
+				},
 			},
 			api.HostEndpointSpec{
 				InterfaceName: "eth1",
 				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("192.168.0.0"), cnet.MustParseIP("192.168.1.1")},
 				Profiles:      []string{"profile3", "profile4"},
+				Ports: []api.EndpointPort{
+					{
+						Port:     5678,
+						Name:     "bazzbiff",
+						Protocol: numorstring.ProtocolFromString("udp"),
+					},
+				},
 			}),
 
 		// Test 2: Pass one partially populated HostEndpointSpec and another fully populated HostEndpointSpec and expect the series of operations to succeed.

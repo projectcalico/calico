@@ -103,18 +103,27 @@ func init() {
 	registerFieldValidator("policytype", validatePolicyType)
 
 	// Register struct validators.
+	// Shared types.
 	registerStructValidator(validateProtocol, numorstring.Protocol{})
 	registerStructValidator(validatePort, numorstring.Port{})
+
+	// Frontend API types.
 	registerStructValidator(validateIPNAT, api.IPNAT{})
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validateIPPool, api.IPPool{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
-	registerStructValidator(validateBackendRule, model.Rule{})
+	registerStructValidator(validateEndpointPort, api.EndpointPort{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
 	registerStructValidator(validateBGPPeerMeta, api.BGPPeerMetadata{})
 	registerStructValidator(validatePolicySpec, api.PolicySpec{})
+
+	// Backend model types.
+	registerStructValidator(validateBackendRule, model.Rule{})
+	registerStructValidator(validateBackendEndpointPort, model.EndpointPort{})
+	registerStructValidator(validateBackendWorkloadEndpoint, model.WorkloadEndpoint{})
+	registerStructValidator(validateBackendHostEndpoint, model.HostEndpoint{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -253,14 +262,18 @@ func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 
 	// Check that the port range is in the correct order.  The YAML parsing also checks this,
 	// but this protects against misuse of the programmatic API.
-	log.Debugf("Validate port: %s")
+	log.Debugf("Validate port: %v", p)
 	if p.MinPort > p.MaxPort {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
 			"Port", "", reason("port range invalid"))
 	}
 
-	// No need to check for the upperbound (65536) because we use uint16.
-	if p.MinPort < 1 || p.MaxPort < 1 {
+	if p.PortName != "" {
+		if p.MinPort != 0 || p.MaxPort != 0 {
+			structLevel.ReportError(reflect.ValueOf(p.PortName),
+				"Port", "", reason("named port invalid, if name is specified, min and max should be 0"))
+		}
+	} else if p.MinPort < 1 || p.MaxPort < 1 {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
 			"Port", "", reason("port range invalid, port number must be between 0 and 65536"))
 	}
@@ -323,6 +336,20 @@ func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.
 				"IPNATs", "", reason("NAT is not in the endpoint networks"))
 		}
 	}
+
+	// Check for duplicate named ports.
+	seenPortNames := map[string]bool{}
+	for _, port := range w.Ports {
+		if seenPortNames[port.Name] {
+			structLevel.ReportError(
+				reflect.ValueOf(port.Name),
+				"Ports",
+				"",
+				reason("Ports list contains duplicate named port."),
+			)
+		}
+		seenPortNames[port.Name] = true
+	}
 }
 
 func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -332,6 +359,20 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 	if h.InterfaceName == "" && len(h.ExpectedIPs) == 0 {
 		structLevel.ReportError(reflect.ValueOf(h.InterfaceName),
 			"InterfaceName", "", reason("no interface or expected IPs have been specified"))
+	}
+
+	// Check for duplicate named ports.
+	seenPortNames := map[string]bool{}
+	for _, port := range h.Ports {
+		if seenPortNames[port.Name] {
+			structLevel.ReportError(
+				reflect.ValueOf(port.Name),
+				"Ports",
+				"",
+				reason("Ports list contains duplicate named port."),
+			)
+		}
+		seenPortNames[port.Name] = true
 	}
 }
 
@@ -517,6 +558,66 @@ func validateBGPPeerMeta(v *validator.Validate, structLevel *validator.StructLev
 	if m.Scope == scope.Global && m.Node != "" {
 		structLevel.ReportError(reflect.ValueOf(m.Node),
 			"Metadata.Node", "", reason("no BGP Peer node name should be specified when scope is global"))
+	}
+}
+
+func validateBackendEndpointPort(v *validator.Validate, structLevel *validator.StructLevel) {
+	port := structLevel.CurrentStruct.Interface().(model.EndpointPort)
+
+	if port.Protocol.String() != "tcp" && port.Protocol.String() != "udp" {
+		structLevel.ReportError(
+			reflect.ValueOf(port.Protocol),
+			"EndpointPort.Protocol",
+			"",
+			reason("EndpointPort protocol must be 'tcp' or 'udp'."),
+		)
+	}
+}
+
+func validateEndpointPort(v *validator.Validate, structLevel *validator.StructLevel) {
+	port := structLevel.CurrentStruct.Interface().(api.EndpointPort)
+
+	if port.Protocol.String() != "tcp" && port.Protocol.String() != "udp" {
+		structLevel.ReportError(
+			reflect.ValueOf(port.Protocol),
+			"EndpointPort.Protocol",
+			"",
+			reason("EndpointPort protocol must be 'tcp' or 'udp'."),
+		)
+	}
+}
+
+func validateBackendWorkloadEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
+	ep := structLevel.CurrentStruct.Interface().(model.WorkloadEndpoint)
+
+	seenPortNames := map[string]bool{}
+	for _, port := range ep.Ports {
+		if seenPortNames[port.Name] {
+			structLevel.ReportError(
+				reflect.ValueOf(port.Name),
+				"WorkloadEndpoint.Ports",
+				"",
+				reason("Ports list contains duplicate named port."),
+			)
+		}
+		seenPortNames[port.Name] = true
+	}
+}
+
+func validateBackendHostEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
+	ep := structLevel.CurrentStruct.Interface().(model.HostEndpoint)
+
+	seenPortNames := map[string]bool{}
+	for _, port := range ep.Ports {
+		if seenPortNames[port.Name] {
+			structLevel.ReportError(
+				reflect.ValueOf(port.Name),
+				"HostEndpoint.Ports",
+				"",
+				reason("Ports list contains duplicate named port."),
+			)
+		}
+		seenPortNames[port.Name] = true
 	}
 }
 

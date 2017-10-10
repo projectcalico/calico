@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -186,6 +187,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				Profiles:      []string{"profile1", "profile2"},
 				InterfaceName: "eth0",
 				MAC:           &cnet.MAC{mac1},
+				Ports: []api.EndpointPort{
+					{
+						Port:     1234,
+						Name:     "foobar",
+						Protocol: numorstring.ProtocolFromString("tcp"),
+					},
+				},
 			},
 			api.WorkloadEndpointSpec{
 				IPNetworks: []cnet.IPNet{cidr3, cidr4},
@@ -201,6 +209,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				Profiles:      []string{"profile3", "profile4"},
 				InterfaceName: "eth1",
 				MAC:           &cnet.MAC{mac2},
+				Ports: []api.EndpointPort{
+					{
+						Port:     5678,
+						Name:     "bazzbiff",
+						Protocol: numorstring.ProtocolFromString("udp"),
+					},
+				},
 			}),
 
 		// Test 2: Pass one partially populated WorkloadEndpointSpec and another fully populated WorkloadEndpointSpec and expect the series of operations to succeed.

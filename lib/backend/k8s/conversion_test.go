@@ -94,6 +94,44 @@ var _ = Describe("Test Pod conversion", func() {
 			},
 			Spec: k8sapi.PodSpec{
 				NodeName: "nodeA",
+				Containers: []k8sapi.Container{
+					{
+						Ports: []k8sapi.ContainerPort{
+							{
+								ContainerPort: 5678,
+							},
+							{
+								Name:          "no-proto",
+								ContainerPort: 1234,
+							},
+						},
+					},
+					{
+						Ports: []k8sapi.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      k8sapi.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+							{
+								Name:          "tcp-proto-with-host-port",
+								Protocol:      k8sapi.ProtocolTCP,
+								ContainerPort: 8080,
+								HostPort:      5678,
+							},
+							{
+								Name:          "udp-proto",
+								Protocol:      k8sapi.ProtocolUDP,
+								ContainerPort: 432,
+							},
+							{
+								Name:          "unkn-proto",
+								Protocol:      k8sapi.Protocol("unknown"),
+								ContainerPort: 567,
+							},
+						},
+					},
+				},
 			},
 			Status: k8sapi.PodStatus{
 				PodIP: "192.168.0.1",
@@ -116,6 +154,20 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
 		expectedLabels := map[string]string{"labelA": "valueA", "labelB": "valueB", "calico/k8s_ns": "default"}
 		Expect(wep.Value.(*model.WorkloadEndpoint).Labels).To(Equal(expectedLabels))
+
+		nsProtoTCP := numorstring.ProtocolFromString("tcp")
+		nsProtoUDP := numorstring.ProtocolFromString("udp")
+		Expect(wep.Value.(*model.WorkloadEndpoint).Ports).To(ConsistOf(
+			// No proto defaults to TCP (as defined in k8s API spec)
+			model.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
+			// Explicit TCP proto is OK too.
+			model.EndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
+			// Host port should be ignored.
+			model.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
+			// UDP is also an option.
+			model.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
+			// Unknown protocol port is ignored.
+		))
 
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision.(string)).To(Equal("1234"))
@@ -199,6 +251,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
 		port80 := intstr.FromInt(80)
+		portFoo := intstr.FromString("foo")
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
@@ -215,6 +268,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					{
 						Ports: []extensions.NetworkPolicyPort{
 							{Port: &port80},
+							{Port: &portFoo},
 						},
 						From: []extensions.NetworkPolicyPeer{
 							{
@@ -245,12 +299,20 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*model.Policy).Selector).To(Equal(
 			"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
 		protoTCP := numorstring.ProtocolFromString("tcp")
-		Expect(pol.Value.(*model.Policy).InboundRules).To(ConsistOf(model.Rule{
-			Action:      "allow",
-			Protocol:    &protoTCP, // Defaulted to TCP.
-			SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
-			DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
-		}))
+		Expect(pol.Value.(*model.Policy).InboundRules).To(ConsistOf(
+			model.Rule{
+				Action:      "allow",
+				Protocol:    &protoTCP, // Defaulted to TCP.
+				SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+				DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
+			},
+			model.Rule{
+				Action:      "allow",
+				Protocol:    &protoTCP, // Defaulted to TCP.
+				SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+				DstPorts:    []numorstring.Port{numorstring.NamedPort("foo")},
+			},
+		))
 
 		// There should be no OutboundRules
 		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))

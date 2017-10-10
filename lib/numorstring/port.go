@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,23 +18,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
+// Port represents either a range of numeric ports or a named port.
+//
+//     - For a named port, set the PortName, leaving MinPort and MaxPort as 0.
+//     - For a port range, set MinPort and MaxPort to the (inclusive) port numbers.  Set
+//       PortName to "".
+//     - For a single port, set MinPort = MaxPort and PortName = "".
 type Port struct {
-	MinPort uint16
-	MaxPort uint16
+	MinPort  uint16
+	MaxPort  uint16
+	PortName string
 }
 
 // SinglePort creates a Port struct representing a single port.
 func SinglePort(port uint16) Port {
-	return Port{port, port}
+	return Port{MinPort: port, MaxPort: port}
+}
+
+func NamedPort(name string) Port {
+	return Port{PortName: name}
 }
 
 // PortFromRange creates a Port struct representing a range of ports.
 func PortFromRange(minPort, maxPort uint16) (Port, error) {
-	port := Port{minPort, maxPort}
+	port := Port{MinPort: minPort, MaxPort: maxPort}
 	if minPort > maxPort {
 		msg := fmt.Sprintf("minimum port number (%d) is greater than maximum port number (%d) in port range", minPort, maxPort)
 		return port, errors.New(msg)
@@ -42,28 +53,44 @@ func PortFromRange(minPort, maxPort uint16) (Port, error) {
 	return port, nil
 }
 
+var (
+	allDigits = regexp.MustCompile(`^\d+$`)
+	portRange = regexp.MustCompile(`^(\d+):(\d+)$`)
+	nameRegex = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
+)
+
 // PortFromString creates a Port struct from its string representation.  A port
-// may either be single value "1234" or a range of values "100:200".
+// may either be single value "1234", a range of values "100:200" or a named port: "name".
 func PortFromString(s string) (Port, error) {
-	if num, err := strconv.ParseUint(s, 10, 16); err == nil {
+	if allDigits.MatchString(s) {
+		// Port is all digits, it should parse as a single port.
+		num, err := strconv.ParseUint(s, 10, 16)
+		if err != nil {
+			msg := fmt.Sprintf("invalid port format (%s)", s)
+			return Port{}, errors.New(msg)
+		}
 		return SinglePort(uint16(num)), nil
 	}
 
-	parts := strings.Split(s, ":")
-	if len(parts) != 2 {
-		msg := fmt.Sprintf("invalid port format (%s)", s)
+	if groups := portRange.FindStringSubmatch(s); len(groups) > 0 {
+		// Port matches <digits>:<digits>, it should parse as a range of ports.
+		if pmin, err := strconv.ParseUint(groups[1], 10, 16); err != nil {
+			msg := fmt.Sprintf("invalid minimum port number in range (%s)", s)
+			return Port{}, errors.New(msg)
+		} else if pmax, err := strconv.ParseUint(groups[2], 10, 16); err != nil {
+			msg := fmt.Sprintf("invalid maximum port number in range (%s)", s)
+			return Port{}, errors.New(msg)
+		} else {
+			return PortFromRange(uint16(pmin), uint16(pmax))
+		}
+	}
+
+	if !nameRegex.MatchString(s) {
+		msg := fmt.Sprintf("invalid name for named port (%s)", s)
 		return Port{}, errors.New(msg)
 	}
 
-	if pmin, err := strconv.ParseUint(parts[0], 10, 16); err != nil {
-		msg := fmt.Sprintf("invalid minimum port number in range (%s)", s)
-		return Port{}, errors.New(msg)
-	} else if pmax, err := strconv.ParseUint(parts[1], 10, 16); err != nil {
-		msg := fmt.Sprintf("invalid maximum port number in range (%s)", s)
-		return Port{}, errors.New(msg)
-	} else {
-		return PortFromRange(uint16(pmin), uint16(pmax))
-	}
+	return NamedPort(s), nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
@@ -94,7 +121,9 @@ func (p *Port) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON implements the json.Marshaller interface.
 func (p Port) MarshalJSON() ([]byte, error) {
-	if p.MinPort == p.MaxPort {
+	if p.PortName != "" {
+		return json.Marshal(p.PortName)
+	} else if p.MinPort == p.MaxPort {
 		return json.Marshal(p.MinPort)
 	} else {
 		return json.Marshal(p.String())
@@ -105,7 +134,9 @@ func (p Port) MarshalJSON() ([]byte, error) {
 // this returns a single string representation of the port number, otherwise
 // if returns a colon separated range of ports.
 func (p Port) String() string {
-	if p.MinPort == p.MaxPort {
+	if p.PortName != "" {
+		return p.PortName
+	} else if p.MinPort == p.MaxPort {
 		return strconv.FormatUint(uint64(p.MinPort), 10)
 	} else {
 		return fmt.Sprintf("%d:%d", p.MinPort, p.MaxPort)

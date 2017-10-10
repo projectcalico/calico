@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,12 +71,14 @@ func init() {
 		Entry("should accept 65535 port as int", "65535", portType, numorstring.SinglePort(65535)),
 		Entry("should accept 0:65535 port range as string", "\"0:65535\"", portType, portFromRange(0, 65535)),
 		Entry("should accept 1:10 port range as string", "\"1:10\"", portType, portFromRange(1, 10)),
+		Entry("should accept foo-bar as named port", "\"foo-bar\"", portType, numorstring.NamedPort("foo-bar")),
 		Entry("should reject -1 port as int", "-1", portType, nil),
 		Entry("should reject 65536 port as int", "65536", portType, nil),
 		Entry("should reject 0:65536 port range as string", "\"0:65536\"", portType, nil),
 		Entry("should reject -1:65535 port range as string", "\"-1:65535\"", portType, nil),
 		Entry("should reject 10:1 port range as string", "\"10:1\"", portType, nil),
 		Entry("should reject 1:2:3 port range as string", "\"1:2:3\"", portType, nil),
+		Entry("should reject bad named port string", "\"*\"", portType, nil),
 		Entry("should reject bad port string", "\"1:2", portType, nil),
 
 		// Protocol tests.  Invalid integer values will be stored as strings.
@@ -114,6 +116,7 @@ func init() {
 		Entry("should marshal port of 10", portFromString("10"), "10"),
 		Entry("should marshal port range of 10:20", portFromRange(10, 20), "\"10:20\""),
 		Entry("should marshal port range of 20:30", portFromRange(20, 30), "\"20:30\""),
+		Entry("should marshal named port", numorstring.NamedPort("foobar"), `"foobar"`),
 
 		// Protocol tests.
 		Entry("should marshal protocol of 0", numorstring.ProtocolFromInt(0), "0"),
