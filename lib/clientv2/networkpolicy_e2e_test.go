@@ -58,6 +58,9 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 	DescribeTable("NetworkPolicy e2e CRUD tests",
 		func(namespace1, namespace2, name1, name2 string, spec1, spec2 apiv2.PolicySpec) {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("NetworkPolicy CRUD not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -260,6 +263,9 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 	Describe("NetworkPolicy watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

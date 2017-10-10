@@ -5,11 +5,12 @@ crds.yaml is applied before running the tests to initialize CRDs (CustomResource
 for the Kubernetes backend.
 This manifest is applied in the Makefile once kubernetes API server is running.
 crds.yaml creates the following CRDs:
-  - GlobalFelixConfig
-  - GlobalBGPPeer
-  - GlobalBGPConfig
+  - FelixConfig
+  - BGPPeer
+  - BGPConfig
   - IPPool
   - GlobalNetworkPolicy
+  - ClusterInfo
 
 These CRDs must be created in advance for any Calico deployment with Kubernetes backend,
 typically as part of the same manifest used to setup Calico.

@@ -173,11 +173,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			Expect(outError.Error()).To(Equal("update conflict: BGPConfiguration(" + name1 + ")"))
 			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
-			By("Getting BGPConfiguration (name1) with the original resource version and comparing the output against specInfo")
-			res, outError = c.BGPConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
-			Expect(res.ResourceVersion).To(Equal(rv1_1))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Getting BGPConfiguration (name1) with the original resource version and comparing the output against specInfo")
+				res, outError = c.BGPConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(res, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+				Expect(res.ResourceVersion).To(Equal(rv1_1))
+			}
 
 			By("Getting BGPConfiguration (name1) with the updated resource version and comparing the output against specDebug")
 			res, outError = c.BGPConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
@@ -185,11 +187,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			testutils.ExpectResource(res, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
-			By("Listing BGPConfigurations with the original resource version and checking for a single result with name1/specInfo")
-			outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Listing BGPConfigurations with the original resource version and checking for a single result with name1/specInfo")
+				outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				Expect(outList.Items).To(HaveLen(1))
+				testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+			}
 
 			By("Listing BGPConfigurations with the latest resource version and checking for two results with name1/specDebug and name2/specDebug")
 			outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{})
@@ -198,40 +202,52 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			testutils.ExpectResource(&outList.Items[0], apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
 			testutils.ExpectResource(&outList.Items[1], apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
 
-			By("Deleting BGPConfiguration (name1) with the old resource version")
-			_, outError = c.BGPConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("update conflict: BGPConfiguration(" + name1 + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Deleting BGPConfiguration (name1) with the old resource version")
+				_, outError = c.BGPConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("update conflict: BGPConfiguration(" + name1 + ")"))
+			}
 
 			By("Deleting BGPConfiguration (name1) with the new resource version")
 			dres, outError := c.BGPConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(dres, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
 
-			By("Updating BGPConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.BGPConfigurations().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Updating BGPConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
+				_, outError = c.BGPConfigurations().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(1 * time.Second)
+				_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(2 * time.Second)
+				_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
 
-			By("Creating BGPConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.BGPConfigurations().Create(ctx, &apiv2.BGPConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: name2},
-				Spec:       specDebug,
-			}, options.SetOptions{TTL: 2 * time.Second})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+				By("Creating BGPConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
+				_, outError = c.BGPConfigurations().Create(ctx, &apiv2.BGPConfiguration{
+					ObjectMeta: metav1.ObjectMeta{Name: name2},
+					Spec:       specDebug,
+				}, options.SetOptions{TTL: 2 * time.Second})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(1 * time.Second)
+				_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(2 * time.Second)
+				_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+			}
+
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				// Delete name2 manually since we are skipping TTL tests until it is supported by the k8s backend.
+				By("Attempting to deleting BGPConfiguration (name2)")
+				dres, outError = c.BGPConfigurations().Delete(ctx, name2, options.DeleteOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(dres, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
+			}
 
 			By("Attempting to deleting BGPConfiguration (name2) again")
 			_, outError = c.BGPConfigurations().Delete(ctx, name2, options.DeleteOptions{})
@@ -283,6 +299,9 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 
 	Describe("BGPConfiguration watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

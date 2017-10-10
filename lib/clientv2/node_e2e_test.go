@@ -52,6 +52,9 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreAll, fun
 
 	DescribeTable("Node e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv2.NodeSpec) {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Node CRUD not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -244,6 +247,9 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreAll, fun
 
 	Describe("Node watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

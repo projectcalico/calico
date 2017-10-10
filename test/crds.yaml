@@ -2,6 +2,7 @@ kind: List
 metadata:
 apiVersion: v1
 items:
+# V1 only CRDs
 - apiVersion: apiextensions.k8s.io/v1beta1
   description: Calico Felix Global Felix Configuration
   kind: CustomResourceDefinition
@@ -16,19 +17,6 @@ items:
       plural: globalfelixconfigs
       singular: globalfelixconfig
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico BGP Peers
-  kind: CustomResourceDefinition
-  metadata:
-    name: bgppeers.crd.projectcalico.org
-  spec:
-    scope: Cluster
-    group: crd.projectcalico.org
-    version: v1
-    names:
-      kind: BGPPeer
-      plural: bgppeers
-      singular: bgppeer
-- apiVersion: apiextensions.k8s.io/v1beta1
   description: Calico Global BGP Configuration
   kind: CustomResourceDefinition
   metadata:
@@ -41,6 +29,7 @@ items:
       kind: GlobalBGPConfig
       plural: globalbgpconfigs
       singular: globalbgpconfig
+# V1 and V2 CRDS
 - apiVersion: apiextensions.k8s.io/v1beta1
   description: Calico IP Pools
   kind: CustomResourceDefinition
@@ -55,6 +44,19 @@ items:
       plural: ippools
       singular: ippool
 - apiVersion: apiextensions.k8s.io/v1beta1
+  description: Calico BGP Peers
+  kind: CustomResourceDefinition
+  metadata:
+    name: bgppeers.crd.projectcalico.org
+  spec:
+    scope: Cluster
+    group: crd.projectcalico.org
+    version: v1
+    names:
+      kind: BGPPeer
+      plural: bgppeers
+      singular: bgppeer
+- apiVersion: apiextensions.k8s.io/v1beta1
   description: Calico Global Network Policies
   kind: CustomResourceDefinition
   metadata:
@@ -67,3 +69,43 @@ items:
       kind: GlobalNetworkPolicy
       plural: globalnetworkpolicies
       singular: globalnetworkpolicy
+# V2 only CRDs.
+- apiVersion: apiextensions.k8s.io/v1beta1
+  description: Calico Felix Configuration
+  kind: CustomResourceDefinition
+  metadata:
+    name: felixconfigurations.crd.projectcalico.org
+  spec:
+    scope: Cluster
+    group: crd.projectcalico.org
+    version: v1
+    names:
+      kind: FelixConfiguration
+      plural: felixconfigurations
+      singular: felixconfiguration
+- apiVersion: apiextensions.k8s.io/v1beta1
+  description: Calico BGP Configuration
+  kind: CustomResourceDefinition
+  metadata:
+    name: bgpconfigurations.crd.projectcalico.org
+  spec:
+    scope: Cluster
+    group: crd.projectcalico.org
+    version: v1
+    names:
+      kind: BGPConfiguration
+      plural: bgpconfigurations
+      singular: bgpconfiguration
+- apiVersion: apiextensions.k8s.io/v1beta1
+  description: Calico Cluster Information
+  kind: CustomResourceDefinition
+  metadata:
+    name: clusterinformations.crd.projectcalico.org
+  spec:
+    scope: Cluster
+    group: crd.projectcalico.org
+    version: v1
+    names:
+      kind: ClusterInformation
+      plural: clusterinformations
+      singular: clusterinformation

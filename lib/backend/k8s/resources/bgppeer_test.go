@@ -15,12 +15,11 @@
 package resources_test
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/scope"
+	//"github.com/projectcalico/libcalico-go/lib/scope"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -28,50 +27,54 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Global BGP conversion methods", func() {
+var _ = Describe("BGP Peer conversion methods", func() {
 
-	converter := resources.GlobalBGPPeerConverter{}
+	converter := resources.BGPPeerConverter{}
 
 	// Define some useful test data.
-	listIncomplete := model.GlobalBGPPeerListOptions{}
-	nameInvalid := "11-22-fail--23"
+	listIncomplete := model.ResourceListOptions{}
 
 	// Compatible set of list, key and name
-	list1 := model.GlobalBGPPeerListOptions{
-		PeerIP: net.MustParseIP("1.2.3.4"),
+	list1 := model.ResourceListOptions{
+		Name: "1-2-3-4",
+		Kind: apiv2.KindBGPPeer,
 	}
-	key1 := model.GlobalBGPPeerKey{
-		PeerIP: net.MustParseIP("1.2.3.4"),
-	}
-	name1 := "1-2-3-4"
 
-	// Compatible set of key and name
-	key2 := model.GlobalBGPPeerKey{
-		PeerIP: net.MustParseIP("11:22::"),
+	name1 := "1-2-3-4"
+	peerIP1 := net.MustParseIP("1.2.3.4")
+
+	key1 := model.ResourceKey{
+		Name: name1,
+		Kind: apiv2.KindBGPPeer,
 	}
-	name2 := "0011-0022-0000-0000-0000-0000-0000-0000"
+
+	name2 := "11-22"
+	key2 := model.ResourceKey{
+		Name: name2,
+		Kind: apiv2.KindBGPPeer,
+	}
 
 	// Compatible set of KVPair and Kubernetes Resource.
+	value1 := apiv2.NewBGPPeer()
+	value1.ObjectMeta.Name = name1
+	value1.Spec = apiv2.BGPPeerSpec{
+		PeerIP:   peerIP1.String(),
+		ASNumber: 1212,
+	}
 	kvp1 := &model.KVPair{
-		Key: key2,
-		Value: &model.BGPPeer{
-			PeerIP: key2.PeerIP,
-			ASNum:  1212,
-		},
+		Key:      key1,
+		Value:    value1,
 		Revision: "rv",
 	}
-	res1 := &custom.BGPPeer{
-		Metadata: metav1.ObjectMeta{
-			Name:            name2,
+	res1 := &apiv2.BGPPeer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            name1,
 			ResourceVersion: "rv",
 		},
-		Spec: custom.BGPPeerSpec{
-			BGPPeerSpec: api.BGPPeerSpec{
-				ASNumber: 1212,
-			},
-			Scope:  scope.Global,
-			PeerIP: key2.PeerIP,
-			Node:   "",
+		Spec: apiv2.BGPPeerSpec{
+			ASNumber: 1212,
+			PeerIP:   peerIP1.String(),
+			Node:     "",
 		},
 	}
 
@@ -95,19 +98,13 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(k).To(Equal(key2))
 	})
 
-	It("should fail to convert an invalid resource name to the equivalent Key", func() {
-		k, err := converter.NameToKey(nameInvalid)
-		Expect(err).To(HaveOccurred())
-		Expect(k).To(BeNil())
-	})
-
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
 		r, err := converter.FromKVPair(kvp1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
-		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&custom.BGPPeer{}))
-		Expect(r.(*custom.BGPPeer).Spec).To(Equal(res1.Spec))
+		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.ObjectMeta.Name))
+		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
+		Expect(r).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
+		Expect(r.(*apiv2.BGPPeer).Spec).To(Equal(res1.Spec))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -115,7 +112,7 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value).To(BeAssignableToTypeOf(&model.BGPPeer{}))
+		Expect(kvp.Value.(*apiv2.BGPPeer)).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
 	})
 })

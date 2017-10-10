@@ -26,28 +26,28 @@ import (
 )
 
 const (
-	GlobalNetworkPolicyResourceName = "GlobalNetworkPolicies"
-	GlobalNetworkPolicyCRDName      = "globalnetworkpolicies.crd.projectcalico.org"
+	BGPConfigResourceName = "BGPConfigurations"
+	BGPConfigCRDName      = "bgpconfigurations.crd.projectcalico.org"
 )
 
-func NewGlobalNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBGPConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
-		name:            GlobalNetworkPolicyCRDName,
-		resource:        GlobalNetworkPolicyResourceName,
-		description:     "Calico Global Network Policies",
-		k8sResourceType: reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv2.GlobalNetworkPolicyList{}),
-		converter:       GlobalNetworkPolicyConverter{},
+		name:            BGPConfigCRDName,
+		resource:        BGPConfigResourceName,
+		description:     "Calico BGP Configuration",
+		k8sResourceType: reflect.TypeOf(apiv2.BGPConfiguration{}),
+		k8sListType:     reflect.TypeOf(apiv2.BGPConfigurationList{}),
+		converter:       BGPConfigConverter{},
 	}
 }
 
-// GlobalNetworkPolicyConverter implements the K8sResourceConverter interface.
-type GlobalNetworkPolicyConverter struct {
+// BGPConfigConverter implements the K8sResourceConverter interface.
+type BGPConfigConverter struct {
 }
 
-func (_ GlobalNetworkPolicyConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
+func (_ BGPConfigConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
 	pl := l.(model.ResourceListOptions)
 	if pl.Name != "" {
 		return model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
@@ -55,45 +55,46 @@ func (_ GlobalNetworkPolicyConverter) ListInterfaceToKey(l model.ListInterface) 
 	return nil
 }
 
-func (_ GlobalNetworkPolicyConverter) KeyToName(k model.Key) (string, error) {
+func (_ BGPConfigConverter) KeyToName(k model.Key) (string, error) {
 	return k.(model.ResourceKey).Name, nil
 }
 
-func (_ GlobalNetworkPolicyConverter) NameToKey(name string) (model.Key, error) {
+func (_ BGPConfigConverter) NameToKey(name string) (model.Key, error) {
 	return model.ResourceKey{
 		Name: name,
-		Kind: apiv2.KindGlobalNetworkPolicy,
+		Kind: apiv2.KindBGPConfiguration,
 	}, nil
 }
 
-func (c GlobalNetworkPolicyConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
-	t := r.(*apiv2.GlobalNetworkPolicy)
+func (c BGPConfigConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+	t := r.(*apiv2.BGPConfiguration)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
-	policy := apiv2.NewGlobalNetworkPolicy()
-	policy.ObjectMeta.Name = t.ObjectMeta.Name
-	policy.ObjectMeta.Namespace = t.ObjectMeta.Namespace
-	policy.Spec = t.Spec
+	conf := apiv2.NewBGPConfiguration()
+	conf.ObjectMeta.Name = t.ObjectMeta.Name
+	conf.ObjectMeta.Namespace = t.ObjectMeta.Namespace
+	conf.Spec = t.Spec
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      t.ObjectMeta.Name,
 			Namespace: t.ObjectMeta.Namespace,
-			Kind:      apiv2.KindGlobalNetworkPolicy,
+			Kind:      apiv2.KindBGPConfiguration,
 		},
-		Value:    policy,
+		Value:    conf,
 		Revision: t.ObjectMeta.ResourceVersion,
 	}, nil
 }
 
-func (c GlobalNetworkPolicyConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
-	v := kvp.Value.(*apiv2.GlobalNetworkPolicy)
+func (c BGPConfigConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+	v := kvp.Value.(*apiv2.BGPConfiguration)
 
-	return &apiv2.GlobalNetworkPolicy{
+	crd := apiv2.BGPConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            v.ObjectMeta.Name,
 			Namespace:       v.ObjectMeta.Namespace,
 			ResourceVersion: kvp.Revision,
 		},
 		Spec: v.Spec,
-	}, nil
+	}
+	return &crd, nil
 }

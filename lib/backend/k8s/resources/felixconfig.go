@@ -26,28 +26,28 @@ import (
 )
 
 const (
-	GlobalNetworkPolicyResourceName = "GlobalNetworkPolicies"
-	GlobalNetworkPolicyCRDName      = "globalnetworkpolicies.crd.projectcalico.org"
+	FelixConfigResourceName = "FelixConfigurations"
+	FelixConfigCRDName      = "felixconfigurations.crd.projectcalico.org"
 )
 
-func NewGlobalNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewFelixConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
-		name:            GlobalNetworkPolicyCRDName,
-		resource:        GlobalNetworkPolicyResourceName,
-		description:     "Calico Global Network Policies",
-		k8sResourceType: reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv2.GlobalNetworkPolicyList{}),
-		converter:       GlobalNetworkPolicyConverter{},
+		name:            FelixConfigCRDName,
+		resource:        FelixConfigResourceName,
+		description:     "Calico Felix Configuration",
+		k8sResourceType: reflect.TypeOf(apiv2.FelixConfiguration{}),
+		k8sListType:     reflect.TypeOf(apiv2.FelixConfigurationList{}),
+		converter:       FelixConfigConverter{},
 	}
 }
 
-// GlobalNetworkPolicyConverter implements the K8sResourceConverter interface.
-type GlobalNetworkPolicyConverter struct {
+// FelixConfigConverter implements the K8sResourceConverter interface.
+type FelixConfigConverter struct {
 }
 
-func (_ GlobalNetworkPolicyConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
+func (_ FelixConfigConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
 	pl := l.(model.ResourceListOptions)
 	if pl.Name != "" {
 		return model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
@@ -55,40 +55,40 @@ func (_ GlobalNetworkPolicyConverter) ListInterfaceToKey(l model.ListInterface) 
 	return nil
 }
 
-func (_ GlobalNetworkPolicyConverter) KeyToName(k model.Key) (string, error) {
+func (_ FelixConfigConverter) KeyToName(k model.Key) (string, error) {
 	return k.(model.ResourceKey).Name, nil
 }
 
-func (_ GlobalNetworkPolicyConverter) NameToKey(name string) (model.Key, error) {
+func (_ FelixConfigConverter) NameToKey(name string) (model.Key, error) {
 	return model.ResourceKey{
 		Name: name,
-		Kind: apiv2.KindGlobalNetworkPolicy,
+		Kind: apiv2.KindFelixConfiguration,
 	}, nil
 }
 
-func (c GlobalNetworkPolicyConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
-	t := r.(*apiv2.GlobalNetworkPolicy)
+func (c FelixConfigConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+	t := r.(*apiv2.FelixConfiguration)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
-	policy := apiv2.NewGlobalNetworkPolicy()
-	policy.ObjectMeta.Name = t.ObjectMeta.Name
-	policy.ObjectMeta.Namespace = t.ObjectMeta.Namespace
-	policy.Spec = t.Spec
+	cfg := apiv2.NewFelixConfiguration()
+	cfg.ObjectMeta.Name = t.ObjectMeta.Name
+	cfg.ObjectMeta.Namespace = t.ObjectMeta.Namespace
+	cfg.Spec = t.Spec
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      t.ObjectMeta.Name,
 			Namespace: t.ObjectMeta.Namespace,
-			Kind:      apiv2.KindGlobalNetworkPolicy,
+			Kind:      apiv2.KindFelixConfiguration,
 		},
-		Value:    policy,
+		Value:    cfg,
 		Revision: t.ObjectMeta.ResourceVersion,
 	}, nil
 }
 
-func (c GlobalNetworkPolicyConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
-	v := kvp.Value.(*apiv2.GlobalNetworkPolicy)
+func (c FelixConfigConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+	v := kvp.Value.(*apiv2.FelixConfiguration)
 
-	return &apiv2.GlobalNetworkPolicy{
+	return &apiv2.FelixConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            v.ObjectMeta.Name,
 			Namespace:       v.ObjectMeta.Namespace,

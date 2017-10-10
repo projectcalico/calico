@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
@@ -142,32 +143,33 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
-		Expect(wep.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal("default.podA"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).Hostname).To(Equal("nodeA"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal("eth0"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal("k8s"))
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("podA"))
+		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv2.KindWorkloadEndpoint))
 
-		// Assert value fields.
-		Expect(len(wep.Value.(*model.WorkloadEndpoint).IPv6Nets)).To(Equal(0))
-		Expect(len(wep.Value.(*model.WorkloadEndpoint).IPv4Nets)).To(Equal(1))
-		Expect(wep.Value.(*model.WorkloadEndpoint).IPv4Nets[0].String()).To(Equal("192.168.0.1/32"))
-		Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Workload).To(Equal("default.podA"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Node).To(Equal("nodeA"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Endpoint).To(Equal("eth0"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
+		Expect(len(wep.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(1))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks[0]).To(Equal("192.168.0.1/32"))
+		//Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
 		expectedLabels := map[string]string{"labelA": "valueA", "labelB": "valueB", "calico/k8s_ns": "default"}
-		Expect(wep.Value.(*model.WorkloadEndpoint).Labels).To(Equal(expectedLabels))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
 
-		nsProtoTCP := numorstring.ProtocolFromString("tcp")
-		nsProtoUDP := numorstring.ProtocolFromString("udp")
-		Expect(wep.Value.(*model.WorkloadEndpoint).Ports).To(ConsistOf(
-			// No proto defaults to TCP (as defined in k8s API spec)
-			model.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
-			// Explicit TCP proto is OK too.
-			model.EndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
-			// Host port should be ignored.
-			model.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
-			// UDP is also an option.
-			model.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
-			// Unknown protocol port is ignored.
-		))
+		// TODO(doublek): Named ports?
+		//nsProtoTCP := numorstring.ProtocolFromString("tcp")
+		//nsProtoUDP := numorstring.ProtocolFromString("udp")
+		//Expect(wep.Value.(*model.WorkloadEndpoint).Ports).To(ConsistOf(
+		//	// No proto defaults to TCP (as defined in k8s API spec)
+		//	model.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
+		//	// Explicit TCP proto is OK too.
+		//	model.EndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
+		//	// Host port should be ignored.
+		//	model.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
+		//	// UDP is also an option.
+		//	model.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
+		//	// Unknown protocol port is ignored.
+		//))
 
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision).To(Equal("1234"))
@@ -214,16 +216,16 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
-		Expect(wep.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal("default.podA"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).Hostname).To(Equal("nodeA"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal("eth0"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal("k8s"))
-
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("podA"))
+		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv2.KindWorkloadEndpoint))
 		// Assert value fields.
-		Expect(len(wep.Value.(*model.WorkloadEndpoint).IPv6Nets)).To(Equal(0))
-		Expect(len(wep.Value.(*model.WorkloadEndpoint).IPv4Nets)).To(Equal(1))
-		Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
-		Expect(wep.Value.(*model.WorkloadEndpoint).Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Workload).To(Equal("default.podA"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Node).To(Equal("nodeA"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Endpoint).To(Equal("eth0"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
+		Expect(len(wep.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(1))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
+		//Expect(wep.Value.(*apiv2.WorkloadEndpoint).State).To(Equal("active"))
 	})
 
 	It("should Parse a Pod with no NodeName", func() {
@@ -290,35 +292,43 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
 
 		// Assert value fields are correct.
-		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
 		// Check the selector is correct, and that the matches are sorted.
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal(
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal(
 			"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
 		protoTCP := numorstring.ProtocolFromString("tcp")
-		Expect(pol.Value.(*model.Policy).InboundRules).To(ConsistOf(
-			model.Rule{
-				Action:      "allow",
-				Protocol:    &protoTCP, // Defaulted to TCP.
-				SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
-				DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules).To(ConsistOf(
+			apiv2.Rule{
+				Action:   "allow",
+				Protocol: &protoTCP, // Defaulted to TCP.
+				Source: apiv2.EntityRule{
+					Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+				},
+				Destination: apiv2.EntityRule{
+					Ports: []numorstring.Port{numorstring.SinglePort(80)},
+				},
 			},
-			model.Rule{
-				Action:      "allow",
-				Protocol:    &protoTCP, // Defaulted to TCP.
-				SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
-				DstPorts:    []numorstring.Port{numorstring.NamedPort("foo")},
+			apiv2.Rule{
+				Action:   "allow",
+				Protocol: &protoTCP, // Defaulted to TCP.
+				Source: apiv2.EntityRule{
+					Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+				},
+				Destination: apiv2.EntityRule{
+					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+				},
 			},
 		))
 
-		// There should be no OutboundRules
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		// There should be no EgressRules
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 		// Check that Types field exists and has only 'ingress'
-		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
@@ -339,19 +349,19 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
 
 		// Assert value fields are correct.
-		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+		Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(0))
 
-		// There should be no OutboundRules
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		// There should be no EgressRules
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 		// Check that Types field exists and has only 'ingress'
-		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 
 	It("should parse a NetworkPolicy with multiple peers", func() {
@@ -395,26 +405,26 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		By("parsing the policy", func() {
 			pol, err = c.NetworkPolicyToPolicy(&np)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
-			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+			Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		By("having the correct endpoint selector", func() {
-			Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
 		})
 
 		By("having the correct peer selectors", func() {
-			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(2))
+			Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(2))
 
-			// There should be no OutboundRules
-			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+			// There should be no EgressRules
+			Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 			// Check that Types field exists and has only 'ingress'
-			Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-			Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+			Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 
-			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
-			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[1].Source.Selector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
 		})
 	})
 
@@ -471,37 +481,37 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		By("parsing the policy", func() {
 			pol, err = c.NetworkPolicyToPolicy(&np)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
-			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+			Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		By("having the correct endpoint selector", func() {
-			Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
 		})
 
 		By("having the correct peer selectors", func() {
 			eighty, _ := numorstring.PortFromString("80")
 			ninety, _ := numorstring.PortFromString("90")
-			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(4))
+			Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(4))
 
-			// There should be no OutboundRules
-			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+			// There should be no EgressRules
+			Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 			// Check that Types field exists and has only 'ingress'
-			Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-			Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+			Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 
-			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
-			Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts).To(Equal([]numorstring.Port{ninety}))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
-			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
-			Expect(pol.Value.(*model.Policy).InboundRules[1].DstPorts).To(Equal([]numorstring.Port{ninety}))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[1].Source.Selector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[1].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
-			Expect(pol.Value.(*model.Policy).InboundRules[2].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
-			Expect(pol.Value.(*model.Policy).InboundRules[2].DstPorts).To(Equal([]numorstring.Port{eighty}))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[2].Source.Selector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[2].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
-			Expect(pol.Value.(*model.Policy).InboundRules[3].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
-			Expect(pol.Value.(*model.Policy).InboundRules[3].DstPorts).To(Equal([]numorstring.Port{eighty}))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[3].Source.Selector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[3].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 		})
 	})
 
@@ -521,19 +531,19 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
 
 		// Assert value fields are correct.
-		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+		Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(0))
 
-		// There should be no OutboundRules
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		// There should be no EgressRules
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 		// Check that Types field exists and has only 'ingress'
-		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 
 	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
@@ -565,20 +575,20 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
 
 		// Assert value fields are correct.
-		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("has(calico/k8s_ns)"))
+		Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("has(calico/k8s_ns)"))
 
-		// There should be no OutboundRules
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		// There should be no EgressRules
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 		// Check that Types field exists and has only 'ingress'
-		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 
 	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
@@ -605,19 +615,19 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
 
 		// Assert value fields are correct.
-		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && k in { 'v1', 'v2' }"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+		Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default' && k in { 'v1', 'v2' }"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(0))
 
-		// There should be no OutboundRules
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		// There should be no EgressRules
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 		// Check that Types field exists and has only 'ingress'
-		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 
 	It("should parse a NetworkPolicy with Ports only", func() {
@@ -648,22 +658,22 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
 
 		// Assert value fields are correct.
-		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).InboundRules[0].Protocol.String()).To(Equal("tcp"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules[0].DstPorts)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts[0].String()).To(Equal("80"))
+		Expect(int(*pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Protocol.String()).To(Equal("tcp"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Destination.Ports)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.IngressRules[0].Destination.Ports[0].String()).To(Equal("80"))
 
-		// There should be no OutboundRules
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		// There should be no EgressRules
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.EgressRules)).To(Equal(0))
 
 		// Check that Types field exists and has only 'ingress'
-		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
-		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(len(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.GlobalNetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 })
 
@@ -688,18 +698,21 @@ var _ = Describe("Test Namespace conversion", func() {
 		p, err := c.NamespaceToProfile(&ns)
 		Expect(err).NotTo(HaveOccurred())
 
+		Expect(p.Key.(model.ResourceKey).Name).To(Equal("k8s_ns.default"))
+		Expect(p.Key.(model.ResourceKey).Kind).To(Equal(apiv2.KindProfile))
+
 		// Ensure rules are correct for profile.
-		inboundRules := p.Value.(*model.Profile).Rules.InboundRules
-		outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-		Expect(len(inboundRules)).To(Equal(1))
-		Expect(len(outboundRules)).To(Equal(1))
+		ingressRules := p.Value.(*apiv2.Profile).Spec.IngressRules
+		egressRules := p.Value.(*apiv2.Profile).Spec.EgressRules
+		Expect(len(ingressRules)).To(Equal(1))
+		Expect(len(egressRules)).To(Equal(1))
 
 		// Ensure both inbound and outbound rules are set to allow.
-		Expect(inboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
-		Expect(outboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		Expect(ingressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
+		Expect(egressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
 
 		// Check labels.
-		labels := p.Value.(*model.Profile).Labels
+		labels := p.Value.(*apiv2.Profile).Labels
 		Expect(labels["pcns.foo"]).To(Equal("bar"))
 		Expect(labels["pcns.roger"]).To(Equal("rabbit"))
 	})
@@ -717,17 +730,17 @@ var _ = Describe("Test Namespace conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Ensure rules are correct.
-		inboundRules := p.Value.(*model.Profile).Rules.InboundRules
-		outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-		Expect(len(inboundRules)).To(Equal(1))
-		Expect(len(outboundRules)).To(Equal(1))
+		ingressRules := p.Value.(*apiv2.Profile).Spec.IngressRules
+		egressRules := p.Value.(*apiv2.Profile).Spec.EgressRules
+		Expect(len(ingressRules)).To(Equal(1))
+		Expect(len(egressRules)).To(Equal(1))
 
 		// Ensure both inbound and outbound rules are set to allow.
-		Expect(inboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
-		Expect(outboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		Expect(ingressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
+		Expect(egressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
 
 		// Check labels.
-		labels := p.Value.(*model.Profile).Labels
+		labels := p.Value.(*apiv2.Profile).ObjectMeta.Labels
 		Expect(len(labels)).To(Equal(0))
 	})
 
@@ -746,14 +759,14 @@ var _ = Describe("Test Namespace conversion", func() {
 		p, err := c.NamespaceToProfile(&ns)
 		Expect(err).NotTo(HaveOccurred())
 		// Ensure rules are correct for profile.
-		inboundRules := p.Value.(*model.Profile).Rules.InboundRules
-		outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-		Expect(len(inboundRules)).To(Equal(1))
-		Expect(len(outboundRules)).To(Equal(1))
+		ingressRules := p.Value.(*apiv2.Profile).Spec.IngressRules
+		egressRules := p.Value.(*apiv2.Profile).Spec.EgressRules
+		Expect(len(ingressRules)).To(Equal(1))
+		Expect(len(egressRules)).To(Equal(1))
 
 		// Ensure both inbound and outbound rules are set to allow.
-		Expect(inboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
-		Expect(outboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+		Expect(ingressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
+		Expect(egressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
 
 	})
 
@@ -790,14 +803,14 @@ var _ = Describe("Test Namespace conversion", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Ensure rules are correct.
-			inboundRules := p.Value.(*model.Profile).Rules.InboundRules
-			outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-			Expect(len(inboundRules)).To(Equal(1))
-			Expect(len(outboundRules)).To(Equal(1))
+			ingressRules := p.Value.(*apiv2.Profile).Spec.IngressRules
+			egressRules := p.Value.(*apiv2.Profile).Spec.EgressRules
+			Expect(len(ingressRules)).To(Equal(1))
+			Expect(len(egressRules)).To(Equal(1))
 
 			// Ensure both inbound and outbound rules are set to allow.
-			Expect(inboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
-			Expect(outboundRules[0]).To(Equal(model.Rule{Action: "allow"}))
+			Expect(ingressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
+			Expect(egressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
 		})
 	})
 })

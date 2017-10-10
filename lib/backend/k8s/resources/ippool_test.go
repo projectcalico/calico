@@ -15,8 +15,7 @@
 package resources_test
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -32,63 +31,55 @@ var _ = Describe("IP Pool conversion methods", func() {
 	converter := resources.IPPoolConverter{}
 
 	// Define some useful test data.
-	listIncomplete := model.IPPoolListOptions{}
+	listIncomplete := model.ResourceListOptions{}
 
-	// Compatible set of list, key and name
-	list1 := model.IPPoolListOptions{
-		CIDR: net.MustParseNetwork("1.2.3.0/24"),
-	}
-	key1 := model.IPPoolKey{
-		CIDR: net.MustParseNetwork("1.2.3.0/24"),
-	}
 	name1 := "1-2-3-0-24"
 
-	// Compatible set of key and name
-	key2 := model.IPPoolKey{
-		CIDR: net.MustParseNetwork("11:22::/120"),
+	//Name: net.MustParseNetwork("1.2.3.0/24"),
+	// Compatible set of list, key and name
+	list1 := model.ResourceListOptions{
+		Name: name1,
+		Kind: apiv2.KindIPPool,
 	}
+	key1 := model.ResourceKey{
+		Name: name1,
+		Kind: apiv2.KindIPPool,
+	}
+
+	cidr2 := net.MustParseNetwork("11:22::/120")
 	name2 := "11-22---120"
+	key2 := model.ResourceKey{
+		Name: name2,
+		Kind: apiv2.KindIPPool,
+	}
 
 	// Compatible set of KVPair and Kubernetes Resource.
-	kvp1 := &model.KVPair{
-		Key: key2,
-		Value: &model.IPPool{
-			CIDR:          key2.CIDR,
-			Masquerade:    true,
-			IPIPMode:      "cross-subnet",
-			IPIPInterface: "tunl0",
-			Disabled:      false,
-			IPAM:          true,
+	value1 := apiv2.NewIPPool()
+	value1.ObjectMeta.Name = name2
+	value1.Spec = apiv2.IPPoolSpec{
+		CIDR:     cidr2.String(),
+		Disabled: false,
+		IPIP: &apiv2.IPIPConfiguration{
+			Mode:    "cross-subnet",
 		},
+	}
+	kvp1 := &model.KVPair{
+		Key:      key2,
+		Value:    value1,
 		Revision: "rv",
 	}
-	res1 := &custom.IPPool{
-		Metadata: metav1.ObjectMeta{
+	res1 := &apiv2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:            name2,
 			ResourceVersion: "rv",
 		},
-		Spec: custom.IPPoolSpec{
-			IPPoolSpec: api.IPPoolSpec{
-				IPIP: &api.IPIPConfiguration{
-					Enabled: true,
-					Mode:    "cross-subnet",
-				},
-				NATOutgoing: true,
-				Disabled:    false,
+		Spec: apiv2.IPPoolSpec{
+			CIDR:     cidr2.String(),
+			Disabled: false,
+			IPIP: &apiv2.IPIPConfiguration{
+				Mode:    "cross-subnet",
 			},
-			CIDR: key2.CIDR,
 		},
-	}
-
-	// Invalid Kubernetes resource, invalid name
-	nameInvalid := "11-22-fail--23"
-
-	resInvalidName := &custom.IPPool{
-		Metadata: metav1.ObjectMeta{
-			Name:            nameInvalid,
-			ResourceVersion: "test",
-		},
-		Spec: custom.IPPoolSpec{},
 	}
 
 	It("should convert an incomplete ListInterface to no Key", func() {
@@ -111,18 +102,12 @@ var _ = Describe("IP Pool conversion methods", func() {
 		Expect(k).To(Equal(key2))
 	})
 
-	It("should fail to convert an invalid resource name to the equivalent Key", func() {
-		k, err := converter.NameToKey(nameInvalid)
-		Expect(err).To(HaveOccurred())
-		Expect(k).To(BeNil())
-	})
-
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
 		r, err := converter.FromKVPair(kvp1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
-		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&custom.IPPool{}))
+		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.ObjectMeta.Name))
+		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
+		Expect(r).To(BeAssignableToTypeOf(&apiv2.IPPool{}))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -130,12 +115,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value).To(BeAssignableToTypeOf(&model.IPPool{}))
+		Expect(kvp.Value).To(BeAssignableToTypeOf(&apiv2.IPPool{}))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
-	})
-
-	It("should fail to convert an invalid Kuberenetes resource (invalid name)", func() {
-		_, err := converter.ToKVPair(resInvalidName)
-		Expect(err).To(HaveOccurred())
 	})
 })

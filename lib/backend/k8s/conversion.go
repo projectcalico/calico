@@ -23,13 +23,14 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var (
@@ -96,12 +97,17 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 
 	name := fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name)
 	kvp := model.KVPair{
-		Key: model.ProfileKey{Name: name},
-		Value: &model.Profile{
-			Labels: labels,
-			Rules: model.ProfileRules{
-				InboundRules:  []model.Rule{model.Rule{Action: "allow"}},
-				OutboundRules: []model.Rule{model.Rule{Action: "allow"}},
+		Key: model.ResourceKey{
+			Name: name,
+			Kind: apiv2.KindProfile,
+		},
+		Value: &apiv2.Profile{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: labels,
+			},
+			Spec: apiv2.ProfileSpec{
+				IngressRules: []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+				EgressRules:  []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
 			},
 		},
 		Revision: ns.ObjectMeta.ResourceVersion,
@@ -146,14 +152,14 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 
 	// We do, in some circumstances, want to parse Pods without an IP address.  For example,
 	// a DELETE update will not include an IP.
-	ipNets := []cnet.IPNet{}
+	ipNets := []string{}
 	if c.hasIPAddress(pod) {
 		_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
 		if err != nil {
 			log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
 			return nil, err
 		}
-		ipNets = append(ipNets, *ipNet)
+		ipNets = append(ipNets, ipNet.String())
 	}
 
 	// Generate the interface name and MAC based on workload.  This must match
@@ -167,51 +173,57 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	}
 	labels["calico/k8s_ns"] = pod.ObjectMeta.Namespace
 
+	// TODO(doublek): Where do named ports go?
 	// Map any named ports through.
-	var endpointPorts []model.EndpointPort
-	for _, container := range pod.Spec.Containers {
-		for _, containerPort := range container.Ports {
-			if containerPort.Name != "" && containerPort.ContainerPort != 0 {
-				var modelProto numorstring.Protocol
-				switch containerPort.Protocol {
-				case kapiv1.ProtocolUDP:
-					modelProto = numorstring.ProtocolFromString("udp")
-				case kapiv1.ProtocolTCP, kapiv1.Protocol("") /* K8s default is TCP. */ :
-					modelProto = numorstring.ProtocolFromString("tcp")
-				default:
-					log.WithFields(log.Fields{
-						"protocol": containerPort.Protocol,
-						"pod":      pod,
-						"port":     containerPort,
-					}).Debug("Ignoring named port with unknown protocol")
-					continue
-				}
+	//var endpointPorts []model.EndpointPort
+	//for _, container := range pod.Spec.Containers {
+	//	for _, containerPort := range container.Ports {
+	//		if containerPort.Name != "" && containerPort.ContainerPort != 0 {
+	//			var modelProto numorstring.Protocol
+	//			switch containerPort.Protocol {
+	//			case kapiv1.ProtocolUDP:
+	//				modelProto = numorstring.ProtocolFromString("udp")
+	//			case kapiv1.ProtocolTCP, kapiv1.Protocol("") /* K8s default is TCP. */ :
+	//				modelProto = numorstring.ProtocolFromString("tcp")
+	//			default:
+	//				log.WithFields(log.Fields{
+	//					"protocol": containerPort.Protocol,
+	//					"pod":      pod,
+	//					"port":     containerPort,
+	//				}).Debug("Ignoring named port with unknown protocol")
+	//				continue
+	//			}
 
-				endpointPorts = append(endpointPorts, model.EndpointPort{
-					Name:     containerPort.Name,
-					Protocol: modelProto,
-					Port:     uint16(containerPort.ContainerPort),
-				})
-			}
-		}
-	}
+	//			endpointPorts = append(endpointPorts, model.EndpointPort{
+	//				Name:     containerPort.Name,
+	//				Protocol: modelProto,
+	//				Port:     uint16(containerPort.ContainerPort),
+	//			})
+	//		}
+	//	}
+	//}
 
 	// Create the key / value pair to return.
 	kvp := model.KVPair{
-		Key: model.WorkloadEndpointKey{
-			Hostname:       pod.Spec.NodeName,
-			OrchestratorID: "k8s",
-			WorkloadID:     workload,
-			EndpointID:     "eth0",
+		Key: model.ResourceKey{
+			Name: pod.ObjectMeta.Name,
+			Kind: apiv2.KindWorkloadEndpoint,
 		},
-		Value: &model.WorkloadEndpoint{
-			State:      "active",
-			Name:       interfaceName,
-			ProfileIDs: []string{profile},
-			IPv4Nets:   ipNets,
-			IPv6Nets:   []cnet.IPNet{},
-			Labels:     labels,
-			Ports:      endpointPorts,
+		Value: &apiv2.WorkloadEndpoint{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pod.ObjectMeta.Name,
+				Namespace: pod.ObjectMeta.Namespace,
+				Labels:    labels,
+			},
+			Spec: apiv2.WorkloadEndpointSpec{
+				Orchestrator:  "k8s",
+				Node:          pod.Spec.NodeName,
+				Workload:      workload,
+				Endpoint:      "eth0",
+				InterfaceName: interfaceName,
+				Profiles:      []string{profile},
+				IPNetworks:    ipNets,
+			},
 		},
 		Revision: pod.ObjectMeta.ResourceVersion,
 	}
@@ -228,21 +240,24 @@ func (c Converter) NetworkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.K
 	order := float64(1000.0)
 
 	// Generate the inbound rules list.
-	var inboundRules []model.Rule
+	var ingressRules []apiv2.Rule
 	for _, r := range np.Spec.Ingress {
-		inboundRules = append(inboundRules, c.k8sIngressRuleToCalico(r, np.ObjectMeta.Namespace)...)
+		ingressRules = append(ingressRules, c.k8sIngressRuleToCalico(r, np.ObjectMeta.Namespace)...)
 	}
 
 	// Build and return the KVPair.
 	return &model.KVPair{
-		Key: model.PolicyKey{
+		Key: model.ResourceKey{
 			Name: policyName,
+			Kind: apiv2.KindGlobalNetworkPolicy,
 		},
-		Value: &model.Policy{
-			Order:        &order,
-			Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
-			InboundRules: inboundRules,
-			Types:        []string{"ingress"},
+		Value: &apiv2.GlobalNetworkPolicy{
+			Spec: apiv2.PolicySpec{
+				Order:        &order,
+				Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
+				IngressRules: ingressRules,
+				Types:        []apiv2.PolicyType{apiv2.PolicyTypeIngress},
+			},
 		},
 		Revision: np.ObjectMeta.ResourceVersion,
 	}, nil
@@ -297,8 +312,8 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) stri
 	return strings.Join(selectors, " && ")
 }
 
-func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule, ns string) []model.Rule {
-	rules := []model.Rule{}
+func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule, ns string) []apiv2.Rule {
+	rules := []apiv2.Rule{}
 	peers := []*extensions.NetworkPolicyPeer{}
 	ports := []*extensions.NetworkPolicyPort{}
 
@@ -351,7 +366,7 @@ func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 	return rules
 }
 
-func (c Converter) buildRule(port *extensions.NetworkPolicyPort, peer *extensions.NetworkPolicyPeer, ns string) model.Rule {
+func (c Converter) buildRule(port *extensions.NetworkPolicyPort, peer *extensions.NetworkPolicyPeer, ns string) apiv2.Rule {
 	var protocol *numorstring.Protocol
 	var dstPorts []numorstring.Port
 	srcSelector := ""
@@ -366,11 +381,15 @@ func (c Converter) buildRule(port *extensions.NetworkPolicyPort, peer *extension
 	}
 
 	// Build the rule.
-	return model.Rule{
-		Action:      "allow",
-		Protocol:    protocol,
-		SrcSelector: srcSelector,
-		DstPorts:    dstPorts,
+	return apiv2.Rule{
+		Action:   "allow",
+		Protocol: protocol,
+		Source: apiv2.EntityRule{
+			Selector: srcSelector,
+		},
+		Destination: apiv2.EntityRule{
+			Ports: dstPorts,
+		},
 	}
 }
 

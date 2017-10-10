@@ -44,6 +44,9 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 
 	Describe("Test prefix deletion of the datastore", func() {
 		It("should receive watch events for each of the deleted keys", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -93,6 +96,9 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 
 	Describe("Test constant stream of events whilst closing watcher", func() {
 		It("should handle gracefully closing watchers while events are occurring", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := New(config)
 			Expect(err).NotTo(HaveOccurred())
 
