@@ -35,11 +35,18 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-var _ = Context("Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(false)
+var _ = Context("TCP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(false, "tcp")
 })
-var _ = Context("Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
-	describeNamedPortTests(true)
+var _ = Context("TCP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(true, "tcp")
+})
+
+var _ = Context("UDP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(false, "udp")
+})
+var _ = Context("UDP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(true, "udp")
 })
 
 // describeNamedPortTests describes tests for either source or destination named ports.
@@ -52,7 +59,7 @@ var _ = Context("Source named ports: with initialized Felix, etcd datastore, 3 w
 //
 //     - The policy generation is parametrised to move the match criteria from destination port
 //       to source port (and from ingress/egress to the opposite) if the flag is set.
-func describeNamedPortTests(testSourcePorts bool) {
+func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	var (
 		etcd   *containers.Container
@@ -63,14 +70,23 @@ func describeNamedPortTests(testSourcePorts bool) {
 	)
 
 	const (
-		sharedPortName = "shared-tcp"
-		w0PortName     = "w0-tcp"
-		w1PortName     = "w1-tcp"
+		sharedPortName = "shared-port"
+		w0PortName     = "w0-port"
+		w1PortName     = "w1-port"
 		sharedPort     = 1100
 		w0Port         = 1000
 		w1Port         = 1001
 		w2Port         = 1002
 	)
+
+	actualConnectivity := func() []string {
+		if protocol == "udp" {
+			// If this is a retry then we may have stale conntrack entries and we don't want those
+			// to influence the connectivity check.
+			felix.ExecMayFail("conntrack", "-D", "-p", "udp")
+		}
+		return cc.ActualConnectivity()
+	}
 
 	BeforeEach(func() {
 
@@ -102,13 +118,13 @@ func describeNamedPortTests(testSourcePorts bool) {
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			workloadTCPPort := uint16(1000 + ii)
+			workloadPort := uint16(1000 + ii)
 
 			var ports string
 			if testSourcePorts {
 				ports = "10000"
 			} else {
-				ports = fmt.Sprintf("3000,4000,1100,%d", workloadTCPPort)
+				ports = fmt.Sprintf("3000,4000,1100,%d", workloadPort)
 			}
 			w[ii] = workload.Run(
 				felix,
@@ -116,6 +132,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 				"cali0"+iiStr,
 				"10.65.0.1"+iiStr,
 				ports,
+				protocol == "udp",
 			)
 
 			// Includes some named ports on each workload.  Each workload gets its own named port,
@@ -124,21 +141,16 @@ func describeNamedPortTests(testSourcePorts bool) {
 				{
 					Port:     sharedPort,
 					Name:     sharedPortName,
-					Protocol: numorstring.ProtocolFromString("tcp"),
+					Protocol: numorstring.ProtocolFromString(protocol),
 				},
 				{
-					Port:     workloadTCPPort,
-					Name:     fmt.Sprintf("w%d-tcp", ii),
-					Protocol: numorstring.ProtocolFromString("tcp"),
+					Port:     workloadPort,
+					Name:     fmt.Sprintf("w%d-port", ii),
+					Protocol: numorstring.ProtocolFromString(protocol),
 				},
 				{
 					Port:     2200,
 					Name:     "shared-udp",
-					Protocol: numorstring.ProtocolFromString("udp"),
-				},
-				{
-					Port:     uint16(1000 + ii),
-					Name:     fmt.Sprintf("w%d-udp", ii),
 					Protocol: numorstring.ProtocolFromString("udp"),
 				},
 			}
@@ -148,6 +160,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 
 		cc = &workload.ConnectivityChecker{
 			ReverseDirection: testSourcePorts,
+			Protocol:         protocol,
 		}
 	})
 
@@ -199,12 +212,12 @@ func describeNamedPortTests(testSourcePorts bool) {
 			cc.ExpectSome(w[1], w[0].Port(4000))
 			cc.ExpectSome(w[2], w[0].Port(4000))
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+			Eventually(actualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 		})
 	})
 
 	createPolicy := func(policy *api.Policy) {
-		log.WithField("policy", policy).Info("Creating policy")
+		log.WithField("policy", dumpPolicy(policy)).Info("Creating policy")
 		_, err := client.Policies().Create(policy)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -219,7 +232,6 @@ func describeNamedPortTests(testSourcePorts bool) {
 		//
 		// useDestSel if set, adds a destination selector (picking out w[0]) to the rule.
 		func(negated bool, applyRulesAt ingressEgress, numNumericPorts int, useDestSel bool) {
-			protoTCP := numorstring.ProtocolFromString("tcp")
 			pol := api.NewPolicy()
 			pol.Metadata.Name = "policy-1"
 			ports := []numorstring.Port{
@@ -237,9 +249,10 @@ func describeNamedPortTests(testSourcePorts bool) {
 			if useDestSel {
 				entRule.Selector = w[0].NameSelector()
 			}
+			protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
 				Action:   "allow",
-				Protocol: &protoTCP,
+				Protocol: &protoStruct,
 			}
 			if testSourcePorts {
 				apiRule.Source = entRule
@@ -340,7 +353,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 			cc.ExpectSome(w[0], w[1].Port(w1Port))
 			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+			Eventually(actualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(pol),
 			)
@@ -390,8 +403,6 @@ func describeNamedPortTests(testSourcePorts bool) {
 		}
 
 		BeforeEach(func() {
-
-			protoTCP := numorstring.ProtocolFromString("tcp")
 			policy = api.NewPolicy()
 			policy.Metadata.Name = "policy-1"
 
@@ -406,9 +417,10 @@ func describeNamedPortTests(testSourcePorts bool) {
 					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
 			}
 
+			protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
 				Action:   "allow",
-				Protocol: &protoTCP,
+				Protocol: &protoStruct,
 			}
 			if testSourcePorts {
 				apiRule.Source = entityRule
@@ -442,7 +454,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 			cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
 			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+			Eventually(actualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(policy),
 			)
@@ -470,7 +482,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+				Eventually(actualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
 					dumpPolicy(policy),
 				)
@@ -501,7 +513,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+				Eventually(actualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
 					dumpPolicy(policy),
 				)
@@ -521,7 +533,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 			cc.ExpectNone(w[2], w[0].Port(4000))
 			cc.ExpectNone(w[2], w[0].Port(3000))
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+			Eventually(actualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(policy),
 			)
@@ -647,7 +659,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 					cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 					cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+					Eventually(actualConnectivity, "10s", "100ms").Should(
 						Equal(cc.ExpectedConnectivity()),
 						dumpPolicy(policy),
 					)
@@ -681,7 +693,7 @@ func describeNamedPortTests(testSourcePorts bool) {
 				cc.ExpectNone(w[3], w[0].Port(4000))       // Numeric port in NotPorts list.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
+				Eventually(actualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
 					dumpPolicy(policy),
 				)
@@ -690,7 +702,6 @@ func describeNamedPortTests(testSourcePorts bool) {
 	})
 }
 
-// TODO UDP
 // TODO Corner case: UDP named port with TCP match
 
 func dumpPolicy(pol *api.Policy) string {

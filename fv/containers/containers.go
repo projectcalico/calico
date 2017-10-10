@@ -208,14 +208,14 @@ func (c *Container) SourceName() string {
 	return c.Name
 }
 
-func (c *Container) CanConnectTo(ip, port string) bool {
+func (c *Container) CanConnectTo(ip, port, protocol string) bool {
 
 	// Ensure that the container has the 'test-connection' binary.
 	c.EnsureBinary("test-connection")
 
 	// Run 'test-connection' to the target.
 	connectionCmd := utils.Command("docker", "exec", c.Name,
-		"/test-connection", "-", ip, port)
+		"/test-connection", "--protocol="+protocol, "-", ip, port)
 	outPipe, err := connectionCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
 	errPipe, err := connectionCmd.StderrPipe()

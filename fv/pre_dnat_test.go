@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
@@ -75,7 +76,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		// Create workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			w[ii] = workload.Run(felix, "w"+iiStr, "cali1"+iiStr, "10.65.0.1"+iiStr, "8055")
+			w[ii] = workload.Run(felix, "w"+iiStr, "cali1"+iiStr, "10.65.0.1"+iiStr, "8055", false)
 			w[ii].Configure(client)
 		}
 

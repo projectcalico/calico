@@ -22,9 +22,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
-	log "github.com/sirupsen/logrus"
 )
 
 func Run(command string, args ...string) {
