@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -204,6 +205,106 @@ var _ = Describe("CalicoCni", func() {
 				_, err = netlink.LinkByName("cali" + containerID)
 				Expect(err).Should(HaveOccurred())
 				Expect(err.Error()).Should(Equal("Link not found"))
+			})
+
+			Context("when a named port is set", func() {
+				It("it is added to the workload endpoint", func() {
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					if err != nil {
+						panic(err)
+					}
+					clientset, err := kubernetes.NewForConfig(config)
+
+					if err != nil {
+						panic(err)
+					}
+
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					interfaceName := k8s.VethNameForWorkload(fmt.Sprintf("%s.%s", K8S_TEST_NS, name))
+
+					// Create a K8s pod w/o any special params
+					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Name: name},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+							Ports: []v1.ContainerPort{{
+								Name:          "anamedport",
+								ContainerPort: 555,
+							}},
+						}}},
+					})
+					if err != nil {
+						panic(err)
+					}
+					containerID, session, contVeth, _, _, contNs, err := CreateContainer(netconf, name, "")
+
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					result, err := GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+
+					mac := contVeth.Attrs().HardwareAddr
+
+					Expect(len(result.IPs)).Should(Equal(1))
+					result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+					Expect(result.IPs[0].Address.Mask.String()).Should(Equal("ffffffff"))
+
+					// datastore things:
+					// TODO Make sure the profile doesn't exist
+
+					// The endpoint is created
+					endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					// Set the Revision to nil since we can't assert it's exact value.
+					endpoints.Items[0].Metadata.Revision = nil
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:             hostname,
+						Name:             "eth0",
+						Workload:         fmt.Sprintf("test.%s", name),
+						ActiveInstanceID: containerID,
+						Orchestrator:     "k8s",
+						Labels:           map[string]string{"calico/k8s_ns": "test"},
+					}))
+					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+						InterfaceName: interfaceName,
+						IPNetworks:    []cnet.IPNet{{result.IPs[0].Address}},
+						MAC:           &cnet.MAC{HardwareAddr: mac},
+						Profiles:      []string{"k8s_ns.test"},
+						Ports: []api.EndpointPort{{
+							Name:     "anamedport",
+							Protocol: numorstring.ProtocolFromString("tcp"),
+							Port:     555,
+						}},
+					}))
+
+					_, err = DeleteContainer(netconf, contNs.Path(), name)
+					Expect(err).ShouldNot(HaveOccurred())
+
+					// Make sure there are no endpoints anymore
+					endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(0))
+
+					// Make sure the interface has been removed from the namespace
+					targetNs, _ := ns.GetNS(contNs.Path())
+					err = targetNs.Do(func(_ ns.NetNS) error {
+						_, err = netlink.LinkByName("eth0")
+						return err
+					})
+					Expect(err).Should(HaveOccurred())
+					Expect(err.Error()).Should(Equal("Link not found"))
+
+					// Make sure the interface has been removed from the host
+					_, err = netlink.LinkByName("cali" + containerID)
+					Expect(err).Should(HaveOccurred())
+					Expect(err.Error()).Should(Equal("Link not found"))
+				})
 			})
 
 			Context("when the same hostVeth exists", func() {

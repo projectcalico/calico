@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	backendconverter "github.com/projectcalico/libcalico-go/lib/converter"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 
@@ -109,6 +110,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 
 		labels := make(map[string]string)
 		annot := make(map[string]string)
+		var ports []api.EndpointPort
 
 		// Only attempt to fetch the labels and annotations from Kubernetes
 		// if the policy type has been set to "k8s". This allows users to
@@ -117,12 +119,13 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		if conf.Policy.PolicyType == "k8s" {
 			var err error
 
-			labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
+			labels, annot, ports, err = getK8sPodInfo(client, k8sArgs)
 			if err != nil {
 				return nil, err
 			}
 			logger.WithField("labels", labels).Debug("Fetched K8s labels")
 			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
+			logger.WithField("ports", ports).Debug("Fetched K8s ports")
 
 			// Check for calico IPAM specific annotations and set them if needed.
 			if conf.IPAM.Type == "calico-ipam" {
@@ -245,6 +248,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		endpoint.Metadata.Orchestrator = orchestrator
 		endpoint.Metadata.Workload = workload
 		endpoint.Metadata.Labels = labels
+		endpoint.Spec.Ports = ports
 
 		// Set the profileID according to whether Kubernetes policy is required.
 		// If it's not, then just use the network name (which is the normal behavior)
@@ -628,20 +632,33 @@ func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset,
 	return kubernetes.NewForConfig(config)
 }
 
-func getK8sLabelsAnnotations(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, map[string]string, error) {
+func getK8sPodInfo(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, err error) {
 	pod, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME), metav1.GetOptions{})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	labels := pod.Labels
+	labels = pod.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels["calico/k8s_ns"] = fmt.Sprintf("%s", k8sargs.K8S_POD_NAMESPACE)
 
-	return labels, pod.Annotations, nil
+	var c k8sbackend.Converter
+	var bc backendconverter.WorkloadEndpointConverter
+	kvp, err := c.PodToWorkloadEndpoint(pod)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	fwep, err := bc.ConvertKVPairToAPI(kvp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	wep := fwep.(*api.WorkloadEndpoint)
+
+	return labels, pod.Annotations, wep.Spec.Ports, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, nodename string) (string, error) {
