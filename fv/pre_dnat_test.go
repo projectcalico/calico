@@ -54,14 +54,13 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		etcd = containers.RunEtcd()
 
 		client = utils.GetEtcdClient(etcd.IP)
-		err := client.EnsureInitialized()
-		Expect(err).NotTo(HaveOccurred())
+		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
 
 		felix = containers.RunFelix(etcd.IP)
 
 		felixNode := api.NewNode()
 		felixNode.Metadata.Name = felix.Hostname
-		_, err = client.Nodes().Create(felixNode)
+		_, err := client.Nodes().Create(felixNode)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
