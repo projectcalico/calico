@@ -183,7 +183,7 @@ k8s-install/scripts/install_cni.test: vendor
 .PHONY: test-install-cni
 ## Test the install-cni.sh script
 test-install-cni: docker-image k8s-install/scripts/install_cni.test
-	cd k8s-install/scripts && ./install_cni.test
+	cd k8s-install/scripts && DEPLOY_CONTAINER_NAME=$(DEPLOY_CONTAINER_NAME) ./install_cni.test
 
 run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	docker run --rm --privileged --net=host \
