@@ -34,7 +34,7 @@ spec:
   - profile2
 ```
 
-### HostEndoint Definition
+### HostEndpoint Definition
 
 #### Metadata
 
