@@ -46,7 +46,7 @@ type Workload struct {
 	errPipe          io.ReadCloser
 	namespacePath    string
 	WorkloadEndpoint *api.WorkloadEndpoint
-	UDP              bool
+	Protocol         string // "tcp" or "udp"
 }
 
 var workloadIdx = 0
@@ -67,7 +67,7 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *containers.Container, name, interfaceName, ip, ports string, udp bool) (w *Workload) {
+func Run(c *containers.Container, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
 
 	// Build unique workload name and struct.
 	workloadIdx++
@@ -77,7 +77,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, udp boo
 		InterfaceName: interfaceName,
 		IP:            ip,
 		Ports:         ports,
-		UDP:           udp,
+		Protocol:      protocol,
 	}
 
 	// Ensure that the host has the 'test-workload' binary.
@@ -86,7 +86,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, udp boo
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
 	var udpArg string
-	if udp {
+	if protocol == "udp" {
 		udpArg = "--udp"
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,

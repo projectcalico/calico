@@ -71,7 +71,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		// Create three workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			w[ii] = workload.Run(felix, "w"+iiStr, "cali1"+iiStr, "10.65.0.1"+iiStr, "8055", false)
+			w[ii] = workload.Run(felix, "w"+iiStr, "cali1"+iiStr, "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 	})

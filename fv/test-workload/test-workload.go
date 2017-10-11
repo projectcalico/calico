@@ -129,7 +129,7 @@ func main() {
 			}
 		}
 
-		// Listen on each port for both TCP and UDP.
+		// Listen on each port for either TCP or UDP.
 		for _, port := range ports {
 			myAddr := ipAddress + ":" + port
 			logCxt := log.WithFields(log.Fields{

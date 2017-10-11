@@ -107,7 +107,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	})
 
 	It("with a local workload, port should be reachable", func() {
-		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", false)
+		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", "tcp")
 		w.Configure(client)
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 		w.Stop()

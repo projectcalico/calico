@@ -104,8 +104,8 @@ func tryConnect(ipAddress, port string, sourcePort string, protocol string) erro
 	// The reuse library implements a version of net.Dialer that can reuse UDP/TCP ports, which we
 	// need in order to make connection retries work.
 	var d reuse.Dialer
+	localAddr := "0.0.0.0:" + sourcePort
 	if protocol == "udp" {
-		localAddr := "0.0.0.0:" + sourcePort
 		remoteAddr := ipAddress + ":" + port
 		log.Infof("Connecting from %v to %v", localAddr, remoteAddr)
 		d.D.LocalAddr, err = net.ResolveUDPAddr("udp", localAddr)
@@ -125,7 +125,7 @@ func tryConnect(ipAddress, port string, sourcePort string, protocol string) erro
 			panic(errors.New("Unexpected reply: " + reply))
 		}
 	} else {
-		d.D.LocalAddr, err = net.ResolveTCPAddr("tcp", "0.0.0.0:"+sourcePort)
+		d.D.LocalAddr, err = net.ResolveTCPAddr("tcp", localAddr)
 		if err != nil {
 			return err
 		}

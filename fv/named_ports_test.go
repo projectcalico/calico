@@ -70,13 +70,14 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	const (
-		sharedPortName = "shared-port"
-		w0PortName     = "w0-port"
-		w1PortName     = "w1-port"
-		sharedPort     = 1100
-		w0Port         = 1000
-		w1Port         = 1001
-		w2Port         = 1002
+		sharedPortName       = "shared-port"
+		w0PortName           = "w0-port"
+		w1PortName           = "w1-port"
+		sharedPort           = 1100
+		w0Port               = 1000
+		w1Port               = 1001
+		w2Port               = 1002
+		sourceTestTargetPort = "10000"
 	)
 
 	actualConnectivity := func() []string {
@@ -115,16 +116,16 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		_, err = client.Profiles().Create(defaultProfile)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Create three workloads, using that profile.
+		// Create some workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
 			workloadPort := uint16(1000 + ii)
 
 			var ports string
 			if testSourcePorts {
-				ports = "10000"
+				ports = sourceTestTargetPort
 			} else {
-				ports = fmt.Sprintf("3000,4000,1100,%d", workloadPort)
+				ports = fmt.Sprintf("3000,4000,%d,%d", sharedPort, workloadPort)
 			}
 			w[ii] = workload.Run(
 				felix,
@@ -132,7 +133,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				"cali0"+iiStr,
 				"10.65.0.1"+iiStr,
 				ports,
-				protocol == "udp",
+				protocol,
 			)
 
 			// Includes some named ports on each workload.  Each workload gets its own named port,
@@ -154,7 +155,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					Protocol: numorstring.ProtocolFromString("udp"),
 				},
 			}
-			w[ii].DefaultPort = "10000"
+			w[ii].DefaultPort = sourceTestTargetPort
 			w[ii].Configure(client)
 		}
 
@@ -174,7 +175,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			utils.Run("docker", "exec", felix.Name, "ip", "r")
 		}
 
-		for ii := 0; ii < 3; ii++ {
+		for ii := range w {
 			w[ii].Stop()
 		}
 		felix.Stop()
@@ -744,7 +745,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			"cali123nginx",
 			"10.65.0.1",
 			"80,81",
-			false,
+			"tcp",
 		)
 		nginx.WorkloadEndpoint.Metadata.Labels = map[string]string{
 			"calico/k8s_ns": "test",
@@ -768,7 +769,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			"cali123client",
 			"10.65.0.2",
 			"1000",
-			false,
+			"tcp",
 		)
 		nginxClient.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
 		nginxClient.Configure(client)
