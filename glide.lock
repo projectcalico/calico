@@ -1,5 +1,5 @@
-hash: 1f0054fc8ba4c8880b804f5751aee427db43130dcb682245e75814d2b6124df5
-updated: 2017-09-29T13:44:09.386041992-07:00
+hash: d31ebeefb037b92f0206747449673093591bdda6fe8d9bfd5627409fb3d66530
+updated: 2017-10-10T21:48:26.873614708Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -153,10 +153,12 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/felix
-  version: 4006dd5a3dfdd39bc0087a9e0a7e2f7623432de4
+  version: ecbd512d86355949387b05a98a09070a09d4488b
   subpackages:
   - fv
   - fv.containers
+  - fv/containers
+  - fv/utils
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -166,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5cabf71a9999834727d83036e986836084e0a13a
+  version: 4db56aa2f763478265b424ef04988cc6ddd30537
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -192,10 +194,11 @@ imports:
   - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
+  - lib/set
   - lib/testutils
   - lib/validator
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
