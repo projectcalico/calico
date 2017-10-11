@@ -19,6 +19,7 @@ from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.network import NETWORKING_LIBNETWORK
 from tests.st.utils.utils import ETCD_CA, ETCD_CERT, \
     ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, get_ip, \
     retry_until_success, wipe_etcd
@@ -69,14 +70,16 @@ class TestLibnetworkLabeling(TestBase):
                 "host1",
                 additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
                 post_docker_commands=POST_DOCKER_COMMANDS,
-                start_calico=False)
+                start_calico=False,
+                networking=NETWORKING_LIBNETWORK)
         cls.host1_hostname = cls.host1.execute("hostname")
         cls.hosts.append(cls.host1)
         cls.host2 = DockerHost(
                 "host2",
                 additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
                 post_docker_commands=POST_DOCKER_COMMANDS,
-                start_calico=False)
+                start_calico=False,
+                networking=NETWORKING_LIBNETWORK)
         cls.host2_hostname = cls.host1.execute("hostname")
         cls.hosts.append(cls.host2)
 
