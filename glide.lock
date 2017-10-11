@@ -1,5 +1,5 @@
-hash: c2a8b7e77e92fc8a1f29857617b21c6f0e2bb615c693adcde4fbc440fc8b913f
-updated: 2017-09-29T15:05:16.078297722Z
+hash: 502dd3ff17f785fe3fa0db2b30a00e241d1f140f5c9848bbc7ffcddb71bbba75
+updated: 2017-10-11T10:48:14.485858855Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -83,7 +83,7 @@ imports:
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/hashicorp/hcl
-  version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
+  version: 42e33e2d55a0ff1d6263f738896ea8c13571a8d0
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -98,7 +98,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 392fa03cf3cc98b78e606c34996976cea65b6814
+  version: 6d93507389b39eaefd2b84c9ad96372c974d4586
   subpackages:
   - client/v2
   - models
@@ -110,7 +110,7 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/magiconair/properties
-  version: be5ece7dd465ab0765a9682137865547526d1dfb
+  version: 8d7837e64d3c1ee4e54a880c5a920ab4316fc90a
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -126,7 +126,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d0303fe809921458f417bcf828397a65db30a7e4
 - name: github.com/olekukonko/tablewriter
-  version: be5337e7b39e64e5f91445ce7e721888dbab7387
+  version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
 - name: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
@@ -162,7 +162,7 @@ imports:
   - table
   - zebra
 - name: github.com/pelletier/go-toml
-  version: 69d355db5304c0f7f809a2edc054553e7142f016
+  version: 2009e44b6f182e34d8ce081ac2767622937ea3d4
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -172,7 +172,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2fe92aee8d834c63da485f6e3934c91cb42f948d
+  version: 4db56aa2f763478265b424ef04988cc6ddd30537
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -208,17 +208,17 @@ imports:
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/afero
-  version: 9be650865eab0c12963d8753212f4f9c66cdcf12
+  version: e67d870304c4bca21331b02f414f970df13aa694
   subpackages:
   - mem
 - name: github.com/spf13/cast
   version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
 - name: github.com/spf13/jwalterweatherman
-  version: 0efa5202c04663c757d84f90f5219c1250baf94f
+  version: 12bd96e66386c1960ab0f74ced1362f66f552f7b
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/spf13/viper
-  version: 25b30aa063fc18e48662b86996252eabdcf2f0c7
+  version: d9cca5ef33035202efb1586825bdbb15ff9ec3ba
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/ugorji/go
@@ -226,7 +226,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: f5a6f697a596c788d474984a38a0ac4ba0719e93
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -259,7 +259,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -311,7 +311,7 @@ imports:
   - peer
   - transport
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
