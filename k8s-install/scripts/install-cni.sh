@@ -128,7 +128,8 @@ sed -i s~__ETCD_CA_CERT_FILE__~${CNI_CONF_ETCD_CA:-}~g $TMP_CONF
 sed -i s~__ETCD_ENDPOINTS__~${ETCD_ENDPOINTS:-}~g $TMP_CONF
 sed -i s~__LOG_LEVEL__~${LOG_LEVEL:-warn}~g $TMP_CONF
 
-FILENAME=${CNI_CONF_NAME:-10-calico.conf}
+CNI_CONF_NAME=${CNI_CONF_NAME:-10-calico.conf}
+CNI_OLD_CONF_NAME=${CNI_OLD_CONF_NAME:-10-calico.conf}
 
 # Log the config file before inserting service account token.
 # This way auth token is not visible in the logs.
@@ -136,10 +137,14 @@ echo "CNI config: $(cat ${TMP_CONF})"
 
 sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g $TMP_CONF
 
+# Delete old CNI config files for upgrades.
+if [ "${CNI_CONF_NAME}" != "${CNI_OLD_CONF_NAME}" ]; then
+    rm -f "/host/etc/cni/net.d/${CNI_OLD_CONF_NAME}"
+fi
 # Move the temporary CNI config into place.
-mv $TMP_CONF /host/etc/cni/net.d/${FILENAME}
+mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME}
 
-echo "Created CNI config $FILENAME"
+echo "Created CNI config ${CNI_CONF_NAME}"
 
 # Unless told otherwise, sleep forever.
 # This prevents Kubernetes from restarting the pod repeatedly.
