@@ -6,26 +6,55 @@ CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
 
-# Read current stream version from _data/versions.yml
-RELEASE_STREAM?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
-
 ###############################################################################
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
 YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
 
-CALICO_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
-CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
-BIRD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
-GOBGPD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
-FELIX_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
-CALICOCTL_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
-LIBNETWORK_PLUGIN_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
-TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
-KUBE_CONTROLLERS_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
-CNI_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
+# Read current stream version from _data/versions.yml
+V_RELEASE_STREAM := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
+RELEASE_STREAM ?= $(V_RELEASE_STREAM)
+
+# Use := so that these V_ variables are computed only once per make run.
+V_CALICO := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
+V_CALICO_GIT := $(shell git describe --tags --dirty --always)
+V_BIRD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
+V_CALICOCTL := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
+V_CNI := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
+V_FELIX := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
+V_GOBGPD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
+V_KUBE_CONTROLLERS := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
+V_LIBNETWORK_PLUGIN := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
+V_TYPHA := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+
+# Now use ?= to allow the versions derived from versions.yml to be
+# overriden (by the environment).
+CALICO_VER ?= $(V_CALICO)
+CALICO_GIT_VER ?= $(V_CALICO_GIT)
+BIRD_VER ?= $(V_BIRD)
+CALICOCTL_VER ?= $(V_CALICOCTL)
+CNI_VER ?= $(V_CNI)
+FELIX_VER ?= $(V_FELIX)
+GOBGPD_VER ?= $(V_GOBGPD)
+KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
+LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
+TYPHA_VER ?= $(V_TYPHA)
+
 # TODO - Why isn't confd in versions.yaml
 CONFD_VER ?= v0.12.1-calico-0.4.0
+
+$(info RELEASE_STREAM=$(RELEASE_STREAM))
+$(info CALICO_VER=$(CALICO_VER))
+$(info CALICO_GIT_VER=$(CALICO_GIT_VER))
+$(info BIRD_VER=$(BIRD_VER))
+$(info CALICOCTL_VER=$(CALICOCTL_VER))
+$(info CONFD_VER=$(CONFD_VER))
+$(info CNI_VER=$(CNI_VER))
+$(info FELIX_VER=$(FELIX_VER))
+$(info GOBGPD_VER=$(GOBGPD_VER))
+$(info KUBE_CONTROLLERS_VER=$(KUBE_CONTROLLERS_VER))
+$(info LIBNETWORK_PLUGIN_VER=$(LIBNETWORK_PLUGIN_VER))
+$(info TYPHA_VER=$(TYPHA_VER))
 
 SYSTEMTEST_CONTAINER_VER ?= latest
 # we can use "custom" build image and test image name
@@ -33,17 +62,6 @@ SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 
 # Ensure that the dist directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist)
-
-.PHONY: print-version
-print-version:
-	$(info $$RELEASE_STREAM is ${RELEASE_STREAM})
-    $(info $$BIRD_VER is ${BIRD_VER})
-    $(info $$CALICOCTL_VER is ${CALICOCTL_VER})
-    $(info $$CALICO_VER is ${CALICO_VER})
-    $(info $$CONFD_VER is ${CONFD_VER})
-    $(info $$FELIX_VER is ${FELIX_VER})
-    $(info $$KUBE_CONTROLLERS_VER is ${KUBE_CONTROLLERS_VER})
-    $(info $$TYPHA_VER is ${TYPHA_VER})
 
 ###############################################################################
 # URL for Calico binaries
@@ -112,7 +130,8 @@ dist/calicoctl-v1.0.2:
 	wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.2/calicoctl -O dist/calicoctl-v1.0.2
 	chmod +x dist/calicoctl-v1.0.2
 
-# Pull the latest calicoctl binary.  Used for STs
+# Pull calicoctl and CNI plugin binaries with versions as per XXX_VER
+# variables.  These are used for the STs.
 dist/calicoctl:
 	-docker rm -f calicoctl
 	docker create --name calicoctl $(CTL_CONTAINER_NAME)
@@ -120,6 +139,16 @@ dist/calicoctl:
 	  test -e dist/calicoctl && \
 	  touch dist/calicoctl
 	-docker rm -f calicoctl
+dist/calico-cni-plugin dist/calico-ipam-plugin:
+	-docker rm -f calico-cni
+	docker create --name calico-cni calico/cni:$(CNI_VER)
+	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
+	  test -e dist/calico-cni-plugin && \
+	  touch dist/calico-cni-plugin
+	docker cp calico-cni:/opt/cni/bin/calico-ipam dist/calico-ipam-plugin && \
+	  test -e dist/calico-ipam-plugin && \
+	  touch dist/calico-ipam-plugin
+	-docker rm -f calico-cni
 
 test_image: calico_test.created ## Create the calico/test image
 
@@ -221,11 +250,11 @@ dist/allocate-ipip-addr: $(ALLOCATE_IPIP_FILES) vendor
 	mkdir -p dist
 	mkdir -p .go-pkg-cache
 	docker run --rm \
-  	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-  	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
-  	-v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
-  	-v $(VERSIONS_FILE):/versions.yaml:ro \
-    -e VERSIONS_FILE=/versions.yaml \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+	-v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
+	-v $(VERSIONS_FILE):/versions.yaml:ro \
+	-e VERSIONS_FILE=/versions.yaml \
 	-v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
 	  $(CALICO_BUILD) sh -c '\
 		cd /go/src/$(PACKAGE_NAME) && \
@@ -320,7 +349,7 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created
+st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -529,7 +558,7 @@ release: clean
 	# Check that the images container the right sub-components
 	docker run $(NODE_CONTAINER_NAME) calico-felix --version
 	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
-	
+
 	@echo "# See RELEASING.md for detailed instructions."
 	@echo "# Now push release images."
 	@echo "  docker push $(NODE_CONTAINER_NAME):$(CALICO_VER)"
@@ -538,7 +567,7 @@ release: clean
 	@echo "# For the final release only, push the latest tag (not for RCs)"
 	@echo "  docker push $(NODE_CONTAINER_NAME):latest"
 	@echo "  docker push quay.io/$(NODE_CONTAINER_NAME):latest"
-	
+
 	@echo "# Only push the git tag AFTER this branch is merged to origin/master"
 	@echo "  git push origin $(CALICO_VER)"
 
@@ -649,4 +678,3 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
-
