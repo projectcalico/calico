@@ -702,6 +702,147 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	})
 }
 
+// This test reproduces a particular Kubernetes failure scenario seen during FV testing named ports.
+var _ = Describe("with a simulated kubernetes nginx and client", func() {
+	var (
+		etcd              *containers.Container
+		felix             *containers.Container
+		client            *client.Client
+		nginx             *workload.Workload
+		nginxClient       *workload.Workload
+		defaultDenyPolicy *api.Policy
+		allowHTTPPolicy   *api.Policy
+	)
+
+	BeforeEach(func() {
+
+		etcd = containers.RunEtcd()
+
+		client = utils.GetEtcdClient(etcd.IP)
+		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
+
+		felix = containers.RunFelix(etcd.IP)
+
+		felixNode := api.NewNode()
+		felixNode.Metadata.Name = felix.Hostname
+		_, err := client.Nodes().Create(felixNode)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a namespace profile and write to the datastore.
+		defaultProfile := api.NewProfile()
+		defaultProfile.Metadata.Name = "k8s_ns.test"
+		defaultProfile.Metadata.Labels = map[string]string{"name": "test"}
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
+		_, err = client.Profiles().Create(defaultProfile)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create nginx workload.
+		nginx = workload.Run(
+			felix,
+			"nginx",
+			"cali123nginx",
+			"10.65.0.1",
+			"80,81",
+			false,
+		)
+		nginx.WorkloadEndpoint.Metadata.Labels = map[string]string{
+			"calico/k8s_ns": "test",
+			"name":          "nginx",
+		}
+		nginx.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
+			{
+				Port:     80,
+				Name:     "http-port",
+				Protocol: numorstring.ProtocolFromString("tcp"),
+			},
+		}
+		nginx.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
+		nginx.DefaultPort = "80"
+		nginx.Configure(client)
+
+		// Create client workload.
+		nginxClient = workload.Run(
+			felix,
+			"client",
+			"cali123client",
+			"10.65.0.2",
+			"1000",
+			false,
+		)
+		nginxClient.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
+		nginxClient.Configure(client)
+
+		// Create a default deny policy (but we don't actually write it to the datastore yet).
+		defaultDenyPolicy = api.NewPolicy()
+		defaultDenyPolicy.Metadata.Name = "knp.default.test.default-deny"
+		thousand := 1000.0
+		defaultDenyPolicy.Spec.Order = &thousand
+		defaultDenyPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		defaultDenyPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+
+		// Create a policy that opens up the HTTP named port (but we don't actually write it to the
+		// datastore yet).
+		allowHTTPPolicy = api.NewPolicy()
+		allowHTTPPolicy.Metadata.Name = "knp.default.test.access-nginx"
+		protoStruct := numorstring.ProtocolFromString("tcp")
+		apiRule := api.Rule{
+			Action:   "allow",
+			Protocol: &protoStruct,
+			Destination: api.EntityRule{
+				Ports: []numorstring.Port{
+					numorstring.NamedPort("http-port"),
+				},
+			},
+		}
+		allowHTTPPolicy.Spec.IngressRules = []api.Rule{
+			apiRule,
+		}
+		allowHTTPPolicy.Spec.Order = &thousand
+		allowHTTPPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		allowHTTPPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			log.Warn("Test failed, dumping diags...")
+			utils.Run("docker", "logs", felix.Name)
+			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
+			utils.Run("docker", "exec", felix.Name, "ipset", "list")
+			utils.Run("docker", "exec", felix.Name, "ip", "r")
+		}
+
+		nginx.Stop()
+		nginxClient.Stop()
+		felix.Stop()
+
+		if CurrentGinkgoTestDescription().Failed {
+			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+		}
+		etcd.Stop()
+	})
+
+	It("HTTP port policy should open up nginx port", func() {
+		// The profile has a default allow so we should start with connectivity.
+		Eventually(nginxClient, "10s", "100ms").Should(HaveConnectivityTo(nginx))
+		Eventually(nginxClient, "10s", "100ms").Should(HaveConnectivityTo(nginx.Port(81)))
+
+		// Then we add an (ingress) default deny policy, which should cut it off again.
+		// It's important to check this before applying the allow policy to check that the correct
+		// policy is opening up the port.
+		_, err := client.Policies().Apply(defaultDenyPolicy)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(nginxClient, "10s", "100ms").ShouldNot(HaveConnectivityTo(nginx))
+		Eventually(nginxClient, "10s", "100ms").ShouldNot(HaveConnectivityTo(nginx.Port(81)))
+
+		// Then a policy that opens up the HTTP port only (by named port).
+		_, err = client.Policies().Apply(allowHTTPPolicy)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(nginxClient, "10s", "100ms").Should(HaveConnectivityTo(nginx))
+		Eventually(nginxClient, "10s", "100ms").ShouldNot(HaveConnectivityTo(nginx.Port(81)))
+	})
+})
+
 // TODO Corner case: UDP named port with TCP match
 
 func dumpPolicy(pol *api.Policy) string {
