@@ -19,6 +19,7 @@ import yaml
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.exceptions import CommandExecError
+from tests.st.utils.network import NETWORKING_CNI, NETWORKING_LIBNETWORK
 from tests.st.utils.utils import assert_network, assert_profile, \
     assert_number_endpoints, get_profile_name
 
@@ -376,8 +377,10 @@ class MultiHostMainline(TestBase):
 
         # Test deleting the network. It will fail if there are any
         # endpoints connected still.
-        self.assertRaises(CommandExecError, network1.delete)
-        self.assertRaises(CommandExecError, network2.delete)
+        if (host1.networking == NETWORKING_LIBNETWORK or
+            host2.networking == NETWORKING_LIBNETWORK):
+            self.assertRaises(CommandExecError, network1.delete)
+            self.assertRaises(CommandExecError, network2.delete)
 
         return n1_workloads, n2_workloads, networks
 
