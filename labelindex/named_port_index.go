@@ -291,7 +291,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 	// Check whether anything has actually changed before we do a scan.
 	oldIPSetData := idx.ipSetDataByID[ipSetID]
 	if oldIPSetData != nil {
-		if oldIPSetData.selector.UniqueID() == oldIPSetData.selector.UniqueID() &&
+		if oldIPSetData.selector.UniqueID() == sel.UniqueID() &&
 			oldIPSetData.namedPortProtocol == namedPortProtocol &&
 			oldIPSetData.namedPort == namedPort {
 			// Spurious refresh of existing IP set.
