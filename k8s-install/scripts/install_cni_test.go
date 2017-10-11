@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -48,7 +49,7 @@ func cleanup() {
 	if err != nil {
 		Fail("Could not get CWD")
 	}
-	containers.Run("cni",
+	out, err := exec.Command("docker", "run", "--rm", "--name", "cni_cleanup",
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
@@ -56,7 +57,11 @@ func cleanup() {
 		"-v", cwd+"/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd+"/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
 		"calico/cni:latest",
-		"sh", "-c", "rm -f /host/opt/cni/bin/* /host/etc/cni/net.d/*")
+		"sh", "-c", "rm -f /host/opt/cni/bin/* /host/etc/cni/net.d/*").CombinedOutput()
+
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to clean up root owned files: %s", string(out)))
+	}
 }
 
 var _ = BeforeSuite(func() {
