@@ -71,6 +71,8 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("InterfacePrefix", "InterfacePrefix", "tap", "tap"),
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
+	Entry("InterfaceExclude", "InterfaceExclude", "kube-ipvs0", "kube-ipvs0"),
+	Entry("InterfaceExclude list", "InterfaceExclude", "kube-ipvs0,dummy", "kube-ipvs0,dummy"),
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
 

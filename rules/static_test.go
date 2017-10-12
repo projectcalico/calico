@@ -131,7 +131,8 @@ var _ = Describe("Static", func() {
 							{Match: Match().MarkSet(0x10),
 								Action: AcceptAction{}},
 
-							// Return if to workload.
+							// To workload traffic.
+							{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 							{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 							// Non-workload traffic, send to host chains.
@@ -545,7 +546,8 @@ var _ = Describe("Static", func() {
 						{Match: Match().MarkSet(0x10),
 							Action: AcceptAction{}},
 
-						// Return if to workload.
+						// To workload traffic.
+						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 						// Non-workload traffic, send to host chains.

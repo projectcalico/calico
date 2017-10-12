@@ -125,7 +125,8 @@ type Config struct {
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
 
-	InterfacePrefix string `config:"iface-list;cali;non-zero,die-on-fail"`
+	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
+	InterfaceExclude string `config:"iface-list;kube-ipvs0"`
 
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
@@ -215,6 +216,10 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 
 func (c *Config) InterfacePrefixes() []string {
 	return strings.Split(c.InterfacePrefix, ",")
+}
+
+func (c *Config) InterfaceExcludes() []string {
+	return strings.Split(c.InterfaceExclude, ",")
 }
 
 func (config *Config) OpenstackActive() bool {

@@ -110,6 +110,8 @@ type Config struct {
 
 	RulesConfig rules.Config
 
+	IfaceMonitorConfig ifacemonitor.Config
+
 	StatusReportingInterval time.Duration
 
 	PostInSyncCallback func()
@@ -212,7 +214,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fromDataplane:     make(chan interface{}, 100),
 		ruleRenderer:      ruleRenderer,
 		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
-		ifaceMonitor:      ifacemonitor.New(),
+		ifaceMonitor:      ifacemonitor.New(config.IfaceMonitorConfig),
 		ifaceUpdates:      make(chan *ifaceUpdate, 100),
 		ifaceAddrUpdates:  make(chan *ifaceAddrsUpdate, 100),
 		config:            config,

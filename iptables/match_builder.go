@@ -67,6 +67,14 @@ func (m MatchCriteria) RPFCheckFailed() MatchCriteria {
 	return append(m, "-m rpfilter --invert")
 }
 
+func (m MatchCriteria) IPVSConnection() MatchCriteria {
+	return append(m, "-m ipvs --ipvs")
+}
+
+func (m MatchCriteria) NotIPVSConnection() MatchCriteria {
+	return append(m, "-m ipvs ! --ipvs")
+}
+
 type AddrType string
 
 const (
