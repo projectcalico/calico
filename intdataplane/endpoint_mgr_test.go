@@ -935,6 +935,24 @@ func endpointManagerTests(ipVersion uint8) func() {
 						})
 					})
 
+					Context("with host ep matching both eth0 and eth1 IPs", func() {
+						JustBeforeEach(configureHostEp(&hostEpSpec{
+							id:        "id0",
+							ipv4Addrs: []string{ipv4Eth1, ipv4},
+						}))
+						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+						// The "id0" host endpoint matches both eth0 and
+						// eth1, and is preferred for eth0 over "id1"
+						// because of alphabetical ordering.  "id1" is then
+						// unused, and so reported as in error.
+						It("should report id1 error and id0 up", func() {
+							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+								proto.HostEndpointID{EndpointId: "id1"}: "error",
+								proto.HostEndpointID{EndpointId: "id0"}: "up",
+							}))
+						})
+					})
+
 					Context("with host ep matching eth1", func() {
 						JustBeforeEach(configureHostEp(&hostEpSpec{
 							id:   "id22",
