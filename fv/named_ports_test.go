@@ -702,6 +702,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		nginxClient       *workload.Workload
 		defaultDenyPolicy *api.Policy
 		allowHTTPPolicy   *api.Policy
+		cc                *workload.ConnectivityChecker
 	)
 
 	BeforeEach(func() {
@@ -780,6 +781,8 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		allowHTTPPolicy.Spec.Order = &thousand
 		allowHTTPPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
 		allowHTTPPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+
+		cc = &workload.ConnectivityChecker{}
 	})
 
 	AfterEach(func() {
@@ -803,26 +806,175 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 
 	It("HTTP port policy should open up nginx port", func() {
 		// The profile has a default allow so we should start with connectivity.
-		Eventually(nginxClient, "10s", "100ms").Should(HaveConnectivityTo(nginx))
-		Eventually(nginxClient, "10s", "100ms").Should(HaveConnectivityTo(nginx.Port(81)))
+		cc.ExpectSome(nginxClient, nginx.Port(80))
+		cc.ExpectSome(nginxClient, nginx.Port(81))
+		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 
 		// Then we add an (ingress) default deny policy, which should cut it off again.
 		// It's important to check this before applying the allow policy to check that the correct
 		// policy is opening up the port.
 		_, err := client.Policies().Apply(defaultDenyPolicy)
 		Expect(err).NotTo(HaveOccurred())
-		Eventually(nginxClient, "10s", "100ms").ShouldNot(HaveConnectivityTo(nginx))
-		Eventually(nginxClient, "10s", "100ms").ShouldNot(HaveConnectivityTo(nginx.Port(81)))
+		cc.ResetExpectations()
+		cc.ExpectNone(nginxClient, nginx.Port(80))
+		cc.ExpectNone(nginxClient, nginx.Port(81))
+		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 
-		// Then a policy that opens up the HTTP port only (by named port).
 		_, err = client.Policies().Apply(allowHTTPPolicy)
 		Expect(err).NotTo(HaveOccurred())
-		Eventually(nginxClient, "10s", "100ms").Should(HaveConnectivityTo(nginx))
-		Eventually(nginxClient, "10s", "100ms").ShouldNot(HaveConnectivityTo(nginx.Port(81)))
+		cc.ResetExpectations()
+		cc.ExpectSome(nginxClient, nginx.Port(80))
+		cc.ExpectNone(nginxClient, nginx.Port(81))
+		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 	})
 })
 
-// TODO Corner case: UDP named port with TCP match
+// This test verifies that TCP named ports aren't matched by UDP rules and vice versa.
+var _ = Describe("tests with mixed TCP/UDP", func() {
+	var (
+		etcd                        *containers.Container
+		felix                       *containers.Container
+		client                      *client.Client
+		targetTCPWorkload           *workload.Workload
+		targetUDPWorkload           *workload.Workload
+		clientWorkload              *workload.Workload
+		allowConfusedProtocolPolicy *api.Policy
+		udpCC                       *workload.ConnectivityChecker
+		tcpCC                       *workload.ConnectivityChecker
+	)
+
+	BeforeEach(func() {
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+
+		// Create a profile that opens up traffic by default.
+		defaultProfile := api.NewProfile()
+		defaultProfile.Metadata.Name = "open"
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
+		_, err := client.Profiles().Create(defaultProfile)
+		Expect(err).NotTo(HaveOccurred())
+
+		createTarget := func(ip, protocol string) *workload.Workload {
+			// Create target workloads.
+			w := workload.Run(
+				felix,
+				"target-"+protocol,
+				"cali123"+protocol,
+				ip,
+				"80,81",
+				protocol,
+			)
+			w.WorkloadEndpoint.Metadata.Labels = map[string]string{
+				"calico/k8s_ns": "test",
+				"name":          "nginx",
+			}
+			w.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
+				{
+					Port:     80,
+					Name:     "tcp-port",
+					Protocol: numorstring.ProtocolFromString("tcp"),
+				},
+				{
+					Port:     81,
+					Name:     "udp-port",
+					Protocol: numorstring.ProtocolFromString("udp"),
+				},
+			}
+			w.WorkloadEndpoint.Spec.Profiles = []string{"open"}
+			w.Configure(client)
+			return w
+		}
+
+		targetTCPWorkload = createTarget("10.65.0.2", "tcp")
+		targetUDPWorkload = createTarget("10.65.0.3", "udp")
+
+		// Create client workload.
+		clientWorkload = workload.Run(
+			felix,
+			"client",
+			"cali123client",
+			"10.65.0.1",
+			"1000",
+			"tcp", // Note: protocol isn't relevant for client.
+		)
+		clientWorkload.WorkloadEndpoint.Spec.Profiles = []string{"open"}
+		clientWorkload.Configure(client)
+
+		// Create a policy that tries to open up the TCP named port over UDP and vice/versa.
+		allowConfusedProtocolPolicy = api.NewPolicy()
+		allowConfusedProtocolPolicy.Metadata.Name = "knp.default.test.confused"
+		protoUDPStruct := numorstring.ProtocolFromString("udp")
+		protoTCPStruct := numorstring.ProtocolFromString("tcp")
+		allowConfusedProtocolPolicy.Spec.IngressRules = []api.Rule{
+			{
+				Action:   "allow",
+				Protocol: &protoTCPStruct,
+				Destination: api.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("udp-port"),
+					},
+				},
+			},
+			{
+				Action:   "allow",
+				Protocol: &protoUDPStruct,
+				Destination: api.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("http-port"),
+					},
+				},
+			},
+		}
+		allowConfusedProtocolPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		allowConfusedProtocolPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+
+		udpCC = &workload.ConnectivityChecker{Protocol: "udp"}
+		tcpCC = &workload.ConnectivityChecker{Protocol: "tcp"}
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			log.Warn("Test failed, dumping diags...")
+			utils.Run("docker", "logs", felix.Name)
+			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
+			utils.Run("docker", "exec", felix.Name, "ipset", "list")
+			utils.Run("docker", "exec", felix.Name, "ip", "r")
+		}
+
+		targetTCPWorkload.Stop()
+		targetUDPWorkload.Stop()
+		clientWorkload.Stop()
+		felix.Stop()
+
+		if CurrentGinkgoTestDescription().Failed {
+			utils.Run("docker", "exec", etcd.Name, "etcdctl", "ls", "--recursive", "/")
+		}
+		etcd.Stop()
+	})
+
+	It("shouldn't confuse TCP and UDP ports", func() {
+		// The profile has a default allow so we should start with connectivity.
+		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(80))
+		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(81))
+		Eventually(tcpCC.ActualConnectivity, "10s", "100ms").Should(Equal(tcpCC.ExpectedConnectivity()))
+
+		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(80))
+		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(81))
+		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
+
+		// Then the connectivity should be broken by adding the confused policy.
+		_, err := client.Policies().Apply(allowConfusedProtocolPolicy)
+		Expect(err).NotTo(HaveOccurred())
+		tcpCC.ResetExpectations()
+		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(80))
+		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(81))
+		Eventually(tcpCC.ActualConnectivity, "10s", "100ms").Should(Equal(tcpCC.ExpectedConnectivity()))
+		udpCC.ResetExpectations()
+		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(80))
+		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(81))
+		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
+	})
+})
 
 func dumpPolicy(pol *api.Policy) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")

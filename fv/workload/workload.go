@@ -344,6 +344,10 @@ func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTar
 	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false})
 }
 
+func (c *ConnectivityChecker) ResetExpectations() {
+	c.expectations = nil
+}
+
 // ActualConnectivity calculates the current connectivity for all the expected paths.  One string is
 // returned for each expectation, in the order they were recorded.  The strings are intended to be
 // human readable, and they are in the same order and format as those returned by
