@@ -80,15 +80,6 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		sourceTestTargetPort = "10000"
 	)
 
-	actualConnectivity := func() []string {
-		if protocol == "udp" {
-			// If this is a retry then we may have stale conntrack entries and we don't want those
-			// to influence the connectivity check.
-			felix.ExecMayFail("conntrack", "-D", "-p", "udp")
-		}
-		return cc.ActualConnectivity()
-	}
-
 	BeforeEach(func() {
 		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
 
@@ -202,7 +193,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[1], w[0].Port(4000))
 			cc.ExpectSome(w[2], w[0].Port(4000))
 
-			Eventually(actualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 		})
 	})
 
@@ -343,7 +334,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[0], w[1].Port(w1Port))
 			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
-			Eventually(actualConnectivity, "10s", "100ms").Should(
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(pol),
 			)
@@ -444,7 +435,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
 			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
 
-			Eventually(actualConnectivity, "10s", "100ms").Should(
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(policy),
 			)
@@ -472,7 +463,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				Eventually(actualConnectivity, "10s", "100ms").Should(
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
 					dumpPolicy(policy),
 				)
@@ -503,7 +494,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				Eventually(actualConnectivity, "10s", "100ms").Should(
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
 					dumpPolicy(policy),
 				)
@@ -523,7 +514,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectNone(w[2], w[0].Port(4000))
 			cc.ExpectNone(w[2], w[0].Port(3000))
 
-			Eventually(actualConnectivity, "10s", "100ms").Should(
+			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
 				dumpPolicy(policy),
 			)
@@ -649,7 +640,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 					cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-					Eventually(actualConnectivity, "10s", "100ms").Should(
+					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 						Equal(cc.ExpectedConnectivity()),
 						dumpPolicy(policy),
 					)
@@ -683,7 +674,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectNone(w[3], w[0].Port(4000))       // Numeric port in NotPorts list.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change
 
-				Eventually(actualConnectivity, "10s", "100ms").Should(
+				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
 					dumpPolicy(policy),
 				)
