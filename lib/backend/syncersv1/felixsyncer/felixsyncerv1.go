@@ -41,7 +41,8 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			ListInterface: model.ResourceListOptions{Kind: apiv2.KindGlobalNetworkPolicy},
 		},
 		{
-			ListInterface: model.ResourceListOptions{Kind: apiv2.KindHostEndpoint},
+			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindHostEndpoint},
+			UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindIPPool},

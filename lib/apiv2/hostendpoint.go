@@ -14,7 +14,10 @@
 
 package apiv2
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 const (
 	KindHostEndpoint     = "HostEndpoint"
@@ -52,7 +55,14 @@ type HostEndpointSpec struct {
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
-	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,namespacedname"`
+	Profiles []string       `json:"profiles,omitempty" validate:"omitempty,dive,namespacedname"`
+	Ports    []EndpointPort `json:"ports,omitempty" validate:"dive"`
+}
+
+type EndpointPort struct {
+	Name     string               `json:"name" validate:"name"`
+	Protocol numorstring.Protocol `json:"protocol"`
+	Port     uint16               `json:"port" validate:"gt=0"`
 }
 
 // HostEndpointList contains a list of HostEndpoint resources.
