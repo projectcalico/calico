@@ -61,7 +61,7 @@ Enable ingress isolation on the namespace by deploying a [default deny all ingre
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.Kubernetes.io/v1
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-ingress
@@ -95,7 +95,7 @@ Run the following to create a `NetworkPolicy` which allows traffic to nginx pods
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.Kubernetes.io/v1
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: access-nginx
@@ -131,7 +131,7 @@ Enable egress isolation on the namespace by deploying a [default deny all egress
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.Kubernetes.io/v1
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-egress
@@ -149,7 +149,7 @@ EOF
 Now any ingress or egress traffic which is not explicitly allowed by a policy will be denied.
 
 We can see that this is the case by switching over to our "access" pod in the
-namespace and attempting to lookup nginx or access google.com.
+namespace and attempting to `nslookup` nginx or `wget` google.com.
 
 ```shell
 / # nslookup nginx
@@ -173,7 +173,7 @@ from any pods in the `advanced-policy-demo` namespace to the `kube-system` names
 ```shell
 kubectl label namespace kube-system name=kube-system
 kubectl create -f - <<EOF
-apiVersion: networking.Kubernetes.io/v1
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-dns-access
@@ -219,7 +219,7 @@ Run the following to create a `NetworkPolicy` which allows egress traffic from a
 
 ```shell
 kubectl create -f - <<EOF
-apiVersion: networking.Kubernetes.io/v1
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-egress-to-advance-policy-ns
