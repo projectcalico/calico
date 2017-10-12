@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/intdataplane"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/rules"
@@ -35,6 +36,9 @@ var _ = Describe("Constructor test", func() {
 	JustBeforeEach(func() {
 		configParams = config.New()
 		dpConfig = intdataplane.Config{
+			IfaceMonitorConfig: ifacemonitor.Config{
+				InterfaceExcludes: configParams.InterfaceExcludes(),
+			},
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 

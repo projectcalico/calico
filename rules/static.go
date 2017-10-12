@@ -313,11 +313,17 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	// That decision is based on pragmatism; it's generally very useful to be able to contact
 	// any local workload from the host and policing the traffic doesn't really protect
 	// against host compromise.  If a host is compromised, then the rules could be removed!
+	// However, we do apply policy to workload ingress traffic if it belongs to an IPVS connection.
 	for _, prefix := range r.WorkloadIfacePrefixes {
-		// If the packet is going to a worklaod endpoint, RETURN.
+		// If the packet is going to a workload endpoint, apply workload ingress policy if traffic
+		// belongs to an IPVS connection and return at the end.
 		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
 		ifaceMatch := prefix + "+"
 		rules = append(rules,
+			Rule{
+				Match:  Match().OutInterface(ifaceMatch).IPVSConnection(),
+				Action: JumpAction{Target: ChainToWorkloadDispatch},
+			},
 			Rule{
 				Match:  Match().OutInterface(ifaceMatch),
 				Action: ReturnAction{},
