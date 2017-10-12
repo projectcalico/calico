@@ -90,18 +90,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	}
 
 	BeforeEach(func() {
-
-		etcd = containers.RunEtcd()
-
-		client = utils.GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
-
-		felix = containers.RunFelix(etcd.IP)
-
-		felixNode := api.NewNode()
-		felixNode.Metadata.Name = felix.Hostname
-		_, err := client.Nodes().Create(felixNode)
-		Expect(err).NotTo(HaveOccurred())
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
@@ -113,7 +102,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			Action: "allow",
 			Source: api.EntityRule{Tag: "default"},
 		}}
-		_, err = client.Profiles().Create(defaultProfile)
+		_, err := client.Profiles().Create(defaultProfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create some workloads, using that profile.
@@ -716,18 +705,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	)
 
 	BeforeEach(func() {
-
-		etcd = containers.RunEtcd()
-
-		client = utils.GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
-
-		felix = containers.RunFelix(etcd.IP)
-
-		felixNode := api.NewNode()
-		felixNode.Metadata.Name = felix.Hostname
-		_, err := client.Nodes().Create(felixNode)
-		Expect(err).NotTo(HaveOccurred())
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
 
 		// Create a namespace profile and write to the datastore.
 		defaultProfile := api.NewProfile()
@@ -735,7 +713,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		defaultProfile.Metadata.Labels = map[string]string{"name": "test"}
 		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
 		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
-		_, err = client.Profiles().Create(defaultProfile)
+		_, err := client.Profiles().Create(defaultProfile)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create nginx workload.
