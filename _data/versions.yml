@@ -1,4 +1,55 @@
 v2.6:
+- title: v2.6.2
+  note: |
+    16 October 2017
+
+    Calico v2.6.2 adds fixes and enhancements for Calico/OpenStack deployments.  For Kubernetes and other integrations there is no change from v2.6.1.
+
+    - The dnsmasq packages that we provide have been upgraded so as to address various [security issues](https://github.com/projectcalico/calico/issues/1169).
+
+    - networking-calico master has been released, as 1.4.3, so as to provide support for OpenStack Ocata and later.
+
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+
+  components:
+    felix:
+      version: 2.6.0
+      url: https://github.com/projectcalico/felix/releases/tag/2.6.0
+    typha:
+      version: v0.5.1
+      url: https://github.com/projectcalico/typha/releases/tag/v0.5.1
+    calicoctl:
+      version: v1.6.1
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.1
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.1/calicoctl
+    calico/node:
+      version: v2.6.1
+      url: https://github.com/projectcalico/calico/releases/tag/v2.6.0
+    calico/cni:
+      version: v1.11.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.11.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico-ipam
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    calico/kube-controllers:
+      version: v1.0.0
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0
+    networking-calico:
+      version: 1.4.3
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
+    calico/routereflector:
+      version: v0.4.0
+      url: ""
+
+
 - title: v2.6.1
   note: |
     29 September 2017
@@ -234,9 +285,9 @@ v2.5:
 - title: v2.5.1
   note: |
     30 August 2017
-    
+
     Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
-    
+
     <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
 
 
@@ -283,7 +334,7 @@ v2.5:
     22 August 2017
 
     Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
-    
+
     <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
 
 
@@ -597,14 +648,14 @@ v2.3:
     - Calico now implements the `networking.k8s.io/NetworkPolicy` API semantics as [defined by Kubernetes](https://github.com/kubernetes/kubernetes/pull/39164#issue-197243974) when using the Kubernetes datastore driver.
       - **Note**: This represents a change in how existing Kubernetes NetworkPolicies are enforced by Calico. To maintain existing behavior when upgrading, follow these steps:
               - In Namespaces that previously did not have the "DefaultDeny" annotation, you should delete any existing NetworkPolicy objects.
-              - In Namespaces that previously did have the "DefaultDeny" annotation, you can create the equivalent semantics by creating a NetworkPolicy that selects all pods 
+              - In Namespaces that previously did have the "DefaultDeny" annotation, you can create the equivalent semantics by creating a NetworkPolicy that selects all pods
                 but does not allow any traffic.
-      - **Note**: Calico with etcd continutes to implement the `extensions/v1beta1` NetworkPolicy API semantics - this change has no effect on etcd based Calico deployments. 
+      - **Note**: Calico with etcd continutes to implement the `extensions/v1beta1` NetworkPolicy API semantics - this change has no effect on etcd based Calico deployments.
 
     ### Bug fixes
 
     - Fixed an issue where the Kubernetes datastore driver would resync with the Kubernetes API more frequently than necessary.
-    
+
   components:
     felix:
       version: 2.3.0
@@ -643,7 +694,7 @@ v2.2:
 - title: v2.2.1
   note: |
     16-May 2017
-    
+
     This release includes fixes for two key issues from the last release - a [route flap](https://github.com/projectcalico/bird/pull/37) and a [memory leak](https://github.com/projectcalico/felix/issues/1455)
 
   components:
@@ -680,7 +731,7 @@ v2.2:
 - title: v2.2.0
   note: |
     12-May 2017
-    
+
     This release includes new versions of most of the key Calico components. Highlights include
     * New version of Bird for BGP multipath support
     * New version of GoBGP integration with IPIP support and other fixes
@@ -727,7 +778,7 @@ v2.2:
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 - title: v2.2.0-rc6
   note: |
-    * Take new calicoctl, calico/node, felix 
+    * Take new calicoctl, calico/node, felix
   components:
     felix:
       version: 2.2.0
@@ -762,7 +813,7 @@ v2.2:
 
 - title: v2.2.0-rc5
   note: |
-    * Take new calicoctl, calico/node, calico-bgp-daemon, cni-plugin, 
+    * Take new calicoctl, calico/node, calico-bgp-daemon, cni-plugin,
   components:
     felix:
       version: 2.2.0-rc4
@@ -830,7 +881,7 @@ v2.2:
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 - title: v2.2.0-rc3
   note: |
-    * Take new CNI version for KDD issue 
+    * Take new CNI version for KDD issue
   components:
     felix:
       version: 2.2.0-rc3
@@ -1314,7 +1365,7 @@ master:
       version: master
       url: ""
      calico/cni:
-      version: master 
+      version: master
       url: ""
       download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.10.0/calico-ipam
@@ -1341,4 +1392,3 @@ currentReleaseStream: v2.6
 
 # Local directories to ignore when checking external links
 htmlProoferLocalDirIgnore: /v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/
-
