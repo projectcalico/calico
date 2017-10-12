@@ -1,3 +1,0 @@
-etcdctl set /calico/bgp/v1/host/kube-node-1/ip_addr_v6 ""
-etcdctl set /calico/bgp/v1/host/kube-master/ip_addr_v6 ""
-etcdctl set /calico/bgp/v1/host/kube-node-2/ip_addr_v6 ""

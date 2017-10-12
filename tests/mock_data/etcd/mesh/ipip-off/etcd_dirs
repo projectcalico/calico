@@ -1,9 +1,0 @@
-/calico/ipam/v2/host/kube-master/ipv6
-/calico/ipam/v2/host/kube-node-1/ipv6
-/calico/ipam/v2/host/kube-node-2/ipv6
-/calico/v1/ipam/v6/pool
-/calico/bgp/v1/global/custom_filters/v4
-/calico/bgp/v1/global/custom_filters/v6
-/calico/ipam/v2/host/kube-master/ipv6/block
-/calico/ipam/v2/host/kube-node-1/ipv6/block
-/calico/ipam/v2/host/kube-node-2/ipv6/block
