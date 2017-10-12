@@ -19,7 +19,8 @@ from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
-    API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED
+    API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
+    DELETE_DEFAULT, SET_DEFAULT, NOT_SUPPORTED
 from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -330,18 +331,18 @@ class TestCalicoctlCommands(TestBase):
         # Clone the data so that we can modify the metadata parms.
         data1 = copy.deepcopy(data)
         data2 = copy.deepcopy(data)
-        
+
         kind = data['kind']
-        
+
         # Create resource with name1 and with name2.  If the resource is
-        # namespaced, leave the first namespace blank and the second set to 
+        # namespaced, leave the first namespace blank and the second set to
         # namespace2 for the actual create request.
         data1['metadata']['name'] = "name1"
         data2['metadata']['name'] = "name2"
         if namespaced:
             data1['metadata']['namespace'] = ""
             data2['metadata']['namespace'] = "namespace2"
-        
+
         rc = calicoctl("create", data=data1)
         rc.assert_no_error()
         rc = calicoctl("create", data=data2)
@@ -352,16 +353,16 @@ class TestCalicoctlCommands(TestBase):
         # we can use it to compare against the calicoctl get output.
         if namespaced:
             data1['metadata']['namespace'] = "default"
-            
-        # Get the resource with name1 and namespace2.  For a namespaced 
-        # resource this should match the modified data to default the 
+
+        # Get the resource with name1 and namespace2.  For a namespaced
+        # resource this should match the modified data to default the
         # namespace.  For non-namespaced resources this will error.
         rc = calicoctl("get %s name1 --namespace default -o yaml" % kind)
         if namespaced:
             rc.assert_data(data1)
         else:
             rc.assert_error(NOT_NAMESPACED)
-            
+
         # Get the resource type for all namespaces.  For a namespaced resource
         # this will return everything.  For non-namespaced resources this will
         # error.
@@ -392,8 +393,8 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_data(data1)
         rc = calicoctl("get -o yaml", data2)
         rc.assert_data(data2)
-        
-        # Doing a get by file will use the default namespace if not specified 
+
+        # Doing a get by file will use the default namespace if not specified
         # in the file or through the CLI args.
         if namespaced:
             data1_no_ns = copy.deepcopy(data1)
@@ -421,6 +422,118 @@ class TestCalicoctlCommands(TestBase):
             rc.assert_no_error()
         else:
             rc.assert_no_error()
+
+    def test_bgpconfig(self):
+        """
+        Test CRUD commands behave as expected on the BGP configuration resource:
+        """
+        # Create a new default BGPConfiguration and get it to determine the current
+        # resource version.
+        rc = calicoctl("create", data=bgpconfig_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get bgpconfig %s -o yaml" % name(bgpconfig_name1_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+
+        # Replace the BGP Configuration (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl("replace", data=bgpconfig_name1_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get bgpconfig %s -o yaml" % name(bgpconfig_name1_rev2))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
+
+        # Attempt to delete the default resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete bgpconfig %s" % name(rev0))
+        rc.assert_error(DELETE_DEFAULT)
+
+        rc = calicoctl("create", data=bgpconfig_name2_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get bgpconfig %s -o yaml" % name(bgpconfig_name2_rev1))
+        rc.assert_no_error()
+        rev2 = rc.decoded
+
+        # Apply an update to the BGP Configuration and assert the resource version is not the same.
+        rc = calicoctl("apply", data=bgpconfig_name2_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get bgpconfig %s -o yaml" % name(bgpconfig_name2_rev2))
+        rc.assert_no_error()
+        rev3 = rc.decoded
+        self.assertNotEqual(rev2['metadata']['resourceVersion'], rev3['metadata']['resourceVersion'])
+
+        # Attempt to apply an update to change fields that are for default configs ONLY
+        rc = calicoctl("apply", data=bgpconfig_name2_rev3)
+        rc.assert_error(SET_DEFAULT)
+
+        # Delete the resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete bgpconfig %s" % name(rev3))
+        rc.assert_no_error()
+
+    def test_felixconfig(self):
+        """
+        Test CRUD commands behave as expected on the felix configuration resource:
+        """
+        # Create a new default BGPConfiguration and get it to determine the current
+        # resource version.
+        rc = calicoctl("create", data=felixconfig_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get felixconfig %s -o yaml" % name(felixconfig_name1_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+
+        # Replace the BGP Configuration (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl("replace", data=felixconfig_name1_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get felixconfig %s -o yaml" % name(felixconfig_name1_rev2))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
+
+        # Apply an update to the BGP Configuration and assert the resource version is not the same.
+        rc = calicoctl("apply", data=felixconfig_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get felixconfig %s -o yaml" % name(felixconfig_name1_rev1))
+        rc.assert_no_error()
+        rev2 = rc.decoded
+        self.assertNotEqual(rev1['metadata']['resourceVersion'], rev2['metadata']['resourceVersion'])
+
+        # Delete the resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete felixconfig %s" % name(rev2))
+        rc.assert_no_error()
+
+    def test_clusterinfo(self):
+        """
+        Test CRUD commands behave as expected on the cluster information resource:
+        """
+        # Create a new default BGPConfiguration and get it to determine the current
+        # resource version.
+        rc = calicoctl("create", data=clusterinfo_name1_rev1)
+        rc.assert_error(NOT_SUPPORTED)
+        rc = calicoctl(
+            "get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
+        rc.assert_error(NOT_FOUND)
+
+        # Replace the BGP Configuration (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl("replace", data=clusterinfo_name1_rev2)
+        rc.assert_error(NOT_FOUND)
+
+        # Apply an update to the BGP Configuration and assert the resource version is not the same.
+        rc = calicoctl("apply", data=clusterinfo_name1_rev2)
+        rc.assert_error(NOT_SUPPORTED)
+
+        # Delete the resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete clusterinfo %s" % name(clusterinfo_name1_rev1))
+        rc.assert_error(NOT_SUPPORTED)
 
 #
 #
@@ -1355,7 +1468,7 @@ class TestCalicoctlCommands(TestBase):
 #                                          'kind': 'IPPool',
 #                                          'metadata': {'cidr': "fd5f::1/123"}, # invalid mask
 #                                          }),
-# 
+#
 #                    ("pool-invalidIpIp1", {'apiVersion': API_VERSION,
 #                                           'kind': 'IPPool',
 #                                           'metadata': {'cidr': "10.0.1.0/24"},
@@ -1427,10 +1540,10 @@ class TestCalicoctlCommands(TestBase):
 #                         }],
 #                     ),
 #                ]
-# 
+#
 #     @parameterized.expand(testdata)
 #     def test_invalid_profiles_rejected(self, name, testdata):
-# 
+#
 #         commanderror = False
 #         def check_no_data_in_store(testdata):
 #             out = calicoctl(
@@ -1441,23 +1554,23 @@ class TestCalicoctlCommands(TestBase):
 #                                  "rejected:\n" \
 #                                  "Injected: %s\n" \
 #                                  "Got back: %s" % (testdata, output)
-# 
+#
 #         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
 #         try:
 #             calicoctl("create", "/tmp/testfile.yaml")
 #         except CommandExecError:
 #             logger.debug("calicoctl error hit, as expected")
 #             commanderror = True
-# 
+#
 #         if name.startswith('compound'):
 #             for data in testdata:
 #                 check_no_data_in_store(data)
 #         else:
 #             check_no_data_in_store(testdata)
-# 
+#
 #         # Cover the case where no data got stored, but calicoctl didn't fail:
 #         assert commanderror is True, "Failed - calicoctl did not fail to add invalid config"
-# 
+#
 # TODO: uncomment this once we have default field handling in libcalico
 # class TestTypes(TestBase):
 #     """
@@ -1494,20 +1607,20 @@ class TestCalicoctlCommands(TestBase):
 #                         }
 #         }
 #         self.writeyaml('/tmp/policy1.yaml', policy1_dict)
-# 
+#
 #         # append types: 'ingress', 'egress'
 #         policy1_types_dict = policy1_dict
 #         policy1_types_dict['spec'].update({'types': ['ingress', 'egress']})
-# 
+#
 #         # Create the policy using calicoctl
 #         calicoctl("create", "/tmp/policy1.yaml")
-# 
+#
 #         # Now read it out (yaml format) with calicoctl and verify it matches:
 #         self.check_data_in_datastore([policy1_types_dict], "policy")
-# 
+#
 #         # Remove policy1
 #         calicoctl("delete", "/tmp/policy1.yaml")
-# 
+#
 #     def test_types_no_ingress_or_egress(self):
 #         """
 #         Test that a simple policy with neither an ingress nor an
@@ -1522,22 +1635,22 @@ class TestCalicoctlCommands(TestBase):
 #                             'selector': "type=='application'"
 #                         }
 #         }
-# 
+#
 #         self.writeyaml('/tmp/policy2.yaml', policy2_dict)
-# 
+#
 #         # Create the policy using calicoctl
 #         calicoctl("create", "/tmp/policy2.yaml")
-# 
+#
 #         # append types: 'ingress'
 #         policy2_types_dict = policy2_dict
 #         policy2_types_dict['spec'].update({'types': ['ingress']})
-# 
+#
 #         # Now read it out (yaml format) with calicoctl and verify it matches:
 #         self.check_data_in_datastore([policy2_types_dict], "policy")
-# 
+#
 #         # Remove policy2
 #         calicoctl("delete", "/tmp/policy2.yaml")
-# 
+#
 #     def test_types_ingress_only(self):
 #         """
 #         Test that a simple policy with only an ingress
@@ -1557,22 +1670,22 @@ class TestCalicoctlCommands(TestBase):
 #                             'selector': "type=='application'"
 #                         }
 #         }
-# 
+#
 #         self.writeyaml('/tmp/policy2.yaml', policy2_dict)
-# 
+#
 #         # Create the policy using calicoctl
 #         calicoctl("create", "/tmp/policy2.yaml")
-# 
+#
 #         # append types: 'ingress'
 #         policy2_types_dict = policy2_dict
 #         policy2_types_dict['spec'].update({'types': ['ingress']})
-# 
+#
 #         # Now read it out (yaml format) with calicoctl and verify it matches:
 #         self.check_data_in_datastore([policy2_types_dict], "policy")
-# 
+#
 #         # Remove policy2
 #         calicoctl("delete", "/tmp/policy2.yaml")
-# 
+#
 #     def test_types_egress_only(self):
 #         """
 #         Test that a simple policy with only an egress
@@ -1592,19 +1705,19 @@ class TestCalicoctlCommands(TestBase):
 #                             'selector': "type=='application'"
 #                         }
 #         }
-# 
+#
 #         self.writeyaml('/tmp/policy2.yaml', policy2_dict)
-# 
+#
 #         # Create the policy using calicoctl
 #         calicoctl("create", "/tmp/policy2.yaml")
-# 
+#
 #         # append types: 'egress'
 #         policy2_types_dict = policy2_dict
 #         policy2_types_dict['spec'].update({'types': ['egress']})
-# 
+#
 #         # Now read it out (yaml format) with calicoctl and verify it matches:
 #         self.check_data_in_datastore([policy2_types_dict], "policy")
-# 
+#
 #         # Remove policy2
 #         calicoctl("delete", "/tmp/policy2.yaml")
-# 
+#

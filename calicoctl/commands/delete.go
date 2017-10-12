@@ -61,14 +61,16 @@ Description:
 
   Valid resource types are:
 
-    * node
+    * bgpConfiguration
     * bgpPeer
+    * felixConfiguration
+    * globalNetworkPolicy
     * hostEndpoint
-    * workloadEndpoint
     * ipPool
     * networkPolicy
-    * globalNetworkPolicy
+    * node
     * profile
+    * workloadEndpoint
 
   The resource type is case insensitive and may be pluralized.
 

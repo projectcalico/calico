@@ -55,14 +55,16 @@ Description:
 
   Valid resource types are:
 
-    * node
+    * bgpConfiguration
     * bgpPeer
+    * felixConfiguration
+    * globalNetworkPolicy
     * hostEndpoint
-    * workloadEndpoint
     * ipPool
     * networkPolicy
-    * globalNetworkPolicy
+    * node
     * profile
+    * workloadEndpoint
 
   Attempting to create a resource that already exists is treated as a
   terminating error unless the --skip-exists flag is set.  If this flag is set,
