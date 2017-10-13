@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package istio.v1.authz;
+package authz.v1;
 
 
 service Authorization {
