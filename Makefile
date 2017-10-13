@@ -1,3 +1,7 @@
+HUB=gcr.io
+PROJECT=unique-caldron-775
+IMAGE=$HUB/$PROJECT/dikastes:latest
+
 proto: proto/authz.pb.go
 
 proto/authz.pb.go: proto/authz.proto
@@ -9,4 +13,8 @@ dikastes:
 
 .PHONY: image
 image: dikastes
-	docker build -t cluster.local:5000/tigera/dikastes:latest .
+	docker build -t $(IMAGE) .
+
+.PHONY: push-image
+push-image: image
+    docker push $(IMAGE)
