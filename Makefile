@@ -14,7 +14,7 @@ VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 # HtmlProofer
 HP_IGNORE_LOCAL_DIRS?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "htmlProoferLocalDirIgnore")
 
-JEKYLL_VERSION=3.3.1
+JEKYLL_VERSION=3.5.2
 DEV?=false
 
 CONFIG=--config _config.yml

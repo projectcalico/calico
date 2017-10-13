@@ -1,41 +1,182 @@
 ---
-title: Calico for Kubernetes
+title: Quickstart for Calico on Kubernetes
 ---
 
-Calico enables networking and network policy in Kubernetes clusters across the cloud.  Calico works
-everywhere - on all major public cloud providers and private cloud as well.
 
-Calico uses a pure IP networking fabric to provide high performance networking, and its battle-tested policy engine
-enforces high-level, intent-focused network policy.  Together, Calico and Kubernetes provide a secure,
-cloud-native platform that can scale your infrastructure to hundreds of thousands of workloads.
+### Overview
 
-## Installing Calico for Kubernetes
+This quickstart gets you a single-host Kubernetes cluster with Calico
+in approximately 15 minutes. You can use this cluster for testing and
+development.
 
-There are a number of ways to install Calico and Kubernetes.  The [installation documentation](installation)
-includes links to a number of popular guides and installers which use Calico. It also
-includes information on installing Calico on a from-scratch Kubernetes cluster using either a self-hosted Kubernetes manifest,
-or by integrating Calico into your own configuration management scripts.
+To deploy a cluster suitable for production, refer to [Installation](https://docs.projectcalico.org/master/getting-started/kubernetes/installation/).
 
-## Using Calico with Kubernetes
 
-Once you have a Kubernetes cluster with Calico installed, the following articles will help you
-get familiar with Calico and make the most of the features that Calico provides.
+### Requirements
 
-##### Tutorials
+- AMD64 processor
+- 2CPU
+- 2GB RAM
+- 10GB free disk space
+- RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 8.x+
 
-**[Using the NetworkPolicy API](tutorials/simple-policy)**: this guide explains how to use Calico to secure a simple two-tier application
-using the Kubernetes NetworkPolicy API.
 
-**[Advanced Calico Policy](tutorials/advanced-policy)**: this guide explains how to use Calico to provide policy features beyond
-what can be done with the Kubernetes NetworkPolicy API like egress and CIDR based policy.
+### Before you begin
 
-**[Stars Demo](tutorials/stars-policy/)**: this demo features a UI which actively shows blocked and allowed connections as policy is implemented.
+[Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
 
-##### Usage Reference
+> **Note**: After installing kubeadm, do not power down or restart
+the host. Instead, continue directly to the 
+[next section to create your cluster](#create-a-single-host-kubernetes-cluster).
+{: .alert .alert-info}
 
-**[Using the calicoctl CLI tool][calicoctl]**: reference documentation for the Calico CLI tool, calicoctl.
 
-**[Configuring BGP Peering][bgp-peering]**: this guide is for users on private cloud who want to configure Calico to peer with their underlying infrastructure.
+### Create a single-host Kubernetes cluster
 
-[calicoctl]: {{site.baseurl}}/{{page.version}}/reference/calicoctl/
-[bgp-peering]: {{site.baseurl}}/{{page.version}}/usage/configuration/bgp
+1. As a regular user with sudo privileges, open a terminal on the host that 
+   you installed kubeadm on. 
+
+1. Update your package definitions and upgrade your existing packages.
+
+   ```
+   sudo apt-get update && sudo apt-get upgrade
+   ```
+   
+1. Initialize the master using the following command.
+
+   ```
+   sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+   ```
+   
+1. Execute the following commands to configure kubectl (also returned by
+   `kubeadm init`).
+
+   ```
+   mkdir -p $HOME/.kube
+   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+   ```
+   
+1. Install Calico and a single node etcd with the following command.
+
+   ```
+   kubectl apply -f \
+   https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
+   ```
+   
+   > **Note**: You can also 
+   > [view the YAML in your browser](https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml){:target="_blank"}.
+   {: .alert .alert-info}
+
+   You should see the following output.
+
+   ```
+   configmap "calico-config" created
+   daemonset "calico-etcd" created
+   service "calico-etcd" created
+   daemonset "calico-node" created
+   deployment "calico-kube-controllers" created
+   deployment "calico-policy-controller" created
+   clusterrolebinding "calico-cni-plugin" created
+   clusterrole "calico-cni-plugin" created
+   serviceaccount "calico-cni-plugin" created
+   clusterrolebinding "calico-kube-controllers" created
+   clusterrole "calico-kube-controllers" created
+   serviceaccount "calico-kube-controllers" created
+   ```
+   
+1. Confirm that all of the pods are running with the following command.
+
+   ```
+   watch kubectl get pods --all-namespaces
+   ```
+   
+   Wait until each pod has the `STATUS` of `Running`.
+
+   ```
+   NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
+   kube-system  calico-etcd-x2482                          1/1    Running  0         2m
+   kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m
+   kube-system  calico-node-24h85                          2/2    Running  0         2m
+   kube-system  etcd-jbaker-virtualbox                     1/1    Running  0         6m
+   kube-system  kube-apiserver-jbaker-virtualbox           1/1    Running  0         6m
+   kube-system  kube-controller-manager-jbaker-virtualbox  1/1    Running  0         6m
+   kube-system  kube-dns-545bc4bfd4-67qqp                  3/3    Running  0         5m
+   kube-system  kube-proxy-8fzp2                           1/1    Running  0         5m
+   kube-system  kube-scheduler-jbaker-virtualbox           1/1    Running  0         5m
+   ```
+
+1. Press CTRL+C to exit `watch`.
+
+1. Remove the taints on the master so that you can schedule pods
+   on it.
+   
+   ```
+   kubectl taint nodes --all node-role.kubernetes.io/master-
+   ```
+
+   It should return the following.
+
+   ```
+   node "<your-hostname>" untainted
+   ```
+   
+1. Switch to a root shell.
+
+   ```
+   sudo -i
+   ```
+
+1. Scroll upward in your terminal to locate the `join` command
+   returned by `kubeadm init`. Copy the `join` command, paste it
+   in your shell prompt, and add `--skip-preflight-checks` to the end.
+   
+   **Syntax**:
+   ```
+   kubeadm join --token <token> <master-ip>:<master-port> \
+   --discovery-token-ca-cert-hash sha256:<hash> \
+   --skip-preflight-checks
+   ```
+   
+   **Example**:
+   ```
+   kubeadm join --token eea8bd.4d282767b6b962ca 10.0.2.15:6443 \
+   --discovery-token-ca-cert-hash sha256:0e6e73d52066326023432f417a566afad72667e6111d2236b69956b658773255
+   --skip-preflight-checks
+   ```
+   
+1. Exit the root shell.
+
+   ```
+   exit
+   ```
+
+1. Confirm that you now have a node in your cluster with the 
+   following command.
+   
+   ```
+   kubectl get nodes -o wide
+   ```
+   
+   It should return something like the following.
+   
+   ```
+   NAME             STATUS  ROLES   AGE  VERSION  EXTERNAL-IP  OS-IMAGE            KERNEL-VERSION     CONTAINER-RUNTIME
+   <your-hostname>  Ready   master  1h   v1.8.x   <none>       Ubuntu 16.04.3 LTS  4.10.0-28-generic  docker://1.12.6
+   ```
+   
+Congratulations! You now have a single-host Kubernetes cluster
+equipped with Calico.
+
+
+### Next steps
+
+**[Secure a simple two-tier application using the Kubernetes `NetworkPolicy` API](tutorials/simple-policy)**
+
+**[Create a policy using more advanced Calico policy features](tutorials/advanced-policy)**
+
+**[Create a user interface that shows blocked and allowed connections in real time](tutorials/stars-policy/)**
+
+**[Using the calicoctl CLI tool](https://docs.projectcalico.org/master/getting-started/kubernetes/tutorials/using-calicoctl)**
+
+**[Configure BGP to peer with your underlying infrastructure (private cloud only)](https://docs.projectcalico.org/master/usage/configuration/bgp)**
