@@ -51,6 +51,7 @@ var (
 	poolUnstictCIDR     = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
 	overlapsV6LinkLocal = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+	protocolPortsMsg    = "rules that specify ports must set protocol to TCP or UDP"
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -445,20 +446,20 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.Source.Ports) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"Source.Ports", "", reason("protocol does not support ports"))
+				"Source.Ports", "", reason(protocolPortsMsg))
 		}
 		if len(rule.Source.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"Source.NotPorts", "", reason("protocol does not support ports"))
+				"Source.NotPorts", "", reason(protocolPortsMsg))
 		}
 
 		if len(rule.Destination.Ports) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"Destination.Ports", "", reason("protocol does not support ports"))
+				"Destination.Ports", "", reason(protocolPortsMsg))
 		}
 		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"Destination.NotPorts", "", reason("protocol does not support ports"))
+				"Destination.NotPorts", "", reason(protocolPortsMsg))
 		}
 	}
 
@@ -513,20 +514,20 @@ func validateBackendRule(v *validator.Validate, structLevel *validator.StructLev
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.SrcPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
-				"SrcPorts", "", reason("protocol does not support ports"))
+				"SrcPorts", "", reason(protocolPortsMsg))
 		}
 		if len(rule.NotSrcPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.NotSrcPorts),
-				"NotSrcPorts", "", reason("protocol does not support ports"))
+				"NotSrcPorts", "", reason(protocolPortsMsg))
 		}
 
 		if len(rule.DstPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
-				"DstPorts", "", reason("protocol does not support ports"))
+				"DstPorts", "", reason(protocolPortsMsg))
 		}
 		if len(rule.NotDstPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
-				"NotDstPorts", "", reason("protocol does not support ports"))
+				"NotDstPorts", "", reason(protocolPortsMsg))
 		}
 	}
 }
