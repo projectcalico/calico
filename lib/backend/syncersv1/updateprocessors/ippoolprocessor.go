@@ -15,14 +15,70 @@
 package updateprocessors
 
 import (
+	"errors"
+
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
-	"github.com/projectcalico/libcalico-go/lib/converter/modelv2v1"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // Create a new SyncerUpdateProcessor to sync IPPool data in v1 format for
 // consumption by both Felix and the BGP daemon.
 func NewIPPoolUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	ipc := modelv2v1.IPPoolConverter{}
-	return NewConflictResolvingCacheUpdateProcessor(apiv2.KindIPPool, ipc.ConvertV2ToV1)
+	return NewConflictResolvingCacheUpdateProcessor(apiv2.KindIPPool, convertIPPoolV2ToV1)
+}
+
+// Convert v2 KVPair to the equivalent v1 KVPair.
+func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
+	// Validate against incorrect key/value kinds.  This indicates a code bug rather
+	// than a user error.
+	v2key, ok := kvp.Key.(model.ResourceKey)
+	if !ok || v2key.Kind != apiv2.KindIPPool {
+		return nil, errors.New("Key is not a valid BGPPeer resource key")
+	}
+	v2res, ok := kvp.Value.(*apiv2.IPPool)
+	if !ok {
+		return nil, errors.New("Value is not a valid BGPPeer resource key")
+	}
+
+	// Correct data types.  Handle the conversion.
+	_, cidr, err := cnet.ParseCIDR(v2res.Spec.CIDR)
+	if err != nil {
+		return nil, err
+	}
+	v1key := model.IPPoolKey{
+		CIDR: *cidr,
+	}
+	var ipipInterface string
+	var ipipMode ipip.Mode
+	var ipm apiv2.IPIPMode
+	if v2res.Spec.IPIP != nil {
+		ipm = v2res.Spec.IPIP.Mode
+	}
+	switch ipm {
+	case apiv2.IPIPModeOff:
+		ipipInterface = ""
+		ipipMode = ipip.Undefined
+	case apiv2.IPIPModeCrossSubnet:
+		ipipInterface = "tunl0"
+		ipipMode = ipip.CrossSubnet
+	default:
+		ipipInterface = "tunl0"
+		ipipMode = ipip.Always
+	}
+
+	return &model.KVPair{
+		Key: v1key,
+		Value: &model.IPPool{
+			CIDR:          *cidr,
+			IPIPInterface: ipipInterface,
+			IPIPMode:      ipipMode,
+			Masquerade:    v2res.Spec.NATOutgoing,
+			IPAM:          !v2res.Spec.Disabled,
+			Disabled:      v2res.Spec.Disabled,
+		},
+		Revision: kvp.Revision,
+	}, nil
 }
