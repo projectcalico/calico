@@ -39,7 +39,7 @@ type IPPoolSpec struct {
 	IPIP *IPIPConfiguration `json:"ipip,omitempty"`
 	// When nat-outgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
-	NATOutgoing bool `json:"nat-outgoing,omitempty"`
+	NATOutgoing bool `json:"natOutgoing,omitempty"`
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
 }
