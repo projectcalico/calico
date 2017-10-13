@@ -1,5 +1,5 @@
-hash: 985cd57b595c91c5ff6c34d41a83803d4292ab381723ac7b05848209ada6948f
-updated: 2017-10-10T17:15:46.833246594Z
+hash: af409d227582ea2fff9772436e0a61adecd74f669cb35d9a1511365f6c4c0066
+updated: 2017-10-13T12:55:49.807800024Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -135,7 +135,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4db56aa2f763478265b424ef04988cc6ddd30537
+  version: cc6687459006bd22a2ddc6b1f3d70d77ab5d0b1e
   subpackages:
   - lib
   - lib/api
@@ -228,7 +228,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
+  version: 43eea11bc92608addb41b8a406b0407495c106f6
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -411,7 +411,7 @@ imports:
   - util/jsonpath
 testImports:
 - name: github.com/onsi/gomega
-  version: dcabb60a477c2b6f456df65037cb6708210fbb02
+  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
   subpackages:
   - format
   - internal/assertion
