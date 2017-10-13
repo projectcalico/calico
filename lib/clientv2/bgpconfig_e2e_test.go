@@ -47,12 +47,12 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 	specDefault1 := apiv2.BGPConfigurationSpec{
 		LogSeverityScreen:     "Info",
 		NodeToNodeMeshEnabled: &ptrTrue,
-		DefaultNodeASNumber:   &nodeASNumber1,
+		ASNumber:              &nodeASNumber1,
 	}
 	specDefault2 := apiv2.BGPConfigurationSpec{
 		LogSeverityScreen:     "Warning",
 		NodeToNodeMeshEnabled: &ptrFalse,
-		DefaultNodeASNumber:   &nodeASNumber2,
+		ASNumber:              &nodeASNumber2,
 	}
 	specInfo := apiv2.BGPConfigurationSpec{
 		LogSeverityScreen: "Info",

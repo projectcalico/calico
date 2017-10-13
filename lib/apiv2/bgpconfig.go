@@ -39,11 +39,11 @@ type BGPConfiguration struct {
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
-	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty"`
+	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty" confignamev1:"loglevel"`
 	// NodeToNodeMeshEnabled sets whether full node to node BGP mesh is enabled. [Default: true]
-	NodeToNodeMeshEnabled *bool `json:"nodeToNodeMeshEnabled,omitempty" validate:"omitempty"`
-	// DefaultNodeASNumber is the default AS number used by a node. [Default: 64512]
-	DefaultNodeASNumber *numorstring.ASNumber `json:"defaultNodeASNumber,omitempty" validate:"omitempty"`
+	NodeToNodeMeshEnabled *bool `json:"nodeToNodeMeshEnabled,omitempty" validate:"omitempty" confignamev1:"node_mesh"`
+	// ASNumber is the default AS number used by a node. [Default: 64512]
+	ASNumber *numorstring.ASNumber `json:"asNumber,omitempty" validate:"omitempty" confignamev1:"as_num"`
 }
 
 // BGPConfigurationList contains a list of BGPConfiguration resources.
@@ -64,7 +64,7 @@ func NewBGPConfiguration() *BGPConfiguration {
 	}
 }
 
-// NewBGPConfigurationList creates a new 9zeroed) BGPConfigurationList struct with the TypeMetadata
+// NewBGPConfigurationList creates a new zeroed) BGPConfigurationList struct with the TypeMetadata
 // initialized to the current version.
 func NewBGPConfigurationList() *BGPConfigurationList {
 	return &BGPConfigurationList{

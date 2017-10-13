@@ -47,14 +47,14 @@ type FelixConfigurationSpec struct {
 	// RouterefreshInterval is the period, in seconds, at which Felix re-checks the routes
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
 	// Set to 0 to disable route refresh. [Default: 90]
-	RouteRefreshIntervalSecs *int `json:"routeRefreshIntervalSecs,omitempty" configname:"RouteRefreshInterval"`
+	RouteRefreshIntervalSecs *int `json:"routeRefreshIntervalSecs,omitempty" confignamev1:"RouteRefreshInterval"`
 	// IptablesRefreshInterval is the period, in seconds, at which Felix re-checks the IP sets
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
 	// Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
 	// other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
 	// version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
 	// to reduce Felix CPU usage. [Default: 10]
-	IptablesRefreshIntervalSecs *int `json:"iptablesRefreshIntervalSecs,omitempty" configname:"IptablesRefreshInterval"`
+	IptablesRefreshIntervalSecs *int `json:"iptablesRefreshIntervalSecs,omitempty" confignamev1:"IptablesRefreshInterval"`
 	// IptablesPostWriteCheckIntervalSecs is the period, in seconds, after Felix has done a write
 	// to the dataplane that it schedules an extra read back in order to check the write was not
 	// clobbered by another process. This should only occur if another application on the system
@@ -77,7 +77,7 @@ type FelixConfigurationSpec struct {
 	// IpsetsRefreshIntervalSecs is the period, in seconds, at which Felix re-checks all iptables
 	// state to ensure that no other process has accidentally broken Calico’s rules. Set to 0 to
 	// disable iptables refresh. [Default: 90]
-	IpsetsRefreshIntervalSecs *int `json:"ipsetsRefreshIntervalSecs,omitempty" configname:"IpsetsRefreshInterval"`
+	IpsetsRefreshIntervalSecs *int `json:"ipsetsRefreshIntervalSecs,omitempty" confignamev1:"IpsetsRefreshInterval"`
 	MaxIpsetSize              *int `json:"maxIpsetSize,omitempty"`
 
 	NetlinkTimeoutSecs *int `json:"netlinkTimeoutSecs,omitempty"`
@@ -180,8 +180,8 @@ type FelixConfigurationSpec struct {
 
 	DebugMemoryProfilePath              string `json:"debugMemoryProfilePath,omitempty"`
 	DebugDisableLogDropping             *bool  `json:"debugDisableLogDropping,omitempty"`
-	DebugSimulateCalcGraphHangAfterSecs *int   `json:"debugSimulateCalcGraphHangAfterSecs,omitempty" configname:"DebugSimulateCalcGraphHangAfter"`
-	DebugSimulateDataplaneHangAfterSecs *int   `json:"debugSimulateDataplaneHangAfterSecs,omitempty" configname:"DebugSimualteDataplaneHangAfter"`
+	DebugSimulateCalcGraphHangAfterSecs *int   `json:"debugSimulateCalcGraphHangAfterSecs,omitempty" confignamev1:"DebugSimulateCalcGraphHangAfter"`
+	DebugSimulateDataplaneHangAfterSecs *int   `json:"debugSimulateDataplaneHangAfterSecs,omitempty" confignamev1:"DebugSimualteDataplaneHangAfter"`
 }
 
 type ProtoPort struct {
