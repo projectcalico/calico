@@ -3,5 +3,5 @@ abstract: "Background information on Calico"
 path: /introduction
 order: 0
 toc:
-- title: Introduction
+- title: About Calico
   path: /introduction/
