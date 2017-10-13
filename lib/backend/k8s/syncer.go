@@ -23,11 +23,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	log "github.com/sirupsen/logrus"
 
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -177,7 +177,7 @@ func newSyncer(kubeAPI kubeAPI, converter Converter, callbacks api.SyncerCallbac
 			KEY_GC:  true,
 			KEY_HC:  true,
 			KEY_IP:  true,
-			KEY_NO:  true,
+			KEY_NO:  !disableNodePoll,
 			KEY_RS:  true,
 		},
 		disableNodePoll: disableNodePoll,
@@ -771,6 +771,10 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 				snap[KEY_HC] = append(snap[KEY_HC], *h)
 				keys[KEY_HC][h.Key.String()] = true
 			}
+			// Special case: for other resources, we reset this flag at the same time that we
+			// restart the watcher but HostConfig doesn't have its own watcher (and the Node watcher
+			// that we piggy-back on may be disabled) so we pro-actively clear the flag here.
+			syn.needsResync[KEY_HC] = false
 		}
 
 		// Resync IP Pools only if needed.
