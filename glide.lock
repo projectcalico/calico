@@ -1,5 +1,5 @@
-hash: 34961e991a6c73130159ba6fd742026ee891cc40c29814f09b242d35dc97acef
-updated: 2017-09-29T14:20:30.66494235Z
+hash: 2dd3dbe86aaa882014f76ca679837dcc1ba06113fdf16ff46c2ca0f617bfb256
+updated: 2017-10-13T13:11:00.818429475Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -75,22 +75,38 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 100ba4e885062801d56799d78530b73b178a78f3
+  version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  version: 130e6b02ab059e7b717a096f397c5b60111cae74
   subpackages:
   - proto
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
+- name: github.com/gxed/eventfd
+  version: 80a92cca79a8041496ccc9dd773fcb52a57ec6f9
+- name: github.com/gxed/GoEndian
+  version: 0f5c6873267e5abf306ffcdfcfa4bf77517ef4a7
 - name: github.com/howeyc/gopass
   version: 3ca23474a7c7203e0a0a070fd33508f6efdb9b3d
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
+- name: github.com/ipfs/go-log
+  version: 48d644b006ba26f1793bffc46396e981801078e3
+- name: github.com/jbenet/go-reuseport
+  version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
+  repo: https://github.com/fasaxc/go-reuseport.git
+  subpackages:
+  - poll
+  - singlepoll
+- name: github.com/jbenet/go-sockaddr
+  version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
+  subpackages:
+  - net
 - name: github.com/jonboulle/clockwork
   version: 72f9bd7c4e0c2a40055ab3d0f09654f730cce982
 - name: github.com/juju/ratelimit
@@ -155,7 +171,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2fe92aee8d834c63da485f6e3934c91cb42f948d
+  version: cc6687459006bd22a2ddc6b1f3d70d77ab5d0b1e
   subpackages:
   - lib
   - lib/api
@@ -187,7 +203,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: f4c649479926210aa8b45a55affee894e2f48ce2
+  version: 87db7812cfdf28a094de22491453ad87aa871fb4
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -202,7 +218,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 2f17f4a9d485bf34b4bfaccc273805040e4f86c8
+  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -231,6 +247,8 @@ imports:
   - nl
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+- name: github.com/whyrusleeping/go-logging
+  version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
@@ -255,7 +273,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 43eea11bc92608addb41b8a406b0407495c106f6
   subpackages:
   - unix
 - name: golang.org/x/text

@@ -90,6 +90,90 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	},
 ).withName("ep1 local, policy")
 
+// localEp1WithNamedPortPolicy as above but with named port in the policy.
+var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+).withIPSet(namedPortAllTCPID, []string{
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
+}).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
+
+// localEp1WithNamedPortPolicy as above but with negated named port in the policy.
+var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
+).withIPSet(namedPortAllLessFoobarTCPID, []string{
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
+}).withIPSet(allLessFoobarSelectorId, []string{
+	// The selector gets filled in because it's needed when doing the negation.
+	"10.0.0.1",
+	"10.0.0.2",
+	"fc00:fe11::1",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{
+		{
+			Name:               "default",
+			IngressPolicyNames: []string{"pol-1"},
+		},
+	},
+).withName("ep1 local, negated named port policy")
+
+// As above but using the destination fields in the policy instead of source.
+var localEp1WithNegatedNamedPortPolicyDest = localEp1WithNegatedNamedPortPolicy.withKVUpdates(
+	KVPair{
+		Key:   PolicyKey{Name: "pol-1"},
+		Value: &policy1_order20_with_selector_and_negated_named_port_tcpport_dest,
+	},
+).withName("ep1 local, negated named port policy in destination fields")
+
+// A host endpoint with a named port
+var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithNamedPorts},
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+).withIPSet(namedPortAllTCPID, []string{
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+).withEndpoint(
+	"named",
+	[]tierInfo{
+		{"default", []string{"pol-1"}, []string{"pol-1"}},
+	},
+).withName("Host endpoint, named port policy")
+
+// As above but with no selector in the rules.
+var localEp1WithNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport},
+).withName("ep1 local, named port only")
+
+// As above but with negated named port.
+var localEp1WithNegatedNamedPortPolicyNoSelector = localEp1WithNamedPortPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_tcpport_negated},
+).withName("ep1 local, negated named port only")
+
 // localEp1WithIngressPolicy is as above except ingress policy only.
 var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
@@ -110,6 +194,16 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 		{"default", []string{"pol-1"}, nil},
 	},
 ).withName("ep1 local, ingress-only policy")
+
+// localEp1WithNamedPortPolicy as above but with UDP named port in the policy.
+var localEp1WithNamedPortPolicyUDP = localEp1WithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_udpport},
+).withIPSet(namedPortAllUDPID, []string{
+	"10.0.0.1,udp:9091",
+	"10.0.0.2,udp:9091",
+	"fc00:fe11::1,udp:9091",
+	"fc00:fe11::2,udp:9091",
+}).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
 
 var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -382,6 +476,148 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	},
 ).withName("2 local, overlapping IPs & a policy")
 
+var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
+).withIPSet(
+	allSelectorId, nil,
+).withIPSet(namedPortAllTCPID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
+}).withName("2 local, overlapping IPs & a named port policy")
+
+var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport2},
+).withIPSet(
+	allSelectorId, nil,
+).withIPSet(namedPortAllTCP2ID, []string{
+	"10.0.0.1,tcp:1234", // ep1
+	"fc00:fe11::1,tcp:1234",
+
+	"10.0.0.2,tcp:1234", // IP shared between ep1 and ep2 but different port no
+	"10.0.0.2,tcp:2345",
+	"fc00:fe11::2,tcp:1234",
+	"fc00:fe11::2,tcp:2345",
+
+	"10.0.0.3,tcp:2345", // ep2
+	"fc00:fe11::3,tcp:2345",
+}).withName("2 local, overlapping IPs & a named port policy")
+
+// localEpsWithMismatchedNamedPortsPolicy contains a policy that has named port matches where the
+// rule has a protocol that doesn't match that in the named port definitions in the endpoint.
+var localEpsWithMismatchedNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_named_port_mismatched_protocol},
+).withIPSet(
+	allSelectorId, nil,
+).withIPSet(
+	bEqBSelectorId, nil,
+).withIPSet(
+	namedPortID(allSelector, "udp", "tcpport"), []string{},
+).withIPSet(
+	namedPortID(allSelector, "tcp", "udpport"), []string{},
+).withName("Named ports policy with protocol not matching endpoints")
+
+// In this state, we have a couple of endpoints.  EP1 has a profile, through which it inherits
+// a label.
+var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
+	// Two local endpoints with overlapping IPs.
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{},
+).withEndpoint(
+	localWlEp2Id,
+	[]tierInfo{},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
+	proto.ProfileID{"prof-missing"},
+)
+
+// Building on the above, we add a policy to match on the inherited label, which should produce
+// a named port.
+var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlappingIPsAndInheritedLabels.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "inherit-pol"}, Value: &policy_with_named_port_inherit},
+).withActivePolicies(
+	proto.PolicyID{Tier: "default", Name: "inherit-pol"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{{Name: "default",
+		IngressPolicyNames: []string{"inherit-pol"},
+		EgressPolicyNames:  []string{"inherit-pol"},
+	}},
+).withEndpoint(
+	localWlEp2Id,
+	[]tierInfo{{Name: "default",
+		IngressPolicyNames: []string{"inherit-pol"},
+		EgressPolicyNames:  []string{"inherit-pol"},
+	}},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	// ep2 doesn't match because it doesn't inherit the profile.
+}).withName("2 local WEPs with policy matching inherited label on WEP1")
+
+// Add a second profile with the same labels so that both endpoints now match.
+var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1.withKVUpdates(
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels1},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
+}).withName("2 local WEPs with policy matching inherited label on both WEPs")
+
+// Then, change the label on EP2 so it no-longer matches.
+var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels2},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	// ep2 no longer matches
+}).withName("2 local WEPs with policy matching inherited label on WEP1; WEP2 has different label")
+
+// Then, change the label on EP1 so it no-longer matches.
+var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2.withKVUpdates(
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels2},
+).withIPSet(namedPortInheritIPSetID, []string{
+// No longer any matches.
+}).withName("2 local WEPs with policy not matching inherited labels")
+
+// Alternatively, prevent EP2 from matching by removing its profiles.
+var localEpsAndNamedPortPolicyEP2ProfileRemoved = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2WithLabelsButNoProfiles},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	// ep2 no longer matches
+}).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withName("2 local WEPs with policy matching inherited label on WEP1; WEP2 has no profile")
+
+// Then do the same for EP1.
+var localEpsAndNamedPortPolicyBothEPsProfilesRemoved = localEpsAndNamedPortPolicyEP2ProfileRemoved.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1WithLabelsButNoProfiles},
+).withIPSet(namedPortInheritIPSetID, []string{
+// Neither EP matches.
+}).withActiveProfiles().withName("2 local WEPs with no matches due to removing profiles from endpoints")
+
 // localEpsWithPolicyUpdatedIPs, when used with localEpsWithPolicy checks
 // correct handling of IP address updates.  We add and remove some IPs from
 // endpoint 1 and check that only its non-shared IPs are removed from the IP
@@ -501,19 +737,17 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 	"fc00:fe11::1",
 	"10.0.0.2", // ep1 and ep2
 	"fc00:fe11::2",
-}).withIPSet(tagFoobarSelectorId, []string{}).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
+}).withIPSet(
+	tagFoobarSelectorId, []string{},
 ).withActiveProfiles(
 	proto.ProfileID{"prof-1"},
 	proto.ProfileID{"prof-2"},
 	proto.ProfileID{"prof-3"},
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
-	localWlEp1Id,
-	[]tierInfo{},
+	localWlEp1Id, []tierInfo{},
 ).withEndpoint(
-	localWlEp2Id,
-	[]tierInfo{},
+	localWlEp2Id, []tierInfo{},
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(

@@ -86,20 +86,24 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 
 		Protocol: protocolToProtoProtocol(in.Protocol),
 
-		SrcNet:      ipNetsToProtoStrings(in.SrcNets),
-		SrcPorts:    portsToProtoPorts(in.SrcPorts),
-		DstNet:      ipNetsToProtoStrings(in.DstNets),
-		DstPorts:    portsToProtoPorts(in.DstPorts),
-		SrcIpSetIds: in.SrcIPSetIDs,
-		DstIpSetIds: in.DstIPSetIDs,
+		SrcNet:               ipNetsToProtoStrings(in.SrcNets),
+		SrcPorts:             portsToProtoPorts(in.SrcPorts),
+		SrcNamedPortIpSetIds: in.SrcNamedPortIPSetIDs,
+		DstNet:               ipNetsToProtoStrings(in.DstNets),
+		DstPorts:             portsToProtoPorts(in.DstPorts),
+		DstNamedPortIpSetIds: in.DstNamedPortIPSetIDs,
+		SrcIpSetIds:          in.SrcIPSetIDs,
+		DstIpSetIds:          in.DstIPSetIDs,
 
-		NotProtocol:    protocolToProtoProtocol(in.NotProtocol),
-		NotSrcNet:      ipNetsToProtoStrings(in.NotSrcNets),
-		NotSrcPorts:    portsToProtoPorts(in.NotSrcPorts),
-		NotDstNet:      ipNetsToProtoStrings(in.NotDstNets),
-		NotDstPorts:    portsToProtoPorts(in.NotDstPorts),
-		NotSrcIpSetIds: in.NotSrcIPSetIDs,
-		NotDstIpSetIds: in.NotDstIPSetIDs,
+		NotProtocol:             protocolToProtoProtocol(in.NotProtocol),
+		NotSrcNet:               ipNetsToProtoStrings(in.NotSrcNets),
+		NotSrcPorts:             portsToProtoPorts(in.NotSrcPorts),
+		NotSrcNamedPortIpSetIds: in.NotSrcNamedPortIPSetIDs,
+		NotDstNet:               ipNetsToProtoStrings(in.NotDstNets),
+		NotDstPorts:             portsToProtoPorts(in.NotDstPorts),
+		NotDstNamedPortIpSetIds: in.NotDstNamedPortIPSetIDs,
+		NotSrcIpSetIds:          in.NotSrcIPSetIDs,
+		NotDstIpSetIds:          in.NotDstIPSetIDs,
 	}
 
 	// Fill in the ICMP fields.  We can't follow the pattern and make a

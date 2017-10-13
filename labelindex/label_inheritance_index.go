@@ -52,7 +52,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -133,13 +132,6 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		dirtyItemIDs: set.New(),
 	}
 	return &inheritIDx
-}
-
-func (l *InheritIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	allUpdDispatcher.Register(model.ProfileTagsKey{}, l.OnUpdate)
-	allUpdDispatcher.Register(model.ProfileLabelsKey{}, l.OnUpdate)
-	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, l.OnUpdate)
-	allUpdDispatcher.Register(model.HostEndpointKey{}, l.OnUpdate)
 }
 
 // OnUpdate makes LabelInheritanceIndex compatible with the UpdateHandler interface

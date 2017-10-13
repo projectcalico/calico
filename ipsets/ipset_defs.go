@@ -21,7 +21,11 @@ import (
 	"regexp"
 	"strings"
 
+	"fmt"
+	"strconv"
+
 	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -67,12 +71,44 @@ const MaxIPSetNameLength = 31
 type IPSetType string
 
 const (
-	IPSetTypeHashIP  IPSetType = "hash:ip"
-	IPSetTypeHashNet IPSetType = "hash:net"
+	IPSetTypeHashIP     IPSetType = "hash:ip"
+	IPSetTypeHashIPPort IPSetType = "hash:ip,port"
+	IPSetTypeHashNet    IPSetType = "hash:net"
 )
 
 func (t IPSetType) SetType() string {
 	return string(t)
+}
+
+type V4IPPort struct {
+	IP       ip.V4Addr
+	Port     uint16
+	Protocol labelindex.IPSetPortProtocol
+}
+
+func (p V4IPPort) String() string {
+	return fmt.Sprintf("%s,%s:%d", p.IP.String(), p.Protocol.String(), p.Port)
+}
+
+type V6IPPort struct {
+	IP       ip.V6Addr
+	Port     uint16
+	Protocol labelindex.IPSetPortProtocol
+}
+
+func (p V6IPPort) String() string {
+	return fmt.Sprintf("%s,%s:%d", p.IP.String(), p.Protocol.String(), p.Port)
+}
+
+func (t IPSetType) IsMemberIPV6(member string) bool {
+	switch t {
+	case IPSetTypeHashIP, IPSetTypeHashNet:
+		return strings.Contains(member, ":")
+	case IPSetTypeHashIPPort:
+		return strings.Contains(strings.Split(member, ",")[0], ":")
+	}
+	log.WithField("type", string(t)).Panic("Unknown IPSetType")
+	return false
 }
 
 // CanonicaliseMember converts the string representation of an IP set member to a canonical
@@ -87,6 +123,48 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 			log.WithField("ip", member).Panic("Failed to parse IP")
 		}
 		return ipAddr
+	case IPSetTypeHashIPPort:
+		// The member should be of the format <IP>,(tcp|udp):<port number>
+		parts := strings.Split(member, ",")
+		if len(parts) != 2 {
+			log.WithField("member", member).Panic("Failed to parse IP,port IP set member")
+		}
+		ipAddr := ip.FromString(parts[0])
+		if ipAddr == nil {
+			// This should be prevented by validation.
+			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+		}
+		// parts[1] should contain "(tcp|udp):<port number>"
+		parts = strings.Split(parts[1], ":")
+		var proto labelindex.IPSetPortProtocol
+		switch strings.ToLower(parts[0]) {
+		case "udp":
+			proto = labelindex.ProtocolUDP
+		case "tcp":
+			proto = labelindex.ProtocolTCP
+		default:
+			log.WithField("member", member).Panic("Unknown protocol")
+		}
+		port, err := strconv.Atoi(parts[1])
+		if err != nil {
+			log.WithField("member", member).WithError(err).Panic("Bad port")
+		}
+		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
+		// the address as an interface by storing one fewer interface headers.  That is worthwhile
+		// because we store many IP set members.
+		if ipAddr.Version() == 4 {
+			return V4IPPort{
+				IP:       ipAddr.(ip.V4Addr),
+				Port:     uint16(port),
+				Protocol: proto,
+			}
+		} else {
+			return V6IPPort{
+				IP:       ipAddr.(ip.V6Addr),
+				Port:     uint16(port),
+				Protocol: proto,
+			}
+		}
 	case IPSetTypeHashNet:
 		// Convert the string into our ip.CIDR type, which is backed by a struct.
 		return ip.MustParseCIDR(member)
@@ -101,7 +179,7 @@ type ipSetMember interface {
 
 func (t IPSetType) IsValid() bool {
 	switch t {
-	case IPSetTypeHashIP, IPSetTypeHashNet:
+	case IPSetTypeHashIP, IPSetTypeHashNet, IPSetTypeHashIPPort:
 		return true
 	}
 	return false

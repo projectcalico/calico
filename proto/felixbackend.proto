@@ -100,6 +100,11 @@ message InSync {
 message IPSetUpdate {
   string id = 1;
   repeated string members = 2;
+  enum IPSetType {
+    IP = 0;           // Each member is an IP address in dotted-decimal or IPv6 format.
+    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp):<port-number>"
+  }
+  IPSetType type = 3;
 }
 
 message IPSetDeltaUpdate {
@@ -164,9 +169,16 @@ message Rule {
   Protocol protocol = 3;
 
   repeated string src_net = 4;
+
+  // The list of ports is split into numeric and named ports, where named ports are represented
+  // by (IP, port) IP sets.  A packet matches this rule if it matches any numeric port range *or*
+  // any listed named port IP set.
   repeated PortRange src_ports = 5;
+  repeated string src_named_port_ip_set_ids = 12;
+
   repeated string dst_net = 6;
   repeated PortRange dst_ports = 7;
+  repeated string dst_named_port_ip_set_ids = 13;
   oneof icmp {
     // Distinguish between a match on type only and type+code.  We can't use
     // the fact that fields ar optional because Go can't distinguish 0 from
@@ -189,6 +201,8 @@ message Rule {
   }
   repeated string not_src_ip_set_ids = 109;
   repeated string not_dst_ip_set_ids = 110;
+  repeated string not_src_named_port_ip_set_ids = 112;
+  repeated string not_dst_named_port_ip_set_ids = 113;
 
   // Changed to config option.
   reserved 200;

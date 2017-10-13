@@ -23,7 +23,6 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/metrics"
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -71,18 +70,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	)
 
 	BeforeEach(func() {
-
-		etcd = containers.RunEtcd()
-
-		client = utils.GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
-
-		felix = containers.RunFelix(etcd.IP)
-
-		felixNode := api.NewNode()
-		felixNode.Metadata.Name = felix.Hostname
-		_, err := client.Nodes().Create(felixNode)
-		Expect(err).NotTo(HaveOccurred())
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
 
 		metricsPortReachable = func() bool {
 			return MetricsPortReachable(felix)
@@ -107,7 +95,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	})
 
 	It("with a local workload, port should be reachable", func() {
-		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055")
+		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", "tcp")
 		w.Configure(client)
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 		w.Stop()

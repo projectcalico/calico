@@ -26,7 +26,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 2fe92aee8d834c63da485f6e3934c91cb42f948d
+  version: cc6687459006bd22a2ddc6b1f3d70d77ab5d0b1e
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -44,7 +44,7 @@ import:
 - package: k8s.io/client-go
   version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
 - package: github.com/projectcalico/typha
-  version: f4c649479926210aa8b45a55affee894e2f48ce2
+  version: 87db7812cfdf28a094de22491453ad87aa871fb4
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
@@ -53,3 +53,6 @@ import:
   version: v0.5.2
 - package: github.com/onsi/gomega
   version: ^1.1.0
+- package: github.com/jbenet/go-reuseport
+  repo: https://github.com/fasaxc/go-reuseport.git
+  version: disable-dial-check
