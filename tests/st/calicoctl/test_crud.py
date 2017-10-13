@@ -209,6 +209,44 @@ class TestCreateFromFile(TestBase):
                               'doNotTrack': True,
                               'types': ['ingress', 'egress']}
         }),
+        ("policy3", {'apiVersion': 'v1',
+                     'kind': 'policy',
+                     'metadata': {'name': 'policy2'},
+                     'spec': {
+                         'egress': [{
+                             'action': 'allow',
+                             'destination': {
+                                 'ports': ['http-port']
+                             },
+                             'protocol': 'tcp',
+                             'source': {},
+                         }],
+                         'selector': "type=='application'",
+                         'types': ['egress']
+                    }}),
+        ("policy4", {'apiVersion': 'v1',
+                     'kind': 'policy',
+                     'metadata': {'name': 'policy2'},
+                     'spec': {
+                         'egress': [{
+                             'action': 'allow',
+                             'destination': {
+                                 'ports': ['Telnet']
+                             },
+                             'protocol': 'udp',
+                             'source': {},
+                         }],
+                         'ingress': [{
+                             'action': 'allow',
+                             'destination': {
+                                 'ports': ['echo', 53, 17, 'Quote']
+                             },
+                             'protocol': 'udp',
+                             'source': {},
+                         }],
+                         'selector': "type=='application'",
+                         'types': ['egress', 'ingress']
+                   }}),
         ("pool1", {'apiVersion': 'v1',
                    'kind': 'ipPool',
                    'metadata': {'cidr': "10.0.1.0/24"},
