@@ -56,7 +56,7 @@ func matchServiceAccountName(names []string, name string) bool {
 
 func matchServiceAccountNamespace(matchNamespace, namespace string) bool {
 	if matchNamespace == "" {
-		log.Debug("No sercice account namespace in rule.")
+		log.Debug("No service account namespace in rule.")
 		return true
 	}
 	return matchNamespace == namespace
@@ -88,6 +88,11 @@ func matchHTTPMethods(methods []string, reqMethod string) bool {
 	}).Debug("Matching HTTP Methods")
 	if len(methods) == 0 {
 		log.Debug("Rule has 0 HTTP Methods, matched.")
+		return true
+	}
+	// TODO: Correctly handle TCP vs HTTP traffic
+	if reqMethod == "" {
+		log.Debug("Request does not have HTTP Method.  Matched.")
 		return true
 	}
 	for _, method := range methods {
