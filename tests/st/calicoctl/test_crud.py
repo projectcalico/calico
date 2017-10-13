@@ -209,6 +209,44 @@ class TestCreateFromFile(TestBase):
                               'doNotTrack': True,
                               'types': ['ingress', 'egress']}
         }),
+        ("policy3", {'apiVersion': 'v1',
+                     'kind': 'policy',
+                     'metadata': {'name': 'policy2'},
+                     'spec': {
+                         'egress': [{
+                             'action': 'allow',
+                             'destination': {
+                                 'ports': ['http-port']
+                             },
+                             'protocol': 'tcp',
+                             'source': {},
+                         }],
+                         'selector': "type=='application'",
+                         'types': ['egress']
+                    }}),
+        ("policy4", {'apiVersion': 'v1',
+                     'kind': 'policy',
+                     'metadata': {'name': 'policy2'},
+                     'spec': {
+                         'egress': [{
+                             'action': 'allow',
+                             'destination': {
+                                 'ports': ['Telnet']
+                             },
+                             'protocol': 'udp',
+                             'source': {},
+                         }],
+                         'ingress': [{
+                             'action': 'allow',
+                             'destination': {
+                                 'ports': ['echo', 53, 17, 'Quote']
+                             },
+                             'protocol': 'udp',
+                             'source': {},
+                         }],
+                         'selector': "type=='application'",
+                         'types': ['egress', 'ingress']
+                   }}),
         ("pool1", {'apiVersion': 'v1',
                    'kind': 'ipPool',
                    'metadata': {'cidr': "10.0.1.0/24"},
@@ -1292,90 +1330,6 @@ class TestTypes(TestBase):
 
         # Now read it out (yaml format) with calicoctl and verify it matches:
         self.check_data_in_datastore([policy2_types_dict], "policy")
-
-        # Remove policy2
-        calicoctl("delete -f /tmp/policy2.yaml")
-
-class TestNamedPorts(TestBase):
-    """
-    Test calicoctl named-ports policy field. Confirm that for a policy with:
-    1) an egress rule with a named port is written/read correctly.
-    2) both ingress and egress rules on UDP are written/read correctly.
-    """
-    def test_named_ports_egress(self):
-        """
-        Test that a simple policy with only an egress
-        rule and a single named port is written/read
-        correctly.
-        """
-        # Set up simple egress rule with a named port
-        policy2_dict = {'apiVersion': 'v1',
-                        'kind': 'policy',
-                        'metadata': {'name': 'policy2'},
-                        'spec': {
-                            'egress': [{
-                                'action': 'allow',
-                                'destination': {
-                                    'ports': ['http-port']
-                                },
-                                'protocol': 'tcp',
-                                'source': {},
-                            }],
-                            'selector': "type=='application'",
-                            'types': ['egress']
-                        }
-        }
-
-        self.writeyaml('/tmp/policy2.yaml', policy2_dict)
-
-        # Create the policy using calicoctl
-        calicoctl("create -f /tmp/policy2.yaml")
-
-        # Now read it out (yaml format) with calicoctl and verify it matches:
-        self.check_data_in_datastore([policy2_dict], "policy")
-
-        # Remove policy2
-        calicoctl("delete -f /tmp/policy2.yaml")
-
-    def test_mix_named_and_numerical_ports(self):
-        """
-        Test that a more complex policy with both ingress
-        and egress rules support a mixture of named and
-        numerical ports.
-        """
-        # Set up simple ingress rule with a named port
-        policy2_dict = {'apiVersion': 'v1',
-                        'kind': 'policy',
-                        'metadata': {'name': 'policy2'},
-                        'spec': {
-                            'egress': [{
-                                'action': 'allow',
-                                'destination': {
-                                    'ports': ['Telnet']
-                                },
-                                'protocol': 'udp',
-                                'source': {},
-                            }],
-                            'ingress': [{
-                                'action': 'allow',
-                                'destination': {
-                                    'ports': ['echo', 53, 17, 'Quote']
-                                },
-                                'protocol': 'udp',
-                                'source': {},
-                            }],
-                            'selector': "type=='application'",
-                            'types': ['egress', 'ingress']
-                        }
-        }
-
-        self.writeyaml('/tmp/policy2.yaml', policy2_dict)
-
-        # Create the policy using calicoctl
-        calicoctl("create -f /tmp/policy2.yaml")
-
-        # Now read it out (yaml format) with calicoctl and verify it matches:
-        self.check_data_in_datastore([policy2_dict], "policy")
 
         # Remove policy2
         calicoctl("delete -f /tmp/policy2.yaml")
