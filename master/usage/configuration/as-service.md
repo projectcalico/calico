@@ -97,6 +97,10 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
 
 ExecStop=-/usr/bin/docker stop calico-node
 
+Restart=on-failure
+StartLimitBurst=3
+StartLimitInterval=60s
+
 [Install]
 WantedBy=multi-user.target
 ```
