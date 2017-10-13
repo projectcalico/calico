@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -25,18 +26,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-	"k8s.io/client-go/tools/clientcmd"
-
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 var exitCode int
@@ -50,17 +51,21 @@ func makeNode(ipv4 string, ipv6 string) *api.Node {
 	ip4, ip4net, _ := net.ParseCIDR(ipv4)
 	ip4net.IP = ip4.IP
 
-	ip6, ip6net, _ := net.ParseCIDR(ipv6)
-	// Guard against nil here in case we pass in an empty string for IPv6.
-	if ip6 != nil {
-		ip6net.IP = ip6.IP
+	ip6Addr := ""
+	if ipv6 != "" {
+		ip6, ip6net, _ := net.ParseCIDR(ipv6)
+		// Guard against nil here in case we pass in an empty string for IPv6.
+		if ip6 != nil {
+			ip6net.IP = ip6.IP
+		}
+		ip6Addr = ip6net.String()
 	}
 
 	n := &api.Node{
 		Spec: api.NodeSpec{
 			BGP: &api.NodeBGPSpec{
-				IPv4Address: ip4net,
-				IPv6Address: ip6net,
+				IPv4Address: ip4net.String(),
+				IPv6Address: ip6Addr,
 			},
 		},
 	}
@@ -101,6 +106,7 @@ type EnvItem struct {
 }
 
 var _ = Describe("FV tests against a real etcd", func() {
+	ctx := context.Background()
 	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING", "IP", "CLUSTER_TYPE"}
 
 	BeforeEach(func() {
@@ -117,21 +123,29 @@ var _ = Describe("FV tests against a real etcd", func() {
 	DescribeTable("Test IP pool env variables",
 		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string, expectedIPV4NATOutgoing bool, expectedIPV6NATOutgoing bool) {
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := client.New(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+			err = be.Clean()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Set the env variables specified.
 			for _, env := range envList {
 				os.Setenv(env.key, env.value)
 			}
-			poolList, err := c.IPPools().List(api.IPPoolMetadata{})
+			poolList, err := c.IPPools().List(ctx, options.ListOptions{})
 			Expect(poolList.Items).To(BeEmpty())
 
 			// Run the UUT.
-			configureIPPools(c)
+			configureIPPools(ctx, c)
 
 			// Get the IPPool list.
-			poolList, err = c.IPPools().List(api.IPPoolMetadata{})
+			poolList, err = c.IPPools().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
 
@@ -140,29 +154,26 @@ var _ = Describe("FV tests against a real etcd", func() {
 			foundv6Expected := false
 
 			for _, pool := range poolList.Items {
-				if pool.Metadata.CIDR.String() == expectedIPv4 {
+				if pool.Spec.CIDR == expectedIPv4 {
 					foundv4Expected = true
 				}
-				if pool.Metadata.CIDR.String() == expectedIPv6 {
+				if pool.Spec.CIDR == expectedIPv6 {
 					foundv6Expected = true
 				}
-				if pool.Metadata.CIDR.Version() == 6 {
+				if _, cidr, _ := net.ParseCIDR(pool.Spec.CIDR); cidr.Version() == 6 {
 					// Expect IPIP on IPv6 to be disabled
-					if pool.Spec.IPIP != nil {
-						Expect(pool.Spec.IPIP.Enabled).To(BeFalse())
-					}
+
+						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
+
 
 					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV6NATOutgoing), "Expected IPv6 to be %t but was %t", expectedIPV6NATOutgoing, pool.Spec.NATOutgoing)
 
 				} else {
 					// off is not a real mode value but use it instead of empty string
-					if expectIpv4IpipMode == "off" {
-						if pool.Spec.IPIP != nil {
-							Expect(pool.Spec.IPIP.Enabled).To(BeFalse())
-						}
+					if expectIpv4IpipMode == "Off" {
+							Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
 					} else {
-						Expect(pool.Spec.IPIP.Enabled).To(BeTrue())
-						Expect(pool.Spec.IPIP.Mode).To(Equal(ipip.Mode(expectIpv4IpipMode)))
+						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPMode(expectIpv4IpipMode)))
 					}
 
 					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV4NATOutgoing), "Expected IPv4 to be %t but was %t", expectedIPV4NATOutgoing, pool.Spec.NATOutgoing)
@@ -176,65 +187,92 @@ var _ = Describe("FV tests against a real etcd", func() {
 		},
 
 		Entry("No env variables set", []EnvItem{},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, false),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
 		Entry("IPv4 Pool env var set",
 			[]EnvItem{{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"}},
-			"172.16.0.0/24", "fd80:24e2:f998:72d6::/64", "off", true, false),
+			"172.16.0.0/24", "fd80:24e2:f998:72d6::/64", "Off", true, false),
 		Entry("IPv6 Pool env var set",
 			[]EnvItem{{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"}},
-			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "off", true, false),
+			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Off", true, false),
 		Entry("Both IPv4 and IPv6 Pool env var set",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"},
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
 			},
-			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "off", true, false),
+			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "Off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "off"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, false),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+		Entry("CALICO_IPV4POOL_IPIP set Off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Off"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+		Entry("CALICO_IPV4POOL_IPIP set Never", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Never"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Never", true, false),
+		Entry("CALICO_IPV4POOL_IPIP set empty string", []EnvItem{{"CALICO_IPV4POOL_IPIP", ""}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "always"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "always", true, false),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Always", true, false),
+		Entry("CALICO_IPV4POOL_IPIP set Always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Always"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Always", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set cross-subnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "cross-subnet"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "cross-subnet", true, false),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "CrossSubnet", true, false),
+		Entry("CALICO_IPV4POOL_IPIP set CrossSubnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "CrossSubnet"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "CrossSubnet", true, false),
 		Entry("IPv6 Pool and IPIP set",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
 				{"CALICO_IPV4POOL_IPIP", "always"},
 			},
-			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "always", true, false),
+			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Always", true, false),
 		Entry("IPv6 NATOutgoing Set Enabled",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, true),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, true),
 		Entry("IPv6 NATOutgoing Set Disabled",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "false"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, false),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
 		Entry("IPv4 NATOutgoing Set Disabled",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", false, false),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", false, false),
 		Entry("IPv6 NAT OUTGOING and IPV4 NAT OUTGOING SET",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"},
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"},
 			},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", false, true),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", false, true),
 	)
 
 	Describe("Test NO_DEFAULT_POOLS env variable", func() {
 		Context("Should have no pools defined", func() {
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			// Set the env variables specified.
 			os.Setenv("NO_DEFAULT_POOLS", "true")
 
 			// Run the UUT.
-			configureIPPools(c)
+			configureIPPools(ctx, c)
 
 			// Get the IPPool list.
-			poolList, err := c.IPPools().List(api.IPPoolMetadata{})
+			poolList, err := c.IPPools().List(ctx, options.ListOptions{})
 			It("should be able to access the IP pool list", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -254,8 +292,17 @@ var _ = Describe("FV tests against a real etcd", func() {
 			defer func() { exitFunction = oldExit }()
 
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := client.New(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = be.Clean()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Set the env variables specified.
 			for _, env := range envList {
@@ -263,7 +310,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			}
 
 			// Run the UUT.
-			configureIPPools(c)
+			configureIPPools(ctx, c)
 
 			Expect(my_ec).To(Equal(1))
 		},
@@ -291,14 +338,31 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 	Describe("Test we properly wait for the etcd datastore", func() {
 		// Create a new client.
-		cfg, _ := client.LoadClientConfigFromEnvironment()
-		c := testutils.CreateCleanClient(*cfg)
+		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+		It("should be able to load Calico client from ENV", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		c, err := client.New(*cfg)
+		It("should be able to create a new Calico client", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		be, err := backend.NewClient(*cfg)
+		It("should be able to create a new backend client", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		err = be.Clean()
+		It("should be able to clear the datastore", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
 
 		// Wait for a connection.
 		done := make(chan bool)
 		go func() {
 			// Wait for a connection.
-			waitForConnection(c)
+			waitForConnection(ctx, c)
 
 			// Once connected, indicate that we connected on the channel.
 			done <- true
@@ -326,113 +390,297 @@ var _ = Describe("FV tests against a real etcd", func() {
 	Describe("Test CLUSTER_TYPE env variable", func() {
 		Context("With no env var, Cluster Type should be empty string", func() {
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			nodeName := determineNodeName()
-			node := getNode(c, nodeName)
+			node := getNode(ctx, c, nodeName)
 
-			err := ensureDefaultConfig(cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 			It("should be able to access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			if assigned {
-				It("should be emtpy", func() {
-					Expect(val).To(Equal(""))
-				})
-			}
+			It("should be emtpy", func() {
+				Expect(clusterInfo.Spec.ClusterType).To(Equal(""))
+			})
+
 		})
 		Context("With env var set, Cluster Type should have that value", func() {
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			nodeName := determineNodeName()
-			node := getNode(c, nodeName)
+			node := getNode(ctx, c, nodeName)
 
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err := ensureDefaultConfig(cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 			It("should be able to access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("should be assigned", func() {
-				Expect(assigned).To(BeTrue())
-			})
+
 			It("should have the set value", func() {
-				Expect(val).To(Equal("theType"))
+				Expect(clusterInfo.Spec.ClusterType).To(Equal("theType"))
 			})
 		})
 		Context("With env var and Cluster Type prepopulated, Cluster Type should have both", func() {
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			nodeName := determineNodeName()
-			node := getNode(c, nodeName)
+			node := getNode(ctx, c, nodeName)
 
-			c.Config().SetFelixConfig("ClusterType", "", "prePopulated")
+			clusterInfo := api.NewClusterInformation()
+			clusterInfo.Name = "default"
+			clusterInfo.Spec.ClusterType = "prePopulated"
+
+			c.ClusterInformation().Create(ctx, clusterInfo, options.SetOptions{})
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err := ensureDefaultConfig(cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 			It("should be able to access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("should be assigned", func() {
-				Expect(assigned).To(BeTrue())
-			})
+
 			It("should have the set value", func() {
-				Expect(val).To(ContainSubstring("theType"))
+				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("theType"))
 			})
 			It("should have the prepopulated value", func() {
-				Expect(val).To(ContainSubstring("prePopulated"))
+				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("prePopulated"))
+			})
+		})
+
+		Context("for KDD backend, with env var and Cluster Type prepopulated, Cluster Type should have 'kdd' appended", func() {
+			// Create Calico client with k8s backend.
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			cfg.Spec = apiconfig.CalicoAPIConfigSpec{
+				DatastoreType: apiconfig.Kubernetes,
+				KubeConfig: apiconfig.KubeConfig{
+					K8sAPIEndpoint:           "http://127.0.0.1:8080",
+					K8sInsecureSkipTLSVerify: true,
+				},
+			}
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			nodeName := determineNodeName()
+			node := getNode(ctx, c, nodeName)
+
+			clusterInfo := api.NewClusterInformation()
+			clusterInfo.Name = "default"
+			clusterInfo.Spec.ClusterType = "prePopulated"
+
+			c.ClusterInformation().Create(ctx, clusterInfo, options.SetOptions{})
+			os.Setenv("CLUSTER_TYPE", "theType")
+
+			err = ensureDefaultConfig(ctx, cfg, c, node)
+			It("should be able to ensureDefaultConfig", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+			It("should be able to access the ClusterType", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should have the set value", func() {
+				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("theType"))
+			})
+			It("should have the prepopulated value", func() {
+				Expect(clusterInfo.Spec.ClusterType).To(ContainSubstring("prePopulated"))
+			})
+			It("should have 'kdd' appended at the end", func() {
+				Expect(strings.HasSuffix(clusterInfo.Spec.ClusterType, ",kdd")).To(BeTrue())
+			})
+		})
+
+		Context("for KDD backend, with no env var and Cluster Type not prepopulated, Cluster Type should only have 'kdd'", func() {
+			// Create Calico client with k8s backend.
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			cfg.Spec = apiconfig.CalicoAPIConfigSpec{
+				DatastoreType: apiconfig.Kubernetes,
+				KubeConfig: apiconfig.KubeConfig{
+					K8sAPIEndpoint:           "http://127.0.0.1:8080",
+					K8sInsecureSkipTLSVerify: true,
+				},
+			}
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			nodeName := determineNodeName()
+			node := getNode(ctx, c, nodeName)
+
+			clusterInfo := api.NewClusterInformation()
+			clusterInfo.Name = "default"
+
+			c.ClusterInformation().Create(ctx, clusterInfo, options.SetOptions{})
+			os.Setenv("CLUSTER_TYPE", "")
+
+			err = ensureDefaultConfig(ctx, cfg, c, node)
+			It("should be able to ensureDefaultConfig", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+			It("should be able to access the ClusterType", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should only have 'kdd' set", func() {
+				Expect(clusterInfo.Spec.ClusterType).Should(Equal("kdd"))
 			})
 		})
 
 		Context("With the same entries in both sources", func() {
 			// Create a new client.
-			cfg, _ := client.LoadClientConfigFromEnvironment()
-			c := testutils.CreateCleanClient(*cfg)
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			It("should be able to load Calico client from ENV", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			c, err := client.New(*cfg)
+			It("should be able to create a new Calico client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			be, err := backend.NewClient(*cfg)
+			It("should be able to create a new backend client", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = be.Clean()
+			It("should be able to clear the datastore", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
 
 			nodeName := determineNodeName()
-			node := getNode(c, nodeName)
+			node := getNode(ctx, c, nodeName)
 
-			c.Config().SetFelixConfig("ClusterType", "", "type1,type2")
+			clusterInfo := api.NewClusterInformation()
+			clusterInfo.Name = "default"
+			clusterInfo.Spec.ClusterType = "type1,type2"
+
+			c.ClusterInformation().Create(ctx, clusterInfo, options.SetOptions{})
 			os.Setenv("CLUSTER_TYPE", "type1,type1")
 
-			err := ensureDefaultConfig(cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			clusterInfo, err = c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 			It("should be able to access the ClusterType", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("should be assigned", func() {
-				Expect(assigned).To(BeTrue())
+
+			It("should have only one instance of the expected value", func() {
+				Expect(strings.Count(clusterInfo.Spec.ClusterType, "type1")).To(Equal(1), "Should only have one instance of type1, read '%s", clusterInfo.Spec.ClusterType)
 			})
 			It("should have only one instance of the expected value", func() {
-				Expect(strings.Count(val, "type1")).To(Equal(1), "Should only have one instance of type1, read '%s", val)
-			})
-			It("should have only one instance of the expected value", func() {
-				Expect(strings.Count(val, "type2")).To(Equal(1), "Should only have one instance of type1, read '%s", val)
+				Expect(strings.Count(clusterInfo.Spec.ClusterType, "type2")).To(Equal(1), "Should only have one instance of type1, read '%s", clusterInfo.Spec.ClusterType)
 			})
 		})
 	})
@@ -465,6 +713,8 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 
 var _ = Describe("FV tests against K8s API server.", func() {
 	It("should not throw an error when multiple Nodes configure the same global CRD value.", func() {
+		ctx := context.Background()
+
 		// How many Nodes we want to "create".
 		numNodes := 10
 
@@ -487,16 +737,19 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		}
 
 		// Create Calico client with k8s backend.
-		cfg := api.NewCalicoAPIConfig()
-		cfg.Spec = api.CalicoAPIConfigSpec{
-			DatastoreType: api.Kubernetes,
-			KubeConfig: api.KubeConfig{
+		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+
+		cfg.Spec = apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.Kubernetes,
+			KubeConfig: apiconfig.KubeConfig{
 				K8sAPIEndpoint:           "http://127.0.0.1:8080",
 				K8sInsecureSkipTLSVerify: true,
 			},
 		}
 
-		c := testutils.CreateClient(*cfg)
+		c, err := client.New(*cfg)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Create some Nodes using K8s client, Calico client does not support Node creation for KDD.
 		kNodes := []*v1.Node{}
@@ -507,11 +760,11 @@ var _ = Describe("FV tests against K8s API server.", func() {
 				},
 			}
 			kNodes = append(kNodes, n)
-			cs.Nodes().Create(n)
+			cs.CoreV1().Nodes().Create(n)
 		}
 
 		// Pull above Nodes using Calico client.
-		nodes, err := c.Nodes().List(api.NodeMetadata{})
+		nodes, err := c.Nodes().List(ctx, options.ListOptions{})
 		if err != nil {
 			Fail(fmt.Sprintf("Could not retrieve Nodes %v", err))
 		}
@@ -523,7 +776,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err = ensureDefaultConfig(cfg, c, &node)
+				err = ensureDefaultConfig(ctx, cfg, c, &node)
 				if err != nil {
 					errors = append(errors, err)
 				}
@@ -537,7 +790,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 
 		// Clean up our Nodes.
 		for _, node := range nodes.Items {
-			cs.Nodes().Delete(node.Metadata.Name, &metav1.DeleteOptions{})
+			cs.CoreV1().Nodes().Delete(node.Name, &metav1.DeleteOptions{})
 		}
 	})
 })
