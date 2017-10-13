@@ -333,10 +333,17 @@ many can clutter the page and exhaust the reader.
 
 For notes, use the following styles.
 
-- `> **Tip**: ... {: .alert .alert-success}` : not everyone needs to 
-  read it, but some might really appreciate and even enjoy the information.
-- `> **Note**: ... {: .alert .alert-info}`: deserves special attention.
-- `> **Important**: ... {: .alert .alert-danger}`: required reading.
+```
+> **Tip**: not everyone needs to read this, but some might really 
+> appreciate (and even enjoy) the information.
+{: .alert .alert-success}
+
+> **Note**: this information deserves special attention.
+{: .alert .alert-info}
+
+> **Important**: this is required reading.
+{: .alert .alert-danger}
+```
 
 Do not use `> **Warning**: ... {: .alert .alert-warning}`. This style 
 is reserved for the note that appears at the top of the page to let people 
