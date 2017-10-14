@@ -16,17 +16,12 @@ package clientv2
 
 import (
 	"context"
-	"encoding/hex"
-	"fmt"
 
-	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -34,11 +29,8 @@ import (
 
 // client implements the client.Interface.
 type client struct {
-	// The backend client is currently public to allow access to datastore
-	// specific functions that are used by calico/node.  This is a temporary
-	// measure and users of the client API should not assume that the backend
-	// will be available in the future.
-	Backend bapi.Client
+	// The backend client.
+	backend bapi.Client
 
 	// The resources client used internally.
 	resources resourceInterface
@@ -47,13 +39,14 @@ type client struct {
 // New returns a connected client. The ClientConfig can either be created explicitly,
 // or can be loaded from a config file or environment variables using the LoadClientConfig() function.
 func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
-	var err error
-	cc := client{}
-	if cc.Backend, err = backend.NewClient(config); err != nil {
+	be, err := backend.NewClient(config)
+	if err != nil {
 		return nil, err
 	}
-	cc.resources = &resources{backend: cc.Backend}
-	return cc, err
+	return client{
+		backend: be,
+		resources: &resources{backend: be},
+	}, nil
 }
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.
@@ -109,7 +102,7 @@ func (c client) BGPPeers() BGPPeerInterface {
 
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c client) IPAM() ipam.Interface {
-	return ipam.NewIPAMClient(c.Backend, poolAccessor{client: &c})
+	return ipam.NewIPAMClient(c.backend, poolAccessor{client: &c})
 }
 
 // BGPConfigurations returns an interface for managing the BGP configuration resources.
@@ -162,25 +155,16 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]net.IPNet, error) {
 // is already initialized.
 func (c client) EnsureInitialized() error {
 	// Perform datastore specific initialization first.
-	if err := c.Backend.EnsureInitialized(); err != nil {
+	if err := c.backend.EnsureInitialized(); err != nil {
 		return err
 	}
 
-	// Ensure a cluster GUID is set for the deployment.  We do this
-	// irrespective of how Calico is deployed.
-	kv := &model.KVPair{
-		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
-		Value: fmt.Sprintf("%v", hex.EncodeToString(uuid.NewV4().Bytes())),
-	}
-	if _, err := c.Backend.Create(context.Background(), kv); err == nil {
-		log.WithField("ClusterGUID", kv.Value).Info("Assigned cluster GUID")
-	} else {
-		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
-			log.WithError(err).WithField("ClusterGUID", kv.Value).Warn("Failed to assign cluster GUID")
-			return err
-		}
-		log.Infof("Using previously configured cluster GUID")
-	}
-
 	return nil
+}
+
+// Backend returns the backend client used by the v2 client.  Not exposed on the main
+// client API, but available publicly for consumers that require access to the backend
+// client (e.g. for syncer support).
+func (c client) Backend() bapi.Client {
+	return c.backend
 }
