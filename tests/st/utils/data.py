@@ -442,7 +442,7 @@ bgpconfig_name1_rev1 = {
     'spec': {
         'logSeverityScreen': 'Info',
         'nodeToNodeMeshEnabled': True,
-        'defaultNodeASNumber': 6512,
+        'asNumber': 6512,
     }
 }
 
@@ -455,7 +455,7 @@ bgpconfig_name1_rev2 = {
     'spec': {
         'logSeverityScreen': 'Info',
         'nodeToNodeMeshEnabled': False,
-        'defaultNodeASNumber': 6511,
+        'asNumber': 6511,
     }
 }
 

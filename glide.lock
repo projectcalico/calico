@@ -1,10 +1,10 @@
-hash: ce651c22912a89f05cffa10f73365b4ae75550f9cd758d38e8ee51d5a87aac76
-updated: 2017-10-06T15:42:22.706832639-07:00
+hash: 5b8cd279db714171f2bef8e861c6ca4641bd8904119f4c9f4dc49d44e5d1e361
+updated: 2017-10-14T22:32:16.001858-07:00
 imports:
 - name: github.com/armon/go-radix
   version: 1fca145dffbcaa8fe914309b1ec0cfc67500fe61
 - name: github.com/coreos/etcd
-  version: 17ae440991da3bdb2df4309936dd2074f66ec394
+  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
   subpackages:
   - auth/authpb
   - client
@@ -13,12 +13,13 @@ imports:
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
   - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 568e959cd89871e61434c1143528d9162da89ef2
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -55,18 +56,11 @@ imports:
 - name: github.com/golang/protobuf
   version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
-  - jsonpb
   - proto
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
-- name: github.com/grpc-ecosystem/grpc-gateway
-  version: 84398b94e188ee336f307779b57b3aa91af7063c
-  subpackages:
-  - runtime
-  - runtime/internal
-  - utilities
 - name: github.com/hashicorp/hcl
-  version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
+  version: 42e33e2d55a0ff1d6263f738896ea8c13571a8d0
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -77,7 +71,7 @@ imports:
   - json/scanner
   - json/token
 - name: github.com/influxdata/influxdb
-  version: 392fa03cf3cc98b78e606c34996976cea65b6814
+  version: 5bf9191a8272d4980a5bed78029b905ed69040a2
   subpackages:
   - client/v2
   - models
@@ -85,7 +79,7 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/magiconair/properties
-  version: be5ece7dd465ab0765a9682137865547526d1dfb
+  version: 8d7837e64d3c1ee4e54a880c5a920ab4316fc90a
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -95,13 +89,13 @@ imports:
 - name: github.com/mattn/go-runewidth
   version: 97311d9f7767e3d6f422ea06661bc2c7a19e8a5d
 - name: github.com/mcuadros/go-version
-  version: 257f7b9a7d87427c8d7f89469a5958d57f8abd7c
+  version: 88e56e02bea1c203c99222c365fa52a69996ccac
 - name: github.com/mitchellh/go-ps
   version: 4fdf99ab29366514c69ccccddab5dc58b8d84062
 - name: github.com/mitchellh/mapstructure
   version: d0303fe809921458f417bcf828397a65db30a7e4
 - name: github.com/olekukonko/tablewriter
-  version: be5337e7b39e64e5f91445ce7e721888dbab7387
+  version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
 - name: github.com/onsi/ginkgo
   version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
@@ -151,7 +145,7 @@ imports:
   - table
   - zebra
 - name: github.com/pelletier/go-toml
-  version: 69d355db5304c0f7f809a2edc054553e7142f016
+  version: 2009e44b6f182e34d8ce081ac2767622937ea3d4
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -161,7 +155,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 27e4ef9104d7275b9c73a7b55f5a62d7a37a0c40
+  version: 6b9bdf28b480cd8a868c7f0146c24efdec56a8d0
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -194,17 +188,17 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/afero
-  version: 9be650865eab0c12963d8753212f4f9c66cdcf12
+  version: e67d870304c4bca21331b02f414f970df13aa694
   subpackages:
   - mem
 - name: github.com/spf13/cast
   version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
 - name: github.com/spf13/jwalterweatherman
-  version: 0efa5202c04663c757d84f90f5219c1250baf94f
+  version: 12bd96e66386c1960ab0f74ced1362f66f552f7b
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/spf13/viper
-  version: 25b30aa063fc18e48662b86996252eabdcf2f0c7
+  version: d9cca5ef33035202efb1586825bdbb15ff9ec3ba
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/ugorji/go
@@ -212,11 +206,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: f5a6f697a596c788d474984a38a0ac4ba0719e93
+  version: 177f1ceba557262b3f1c3aba4df93a29199fb4eb
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
