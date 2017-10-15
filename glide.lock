@@ -1,5 +1,5 @@
-hash: f9aaca0a8b72398e0ef26c914c77162f071c375dbae644401df90012c2e29cb2
-updated: 2017-09-13T19:03:03.50962287Z
+hash: c47774fbb3f60d95977baee390008908a1fae940d3491865eff49c9da0d3bf11
+updated: 2017-10-14T22:04:53.71265-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
+  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
   subpackages:
   - auth/authpb
   - client
@@ -37,7 +37,7 @@ imports:
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
-  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
+  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
   - spew
 - name: github.com/dgrijalva/jwt-go
@@ -67,12 +67,6 @@ imports:
   version: 6aced65f8501fe1217321abf0749d354824ba2ff
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
-- name: github.com/go-playground/locales
-  version: 1e5f1161c6416a5ff48840eb8724a394e48cc534
-  subpackages:
-  - currency
-- name: github.com/go-playground/universal-translator
-  version: 71201497bace774495daed26a3874fd339e0b538
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -129,6 +123,20 @@ imports:
   - reporters/stenographer/support/go-colorable
   - reporters/stenographer/support/go-isatty
   - types
+- name: github.com/onsi/gomega
+  version: c893efa28eb45626cdaa76c9f653b62488858837
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -170,11 +178,11 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/crypto
-  version: faadfbdc035307d901e69eea569f5dda451a3ee3
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
+  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
   subpackages:
   - context
   - context/ctxhttp
@@ -200,7 +208,7 @@ imports:
   - unix
   - windows
 - name: golang.org/x/text
-  version: b19bf474d317b857955b12035d2c5acb57ce8b01
+  version: 2910a502d2bf9e43193af9d68ca516529614eed3
   subpackages:
   - cases
   - encoding
@@ -213,7 +221,6 @@ imports:
   - encoding/simplifiedchinese
   - encoding/traditionalchinese
   - encoding/unicode
-  - internal
   - internal/tag
   - internal/utf8internal
   - language
@@ -391,22 +398,4 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
-- name: k8s.io/kube-openapi
-  version: 80f07ef71bb4f781233c65aa8d0369e4ecafab87
-  subpackages:
-  - pkg/common
-testImports:
-- name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
-  subpackages:
-  - format
-  - internal/assertion
-  - internal/asyncassertion
-  - internal/oraclematcher
-  - internal/testingtsupport
-  - matchers
-  - matchers/support/goraph/bipartitegraph
-  - matchers/support/goraph/edge
-  - matchers/support/goraph/node
-  - matchers/support/goraph/util
-  - types
+testImports: []
