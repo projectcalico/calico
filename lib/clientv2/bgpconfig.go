@@ -122,7 +122,7 @@ func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv2.BGPConfiguration
 		if res.Spec.ASNumber != nil {
 			errFields = append(errFields, cerrors.ErroredField{
 				Name:   "BGPConfiguration.Spec.ASNumber",
-				Reason: "Cannot set defaultNodeASNumber on a non default BGP Configuration.",
+				Reason: "Cannot set ASNumber on a non default BGP Configuration.",
 			})
 		}
 	}
