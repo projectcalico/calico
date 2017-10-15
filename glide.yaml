@@ -5,8 +5,6 @@ owners:
 - name: Rob Brockbank
   email: rob@tigera.io
 import:
-- package: github.com/sirupsen/logrus
-  version: ^1.0.3
 - package: github.com/docopt/docopt-go
 - package: github.com/mcuadros/go-version
 - package: github.com/mitchellh/go-ps
@@ -19,11 +17,7 @@ import:
 - package: github.com/projectcalico/go-json
   subpackages:
   - json
-- package: github.com/coreos/etcd
-  version: 17ae440991da3bdb2df4309936dd2074f66ec394
 - package: github.com/projectcalico/go-yaml-wrapper
-- package: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
 - package: github.com/projectcalico/libcalico-go
   version: v3.0-integration
   subpackages:
@@ -40,5 +34,4 @@ import:
   - lib/numorstring
   - lib/scope
   - lib/validator
-- package: github.com/satori/go.uuid
 - package: github.com/termie/go-shutil
