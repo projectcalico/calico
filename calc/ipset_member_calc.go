@@ -26,8 +26,8 @@ import (
 )
 
 type IPAddRemoveCallbacks interface {
-	OnIPAdded(ipSetID string, ip ip.Addr)
-	OnIPRemoved(ipSetID string, ip ip.Addr)
+	OnCIDRAdded(ipSetID string, ip ip.CIDR)
+	OnCIDRRemoved(ipSetID string, ip ip.CIDR)
 }
 
 // MemberCalculator calculates the actual IPs that should be in each IP set.  As input, it
@@ -41,18 +41,18 @@ type IPAddRemoveCallbacks interface {
 // want to generate only one "IP added" event.  We also need to wait for both endpoints to be
 // removed before generating the "IP removed" event.
 type MemberCalculator struct {
-	keyToIPs              map[model.Key][]ip.Addr
+	keyToCIDRs            map[model.Key][]ip.CIDR
 	keyToMatchingIPSetIDs multidict.IfaceToString
-	ipSetIDToIPToKey      map[string]map[ip.Addr][]model.Key
+	ipSetIDToCIDRToKey    map[string]map[ip.CIDR][]model.Key
 
 	callbacks IPAddRemoveCallbacks
 }
 
 func NewMemberCalculator() *MemberCalculator {
 	calc := &MemberCalculator{
-		keyToIPs:              make(map[model.Key][]ip.Addr),
+		keyToCIDRs:            make(map[model.Key][]ip.CIDR),
 		keyToMatchingIPSetIDs: multidict.NewIfaceToString(),
-		ipSetIDToIPToKey:      make(map[string]map[ip.Addr][]model.Key),
+		ipSetIDToCIDRToKey:    make(map[string]map[ip.CIDR][]model.Key),
 	}
 	return calc
 }
@@ -60,13 +60,14 @@ func NewMemberCalculator() *MemberCalculator {
 func (calc *MemberCalculator) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, calc.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, calc.OnUpdate)
+	allUpdDispatcher.Register(model.NetworkSetKey{}, calc.OnUpdate)
 }
 
 // MatchStarted tells this object that an endpoint now belongs to an IP set.
 func (calc *MemberCalculator) MatchStarted(key model.Key, ipSetID string) {
 	log.Debugf("Adding endpoint %v to IP set %v", key, ipSetID)
 	calc.keyToMatchingIPSetIDs.Put(key, ipSetID)
-	ips := calc.keyToIPs[key]
+	ips := calc.keyToCIDRs[key]
 	calc.addMatchToIndex(ipSetID, key, ips)
 }
 
@@ -74,123 +75,130 @@ func (calc *MemberCalculator) MatchStarted(key model.Key, ipSetID string) {
 func (calc *MemberCalculator) MatchStopped(key model.Key, ipSetID string) {
 	log.Debugf("Removing endpoint %v from IP set %v", key, ipSetID)
 	calc.keyToMatchingIPSetIDs.Discard(key, ipSetID)
-	ips := calc.keyToIPs[key]
+	ips := calc.keyToCIDRs[key]
 	calc.removeMatchFromIndex(ipSetID, key, ips)
 }
 
 func (calc *MemberCalculator) OnUpdate(update api.Update) (filterOut bool) {
 	if update.Value == nil {
-		calc.updateEndpointIPs(update.Key, []ip.Addr{})
+		calc.updateCIDRsForKey(update.Key, []ip.CIDR{})
 		return
 	}
 	switch update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		ep := update.Value.(*model.WorkloadEndpoint)
-		ips := make([]ip.Addr, 0, len(ep.IPv4Nets)+len(ep.IPv6Nets))
+		cidrs := make([]ip.CIDR, 0, len(ep.IPv4Nets)+len(ep.IPv6Nets))
 		for _, net := range ep.IPv4Nets {
-			ips = append(ips, ip.FromNetIP(net.IP))
+			cidrs = append(cidrs, ip.CIDRFromCalicoNet(net))
 		}
 		for _, net := range ep.IPv6Nets {
-			ips = append(ips, ip.FromNetIP(net.IP))
+			cidrs = append(cidrs, ip.CIDRFromCalicoNet(net))
 		}
-		calc.updateEndpointIPs(update.Key, ips)
+		calc.updateCIDRsForKey(update.Key, cidrs)
+	case model.NetworkSetKey:
+		ns := update.Value.(*model.NetworkSet)
+		cidrs := make([]ip.CIDR, 0, len(ns.Nets))
+		for _, net := range ns.Nets {
+			cidrs = append(cidrs, ip.CIDRFromCalicoNet(net))
+		}
+		calc.updateCIDRsForKey(update.Key, cidrs)
 	case model.HostEndpointKey:
 		ep := update.Value.(*model.HostEndpoint)
-		ips := make([]ip.Addr, 0,
+		cidrs := make([]ip.CIDR, 0,
 			len(ep.ExpectedIPv4Addrs)+len(ep.ExpectedIPv6Addrs))
 		for _, netIP := range ep.ExpectedIPv4Addrs {
-			ips = append(ips, ip.FromNetIP(netIP.IP))
+			cidrs = append(cidrs, ip.CIDRFromNetIP(netIP.IP))
 		}
 		for _, netIP := range ep.ExpectedIPv6Addrs {
-			ips = append(ips, ip.FromNetIP(netIP.IP))
+			cidrs = append(cidrs, ip.CIDRFromNetIP(netIP.IP))
 		}
-		calc.updateEndpointIPs(update.Key, ips)
+		calc.updateCIDRsForKey(update.Key, cidrs)
 	}
 	return
 }
 
 // UpdateEndpointIPs tells this object that an endpoint has a new set of IP addresses.
-func (calc *MemberCalculator) updateEndpointIPs(endpointKey model.Key, ips []ip.Addr) {
-	log.Debugf("Endpoint %v IPs updated to %v", endpointKey, ips)
-	oldIPs := calc.keyToIPs[endpointKey]
-	if len(ips) == 0 {
-		delete(calc.keyToIPs, endpointKey)
+func (calc *MemberCalculator) updateCIDRsForKey(key model.Key, cidrs []ip.CIDR) {
+	log.Debugf("Endpoint %v CIDRs updated to %v", key, cidrs)
+	oldCIDRs := calc.keyToCIDRs[key]
+	if len(cidrs) == 0 {
+		delete(calc.keyToCIDRs, key)
 	} else {
-		calc.keyToIPs[endpointKey] = ips
+		calc.keyToCIDRs[key] = cidrs
 	}
 
-	oldIPsSet := set.New()
-	for _, ip := range oldIPs {
-		oldIPsSet.Add(ip)
+	oldCIDRsSet := set.New()
+	for _, cidr := range oldCIDRs {
+		oldCIDRsSet.Add(cidr)
 	}
 
-	addedIPs := make([]ip.Addr, 0)
-	currentIPs := set.New()
-	for _, ip := range ips {
-		if !oldIPsSet.Contains(ip) {
-			log.Debugf("Added IP: %v", ip)
-			addedIPs = append(addedIPs, ip)
+	addedCIDRs := make([]ip.CIDR, 0)
+	currentCIDRs := set.New()
+	for _, cidr := range cidrs {
+		if !oldCIDRsSet.Contains(cidr) {
+			log.Debugf("Added CIDR: %v", cidr)
+			addedCIDRs = append(addedCIDRs, cidr)
 		}
-		currentIPs.Add(ip)
+		currentCIDRs.Add(cidr)
 	}
 
-	removedIPs := make([]ip.Addr, 0)
-	for _, ip := range oldIPs {
-		if !currentIPs.Contains(ip) {
-			log.Debugf("Removed IP: %v", ip)
-			removedIPs = append(removedIPs, ip)
+	removedCIDRs := make([]ip.CIDR, 0)
+	for _, cidr := range oldCIDRs {
+		if !currentCIDRs.Contains(cidr) {
+			log.Debugf("Removed CIDR: %v", cidr)
+			removedCIDRs = append(removedCIDRs, cidr)
 		}
 	}
 
-	calc.keyToMatchingIPSetIDs.Iter(endpointKey, func(ipSetID string) {
+	calc.keyToMatchingIPSetIDs.Iter(key, func(ipSetID string) {
 		log.Debugf("Updating matching IP set: %v", ipSetID)
-		calc.addMatchToIndex(ipSetID, endpointKey, addedIPs)
-		calc.removeMatchFromIndex(ipSetID, endpointKey, removedIPs)
+		calc.addMatchToIndex(ipSetID, key, addedCIDRs)
+		calc.removeMatchFromIndex(ipSetID, key, removedCIDRs)
 	})
 }
 
-func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key model.Key, ips []ip.Addr) {
-	log.Debugf("IP set %v now matches IPs %v via %v", ipSetID, ips, key)
-	ipToKeys, ok := calc.ipSetIDToIPToKey[ipSetID]
+func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key model.Key, cidrs []ip.CIDR) {
+	log.Debugf("IP set %v now matches CIDRs %v via %v", ipSetID, cidrs, key)
+	cidrToKeys, ok := calc.ipSetIDToCIDRToKey[ipSetID]
 	if !ok {
-		ipToKeys = make(map[ip.Addr][]model.Key, len(ips))
-		calc.ipSetIDToIPToKey[ipSetID] = ipToKeys
+		cidrToKeys = make(map[ip.CIDR][]model.Key, len(cidrs))
+		calc.ipSetIDToCIDRToKey[ipSetID] = cidrToKeys
 	}
 
-ipLoop:
-	for _, theIP := range ips {
-		keys := ipToKeys[theIP]
+cidrLoop:
+	for _, cidr := range cidrs {
+		keys := cidrToKeys[cidr]
 		if keys == nil {
-			log.Debugf("New IP in IP set %v: %v", ipSetID, theIP)
-			calc.callbacks.OnIPAdded(ipSetID, theIP)
+			log.Debugf("New CIDR in IP set %v: %v", ipSetID, cidr)
+			calc.callbacks.OnCIDRAdded(ipSetID, cidr)
 		} else {
 			// Skip the append if the key is already present.
 			for _, k := range keys {
 				if key == k {
-					continue ipLoop
+					continue cidrLoop
 				}
 			}
 		}
-		ipToKeys[theIP] = append(keys, key)
+		cidrToKeys[cidr] = append(keys, key)
 	}
 }
 
-func (calc *MemberCalculator) removeMatchFromIndex(ipSetID string, key model.Key, ips []ip.Addr) {
-	log.Debugf("IP set %v no longer matches IPs %v via %v", ipSetID, ips, key)
-	ipToKeys := calc.ipSetIDToIPToKey[ipSetID]
-	for _, theIP := range ips {
-		keys := ipToKeys[theIP]
+func (calc *MemberCalculator) removeMatchFromIndex(ipSetID string, key model.Key, cidrs []ip.CIDR) {
+	log.Debugf("IP set %v no longer matches CIDRs %v via %v", ipSetID, cidrs, key)
+	cidrToKeys := calc.ipSetIDToCIDRToKey[ipSetID]
+	for _, cidr := range cidrs {
+		keys := cidrToKeys[cidr]
 		for i, k := range keys {
 			if key == k {
 				// found it,
 				if len(keys) == 1 {
 					// It was the only entry, clean it up.
-					delete(ipToKeys, theIP)
-					calc.callbacks.OnIPRemoved(ipSetID, theIP)
+					delete(cidrToKeys, cidr)
+					calc.callbacks.OnCIDRRemoved(ipSetID, cidr)
 				} else {
 					keys[i] = keys[len(keys)-1]
 					keys = keys[:len(keys)-1]
-					ipToKeys[theIP] = keys
+					cidrToKeys[cidr] = keys
 				}
 				break
 			}

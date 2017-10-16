@@ -94,7 +94,7 @@ const (
 )
 
 func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}, healthAggregator *health.HealthAggregator) *AsyncCalcGraph {
-	eventBuffer := NewEventBuffer(conf)
+	eventBuffer := NewEventSequencer(conf)
 	disp := NewCalculationGraph(eventBuffer, conf.FelixHostname)
 	g := &AsyncCalcGraph{
 		inputEvents:      make(chan interface{}, 10),

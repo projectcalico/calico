@@ -45,7 +45,7 @@ var _ = DescribeTable("IpAddr",
 
 var _ = DescribeTable("CIDR",
 	func(version int, inputCIDR, canonical string, bytes []byte, len int) {
-		cidr := MustParseCIDR(inputCIDR)
+		cidr := MustParseCIDROrIP(inputCIDR)
 		Expect([]byte(cidr.Addr().AsNetIP())).To(Equal(bytes))
 		Expect(int(cidr.Prefix())).To(Equal(len))
 		Expect(cidr.String()).To(Equal(canonical))

@@ -551,6 +551,59 @@ var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
 	[]tierInfo{},
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
+var hostEp1WithPolicyAndANetworkSet = hostEp1WithPolicy.withKVUpdates(
+	KVPair{Key: netSet1Key, Value: &netSet1},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1 and net set.
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+	"12.0.0.0/24",
+	"12.1.0.0/24",
+	"feed:beef::/32",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+})
+
+var hostEp1WithPolicyAndTwoNetworkSets = hostEp1WithPolicyAndANetworkSet.withKVUpdates(
+	KVPair{Key: netSet2Key, Value: &netSet2},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+	"12.0.0.0/24", // Shared by both net sets.
+	"12.1.0.0/24",
+	"feed:beef::/32",
+	"13.1.0.0/24", // Unique to netset-2
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+})
+
+var hostEp1WithPolicyAndANetworkSetMatchingBEqB = hostEp1WithPolicy.withKVUpdates(
+	KVPair{Key: netSet1Key, Value: &netSet1WithBEqB},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1 and net set.
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+	"12.0.0.0/24",
+	"12.1.0.0/24",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+	"12.0.0.0/24",
+	"12.1.0.0/24",
+})
+
 type StateList []State
 
 func (l StateList) String() string {

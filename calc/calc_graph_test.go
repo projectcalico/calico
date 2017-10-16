@@ -39,7 +39,7 @@ var testIPAs4 = net.IP{testIP.To4()}
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input interface{}, expUpdate interface{}, expRemove interface{}) {
 		// Create a calculation graph/event buffer combo.
-		eb := NewEventBuffer(nil)
+		eb := NewEventSequencer(nil)
 		var messageReceived interface{}
 		eb.Callback = func(message interface{}) {
 			logrus.WithField("message", message).Info("Received message")
@@ -123,7 +123,7 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 
 	BeforeEach(func() {
 		// Create a calculation graph/event buffer combo.
-		eb = NewEventBuffer(nil)
+		eb = NewEventSequencer(nil)
 		messagesReceived = nil
 		eb.Callback = func(message interface{}) {
 			logrus.WithField("message", message).Info("Received message")

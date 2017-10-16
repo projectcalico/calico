@@ -80,19 +80,31 @@ var baseTests = []StateList{
 		localEpsWithTagInheritProfile,
 		localEpsWithPolicy,
 		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
 		hostEp1WithPolicy,
 		localEpsWithUpdatedProfile,
 		withProfileTagInherit,
+		hostEp1WithPolicyAndTwoNetworkSets,
 		localEp1WithIngressPolicy,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,
 		hostEp1WithUntrackedPolicy,
 		localEpsWithTagInheritProfile,
 		localEp1WithPolicy,
-		localEpsWithProfile},
+		localEpsWithProfile,
+		hostEp1WithPolicyAndANetworkSet,
+	},
 
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
+
+	// Network set tests.
+	{hostEp1WithPolicy,
+		hostEp1WithPolicyAndANetworkSet,
+		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
+		hostEp2WithPolicy,
+		hostEp1WithPolicyAndANetworkSet,
+		hostEp1WithPolicyAndTwoNetworkSets},
 
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
@@ -297,7 +309,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 
 	BeforeEach(func() {
 		tracker = newMockDataplane()
-		eventBuf = NewEventBuffer(tracker)
+		eventBuf = NewEventSequencer(tracker)
 		eventBuf.Callback = tracker.onEvent
 		calcGraph = NewCalculationGraph(eventBuf, localHostname)
 		validationFilter = NewValidationFilter(calcGraph)

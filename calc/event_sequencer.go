@@ -82,7 +82,7 @@ type EventSequencer struct {
 //
 //}
 
-func NewEventBuffer(conf configInterface) *EventSequencer {
+func NewEventSequencer(conf configInterface) *EventSequencer {
 	buf := &EventSequencer{
 		config:               conf,
 		pendingAddedIPSets:   set.New(),
@@ -138,27 +138,27 @@ func (buf *EventSequencer) OnIPSetRemoved(setID string) {
 	buf.pendingRemovedIPs.DiscardKey(setID)
 }
 
-func (buf *EventSequencer) OnIPAdded(setID string, ip ip.Addr) {
-	log.Debugf("IP set %v now contains %v", setID, ip)
+func (buf *EventSequencer) OnCIDRAdded(setID string, cidr ip.CIDR) {
+	log.Debugf("IP set %v now contains %v", setID, cidr)
 	if !buf.sentIPSets.Contains(setID) && !buf.pendingAddedIPSets.Contains(setID) {
-		log.WithField("setID", setID).Panic("IP added to unknown IP set")
+		log.WithField("setID", setID).Panic("CIDR added to unknown IP set")
 	}
-	if buf.pendingRemovedIPs.Contains(setID, ip) {
-		buf.pendingRemovedIPs.Discard(setID, ip)
+	if buf.pendingRemovedIPs.Contains(setID, cidr) {
+		buf.pendingRemovedIPs.Discard(setID, cidr)
 	} else {
-		buf.pendingAddedIPs.Put(setID, ip)
+		buf.pendingAddedIPs.Put(setID, cidr)
 	}
 }
 
-func (buf *EventSequencer) OnIPRemoved(setID string, ip ip.Addr) {
-	log.Debugf("IP set %v no longer contains %v", setID, ip)
+func (buf *EventSequencer) OnCIDRRemoved(setID string, cidr ip.CIDR) {
+	log.Debugf("IP set %v no longer contains %v", setID, cidr)
 	if !buf.sentIPSets.Contains(setID) && !buf.pendingAddedIPSets.Contains(setID) {
-		log.WithField("setID", setID).Panic("IP removed from unknown IP set")
+		log.WithField("setID", setID).Panic("CIDR removed from unknown IP set")
 	}
-	if buf.pendingAddedIPs.Contains(setID, ip) {
-		buf.pendingAddedIPs.Discard(setID, ip)
+	if buf.pendingAddedIPs.Contains(setID, cidr) {
+		buf.pendingAddedIPs.Discard(setID, cidr)
 	} else {
-		buf.pendingRemovedIPs.Put(setID, ip)
+		buf.pendingRemovedIPs.Put(setID, cidr)
 	}
 }
 
@@ -495,7 +495,7 @@ func (buf *EventSequencer) flushAddedIPSets() {
 		log.WithField("setID", setID).Debug("Flushing added IP set")
 		members := make([]string, 0)
 		buf.pendingAddedIPs.Iter(setID, func(value interface{}) {
-			members = append(members, value.(ip.Addr).String())
+			members = append(members, value.(ip.CIDR).String())
 		})
 		buf.pendingAddedIPs.DiscardKey(setID)
 		buf.Callback(&proto.IPSetUpdate{
@@ -562,11 +562,11 @@ func (buf *EventSequencer) flushAddsOrRemoves(setID string) {
 		Id: setID,
 	}
 	buf.pendingAddedIPs.Iter(setID, func(item interface{}) {
-		addrStr := item.(ip.Addr).String()
+		addrStr := item.(ip.CIDR).String()
 		deltaUpdate.AddedMembers = append(deltaUpdate.AddedMembers, addrStr)
 	})
 	buf.pendingRemovedIPs.Iter(setID, func(item interface{}) {
-		addrStr := item.(ip.Addr).String()
+		addrStr := item.(ip.CIDR).String()
 		deltaUpdate.RemovedMembers = append(deltaUpdate.RemovedMembers, addrStr)
 	})
 	buf.pendingAddedIPs.DiscardKey(setID)

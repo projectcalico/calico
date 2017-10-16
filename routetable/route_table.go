@@ -47,7 +47,7 @@ var (
 	IfaceDown       = errors.New("interface down")
 	IfaceGrace      = errors.New("interface in cleanup grace period")
 
-	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
+	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
 	listIfaceTime = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_route_table_list_seconds",

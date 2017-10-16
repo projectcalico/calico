@@ -1,5 +1,5 @@
-hash: ae19a6683f4e7b7589fb56478cb4567390928b1da0b7348ddac3f9fad5e32468
-updated: 2017-09-24T18:23:31.096170181-07:00
+hash: 07208b76e2ece8a5933122ead76a3e4fb52012db616256665e978ab51807a1d3
+updated: 2017-10-16T09:05:13.416063497Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -65,7 +65,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 20b96f641a5ea98f2f8619ff4f3e061cff4833bd
+  version: 5b3e00af70a9484542169a976dcab8d03e601a17
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -75,14 +75,14 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 100ba4e885062801d56799d78530b73b178a78f3
+  version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 130e6b02ab059e7b717a096f397c5b60111cae74
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -155,7 +155,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5cabf71a9999834727d83036e986836084e0a13a
+  version: ac7d8f6b4165377f1736189cea82b09c113230cd
+  repo: http://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
   - lib/api
@@ -202,13 +203,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -219,6 +220,8 @@ imports:
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+- name: github.com/Sirupsen/logrus
+  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
@@ -255,7 +258,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 686000749eaec0b8855b8eef5336cf63899fe51d
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -296,7 +299,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
@@ -436,4 +439,8 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
+- name: k8s.io/kube-openapi
+  version: 868f2f29720b192240e18284659231b440f9cda5
+  subpackages:
+  - pkg/common
 testImports: []

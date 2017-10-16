@@ -45,7 +45,7 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	case *proto.IPSetUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set update")
 		metadata := ipsets.IPSetMetadata{
-			Type:    ipsets.IPSetTypeHashIP,
+			Type:    ipsets.IPSetTypeHashNet,
 			SetID:   msg.Id,
 			MaxSize: m.maxSize,
 		}
