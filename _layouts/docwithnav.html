@@ -196,7 +196,10 @@ The code is a little roundabout for a few reasons:
               </script>
               <gcse:search></gcse:search>
             </div>
-            <div id="sidebar">{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}</div>
+            <div id="sidebar">
+            	{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}
+            	{% include docs_ad.html %}
+			</div>
           </div>
           <div class="col-xs-12 col-sm-8 col-md-9">
             <div id="content-main">
@@ -210,7 +213,7 @@ The code is a little roundabout for a few reasons:
               {{ content }}
               
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
-              <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">Rate this Page: <div class="rw-ui-container" style="margin-top: -5px;"></div> <a href="https://www.projectcalico.org/contact?type=docs&file={{page.path}}" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-envelope" aria-hidden="true"></i> Provide Feedback</a> <a href="https://www.projectcalico.org/community#slack" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-slack" aria-hidden="true"></i> Get Help via Slack</a> <a href="https://www.projectcalico.org/mvp" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-trophy" aria-hidden="true"></i> Ask our MVPs</a></div>
+              <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">Rate this Page: <div class="rw-ui-container" style="margin-top: -5px;"></div> <a href="https://www.projectcalico.org/contact?type=docs&file={{page.path}}" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-envelope" aria-hidden="true"></i> Provide Feedback</a> <a href="https://www.projectcalico.org/community#slack" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-slack" aria-hidden="true"></i> Get Help via Slack</a> <a href="https://www.projectcalico.org/mvp" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-trophy" aria-hidden="true"></i> Ask our MVPs</a> <a href="https:/tigera.io/training" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-graduation-cap" aria-hidden="true"></i> Training</a></div>
               <!-- END BOTTOM DOCUMENTATION PAGE NAVBAR -->
             </div>
           </div>
