@@ -49,6 +49,9 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 
 	DescribeTable("HostEndpoint e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv2.HostEndpointSpec) {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("HostEndpoints not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -241,6 +244,9 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 
 	Describe("HostEndpoint watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

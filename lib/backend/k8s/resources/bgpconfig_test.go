@@ -15,7 +15,7 @@
 package resources_test
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
@@ -25,37 +25,42 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Global Felix config conversion methods", func() {
+var _ = Describe("BGP config conversion methods", func() {
 
-	converter := resources.GlobalFelixConfigConverter{}
+	converter := resources.BGPConfigConverter{}
 
 	// Define some useful test data.
-	listIncomplete := model.GlobalConfigListOptions{}
+	listIncomplete := model.ResourceListOptions{}
 
 	// Compatible set of list, key and name (used for Key to Name conversion)
-	list1 := model.GlobalConfigListOptions{
+	list1 := model.ResourceListOptions{
 		Name: "AbCd",
+		Kind: apiv2.KindBGPConfiguration,
 	}
-	key1 := model.GlobalConfigKey{
+	key1 := model.ResourceKey{
 		Name: "AbCd",
+		Kind: apiv2.KindBGPConfiguration,
 	}
-	name1 := "abcd"
+	name1 := "AbCd"
 
 	// Compatible set of KVPair and Kubernetes Resource.
-	value1 := "test"
+	value1 := apiv2.NewBGPConfiguration()
+	value1.ObjectMeta.Name = name1
+	value1.Spec = apiv2.BGPConfigurationSpec{
+		LogSeverityScreen: "INFO",
+	}
 	kvp1 := &model.KVPair{
 		Key:      key1,
 		Value:    value1,
 		Revision: "rv",
 	}
-	res1 := &custom.GlobalFelixConfig{
-		Metadata: metav1.ObjectMeta{
+	res1 := &apiv2.BGPConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:            name1,
 			ResourceVersion: "rv",
 		},
-		Spec: custom.GlobalFelixConfigSpec{
-			Name:  key1.Name,
-			Value: value1,
+		Spec: apiv2.BGPConfigurationSpec{
+			LogSeverityScreen: "INFO",
 		},
 	}
 
@@ -73,21 +78,23 @@ var _ = Describe("Global Felix config conversion methods", func() {
 		Expect(n).To(Equal(name1))
 	})
 
-	It("should not convert a resource name to the equivalent Key - this is not possible due to case switching", func() {
-		_, err := converter.NameToKey("test")
-		Expect(err).To(HaveOccurred())
+	It("should convert a resource name to the equivalent Key", func() {
+		keyRes, err := converter.NameToKey("test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(keyRes.(model.ResourceKey).Name).To(Equal("test"))
+		Expect(keyRes.(model.ResourceKey).Kind).To(Equal(apiv2.KindBGPConfiguration))
 	})
 
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
 		r, err := converter.FromKVPair(kvp1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
-		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&custom.GlobalFelixConfig{}))
-		Expect(r.(*custom.GlobalFelixConfig).Spec).To(Equal(res1.Spec))
+		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.ObjectMeta.Name))
+		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
+		Expect(r).To(BeAssignableToTypeOf(&apiv2.BGPConfiguration{}))
+		Expect(r.(*apiv2.BGPConfiguration).Spec).To(Equal(res1.Spec))
 	})
 
-	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
+	It("should convert between a Kubernetes resource and the equivalent KVPair", func() {
 		kvp, err := converter.ToKVPair(res1)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))

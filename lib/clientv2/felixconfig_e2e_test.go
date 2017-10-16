@@ -165,11 +165,13 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			Expect(outError.Error()).To(Equal("update conflict: FelixConfiguration(" + name1 + ")"))
 			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
-			By("Getting FelixConfiguration (name1) with the original resource version and comparing the output against spec1")
-			res, outError = c.FelixConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec1)
-			Expect(res.ResourceVersion).To(Equal(rv1_1))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Getting FelixConfiguration (name1) with the original resource version and comparing the output against spec1")
+				res, outError = c.FelixConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(res, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec1)
+				Expect(res.ResourceVersion).To(Equal(rv1_1))
+			}
 
 			By("Getting FelixConfiguration (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.FelixConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
@@ -177,11 +179,13 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			testutils.ExpectResource(res, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec2)
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
-			By("Listing FelixConfigurations with the original resource version and checking for a single result with name1/spec1")
-			outList, outError = c.FelixConfigurations().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec1)
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Listing FelixConfigurations with the original resource version and checking for a single result with name1/spec1")
+				outList, outError = c.FelixConfigurations().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				Expect(outList.Items).To(HaveLen(1))
+				testutils.ExpectResource(&outList.Items[0], apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec1)
+			}
 
 			By("Listing FelixConfigurations with the latest resource version and checking for two results with name1/spec2 and name2/specDebug")
 			outList, outError = c.FelixConfigurations().List(ctx, options.ListOptions{})
@@ -190,40 +194,51 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			testutils.ExpectResource(&outList.Items[0], apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec2)
 			testutils.ExpectResource(&outList.Items[1], apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name2, spec2)
 
-			By("Deleting FelixConfiguration (name1) with the old resource version")
-			_, outError = c.FelixConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("update conflict: FelixConfiguration(" + name1 + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Deleting FelixConfiguration (name1) with the old resource version")
+				_, outError = c.FelixConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("update conflict: FelixConfiguration(" + name1 + ")"))
+			}
 
 			By("Deleting FelixConfiguration (name1) with the new resource version")
 			dres, outError := c.FelixConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(dres, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec2)
 
-			By("Updating FelixConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.FelixConfigurations().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Updating FelixConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
+				_, outError = c.FelixConfigurations().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(1 * time.Second)
+				_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(2 * time.Second)
+				_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
 
-			By("Creating FelixConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: name2},
-				Spec:       spec2,
-			}, options.SetOptions{TTL: 2 * time.Second})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+				By("Creating FelixConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
+				_, outError = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
+					ObjectMeta: metav1.ObjectMeta{Name: name2},
+					Spec:       spec2,
+				}, options.SetOptions{TTL: 2 * time.Second})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(1 * time.Second)
+				_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(2 * time.Second)
+				_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+			}
+
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				By("Attempting to deleting FelixConfiguration (name2)")
+				dres, outError = c.FelixConfigurations().Delete(ctx, name2, options.DeleteOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(dres, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name2, spec2)
+			}
 
 			By("Attempting to deleting FelixConfiguration (name2) again")
 			_, outError = c.FelixConfigurations().Delete(ctx, name2, options.DeleteOptions{})
@@ -247,6 +262,9 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 
 	Describe("FelixConfiguration watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

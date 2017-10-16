@@ -51,6 +51,9 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreAll, 
 
 	DescribeTable("Profile e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv2.ProfileSpec) {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Profile CRUD not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -243,6 +246,9 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreAll, 
 
 	Describe("Profile watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

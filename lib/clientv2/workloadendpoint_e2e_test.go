@@ -74,6 +74,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 	DescribeTable("WorkloadEndpoint e2e CRUD tests",
 		func(namespace1, namespace2, name1, name2 string, spec1_1, spec1_2, spec2_1 apiv2.WorkloadEndpointSpec) {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("WorkloadEndpoint CRUD not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -276,6 +279,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 	Describe("WorkloadEndpoint watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 

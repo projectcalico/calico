@@ -28,7 +28,7 @@ const (
 	DatastoreEtcdV3
 	DatastoreK8s
 
-	DatastoreAll = DatastoreEtcdV3
+	DatastoreAll = DatastoreEtcdV3 | DatastoreK8s
 )
 
 // E2eDatastoreDescribe is a replacement for ginkgo.Describe which invokes Describe

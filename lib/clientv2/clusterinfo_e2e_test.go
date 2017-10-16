@@ -145,11 +145,13 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			Expect(outError.Error()).To(Equal("update conflict: ClusterInformation(" + name + ")"))
 			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
-			By("Getting ClusterInformation (name) with the original resource version and comparing the output against spec1")
-			res, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1)
-			Expect(res.ResourceVersion).To(Equal(rv1_1))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Getting ClusterInformation (name) with the original resource version and comparing the output against spec1")
+				res, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1)
+				Expect(res.ResourceVersion).To(Equal(rv1_1))
+			}
 
 			By("Getting ClusterInformation (name) with the updated resource version and comparing the output against spec2")
 			res, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{ResourceVersion: rv1_2})
@@ -157,11 +159,13 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec2)
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
-			By("Listing ClusterInformation with the original resource version and checking for a single result with name/spec1")
-			outList, outError = c.ClusterInformation().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1)
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Listing ClusterInformation with the original resource version and checking for a single result with name/spec1")
+				outList, outError = c.ClusterInformation().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				Expect(outList.Items).To(HaveLen(1))
+				testutils.ExpectResource(&outList.Items[0], apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1)
+			}
 
 			By("Listing ClusterInformation with the latest resource version and checking for one result with name/spec2")
 			outList, outError = c.ClusterInformation().List(ctx, options.ListOptions{})
@@ -169,10 +173,12 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			Expect(outList.Items).To(HaveLen(1))
 			testutils.ExpectResource(&outList.Items[0], apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec2)
 
-			By("Deleting ClusterInformation (name) with the old resource version")
-			_, outError = c.ClusterInformation().Delete(ctx, name, options.DeleteOptions{ResourceVersion: rv1_1})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("update conflict: ClusterInformation(" + name + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Deleting ClusterInformation (name) with the old resource version")
+				_, outError = c.ClusterInformation().Delete(ctx, name, options.DeleteOptions{ResourceVersion: rv1_1})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("update conflict: ClusterInformation(" + name + ")"))
+			}
 
 			By("Deleting ClusterInformation (name) with the new resource version")
 			dres, outError := c.ClusterInformation().Delete(ctx, name, options.DeleteOptions{ResourceVersion: rv1_2})
@@ -192,6 +198,9 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 
 	Describe("ClusterInformation watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Skip("Watch not supported yet with Kubernetes Backend")
+			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
