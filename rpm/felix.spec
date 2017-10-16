@@ -2,8 +2,8 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.6.0
-Release:        0.1.rc2%{?dist}
+Version:        2.7.0
+Release:        0.1.pre1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,23 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 16 2017 Neil Jerram <neil@tigera.io> 2.7.0-0.1.pre1
+  - Felix 2.7.0-pre1 (from Git commit d0576c7).
+    [Changes recorded in 2.7.0-pre1 tag]
+    - Implement support for network sets.
+    [Changes recorded in 2.6.0 tag]
+    By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
+    v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
+    
+    In addition, libcalico-go now supports a new `Types` field which
+    specifies whether a rule should apply to `ingress`, `egress` or
+    both types of traffic.
+    
+    - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
+    - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
+    - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)
+    - Adding support for ppc64le. [#1516](https://github.com/projectcalico/felix/pull/1516)
+
 * Tue Sep 26 2017 Neil Jerram <neil@tigera.io> 2.6.0-0.1.rc2
   - Felix 2.6.0-rc2 (from Git commit 5a0cb38).
 
