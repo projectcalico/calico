@@ -1,6 +1,6 @@
 ---
 title: Going Beyond NetworkPolicy with Calico
-redirect_from: latest/getting-started/Kubernetes/tutorials/advanced-policy
+redirect_from: latest/getting-started/kubernetes/tutorials/advanced-policy
 ---
 
 The Kubernetes `NetworkPolicy` API allows users to express ingress and egress policies (starting with Kubernetes 1.8.0) to Kubernetes pods
