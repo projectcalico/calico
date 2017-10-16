@@ -1,5 +1,5 @@
-hash: 07208b76e2ece8a5933122ead76a3e4fb52012db616256665e978ab51807a1d3
-updated: 2017-10-16T09:05:13.416063497Z
+hash: 0e9080826af213c6d4e69fa80a9de7643633be1296a1b3d5df38175c12800c19
+updated: 2017-10-16T12:26:59.347556626Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -188,7 +188,8 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 049f0ad98022129ccb29f7fb3d9859c8dd967728
+  version: 98fb30a9978ae478a97b8a2ce290834cb9e9650a
+  repo: http://github.com/fasaxc/typha.git
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -220,8 +221,6 @@ imports:
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
-- name: github.com/Sirupsen/logrus
-  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
