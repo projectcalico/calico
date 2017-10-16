@@ -38,7 +38,8 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			UpdateProcessor: updateprocessors.NewFelixConfigUpdateProcessor(),
 		},
 		{
-			ListInterface: model.ResourceListOptions{Kind: apiv2.KindGlobalNetworkPolicy},
+			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindGlobalNetworkPolicy},
+			UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindHostEndpoint},
@@ -49,17 +50,20 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
 		},
 		{
-			ListInterface: model.ResourceListOptions{Kind: apiv2.KindNetworkPolicy},
+			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNetworkPolicy},
+			UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNode},
 			UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(),
 		},
 		{
-			ListInterface: model.ResourceListOptions{Kind: apiv2.KindProfile},
+			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindProfile},
+			UpdateProcessor: updateprocessors.NewProfileUpdateProcessor(),
 		},
 		{
-			ListInterface: model.ResourceListOptions{Kind: apiv2.KindWorkloadEndpoint},
+			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindWorkloadEndpoint},
+			UpdateProcessor: updateprocessors.NewWorkloadEndpointUpdateProcessor(),
 		},
 	}
 

@@ -64,7 +64,7 @@ func (ids WorkloadEndpointIdentifiers) NameMatches(name string) (bool, error) {
 	}
 
 	// Extract the parameters from the name.
-	parts := extractDashSeparatedParms(name, len(req))
+	parts := ExtractDashSeparatedParms(name, len(req))
 	if len(parts) == 0 {
 		return false, nil
 	}
@@ -190,7 +190,7 @@ func escapeDashes(seg segment) (string, *cerrors.ErroredField) {
 
 // Extract the dash separated parms from the name.  Each parm will have had their dashes escaped,
 // this also removes that escaping.  Returns nil if the parameters could not be extracted.
-func extractDashSeparatedParms(name string, numParms int) []string {
+func ExtractDashSeparatedParms(name string, numParms int) []string {
 	// The name must be at least as long as the number of parameters plus the separators.
 	if len(name) < (2*numParms - 1) {
 		return nil
