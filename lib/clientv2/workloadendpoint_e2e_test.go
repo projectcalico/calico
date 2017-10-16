@@ -64,6 +64,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 		ContainerID:   "a232323a",
 		InterfaceName: "cali09122",
 	}
+	spec2_2 := apiv2.WorkloadEndpointSpec{
+		Node:          "node-2",
+		Orchestrator:  "cni",
+		Endpoint:      "eth0",
+		ContainerID:   "a232323a",
+		InterfaceName: "caliabcde",
+	}
 
 	DescribeTable("WorkloadEndpoint e2e CRUD tests",
 		func(namespace1, namespace2, name1, name2 string, spec1_1, spec1_2, spec2_1 apiv2.WorkloadEndpointSpec) {
@@ -92,9 +99,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
-			By("Creating a new WorkloadEndpoint with namespace1/name1/spec1_1")
+			By("Creating a new WorkloadEndpoint with namespace1/name1/spec1_1 - name gets assigned automatically")
 			res1, outError := c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
@@ -292,16 +299,18 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				options.SetOptions{},
 			)
 			rev1 := outRes1.ResourceVersion
+			Expect(err).NotTo(HaveOccurred())
 
-			By("Configuring a WorkloadEndpoint namespace2/name2/spec1_2 and storing the response")
+			By("Configuring a WorkloadEndpoint namespace2/name2/spec2_1 and storing the response")
 			outRes2, err := c.WorkloadEndpoints().Create(
 				ctx,
 				&apiv2.WorkloadEndpoint{
 					ObjectMeta: metav1.ObjectMeta{Namespace: namespace2, Name: name2},
-					Spec:       spec1_2,
+					Spec:       spec2_1,
 				},
 				options.SetOptions{},
 			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.WorkloadEndpoints().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
@@ -337,7 +346,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				ctx,
 				&apiv2.WorkloadEndpoint{
 					ObjectMeta: outRes2.ObjectMeta,
-					Spec:       spec1_1,
+					Spec:       spec2_2,
 				},
 				options.SetOptions{},
 			)
@@ -511,6 +520,81 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(err).NotTo(HaveOccurred())
 			_, err = c.WorkloadEndpoints().Delete(ctx, outRes3.Namespace, outRes3.Name, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+
+	Describe("WorkloadEndpoint names based on primary identifiers in Spec", func() {
+		It("should handle prefix lists of workload endpoints", func() {
+			c, err := clientv2.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+
+			By("Creating a workload endpoint with missing ContainerID for CNI")
+			_, err = c.WorkloadEndpoints().Create(
+				ctx,
+				&apiv2.WorkloadEndpoint{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "node--1-cni-container-eth0"},
+					Spec: apiv2.WorkloadEndpointSpec{
+						Node:          "node-1",
+						Orchestrator:  "cni",
+						Pod:           "pod",
+						Endpoint:      "eth0",
+						InterfaceName: "cali1234",
+					},
+				},
+				options.SetOptions{},
+			)
+			Expect(err).To(HaveOccurred())
+
+			By("Creating a workload endpoint with missing Workload for arbitrary orchestrator")
+			_, err = c.WorkloadEndpoints().Create(
+				ctx,
+				&apiv2.WorkloadEndpoint{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "node--1-cni-container-eth0"},
+					Spec: apiv2.WorkloadEndpointSpec{
+						Node:          "node-1",
+						Orchestrator:  "other",
+						Pod:           "pod",
+						Endpoint:      "eth0",
+						ContainerID:   "12345",
+						InterfaceName: "cali1234",
+					},
+				},
+				options.SetOptions{},
+			)
+			Expect(err).To(HaveOccurred())
+
+			By("Creating a workload endpoint with correct name and indices for k8s")
+			wep, err := c.WorkloadEndpoints().Create(
+				ctx,
+				&apiv2.WorkloadEndpoint{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "node--1-k8s-pod-eth0"},
+					Spec: apiv2.WorkloadEndpointSpec{
+						Node:          "node-1",
+						Orchestrator:  "k8s",
+						Pod:           "pod",
+						Endpoint:      "eth0",
+						ContainerID:   "12345",
+						InterfaceName: "cali1234",
+					},
+				},
+				options.SetOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Modifying the k8s WEP to have a different container ID")
+			wep.Spec.ContainerID = "abcdef"
+			wep, err = c.WorkloadEndpoints().Update(ctx, wep, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Modifying the k8s WEP to have a different pod")
+			wep.Spec.Pod = "abcdef"
+			_, err = c.WorkloadEndpoints().Update(ctx, wep, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })
