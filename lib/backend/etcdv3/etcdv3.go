@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 )
 
 var (
@@ -409,7 +410,7 @@ func (c *etcdV3Client) Clean() error {
 
 // Syncer returns a v1 Syncer used to stream resource updates.
 func (c *etcdV3Client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return newSyncerV3(c.etcdClient, callbacks)
+	return felixsyncer.New(c, callbacks)
 }
 
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.
