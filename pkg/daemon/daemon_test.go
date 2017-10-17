@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/config"
@@ -51,7 +51,7 @@ var _ = Describe("Daemon", func() {
 	BeforeEach(func() {
 		d = New()
 		backend = &mockBackend{}
-		d.NewBackendClient = func(config api.CalicoAPIConfig) (c BackendClient, err error) {
+		d.NewBackendClient = func(config apiconfig.CalicoAPIConfig) (c BackendClient, err error) {
 			return backend, newClientErr
 		}
 		earlyLoggingConfigured = false
