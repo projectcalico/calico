@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "apiconfig.go",
+        "bgppeer.go",
+        "doc.go",
+        "hostendpoint.go",
+        "ippool.go",
+        "node.go",
+        "policy.go",
+        "profile.go",
+        "rule.go",
+        "workloadendpoint.go",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/projectcalico/libcalico-go/lib/api/unversioned:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/ipip:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/net:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/numorstring:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/scope:go_default_library",
+    ],
+)

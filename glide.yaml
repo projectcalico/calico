@@ -1,0 +1,24 @@
+package: tigera.io/dikastes
+import:
+- package: github.com/docopt/docopt-go
+  version: ^0.6.2
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
+- package: github.com/projectcalico/libcalico-go
+  subpackages:
+  - lib/api
+  - lib/client
+  - lib/selector
+- package: github.com/sirupsen/logrus
+  version: ^0.10.0
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: google.golang.org/grpc
+  version: ^1.7.0
+  subpackages:
+  - reflection
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/util/validation

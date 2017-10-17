@@ -1,0 +1,49 @@
+package: github.com/projectcalico/libcalico-go
+homepage: https://projectcalico.org
+license: Apache-2.0
+owners:
+- name: Rob Brockbank
+  email: rob@tigera.io
+import:
+- package: github.com/sirupsen/logrus
+  version: ^0.10.0
+- package: github.com/coreos/etcd
+  subpackages:
+  - client
+  - pkg/transport
+- package: github.com/projectcalico/go-yaml-wrapper
+- package: github.com/kelseyhightower/envconfig
+- package: github.com/onsi/ginkgo
+- package: github.com/satori/go.uuid
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: gopkg.in/go-playground/validator.v8
+- package: gopkg.in/tchap/go-patricia.v2
+  subpackages:
+  - patricia
+- package: golang.org/x/text
+  version: 19e51611da83d6be54ddafce4a4af510cb3e9ea4
+- package: k8s.io/client-go
+  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
+  subpackages:
+  - kubernetes
+  - pkg/api
+  - pkg/api/errors
+  - pkg/api/meta
+  - pkg/api/unversioned
+  - pkg/api/v1
+  - pkg/apis/extensions/v1beta1
+  - pkg/fields
+  - pkg/runtime
+  - pkg/runtime/schema
+  - pkg/runtime/serializer
+  - pkg/util/wait
+  - pkg/watch
+  - rest
+  - tools/cache
+  - tools/clientcmd
+- package: github.com/prometheus/client_golang
+  version: ^0.8.0
+testImport:
+- package: github.com/onsi/gomega

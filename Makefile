@@ -1,6 +1,6 @@
 HUB=gcr.io
 PROJECT=unique-caldron-775
-IMAGE=$HUB/$PROJECT/dikastes:latest
+IMAGE=$(HUB)/$(PROJECT)/dikastes:latest
 
 proto: proto/authz.pb.go
 

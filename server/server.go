@@ -37,7 +37,7 @@ func NewServer(config api.CalicoAPIConfig, labels map[string]string) (*auth_serv
 
 func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Response, error) {
 	log.Debugf("Check(%v)", req)
-	resp := authz.Response{Status: &authz.Response_Status{Code: authz.Response_Status_INTERNAL}}
+	resp := authz.Response{Status: &authz.Response_Status{Code: authz.INTERNAL}}
 	policies, err := as.getPolicies()
 	if err != nil {
 		log.Errorf("Failed to get policies. %v", err)

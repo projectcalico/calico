@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["set.go"],
+    visibility = ["//visibility:public"],
+    deps = ["@com_github_sirupsen_logrus//:go_default_library"],
+)
+
+go_test(
+    name = "go_default_xtest",
+    srcs = [
+        "set_suite_test.go",
+        "set_test.go",
+    ],
+    deps = [
+        ":go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/testutils:go_default_library",
+        "@com_github_onsi_ginkgo//:go_default_library",
+        "@com_github_onsi_ginkgo//reporters:go_default_library",
+        "@com_github_onsi_gomega//:go_default_library",
+    ],
+)

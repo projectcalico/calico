@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "common.go",
+        "doc.go",
+        "validator.go",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//vendor/github.com/projectcalico/libcalico-go/lib/api:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/api/unversioned:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/backend/model:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/errors:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/net:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/numorstring:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/scope:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/selector:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/selector/tokenizer:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+        "@in_gopkg_go_playground_validator_v8//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_xtest",
+    srcs = [
+        "common_test.go",
+        "validator_suite_test.go",
+        "validator_test.go",
+    ],
+    deps = [
+        ":go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/api:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/backend/model:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/net:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/numorstring:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/scope:go_default_library",
+        "//vendor/github.com/projectcalico/libcalico-go/lib/testutils:go_default_library",
+        "@com_github_onsi_ginkgo//:go_default_library",
+        "@com_github_onsi_ginkgo//extensions/table:go_default_library",
+        "@com_github_onsi_gomega//:go_default_library",
+    ],
+)
