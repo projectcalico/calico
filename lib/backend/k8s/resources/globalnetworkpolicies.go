@@ -66,7 +66,7 @@ func (_ GlobalNetworkPolicyConverter) NameToKey(name string) (model.Key, error) 
 	}, nil
 }
 
-func (c GlobalNetworkPolicyConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+func (c GlobalNetworkPolicyConverter) ToKVPair(r Resource) (*model.KVPair, error) {
 	t := r.(*apiv2.GlobalNetworkPolicy)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
@@ -85,7 +85,7 @@ func (c GlobalNetworkPolicyConverter) ToKVPair(r CustomK8sResource) (*model.KVPa
 	}, nil
 }
 
-func (c GlobalNetworkPolicyConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+func (c GlobalNetworkPolicyConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
 	v := kvp.Value.(*apiv2.GlobalNetworkPolicy)
 
 	return &apiv2.GlobalNetworkPolicy{

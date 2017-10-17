@@ -56,30 +56,28 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			be.Clean()
 
 			By("Updating the ClusterInformation before it is created")
-			res, outError := c.ClusterInformation().Update(ctx, &apiv2.ClusterInformation{
+			_, outError := c.ClusterInformation().Update(ctx, &apiv2.ClusterInformation{
 				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "1234"},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(res).To(BeNil())
 			Expect(outError.Error()).To(Equal("resource does not exist: ClusterInformation(" + name + ")"))
 
 			By("Attempting to creating a new ClusterInformation with name/spec1 and a non-empty ResourceVersion")
-			res, outError = c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
+			_, outError = c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
 				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "12345"},
 				Spec:       spec1,
 			}, options.SetOptions{})
-			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
 			By("Getting ClusterInformation (name) before it is created")
-			res, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			_, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: ClusterInformation(" + name + ")"))
 
 			By("Attempting to create a new ClusterInformation with a non-default name and spec1")
-			res1, outError := c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
+			_, outError = c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
 				ObjectMeta: metav1.ObjectMeta{Name: "not-default"},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -87,7 +85,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			Expect(outError.Error()).To(Equal("Cannot create a Cluster Information resource with a name other than \"default\""))
 
 			By("Creating a new ClusterInformation with name/spec1")
-			res1, outError = c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
+			res1, outError := c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -98,18 +96,15 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same ClusterInformation with name but with spec2")
-			res1, outError = c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
+			_, outError = c.ClusterInformation().Create(ctx, &apiv2.ClusterInformation{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: ClusterInformation(" + name + ")"))
-			// Check return value is actually the previously stored value.
-			testutils.ExpectResource(res1, apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1)
-			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting ClusterInformation (name) and comparing the output against spec1")
-			res, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			res, outError := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
@@ -132,18 +127,16 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			By("Updating ClusterInformation name without specifying a resource version")
 			res1.Spec = spec1
 			res1.ObjectMeta.ResourceVersion = ""
-			res, outError = c.ClusterInformation().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.ClusterInformation().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '' (field must be set for an Update request)"))
-			Expect(res).To(BeNil())
 
 			By("Updating ClusterInformation name using the previous resource version")
 			res1.Spec = spec1
 			res1.ResourceVersion = rv1_1
-			res1, outError = c.ClusterInformation().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.ClusterInformation().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: ClusterInformation(" + name + ")"))
-			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Getting ClusterInformation (name) with the original resource version and comparing the output against spec1")
@@ -198,9 +191,6 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 
 	Describe("ClusterInformation watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("Watch not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -228,14 +218,14 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.ClusterInformation().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher1 := testutils.TestResourceWatch(w)
+			testWatcher1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
 			_, err = c.ClusterInformation().Delete(ctx, name, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking for two events, create res2 and delete re1")
+			By("Checking for event: delete res1")
 			testWatcher1.ExpectEvents(apiv2.KindClusterInformation, []watch.Event{
 				{
 					Type:     watch.Deleted,
@@ -257,7 +247,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			By("Starting a watcher from rev0 - this should get all events")
 			w, err = c.ClusterInformation().Watch(ctx, options.ListOptions{ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2 := testutils.TestResourceWatch(w)
+			testWatcher2 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
@@ -291,38 +281,41 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			})
 			testWatcher2.Stop()
 
-			By("Starting a watcher from rev0 watching name - this should get all events for name")
-			w, err = c.ClusterInformation().Watch(ctx, options.ListOptions{Name: name, ResourceVersion: rev0})
-			Expect(err).NotTo(HaveOccurred())
-			testWatcher2_1 := testutils.TestResourceWatch(w)
-			defer testWatcher2_1.Stop()
-			testWatcher2_1.ExpectEvents(apiv2.KindClusterInformation, []watch.Event{
-				{
-					Type:   watch.Added,
-					Object: outRes1,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-				{
-					Type:   watch.Added,
-					Object: outRes2,
-				},
-				{
-					Type:     watch.Modified,
-					Previous: outRes2,
-					Object:   outRes3,
-				},
-			})
-			testWatcher2_1.Stop()
+			// Only etcdv3 supports watching a specific instance of a resource.
+			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+				By("Starting a watcher from rev0 watching name - this should get all events for name")
+				w, err = c.ClusterInformation().Watch(ctx, options.ListOptions{Name: name, ResourceVersion: rev0})
+				Expect(err).NotTo(HaveOccurred())
+				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+				defer testWatcher2_1.Stop()
+				testWatcher2_1.ExpectEvents(apiv2.KindClusterInformation, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes1,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+					{
+						Type:   watch.Added,
+						Object: outRes2,
+					},
+					{
+						Type:     watch.Modified,
+						Previous: outRes2,
+						Object:   outRes3,
+					},
+				})
+				testWatcher2_1.Stop()
+			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.ClusterInformation().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher3 := testutils.TestResourceWatch(w)
+			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
-			testWatcher3.ExpectEvents(apiv2.KindClusterInformation, []watch.Event{
+			testWatcher3.ExpectEventsAnyOrder(apiv2.KindClusterInformation, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes3,

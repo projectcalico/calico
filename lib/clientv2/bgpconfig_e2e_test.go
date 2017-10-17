@@ -71,20 +71,18 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			be.Clean()
 
 			By("Updating the BGPConfiguration before it is created")
-			res, outError := c.BGPConfigurations().Update(ctx, &apiv2.BGPConfiguration{
+			_, outError := c.BGPConfigurations().Update(ctx, &apiv2.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: nameDefault, ResourceVersion: "1234"},
 				Spec:       specDefault1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(res).To(BeNil())
 			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + nameDefault + ")"))
 
 			By("Attempting to creating a new BGPConfiguration with name1/specInfo and a non-empty ResourceVersion")
-			res, outError = c.BGPConfigurations().Create(ctx, &apiv2.BGPConfiguration{
+			_, outError = c.BGPConfigurations().Create(ctx, &apiv2.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
 				Spec:       specInfo,
 			}, options.SetOptions{})
-			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
@@ -100,24 +98,21 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same BGPConfiguration with name1 but with specDebug")
-			res1, outError = c.BGPConfigurations().Create(ctx, &apiv2.BGPConfiguration{
+			_, outError = c.BGPConfigurations().Create(ctx, &apiv2.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       specDebug,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: BGPConfiguration(" + name1 + ")"))
-			// Check return value is actually the previously stored value.
-			testutils.ExpectResource(res1, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
-			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting BGPConfiguration (name1) and comparing the output against specInfo")
-			res, outError = c.BGPConfigurations().Get(ctx, name1, options.GetOptions{})
+			res, outError := c.BGPConfigurations().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting BGPConfiguration (name2) before it is created")
-			res, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
+			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
 
@@ -160,18 +155,16 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Updating BGPConfiguration name1 without specifying a resource version")
 			res1.Spec = specInfo
 			res1.ObjectMeta.ResourceVersion = ""
-			res, outError = c.BGPConfigurations().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.BGPConfigurations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '' (field must be set for an Update request)"))
-			Expect(res).To(BeNil())
 
 			By("Updating BGPConfiguration name1 using the previous resource version")
 			res1.Spec = specInfo
 			res1.ResourceVersion = rv1_1
-			res1, outError = c.BGPConfigurations().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.BGPConfigurations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: BGPConfiguration(" + name1 + ")"))
-			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Getting BGPConfiguration (name1) with the original resource version and comparing the output against specInfo")
@@ -260,7 +253,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			Expect(outList.Items).To(HaveLen(0))
 
 			By("Getting BGPConfiguration (name2) and expecting an error")
-			res, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
+			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
 
@@ -299,9 +292,6 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 
 	Describe("BGPConfiguration watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("Watch not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -339,7 +329,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.BGPConfigurations().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher1 := testutils.TestResourceWatch(w)
+			testWatcher1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
@@ -362,7 +352,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Starting a watcher from rev0 - this should get all events")
 			w, err = c.BGPConfigurations().Watch(ctx, options.ListOptions{ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2 := testutils.TestResourceWatch(w)
+			testWatcher2 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
@@ -396,27 +386,30 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			})
 			testWatcher2.Stop()
 
-			By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
-			w, err = c.BGPConfigurations().Watch(ctx, options.ListOptions{Name: name1, ResourceVersion: rev0})
-			Expect(err).NotTo(HaveOccurred())
-			testWatcher2_1 := testutils.TestResourceWatch(w)
-			defer testWatcher2_1.Stop()
-			testWatcher2_1.ExpectEvents(apiv2.KindBGPConfiguration, []watch.Event{
-				{
-					Type:   watch.Added,
-					Object: outRes1,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-			})
-			testWatcher2_1.Stop()
+			// Only etcdv3 supports watching a specific instance of a resource.
+			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+				By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
+				w, err = c.BGPConfigurations().Watch(ctx, options.ListOptions{Name: name1, ResourceVersion: rev0})
+				Expect(err).NotTo(HaveOccurred())
+				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+				defer testWatcher2_1.Stop()
+				testWatcher2_1.ExpectEvents(apiv2.KindBGPConfiguration, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes1,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+				})
+				testWatcher2_1.Stop()
+			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.BGPConfigurations().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher3 := testutils.TestResourceWatch(w)
+			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
 			testWatcher3.ExpectEvents(apiv2.KindBGPConfiguration, []watch.Event{
 				{
@@ -439,9 +432,9 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.BGPConfigurations().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher4 := testutils.TestResourceWatch(w)
+			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
-			testWatcher4.ExpectEvents(apiv2.KindBGPConfiguration, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv2.KindBGPConfiguration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,

@@ -66,7 +66,7 @@ func (_ FelixConfigConverter) NameToKey(name string) (model.Key, error) {
 	}, nil
 }
 
-func (c FelixConfigConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+func (c FelixConfigConverter) ToKVPair(r Resource) (*model.KVPair, error) {
 	t := r.(*apiv2.FelixConfiguration)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
@@ -85,7 +85,7 @@ func (c FelixConfigConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, erro
 	}, nil
 }
 
-func (c FelixConfigConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+func (c FelixConfigConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
 	v := kvp.Value.(*apiv2.FelixConfiguration)
 
 	return &apiv2.FelixConfiguration{

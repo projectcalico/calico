@@ -17,9 +17,10 @@ package resources
 import (
 	"context"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-
 	apiv1 "k8s.io/api/core/v1"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 // K8sResourceClient is the interface to the k8s datastore for CRUD operations
@@ -27,8 +28,7 @@ import (
 // the K8s backend).
 //
 // Defining a separate client interface from api.Client allows the k8s-specific
-// client to diverge - for example, the List operation also returns additional
-// revision information.
+// client to diverge.
 type K8sResourceClient interface {
 	// Create creates the object specified in the KVPair, which must not
 	// already exist. On success, returns a KVPair for the object with
@@ -41,13 +41,6 @@ type K8sResourceClient interface {
 	// information then the update only succeeds if the revision is still
 	// current.
 	Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
-
-	// Apply updates or creates the object specified in the KVPair.
-	// On success, returns a KVPair for the object with revision
-	// information filled-in.  If the input KVPair has revision
-	// information then the update only succeeds if the revision is still
-	// current.
-	Apply(object *model.KVPair) (*model.KVPair, error)
 
 	// Delete removes the object specified by the KVPair.  If the KVPair
 	// contains revision information, the delete only succeeds if the
@@ -62,6 +55,10 @@ type K8sResourceClient interface {
 	// list should be passed one of the model.<Type>ListOptions structs.
 	// Non-zero fields in the struct are used as filters.
 	List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
+
+	// Watch returns a WatchInterface used for watching a resources matching the
+	// input list options.
+	Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error)
 
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.

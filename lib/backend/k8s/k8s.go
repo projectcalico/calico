@@ -16,7 +16,6 @@ package k8s
 
 import (
 	"context"
-	goerrors "errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -29,13 +28,13 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 
 	"k8s.io/api/core/v1"
-	extensions "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -45,6 +44,11 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+)
+
+var (
+	resourceKeyType  = reflect.TypeOf(model.ResourceKey{})
+	resourceListType = reflect.TypeOf(model.ResourceListOptions{})
 )
 
 type KubeClient struct {
@@ -58,17 +62,16 @@ type KubeClient struct {
 
 	// Contains methods for converting Kubernetes resources to
 	// Calico resources.
-	converter Converter
+	converter conversion.Converter
 
-	// Clients for interacting with Calico resources.
-	bgpPeerClient       resources.K8sResourceClient
-	bgpConfigClient     resources.K8sResourceClient
-	nodeBgpConfigClient resources.K8sResourceClient
-	felixConfigClient   resources.K8sResourceClient
-	clusterInfoClient   resources.K8sResourceClient
-	ipPoolClient        resources.K8sResourceClient
-	gnpClient           resources.K8sResourceClient
-	nodeClient          resources.K8sResourceClient
+	// Resource clients keyed off Kind.
+	clientsByResourceKind map[string]resources.K8sResourceClient
+
+	// Non v2 resource clients keyed off Key Type.
+	clientsByKeyType map[reflect.Type]resources.K8sResourceClient
+
+	// Non v2 resource clients keyed off List Type.
+	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
 func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
@@ -125,21 +128,108 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 	}
 
 	kubeClient := &KubeClient{
-		clientSet:       cs,
-		crdClientV1:     crdClientV1,
-		disableNodePoll: kc.K8sDisableNodePoll,
+		clientSet:               cs,
+		crdClientV1:             crdClientV1,
+		disableNodePoll:         kc.K8sDisableNodePoll,
+		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
+		clientsByKeyType: make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByListType: make(map[reflect.Type]resources.K8sResourceClient),
 	}
 
-	// Create the Calico sub-clients.
-	kubeClient.ipPoolClient = resources.NewIPPoolClient(cs, crdClientV1)
-	kubeClient.nodeClient = resources.NewNodeClient(cs, crdClientV1)
-	kubeClient.gnpClient = resources.NewGlobalNetworkPolicyClient(cs, crdClientV1)
-	kubeClient.bgpPeerClient = resources.NewBGPPeerClient(cs, crdClientV1)
-	kubeClient.bgpConfigClient = resources.NewBGPConfigClient(cs, crdClientV1)
-	kubeClient.felixConfigClient = resources.NewFelixConfigClient(cs, crdClientV1)
-	kubeClient.clusterInfoClient = resources.NewClusterInfoClient(cs, crdClientV1)
+	// Create the Calico sub-clients and register them.
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindIPPool,
+		resources.NewIPPoolClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindGlobalNetworkPolicy,
+		resources.NewGlobalNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindBGPPeer,
+		resources.NewBGPPeerClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindBGPConfiguration,
+		resources.NewBGPConfigClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindFelixConfiguration,
+		resources.NewFelixConfigClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindClusterInformation,
+		resources.NewClusterInfoClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindNode,
+		resources.NewNodeClient(cs),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindProfile,
+		resources.NewProfileClient(cs),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.BlockAffinityKey{}),
+		reflect.TypeOf(model.BlockAffinityListOptions{}),
+		"",
+		resources.NewAffinityBlockClient(cs),
+	)
 
 	return kubeClient, nil
+}
+
+// registerResourceClient registers a specific resource client with the associated
+// key and list types (and for v2 resources with the resource kind - since these share
+// a common key and list type).
+func (c *KubeClient) registerResourceClient(keyType, listType reflect.Type, resourceKind string, client resources.K8sResourceClient) {
+	if keyType == resourceKeyType {
+		c.clientsByResourceKind[resourceKind] = client
+	} else {
+		c.clientsByKeyType[keyType] = client
+		c.clientsByListType[listType] = client
+	}
+}
+
+// getResourceClientFromKey returns the appropriate resource client for the v2 resource kind.
+func (c *KubeClient) getResourceClientFromResourceKind(kind string) resources.K8sResourceClient {
+	return c.clientsByResourceKind[kind]
+}
+
+// getResourceClientFromKey returns the appropriate resource client for the key.
+func (c *KubeClient) getResourceClientFromKey(key model.Key) resources.K8sResourceClient {
+	kt := reflect.TypeOf(key)
+	if kt == resourceKeyType {
+		return c.clientsByResourceKind[key.(model.ResourceKey).Kind]
+	} else {
+		return c.clientsByKeyType[kt]
+	}
+}
+
+// getResourceClientFromList returns the appropriate resource client for the list.
+func (c *KubeClient) getResourceClientFromList(list model.ListInterface) resources.K8sResourceClient {
+	lt := reflect.TypeOf(list)
+	if lt == resourceListType {
+		return c.clientsByResourceKind[list.(model.ResourceListOptions).Kind]
+	} else {
+		return c.clientsByListType[lt]
+	}
 }
 
 // EnsureInitialized checks that the necessary custom resource definitions
@@ -160,20 +250,24 @@ func (c *KubeClient) EnsureInitialized() error {
 }
 
 func (c *KubeClient) Clean() error {
-	/*types := []model.ListInterface{
-		model.BGPConfigListOptions{},
-		model.BGPPeerListOptions{},
-		model.GlobalConfigListOptions{},
-		model.IPPoolListOptions{},
+	log.Warning("Cleaning KDD of all Calico-creatable data")
+	kinds := []string{
+		apiv2.KindBGPConfiguration,
+		apiv2.KindBGPPeer,
+		apiv2.KindClusterInformation,
+		apiv2.KindFelixConfiguration,
+		apiv2.KindGlobalNetworkPolicy,
+		apiv2.KindIPPool,
 	}
-	for _, t := range types {
-		rs, _ := c.List(t, "")
+	ctx := context.Background()
+	for _, k := range kinds {
+		lo := model.ResourceListOptions{Kind: k}
+		rs, _ := c.List(ctx, lo, "")
 		for _, r := range rs.KVPairs {
 			log.WithField("Key", r.Key).Info("Deleting from KDD")
-			backend.Delete(r.Key, r.Revision)
+			c.Delete(ctx, r.Key, r.Revision)
 		}
 	}
-	*/
 	return nil
 }
 
@@ -195,7 +289,7 @@ func (c *KubeClient) ensureClusterType() (bool, error) {
 	// any existing values to it.
 	ct, err := c.Get(context.Background(), k, "")
 	if err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// Resource exists but we got another error.
 			return false, err
 		}
@@ -274,439 +368,125 @@ func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'Create' for %+v", d)
-	switch d.Value.(type) {
-	case *apiv2.IPPool:
-		return c.ipPoolClient.Create(ctx, d)
-	case *apiv2.Node:
-		return c.nodeClient.Create(ctx, d)
-	case *apiv2.BGPPeer:
-		return c.bgpPeerClient.Create(ctx, d)
-	case *apiv2.BGPConfiguration:
-		return c.bgpConfigClient.Create(ctx, d)
-	case *apiv2.FelixConfiguration:
-		return c.felixConfigClient.Create(ctx, d)
-	case *apiv2.ClusterInformation:
-		return c.clusterInfoClient.Create(ctx, d)
-	case *apiv2.GlobalNetworkPolicy:
-		return c.gnpClient.Create(ctx, d)
-	default:
-		log.Warn("Attempt to 'Create' using kubernetes backend is not supported.")
-		return nil, errors.ErrorOperationNotSupported{
+	client := c.getResourceClientFromKey(d.Key)
+	if client == nil {
+		log.Debug("Attempt to 'Create' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: d.Key,
 			Operation:  "Create",
 		}
 	}
+	return client.Create(ctx, d)
 }
 
 // Update an existing entry in the datastore.  This errors if the entry does
 // not exist.
 func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'Update' for %+v", d)
-	switch d.Value.(type) {
-	case *apiv2.IPPool:
-		return c.ipPoolClient.Update(ctx, d)
-	case *apiv2.Node:
-		return c.nodeClient.Update(ctx, d)
-	case *apiv2.BGPPeer:
-		return c.bgpPeerClient.Update(ctx, d)
-	case *apiv2.BGPConfiguration:
-		return c.bgpConfigClient.Update(ctx, d)
-	case *apiv2.FelixConfiguration:
-		return c.felixConfigClient.Update(ctx, d)
-	case *apiv2.ClusterInformation:
-		return c.clusterInfoClient.Update(ctx, d)
-	case *apiv2.GlobalNetworkPolicy:
-		return c.gnpClient.Update(ctx, d)
-	default:
-		log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
-		return nil, errors.ErrorOperationNotSupported{
+	client := c.getResourceClientFromKey(d.Key)
+	if client == nil {
+		log.Debug("Attempt to 'Update' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: d.Key,
 			Operation:  "Update",
 		}
 	}
+	return client.Update(ctx, d)
 }
 
 // Set an existing entry in the datastore.  This ignores whether an entry already
-// exists.
-func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
-	log.Debugf("Performing 'Apply' for %+v", d)
-	switch d.Key.(type) {
-	case model.WorkloadEndpointKey:
-		return c.applyWorkloadEndpoint(d)
-	case model.GlobalConfigKey:
-		return c.felixConfigClient.Apply(d)
-	case model.IPPoolKey:
-		return c.ipPoolClient.Apply(d)
-	case model.NodeKey:
-		return c.nodeClient.Apply(d)
-	case model.GlobalBGPPeerKey:
-		return c.bgpPeerClient.Apply(d)
-	case model.GlobalBGPConfigKey:
-		return c.bgpConfigClient.Apply(d)
-	case model.NodeBGPConfigKey:
-		return c.nodeBgpConfigClient.Apply(d)
-	case model.ActiveStatusReportKey, model.LastStatusReportKey,
-		model.HostEndpointStatusKey, model.WorkloadEndpointStatusKey:
-		// Felix periodically reports status to the datastore.  This isn't supported
-		// right now, but we handle it anyway to avoid spamming warning logs.
-		log.WithField("key", d.Key).Debug("Dropping status report (not supported)")
-		return d, nil
-	default:
-		log.Warn("Attempt to 'Apply' using kubernetes backend is not supported.")
-		return nil, errors.ErrorOperationNotSupported{
-			Identifier: d.Key,
-			Operation:  "Apply",
+// exists.  This is not exposed in the main client - but we keep here for the backend
+// API.
+func (c *KubeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+	logContext := log.WithFields(log.Fields{
+		"Key":   kvp.Key,
+		"Value": kvp.Value,
+	})
+	logContext.Debug("Apply Kubernetes resource")
+
+	// Attempt to Create and do an Update if the resource already exists.
+	// We only log debug here since the Create and Update will also log.
+	// Can't set Revision while creating a resource.
+	updated, err := c.Create(context.Background(), &model.KVPair{
+		Key:   kvp.Key,
+		Value: kvp.Value,
+	})
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+			logContext.Debug("Error applying resource (using Create)")
+			return nil, err
+		}
+
+		// Try to Update if the resource already exists.
+		updated, err = c.Update(context.Background(), kvp)
+		if err != nil {
+			logContext.Debug("Error applying resource (using Update)")
+			return nil, err
 		}
 	}
+	return updated, nil
 }
 
 // Delete an entry in the datastore. This is a no-op when using the k8s backend.
 func (c *KubeClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	log.Debugf("Performing 'Delete' for %+v", k)
-	switch k.(model.ResourceKey).Kind {
-	case apiv2.KindIPPool:
-		return c.ipPoolClient.Delete(ctx, k, revision)
-	case apiv2.KindNode:
-		return c.nodeClient.Delete(ctx, k, revision)
-	case apiv2.KindBGPPeer:
-		return c.bgpPeerClient.Delete(ctx, k, revision)
-	case apiv2.KindBGPConfiguration:
-		return c.bgpConfigClient.Delete(ctx, k, revision)
-	case apiv2.KindFelixConfiguration:
-		return c.felixConfigClient.Delete(ctx, k, revision)
-	case apiv2.KindClusterInformation:
-		return c.clusterInfoClient.Delete(ctx, k, revision)
-	case apiv2.KindGlobalNetworkPolicy:
-		return c.gnpClient.Delete(ctx, k, revision)
-	default:
-		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
-		return nil, errors.ErrorOperationNotSupported{
+	client := c.getResourceClientFromKey(k)
+	if client == nil {
+		log.Debug("Attempt to 'Delete' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: k,
 			Operation:  "Delete",
 		}
 	}
+	return client.Delete(ctx, k, revision)
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
 func (c *KubeClient) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	log.Debugf("Performing 'Get' for %+v %v", k, revision)
-	switch k.(model.ResourceKey).Kind {
-	case apiv2.KindProfile:
-		return c.getProfile(ctx, k.(model.ResourceKey), revision)
-	case apiv2.KindWorkloadEndpoint:
-		return c.getWorkloadEndpoint(ctx, k.(model.ResourceKey), revision)
-	case apiv2.KindGlobalNetworkPolicy, apiv2.KindNetworkPolicy:
-		return c.getPolicy(ctx, k.(model.ResourceKey), revision)
-	case apiv2.KindIPPool:
-		return c.ipPoolClient.Get(ctx, k, revision)
-	case apiv2.KindNode:
-		return c.nodeClient.Get(ctx, k.(model.ResourceKey), revision)
-	case apiv2.KindBGPPeer:
-		return c.bgpPeerClient.Get(ctx, k, revision)
-	case apiv2.KindBGPConfiguration:
-		return c.bgpConfigClient.Get(ctx, k, revision)
-	case apiv2.KindFelixConfiguration:
-		return c.felixConfigClient.Get(ctx, k, revision)
-	case apiv2.KindClusterInformation:
-		return c.clusterInfoClient.Get(ctx, k, revision)
-	default:
-		return nil, errors.ErrorOperationNotSupported{
+	client := c.getResourceClientFromKey(k)
+	if client == nil {
+		log.Debug("Attempt to 'Get' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: k,
 			Operation:  "Get",
 		}
 	}
+	return client.Get(ctx, k, revision)
 }
 
 // List entries in the datastore.  This may return an empty list if there are
 // no entries matching the request in the ListInterface.
 func (c *KubeClient) List(ctx context.Context, l model.ListInterface, revision string) (*model.KVPairList, error) {
 	log.Debugf("Performing 'List' for %+v %v", l, reflect.TypeOf(l))
-	switch l.(model.ResourceListOptions).Kind {
-	case apiv2.KindProfile:
-		return c.listProfiles(ctx, l.(model.ResourceListOptions), revision)
-	case apiv2.KindWorkloadEndpoint:
-		return c.listWorkloadEndpoints(ctx, l.(model.ResourceListOptions), revision)
-	case apiv2.KindGlobalNetworkPolicy, apiv2.KindNetworkPolicy:
-		return c.listPolicies(ctx, l.(model.ResourceListOptions), revision)
-	case apiv2.KindIPPool:
-		return c.ipPoolClient.List(ctx, l, revision)
-	case apiv2.KindBGPPeer:
-		return c.bgpPeerClient.List(ctx, l, revision)
-	case apiv2.KindBGPConfiguration:
-		return c.bgpConfigClient.List(ctx, l, revision)
-	case apiv2.KindFelixConfiguration:
-		return c.felixConfigClient.List(ctx, l, revision)
-	case apiv2.KindClusterInformation:
-		return c.clusterInfoClient.List(ctx, l, revision)
-	case apiv2.KindNode:
-		return c.nodeClient.List(ctx, l, revision)
-	default:
-		return &model.KVPairList{
-			KVPairs:  []*model.KVPair{},
-			Revision: revision,
-		}, nil
+	client := c.getResourceClientFromList(l)
+	if client == nil {
+		log.Info("Attempt to 'List' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: l,
+			Operation:  "List",
+		}
 	}
+	return client.List(ctx, l, revision)
 }
 
-// listProfiles lists Profiles from the k8s API based on existing Namespaces.
-func (c *KubeClient) listProfiles(ctx context.Context, l model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	// If a name is specified, then do an exact lookup.
-	if l.Name != "" {
-		kvp, err := c.getProfile(ctx, model.ResourceKey{Name: l.Name, Kind: l.Kind}, revision)
-		if err != nil {
-			log.WithError(err).Debug("Error retrieving profile")
-			// TODO(doublek): Check the return value here.
-			return &model.KVPairList{
-				KVPairs:  []*model.KVPair{},
-				Revision: revision,
-			}, nil
+// List entries in the datastore.  This may return an empty list if there are
+// no entries matching the request in the ListInterface.
+func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, revision string) (api.WatchInterface, error) {
+	log.Debugf("Performing 'Watch' for %+v %v", l, reflect.TypeOf(l))
+	client := c.getResourceClientFromList(l)
+	if client == nil {
+		log.Debug("Attempt to 'Watch' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: l,
+			Operation:  "Watch",
 		}
-		return &model.KVPairList{
-			KVPairs:  []*model.KVPair{kvp},
-			Revision: revision,
-		}, nil
 	}
-
-	// Otherwise, enumerate all.
-	namespaces, err := c.clientSet.CoreV1().Namespaces().List(metav1.ListOptions{})
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, l)
-	}
-
-	// For each Namespace, return a profile.
-	ret := []*model.KVPair{}
-	for _, ns := range namespaces.Items {
-		kvp, err := c.converter.NamespaceToProfile(&ns)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, kvp)
-	}
-	return &model.KVPairList{
-		KVPairs:  ret,
-		Revision: revision,
-	}, nil
-}
-
-// getProfile gets the Profile from the k8s API based on existing Namespaces.
-func (c *KubeClient) getProfile(ctx context.Context, k model.ResourceKey, revision string) (*model.KVPair, error) {
-	if k.Name == "" {
-		return nil, fmt.Errorf("Profile key missing name: %+v", k)
-	}
-	namespaceName, err := c.converter.parseProfileName(k.Name)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse Profile name: %s", err)
-	}
-	namespace, err := c.clientSet.CoreV1().Namespaces().Get(namespaceName, metav1.GetOptions{})
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, k)
-	}
-
-	return c.converter.NamespaceToProfile(namespace)
-}
-
-// applyWorkloadEndpoint patches the existing Pod to include an IP address, if
-// one has been set on the workload endpoint.
-// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
-// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
-func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, error) {
-	ips := k.Value.(*model.WorkloadEndpoint).IPv4Nets
-	if len(ips) > 0 {
-		log.Debugf("Applying workload with IPs: %+v", ips)
-		ns, name := c.converter.parseWorkloadID(k.Key.(model.WorkloadEndpointKey).WorkloadID)
-		pod, err := c.clientSet.CoreV1().Pods(ns).Get(name, metav1.GetOptions{})
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k.Key)
-		}
-		pod.Status.PodIP = ips[0].IP.String()
-		pod, err = c.clientSet.CoreV1().Pods(ns).UpdateStatus(pod)
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k.Key)
-		}
-		log.Debugf("Successfully applied pod: %+v", pod)
-		return c.converter.PodToWorkloadEndpoint(pod)
-	}
-	return k, nil
-}
-
-// listWorkloadEndpoints lists WorkloadEndpoints from the k8s API based on existing Pods.
-func (c *KubeClient) listWorkloadEndpoints(ctx context.Context, l model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	// If a workload is provided, we can do an exact lookup of this
-	// workload endpoint.
-	if l.Name != "" {
-		kvp, err := c.getWorkloadEndpoint(ctx, model.ResourceKey{
-			Name: l.Name,
-			Kind: l.Kind,
-		}, revision)
-		if err != nil {
-			switch err.(type) {
-			// Return empty slice of KVPair if the object doesn't exist, return the error otherwise.
-			case errors.ErrorResourceDoesNotExist:
-				return &model.KVPairList{
-					KVPairs:  []*model.KVPair{},
-					Revision: revision,
-				}, nil
-			default:
-				return nil, err
-			}
-		}
-
-		return &model.KVPairList{
-			KVPairs:  []*model.KVPair{kvp},
-			Revision: revision,
-		}, nil
-	}
-
-	// Otherwise, enumerate all pods in all namespaces.
-	// We don't yet support hostname, orchestratorID, for the k8s backend.
-	pods, err := c.clientSet.CoreV1().Pods("").List(metav1.ListOptions{})
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, l)
-	}
-
-	// For each Pod, return a workload endpoint.
-	ret := []*model.KVPair{}
-	for _, pod := range pods.Items {
-		// Decide if this pod should be displayed.
-		if !c.converter.isReadyCalicoPod(&pod) {
-			continue
-		}
-
-		kvp, err := c.converter.PodToWorkloadEndpoint(&pod)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, kvp)
-	}
-	return &model.KVPairList{
-		KVPairs:  ret,
-		Revision: revision,
-	}, nil
-}
-
-// getWorkloadEndpoint gets the WorkloadEndpoint from the k8s API based on existing Pods.
-func (c *KubeClient) getWorkloadEndpoint(ctx context.Context, k model.ResourceKey, revision string) (*model.KVPair, error) {
-	// The workloadID is of the form namespace.podname.  Parse it so we
-	// can find the correct namespace to get the pod.
-	namespace, podName := c.converter.parseWorkloadID(k.Name)
-
-	pod, err := c.clientSet.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, k)
-	}
-
-	// Decide if this pod should be displayed.
-	if !c.converter.isReadyCalicoPod(pod) {
-		return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
-	}
-	return c.converter.PodToWorkloadEndpoint(pod)
-}
-
-// listPolicies lists the Policies from the k8s API based on NetworkPolicy objects.
-func (c *KubeClient) listPolicies(ctx context.Context, l model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	if l.Name != "" {
-		// Exact lookup on a NetworkPolicy.
-		kvp, err := c.getPolicy(ctx, model.ResourceKey{Name: l.Name, Kind: l.Kind}, revision)
-		if err != nil {
-			switch err.(type) {
-			// Return empty slice of KVPair if the object doesn't exist, return the error otherwise.
-			case errors.ErrorResourceDoesNotExist:
-				return &model.KVPairList{
-					KVPairs:  []*model.KVPair{},
-					Revision: revision,
-				}, nil
-			default:
-				return nil, err
-			}
-		}
-
-		return &model.KVPairList{
-			KVPairs:  []*model.KVPair{kvp},
-			Revision: revision,
-		}, nil
-	}
-
-	// Otherwise, list all NetworkPolicy objects in all Namespaces.
-	networkPolicies := extensions.NetworkPolicyList{}
-
-	// For each policy, turn it into a Policy and generate the list.
-	ret := []*model.KVPair{}
-	for _, p := range networkPolicies.Items {
-		kvp, err := c.converter.NetworkPolicyToPolicy(&p)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, kvp)
-	}
-
-	// List all Global Network Policies.
-	gnps, err := c.gnpClient.List(ctx, l, revision)
-	if err != nil {
-		return nil, err
-	}
-	ret = append(ret, gnps.KVPairs...)
-
-	return &model.KVPairList{
-		KVPairs:  ret,
-		Revision: revision,
-	}, nil
-}
-
-// getPolicy gets the Policy from the k8s API based on NetworkPolicy objects.
-func (c *KubeClient) getPolicy(ctx context.Context, k model.ResourceKey, revision string) (*model.KVPair, error) {
-	if k.Name == "" {
-		return nil, goerrors.New("Missing policy name")
-	}
-
-	// Check to see if this is backed by a NetworkPolicy.
-	if strings.HasPrefix(k.Name, "knp.default.") {
-		// Backed by a NetworkPolicy. Parse out the namespace / name.
-		namespace, policyName, err := c.converter.parsePolicyNameNetworkPolicy(k.Name)
-		if err != nil {
-			return nil, errors.ErrorResourceDoesNotExist{Err: err, Identifier: k}
-		}
-
-		// Get the NetworkPolicy from the API and convert it.
-		networkPolicy := extensions.NetworkPolicy{}
-		err = c.clientSet.ExtensionsV1beta1().RESTClient().
-			Get().
-			Resource("networkpolicies").
-			Namespace(namespace).
-			Name(policyName).
-			Timeout(10 * time.Second).
-			Do().Into(&networkPolicy)
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k)
-		}
-		return c.converter.NetworkPolicyToPolicy(&networkPolicy)
-	} else {
-		// This is backed by a Global Network Policy CRD.
-		return c.gnpClient.Get(ctx, k, revision)
-	}
+	return client.Watch(ctx, l, revision)
 }
 
 func (c *KubeClient) getReadyStatus(ctx context.Context, k model.ReadyFlagKey, revision string) (*model.KVPair, error) {
 	return &model.KVPair{Key: k, Value: true}, nil
-}
-
-func (c *KubeClient) getHostConfig(ctx context.Context, k model.HostConfigKey, revision string) (*model.KVPair, error) {
-	if k.Name == "IpInIpTunnelAddr" {
-		n, err := c.clientSet.CoreV1().Nodes().Get(k.Hostname, metav1.GetOptions{})
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k)
-		}
-
-		kvp, err := getTunIp(n)
-		if err != nil {
-			return nil, err
-		} else if kvp == nil {
-			return nil, errors.ErrorResourceDoesNotExist{}
-		}
-
-		return kvp, nil
-	}
-
-	return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
 }
 
 func (c *KubeClient) listHostConfig(ctx context.Context, l model.HostConfigListOptions, revision string) (*model.KVPairList, error) {

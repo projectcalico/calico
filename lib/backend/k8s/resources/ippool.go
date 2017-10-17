@@ -66,7 +66,7 @@ func (_ IPPoolConverter) NameToKey(name string) (model.Key, error) {
 	}, nil
 }
 
-func (i IPPoolConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+func (i IPPoolConverter) ToKVPair(r Resource) (*model.KVPair, error) {
 	t := r.(*apiv2.IPPool)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
@@ -86,7 +86,7 @@ func (i IPPoolConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
 
 }
 
-func (i IPPoolConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+func (i IPPoolConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
 	v := kvp.Value.(*apiv2.IPPool)
 
 	return &apiv2.IPPool{

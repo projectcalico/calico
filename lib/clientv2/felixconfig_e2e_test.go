@@ -63,20 +63,18 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			be.Clean()
 
 			By("Updating the FelixConfiguration before it is created")
-			res, outError := c.FelixConfigurations().Update(ctx, &apiv2.FelixConfiguration{
+			_, outError := c.FelixConfigurations().Update(ctx, &apiv2.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234"},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(res).To(BeNil())
 			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name1 + ")"))
 
 			By("Attempting to creating a new FelixConfiguration with name1/spec1 and a non-empty ResourceVersion")
-			res, outError = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
+			_, outError = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1,
 			}, options.SetOptions{})
-			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
@@ -92,24 +90,21 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same FelixConfiguration with name1 but with spec2")
-			res1, outError = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
+			_, outError = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: FelixConfiguration(" + name1 + ")"))
-			// Check return value is actually the previously stored value.
-			testutils.ExpectResource(res1, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec1)
-			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting FelixConfiguration (name1) and comparing the output against spec1")
-			res, outError = c.FelixConfigurations().Get(ctx, name1, options.GetOptions{})
+			res, outError := c.FelixConfigurations().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res, apiv2.KindFelixConfiguration, testutils.ExpectNoNamespace, name1, spec1)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting FelixConfiguration (name2) before it is created")
-			res, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
+			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
 
@@ -152,18 +147,16 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Updating FelixConfiguration name1 without specifying a resource version")
 			res1.Spec = spec1
 			res1.ObjectMeta.ResourceVersion = ""
-			res, outError = c.FelixConfigurations().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.FelixConfigurations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '' (field must be set for an Update request)"))
-			Expect(res).To(BeNil())
 
 			By("Updating FelixConfiguration name1 using the previous resource version")
 			res1.Spec = spec1
 			res1.ResourceVersion = rv1_1
-			res1, outError = c.FelixConfigurations().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.FelixConfigurations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: FelixConfiguration(" + name1 + ")"))
-			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Getting FelixConfiguration (name1) with the original resource version and comparing the output against spec1")
@@ -251,7 +244,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			Expect(outList.Items).To(HaveLen(0))
 
 			By("Getting FelixConfiguration (name2) and expecting an error")
-			res, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
+			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
 		},
@@ -262,9 +255,6 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 
 	Describe("FelixConfiguration watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("Watch not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -302,7 +292,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.FelixConfigurations().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher1 := testutils.TestResourceWatch(w)
+			testWatcher1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
@@ -325,7 +315,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Starting a watcher from rev0 - this should get all events")
 			w, err = c.FelixConfigurations().Watch(ctx, options.ListOptions{ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2 := testutils.TestResourceWatch(w)
+			testWatcher2 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
@@ -359,27 +349,30 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			})
 			testWatcher2.Stop()
 
-			By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
-			w, err = c.FelixConfigurations().Watch(ctx, options.ListOptions{Name: name1, ResourceVersion: rev0})
-			Expect(err).NotTo(HaveOccurred())
-			testWatcher2_1 := testutils.TestResourceWatch(w)
-			defer testWatcher2_1.Stop()
-			testWatcher2_1.ExpectEvents(apiv2.KindFelixConfiguration, []watch.Event{
-				{
-					Type:   watch.Added,
-					Object: outRes1,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-			})
-			testWatcher2_1.Stop()
+			// Only etcdv3 supports watching a specific instance of a resource.
+			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+				By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
+				w, err = c.FelixConfigurations().Watch(ctx, options.ListOptions{Name: name1, ResourceVersion: rev0})
+				Expect(err).NotTo(HaveOccurred())
+				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+				defer testWatcher2_1.Stop()
+				testWatcher2_1.ExpectEvents(apiv2.KindFelixConfiguration, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes1,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+				})
+				testWatcher2_1.Stop()
+			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.FelixConfigurations().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher3 := testutils.TestResourceWatch(w)
+			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
 			testWatcher3.ExpectEvents(apiv2.KindFelixConfiguration, []watch.Event{
 				{
@@ -402,9 +395,9 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.FelixConfigurations().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher4 := testutils.TestResourceWatch(w)
+			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
-			testWatcher4.ExpectEvents(apiv2.KindFelixConfiguration, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv2.KindFelixConfiguration, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
