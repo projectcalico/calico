@@ -25,4 +25,4 @@ Proven in production at scale, Calico features
 integrations with Kubernetes, OpenShift, Docker, 
 Mesos, DC/OS, and OpenStack.
 
-<a href="/v2.6/getting-started/" class="btn btn-primary btn-lg">Get started</a>
+<a href="/{{page.version}}/getting-started/" class="btn btn-primary btn-lg">Get started</a>
