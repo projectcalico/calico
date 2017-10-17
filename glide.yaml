@@ -8,9 +8,9 @@ import:
 - package: github.com/kelseyhightower/envconfig
   version: ~1.3.0
 - package: k8s.io/apimachinery
-  version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
-- package: k8s.io/client-go
-  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
+  version: release-1.8
+- package: k8s.io/api
+  version: release-1.8
   subpackages:
   - kubernetes
   - pkg/api
