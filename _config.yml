@@ -18,6 +18,7 @@ exclude:
   - BUILDING_CALICO.md
   - CONTRIBUTING_DOCS.md
   - CONTRIBUTING_CODE.md
+  - DOC_STYLE_GUIDE.md
   - hack
   - calico_node
 
