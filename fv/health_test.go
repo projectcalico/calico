@@ -49,15 +49,15 @@ import (
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
@@ -73,7 +73,7 @@ var apiServerContainer *containers.Container
 var k8sAPIEndpoint string
 var badK8sAPIEndpoint string
 var k8sCertFilename string
-var calicoClient *client.Client
+var calicoClient client.Interface
 var k8sClient *kubernetes.Clientset
 
 var (
@@ -180,10 +180,10 @@ var _ = BeforeSuite(func() {
 	}, "60s", "2s").ShouldNot(HaveOccurred())
 
 	Eventually(func() (err error) {
-		calicoClient, err = client.New(api.CalicoAPIConfig{
-			Spec: api.CalicoAPIConfigSpec{
-				DatastoreType: api.Kubernetes,
-				KubeConfig: api.KubeConfig{
+		calicoClient, err = client.New(apiconfig.CalicoAPIConfig{
+			Spec: apiconfig.CalicoAPIConfigSpec{
+				DatastoreType: apiconfig.Kubernetes,
+				KubeConfig: apiconfig.KubeConfig{
 					K8sAPIEndpoint:           k8sAPIEndpoint,
 					K8sInsecureSkipTLSVerify: true,
 				},
@@ -226,7 +226,7 @@ var _ = Describe("health tests", func() {
 
 	createPerNodeConfig := func() {
 		// Make a k8s Node using the hostname of Felix's container.
-		_, err := k8sClient.Nodes().Create(&v1.Node{
+		_, err := k8sClient.CoreV1().Nodes().Create(&v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: felixContainer.Hostname,
 			},
@@ -236,7 +236,7 @@ var _ = Describe("health tests", func() {
 	}
 
 	removePerNodeConfig := func() {
-		err := k8sClient.Nodes().Delete(felixContainer.Hostname, nil)
+		err := k8sClient.CoreV1().Nodes().Delete(felixContainer.Hostname, nil)
 		Expect(err).NotTo(HaveOccurred())
 	}
 

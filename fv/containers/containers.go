@@ -29,8 +29,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -264,7 +264,7 @@ func RunFelix(etcdIP string) *Container {
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology() (felix, etcd *Container, client *client.Client) {
+func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interface) {
 	success := false
 	defer func() {
 		if !success {
@@ -277,16 +277,15 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client *client.Clien
 	// First start etcd.
 	etcd = RunEtcd()
 
-	// Connect to etcd and initialise the datastore.
+	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
-	Eventually(client.EnsureInitialized, "10s", "100ms").ShouldNot(HaveOccurred())
 
 	// Then start Felix and create a node for it.
 	felix = RunFelix(etcd.IP)
 
 	felixNode := api.NewNode()
-	felixNode.Metadata.Name = felix.Hostname
-	_, err := client.Nodes().Create(felixNode)
+	felixNode.Name = felix.Hostname
+	_, err := client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
 	Expect(err).NotTo(HaveOccurred())
 
 	success = true

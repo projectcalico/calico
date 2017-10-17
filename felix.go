@@ -112,6 +112,8 @@ func main() {
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
 
+	ctx := context.Background()
+
 	if os.Getenv("GOGC") == "" {
 		// Tune the GC to trade off a little extra CPU usage for significantly lower
 		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
@@ -185,7 +187,7 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig, hostConfig := loadConfigFromDatastore(datastore,
+		globalConfig, hostConfig := loadConfigFromDatastore(ctx, datastore,
 			configParams.FelixHostname)
 		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
 		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
@@ -645,10 +647,10 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt.Fatal("Exiting immediately")
 }
 
-func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
+func loadConfigFromDatastore(ctx context.Context, datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
 	for {
 		log.Info("Waiting for the datastore to be ready")
-		if kv, err := datastore.Get(model.ReadyFlagKey{}); err != nil {
+		if kv, err := datastore.Get(ctx, model.ReadyFlagKey{}, ""); err != nil {
 			log.WithError(err).Error("Failed to read global datastore 'Ready' flag, will retry...")
 			time.Sleep(1 * time.Second)
 			continue
@@ -659,29 +661,29 @@ func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConf
 		}
 
 		log.Info("Loading global config from datastore")
-		kvs, err := datastore.List(model.GlobalConfigListOptions{})
+		kvl, err := datastore.List(ctx, model.GlobalConfigListOptions{}, "")
 		if err != nil {
 			log.WithError(err).Error("Failed to load config from datastore")
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		globalConfig = make(map[string]string)
-		for _, kv := range kvs {
+		for _, kv := range kvl.KVPairs {
 			key := kv.Key.(model.GlobalConfigKey)
 			value := kv.Value.(string)
 			globalConfig[key.Name] = value
 		}
 
 		log.Infof("Loading per-host config from datastore; hostname=%v", hostname)
-		kvs, err = datastore.List(
-			model.HostConfigListOptions{Hostname: hostname})
+		kvl, err = datastore.List(ctx,
+			model.HostConfigListOptions{Hostname: hostname}, "")
 		if err != nil {
 			log.WithError(err).Error("Failed to load config from datastore")
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		hostConfig = make(map[string]string)
-		for _, kv := range kvs {
+		for _, kv := range kvl.KVPairs {
 			key := kv.Key.(model.HostConfigKey)
 			value := kv.Value.(string)
 			hostConfig[key.Name] = value

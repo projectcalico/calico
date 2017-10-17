@@ -63,7 +63,7 @@ var _ = Context("with a k8s clientset", func() {
 
 			// Clear the pod's IP address.
 			podOut.Status.PodIP = ""
-			_, err := clientset.Pods(nsName).UpdateStatus(podOut)
+			_, err := clientset.CoreV1().Pods(nsName).UpdateStatus(podOut)
 			panicIfError(err)
 
 			// Short wait, then delete the pod.
