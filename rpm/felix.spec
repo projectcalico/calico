@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        2.7.0
-Release:        0.1.pre1%{?dist}
+Release:        0.1.pre2%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,11 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 16 2017 Neil Jerram <neil@tigera.io> 2.7.0-0.1.pre2
+  - Felix 2.7.0-pre2 (from Git commit 942db10).
+    [Changes recorded in 2.7.0-pre2 tag]
+    - Add support for network sets.
+
 * Mon Oct 16 2017 Neil Jerram <neil@tigera.io> 2.7.0-0.1.pre1
   - Felix 2.7.0-pre1 (from Git commit d0576c7).
     [Changes recorded in 2.7.0-pre1 tag]
