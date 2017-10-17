@@ -186,7 +186,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 		// Update our cache of current entries.
 		k, err := model.KeyToDefaultPath(u.Key)
 		if err != nil {
-			log.Error("Unable to create path from Key %v: %v", u.Key, err)
+			log.Error("Ignoring update: unable to create path from Key %v: %v", u.Key, err)
 			continue
 		}
 
@@ -196,7 +196,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 		case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
 			value, err := model.SerializeValue(&u.KVPair)
 			if err != nil {
-				log.Error("Unable to serialize value %v: %v", u.KVPair.Value, err)
+				log.Error("Ignoring update: unable to serialize value %v: %v", u.KVPair.Value, err)
 				continue
 			}
 			c.cache[k] = string(value)
@@ -216,14 +216,16 @@ func (c *client) OnUpdates(updates []api.Update) {
 		// suffice.
 		nodeMeshEnabled := !strings.Contains(c.cache[globalNodeMesh], "false")
 		if nodeMeshEnabled != c.nodeMeshEnabled {
-			log.Info("Node to node mesh setting has been modified - shutting down confd")
+			log.Info("Node to node mesh setting has been modified - restarting confd")
 			os.Exit(1)
 		}
-	}
 
-	// Wake up the watchers to let them know there may be some updates of interest.
-	log.Debug("Notify watchers of new event data")
-	c.watcherCond.Broadcast()
+		// Wake up the watchers to let them know there may be some updates of interest.  We only
+		// need to do this once we're synced because until that point all of the Watcher threads
+		// will be blocked getting values.
+		log.Debug("Notify watchers of new event data")
+		c.watcherCond.Broadcast()
+	}
 }
 
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
@@ -236,8 +238,8 @@ func (c *client) ParseFailed(rawKey string, rawValue string) {
 // We simply populate the values from our cache, only returning values which have the requested
 // set of prefixes.
 func (c *client) GetValues(keys []string) (map[string]string, error) {
-	// We should block GetValues until we have the sync'd notification.  This is necessary because
-	// our data collection is happening in a different goroutine.
+	// We should block GetValues until we have the sync'd notification - until that point we
+	// only have a partial snapshot and we should never write out partial config.
 	c.waitForSync.Wait()
 
 	log.Debug("Requesting values for keys: %v", keys)
