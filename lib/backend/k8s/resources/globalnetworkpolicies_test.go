@@ -118,6 +118,7 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 			kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec.PreDNAT = true
 			res1.Spec.DoNotTrack = false
 			res1.Spec.PreDNAT = true
+			res1.Spec.ApplyOnForward = true
 		})
 
 		AfterEach(func() {
@@ -125,6 +126,7 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 			kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec.PreDNAT = false
 			res1.Spec.DoNotTrack = true
 			res1.Spec.PreDNAT = false
+			res1.Spec.ApplyOnForward = true
 		})
 
 		It("should convert between a KVPair and the equivalent Kubernetes resource", func() {

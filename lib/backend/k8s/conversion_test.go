@@ -22,10 +22,10 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 var _ = Describe("Test parsing strings", func() {
@@ -284,6 +284,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -341,6 +342,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -397,6 +399,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -429,8 +432,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with multiple peers and ports", func() {
-		tcp := k8sapi.ProtocolTCP
-		udp := k8sapi.ProtocolUDP
+		tcp := extensions.ProtocolTCP
+		udp := extensions.ProtocolUDP
 		eighty := intstr.FromInt(80)
 		ninety := intstr.FromInt(90)
 
@@ -473,6 +476,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -523,6 +527,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			},
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -567,6 +572,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -607,6 +613,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
 			},
 		}
 
@@ -631,7 +638,656 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with Ports only", func() {
-		protocol := k8sapi.ProtocolTCP
+		protocol := extensions.ProtocolTCP
+		port := intstr.FromInt(80)
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{
+								Protocol: &protocol,
+								Port:     &port,
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].Protocol.String()).To(Equal("tcp"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules[0].DstPorts)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts[0].String()).To(Equal("80"))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with an Ingress rule with an IPBlock Peer", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								IPBlock: &extensions.IPBlock{
+									CIDR:   "192.168.0.0/16",
+									Except: []string{"192.168.3.0/24", "192.168.4.0/24"},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcNets[0].String()).To(Equal("192.168.0.0/16"))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].NotSrcNets[0].String()).To(Equal("192.168.3.0/24"))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].NotSrcNets[1].String()).To(Equal("192.168.4.0/24"))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with an Egress rule with an IPBlock Peer", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Egress: []extensions.NetworkPolicyEgressRule{
+					{
+						To: []extensions.NetworkPolicyPeer{
+							{
+								IPBlock: &extensions.IPBlock{
+									CIDR:   "192.168.0.0/16",
+									Except: []string{"192.168.3.0/24", "192.168.4.0/24", "192.168.5.0/24"},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].DstNets[0].String()).To(Equal("192.168.0.0/16"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[0].String()).To(Equal("192.168.3.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[1].String()).To(Equal("192.168.4.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[2].String()).To(Equal("192.168.5.0/24"))
+
+		// There should be no InboundRules
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'egress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("egress"))
+	})
+
+	It("should parse a NetworkPolicy with an Egress rule with IPBlock and Ports", func() {
+		tcp := extensions.ProtocolTCP
+		udp := extensions.ProtocolUDP
+		eighty := intstr.FromInt(80)
+		ninety := intstr.FromInt(90)
+
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Egress: []extensions.NetworkPolicyEgressRule{
+					extensions.NetworkPolicyEgressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{
+								Port:     &ninety,
+								Protocol: &udp,
+							},
+							extensions.NetworkPolicyPort{
+								Port:     &eighty,
+								Protocol: &tcp,
+							},
+						},
+						To: []extensions.NetworkPolicyPeer{
+							{
+								IPBlock: &extensions.IPBlock{
+									CIDR:   "192.168.0.0/16",
+									Except: []string{"192.168.3.0/24", "192.168.4.0/24", "192.168.5.0/24"},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		eightyName, _ := numorstring.PortFromString("80")
+		ninetyName, _ := numorstring.PortFromString("90")
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(2))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].DstPorts).To(Equal([]numorstring.Port{ninetyName}))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].DstNets[0].String()).To(Equal("192.168.0.0/16"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[0].String()).To(Equal("192.168.3.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[1].String()).To(Equal("192.168.4.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[2].String()).To(Equal("192.168.5.0/24"))
+
+		Expect(pol.Value.(*model.Policy).OutboundRules[1].DstPorts).To(Equal([]numorstring.Port{eightyName}))
+		Expect(pol.Value.(*model.Policy).OutboundRules[1].DstNets[0].String()).To(Equal("192.168.0.0/16"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[1].NotDstNets[0].String()).To(Equal("192.168.3.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[1].NotDstNets[1].String()).To(Equal("192.168.4.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[1].NotDstNets[2].String()).To(Equal("192.168.5.0/24"))
+
+		// There should be no InboundRules
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'egress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("egress"))
+	})
+
+	It("should parse a NetworkPolicy with both an Egress and an Ingress rule", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						From: []extensions.NetworkPolicyPeer{
+							{
+								IPBlock: &extensions.IPBlock{
+									CIDR:   "192.168.0.0/16",
+									Except: []string{"192.168.3.0/24", "192.168.4.0/24"},
+								},
+							},
+						},
+					},
+				},
+				Egress: []extensions.NetworkPolicyEgressRule{
+					{
+						To: []extensions.NetworkPolicyPeer{
+							{
+								IPBlock: &extensions.IPBlock{
+									CIDR:   "10.10.0.0/16",
+									Except: []string{"192.168.13.0/24", "192.168.14.0/24", "192.168.15.0/24"},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress, extensions.PolicyTypeIngress},
+			},
+		}
+
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].DstNets[0].String()).To(Equal("10.10.0.0/16"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[0].String()).To(Equal("192.168.13.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[1].String()).To(Equal("192.168.14.0/24"))
+		Expect(pol.Value.(*model.Policy).OutboundRules[0].NotDstNets[2].String()).To(Equal("192.168.15.0/24"))
+
+		// There should be one InboundRule
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
+
+		// Assert InboundRule fields are correct.
+		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcNets[0].String()).To(Equal("192.168.0.0/16"))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].NotSrcNets[0].String()).To(Equal("192.168.3.0/24"))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].NotSrcNets[1].String()).To(Equal("192.168.4.0/24"))
+
+		// Check that Types field exists and has both 'egress' and 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(2))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+		Expect(pol.Value.(*model.Policy).Types[1]).To(Equal("egress"))
+	})
+})
+
+// This suite of tests is useful for ensuring we continue to support kubernetes apiserver
+// versions <= 1.7.x, and can be removed when that is no longer required.
+var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", func() {
+
+	// Use a single instance of the Converter for these tests.
+	c := Converter{}
+
+	It("should parse a basic NetworkPolicy to a Policy", func() {
+		port80 := intstr.FromInt(80)
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"label":  "value",
+						"label2": "value2",
+					},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					{
+						Ports: []extensions.NetworkPolicyPort{
+							{Port: &port80},
+						},
+						From: []extensions.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		// Check the selector is correct, and that the matches are sorted.
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal(
+			"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
+		protoTCP := numorstring.ProtocolFromString("tcp")
+		Expect(pol.Value.(*model.Policy).InboundRules).To(ConsistOf(model.Rule{
+			Action:      "allow",
+			Protocol:    &protoTCP, // Defaulted to TCP.
+			SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+			DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
+		}))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with no rules", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with multiple peers", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{},
+						},
+						From: []extensions.NetworkPolicyPeer{
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		var pol *model.KVPair
+		var err error
+		By("parsing the policy", func() {
+			pol, err = c.NetworkPolicyToPolicy(&np)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		})
+
+		By("having the correct endpoint selector", func() {
+			Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		})
+
+		By("having the correct peer selectors", func() {
+			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(2))
+
+			// There should be no OutboundRules
+			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+			// Check that Types field exists and has only 'ingress'
+			Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+			Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+		})
+	})
+
+	It("should parse a NetworkPolicy with multiple peers and ports", func() {
+		tcp := extensions.ProtocolTCP
+		udp := extensions.ProtocolUDP
+		eighty := intstr.FromInt(80)
+		ninety := intstr.FromInt(90)
+
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{
+								Port:     &ninety,
+								Protocol: &udp,
+							},
+							extensions.NetworkPolicyPort{
+								Port:     &eighty,
+								Protocol: &tcp,
+							},
+						},
+						From: []extensions.NetworkPolicyPeer{
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		var pol *model.KVPair
+		var err error
+		By("parsing the policy", func() {
+			pol, err = c.NetworkPolicyToPolicy(&np)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		})
+
+		By("having the correct endpoint selector", func() {
+			Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		})
+
+		By("having the correct peer selectors", func() {
+			eighty, _ := numorstring.PortFromString("80")
+			ninety, _ := numorstring.PortFromString("90")
+			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(4))
+
+			// There should be no OutboundRules
+			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+			// Check that Types field exists and has only 'ingress'
+			Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+			Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts).To(Equal([]numorstring.Port{ninety}))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[1].DstPorts).To(Equal([]numorstring.Port{ninety}))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[2].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[2].DstPorts).To(Equal([]numorstring.Port{eighty}))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[3].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[3].DstPorts).To(Equal([]numorstring.Port{eighty}))
+		})
+	})
+
+	It("should parse a NetworkPolicy with empty podSelector", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						From: []extensions.NetworkPolicyPeer{
+							extensions.NetworkPolicyPeer{
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("has(calico/k8s_ns)"))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						metav1.LabelSelectorRequirement{
+							Key:      "k",
+							Operator: metav1.LabelSelectorOpIn,
+							Values:   []string{"v1", "v2"},
+						},
+					},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.NetworkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("knp.default.default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && k in { 'v1', 'v2' }"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+
+		// There should be no OutboundRules
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*model.Policy).Types)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).Types[0]).To(Equal("ingress"))
+	})
+
+	It("should parse a NetworkPolicy with Ports only", func() {
+		protocol := extensions.ProtocolTCP
 		port := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{

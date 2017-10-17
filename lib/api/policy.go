@@ -118,6 +118,9 @@ type PolicySpec struct {
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
 	PreDNAT bool `json:"preDNAT,omitempty"`
 
+	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
+	ApplyOnForward bool `json:"applyOnForward,omitempty"`
+
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what IngressRules and EgressRules are present in the policy.  The

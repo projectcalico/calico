@@ -21,10 +21,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	protoTCP = kapiv1.ProtocolTCP
+	protoTCP = extensions.ProtocolTCP
 )
 
 //TODO: make this private and expose a public conversion interface instead
@@ -242,7 +242,44 @@ func (c Converter) NetworkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.K
 	// Generate the inbound rules list.
 	var ingressRules []apiv2.Rule
 	for _, r := range np.Spec.Ingress {
-		ingressRules = append(ingressRules, c.k8sIngressRuleToCalico(r, np.ObjectMeta.Namespace)...)
+		inboundRules = append(inboundRules, c.k8sRuleToCalico(r.From, r.Ports, np.ObjectMeta.Namespace, true)...)
+	}
+
+	// Generate the outbound rules list.
+	var outboundRules []model.Rule
+	for _, r := range np.Spec.Egress {
+		outboundRules = append(outboundRules, c.k8sRuleToCalico(r.To, r.Ports, np.ObjectMeta.Namespace, false)...)
+	}
+
+	// Calculate Types setting.
+	ingress := false
+	egress := false
+	for _, policyType := range np.Spec.PolicyTypes {
+		switch policyType {
+		case extensions.PolicyTypeIngress:
+			ingress = true
+		case extensions.PolicyTypeEgress:
+			egress = true
+		}
+	}
+	types := []string{}
+	if ingress {
+		types = append(types, "ingress")
+	}
+	if egress {
+		types = append(types, "egress")
+	} else if len(outboundRules) > 0 {
+		// Egress was introduced at the same time as policyTypes.  It shouldn't be possible to
+		// receive a NetworkPolicy with an egress rule but without "egress" specified in its types,
+		// but we'll warn about it anyway.
+		log.Warn("K8s PolicyTypes don't include 'egress', but NetworkPolicy has egress rules.")
+	}
+
+	// If no types were specified in the policy, then we're running on a cluster that doesn't
+	// include support for that field in the API.  In that case, the correct behavior is for the policy
+	// to apply to only ingress traffic.
+	if len(types) == 0 {
+		types = append(types, "ingress")
 	}
 
 	// Build and return the KVPair.
@@ -253,10 +290,11 @@ func (c Converter) NetworkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.K
 		},
 		Value: &apiv2.GlobalNetworkPolicy{
 			Spec: apiv2.PolicySpec{
-				Order:        &order,
-				Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
-				IngressRules: ingressRules,
-				Types:        []apiv2.PolicyType{apiv2.PolicyTypeIngress},
+				Order:         &order,
+				Selector:      c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
+				IngressRules:  ingressRules,
+				OutboundRules: outboundRules,
+				Types:         types,
 			},
 		},
 		Revision: np.ObjectMeta.ResourceVersion,
@@ -312,21 +350,22 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) stri
 	return strings.Join(selectors, " && ")
 }
 
-func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule, ns string) []apiv2.Rule {
+func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts []extensions.NetworkPolicyPort, ns string, ingress bool) []apiv2.Rule {
 	rules := []apiv2.Rule{}
 	peers := []*extensions.NetworkPolicyPeer{}
 	ports := []*extensions.NetworkPolicyPort{}
 
 	// Built up a list of the sources and a list of the destinations.
-	for _, f := range r.From {
+	for _, f := range rPeers {
 		// We need to add a copy of the peer so all the rules don't
 		// point to the same location.
 		peers = append(peers, &extensions.NetworkPolicyPeer{
 			NamespaceSelector: f.NamespaceSelector,
 			PodSelector:       f.PodSelector,
+			IPBlock:           f.IPBlock,
 		})
 	}
-	for _, p := range r.Ports {
+	for _, p := range rPorts {
 		// We need to add a copy of the port so all the rules don't
 		// point to the same location.
 		port := extensions.NetworkPolicyPort{}
@@ -340,7 +379,7 @@ func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 			port.Protocol = &protoTCP
 		}
 		if p.Protocol != nil {
-			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
+			protval := extensions.Protocol(fmt.Sprintf("%s", *p.Protocol))
 			port.Protocol = &protval
 		}
 		ports = append(ports, &port)
@@ -359,41 +398,46 @@ func (c Converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 	// into a rule.  We can combine these so that we don't need as many rules!
 	for _, port := range ports {
 		for _, peer := range peers {
-			// Build rule and append to list.
-			rules = append(rules, c.buildRule(port, peer, ns))
+			protocol, dstPorts := c.k8sPortToCalicoFields(port)
+			selector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
+			if ingress {
+				// Build inbound rule and append to list.
+				rules = append(rules, model.Rule{
+					Action:      "allow",
+					Protocol:    protocol,
+					DstPorts:    dstPorts,
+					SrcSelector: selector,
+					SrcNets:     nets,
+					NotSrcNets:  notNets,
+				})
+			} else {
+				// Build outbound rule and append to list.
+				rules = append(rules, model.Rule{
+					Action:      "allow",
+					Protocol:    protocol,
+					DstPorts:    dstPorts,
+					DstSelector: selector,
+					DstNets:     nets,
+					NotDstNets:  notNets,
+				})
+			}
 		}
 	}
 	return rules
 }
 
-func (c Converter) buildRule(port *extensions.NetworkPolicyPort, peer *extensions.NetworkPolicyPeer, ns string) apiv2.Rule {
-	var protocol *numorstring.Protocol
-	var dstPorts []numorstring.Port
-	srcSelector := ""
-	if port != nil {
-		// Port information available.
-		protocol = c.k8sProtocolToCalico(port.Protocol)
-		dstPorts = c.k8sPortToCalico(*port)
+func (c Converter) k8sPortToCalicoFields(port *extensions.NetworkPolicyPort) (protocol *numorstring.Protocol, dstPorts []numorstring.Port) {
+	// If no port info, return zero values for all fields (protocol, dstPorts).
+	if port == nil {
+		return
 	}
-	if peer != nil {
-		// Peer information available.
-		srcSelector = c.k8sPeerToCalicoSelector(*peer, ns)
-	}
-
-	// Build the rule.
-	return apiv2.Rule{
-		Action:   "allow",
-		Protocol: protocol,
-		Source: apiv2.EntityRule{
-			Selector: srcSelector,
-		},
-		Destination: apiv2.EntityRule{
-			Ports: dstPorts,
-		},
-	}
+	// Port information available.
+	protocol = c.k8sProtocolToCalico(port.Protocol)
+	dstPorts = c.k8sPortToCalico(*port)
+	return
 }
 
-func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
+func (c Converter) k8sProtocolToCalico(protocol *extensions.Protocol) *numorstring.Protocol {
 	if protocol != nil {
 		p := numorstring.ProtocolFromString(strings.ToLower(string(*protocol)))
 		return &p
@@ -401,18 +445,44 @@ func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.P
 	return nil
 }
 
-func (c Converter) k8sPeerToCalicoSelector(peer extensions.NetworkPolicyPeer, ns string) string {
+func (c Converter) k8sPeerToCalicoFields(peer *extensions.NetworkPolicyPeer, ns string) (selector string, nets []*cnet.IPNet, notNets []*cnet.IPNet) {
+	// If no peer, return zero values for all fields (selector, nets and !nets).
+	if peer == nil {
+		return
+	}
+	// Peer information available.
 	// Determine the source selector for the rule.
 	// Only one of PodSelector / NamespaceSelector can be defined.
 	if peer.PodSelector != nil {
-		return c.k8sSelectorToCalico(peer.PodSelector, &ns)
+		selector = c.k8sSelectorToCalico(peer.PodSelector, &ns)
+		return
 	}
 	if peer.NamespaceSelector != nil {
-		return c.k8sSelectorToCalico(peer.NamespaceSelector, nil)
+		selector = c.k8sSelectorToCalico(peer.NamespaceSelector, nil)
+		return
 	}
+	if peer.IPBlock != nil {
+		// Convert the CIDR to include.
+		_, ipNet, err := cnet.ParseCIDR(peer.IPBlock.CIDR)
+		if err != nil {
+			log.WithField("cidr", peer.IPBlock.CIDR).WithError(err).Error("Failed to parse CIDR")
+			return
+		}
+		nets = []*cnet.IPNet{ipNet}
 
-	// Neither is defined - return an empty selector.
-	return ""
+		// Convert the CIDRs to exclude.
+		notNets = []*cnet.IPNet{}
+		for _, exception := range peer.IPBlock.Except {
+			_, ipNet, err = cnet.ParseCIDR(exception)
+			if err != nil {
+				log.WithField("cidr", exception).WithError(err).Error("Failed to parse CIDR")
+				return
+			}
+			notNets = append(notNets, ipNet)
+		}
+		return
+	}
+	return
 }
 
 func (c Converter) k8sPortToCalico(port extensions.NetworkPolicyPort) []numorstring.Port {

@@ -4,7 +4,8 @@ default: all
 all: test
 test: ut
 
-K8S_VERSION=v1.7.3
+K8S_VERSION=v1.8.0-beta.1
+KUBECTL_VERSION=v1.7.3
 CALICO_BUILD?=calico/go-build
 PACKAGE_NAME?=projectcalico/libcalico-go
 LOCAL_USER_ID?=$(shell id -u $$USER)
@@ -78,13 +79,13 @@ run-kubernetes-master: stop-kubernetes-master
                         --v=5
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
-	# from the manifest crds.yaml 
+	# from the manifest crds.yaml
 	docker run \
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
-		--server=http://localhost:8080 \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		--server=http://127.0.0.1:8080 \
 		apply -f manifests/test/crds.yaml
 
 	# Create a Node in the API for the tests to use.
@@ -92,8 +93,8 @@ run-kubernetes-master: stop-kubernetes-master
 	    --net=host \
 	    --rm \
 		-v  $(CURDIR):/manifests \
-		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
-		--server=http://localhost:8080 \
+		lachlanevenson/k8s-kubectl:${KUBECTL_VERSION} \
+		--server=http://127.0.0.1:8080 \
 		apply -f manifests/test/mock-node.yaml
 
 ## Stop the local kubernetes master
@@ -101,7 +102,7 @@ stop-kubernetes-master:
 	# Delete the cluster role binding.
 	-docker exec st-apiserver kubectl delete clusterrolebinding anonymous-admin
 
-	# Stop master components. 
+	# Stop master components.
 	-docker rm -f st-apiserver st-controller-manager
 
 ## Stop the etcd container (calico-etcd)

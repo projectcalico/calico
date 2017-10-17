@@ -976,28 +976,71 @@ func init() {
 		Entry("should reject node with IPv4 address in IPv6 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: &netv4_1}}, false),
 		Entry("should reject Policy with both PreDNAT and DoNotTrack",
 			api.PolicySpec{
-				PreDNAT:    true,
-				DoNotTrack: true,
+				PreDNAT:        true,
+				DoNotTrack:     true,
+				ApplyOnForward: true,
 			}, false),
 		Entry("should accept Policy with PreDNAT but not DoNotTrack",
 			api.PolicySpec{
-				PreDNAT: true,
+				PreDNAT:        true,
+				ApplyOnForward: true,
 			}, true),
 		Entry("should accept Policy with DoNotTrack but not PreDNAT",
 			api.PolicySpec{
-				PreDNAT:    false,
-				DoNotTrack: true,
+				PreDNAT:        false,
+				DoNotTrack:     true,
+				ApplyOnForward: true,
 			}, true),
 		Entry("should reject pre-DNAT Policy with egress rules",
 			api.PolicySpec{
-				PreDNAT:     true,
-				EgressRules: []api.Rule{{Action: "allow"}},
+				PreDNAT:        true,
+				ApplyOnForward: true,
+				EgressRules:    []api.Rule{{Action: "allow"}},
 			}, false),
 		Entry("should accept pre-DNAT Policy with ingress rules",
 			api.PolicySpec{
-				PreDNAT:      true,
-				IngressRules: []api.Rule{{Action: "allow"}},
+				PreDNAT:        true,
+				ApplyOnForward: true,
+				IngressRules:   []api.Rule{{Action: "allow"}},
 			}, true),
+
+		// PolicySpec ApplyOnForward field checks.
+		Entry("should accept Policy with ApplyOnForward but not PreDNAT",
+			api.PolicySpec{
+				PreDNAT:        false,
+				ApplyOnForward: true,
+			}, true),
+		Entry("should accept Policy with ApplyOnForward but not DoNotTrack",
+			api.PolicySpec{
+				DoNotTrack:     false,
+				ApplyOnForward: true,
+			}, true),
+		Entry("should accept Policy with ApplyOnForward and PreDNAT",
+			api.PolicySpec{
+				PreDNAT:        true,
+				ApplyOnForward: true,
+			}, true),
+		Entry("should accept Policy with ApplyOnForward and DoNotTrack",
+			api.PolicySpec{
+				DoNotTrack:     true,
+				ApplyOnForward: true,
+			}, true),
+		Entry("should accept Policy with no ApplyOnForward DoNotTrack PreDNAT",
+			api.PolicySpec{
+				PreDNAT:        false,
+				DoNotTrack:     false,
+				ApplyOnForward: false,
+			}, true),
+		Entry("should reject Policy with PreDNAT but not ApplyOnForward",
+			api.PolicySpec{
+				PreDNAT:        true,
+				ApplyOnForward: false,
+			}, false),
+		Entry("should reject Policy with DoNotTrack but not ApplyOnForward",
+			api.PolicySpec{
+				DoNotTrack:     true,
+				ApplyOnForward: false,
+			}, false),
 
 		// PolicySpec Types field checks.
 		Entry("allow missing Types", api.PolicySpec{}, true),
@@ -1007,16 +1050,22 @@ func init() {
 		Entry("allow ingress+egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}}, true),
 		Entry("disallow repeated egress Types", api.PolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress}}, false),
 		Entry("disallow unexpected value", api.PolicySpec{Types: []api.PolicyType{"unexpected"}}, false),
-		Entry("disallow Types without ingress when IngressRules present",
+
+		// In the initial implementation, we validated against the following two cases but we found
+		// that prevented us from doing a smooth upgrade from type-less to typed policy since we
+		// couldn't write a policy that would work for back-level Felix instances while also
+		// specifying the type for up-level Felix instances.
+		Entry("allow Types without ingress when IngressRules present",
 			api.PolicySpec{
 				IngressRules: []api.Rule{{Action: "allow"}},
 				Types:        []api.PolicyType{api.PolicyTypeEgress},
-			}, false),
-		Entry("disallow Types without egress when EgressRules present",
+			}, true),
+		Entry("allow Types without egress when EgressRules present",
 			api.PolicySpec{
 				EgressRules: []api.Rule{{Action: "allow"}},
 				Types:       []api.PolicyType{api.PolicyTypeIngress},
-			}, false),
+			}, true),
+
 		Entry("allow Types with ingress when IngressRules present",
 			api.PolicySpec{
 				IngressRules: []api.Rule{{Action: "allow"}},
@@ -1039,18 +1088,21 @@ func init() {
 			}, true),
 		Entry("allow ingress Types with pre-DNAT",
 			api.PolicySpec{
-				PreDNAT: true,
-				Types:   []api.PolicyType{api.PolicyTypeIngress},
+				PreDNAT:        true,
+				ApplyOnForward: true,
+				Types:          []api.PolicyType{api.PolicyTypeIngress},
 			}, true),
 		Entry("disallow egress Types with pre-DNAT",
 			api.PolicySpec{
-				PreDNAT: true,
-				Types:   []api.PolicyType{api.PolicyTypeEgress},
+				PreDNAT:        true,
+				ApplyOnForward: true,
+				Types:          []api.PolicyType{api.PolicyTypeEgress},
 			}, false),
 		Entry("disallow ingress+egress Types with pre-DNAT",
 			api.PolicySpec{
-				PreDNAT: true,
-				Types:   []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				PreDNAT:        true,
+				ApplyOnForward: true,
+				Types:          []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
 			}, false),
 	)
 }
