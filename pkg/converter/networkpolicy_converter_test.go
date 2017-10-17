@@ -15,7 +15,7 @@
 package converter_test
 
 import (
-	"github.com/projectcalico/k8s-policy/pkg/converter"
+	"github.com/projectcalico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"

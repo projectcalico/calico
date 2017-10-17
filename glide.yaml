@@ -1,4 +1,4 @@
-package: github.com/projectcalico/k8s-policy
+package: github.com/projectcalico/kube-controllers
 description: Calico Policy Controller
 homepage: https://projectcalico.org
 license: Apache-2.0

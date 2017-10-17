@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/k8s-policy/tests/testutils"
+	"github.com/projectcalico/kube-controllers/tests/testutils"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"

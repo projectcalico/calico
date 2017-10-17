@@ -60,7 +60,7 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	calicoPolicy := policy.(*api.Policy)
 
 	// To ease upgrade path, create an allow-all Egress rule, but with Types: Ingress
-	// In the case where there's an older Felix interoperating with a new k8s-policy
+	// In the case where there's an older Felix interoperating with a new kube-controllers
 	// controller, Felix will respect the egress rule and ignore the types field.
 	// When Felix is upgraded, it will ignore the Egress allow-all rule due to
 	// Types: Ingress.

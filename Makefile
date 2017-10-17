@@ -19,7 +19,7 @@ default: help
 
 # Makefile configuration options 
 CONTAINER_NAME=calico/kube-controllers$(ARCHTAG)
-PACKAGE_NAME?=github.com/projectcalico/k8s-policy
+PACKAGE_NAME?=github.com/projectcalico/kube-controllers
 GO_BUILD_VER:=latest
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 LIBCALICOGO_PATH?=none
@@ -35,9 +35,9 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                    docker run --rm \
                               --net=host \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-                              -v $${PWD}:/go/src/github.com/projectcalico/k8s-policy:rw \
+                              -v $${PWD}:/go/src/github.com/projectcalico/kube-controllers:rw \
                               -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
-                              -w /go/src/github.com/projectcalico/k8s-policy \
+                              -w /go/src/github.com/projectcalico/kube-controllers \
                               $(CALICO_BUILD)
 
 ###############################################################################
