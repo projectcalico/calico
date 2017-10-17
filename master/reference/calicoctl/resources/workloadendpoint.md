@@ -1,14 +1,14 @@
 ---
-title: Workload Endpoint Resource (workloadEndpoint)
+title: Workload Endpoint Resource (WorkloadEndpoint)
 ---
 
-A Workload Endpoint resource (workloadEndpoint) represents an interface
+A workload endpoint resource (`WorkloadEndpoint`) represents an interface
 connecting a Calico networked container or VM to its host.
 
 Each endpoint may specify a set of labels and list of profiles that Calico will use
 to apply policy to the interface.
 
-For `calicoctl` commands that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
 
 > **Note**: While `calicoctl` allows the user to fully manage Workload Endpoint resources,
@@ -22,17 +22,19 @@ aliases are supported (all case insensitive): `workloadendpoint`, `workloadendpo
 ### Sample YAML
 
 ```yaml
-apiVersion: v1
-kind: workloadEndpoint
+apiVersion: projectcalico.org/v2
+kind: WorkloadEndpoint
 metadata:
-  name: eth0
-  workload: default.frontend-5gs43
-  orchestrator: k8s
-  node: rack1-host1
+  name: node1-k8s-frontend--5gs43-eth0
+  namespace: default
   labels:
     app: frontend
     calico/k8s_ns: default
 spec:
+  node: node1
+  orchestrator: k8s
+  endpoint: eth0
+  containerID: 1337495556942031415926535
   interfaceName: cali0ef24ba
   mac: ca:fe:1d:52:bb:e9
   ipNetworks:
@@ -54,16 +56,17 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| name           | The name of this endpoint resource.                     |  | string |
-| workload       | The name of the workload to which this endpoint belongs. |  | string |
-| orchestrator   | The orchestrator that created this endpoint.  |  | string |
-| node           | The node where this endpoint resides.   |  | string |
-| labels         | A set of labels to apply to this endpoint.              |  | map |
+| name      | The name of this workload endpoint resource. Reqired. |  Alphanumeric string with optional `.`, `_`, `-`, or `/` | string | |
+| namespace | Namespace provides an additional qualification to a resource name. | | map | "default" |
 
 #### Spec
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
+| workload       | The name of the workload to which this endpoint belongs. |  | string |
+| orchestrator   | The orchestrator that created this endpoint.  |  | string |
+| node           | The node where this endpoint resides.   |  | string |
+| labels         | A set of labels to apply to this endpoint.              |  | map |
 | ipNetworks    | The CIDRs assigned to the interface. |  | List of strings |
 | profiles      | List of profiles assigned to this endpoint.             | | List of strings |
 | interfaceName | The name of the host-side interface attached to the workload. | | string |
@@ -78,5 +81,5 @@ spec:
 
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
-| etcdv2                | Yes           | Yes    | Yes      |
+| etcdv3                | Yes           | Yes    | Yes      |
 | Kubernetes API server | No            | Yes    | Yes      | WorkloadEndpoints are directly tied to a Kuberenetes Pod.

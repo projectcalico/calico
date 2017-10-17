@@ -3,7 +3,7 @@ title: Network Policy (Universal Containerizer)
 ---
 
 This document will demonstrate how to manipulate policy for Calico using
-[Policies]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy). Specifically, we will:
+[Policies]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy). Specifically, we will:
 
 - Set labels on our workload at launch
 - Configure policy based off these labels
