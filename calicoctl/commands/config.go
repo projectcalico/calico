@@ -159,8 +159,6 @@ The table below details the valid config options.
 		fmt.Printf("Error executing command: %s\n", err)
 		os.Exit(1)
 	}
-
-	return
 }
 
 // Config management interface.
