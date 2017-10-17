@@ -257,7 +257,7 @@ func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
 type SerializedUpdate struct {
 	Key        string
 	Value      []byte
-	Revision   interface{}
+	Revision   string
 	TTL        time.Duration
 	UpdateType api.UpdateType
 }
@@ -295,8 +295,8 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 func (s SerializedUpdate) WouldBeNoOp(previous SerializedUpdate) bool {
 	// We don't care if the revision has changed so nil it out.  Note: we're using the fact that this is a
 	// value type so these changes won't be propagated to the caller!
-	s.Revision = nil
-	previous.Revision = nil
+	s.Revision = ""
+	previous.Revision = ""
 
 	if previous.UpdateType == api.UpdateTypeKVNew {
 		// If the old update was a create, convert it to an update before the comparison since it's OK to
