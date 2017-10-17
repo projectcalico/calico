@@ -79,8 +79,15 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
+	// Update the return data with the metadata populated by the (Kubernetes) datastore.
+	kvp, err = c.convertResourceToKVPair(resOut)
+	if err != nil {
+		logContext.WithError(err).Info("Error converting created K8s resource to Calico resource")
+		return nil, K8sErrorToCalico(err, kvp.Key)
+	}
 	// Update the revision information from the response.
 	kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
+
 	return kvp, nil
 }
 
@@ -122,10 +129,15 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 		return nil, K8sErrorToCalico(updateError, kvp.Key)
 	}
 
-	resOut.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
-
+	// Update the return data with the metadata populated by the (Kubernetes) datastore.
+	kvp, err = c.convertResourceToKVPair(resOut)
+	if err != nil {
+		logContext.WithError(err).Info("Error converting created K8s resource to Calico resource")
+		return nil, K8sErrorToCalico(err, kvp.Key)
+	}
 	// Success. Update the revision information from the response.
 	kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
+
 	return kvp, nil
 }
 
@@ -198,8 +210,6 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		logContext.WithError(err).Info("Error getting resource")
 		return nil, K8sErrorToCalico(err, key)
 	}
-	resOut.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
-
 	return c.convertResourceToKVPair(resOut)
 }
 
@@ -276,8 +286,6 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	items := reflect.ValueOf(elem.FieldByName("Items").Interface())
 	for idx := 0; idx < items.Len(); idx++ {
 		res := items.Index(idx).Addr().Interface().(Resource)
-		res.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
-
 		if kvp, err := c.convertResourceToKVPair(res); err == nil {
 			kvps = append(kvps, kvp)
 		} else {
@@ -309,7 +317,6 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 		return nil, K8sErrorToCalico(err, list)
 	}
 	toKVPair := func(r Resource) (*model.KVPair, error) {
-		r.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
 		return c.convertResourceToKVPair(r)
 	}
 	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
@@ -341,22 +348,31 @@ func (c *customK8sResourceClient) nameToKey(name string) (model.Key, error) {
 }
 
 func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KVPair, error) {
+	r.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      r.GetObjectMeta().GetName(),
 			Namespace: r.GetObjectMeta().GetNamespace(),
 			Kind:      c.resourceKind,
 		},
-		Value:    r,
 		Revision: r.GetObjectMeta().GetResourceVersion(),
 	}
 
+	if err := ConvertK8sResourceToCalicoResource(r); err != nil {
+		return kvp, err
+	}
+
+	kvp.Value = r
 	return kvp, nil
 }
 
 func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resource, error) {
 	resource := kvp.Value.(Resource)
 	resource.GetObjectMeta().SetResourceVersion(kvp.Revision)
+	resOut, err := ConvertCalicoResourceToK8sResource(resource)
+	if err != nil {
+		return resOut, err
+	}
 
-	return resource, nil
+	return resOut, nil
 }

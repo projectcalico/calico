@@ -41,10 +41,19 @@ type networkPolicies struct {
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Create(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
 	defaultPolicyTypesField(&res.Spec)
+
+	// Properly prefix the name
+	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
+
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindNetworkPolicy, res)
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.NetworkPolicy), err
 	}
+
+	// Remove the prefix out of the returned policy name.
+	res.GetObjectMeta().SetName(convertPolicyNameFromStorage(res.GetObjectMeta().GetName()))
 	return nil, err
 }
 
@@ -52,17 +61,28 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv2.NetworkPolicy, o
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Update(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
 	defaultPolicyTypesField(&res.Spec)
+
+	// Properly prefix the name
+	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
+
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindNetworkPolicy, res)
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.NetworkPolicy), err
 	}
+
+	// Remove the prefix out of the returned policy name.
+	res.GetObjectMeta().SetName(convertPolicyNameFromStorage(res.GetObjectMeta().GetName()))
 	return nil, err
 }
 
 // Delete takes name of the NetworkPolicy and deletes it. Returns an error if one occurs.
 func (r networkPolicies) Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*apiv2.NetworkPolicy, error) {
-	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindNetworkPolicy, namespace, name)
+	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindNetworkPolicy, namespace, convertPolicyNameForStorage(name))
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.NetworkPolicy), err
 	}
 	return nil, err
@@ -71,8 +91,10 @@ func (r networkPolicies) Delete(ctx context.Context, namespace, name string, opt
 // Get takes name of the NetworkPolicy, and returns the corresponding NetworkPolicy object,
 // and an error if there is any.
 func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*apiv2.NetworkPolicy, error) {
-	out, err := r.client.resources.Get(ctx, opts, apiv2.KindNetworkPolicy, namespace, name)
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindNetworkPolicy, namespace, convertPolicyNameForStorage(name))
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.NetworkPolicy), err
 	}
 	return nil, err
@@ -84,6 +106,13 @@ func (r networkPolicies) List(ctx context.Context, opts options.ListOptions) (*a
 	if err := r.client.resources.List(ctx, opts, apiv2.KindNetworkPolicy, apiv2.KindNetworkPolicyList, res); err != nil {
 		return nil, err
 	}
+
+	// Remove the prefix off of each policy name
+	for i, _ := range res.Items {
+		name := res.Items[i].GetObjectMeta().GetName()
+		res.Items[i].GetObjectMeta().SetName(convertPolicyNameFromStorage(name))
+	}
+
 	return res, nil
 }
 

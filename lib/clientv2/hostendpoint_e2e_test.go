@@ -78,7 +78,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 
 			By("Updating the HostEndpoint before it is created")
 			_, outError := c.HostEndpoints().Update(ctx, &apiv2.HostEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-hostendpoint"},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -154,6 +154,24 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			res1, outError = c.HostEndpoints().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res1, apiv2.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
+
+			By("Attempting to update the HostEndpoint without a Creation Timestamp")
+			res, outError = c.HostEndpoints().Update(ctx, &apiv2.HostEndpoint{
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-hostendpoint"},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(res).To(BeNil())
+			Expect(outError.Error()).To(Equal("error with field Metadata.CreationTimestamp = '0001-01-01 00:00:00 +0000 UTC' (field must be set for an Update request)"))
+
+			By("Attempting to update the HostEndpoint without a UID")
+			res, outError = c.HostEndpoints().Update(ctx, &apiv2.HostEndpoint{
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now()},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(res).To(BeNil())
+			Expect(outError.Error()).To(Equal("error with field Metadata.UID = '' (field must be set for an Update request)"))
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion

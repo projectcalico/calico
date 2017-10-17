@@ -72,7 +72,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 
 			By("Updating the BGPConfiguration before it is created")
 			_, outError := c.BGPConfigurations().Update(ctx, &apiv2.BGPConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: nameDefault, ResourceVersion: "1234"},
+				ObjectMeta: metav1.ObjectMeta{Name: nameDefault, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-workload-bgpconfig"},
 				Spec:       specDefault1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -148,6 +148,24 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			res1, outError = c.BGPConfigurations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res1, apiv2.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
+
+			By("Attempting to update the BGPConfiguration without a Creation Timestamp")
+			res, outError = c.BGPConfigurations().Update(ctx, &apiv2.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", UID: "test-fail-bgpconfig"},
+				Spec:       specInfo,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(res).To(BeNil())
+			Expect(outError.Error()).To(Equal("error with field Metadata.CreationTimestamp = '0001-01-01 00:00:00 +0000 UTC' (field must be set for an Update request)"))
+
+			By("Attempting to update the BGPConfiguration without a UID")
+			res, outError = c.BGPConfigurations().Update(ctx, &apiv2.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now()},
+				Spec:       specInfo,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(res).To(BeNil())
+			Expect(outError.Error()).To(Equal("error with field Metadata.UID = '' (field must be set for an Update request)"))
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion

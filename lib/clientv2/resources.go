@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/uuid"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -83,6 +84,15 @@ func (c *resources) Create(ctx context.Context, opts options.SetOptions, kind st
 		return nil, err
 	}
 
+	// Add in the UID and creation timestamp for the resource if needed.
+	creationTimestamp := in.GetObjectMeta().GetCreationTimestamp()
+	if creationTimestamp.IsZero() {
+		in.GetObjectMeta().SetCreationTimestamp(v1.Now())
+	}
+	if in.GetObjectMeta().GetUID() == "" {
+		in.GetObjectMeta().SetUID(uuid.NewUUID())
+	}
+
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
 	kvp, err := c.backend.Create(ctx, c.resourceToKVPair(opts, kind, in))
@@ -107,6 +117,25 @@ func (c *resources) Update(ctx context.Context, opts options.SetOptions, kind st
 	}
 	if err := c.checkNamespace(in.GetObjectMeta().GetNamespace(), kind); err != nil {
 		return nil, err
+	}
+	creationTimestamp := in.GetObjectMeta().GetCreationTimestamp()
+	if creationTimestamp.IsZero() {
+		return nil, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "Metadata.CreationTimestamp",
+				Reason: "field must be set for an Update request",
+				Value:  in.GetObjectMeta().GetCreationTimestamp(),
+			}},
+		}
+	}
+	if in.GetObjectMeta().GetUID() == "" {
+		return nil, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "Metadata.UID",
+				Reason: "field must be set for an Update request",
+				Value:  in.GetObjectMeta().GetUID(),
+			}},
+		}
 	}
 
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
