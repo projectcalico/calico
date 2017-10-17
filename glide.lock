@@ -1,5 +1,5 @@
-hash: af409d227582ea2fff9772436e0a61adecd74f669cb35d9a1511365f6c4c0066
-updated: 2017-10-13T12:55:49.807800024Z
+hash: d4313abb73748d9165d6311acb0ef002e2fc22ffb6238a7f7c29276183f29b8f
+updated: 2017-10-17T10:53:29.787681934Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,13 +13,14 @@ imports:
 - name: github.com/coreos/etcd
   version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
   subpackages:
+  - auth/authpb
   - client
-  - pkg/pathutil
-  - pkg/srv
+  - clientv3
+  - etcdserver/api/v3rpc/rpctypes
+  - etcdserver/etcdserverpb
+  - mvcc/mvccpb
   - pkg/tlsutil
   - pkg/transport
-  - pkg/types
-  - version
 - name: github.com/coreos/go-oidc
   version: be73733bb8cc830d0205609b95d125215f8e9c70
   subpackages:
@@ -28,10 +29,6 @@ imports:
   - key
   - oauth2
   - oidc
-- name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
-  subpackages:
-  - semver
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
@@ -59,7 +56,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 20b96f641a5ea98f2f8619ff4f3e061cff4833bd
+  version: 5b3e00af70a9484542169a976dcab8d03e601a17
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -126,6 +123,20 @@ imports:
   - reporters/stenographer/support/go-colorable
   - reporters/stenographer/support/go-isatty
   - types
+- name: github.com/onsi/gomega
+  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -135,27 +146,32 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: cc6687459006bd22a2ddc6b1f3d70d77ab5d0b1e
+  version: 3423c044727ae3ea05c2dc0ad9f15b99354cd447
   subpackages:
   - lib
   - lib/api
   - lib/api/unversioned
+  - lib/apiconfig
+  - lib/apiv2
   - lib/backend
   - lib/backend/api
   - lib/backend/compat
-  - lib/backend/etcd
-  - lib/backend/extensions
+  - lib/backend/etcdv3
   - lib/backend/k8s
-  - lib/backend/k8s/custom
   - lib/backend/k8s/resources
   - lib/backend/model
+  - lib/backend/syncersv1/felixsyncer
+  - lib/backend/syncersv1/updateprocessors
+  - lib/backend/watchersyncer
   - lib/client
   - lib/converter
   - lib/errors
   - lib/hash
   - lib/health
-  - lib/hwm
+  - lib/ipam
   - lib/ipip
+  - lib/names
+  - lib/namespace
   - lib/net
   - lib/numorstring
   - lib/scope
@@ -165,8 +181,9 @@ imports:
   - lib/set
   - lib/testutils
   - lib/validator
+  - lib/watch
 - name: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
+  version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
   - prometheus
   - prometheus/promhttp
@@ -175,13 +192,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -191,7 +208,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
@@ -204,7 +221,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: d172538b2cfce0c13cee31e647d0367aa8cd2486
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -219,7 +236,9 @@ imports:
   - http2/hpack
   - idna
   - idna/
+  - internal/timeseries
   - lex/httplex
+  - trace
 - name: golang.org/x/oauth2
   version: 3c3a985cb79f52a3190fbc056984415ca6763d01
   subpackages:
@@ -228,9 +247,10 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 43eea11bc92608addb41b8a406b0407495c106f6
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
   version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
@@ -268,14 +288,24 @@ imports:
   - internal/remote_api
   - internal/urlfetch
   - urlfetch
+- name: google.golang.org/grpc
+  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
+  subpackages:
+  - codes
+  - credentials
+  - grpclog
+  - internal
+  - keepalive
+  - metadata
+  - naming
+  - peer
+  - stats
+  - tap
+  - transport
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
-- name: gopkg.in/tchap/go-patricia.v2
-  version: 666120de432aea38ab06bd5c818f04f4129882c9
-  subpackages:
-  - patricia
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/apimachinery
@@ -409,18 +439,4 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
-testImports:
-- name: github.com/onsi/gomega
-  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
-  subpackages:
-  - format
-  - internal/assertion
-  - internal/asyncassertion
-  - internal/oraclematcher
-  - internal/testingtsupport
-  - matchers
-  - matchers/support/goraph/bipartitegraph
-  - matchers/support/goraph/edge
-  - matchers/support/goraph/node
-  - matchers/support/goraph/util
-  - types
+testImports: []
