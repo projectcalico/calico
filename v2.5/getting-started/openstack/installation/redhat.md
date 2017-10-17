@@ -271,7 +271,7 @@ On each control node, perform the following steps:
     > left around.
     >
 
-3.  Edit the `/etc/neutron/neutron.conf` file. In the \[DEFAULT\]
+3.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
     section:
     -   Find the line beginning with `core_plugin`, and change it to
         read `core_plugin = calico`.
@@ -335,7 +335,7 @@ On each compute node, perform the following steps:
         service libvirtd restart
     ```
 
-2.  Open `/etc/nova/nova.conf` and remove the line from the \[DEFAULT\]
+2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
     ```

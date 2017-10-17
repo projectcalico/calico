@@ -195,13 +195,13 @@ perform the following steps:
         $ sudo apt-get install calico-control
     ```
 
-3.  Edit the `/etc/neutron/neutron.conf` file. In the [DEFAULT]
+3.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
     section:
     -   Find the line beginning with `core_plugin`, and change it to
         read `core_plugin = calico`.
 
 4.  With OpenStack releases earlier than Liberty, edit the
-    `/etc/neutron/neutron.conf` file. In the [DEFAULT] section:
+    `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section:
     -   Find the line for the `dhcp_agents_per_network` setting,
         uncomment it, and set its value to the number of compute nodes
         that you will have (or any number larger than that). This allows
@@ -251,7 +251,7 @@ perform the following steps:
         $ sudo service libvirt-bin restart
     ```
 
-2.  Open `/etc/nova/nova.conf` and remove the line from the \[DEFAULT\]
+2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
     ```shell
@@ -307,7 +307,7 @@ perform the following steps:
     will bring in Calico-specific updates to the OpenStack packages and
     to `dnsmasq`. For OpenStack Liberty, this step only upgrades
     `dnsmasq`.
-    
+
     > **Important**: Check the version of libvirt-bin that is installed using
     > `dpkg -s libvirt-bin`. For Kilo, the version of libvirt-bin
     > should be at least `1.2.12-0ubuntu13`. This will become part
@@ -319,7 +319,7 @@ perform the following steps:
     > `$ sudo apt-get update`
     >
     > `$ sudo apt-get upgrade`
-    >  
+    >
     {: .alert .alert-danger}
 
 
