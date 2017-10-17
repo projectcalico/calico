@@ -15,16 +15,12 @@
 package main
 
 import (
-	"net/http"
-	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 var _ = Describe("calculation graph scale test", func() {
@@ -48,60 +44,9 @@ var _ = Describe("calculation graph scale test", func() {
 		Expect(create1000Pods(clientset, nsPrefix)).To(BeNil())
 	})
 
-	It("health endpoint should indicate not ready", func() {
-		// Because there is no config for the local node.
-		triggerFelixRestart()
-		for i := 0; i < 20; i++ {
-			Expect(getHealthStatus("readiness")()).To(BeNumerically("==", health.StatusBad))
-			time.Sleep(500 * time.Millisecond)
-		}
-	})
-
-	It("health endpoint should indicate not live", func() {
-		// Because there is no config for the local node.
-		triggerFelixRestart()
-		for i := 0; i < 20; i++ {
-			Expect(getHealthStatus("liveness")()).To(BeNumerically("==", health.StatusBad))
-			time.Sleep(500 * time.Millisecond)
-		}
-	})
-
-	Context("with a local host", func() {
-		BeforeEach(func() {
-			triggerFelixRestart()
-			_ = NewDeployment(clientset, 0, true)
-		})
-
-		It("should see health readiness endpoint", func() {
-			Eventually(getHealthStatus("readiness"), "20s", "0.5s").Should(BeNumerically("==", health.StatusGood))
-		})
-
-		It("should see health liveness endpoint", func() {
-			Eventually(getHealthStatus("liveness"), "20s", "0.5s").Should(BeNumerically("==", health.StatusGood))
-		})
-	})
-
 	AfterEach(func() {
 		log.Info(">>> AfterEach <<<")
 		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})
 })
-
-func getHealthStatus(endpoint string) func() int {
-	return func() int {
-		resp, err := http.Get("http://" + felixIP + ":9099/" + endpoint)
-		if err != nil {
-			log.WithError(err).Error("HTTP GET failed")
-			return health.StatusBad
-		}
-		log.WithField("resp", resp).Info("Health response")
-		defer resp.Body.Close()
-		return resp.StatusCode
-	}
-}
-
-func triggerFelixRestart() {
-	exec.Command("pkill", "-TERM", "calico-felix").Run()
-	time.Sleep(1 * time.Second)
-}

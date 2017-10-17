@@ -28,6 +28,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/fv/utils"
 )
 
 var _ = Describe("with running container", func() {
@@ -38,7 +40,7 @@ var _ = Describe("with running container", func() {
 	cmdInContainer := func(cmd ...string) *exec.Cmd {
 		arg := []string{"exec", containerName}
 		arg = append(arg, cmd...)
-		return exec.Command("docker", arg...)
+		return utils.Command("docker", arg...)
 	}
 
 	BeforeEach(func() {
@@ -54,7 +56,7 @@ var _ = Describe("with running container", func() {
 		// but the calico/felix container has all the iptables dependencies we need to
 		// check the lock behaviour.  Note: we don't map the host's iptables lock into the
 		// container so the scope of the lock is limited to the container.
-		felixCmd = exec.Command("docker", "run",
+		felixCmd = utils.Command("docker", "run",
 			"--rm",
 			"--name", containerName,
 			"-v", fmt.Sprintf("%s/..:/codebase", myDir),
@@ -66,7 +68,7 @@ var _ = Describe("with running container", func() {
 		log.Info("Waiting for container to be listed in docker ps")
 		start := time.Now()
 		for {
-			cmd := exec.Command("docker", "ps")
+			cmd := utils.Command("docker", "ps")
 			out, err := cmd.CombinedOutput()
 			Expect(err).NotTo(HaveOccurred())
 			if strings.Contains(string(out), containerName) {

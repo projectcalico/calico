@@ -23,46 +23,11 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/metrics"
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
-
-func RunEtcd() *containers.Container {
-	return containers.Run("etcd-fv",
-		"quay.io/coreos/etcd",
-		"etcd",
-		"--advertise-client-urls", "http://127.0.0.1:2379",
-		"--listen-client-urls", "http://0.0.0.0:2379")
-}
-
-func RunFelix(etcdIP string) *containers.Container {
-	return containers.Run("felix-fv",
-		"--privileged",
-		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
-		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
-		"-e", "FELIX_DATASTORETYPE=etcdv2",
-		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
-		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT=false",
-		"calico/felix:latest")
-}
-
-func GetEtcdClient(etcdIP string) *client.Client {
-	client, err := client.New(api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.EtcdV2,
-			EtcdConfig: api.EtcdConfig{
-				EtcdEndpoints: "http://" + etcdIP + ":2379",
-			},
-		},
-	})
-	Expect(err).NotTo(HaveOccurred())
-	return client
-}
 
 func MetricsPortReachable(felix *containers.Container) bool {
 	// Delete existing conntrack state for the metrics port.
@@ -105,18 +70,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	)
 
 	BeforeEach(func() {
-
-		etcd = RunEtcd()
-
-		client = GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
-
-		felix = RunFelix(etcd.IP)
-
-		felixNode := api.NewNode()
-		felixNode.Metadata.Name = felix.Hostname
-		_, err := client.Nodes().Create(felixNode)
-		Expect(err).NotTo(HaveOccurred())
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
 
 		metricsPortReachable = func() bool {
 			return MetricsPortReachable(felix)
@@ -126,7 +80,6 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
-			utils.Run("docker", "logs", felix.Name)
 			felix.Exec("iptables-save", "-c")
 		}
 		felix.Stop()
@@ -142,7 +95,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	})
 
 	It("with a local workload, port should be reachable", func() {
-		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055")
+		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", "tcp")
 		w.Configure(client)
 		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
 		w.Stop()
@@ -171,6 +124,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 				policy := api.NewPolicy()
 				policy.Metadata.Name = "pre-dnat-policy-1"
 				policy.Spec.PreDNAT = true
+				policy.Spec.ApplyOnForward = true
 				protocol := numorstring.ProtocolFromString("tcp")
 				allowMetricsPortRule := api.Rule{
 					Action:   "allow",

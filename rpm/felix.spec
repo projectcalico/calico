@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.5.0
+Version:        2.6.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -151,6 +151,45 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Sep 26 2017 Brendan Creane <brendan@tigera.io> 2.6.0-1
+  - Felix 2.6.0 (from Git commit 64caa62).
+    [Changes recorded in 2.6.0 tag]
+    By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
+    v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
+    
+    In addition, libcalico-go now supports a new `Types` field which
+    specifies whether a rule should apply to `ingress`, `egress` or
+    both types of traffic.
+    
+    - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
+    - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
+    - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)
+    - Adding support for ppc64le. [#1516](https://github.com/projectcalico/felix/pull/1516)
+
+* Tue Sep 26 2017 Neil Jerram <neil@tigera.io> 2.6.0-0.1.rc2
+  - Felix 2.6.0-rc2 (from Git commit 5a0cb38).
+
+    This is a pre-release of Calico's per-host agent, Felix.
+
+    By upgrading libcalico-go to v1.7.0 [#1559], we add support for
+    Kubernetes' v1.8.0 NetworkPolicy with Egress rule and IPBlock
+    functionality.
+
+    In addition, libcalico-go now supports a new `Types` field which
+    specifies whether a rule should apply to `ingress`, `egress` or
+    both types of traffic.
+
+    - Allow Policy to explicitly govern ingress and/or egress [#1557]
+
+    Other changes in this pre-release since 2.5.0 are:
+    - Add read/write timeout options for Typha connection. [#1538]
+    - Fix OpenStack detection heuristic to ignore 'none'. [#1556]
+    - Adding support for ppc64le. [#1516]
+    - Add timeouts to Typha/Felix connection to detect silent TCP
+      drops. [#1537, #1538]
+    - Testing enhancements. [#1551]
+    - Add a configurable timeout to netlink operations. [#1526]
+
 * Tue Aug 22 2017 Neil Jerram <neil@tigera.io> 2.5.0-1
   - Felix 2.5.0 (from Git commit daa250c).
     [Changes recorded in 2.5.0 tag]

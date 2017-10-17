@@ -99,29 +99,29 @@ var ruleTestData = []TableEntry{
 		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{8}}},
 		"! -p 8"),
 
-	Entry("Source net", 4,
+	Entry("Negated source net", 4,
 		proto.Rule{NotSrcNet: []string{"10.0.0.0/16"}},
 		"! --source 10.0.0.0/16"),
-	Entry("Source IP set", 4,
+	Entry("Negated source IP set", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali4-ipsetid1 src"),
-	Entry("Source IP set v6", 6,
+	Entry("Negated source IP set v6", 6,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali6-ipsetid1 src"),
-	Entry("Source IP sets", 4,
+	Entry("Negated source IP sets", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
 		"-m set ! --match-set cali4-ipsetid1 src -m set ! --match-set cali4-ipsetid2 src"),
-	Entry("Source ports", 4,
+	Entry("Negated source ports", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --source-ports 10:12"),
-	Entry("Source ports (multiple)", 4,
+	Entry("Negated source ports (multiple)", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
 			{First: 20, Last: 30},
 			{First: 8080, Last: 8080},
 		}},
 		"-m multiport ! --source-ports 10:12,20:30,8080"),
-	Entry("Source ports (>15) should be broken into blocks", 4,
+	Entry("Negated source ports (>15) should be broken into blocks", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{
 			{First: 1, Last: 2},
 			{First: 3, Last: 4},
@@ -288,11 +288,18 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	const (
-		clearBothMarksRule      = "-A test --jump MARK --set-mark 0x0/0x600"
-		preSetAllBlocksMarkRule = "-A test --jump MARK --set-mark 0x200/0x600"
-		allowIfAllMarkRule      = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
-		returnRule              = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
+		clearBothMarksRule       = "-A test --jump MARK --set-mark 0x0/0x600"
+		preSetAllBlocksMarkRule  = "-A test --jump MARK --set-mark 0x200/0x600"
+		allowIfAllMarkRule       = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		allowIfAllMarkAndTCPRule = "-A test -p tcp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		allowIfAllMarkAndUDPRule = "-A test -p udp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		returnRule               = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
+		// allBlocksPassAndEqThisBlockPassRule is seen at the end of every positive match block
+		// after the first one.  It clears the all-blocks-pass bit if the this-block-passes bit
+		// is not set.
+		allBlocksPassAndEqThisBlockPassRule = "-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200"
 	)
+
 	DescribeTable(
 		"CIDR split tests",
 		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
@@ -354,8 +361,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
-			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
-			allowIfAllMarkRule,
+			"-A test ! --source 11.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		}),
 
@@ -370,8 +376,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
-			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
-			allowIfAllMarkRule,
+			"-A test ! --destination 13.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		}),
 
@@ -397,7 +402,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x400/0x400",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x400/0x400",
 			// If the scratch bit isn't set then we clear the AllBlocks bit.
-			"-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200",
+			allBlocksPassAndEqThisBlockPassRule,
 
 			// The negated matches clear the AllBlocks bit directly if they match.
 			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
@@ -408,6 +413,408 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			allowIfAllMarkRule,
 			returnRule,
 		}),
+	)
+
+	namedPortEntry := func(description string, pRule proto.Rule, expected ...string) TableEntry {
+		return Entry(
+			description+", input = "+pRule.String(),
+			pRule,
+			expected,
+		)
+	}
+
+	DescribeTable(
+		"Named port tests",
+		func(pRule proto.Rule, expected []string) {
+			renderer := NewRenderer(rrConfigNormal)
+			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
+			rendered := []string{}
+			for _, ir := range iptRules {
+				s := ir.RenderAppend("test", "")
+				rendered = append(rendered, s)
+			}
+			Expect(rendered).To(Equal(expected))
+		},
+
+		// Positive source matches only.
+		namedPortEntry(
+			"Named port on its own rendered as single rule",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Two named ports need a block",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
+			},
+			clearBothMarksRule,
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple named + numeric ports",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			clearBothMarksRule,
+			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Overflow of numeric ports",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+			},
+			clearBothMarksRule,
+			"-A test -p udp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p udp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
+			returnRule,
+		),
+
+		// Positive dest matches only.
+		namedPortEntry(
+			"Named + numeric ports need a block",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Single named port fits in rule",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Two named ports need a block",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
+			},
+			clearBothMarksRule,
+			"-A test -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Named + numeric ports need a block",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --destination-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+
+		// Positive source and dest matches together.
+		namedPortEntry(
+			"Positive source needs block only",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p udp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -p udp -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Positive dest needs block only",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			// Source port rendered directly into the main rule.
+			"-A test -p tcp -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Positive source and dest need blocks",
+			proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+				DstNamedPortIpSetIds: []string{"ipset-2"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			// Second block uses per-block bit.
+			"-A test -p tcp -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set cali4-ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Overflow of numeric ports",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				DstPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+			},
+			clearBothMarksRule,
+			"-A test -p udp -m multiport --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p udp -m multiport --destination-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
+			returnRule,
+		),
+
+		// Negative src matches.
+		namedPortEntry(
+			"Negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotSrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				NotSrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m multiport ! --source-ports 1:2 "+
+				"-m set ! --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotSrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				NotSrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			"-A test -p tcp "+
+				"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
+				"-m multiport ! --source-ports 15:16 "+ // Overflow to new multiport.
+				"-m set ! --match-set cali4-ipset-1 src,src "+
+				"-m set ! --match-set cali4-ipset-2 src,src "+
+				"-m set ! --match-set cali4-ipset-3 src,src "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+
+		// Negative dst matches.
+		namedPortEntry(
+			"Negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotDstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				NotDstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m multiport ! --destination-ports 1:2 "+
+				"-m set ! --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple negated named + numeric ports rendered in single rule",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				NotDstPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				NotDstNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			"-A test -p udp "+
+				"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
+				"-m multiport ! --destination-ports 15:16 "+ // Overflow to new multiport.
+				"-m set ! --match-set cali4-ipset-1 dst,dst "+
+				"-m set ! --match-set cali4-ipset-2 dst,dst "+
+				"-m set ! --match-set cali4-ipset-3 dst,dst "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+
+		// CIDRs + named ports.
+		namedPortEntry(
+			"numeric, named ports and CIDRs",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+				SrcNet:               []string{"10.1.0.0/16", "11.0.0.0/8"},
+			},
+			clearBothMarksRule,
+			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+
+		// CIDRs + positive and negated named ports.
+		namedPortEntry(
+			"positive and negatednumeric, named ports and CIDRs",
+			proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				SrcNet:               []string{"10.1.0.0/16", "11.0.0.0/8"},
+				NotSrcPorts: []*proto.PortRange{
+					{First: 101, Last: 101},
+				},
+				NotSrcNamedPortIpSetIds: []string{"ipset-3"},
+				NotSrcNet:               []string{"14.1.0.0/16", "15.0.0.0/8"},
+
+				DstPorts: []*proto.PortRange{
+					{First: 2, Last: 3},
+				},
+				DstNamedPortIpSetIds: []string{"ipset-2"},
+				DstNet:               []string{"12.1.0.0/16", "13.0.0.0/8"},
+				NotDstPorts: []*proto.PortRange{
+					{First: 201, Last: 201},
+				},
+				NotDstNamedPortIpSetIds: []string{"ipset-4"},
+				NotDstNet:               []string{"16.1.0.0/16", "17.0.0.0/8"},
+			},
+			clearBothMarksRule,
+			// Positive source port match block.
+			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+
+			// Positive destination port match block..
+			"-A test -p tcp -m multiport --destination-ports 2:3 --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set cali4-ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// Positive sroiuce CIDRs.
+			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// Positive dest CIDRs.
+			"-A test --destination 12.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --destination 13.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// Negative source CIDRs.
+			"-A test --source 14.1.0.0/16 --jump MARK --set-mark 0/0x200",
+			"-A test --source 15.0.0.0/8 --jump MARK --set-mark 0/0x200",
+
+			// Negative dest CIDRs.
+			"-A test --destination 16.1.0.0/16 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 17.0.0.0/8 --jump MARK --set-mark 0/0x200",
+
+			// Negative port matches can be inlined into the main rule.
+			"-A test -p tcp "+
+				"-m multiport ! --source-ports 101 "+
+				"-m set ! --match-set cali4-ipset-3 src,src "+
+				"-m multiport ! --destination-ports 201 "+
+				"-m set ! --match-set cali4-ipset-4 dst,dst "+
+				"-m mark --mark 0x200/0x200 "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
 	)
 
 	var renderer *DefaultRuleRenderer
@@ -459,74 +866,14 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
-
-	It("Should correctly render the cross-product of the source/dest ports", func() {
-		srcPorts := []*proto.PortRange{
-			{First: 1, Last: 2},
-			{First: 3, Last: 4},
-			{First: 5, Last: 6},
-			{First: 7, Last: 8},
-			{First: 9, Last: 10},
-			{First: 11, Last: 12},
-			{First: 13, Last: 14},
-			{First: 15, Last: 16},
-		}
-		dstPorts := []*proto.PortRange{
-			{First: 101, Last: 102},
-			{First: 103, Last: 104},
-			{First: 105, Last: 106},
-			{First: 107, Last: 108},
-			{First: 109, Last: 1010},
-			{First: 1011, Last: 1012},
-			{First: 1013, Last: 1014},
-			{First: 1015, Last: 1016},
-		}
-		rule := proto.Rule{
-			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}},
-			SrcPorts: srcPorts,
-			DstPorts: dstPorts,
-		}
-		renderer := NewRenderer(rrConfigNormal)
-		rules := renderer.ProtoRuleToIptablesRules(&rule, uint8(4))
-		Expect(rules).To(Equal([]iptables.Rule{
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[:7]).
-					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[:7]).
-					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[7:8]).
-					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-			{
-				Match: iptables.Match().Protocol("tcp").
-					SourcePortRanges(srcPorts[7:8]).
-					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{Mark: 0x80},
-			},
-			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
-		}))
-	})
 })
 
 var _ = DescribeTable("Port split tests",
 	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
 		Expect(SplitPortList(in)).To(Equal(expected))
 	},
-	Entry("nil input", ([]*proto.PortRange)(nil), [][]*proto.PortRange{{}}),
-	Entry("empty input", []*proto.PortRange{}, [][]*proto.PortRange{{}}),
+	Entry("nil input", ([]*proto.PortRange)(nil), ([][]*proto.PortRange)(nil)),
+	Entry("empty input", []*proto.PortRange{}, ([][]*proto.PortRange)(nil)),
 	Entry("single input", []*proto.PortRange{{First: 1, Last: 1}}, [][]*proto.PortRange{{{First: 1, Last: 1}}}),
 	Entry("range input", []*proto.PortRange{{First: 1, Last: 10}}, [][]*proto.PortRange{{{First: 1, Last: 10}}}),
 	Entry("exactly 15 single ports should give exactly one split", []*proto.PortRange{
@@ -562,7 +909,7 @@ var _ = DescribeTable("Port split tests",
 		{First: 14, Last: 14},
 		{First: 15, Last: 15},
 	}}),
-	Entry("exactly 16 single ports should give exactly tow splits", []*proto.PortRange{
+	Entry("exactly 16 single ports should give exactly two splits", []*proto.PortRange{
 		{First: 1, Last: 1},
 		{First: 2, Last: 2},
 		{First: 3, Last: 3},

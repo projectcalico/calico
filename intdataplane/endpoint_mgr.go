@@ -630,16 +630,25 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 		// Update the filter chain, for normal traffic.
 		var ingressPolicyNames, egressPolicyNames []string
+		var ingressForwardPolicyNames, egressForwardPolicyNames []string
 		if len(hostEp.Tiers) > 0 {
 			ingressPolicyNames = hostEp.Tiers[0].IngressPolicies
 			egressPolicyNames = hostEp.Tiers[0].EgressPolicies
 		}
+		if len(hostEp.ForwardTiers) > 0 {
+			ingressForwardPolicyNames = hostEp.ForwardTiers[0].IngressPolicies
+			egressForwardPolicyNames = hostEp.ForwardTiers[0].EgressPolicies
+		}
+
 		filtChains := m.ruleRenderer.HostEndpointToFilterChains(
 			ifaceName,
 			ingressPolicyNames,
 			egressPolicyNames,
+			ingressForwardPolicyNames,
+			egressForwardPolicyNames,
 			hostEp.ProfileIds,
 		)
+
 		if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
 			m.filterTable.UpdateChains(filtChains)
 		}
@@ -717,7 +726,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 	// Rewrite the filter dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite filter dispatch chains?")
-	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
+	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, true)
 	m.updateDispatchChains(m.activeHostFilterDispatchChains, newFilterDispatchChains, m.filterTable)
 
 	// Rewrite the mangle dispatch chains if they've changed.
@@ -727,7 +736,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 	// Rewrite the raw dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
-	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID)
+	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, false)
 	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 
 	log.Debug("Done resolving host endpoints.")

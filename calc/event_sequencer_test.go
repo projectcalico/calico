@@ -62,14 +62,15 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 )
 
 var _ = DescribeTable("ModelHostEndpointToProto",
-	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, expected proto.HostEndpoint) {
-		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers, nil)
+	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo, expected proto.HostEndpoint) {
+		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers, nil, forwardTiers)
 		Expect(*out).To(Equal(expected))
 	},
 	Entry("minimal endpoint",
 		model.HostEndpoint{
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13")},
 		},
+		nil,
 		nil,
 		nil,
 		proto.HostEndpoint{
@@ -89,12 +90,14 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		},
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b", "c"}}},
 		[]*proto.TierInfo{{Name: "d", IngressPolicies: []string{"e", "f"}}},
+		[]*proto.TierInfo{{Name: "g", IngressPolicies: []string{"h", "i"}}},
 		proto.HostEndpoint{
 			Name:              "eth0",
 			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
 			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
 			Tiers:             []*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b", "c"}}},
 			UntrackedTiers:    []*proto.TierInfo{{Name: "d", IngressPolicies: []string{"e", "f"}}},
+			ForwardTiers:      []*proto.TierInfo{{Name: "g", IngressPolicies: []string{"h", "i"}}},
 			ProfileIds:        []string{"prof1"},
 		},
 	),
@@ -110,12 +113,14 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		},
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
 		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
+		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
 		proto.HostEndpoint{
 			Name:              "eth0",
 			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
 			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
 			Tiers:             []*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
 			UntrackedTiers:    []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
+			ForwardTiers:      []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
 			ProfileIds:        []string{"prof1"},
 		},
 	),

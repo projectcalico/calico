@@ -229,7 +229,7 @@ func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []str
 	filtered := set.New()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
 	for _, member := range members {
-		isIPV6 := strings.Index(member, ":") >= 0
+		isIPV6 := ipSetType.IsMemberIPV6(member)
 		if wantIPV6 != isIPV6 {
 			continue
 		}

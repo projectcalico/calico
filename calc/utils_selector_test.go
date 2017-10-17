@@ -17,13 +17,20 @@ package calc_test
 import (
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
-func selectorId(selStr string) string {
+func selectorID(selStr string) string {
 	sel, err := selector.Parse(selStr)
 	if err != nil {
 		log.Panicf("Failed to parse %v: %v", selStr, err)
 	}
 	return sel.UniqueID()
+}
+
+func namedPortID(selector, protocol, portName string) string {
+	selID := selectorID(selector)
+	idToHash := selID + "," + protocol + "," + portName
+	return hash.MakeUniqueID("n", idToHash)
 }

@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+sleep 5
+exec /sbin/xtables-multi iptables-restore $@

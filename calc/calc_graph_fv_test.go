@@ -36,13 +36,14 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-// Each entry in baseTests contains a series of states to move through.  Apart
-// from running each of these, we'll also expand each of them by passing it
-// through the expansion functions below.  In particular, we'll do each of them
+// Each entry in baseTests contains a series of states to move through (defined in
+// states_for_test.go). Apart from running each of these, we'll also expand each of them by
+// passing it through the expansion functions below.  In particular, we'll do each of them
 // in reversed order and reversed KV injection order.
 var baseTests = []StateList{
 	// Empty should be empty!
 	{},
+
 	// Add one endpoint then remove it and add another with overlapping IP.
 	{localEp1WithPolicy, localEp2WithPolicy},
 
@@ -72,25 +73,6 @@ var baseTests = []StateList{
 	// Test mutating the profile list of some endpoints.
 	{localEpsWithNonMatchingProfile, localEpsWithProfile},
 
-	// String together some complex updates with profiles and policies
-	// coming and going.
-	{localEpsWithProfile,
-		localEp1WithOneTierPolicy123,
-		localEpsWithNonMatchingProfile,
-		localEpsWithTagInheritProfile,
-		localEpsWithPolicy,
-		localEpsWithPolicyUpdatedIPs,
-		hostEp1WithPolicy,
-		localEpsWithUpdatedProfile,
-		withProfileTagInherit,
-		localEp1WithIngressPolicy,
-		localEpsWithNonMatchingProfile,
-		localEpsWithUpdatedProfileNegatedTags,
-		hostEp1WithUntrackedPolicy,
-		localEpsWithTagInheritProfile,
-		localEp1WithPolicy,
-		localEpsWithProfile},
-
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
@@ -110,6 +92,106 @@ var baseTests = []StateList{
 	{withProfileTagInherit, localEpsWithTagInheritProfile},
 	// But if there's an explicit label, it overrides the tag.
 	{localEpsWithTagOverriddenProfile, withProfileTagOverriden},
+
+	// Named ports. Simple cases.
+	{localEp1WithNamedPortPolicy},
+	{localEp1WithNamedPortPolicyUDP},
+	{localEp1WithNamedPortPolicyNoSelector},
+	{localEp1WithNegatedNamedPortPolicyNoSelector},
+	{localEp1WithNegatedNamedPortPolicy},
+	{localEp1WithNegatedNamedPortPolicyDest},
+	// Host endpoints have named ports too.
+	{localHostEp1WithNamedPortPolicy},
+	{hostEp1WithPolicy, localHostEp1WithNamedPortPolicy, hostEp1WithPolicy},
+	// Endpoints with overlapping IPs.
+	{localEpsWithNamedPortsPolicy},
+	{localEp1WithNamedPortPolicy, localEpsWithNamedPortsPolicy},
+	// Endpoints with overlapping IPs but different port numbers.
+	{localEpsWithNamedPortsPolicyTCPPort2},
+	// Policy has protocol=TCP but named ports defined as UDP and vice-versa.
+	{localEpsWithMismatchedNamedPortsPolicy},
+	// Handling a port update.
+	{localEpsWithNamedPortsPolicy, localEpsWithNamedPortsPolicyTCPPort2},
+	// Add named ports to policy and then remove them.
+	{hostEp1WithPolicy, localEp1WithNamedPortPolicy, hostEp1WithPolicy},
+	{hostEp1WithPolicy, localEp1WithNamedPortPolicyNoSelector, hostEp1WithPolicy},
+	{hostEp1WithPolicy, localEpsWithNamedPortsPolicy, hostEp1WithPolicy},
+	// In this scenario, the endpoint only matches the selector of the named port due to
+	// inheriting a label from its profile.
+	{
+		// Start with the endpoints and profile but no policy.
+		localEpsWithOverlappingIPsAndInheritedLabels,
+		// Policy added, matches EP1 due to its inheritance.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1,
+		// Add label to EP2 via inheritance.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+		// Then change inherited label on EP2 to stop the match.
+		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2,
+		// Ditto for EP1.  Now matches none of the EPs.
+		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1},
+	// In this scenario, we remove the profiles from the endpoints rather than changing the labels.
+	{
+		// Start with both matching, as in the middle of the above test.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+		// Remove the profiles from EP2.
+		localEpsAndNamedPortPolicyEP2ProfileRemoved,
+		// Ditto for EP1.  Named port now matches none of the EPs.
+		localEpsAndNamedPortPolicyBothEPsProfilesRemoved,
+		// Add everything back.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+	},
+
+	// Repro of a particular named port index update failure case.  The inherited profile was
+	// improperly cleaned up, so, when it was added back in again we ended up with multiple copies.
+	{localEpsWithTagInheritProfile,
+		localEp1WithPolicy,
+		localEpsWithProfile},
+
+	// A long, fairly random sequence of updates.
+	{
+		localEpsWithProfile,
+		localEp1WithOneTierPolicy123,
+		localEpsWithNonMatchingProfile,
+		localEpsWithTagInheritProfile,
+		localEpsWithPolicy,
+		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicy,
+		localEpsWithUpdatedProfile,
+		withProfileTagInherit,
+		localEp1WithIngressPolicy,
+		localEpsWithNonMatchingProfile,
+		localEpsWithUpdatedProfileNegatedTags,
+		hostEp1WithUntrackedPolicy,
+		localEpsWithTagInheritProfile,
+		localEp1WithPolicy,
+		localEpsWithProfile,
+	},
+
+	// And another one.
+	{
+		localEpsWithProfile,
+		localEp1WithOneTierPolicy123,
+		localEpsWithNonMatchingProfile,
+		localEpsWithTagInheritProfile,
+		hostEp1WithUntrackedPolicy,
+		localEpsWithTagInheritProfile,
+		localEpsWithMismatchedNamedPortsPolicy,
+		localEp1WithPolicy,
+		localEp1WithNamedPortPolicyNoSelector,
+		localEpsWithProfile,
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+		localEp1WithIngressPolicy,
+		localEpsWithNonMatchingProfile,
+		localEpsWithUpdatedProfileNegatedTags,
+		localEpsWithPolicy,
+		localEp1WithNamedPortPolicyNoSelector,
+		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicy,
+		localEpsWithUpdatedProfile,
+		withProfileTagInherit,
+		localEp1WithNamedPortPolicyUDP,
+		localEp1WithNamedPortPolicyUDP,
+	},
 
 	// TODO(smc): Test config calculation
 	// TODO(smc): Test mutation of endpoints

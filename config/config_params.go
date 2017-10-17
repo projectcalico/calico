@@ -125,7 +125,8 @@ type Config struct {
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
 
-	InterfacePrefix string `config:"iface-list;cali;non-zero,die-on-fail"`
+	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
+	InterfaceExclude string `config:"iface-list;kube-ipvs0"`
 
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
@@ -168,8 +169,10 @@ type Config struct {
 	ClusterType           string `config:"string;"`
 	CalicoVersion         string `config:"string;"`
 
-	DebugMemoryProfilePath  string `config:"file;;"`
-	DebugDisableLogDropping bool   `config:"bool;false"`
+	DebugMemoryProfilePath          string        `config:"file;;"`
+	DebugDisableLogDropping         bool          `config:"bool;false"`
+	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
+	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`
 
 	// State tracking.
 
@@ -215,16 +218,25 @@ func (c *Config) InterfacePrefixes() []string {
 	return strings.Split(c.InterfacePrefix, ",")
 }
 
+func (c *Config) InterfaceExcludes() []string {
+	return strings.Split(c.InterfaceExclude, ",")
+}
+
 func (config *Config) OpenstackActive() bool {
 	if strings.Contains(strings.ToLower(config.ClusterType), "openstack") {
+		// OpenStack is explicitly known to be present.  Newer versions of the OpenStack plugin
+		// set this flag.
 		log.Debug("Cluster type contains OpenStack")
 		return true
 	}
-	if config.MetadataAddr != "127.0.0.1" {
+	// If we get here, either OpenStack isn't present or we're running against an old version
+	// of the OpenStack plugin, which doesn't set the flag.  Use heuristics based on the
+	// presence of the OpenStack-related parameters.
+	if config.MetadataAddr != "" && config.MetadataAddr != "127.0.0.1" {
 		log.Debug("OpenStack metadata IP set to non-default, assuming OpenStack active")
 		return true
 	}
-	if config.MetadataPort != 8775 {
+	if config.MetadataPort != 0 && config.MetadataPort != 8775 {
 		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
 		return true
 	}

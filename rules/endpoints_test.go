@@ -231,7 +231,10 @@ var _ = Describe("Endpoints", func() {
 	})
 
 	It("should render a host endpoint", func() {
-		Expect(renderer.HostEndpointToFilterChains("eth0", []string{"ai", "bi"}, []string{"ae", "be"}, []string{"prof1", "prof2"})).To(Equal([]*Chain{
+		Expect(renderer.HostEndpointToFilterChains("eth0",
+			[]string{"ai", "bi"}, []string{"ae", "be"},
+			[]string{"afi", "bfi"}, []string{"afe", "bfe"},
+			[]string{"prof1", "prof2"})).To(Equal([]*Chain{
 			{
 				Name: "cali-th-eth0",
 				Rules: []Rule{
@@ -316,6 +319,62 @@ var _ = Describe("Endpoints", func() {
 
 					{Action: DropAction{},
 						Comment: "Drop if no profiles matched"},
+				},
+			},
+			{
+				Name: "cali-thfw-eth0",
+				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+
+					{Action: ClearMarkAction{Mark: 0x8}},
+
+					{Comment: "Start of policies",
+						Action: ClearMarkAction{Mark: 0x10}},
+					{Match: Match().MarkClear(0x10),
+						Action: JumpAction{Target: "cali-po-afe"}},
+					{Match: Match().MarkSet(0x8),
+						Action:  ReturnAction{},
+						Comment: "Return if policy accepted"},
+					{Match: Match().MarkClear(0x10),
+						Action: JumpAction{Target: "cali-po-bfe"}},
+					{Match: Match().MarkSet(0x8),
+						Action:  ReturnAction{},
+						Comment: "Return if policy accepted"},
+					{Match: Match().MarkClear(0x10),
+						Action:  DropAction{},
+						Comment: "Drop if no policies passed packet"},
+				},
+			},
+			{
+				Name: "cali-fhfw-eth0",
+				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+
+					{Action: ClearMarkAction{Mark: 0x8}},
+
+					{Comment: "Start of policies",
+						Action: ClearMarkAction{Mark: 0x10}},
+					{Match: Match().MarkClear(0x10),
+						Action: JumpAction{Target: "cali-pi-afi"}},
+					{Match: Match().MarkSet(0x8),
+						Action:  ReturnAction{},
+						Comment: "Return if policy accepted"},
+					{Match: Match().MarkClear(0x10),
+						Action: JumpAction{Target: "cali-pi-bfi"}},
+					{Match: Match().MarkSet(0x8),
+						Action:  ReturnAction{},
+						Comment: "Return if policy accepted"},
+					{Match: Match().MarkClear(0x10),
+						Action:  DropAction{},
+						Comment: "Drop if no policies passed packet"},
 				},
 			},
 		}))
