@@ -152,6 +152,12 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindNetworkPolicy,
+		resources.NewNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv2.KindBGPPeer,
 		resources.NewBGPPeerClient(cs, crdClientV1),
 	)
@@ -358,6 +364,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 				&apiv2.ClusterInformationList{},
 				&apiv2.GlobalNetworkPolicy{},
 				&apiv2.GlobalNetworkPolicyList{},
+				&apiv2.NetworkPolicy{},
+				&apiv2.NetworkPolicyList{},
 			)
 			return nil
 		})

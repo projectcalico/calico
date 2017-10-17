@@ -67,6 +67,7 @@ type customK8sResourceClient struct {
 	k8sResourceType reflect.Type
 	k8sListType     reflect.Type
 	converter       CustomK8sResourceConverter
+	namespaced      bool
 }
 
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
@@ -87,7 +88,10 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 
 	// Send the update request using the REST interface.
 	resOut := reflect.New(c.k8sResourceType).Interface().(Resource)
+	namespace := kvp.Key.(model.ResourceKey).Namespace
 	err = c.restClient.Post().
+		NamespaceIfScoped(namespace, c.namespaced).
+		Context(ctx).
 		Resource(c.resource).
 		Body(resIn).
 		Do().Into(resOut)
@@ -123,10 +127,13 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
+	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource by name")
 	updateError = c.restClient.Put().
+		Context(ctx).
 		Resource(c.resource).
+		NamespaceIfScoped(namespace, c.namespaced).
 		Body(resIn).
 		Name(name).
 		Do().Into(resOut)
@@ -161,10 +168,14 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 		return nil, err
 	}
 
+	namespace := k.(model.ResourceKey).Namespace
+
 	// Delete the resource using the name.
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Send delete request by name")
 	err = c.restClient.Delete().
+		Context(ctx).
+		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
 		Name(name).
 		Do().Error()
@@ -188,6 +199,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		logContext.WithError(err).Info("Error getting resource")
 		return nil, err
 	}
+	namespace := key.(model.ResourceKey).Namespace
 
 	// Add the name to the log context now that we know it, and query
 	// Kubernetes.
@@ -196,6 +208,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 	resOut := reflect.New(c.k8sResourceType).Interface().(Resource)
 	err = c.restClient.Get().
 		Context(ctx).
+		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
 		Name(name).
 		Do().Into(resOut)
@@ -247,8 +260,13 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	// list of resources.
 	reslOut := reflect.New(c.k8sListType).Interface().(ResourceList)
 
+	// If it is a namespaced resource, then we'll need the namespace.
+	namespace := list.(model.ResourceListOptions).Namespace
+
 	// Perform the request.
 	err := c.restClient.Get().
+		Context(ctx).
+		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
 		Do().Into(reslOut)
 	if err != nil {
