@@ -1,5 +1,5 @@
 ---
-title: Going Beyond NetworkPolicy with Calico
+title: Controlling ingress and egress traffic with network policy
 redirect_from: latest/getting-started/kubernetes/tutorials/advanced-policy
 ---
 
