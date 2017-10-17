@@ -142,15 +142,14 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 			}
 		}
 
+		if err = configureContainerSysctls(hasIPv4, hasIPv6); err != nil {
+			return fmt.Errorf("error configuring sysctls for the container netns, error: %s", err)
+		}
+
 		// Now that the everything has been successfully set up in the container, move the "host" end of the
 		// veth into the host namespace.
 		if err = netlink.LinkSetNsFd(hostVeth, int(hostNS.Fd())); err != nil {
 			return fmt.Errorf("failed to move veth to host netns: %v", err)
-		}
-
-		err = configureContainerSysctls(hasIPv4, hasIPv6)
-		if err != nil {
-			return fmt.Errorf("error configuring sysctls for the container netns, error: %s", err)
 		}
 
 		return nil
