@@ -170,10 +170,7 @@ func (r resourcePrinterTemplate) print(client *client.Client, resources []unvers
 	}
 
 	err = tmpl.Execute(os.Stdout, resources)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // join is similar to strings.Join() but takes an arbitrary slice of interfaces and converts
