@@ -8,19 +8,27 @@ import (
 	"github.com/kelseyhightower/confd/log"
 )
 
+var (
+	initialProcessRetryInterval = 250 * time.Millisecond
+	maxProcessRetryInterval = 5 * time.Second
+)
+
 type Processor interface {
 	Process()
 }
 
 func Process(config Config) error {
+	// Get the template resources.
 	ts, err := getTemplateResources(config)
 	if err != nil {
 		return err
 	}
-	return process(ts)
-}
 
-func process(ts []*TemplateResource) error {
+	// Configure the client with the set of prefixes.
+	if err := setClientPrefixes(config, ts); err != nil {
+		return err
+	}
+
 	var lastErr error
 	for _, t := range ts {
 		if err := t.process(); err != nil {
@@ -31,34 +39,24 @@ func process(ts []*TemplateResource) error {
 	return lastErr
 }
 
-type intervalProcessor struct {
-	config   Config
-	stopChan chan bool
-	doneChan chan bool
-	errChan  chan error
-	interval int
-}
+// Called to notify the client which prefixes will be monitored.
+func setClientPrefixes(config Config, trs []*TemplateResource) error {
+	prefixes := []string{}
 
-func IntervalProcessor(config Config, stopChan, doneChan chan bool, errChan chan error, interval int) Processor {
-	return &intervalProcessor{config, stopChan, doneChan, errChan, interval}
-}
-
-func (p *intervalProcessor) Process() {
-	defer close(p.doneChan)
-	for {
-		ts, err := getTemplateResources(p.config)
-		if err != nil {
-			log.Fatal(err.Error())
-			break
-		}
-		process(ts)
-		select {
-		case <-p.stopChan:
-			break
-		case <-time.After(time.Duration(p.interval) * time.Second):
-			continue
+	// Loop through the full set of template resources and get a complete set of
+	// unique prefixes that are being watched.
+	pmap := map[string]bool{}
+	for _, tr := range trs {
+		for _, pk := range tr.PrefixedKeys {
+			pmap[pk] = true
 		}
 	}
+	for p, _ := range pmap {
+		prefixes = append(prefixes, p)
+	}
+
+	// Tell the client the set of prefixes.
+	return config.StoreClient.SetPrefixes(prefixes)
 }
 
 type watchProcessor struct {
@@ -76,11 +74,20 @@ func WatchProcessor(config Config, stopChan, doneChan chan bool, errChan chan er
 
 func (p *watchProcessor) Process() {
 	defer close(p.doneChan)
+	// Get the set of template resources.
 	ts, err := getTemplateResources(p.config)
 	if err != nil {
 		log.Fatal(err.Error())
 		return
 	}
+
+	// Configure the client with the set of prefixes.
+	if err := setClientPrefixes(p.config, ts); err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+
+	// Start the individual watchers for each template.
 	for _, t := range ts {
 		t := t
 		p.wg.Add(1)
@@ -91,18 +98,40 @@ func (p *watchProcessor) Process() {
 
 func (p *watchProcessor) monitorPrefix(t *TemplateResource) {
 	defer p.wg.Done()
-	keys := appendPrefix(t.Prefix, t.Keys)
+	var revision uint64
 	for {
-		index, err := t.storeClient.WatchPrefix(t.Prefix, keys, t.lastIndex, p.stopChan)
+		// Watch from the last revision that we updated the templates with.  This will exit it the
+		// data in the datastore for the requested prefixes has had updates since that revision.
+		err := t.storeClient.WatchPrefix(t.Prefix, t.PrefixedKeys, revision, p.stopChan)
 		if err != nil {
 			p.errChan <- err
 			// Prevent backend errors from consuming all resources.
 			time.Sleep(time.Second * 2)
 			continue
 		}
-		t.lastIndex = index
-		if err := t.process(); err != nil {
+
+		// Get the current datastore revision and then populate the template with the current settings.
+		// The templates will be populated with data that is at least as recent as the datastore
+		// revision.
+		retryInterval := initialProcessRetryInterval
+		for {
+			revision = t.storeClient.GetCurrentRevision()
+			if err = t.process(); err == nil {
+				break
+			}
+
+			// We hit an error processing the template - this means the template will not have been
+			// rendered.  This may be because the rendered templates are interconnected and the
+			// check function for this template is dependent on the other templates being rendered.
+			// Rather than blocking on WatchPrefix, sleep for a short period and retry - we'll start
+			// with short retry intervals and increase up to 5s.
+			log.Debug("Will retry processing the template in %s", retryInterval)
 			p.errChan <- err
+			time.Sleep(retryInterval)
+			retryInterval *= 2
+			if retryInterval > maxProcessRetryInterval {
+				retryInterval = maxProcessRetryInterval
+			}
 		}
 	}
 }

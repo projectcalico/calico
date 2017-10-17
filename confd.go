@@ -22,8 +22,7 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	log.Info("Starting confd")
-
+	log.Info("Starting calico-confd")
 	storeClient, err := backends.New(backendsConfig)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -41,14 +40,7 @@ func main() {
 	doneChan := make(chan bool)
 	errChan := make(chan error, 10)
 
-	var processor template.Processor
-	switch {
-	case config.Watch:
-		processor = template.WatchProcessor(templateConfig, stopChan, doneChan, errChan)
-	default:
-		processor = template.IntervalProcessor(templateConfig, stopChan, doneChan, errChan, config.Interval)
-	}
-
+	processor := template.WatchProcessor(templateConfig, stopChan, doneChan, errChan)
 	go processor.Process()
 
 	signalChan := make(chan os.Signal, 1)

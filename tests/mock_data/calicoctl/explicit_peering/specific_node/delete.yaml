@@ -1,0 +1,32 @@
+kind: BGPPeer
+apiVersion: projectcalico.org/v2
+metadata:
+  name: bgppeer-1
+spec:
+  peerIP: 10.192.0.3
+  asNumber: 64566
+  node: kube-master
+
+---
+
+kind: BGPPeer
+apiVersion: projectcalico.org/v2
+metadata:
+  name: bgppeer-2
+spec:
+  peerIP: 10.192.0.4
+  asNumber: 64566
+  node: kube-master
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v2
+metadata:
+  name: ippool-1
+spec:
+  cidr: 192.168.0.0/16
+  ipip:
+    mode: Always
+  natOutgoing: true
+
