@@ -20,10 +20,10 @@ import (
 	"os"
 	"time"
 
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
-	"k8s.io/client-go/rest"
 )
 
 var _ = Describe("PolicyController", func() {
@@ -43,7 +42,6 @@ var _ = Describe("PolicyController", func() {
 		apiserver        *containers.Container
 		calicoClient     *client.Client
 		k8sClient        *kubernetes.Clientset
-		extensionsClient *rest.RESTClient
 	)
 
 	BeforeEach(func() {
@@ -66,9 +64,6 @@ var _ = Describe("PolicyController", func() {
 		policyController = testutils.RunPolicyController(etcd.IP, kfconfigfile.Name())
 
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
-		Expect(err).NotTo(HaveOccurred())
-
-		extensionsClient, err = testutils.GetExtensionsClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
 		// TODO: Use upcoming port checker functions to wait until apiserver is responding to requests.
@@ -144,7 +139,7 @@ var _ = Describe("PolicyController", func() {
 					},
 				},
 			}
-			err := extensionsClient.
+			err := k8sClient.ExtensionsV1beta1().RESTClient().
 				Post().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -225,7 +220,7 @@ var _ = Describe("PolicyController", func() {
 				},
 			}
 
-			err := extensionsClient.
+			err := k8sClient.ExtensionsV1beta1().RESTClient().
 				Post().
 				Resource("networkpolicies").
 				Namespace("default").

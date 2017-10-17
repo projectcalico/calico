@@ -17,10 +17,11 @@ package converter
 import (
 	"fmt"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
+	backendconverter "github.com/projectcalico/libcalico-go/lib/converter"
+
+	v1beta1 "k8s.io/api/extensions"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -33,14 +34,14 @@ func NewPolicyConverter() Converter {
 }
 
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	np, ok := k8sObj.(*extensions.NetworkPolicy)
+	np, ok := k8sObj.(*v1beta1.NetworkPolicy)
 
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
 		}
-		np, ok = tombstone.Obj.(*extensions.NetworkPolicy)
+		np, ok = tombstone.Obj.(*v1beta1.NetworkPolicy)
 		if !ok {
 			return nil, fmt.Errorf("tombstone contained object that is not a NetworkPolicy %+v", k8sObj)
 		}
@@ -52,7 +53,7 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	var backendConverter backendConverter.PolicyConverter
+	var backendConverter backendconverter.PolicyConverter
 	policy, err := backendConverter.ConvertKVPairToAPI(kvpair)
 	if err != nil {
 		return nil, err

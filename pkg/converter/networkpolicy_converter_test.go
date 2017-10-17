@@ -16,11 +16,13 @@ package converter_test
 
 import (
 	"github.com/projectcalico/kube-controllers/pkg/converter"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"k8s.io/api/extensions"
 	"k8s.io/client-go/tools/cache"
 
 	. "github.com/onsi/ginkgo"

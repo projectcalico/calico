@@ -72,7 +72,7 @@ func main() {
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, calicoClient, extensionsClient, err := getClients(config.Kubeconfig)
+	k8sClientset, calicoClient, err := getClients(config.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
 	}
@@ -89,7 +89,7 @@ func main() {
 			namespaceController := namespace.NewNamespaceController(k8sClientset, calicoClient)
 			go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
 		case "policy":
-			policyController := networkpolicy.NewPolicyController(extensionsClient, calicoClient)
+			policyController := networkpolicy.NewPolicyController(k8sClientset, calicoClient)
 			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
@@ -101,7 +101,7 @@ func main() {
 }
 
 // getClients builds and returns Kubernetes, Calico and Extensions clients.
-func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, *rest.RESTClient, error) {
+func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, error) {
 	// First, build the Calico client using the configured environment variables.
 	cconfig, err := client.LoadClientConfig("")
 	if err != nil {
@@ -126,12 +126,4 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, *rest
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
-
-	// Get extensions client
-	extensionsClient, err := k8s.BuildExtensionsClientV1(*k8sconfig)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build extensions client: %s", err)
-	}
-
-	return k8sClientset, calicoClient, extensionsClient, nil
 }
