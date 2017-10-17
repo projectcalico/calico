@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/k8s-policy/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/cache"
 )
 
 type resource struct {

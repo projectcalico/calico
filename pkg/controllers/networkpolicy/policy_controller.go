@@ -20,11 +20,11 @@ import (
 	"strings"
 	"time"
 
-	calicocache "github.com/projectcalico/k8s-policy/pkg/cache"
-	"github.com/projectcalico/k8s-policy/pkg/controllers/controller"
+	calicocache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/k8s-policy/pkg/converter"
+	"github.com/projectcalico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -113,7 +113,7 @@ func NewPolicyController(extensionsClient *rest.RESTClient, calicoClient *client
 					log.Infof("Assuming we're responsible for policy %s", policyName)
 					m[policyName] = policy
 				}
-			} else if policyName == "k8s-policy-no-match" {
+			} else if policyName == "kube-controllers-no-match" {
 				// Older versions of the controller programmed this policy, but we don't
 				// want it around any more.  TODO: Remove this section once we don't care about
 				// upgrade from the Python controller.

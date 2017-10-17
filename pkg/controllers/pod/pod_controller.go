@@ -20,9 +20,9 @@ import (
 
 	"time"
 
-	calicocache "github.com/projectcalico/k8s-policy/pkg/cache"
-	"github.com/projectcalico/k8s-policy/pkg/controllers/controller"
-	"github.com/projectcalico/k8s-policy/pkg/converter"
+	calicocache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"

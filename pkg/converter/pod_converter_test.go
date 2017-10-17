@@ -17,7 +17,7 @@ package converter_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/k8s-policy/pkg/converter"
+	"github.com/projectcalico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/api/core/v1"
