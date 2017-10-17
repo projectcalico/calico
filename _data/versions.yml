@@ -23,8 +23,8 @@ v2.6:
       url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.1
       download_url: https://github.com/projectcalico/calicoctl/releases/download/v1.6.1/calicoctl
     calico/node:
-      version: v2.6.1
-      url: https://github.com/projectcalico/calico/releases/tag/v2.6.1
+      version: v2.6.2
+      url: https://github.com/projectcalico/calico/releases/tag/v2.6.2
     calico/cni:
       version: v1.11.0
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.11.0
