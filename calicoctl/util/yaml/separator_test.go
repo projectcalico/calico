@@ -16,6 +16,7 @@ package yaml
 
 import (
 	"bytes"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -56,6 +57,19 @@ var _ = Describe("Test splitYAMLDocument", func() {
 
 	It("should split out and read the first document in multiple documents", func() {
 		ValidateSplitYAMLDocument("abc\n---\ndef", true, "abc", 8)
+	})
+
+	It("should split out and read the first document in a large doc without separators", func() {
+		// Just shy of 10MB, which is the limit:
+		doc := strings.Repeat("0123456789abcdef", 65535)
+		ValidateSplitYAMLDocument(doc, true, doc, len(doc))
+	})
+
+	It("should split out and read the first document in a compound large doc", func() {
+		// Just shy of 10MB, which is the limit:
+		firstDoc := strings.Repeat("0123456789abcdef", 65535)
+		docs := firstDoc + "\n---\ndef"
+		ValidateSplitYAMLDocument(docs, true, firstDoc, len(firstDoc)+5)
 	})
 
 	It("should read the rest of the multiple documents at the EOF", func() {
