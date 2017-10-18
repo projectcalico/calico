@@ -44,7 +44,7 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 		return nil, err
 	}
 	return client{
-		backend: be,
+		backend:   be,
 		resources: &resources{backend: be},
 	}, nil
 }
