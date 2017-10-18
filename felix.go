@@ -649,16 +649,16 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 
 func loadConfigFromDatastore(ctx context.Context, datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
 	for {
-		log.Info("Waiting for the datastore to be ready")
-		if kv, err := datastore.Get(ctx, model.ReadyFlagKey{}, ""); err != nil {
-			log.WithError(err).Error("Failed to read global datastore 'Ready' flag, will retry...")
-			time.Sleep(1 * time.Second)
-			continue
-		} else if kv.Value != true {
-			log.Warning("Global datastore 'Ready' flag set to false, waiting...")
-			time.Sleep(1 * time.Second)
-			continue
-		}
+		//log.Info("Waiting for the datastore to be ready")
+		//if kv, err := datastore.Get(ctx, model.ReadyFlagKey{}, ""); err != nil {
+		//	log.WithError(err).Error("Failed to read global datastore 'Ready' flag, will retry...")
+		//	time.Sleep(1 * time.Second)
+		//	continue
+		//} else if kv.Value != true {
+		//	log.Warning("Global datastore 'Ready' flag set to false, waiting...")
+		//	time.Sleep(1 * time.Second)
+		//	continue
+		//}
 
 		log.Info("Loading global config from datastore")
 		kvl, err := datastore.List(ctx, model.GlobalConfigListOptions{}, "")

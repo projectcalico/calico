@@ -114,8 +114,8 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 	for k, v := range cb.hostConfig {
 		hostConfigCopy[k] = v
 	}
-	if !cb.datastoreReady {
-		cb.callbacks.OnDatastoreNotReady()
-	}
+	//if !cb.datastoreReady {
+	//	cb.callbacks.OnDatastoreNotReady()
+	//}
 	cb.callbacks.OnConfigUpdate(globalConfigCopy, hostConfigCopy)
 }
