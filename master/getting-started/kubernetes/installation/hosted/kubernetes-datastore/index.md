@@ -89,10 +89,10 @@ This will install Calico and will initially create a full node-to-node mesh.
 {: .alert .alert-info}
 
 ```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/calico.yaml
 ```
 
->[Click here to view the above yaml directly.](calico-networking/1.7/calico.yaml)
+>[Click here to view the above yaml directly.](calico-networking/calico.yaml)
 
 
 #### Calico policy with Calico networking on kubeadm
@@ -124,10 +124,10 @@ To install Calico in policy-only mode, run one of the following commands based o
 {: .alert .alert-info}
 
 ```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/calico.yaml
 ```
 
->[Click here to view the above yaml directly.](policy-only/1.7/calico.yaml)
+>[Click here to view the above yaml directly.](policy-only/calico.yaml)
 
 
 ### 3. Calico policy-only with flannel networking
