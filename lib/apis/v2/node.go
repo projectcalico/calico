@@ -25,6 +25,9 @@ const (
 	KindNodeList = "NodeList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // Node contains information about a Node resource.
 type Node struct {
 	metav1.TypeMeta `json:",inline"`
@@ -54,6 +57,8 @@ type NodeBGPSpec struct {
 	// IPv4IPIPTunnelAddr is the IPv4 address of the IP in IP tunnel.
 	IPv4IPIPTunnelAddr string `json:"ipv4IPIPTunnelAddr,omitempty" validate:"omitempty,ipv4"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NodeList contains a list of Node resources.
 type NodeList struct {

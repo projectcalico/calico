@@ -21,6 +21,9 @@ const (
 	KindIPPoolList = "IPPoolList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // IPPool contains information about a IPPool resource.
 type IPPool struct {
 	metav1.TypeMeta `json:",inline"`
@@ -61,6 +64,8 @@ const (
 	IPIPModeCrossSubnet          = "CrossSubnet"
 )
 const DefaultMode = IPIPModeAlways
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // IPPoolList contains a list of IPPool resources.
 type IPPoolList struct {

@@ -21,6 +21,9 @@ const (
 	KindNetworkPolicyList = "NetworkPolicyList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // NetworkPolicy is the Namespaced-equivalent of the GlobalNetworkPolicy.
 type NetworkPolicy struct {
 	metav1.TypeMeta `json:",inline"`
@@ -29,6 +32,8 @@ type NetworkPolicy struct {
 	// Specification of the Policy.
 	Spec PolicySpec `json:"spec,omitempty"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkPolicyList contains a list of NetworkPolicy resources.
 type NetworkPolicyList struct {

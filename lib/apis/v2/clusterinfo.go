@@ -23,6 +23,9 @@ const (
 	KindClusterInformationList = "ClusterInformationList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // ClusterInformation contains the cluster specific information.
 type ClusterInformation struct {
 	metav1.TypeMeta `json:",inline"`
@@ -41,6 +44,8 @@ type ClusterInformationSpec struct {
 	// CalicoVersion is the version of Calico that the cluster is running
 	CalicoVersion string `json:"calicoVersion,omitempty" validate:"omitempty"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterInformationList contains a list of ClusterInformation resources
 // (even though there should only be one).
