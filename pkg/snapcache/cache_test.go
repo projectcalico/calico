@@ -15,6 +15,8 @@
 package snapcache_test
 
 import (
+	"strconv"
+
 	"github.com/projectcalico/typha/pkg/snapcache"
 
 	"context"
@@ -99,7 +101,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		kv := model.KVPair{
 			Key:      model.GlobalConfigKey{Name: "foo"},
 			Value:    "bar",
-			Revision: 10,
+			Revision: "10",
 			TTL:      0,
 		}
 		updateFoo1 := api.Update{
@@ -117,7 +119,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 		// Then send in another update with same value, and another value to make sure we generate another
 		// crumb.
-		kv.Revision = 11
+		kv.Revision = "11"
 		updateFoo2 := api.Update{
 			KVPair:     kv,
 			UpdateType: api.UpdateTypeKVUpdated,
@@ -126,7 +128,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		kv2 := model.KVPair{
 			Key:      model.GlobalConfigKey{Name: "biff"},
 			Value:    "baz",
-			Revision: 12,
+			Revision: "12",
 			TTL:      0,
 		}
 		updateBiff := api.Update{
@@ -162,7 +164,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		kv := model.KVPair{
 			Key:      model.GlobalConfigKey{Name: "foo"},
 			Value:    "bar",
-			Revision: 10,
+			Revision: "10",
 			TTL:      0,
 		}
 		updateFoo1 := api.Update{
@@ -180,7 +182,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 		// Then send in another update with same value, and another value to make sure we generate another
 		// crumb.
-		kv.Revision = 11
+		kv.Revision = "11"
 		kv.Value = nil
 		deletionUpdate := api.Update{
 			KVPair:     kv,
@@ -237,7 +239,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 				KVPair: model.KVPair{
 					Key:      key,
 					Value:    value,
-					Revision: i,
+					Revision: strconv.Itoa(i),
 					TTL:      0,
 				},
 				UpdateType: api.UpdateTypeKVNew,
@@ -301,8 +303,10 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		expectFollowersCorrect := func(expectedEndResult map[model.Key]api.Update) {
 			var maxRev int
 			for _, upd := range expectedEndResult {
-				if upd.Revision.(int) > maxRev {
-					maxRev = upd.Revision.(int)
+				newRev, err := strconv.Atoi(upd.Revision)
+				Expect(err).NotTo(HaveOccurred())
+				if newRev > maxRev {
+					maxRev = newRev
 				}
 			}
 			for _, f := range followers {
@@ -425,8 +429,10 @@ func (f *follower) Loop(cxt context.Context) {
 	for item := range crumb.KVs.Iterator(cxt.Done()) {
 		upd := item.Value.(syncproto.SerializedUpdate)
 		f.state[upd.Key] = upd
-		if upd.Revision.(int) > maxRev {
-			maxRev = upd.Revision.(int)
+		newRev, err := strconv.Atoi(upd.Revision.(string))
+		Expect(err).NotTo(HaveOccurred())
+		if newRev > maxRev {
+			maxRev = newRev
 		}
 		if crumb.SyncStatus == api.InSync {
 			f.inSyncAt = maxRev
@@ -448,8 +454,10 @@ func (f *follower) Loop(cxt context.Context) {
 		//logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got next crumb")
 		for _, upd := range crumb.Deltas {
 			f.state[upd.Key] = upd
-			if upd.Revision.(int) > maxRev {
-				maxRev = upd.Revision.(int)
+			newRev, err := strconv.Atoi(upd.Revision.(string))
+			Expect(err).NotTo(HaveOccurred())
+			if newRev > maxRev {
+				maxRev = newRev
 			}
 		}
 		if crumb.SyncStatus == api.InSync {

@@ -280,11 +280,18 @@ func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 				"Failed to parse value.")
 		}
 	}
+	revStr := ""
+	switch r := s.Revision.(type) {
+	case string:
+		revStr = r
+	default:
+		revStr = fmt.Sprintf("%v", r)
+	}
 	return api.Update{
 		KVPair: model.KVPair{
 			Key:      parsedKey,
 			Value:    parsedValue,
-			Revision: s.Revision,
+			Revision: revStr,
 			TTL:      s.TTL,
 		},
 		UpdateType: s.UpdateType,

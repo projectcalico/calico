@@ -33,7 +33,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -75,7 +75,7 @@ type TyphaDaemon struct {
 	Server            *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
-	NewBackendClient      func(config api.CalicoAPIConfig) (BackendClient, error)
+	NewBackendClient      func(config apiconfig.CalicoAPIConfig) (BackendClient, error)
 	ConfigureEarlyLogging func()
 	ConfigureLogging      func(configParams *config.Config)
 
@@ -85,7 +85,7 @@ type TyphaDaemon struct {
 
 func New() *TyphaDaemon {
 	return &TyphaDaemon{
-		NewBackendClient: func(config api.CalicoAPIConfig) (BackendClient, error) {
+		NewBackendClient: func(config apiconfig.CalicoAPIConfig) (BackendClient, error) {
 			return backend.NewClient(config)
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
