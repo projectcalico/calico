@@ -90,8 +90,14 @@ type ListInterface interface {
 type KVPair struct {
 	Key      Key
 	Value    interface{}
-	Revision interface{}
+	Revision string
 	TTL      time.Duration // For writes, if non-zero, key has a TTL.
+}
+
+// KVPairList hosts a slice of KVPair structs and a Revision, returned from a Ls
+type KVPairList struct {
+	KVPairs  []*KVPair
+	Revision string
 }
 
 // KeyToDefaultPath converts one of the Keys from this package into a unique
@@ -157,6 +163,22 @@ func KeyToDefaultDeleteParentPaths(key Key) ([]string, error) {
 // returned by KeyToDefaultPath.
 func ListOptionsToDefaultPathRoot(listOptions ListInterface) string {
 	return listOptions.defaultPathRoot()
+}
+
+// ListOptionsIsFullyQualified returns true if the options actually specify a fully
+// qualified resource rather than a partial match.
+func ListOptionsIsFullyQualified(listOptions ListInterface) bool {
+	// Contruct the path prefix and then check to see if that actually corresponds to
+	// the path of a resource instance.
+	return listOptions.KeyFromDefaultPath(listOptions.defaultPathRoot()) != nil
+}
+
+// IsListOptionsLastSegmentPrefix returns true if the final segment of the default path
+// root is a name prefix rather than the full name.
+func IsListOptionsLastSegmentPrefix(listOptions ListInterface) bool {
+	// Only supported for ResourceListOptions.
+	rl, ok := listOptions.(ResourceListOptions)
+	return ok && rl.IsLastSegmentIsPrefix()
 }
 
 // KeyFromDefaultPath parses the default path representation of a key into one

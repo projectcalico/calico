@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	log "github.com/sirupsen/logrus"
@@ -44,11 +46,11 @@ func (r retryError) Error() string {
 	return r.err.Error()
 }
 
-func (r *retryWrapper) Create(object *model.KVPair) (*model.KVPair, error) {
+func (r *retryWrapper) Create(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	var kvp *model.KVPair
 	var err error
 	for i := 0; i < maxActionRetries; i++ {
-		if kvp, err = r.client.Create(object); err == nil {
+		if kvp, err = r.client.Create(ctx, object); err == nil {
 			// No error, exit returning the KVPair.
 			return kvp, nil
 		} else {
@@ -61,11 +63,11 @@ func (r *retryWrapper) Create(object *model.KVPair) (*model.KVPair, error) {
 	return nil, err.(retryError).err
 }
 
-func (r *retryWrapper) Update(object *model.KVPair) (*model.KVPair, error) {
+func (r *retryWrapper) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	var kvp *model.KVPair
 	var err error
 	for i := 0; i < maxActionRetries; i++ {
-		if kvp, err = r.client.Update(object); err == nil {
+		if kvp, err = r.client.Update(ctx, object); err == nil {
 			// No error, exit returning the KVPair.
 			return kvp, nil
 		} else if _, ok := err.(retryError); !ok {
@@ -95,27 +97,27 @@ func (r *retryWrapper) Apply(object *model.KVPair) (*model.KVPair, error) {
 	return nil, err.(retryError).err
 }
 
-func (r *retryWrapper) Delete(object *model.KVPair) error {
+func (r *retryWrapper) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	var err error
 	for i := 0; i < maxActionRetries; i++ {
-		if err = r.client.Delete(object); err == nil {
+		if kvp, err := r.client.Delete(ctx, key, revision); err == nil {
 			// No error, exit returning the KVPair.
-			return nil
+			return kvp, nil
 		} else if _, ok := err.(retryError); !ok {
-			return err
+			return nil, err
 		}
 	}
 
 	// Excessive retries.  Return the last error.
-	log.WithField("Key", object.Key).Error("Failed to delete object: too many retries")
-	return err.(retryError).err
+	log.WithField("Key", key).Error("Failed to delete object: too many retries")
+	return nil, err.(retryError).err
 }
 
-func (r *retryWrapper) Get(key model.Key) (*model.KVPair, error) {
+func (r *retryWrapper) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	var kvp *model.KVPair
 	var err error
 	for i := 0; i < maxActionRetries; i++ {
-		if kvp, err = r.client.Get(key); err == nil {
+		if kvp, err = r.client.Get(ctx, key, revision); err == nil {
 			// No error, exit returning the KVPair.
 			return kvp, nil
 		} else if _, ok := err.(retryError); !ok {
@@ -128,22 +130,21 @@ func (r *retryWrapper) Get(key model.Key) (*model.KVPair, error) {
 	return nil, err.(retryError).err
 }
 
-func (r *retryWrapper) List(list model.ListInterface) ([]*model.KVPair, string, error) {
-	var rev string
-	var kvps []*model.KVPair
+func (r *retryWrapper) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+	var kvpl *model.KVPairList
 	var err error
 	for i := 0; i < maxActionRetries; i++ {
-		if kvps, rev, err = r.client.List(list); err == nil {
-			// No error, exit returning the KVPair.
-			return kvps, rev, nil
+		if kvpl, err = r.client.List(ctx, list, revision); err == nil {
+			// No error, exit returning the KVPairList.
+			return kvpl, nil
 		} else if _, ok := err.(retryError); !ok {
-			return nil, "", err
+			return nil, err
 		}
 	}
 
 	// Excessive retries.  Return the last error.
 	log.WithField("List", list).Error("Failed to list object: too many retries")
-	return nil, "", err.(retryError).err
+	return nil, err.(retryError).err
 }
 
 func (r *retryWrapper) EnsureInitialized() error {

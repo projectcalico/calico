@@ -15,8 +15,7 @@
 package resources_test
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -32,20 +31,23 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 	converter := resources.GlobalNetworkPolicyConverter{}
 
 	// Define some useful test data.
-	listIncomplete := model.PolicyListOptions{}
+	listIncomplete := model.ResourceListOptions{}
 
 	// Compatible set of list, key and name
-	list1 := model.PolicyListOptions{
+	list1 := model.ResourceListOptions{
 		Name: "abcd",
+		Kind: apiv2.KindGlobalNetworkPolicy,
 	}
-	key1 := model.PolicyKey{
+	key1 := model.ResourceKey{
 		Name: "abcd",
+		Kind: apiv2.KindGlobalNetworkPolicy,
 	}
 	name1 := "abcd"
 
 	// Compatible set of key and name
-	key2 := model.PolicyKey{
+	key2 := model.ResourceKey{
 		Name: "foo.bar",
+		Kind: apiv2.KindGlobalNetworkPolicy,
 	}
 	name2 := "foo.bar"
 
@@ -55,77 +57,87 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 	port, _ := numorstring.PortFromRange(10, 20)
 	kvp1 := &model.KVPair{
 		Key: key2,
-		Value: &model.Policy{
-			Order: &order,
-			InboundRules: []model.Rule{{
-				Action:      "deny",
-				Protocol:    &prot,
-				SrcSelector: "has(bazfoo)",
-			}},
-			OutboundRules: []model.Rule{{
-				Action:   "allow",
-				DstPorts: []numorstring.Port{port},
-			}},
-			Selector:   "has(foobar)",
-			DoNotTrack: true,
-			Types:      []string{"ingress", "egress"},
+		Value: &apiv2.GlobalNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            name2,
+				ResourceVersion: "rv",
+			},
+			Spec: apiv2.PolicySpec{
+				Order: &order,
+				IngressRules: []apiv2.Rule{{
+					Action:   "deny",
+					Protocol: &prot,
+					Source: apiv2.EntityRule{
+						Selector: "has(bazfoo)",
+					},
+				}},
+				EgressRules: []apiv2.Rule{{
+					Action: "allow",
+					Destination: apiv2.EntityRule{
+						Ports: []numorstring.Port{port},
+					},
+				}},
+				Selector:   "has(foobar)",
+				DoNotTrack: true,
+				Types:      []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress},
+			},
 		},
 		Revision: "rv",
 	}
 
-	res1 := &custom.GlobalNetworkPolicy{
-		Metadata: metav1.ObjectMeta{
+	res1 := &apiv2.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:            name2,
 			ResourceVersion: "rv",
 		},
-		Spec: api.PolicySpec{
+		Spec: apiv2.PolicySpec{
 			Order: &order,
-			IngressRules: []api.Rule{{
+			IngressRules: []apiv2.Rule{{
 				Action:   "deny",
 				Protocol: &prot,
-				Source: api.EntityRule{
+				Source: apiv2.EntityRule{
 					Selector: "has(bazfoo)",
 				},
 			}},
-			EgressRules: []api.Rule{{
+			EgressRules: []apiv2.Rule{{
 				Action: "allow",
-				Destination: api.EntityRule{
+				Destination: apiv2.EntityRule{
 					Ports: []numorstring.Port{port},
 				},
 			}},
 			Selector:   "has(foobar)",
 			DoNotTrack: true,
-			Types:      []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+			Types:      []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress},
 		},
 	}
 
 	Context("with pre-DNAT flag", func() {
 
 		BeforeEach(func() {
-			kvp1.Value.(*model.Policy).DoNotTrack = false
-			kvp1.Value.(*model.Policy).PreDNAT = true
-			kvp1.Value.(*model.Policy).ApplyOnForward = true
+			kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec.DoNotTrack = false
+			kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec.PreDNAT = true
 			res1.Spec.DoNotTrack = false
 			res1.Spec.PreDNAT = true
-			res1.Spec.ApplyOnForward = true
+			//TODO: Add back
+			//res1.Spec.ApplyOnForward = true
 		})
 
 		AfterEach(func() {
-			kvp1.Value.(*model.Policy).DoNotTrack = true
-			kvp1.Value.(*model.Policy).PreDNAT = false
-			kvp1.Value.(*model.Policy).ApplyOnForward = true
+			kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec.DoNotTrack = true
+			kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec.PreDNAT = false
 			res1.Spec.DoNotTrack = true
 			res1.Spec.PreDNAT = false
-			res1.Spec.ApplyOnForward = true
+			//TODO: Add back
+			//res1.Spec.ApplyOnForward = true
 		})
 
 		It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
 			r, err := converter.FromKVPair(kvp1)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
-			Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-			Expect(r).To(BeAssignableToTypeOf(&custom.GlobalNetworkPolicy{}))
-			Expect(r.(*custom.GlobalNetworkPolicy).Spec).To(Equal(res1.Spec))
+			Expect(r.GetObjectMeta().GetName()).To(Equal(res1.ObjectMeta.Name))
+			Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
+			Expect(r).To(BeAssignableToTypeOf(&apiv2.GlobalNetworkPolicy{}))
+			Expect(r.(*apiv2.GlobalNetworkPolicy).Spec).To(Equal(res1.Spec))
 		})
 
 		It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -133,8 +145,8 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvp.Key).To(Equal(kvp1.Key))
 			Expect(kvp.Revision).To(Equal(kvp1.Revision))
-			Expect(kvp.Value).To(BeAssignableToTypeOf(&model.Policy{}))
-			Expect(kvp.Value).To(Equal(kvp1.Value))
+			Expect(kvp.Value).To(BeAssignableToTypeOf(&apiv2.GlobalNetworkPolicy{}))
+			Expect(kvp.Value.(*apiv2.GlobalNetworkPolicy).Spec).To(Equal(kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec))
 		})
 	})
 
@@ -161,10 +173,10 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
 		r, err := converter.FromKVPair(kvp1)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
-		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&custom.GlobalNetworkPolicy{}))
-		Expect(r.(*custom.GlobalNetworkPolicy).Spec).To(Equal(res1.Spec))
+		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.ObjectMeta.Name))
+		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
+		Expect(r).To(BeAssignableToTypeOf(&apiv2.GlobalNetworkPolicy{}))
+		Expect(r.(*apiv2.GlobalNetworkPolicy).Spec).To(Equal(res1.Spec))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -172,7 +184,7 @@ var _ = Describe("Global Network Policies conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value).To(BeAssignableToTypeOf(&model.Policy{}))
-		Expect(kvp.Value).To(Equal(kvp1.Value))
+		Expect(kvp.Value).To(BeAssignableToTypeOf(&apiv2.GlobalNetworkPolicy{}))
+		Expect(kvp.Value.(*apiv2.GlobalNetworkPolicy).Spec).To(Equal(kvp1.Value.(*apiv2.GlobalNetworkPolicy).Spec))
 	})
 })

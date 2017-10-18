@@ -15,6 +15,8 @@
 package client
 
 import (
+	"context"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -100,14 +102,14 @@ func (h *nodes) Delete(metadata api.NodeMetadata) error {
 	}
 
 	log.Debugf("Releasing the following IPs from workload endpoints: %v", ips)
-	_, err = h.c.IPAM().ReleaseIPs(ips)
+	_, err = h.c.IPAM().ReleaseIPs(context.Background(), ips)
 	if err != nil {
 		return err
 	}
 
 	// Remove the node from the IPAM data if it exists.
 	log.Debug("Removing IPAM host data")
-	err = h.c.IPAM().RemoveIPAMHost(metadata.Name)
+	err = h.c.IPAM().RemoveIPAMHost(context.Background(), metadata.Name)
 	if err != nil {
 		log.Debug("Error removing host data: %v", err)
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
@@ -117,7 +119,7 @@ func (h *nodes) Delete(metadata api.NodeMetadata) error {
 
 	// Remove BGP Node directory
 	log.Debug("Removing BGP Node data")
-	err = h.RemoveBGPNode(metadata.Name)
+	err = h.RemoveBGPNode(metadata)
 	if err != nil {
 		log.Debug("Error removing BGP Node data: %v", err)
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
@@ -240,10 +242,8 @@ func (h *nodes) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error
 }
 
 // RemoveBGPNode removes all Node specific data from the datastore.
-func (h *nodes) RemoveBGPNode(host string) error {
-	err := h.c.Backend.Delete(&model.KVPair{
-		Key: model.BGPNodeKey{Host: host},
-	})
+func (h *nodes) RemoveBGPNode(metadata api.NodeMetadata) error {
+	_, err := h.c.Backend.Delete(context.Background(), model.BGPNodeKey{Host: metadata.Name}, metadata.GetObjectMetadata().Revision)
 	if err != nil {
 		// Return the error unless the resource does not exist.
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {

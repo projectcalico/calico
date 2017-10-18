@@ -36,24 +36,14 @@ func (i *IPNet) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	// First attempt to parse as a CIDR and then as an IP address (assuming
-	// full mask).  When parsing as a CIDR we preserve the actual IP address
-	// and *not* the masked IP.
-	if ip, ipnet, err := ParseCIDR(s); err == nil {
-		i.IP = ip.IP
-		i.Mask = ipnet.Mask
-		return nil
-	}
-
-	ip := &IP{}
-	if err := ip.UnmarshalText([]byte(s)); err == nil {
-		n := ip.Network()
-		i.IP = n.IP
-		i.Mask = n.Mask
-		return nil
-	} else {
+	// Decode and ensure we maintain the full IP address in the IPNet that we return.
+	ip, ipnet, err := ParseCIDROrIP(s)
+	if err != nil {
 		return err
 	}
+	i.IP = ip.IP
+	i.Mask = ipnet.Mask
+	return nil
 }
 
 // Version returns the IP version for an IPNet, or 0 if not a valid IP net.
@@ -97,6 +87,29 @@ func ParseCIDR(c string) (*IP, *IPNet, error) {
 	return ip, ipnet, nil
 }
 
+// Parse a CIDR or an IP address and return the IP, CIDR or error.  If an IP address
+// string is supplied, then the CIDR returned is the fully masked IP address (i.e /32 or /128)
+func ParseCIDROrIP(c string) (*IP, *IPNet, error) {
+	// First try parsing as a CIDR.
+	ip, cidr, err := ParseCIDR(c)
+	if err == nil {
+		return ip, cidr, nil
+	}
+
+	// That failed, so try parsing as an IP.
+	ip = &IP{}
+	if err2 := ip.UnmarshalText([]byte(c)); err2 == nil {
+		if ip4 := ip.IP.To4(); ip4 != nil {
+			ip.IP = ip4
+		}
+		n := ip.Network()
+		return ip, n, nil
+	}
+
+	// That failed too, return the original error.
+	return nil, nil, err
+}
+
 // String returns a friendly name for the network.  The standard net package
 // implements String() on the pointer, which means it will not be invoked on a
 // struct type, so we re-implement on the struct type.
@@ -108,22 +121,22 @@ func (i IPNet) String() string {
 // MustParseNetwork parses the string into a IPNet.  The IP address in the
 // IPNet is masked.
 func MustParseNetwork(c string) IPNet {
-	_, cidr, err := net.ParseCIDR(c)
+	_, cidr, err := ParseCIDR(c)
 	if err != nil {
 		panic(err)
 	}
-	return IPNet{*cidr}
+	return *cidr
 }
 
 // MustParseCIDR parses the string into a IPNet.  The IP address in the
 // IPNet is not masked.
 func MustParseCIDR(c string) IPNet {
-	ip, cidr, err := net.ParseCIDR(c)
+	ip, cidr, err := ParseCIDR(c)
 	if err != nil {
 		panic(err)
 	}
 	n := IPNet{}
-	n.IP = ip
+	n.IP = ip.IP
 	n.Mask = cidr.Mask
 	return n
 }

@@ -15,8 +15,7 @@
 package testutils
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -29,108 +28,60 @@ var numProtocol1 = numorstring.ProtocolFromInt(240)
 var icmpType1 = 100
 var icmpCode1 = 200
 
-var cidr1 = net.MustParseNetwork("10.0.0.1/24")
-var cidr2 = net.MustParseNetwork("20.0.0.1/24")
-var cidrv61 = net.MustParseNetwork("abcd:5555::/120")
-var cidrv62 = net.MustParseNetwork("abcd:2345::/120")
+var cidr1 = "10.0.0.0/24"
+var cidr2 = "20.0.0.0/24"
+var cidrv61 = "abcd:5555::/120"
+var cidrv62 = "abcd:2345::/120"
 
-var icmp1 = api.ICMPFields{
+var icmp1 = apiv2.ICMPFields{
 	Type: &icmpType1,
 	Code: &icmpCode1,
 }
 
-var InRule1 = api.Rule{
+var InRule1 = apiv2.Rule{
 	Action:    "allow",
 	IPVersion: &ipv4,
 	Protocol:  &strProtocol1,
 	ICMP:      &icmp1,
-	Source: api.EntityRule{
+	Source: apiv2.EntityRule{
 		Tag:      "tag1",
-		Net:      &cidr1,
+		Nets:     []string{cidr1},
 		Selector: "label1 == 'value1'",
 	},
 }
 
-var InRule1AfterRead = api.Rule{
-	Action:    "allow",
-	IPVersion: &ipv4,
-	Protocol:  &strProtocol1,
-	ICMP:      &icmp1,
-	Source: api.EntityRule{
-		Tag:      "tag1",
-		Nets:     []*net.IPNet{&cidr1},
-		Selector: "label1 == 'value1'",
-	},
-}
-
-var InRule2 = api.Rule{
+var InRule2 = apiv2.Rule{
 	Action:    "deny",
 	IPVersion: &ipv6,
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
-	Source: api.EntityRule{
+	Source: apiv2.EntityRule{
 		Tag:      "tag2",
-		Net:      &cidrv61,
+		Nets:     []string{cidrv61},
 		Selector: "has(label2)",
 	},
 }
 
-var InRule2AfterRead = api.Rule{
-	Action:    "deny",
-	IPVersion: &ipv6,
-	Protocol:  &numProtocol1,
-	ICMP:      &icmp1,
-	Source: api.EntityRule{
-		Tag:      "tag2",
-		Nets:     []*net.IPNet{&cidrv61},
-		Selector: "has(label2)",
-	},
-}
-
-var EgressRule1 = api.Rule{
+var EgressRule1 = apiv2.Rule{
 	Action:    "pass",
 	IPVersion: &ipv4,
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
-	Source: api.EntityRule{
+	Source: apiv2.EntityRule{
 		Tag:      "tag3",
-		Net:      &cidr2,
+		Nets:     []string{cidr2},
 		Selector: "all()",
 	},
 }
 
-var EgressRule1AfterRead = api.Rule{
-	Action:    "pass",
-	IPVersion: &ipv4,
-	Protocol:  &numProtocol1,
-	ICMP:      &icmp1,
-	Source: api.EntityRule{
-		Tag:      "tag3",
-		Nets:     []*net.IPNet{&cidr2},
-		Selector: "all()",
-	},
-}
-
-var EgressRule2 = api.Rule{
+var EgressRule2 = apiv2.Rule{
 	Action:    "allow",
 	IPVersion: &ipv6,
 	Protocol:  &strProtocol2,
 	ICMP:      &icmp1,
-	Source: api.EntityRule{
+	Source: apiv2.EntityRule{
 		Tag:      "tag4",
-		Net:      &cidrv62,
-		Selector: "label2 == '1234'",
-	},
-}
-
-var EgressRule2AfterRead = api.Rule{
-	Action:    "allow",
-	IPVersion: &ipv6,
-	Protocol:  &strProtocol2,
-	ICMP:      &icmp1,
-	Source: api.EntityRule{
-		Tag:      "tag4",
-		Nets:     []*net.IPNet{&cidrv62},
+		Nets:     []string{cidrv62},
 		Selector: "label2 == '1234'",
 	},
 }

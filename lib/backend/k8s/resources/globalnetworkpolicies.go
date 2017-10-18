@@ -17,10 +17,8 @@ package resources
 import (
 	"reflect"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/custom"
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/converter"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -39,72 +37,63 @@ func NewGlobalNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K
 		name:            GlobalNetworkPolicyCRDName,
 		resource:        GlobalNetworkPolicyResourceName,
 		description:     "Calico Global Network Policies",
-		k8sResourceType: reflect.TypeOf(custom.GlobalNetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(custom.GlobalNetworkPolicyList{}),
+		k8sResourceType: reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
+		k8sListType:     reflect.TypeOf(apiv2.GlobalNetworkPolicyList{}),
 		converter:       GlobalNetworkPolicyConverter{},
 	}
 }
 
 // GlobalNetworkPolicyConverter implements the K8sResourceConverter interface.
 type GlobalNetworkPolicyConverter struct {
-	// Since the Spec is identical to the Calico API Spec, we use the
-	// API converter to convert to and from the model representation.
-	converter.PolicyConverter
 }
 
 func (_ GlobalNetworkPolicyConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
-	pl := l.(model.PolicyListOptions)
+	pl := l.(model.ResourceListOptions)
 	if pl.Name != "" {
-		return model.PolicyKey{Name: pl.Name}
+		return model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
 	}
 	return nil
 }
 
 func (_ GlobalNetworkPolicyConverter) KeyToName(k model.Key) (string, error) {
-	return k.(model.PolicyKey).Name, nil
+	return k.(model.ResourceKey).Name, nil
 }
 
 func (_ GlobalNetworkPolicyConverter) NameToKey(name string) (model.Key, error) {
-	return model.PolicyKey{
+	return model.ResourceKey{
 		Name: name,
+		Kind: apiv2.KindGlobalNetworkPolicy,
 	}, nil
 }
 
 func (c GlobalNetworkPolicyConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
-	// Since we are using the Calico API Spec definition to store the Calico
-	// Policy, use the client conversion helper to convert between KV and API.
-	t := r.(*custom.GlobalNetworkPolicy)
-	policy := api.Policy{
-		Metadata: api.PolicyMetadata{
-			Name: t.Metadata.Name,
-		},
-		Spec: t.Spec,
-	}
-	kvp, err := c.ConvertAPIToKVPair(policy)
-	kvp.Revision = t.Metadata.ResourceVersion
+	t := r.(*apiv2.GlobalNetworkPolicy)
 
-	return kvp, err
+	// Clear any CRD TypeMeta fields and then create a KVPair.
+	policy := apiv2.NewGlobalNetworkPolicy()
+	policy.ObjectMeta.Name = t.ObjectMeta.Name
+	policy.ObjectMeta.Namespace = t.ObjectMeta.Namespace
+	policy.Spec = t.Spec
+	return &model.KVPair{
+		Key: model.ResourceKey{
+			Name:      t.ObjectMeta.Name,
+			Namespace: t.ObjectMeta.Namespace,
+			Kind:      apiv2.KindGlobalNetworkPolicy,
+		},
+		Value:    policy,
+		Revision: t.ObjectMeta.ResourceVersion,
+	}, nil
 }
 
 func (c GlobalNetworkPolicyConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
-	r, err := c.ConvertKVPairToAPI(kvp)
-	if err != nil {
-		return nil, err
-	}
+	v := kvp.Value.(*apiv2.GlobalNetworkPolicy)
 
-	crdName, err := c.KeyToName(kvp.Key)
-	if err != nil {
-		return nil, err
-	}
-
-	crd := custom.GlobalNetworkPolicy{
-		Metadata: metav1.ObjectMeta{
-			Name: crdName,
+	return &apiv2.GlobalNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            v.ObjectMeta.Name,
+			Namespace:       v.ObjectMeta.Namespace,
+			ResourceVersion: kvp.Revision,
 		},
-		Spec: r.(*api.Policy).Spec,
-	}
-	if kvp.Revision != nil {
-		crd.Metadata.ResourceVersion = kvp.Revision.(string)
-	}
-	return &crd, nil
+		Spec: v.Spec,
+	}, nil
 }

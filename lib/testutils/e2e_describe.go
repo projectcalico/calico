@@ -16,7 +16,7 @@ package testutils
 import (
 	"fmt"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 
 	. "github.com/onsi/ginkgo"
 )
@@ -25,9 +25,10 @@ type DatastoreType int
 
 const (
 	DatastoreEtcdV2 DatastoreType = 1 << iota
+	DatastoreEtcdV3
 	DatastoreK8s
 
-	DatastoreAll = DatastoreEtcdV2 | DatastoreK8s
+	DatastoreAll = DatastoreEtcdV3 | DatastoreK8s
 )
 
 // E2eDatastoreDescribe is a replacement for ginkgo.Describe which invokes Describe
@@ -38,14 +39,28 @@ const (
 //
 // The *datastores* parameter is a bit-wise OR of the required datastore drivers
 // that will be tested.
-func E2eDatastoreDescribe(description string, datastores DatastoreType, body func(config api.CalicoAPIConfig)) bool {
+func E2eDatastoreDescribe(description string, datastores DatastoreType, body func(config apiconfig.CalicoAPIConfig)) bool {
 	if datastores&DatastoreEtcdV2 != 0 {
 		Describe(fmt.Sprintf("%s (etcdv2 backend)", description),
 			func() {
-				body(api.CalicoAPIConfig{
-					Spec: api.CalicoAPIConfigSpec{
-						DatastoreType: api.EtcdV2,
-						EtcdConfig: api.EtcdConfig{
+				body(apiconfig.CalicoAPIConfig{
+					Spec: apiconfig.CalicoAPIConfigSpec{
+						DatastoreType: apiconfig.EtcdV2,
+						EtcdConfig: apiconfig.EtcdConfig{
+							EtcdEndpoints: "http://127.0.0.1:2379",
+						},
+					},
+				})
+			})
+	}
+
+	if datastores&DatastoreEtcdV3 != 0 {
+		Describe(fmt.Sprintf("%s (etcdv3 backend)", description),
+			func() {
+				body(apiconfig.CalicoAPIConfig{
+					Spec: apiconfig.CalicoAPIConfigSpec{
+						DatastoreType: apiconfig.EtcdV3,
+						EtcdConfig: apiconfig.EtcdConfig{
 							EtcdEndpoints: "http://127.0.0.1:2379",
 						},
 					},
@@ -56,10 +71,10 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 	if datastores&DatastoreK8s != 0 {
 		Describe(fmt.Sprintf("%s (kubernetes backend)", description),
 			func() {
-				body(api.CalicoAPIConfig{
-					Spec: api.CalicoAPIConfigSpec{
-						DatastoreType: api.Kubernetes,
-						KubeConfig: api.KubeConfig{
+				body(apiconfig.CalicoAPIConfig{
+					Spec: apiconfig.CalicoAPIConfigSpec{
+						DatastoreType: apiconfig.Kubernetes,
+						KubeConfig: apiconfig.KubeConfig{
 							K8sAPIEndpoint: "http://localhost:8080",
 						},
 					},

@@ -15,6 +15,7 @@
 package resources
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -75,7 +76,7 @@ type customK8sResourceClient struct {
 }
 
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
-func (c *customK8sResourceClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      kvp.Key,
 		"Value":    kvp.Value,
@@ -98,6 +99,14 @@ func (c *customK8sResourceClient) Create(kvp *model.KVPair) (*model.KVPair, erro
 		Do().Into(resOut)
 	if err != nil {
 		logContext.WithError(err).Info("Error creating resource")
+		// If the resource already exists, return the existing one.
+		if kerrors.IsAlreadyExists(err) {
+			existing, get_err := c.Get(ctx, kvp.Key, kvp.Revision)
+			if get_err != nil {
+				return nil, get_err
+			}
+			return existing, K8sErrorToCalico(err, kvp.Key)
+		}
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
@@ -107,7 +116,7 @@ func (c *customK8sResourceClient) Create(kvp *model.KVPair) (*model.KVPair, erro
 }
 
 // Update updates an existing Custom K8s Resource instance in the k8s API from the supplied KVPair.
-func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      kvp.Key,
 		"Value":    kvp.Value,
@@ -118,26 +127,19 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 	// Create storage for the updated resource.
 	resOut := reflect.New(c.k8sResourceType).Interface().(CustomK8sResource)
 
-	providedRV := ""
-	if kvp.Revision != nil {
-		if rv, ok := kvp.Revision.(string); ok {
-			providedRV = rv
-		}
-	}
-
 	var updateError error
 	for i := 0; i < 5; i++ {
 		// If no revision was passed, get the object to use its latest Revision number.
 		// If a revision was passed, then we should just use that.
-		if providedRV == "" {
+		if len(kvp.Revision) == 0 {
 			logContext.Debug("Querying for resource version")
-			k, err := c.Get(kvp.Key)
+			k, err := c.Get(ctx, kvp.Key, kvp.Revision)
 			if err != nil {
 				return nil, err
 			}
 
-			if k.Revision != nil {
-				kvp.Revision = k.Revision.(string)
+			if len(k.Revision) != 0 {
+				kvp.Revision = k.Revision
 				logContext.Debugf("Set resource version to %s", kvp.Revision)
 			}
 		}
@@ -163,7 +165,7 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 			// Update the revision information from the response.
 			kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
 			return kvp, nil
-		} else if _, ok := updateError.(errors.ErrorResourceUpdateConflict); ok && providedRV == "" {
+		} else if kerrors.IsConflict(updateError) && len(kvp.Revision) == 0 {
 			// We only want to retry if there was no Revision provided with
 			// the KVP AND there was a CAS error while updating.
 			logContext.WithError(updateError).Warnf("Update failed for %s, retrying", kvp.Key.String())
@@ -176,6 +178,16 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 
 	// Failed to update the resource.
 	logContext.WithError(updateError).Error("Error updating resource")
+
+	if kerrors.IsConflict(updateError) {
+		logContext.Error("Getting existing resource")
+		existing, get_err := c.Get(ctx, kvp.Key, kvp.Revision)
+		if get_err != nil {
+			return nil, get_err
+		}
+		return existing, K8sErrorToCalico(updateError, kvp.Key)
+	}
+
 	return nil, K8sErrorToCalico(updateError, kvp.Key)
 }
 
@@ -192,7 +204,7 @@ func (c *customK8sResourceClient) Apply(kvp *model.KVPair) (*model.KVPair, error
 	// Attempt to Create and do an Update if the resource already exists.
 	// We only log debug here since the Create and Update will also log.
 	// Can't set Revision while creating a resource.
-	updated, err := c.Create(&model.KVPair{
+	updated, err := c.Create(context.Background(), &model.KVPair{
 		Key:   kvp.Key,
 		Value: kvp.Value,
 	})
@@ -203,7 +215,7 @@ func (c *customK8sResourceClient) Apply(kvp *model.KVPair) (*model.KVPair, error
 		}
 
 		// Try to Update if the resource already exists.
-		updated, err = c.Update(kvp)
+		updated, err = c.Update(context.Background(), kvp)
 		if err != nil {
 			logContext.Debug("Error applying resource (using Update)")
 			return nil, err
@@ -213,18 +225,23 @@ func (c *customK8sResourceClient) Apply(kvp *model.KVPair) (*model.KVPair, error
 }
 
 // Delete deletes an existing Custom K8s Resource instance in the k8s API using the supplied KVPair.
-func (c *customK8sResourceClient) Delete(kvp *model.KVPair) error {
+func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
-		"Key":      kvp.Key,
+		"Key":      k,
 		"Resource": c.resource,
 	})
 	logContext.Debug("Delete custom Kubernetes resource")
 
 	// Convert the Key to a resource name.
-	name, err := c.converter.KeyToName(kvp.Key)
+	name, err := c.converter.KeyToName(k)
 	if err != nil {
 		logContext.WithError(err).Info("Error deleting resource")
-		return err
+		return nil, err
+	}
+
+	existing, err := c.Get(ctx, k, revision)
+	if err != nil {
+		return nil, err
 	}
 
 	// Delete the resource using the name.
@@ -236,16 +253,17 @@ func (c *customK8sResourceClient) Delete(kvp *model.KVPair) error {
 		Do().Error()
 	if err != nil {
 		logContext.WithError(err).Info("Error deleting resource")
-		return K8sErrorToCalico(err, kvp.Key)
+		return nil, K8sErrorToCalico(err, k)
 	}
-	return nil
+	return existing, nil
 }
 
 // Get gets an existing Custom K8s Resource instance in the k8s API using the supplied Key.
-func (c *customK8sResourceClient) Get(key model.Key) (*model.KVPair, error) {
+func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      key,
 		"Resource": c.resource,
+		"Revision": revision,
 	})
 	logContext.Debug("Get custom Kubernetes resource")
 	name, err := c.converter.KeyToName(key)
@@ -260,6 +278,7 @@ func (c *customK8sResourceClient) Get(key model.Key) (*model.KVPair, error) {
 	logContext.Debug("Get custom Kubernetes resource by name")
 	resOut := reflect.New(c.k8sResourceType).Interface().(CustomK8sResource)
 	err = c.restClient.Get().
+		Context(ctx).
 		Resource(c.resource).
 		Name(name).
 		Do().Into(resOut)
@@ -273,7 +292,7 @@ func (c *customK8sResourceClient) Get(key model.Key) (*model.KVPair, error) {
 
 // List lists configured Custom K8s Resource instances in the k8s API matching the
 // supplied ListInterface.
-func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPair, string, error) {
+func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	logContext := log.WithFields(log.Fields{
 		"ListInterface": list,
 		"Resource":      c.resource,
@@ -286,18 +305,24 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 	// List.
 	if key := c.converter.ListInterfaceToKey(list); key != nil {
 		logContext.Debug("Performing List using Get")
-		if kvp, err := c.Get(key); err != nil {
+		if kvp, err := c.Get(ctx, key, revision); err != nil {
 			// The error will already be a Calico error type.  Ignore
 			// error that it doesn't exist - we'll return an empty
 			// list.
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 				log.WithField("Resource", c.resource).WithError(err).Info("Error listing resource")
-				return nil, "", err
+				return nil, err
 			}
-			return kvps, "", nil
+			return &model.KVPairList{
+				KVPairs:  kvps,
+				Revision: revision,
+			}, nil
 		} else {
 			kvps = append(kvps, kvp)
-			return kvps, kvp.Revision.(string), nil
+			return &model.KVPairList{
+				KVPairs:  kvps,
+				Revision: revision,
+			}, nil
 		}
 	}
 
@@ -315,9 +340,12 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 		// an empty list.
 		if !kerrors.IsNotFound(err) {
 			log.WithError(err).Info("Error listing resources")
-			return nil, "", K8sErrorToCalico(err, list)
+			return nil, K8sErrorToCalico(err, list)
 		}
-		return kvps, reslOut.GetListMeta().GetResourceVersion(), nil
+		return &model.KVPairList{
+			KVPairs:  kvps,
+			Revision: revision,
+		}, nil
 	}
 
 	// We expect the list type to have an "Items" field that we can
@@ -333,7 +361,10 @@ func (c *customK8sResourceClient) List(list model.ListInterface) ([]*model.KVPai
 			logContext.WithError(err).WithField("Item", res).Warning("unable to process resource, skipping")
 		}
 	}
-	return kvps, reslOut.GetListMeta().GetResourceVersion(), nil
+	return &model.KVPairList{
+		KVPairs:  kvps,
+		Revision: revision,
+	}, nil
 }
 
 // EnsureInitialized is a no-op since the CRD should be

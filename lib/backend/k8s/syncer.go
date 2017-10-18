@@ -15,6 +15,7 @@
 package k8s
 
 import (
+	"context"
 	"time"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -38,8 +39,8 @@ type kubeAPI interface {
 	PodList(string, metav1.ListOptions) (*k8sapi.PodList, error)
 	NetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
 	NetworkPolicyList() (extensions.NetworkPolicyList, error)
-	GlobalFelixConfigWatch(metav1.ListOptions) (watch.Interface, error)
-	GlobalFelixConfigList(model.GlobalConfigListOptions) ([]*model.KVPair, string, error)
+	FelixConfigWatch(metav1.ListOptions) (watch.Interface, error)
+	FelixConfigList(model.GlobalConfigListOptions) ([]*model.KVPair, string, error)
 	IPPoolWatch(metav1.ListOptions) (watch.Interface, error)
 	IPPoolList(model.IPPoolListOptions) ([]*model.KVPair, string, error)
 	NodeWatch(metav1.ListOptions) (watch.Interface, error)
@@ -74,10 +75,10 @@ func (k *realKubeAPI) NetworkPolicyWatch(opts metav1.ListOptions) (watch watch.I
 	return
 }
 
-func (k *realKubeAPI) GlobalFelixConfigWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) FelixConfigWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	globalFelixConfigWatcher := cache.NewListWatchFromClient(
 		k.kc.crdClientV1,
-		resources.GlobalFelixConfigResourceName,
+		resources.FelixConfigResourceName,
 		"",
 		fields.Everything())
 	watch, err = globalFelixConfigWatcher.WatchFunc(opts)
@@ -124,7 +125,8 @@ func (k *realKubeAPI) GlobalNetworkPolicyWatch(opts metav1.ListOptions) (watch.I
 }
 
 func (k *realKubeAPI) GlobalNetworkPolicyList() ([]*model.KVPair, string, error) {
-	return k.kc.gnpClient.List(model.PolicyListOptions{})
+	kvpl, err := k.kc.gnpClient.List(context.Background(), model.PolicyListOptions{}, "")
+	return kvpl.KVPairs, "", err
 }
 
 func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
@@ -132,16 +134,19 @@ func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *
 	return
 }
 
-func (k *realKubeAPI) GlobalFelixConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
-	return k.kc.globalFelixConfigClient.List(l)
+func (k *realKubeAPI) FelixConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
+	kvpl, err := k.kc.felixConfigClient.List(context.Background(), l, "")
+	return kvpl.KVPairs, "", err
 }
 
 func (k *realKubeAPI) HostConfigList(l model.HostConfigListOptions) ([]*model.KVPair, error) {
-	return k.kc.listHostConfig(l)
+	kvpl, err := k.kc.listHostConfig(context.Background(), l, "")
+	return kvpl.KVPairs, err
 }
 
 func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, string, error) {
-	return k.kc.ipPoolClient.List(l)
+	kvpl, err := k.kc.ipPoolClient.List(context.Background(), l, "")
+	return kvpl.KVPairs, "", err
 }
 
 func (k *realKubeAPI) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
@@ -150,7 +155,7 @@ func (k *realKubeAPI) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, 
 }
 
 func (k *realKubeAPI) getReadyStatus(key model.ReadyFlagKey) (*model.KVPair, error) {
-	return k.kc.getReadyStatus(key)
+	return k.kc.getReadyStatus(context.Background(), key, "")
 }
 
 func newSyncer(kubeAPI kubeAPI, converter Converter, callbacks api.SyncerCallbacks, disableNodePoll bool) *kubeSyncer {
@@ -288,7 +293,7 @@ const (
 	KEY_PO  = "Pod"
 	KEY_NP  = "NetworkPolicy"
 	KEY_GNP = "GlobalNetworkPolicy"
-	KEY_GC  = "GlobalFelixConfig"
+	KEY_GC  = "FelixConfig"
 	KEY_HC  = "HostConfig"
 	KEY_IP  = "IPPool"
 	KEY_NO  = "Node"
@@ -418,7 +423,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			// Create watcher for Calico global felix config resources.
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.globalFelixConfigVersion}
 			log.WithField("opts", opts).Info("(Re)start GlobalFelixConfig watch")
-			globalFelixConfigWatch, err := syn.kubeAPI.GlobalFelixConfigWatch(opts)
+			globalFelixConfigWatch, err := syn.kubeAPI.FelixConfigWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch GlobalFelixConfig, retrying: %s", err)
 				time.Sleep(1 * time.Second)
@@ -477,7 +482,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it.
 			kvps := syn.parseNamespaceEvent(event)
-			latestVersions.namespaceVersion = kvps[0].Revision.(string)
+			latestVersions.namespaceVersion = kvps[0].Revision
 			syn.sendUpdates(kvps, KEY_NS)
 			continue
 		case event = <-poChan:
@@ -493,7 +498,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			if kvp := syn.parsePodEvent(event); kvp != nil {
 				// Only send the update if we care about it.  We filter
 				// out a number of events that aren't useful for us.
-				latestVersions.podVersion = kvp.Revision.(string)
+				latestVersions.podVersion = kvp.Revision
 				syn.sendUpdates([]model.KVPair{*kvp}, KEY_PO)
 			}
 		case event = <-npChan:
@@ -507,7 +512,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			kvp := syn.parseNetworkPolicyEvent(event)
-			latestVersions.networkPolicyVersion = kvp.Revision.(string)
+			latestVersions.networkPolicyVersion = kvp.Revision
 			syn.sendUpdates([]model.KVPair{*kvp}, KEY_NP)
 		case event = <-gnpChan:
 			log.Debugf("Incoming GlobalNetworkPolicy watch event. Type=%s", event.Type)
@@ -522,7 +527,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			if kvp := syn.parseGlobalNetworkPolicyEvent(event); kvp != nil {
-				latestVersions.globalNetworkPolicyVersion = kvp.Revision.(string)
+				latestVersions.globalNetworkPolicyVersion = kvp.Revision
 				syn.sendUpdates([]model.KVPair{*kvp}, KEY_GNP)
 			}
 		case event = <-gcChan:
@@ -538,7 +543,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			kvp := syn.parseGlobalFelixConfigEvent(event)
-			latestVersions.globalFelixConfigVersion = kvp.Revision.(string)
+			latestVersions.globalFelixConfigVersion = kvp.Revision
 			syn.sendUpdates([]model.KVPair{*kvp}, KEY_GC)
 		case event = <-poolChan:
 			log.Debugf("Incoming IPPool watch event. Type=%s", event.Type)
@@ -553,7 +558,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			// Event is OK - parse it and send it over the channel.
 			if kvp := syn.parseIPPoolEvent(event); kvp != nil {
-				latestVersions.poolVersion = kvp.Revision.(string)
+				latestVersions.poolVersion = kvp.Revision
 				syn.sendUpdates([]model.KVPair{*kvp}, KEY_IP)
 			}
 		case event = <-noChan:
@@ -574,7 +579,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				"kvpHostIP":   kvpHostIP,
 				"kvpIPIPAddr": kvpIPIPAddr,
 			}).Debug("Got node KVs.")
-			latestVersions.nodeVersion = kvpHostIP.Revision.(string)
+			latestVersions.nodeVersion = kvpHostIP.Revision
 			syn.sendUpdates([]model.KVPair{*kvpHostIP}, KEY_NO)
 			syn.sendUpdates([]model.KVPair{*kvpIPIPAddr}, KEY_HC)
 		}
@@ -733,7 +738,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 		// Resync GlobalFelixConfig only if needed.
 		if syn.needsResync[KEY_GC] {
 			log.Info("Syncing GlobalFelixConfig")
-			confList, resourceVersion, err := syn.kubeAPI.GlobalFelixConfigList(model.GlobalConfigListOptions{})
+			confList, resourceVersion, err := syn.kubeAPI.FelixConfigList(model.GlobalConfigListOptions{})
 			if err != nil {
 				log.Warnf("Error querying GlobalFelixConfig during snapshot, retrying: %s", err)
 				time.Sleep(1 * time.Second)
@@ -1026,7 +1031,7 @@ func (syn *kubeSyncer) parseNetworkPolicyEvent(e watch.Event) *model.KVPair {
 }
 
 func (syn *kubeSyncer) parseGlobalFelixConfigEvent(e watch.Event) *model.KVPair {
-	return syn.parseCustomK8sResourceEvent(e, resources.GlobalFelixConfigConverter{}, "GlobalFelixConfig")
+	return syn.parseCustomK8sResourceEvent(e, resources.FelixConfigConverter{}, "FelixConfig")
 }
 
 func (syn *kubeSyncer) parseGlobalNetworkPolicyEvent(e watch.Event) *model.KVPair {

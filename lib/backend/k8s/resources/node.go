@@ -15,8 +15,11 @@
 package resources
 
 import (
+	"context"
+
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/apiv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
@@ -26,8 +29,10 @@ import (
 )
 
 const (
-	nodeBgpIpv4CidrAnnotation = "projectcalico.org/IPv4Address"
+	nodeBgpIpv4AddrAnnotation = "projectcalico.org/IPv4Address"
+	nodeBgpIpv6AddrAnnotation = "projectcalico.org/IPv6Address"
 	nodeBgpAsnAnnotation      = "projectcalico.org/ASNumber"
+	nodeIpInIpTunnelAddr      = "projectcalico.org/IpInIpTunnelAddr"
 )
 
 func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
@@ -43,22 +48,21 @@ type nodeClient struct {
 	clientSet *kubernetes.Clientset
 }
 
-func (c *nodeClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Create is not supported on Node type")
+func (c *nodeClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	return nil, errors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
 		Operation:  "Create",
 	}
 }
 
-func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	// Get a current copy of the node to fill in fields we don't track.
-	oldNode, err := c.clientSet.Nodes().Get(kvp.Key.(model.NodeKey).Hostname, metav1.GetOptions{})
+	oldNode, err := c.clientSet.Nodes().Get(kvp.Key.(model.ResourceKey).Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
-	node, err := mergeCalicoK8sNode(kvp.Value.(*model.Node), oldNode)
+	node, err := mergeCalicoK8sNode(kvp.Value.(*apiv2.Node), oldNode)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +74,7 @@ func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 
 		// If this is an update conflict and we didn't specify a revision in the
 		// request, indicate to the nodeRetryWrapper that we can retry the action.
-		if _, ok := err.(errors.ErrorResourceUpdateConflict); ok && kvp.Revision == nil {
+		if _, ok := err.(errors.ErrorResourceUpdateConflict); ok && len(kvp.Revision) == 0 {
 			err = retryError{err: err}
 		}
 		return nil, err
@@ -86,7 +90,7 @@ func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 }
 
 func (c *nodeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
-	node, err := c.Update(kvp)
+	node, err := c.Update(context.Background(), kvp)
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			return nil, err
@@ -95,22 +99,22 @@ func (c *nodeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 
 		// Create is not currently implemented, and probably will not be, but will throw an appropriate error
 		// for the user, along with the above warning.
-		return c.Create(kvp)
+		return c.Create(context.Background(), kvp)
 	}
 	return node, nil
 }
 
-func (c *nodeClient) Delete(kvp *model.KVPair) error {
+func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on Node type")
-	return errors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
+	return nil, errors.ErrorOperationNotSupported{
+		Identifier: key,
 		Operation:  "Delete",
 	}
 }
 
-func (c *nodeClient) Get(key model.Key) (*model.KVPair, error) {
+func (c *nodeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	log.Debug("Received Get request on Node type")
-	node, err := c.clientSet.Nodes().Get(key.(model.NodeKey).Hostname, metav1.GetOptions{})
+	node, err := c.clientSet.Nodes().Get(key.(model.ResourceKey).Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
@@ -123,24 +127,29 @@ func (c *nodeClient) Get(key model.Key) (*model.KVPair, error) {
 	return kvp, nil
 }
 
-//func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, string, error) {f
-func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, string, error) {
+func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	log.Debug("Received List request on Node type")
-	nl := list.(model.NodeListOptions)
+	nl := list.(model.ResourceListOptions)
 	kvps := []*model.KVPair{}
 
-	if nl.Hostname != "" {
+	if nl.Name != "" {
 		// The node is already fully qualified, so perform a Get instead.
 		// If the entry does not exist then we just return an empty list.
-		kvp, err := c.Get(model.NodeKey{Hostname: nl.Hostname})
+		kvp, err := c.Get(ctx, model.ResourceKey{Name: nl.Name, Kind: apiv2.KindNode}, revision)
 		if err != nil {
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-				return nil, "", err
+				return nil, err
 			}
-			return kvps, "", nil
+			return &model.KVPairList{
+				KVPairs:  kvps,
+				Revision: revision,
+			}, nil
 		}
 		kvps = append(kvps, kvp)
-		return kvps, kvp.Revision.(string), nil
+		return &model.KVPairList{
+			KVPairs:  kvps,
+			Revision: revision,
+		}, nil
 	}
 
 	// Listing all nodes.
@@ -157,7 +166,10 @@ func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, string, er
 		kvps = append(kvps, n)
 	}
 
-	return kvps, nodes.GetListMeta().GetResourceVersion(), nil
+	return &model.KVPairList{
+		KVPairs:  kvps,
+		Revision: revision,
+	}, nil
 }
 
 func (c *nodeClient) EnsureInitialized() error {

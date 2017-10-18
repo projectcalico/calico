@@ -15,6 +15,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -375,7 +376,7 @@ func (c *config) setLogLevel(level string, felixKey, bgpKey model.Key) error {
 
 // deleteConfig deletes a resource and ignores deleted errors.
 func (c *config) deleteConfig(key model.Key) error {
-	err := c.c.Backend.Delete(&model.KVPair{Key: key})
+	_, err := c.c.Backend.Delete(context.Background(), key, "")
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			return err
@@ -387,7 +388,7 @@ func (c *config) deleteConfig(key model.Key) error {
 // getValue returns the string value (pointer) or nil if the key does not
 // exist in the datastore.
 func (c *config) getValue(key model.Key) (*string, error) {
-	kv, err := c.c.Backend.Get(key)
+	kv, err := c.c.Backend.Get(context.Background(), key, "")
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
 			return nil, nil

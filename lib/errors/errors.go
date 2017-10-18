@@ -124,7 +124,7 @@ type ErrorResourceUpdateConflict struct {
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
-	return fmt.Sprintf("update conflict: '%s'", e.Identifier)
+	return fmt.Sprintf("update conflict: %s", e.Identifier)
 }
 
 // UpdateErrorIdentifier modifies the supplied error to use the new resource
@@ -152,4 +152,24 @@ func UpdateErrorIdentifier(err error, id interface{}) error {
 		err = e
 	}
 	return err
+}
+
+// Error indicating the watcher has been terminated.
+type ErrorWatchTerminated struct {
+	Err error
+}
+
+func (e ErrorWatchTerminated) Error() string {
+	return fmt.Sprintf("watch terminated: %s", e.Err)
+}
+
+// Error indicating the datastore has failed to parse an entry.
+type ErrorParsingDatastoreEntry struct {
+	RawKey   string
+	RawValue string
+	Err      error
+}
+
+func (e ErrorParsingDatastoreEntry) Error() string {
+	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %s", e.RawKey, e.RawValue, e.Err)
 }
