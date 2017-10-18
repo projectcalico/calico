@@ -26,7 +26,7 @@ The doc contribution process works as follows.
 
 > **Note**: For contributions that affect just one page, you can use the **Edit this page** buttons in the doc site. This allows you to skip a few steps in the process outlined above, but is suitable only for small contributions.
 
-We also encourage you to review [Doc site organization](#doc-site-organization), [Doc site architecture](#doc-site-architecture), [Linking content](#linking-content), and [RELEASING.md](RELEASING.md) for additional information.
+We also encourage you to review [Doc site organization](#doc-site-organization), [Organizational changes](#organizational-changes), [Link syntax](#link-syntax), and [RELEASING.md](RELEASING.md) for additional information.
 
 
 ## Building the doc site locally
@@ -132,26 +132,83 @@ Examples:
 - Calico API schema reference (policy, ip pool, etcd)
 
 
-## Doc site architecture
+## Organizational changes
 
-The naming and layout of these navbars are stored in `_data/$VERSION/navbars/*`. Jekyll automatically stores information from the `_data` directory in an accessible variable called `site.data`. The top-level layout (`_layout/docwithnav.html`) will iterate through all the files in `site.data[version].navbars` to construct the sidebar based on which version is being viewed.
+### Creating new pages
+
+- To create a top level splash page for a URL path, simply name the file `index.md`.
+
+- If you are adding a new page to the current release directory, add the following metadata just under the `title` of the page: `redirect_from: latest/<path-to-new-file>`. This ensures that readers who use `latest` in their paths instead of the version number of the current release get redirected to your new page. If you do not add this, you may experience `htmlproofer` errors.
+
+- [Add the new page to the side navigation bar](#linking-content).
+
+- Within the copies of the page in the `master` and previous release directories, add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. Example: `canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/'`. For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
+
+
+### Deleting or renaming pages
+
+If you need to delete or rename a directory or file:
+
+- Ensure that you [adjust the side navigation bar to match](#side-navigation-bar).
+
+- Update any `canonical_url` paths that reference the deleted or renamed page. The `canonical_url` metadata of all previous instances of the page may reference the deleted or renamed page. You must correct these pages to reference the final instance of the page. When you submit your PR, `htmlproofer` will flag these errors.
+
+    - _Deletion example_: If you delete a page from the `master` and `v3.0` directories, you must update the `canonical_url` path of the page in the `v2.6` directory to point to itself. You would also need to update the `canonical_url` paths of any previous instances of the page to point to the copy in the `v2.6` directory. This final copy becomes the new canonical copy. 
+    
+    - _Renaming example_: If you rename a page from the `master` and `v3.0` directories, you must update the `canonical_url` path of the page in the `v2.6` directory to point to the new path. Also correct any copies in previous directories.
+    
+    - For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
+
+### Side navigation bar
+
+The naming and layout of the side navigation bar is stored in `_data/$VERSION/navbars/*`. Jekyll automatically stores information from the `_data` directory in an accessible variable called `site.data`. The top-level layout (`_layout/docwithnav.html`) will iterate through all the files in `site.data[version].navbars` to construct the sidebar based on which version is being viewed.
 
 > **Note**: Sidebar paths to index files (see [next section](#linking-content)) should end in a `/` in the yaml file. Sidebar paths to actual files should not end in a `/` in the yaml file.
 
-URL structure is important. In order to create a top level splash page for a URL path, simply name the file `index.md`. See the following example:
+
+## Link syntax
+
+### Closing slashes
+
+To link to a page not named `index.md`, omit the closing slash. To link to a page named `index.md`, include a closing slash. See the following table for some examples.
 
 
-| URL                                           | Filepath                                         |
-|-----------------------------------------------|--------------------------------------------------|
-| `/getting-started/kubernetes/`                | `/getting-started/kubernetes/index.md`           |
-| `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md` |
+| URL                                           | File path                                         |
+|-----------------------------------------------|---------------------------------------------------|
+| `/getting-started/kubernetes/`                | `/getting-started/kubernetes/index.md`            |
+| `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md`  |
 
 
-## Linking content
+### Relative links and `page.version` variable
 
-All links should be absolute links. To link to versioned content, prefix all links with: `{{site.baseurl}}/{{page.version}}/`
+To link to other doc site content, use relative links prefixed with: `/{{page.version}}/`. This allows the content to port across documentation versions without link breakage. Example:
+
+```
+[Get started](/{{page.version}}/getting-started/)
+```
 
 > **Pro tip**: `page.version` will be inherited from the default set in `_config.yml` for the current page's directory.
+
+### Case sensitivity
+
+Do not include any uppercase letters in your links.
+
+### Anchor links
+
+An anchor link for each heading is automatically created. It consists of the title of the heading with each word separated by hyphens. Delete any slashes in the title. For example, to reference a heading titled "Working with the calico/kube-controllers container" on a page located at `https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration`, you would use the following:
+
+```
+/{{page.version}}/reference/kube-controllers/configuration#working-with-the-calicokube-controllers-container
+```
+
+## Canonical URLs
+
+Because the documentation site includes content for past versions as well as the latest version, it contains many duplicate pages. When Google indexes the site, it needs to know which copy we prefer. We use [jekyll-seo-tag](https://github.com/jekyll/jekyll-seo-tag) to add [canonical URLs](https://support.google.com/webmasters/answer/139066?hl=en) to each page. This helps us to ensure that the latest copy of the page comes up first when people search for information via Google.
+
+Each page should include a `canonical_url` tag that contains the absolute path to the latest copy of the page, even if the latest copy is the page itself. 
+
+You should _not_ need to modify the `canonical_url` metadata unless you are adding, deleting, or renaming a page.
+
 
 ## Releases
 
