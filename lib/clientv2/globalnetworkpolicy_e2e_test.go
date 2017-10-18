@@ -47,11 +47,12 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		Selector:     "thing == 'value'",
 	}
 	spec2 := apiv2.PolicySpec{
-		Order:        &order2,
-		IngressRules: []apiv2.Rule{testutils.InRule2, testutils.InRule1},
-		EgressRules:  []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
-		Selector:     "thing2 == 'value2'",
-		DoNotTrack:   true,
+		Order:          &order2,
+		IngressRules:   []apiv2.Rule{testutils.InRule2, testutils.InRule1},
+		EgressRules:    []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
+		Selector:       "thing2 == 'value2'",
+		DoNotTrack:     true,
+		ApplyOnForward: true,
 	}
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
