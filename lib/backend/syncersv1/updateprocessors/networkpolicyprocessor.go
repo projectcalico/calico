@@ -59,13 +59,14 @@ func convertPolicyV2ToV1Spec(spec apiv2.PolicySpec) (interface{}, error) {
 	}
 
 	v1value := &model.Policy{
-		Order:         spec.Order,
-		InboundRules:  irules,
-		OutboundRules: erules,
-		Selector:      spec.Selector,
-		DoNotTrack:    spec.DoNotTrack,
-		PreDNAT:       spec.PreDNAT,
-		Types:         policyTypesAPIV2ToBackend(spec.Types),
+		Order:          spec.Order,
+		InboundRules:   irules,
+		OutboundRules:  erules,
+		Selector:       spec.Selector,
+		DoNotTrack:     spec.DoNotTrack,
+		PreDNAT:        spec.PreDNAT,
+		ApplyOnForward: spec.ApplyOnForward,
+		Types:          policyTypesAPIV2ToBackend(spec.Types),
 	}
 
 	return v1value, nil

@@ -54,6 +54,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		By("converting a NetworkPolicy with minimum configuration")
 		res := apiv2.NewNetworkPolicy()
 		res.Spec.PreDNAT = true
+		res.Spec.ApplyOnForward = true
 
 		kvps, err := up.Process(&model.KVPair{
 			Key:      v2NetworkPolicyKey1,
@@ -65,7 +66,8 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1NetworkPolicyKey1,
 			Value: &model.Policy{
-				PreDNAT: true,
+				PreDNAT:        true,
+				ApplyOnForward: true,
 			},
 			Revision: "abcde",
 		}))
@@ -166,6 +168,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		res.Spec.Selector = selector
 		res.Spec.DoNotTrack = true
 		res.Spec.PreDNAT = false
+		res.Spec.ApplyOnForward = true
 		res.Spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v2NetworkPolicyKey2,
@@ -180,13 +183,14 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			{
 				Key: v1NetworkPolicyKey2,
 				Value: &model.Policy{
-					Order:         &order,
-					InboundRules:  []model.Rule{v1irule},
-					OutboundRules: []model.Rule{v1erule},
-					Selector:      selector,
-					DoNotTrack:    true,
-					PreDNAT:       false,
-					Types:         []string{"ingress"},
+					Order:          &order,
+					InboundRules:   []model.Rule{v1irule},
+					OutboundRules:  []model.Rule{v1erule},
+					Selector:       selector,
+					DoNotTrack:     true,
+					PreDNAT:        false,
+					ApplyOnForward: true,
+					Types:          []string{"ingress"},
 				},
 				Revision: "1234",
 			},
