@@ -17,6 +17,7 @@ package testutils
 import (
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	"github.com/sirupsen/logrus"
 )
 
 var ipv4 = 4
@@ -24,6 +25,18 @@ var ipv6 = 6
 var strProtocol1 = numorstring.ProtocolFromString("icmp")
 var strProtocol2 = numorstring.ProtocolFromString("udp")
 var numProtocol1 = numorstring.ProtocolFromInt(240)
+
+var portRange, singlePort, namedPort numorstring.Port
+
+func init() {
+	var err error
+	portRange, err = numorstring.PortFromRange(10, 20)
+	if err != nil {
+		logrus.WithError(err).Panic("Failed to create port range")
+	}
+	singlePort = numorstring.SinglePort(1024)
+	namedPort = numorstring.NamedPort("named-port")
+}
 
 var icmpType1 = 100
 var icmpCode1 = 200
@@ -47,6 +60,11 @@ var InRule1 = apiv2.Rule{
 		Tag:      "tag1",
 		Nets:     []string{cidr1},
 		Selector: "label1 == 'value1'",
+		Ports: []numorstring.Port{
+			portRange,
+			singlePort,
+			namedPort,
+		},
 	},
 }
 

@@ -28,6 +28,7 @@ import (
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -48,6 +49,18 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 		ContainerID:   "a12345a",
 		Endpoint:      "eth0",
 		InterfaceName: "cali09123",
+		Ports: []apiv2.EndpointPort{
+			{
+				Port:     1234,
+				Name:     "foobar",
+				Protocol: numorstring.ProtocolFromString("tcp"),
+			},
+			{
+				Port:     5432,
+				Name:     "bop",
+				Protocol: numorstring.ProtocolFromString("tcp"),
+			},
+		},
 	}
 	spec1_2 := apiv2.WorkloadEndpointSpec{
 		Node:          "node-1",
@@ -56,6 +69,13 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 		ContainerID:   "a12345a",
 		Endpoint:      "eth0",
 		InterfaceName: "foobar",
+		Ports: []apiv2.EndpointPort{
+			{
+				Port:     5678,
+				Name:     "bazzbiff",
+				Protocol: numorstring.ProtocolFromString("udp"),
+			},
+		},
 	}
 	spec2_1 := apiv2.WorkloadEndpointSpec{
 		Node:          "node-2",
@@ -528,7 +548,6 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
-
 
 	Describe("WorkloadEndpoint names based on primary identifiers in Spec", func() {
 		It("should handle prefix lists of workload endpoints", func() {

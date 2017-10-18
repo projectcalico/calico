@@ -156,20 +156,19 @@ var _ = Describe("Test Pod conversion", func() {
 		expectedLabels := map[string]string{"labelA": "valueA", "labelB": "valueB", "calico/k8s_ns": "default"}
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
 
-		// TODO(doublek): Named ports?
-		//nsProtoTCP := numorstring.ProtocolFromString("tcp")
-		//nsProtoUDP := numorstring.ProtocolFromString("udp")
-		//Expect(wep.Value.(*model.WorkloadEndpoint).Ports).To(ConsistOf(
-		//	// No proto defaults to TCP (as defined in k8s API spec)
-		//	model.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
-		//	// Explicit TCP proto is OK too.
-		//	model.EndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
-		//	// Host port should be ignored.
-		//	model.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
-		//	// UDP is also an option.
-		//	model.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
-		//	// Unknown protocol port is ignored.
-		//))
+		nsProtoTCP := numorstring.ProtocolFromString("tcp")
+		nsProtoUDP := numorstring.ProtocolFromString("udp")
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Ports).To(ConsistOf(
+			// No proto defaults to TCP (as defined in k8s API spec)
+			apiv2.EndpointPort{Name: "no-proto", Port: 1234, Protocol: nsProtoTCP},
+			// Explicit TCP proto is OK too.
+			apiv2.EndpointPort{Name: "tcp-proto", Port: 1024, Protocol: nsProtoTCP},
+			// Host port should be ignored.
+			apiv2.EndpointPort{Name: "tcp-proto-with-host-port", Port: 8080, Protocol: nsProtoTCP},
+			// UDP is also an option.
+			apiv2.EndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
+			// Unknown protocol port is ignored.
+		))
 
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision).To(Equal("1234"))
