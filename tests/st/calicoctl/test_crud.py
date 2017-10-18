@@ -337,8 +337,23 @@ class TestCalicoctlCommands(TestBase):
         # Create resource with name1 and with name2.  If the resource is
         # namespaced, leave the first namespace blank and the second set to
         # namespace2 for the actual create request.
-        data1['metadata']['name'] = "name1"
-        data2['metadata']['name'] = "name2"
+        if kind == "WorkloadEndpoint":
+            # The validation in libcalico-go WorkloadEndpoint checks the
+            # construction of the name so keep the name on the workloadendpoint.
+
+            # Below namespace2 is searched for the WorkloadEndpoint data1
+            # name so we need data2 to have a different name than data1 so we
+            # change it to have eth1 instead of eth0
+
+            # Strip off the last character (the zero in eth0) and replace it
+            # with a 1
+            data2['metadata']['name'] = data1['metadata']['name'][:len(data1['metadata']['name'])-1] + "1"
+            # Change endpoint to eth1 so the validation works on the WEP
+            data2['spec']['endpoint'] = "eth1"
+        else:
+            data1['metadata']['name'] = "name1"
+            data2['metadata']['name'] = "name2"
+
         if namespaced:
             data1['metadata']['namespace'] = ""
             data2['metadata']['namespace'] = "namespace2"
@@ -357,7 +372,7 @@ class TestCalicoctlCommands(TestBase):
         # Get the resource with name1 and namespace2.  For a namespaced
         # resource this should match the modified data to default the
         # namespace.  For non-namespaced resources this will error.
-        rc = calicoctl("get %s name1 --namespace default -o yaml" % kind)
+        rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))
         if namespaced:
             rc.assert_data(data1)
         else:
@@ -412,10 +427,10 @@ class TestCalicoctlCommands(TestBase):
             rc.assert_error(NOT_FOUND)
 
         # Deleting without a namespace will delete the default.
-        rc = calicoctl("delete %s name1" % kind)
+        rc = calicoctl("delete %s %s" % (kind, data1['metadata']['name']))
         rc.assert_no_error()
 
-        rc = calicoctl("delete %s name2" % kind)
+        rc = calicoctl("delete %s %s" % (kind, data2['metadata']['name']))
         if namespaced:
             rc.assert_error(NOT_FOUND)
             rc = calicoctl("delete", data2)
