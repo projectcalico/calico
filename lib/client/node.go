@@ -117,6 +117,16 @@ func (h *nodes) Delete(metadata api.NodeMetadata) error {
 		}
 	}
 
+	// Remove BGP Node directory
+	log.Debug("Removing BGP Node data")
+	err = h.RemoveBGPNode(metadata)
+	if err != nil {
+		log.Debug("Error removing BGP Node data: %v", err)
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+			return err
+		}
+	}
+
 	// Finally remove the node.
 	return h.c.delete(metadata, h)
 }
@@ -229,4 +239,17 @@ func (h *nodes) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error
 	}
 
 	return apiNode, nil
+}
+
+// RemoveBGPNode removes all Node specific data from the datastore.
+func (h *nodes) RemoveBGPNode(metadata api.NodeMetadata) error {
+	_, err := h.c.Backend.Delete(context.Background(), model.BGPNodeKey{Host: metadata.Name}, metadata.GetObjectMetadata().Revision)
+	if err != nil {
+		// Return the error unless the resource does not exist.
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			log.Errorf("Error removing BGP Node: %s", err)
+			return err
+		}
+	}
+	return nil
 }

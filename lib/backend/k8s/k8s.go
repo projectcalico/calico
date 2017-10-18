@@ -42,7 +42,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -53,6 +53,9 @@ type KubeClient struct {
 
 	// Client for interacting with CustomResourceDefinition.
 	crdClientV1 *rest.RESTClient
+
+	// Client for interacting with NetworkingPolicy
+	extensionsClientV1Beta1 *rest.RESTClient
 
 	disableNodePoll bool
 
@@ -124,10 +127,16 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %s", err)
 	}
 
+	extensionsClientV1, err := BuildExtensionsClientV1(*config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build V1 Extensions client: %s", err)
+	}
+
 	kubeClient := &KubeClient{
-		clientSet:       cs,
-		crdClientV1:     crdClientV1,
-		disableNodePoll: kc.K8sDisableNodePoll,
+		clientSet:               cs,
+		crdClientV1:             crdClientV1,
+		extensionsClientV1Beta1: extensionsClientV1,
+		disableNodePoll:         kc.K8sDisableNodePoll,
 	}
 
 	// Create the Calico sub-clients.
@@ -262,6 +271,47 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 			return nil
 		})
 
+	schemeBuilder.AddToScheme(clientapi.Scheme)
+
+	return cli, nil
+}
+
+// BuildExtensionsClientV1 builds a RESTClient configured to interact with
+// K8s.io extensions/NetworkPolicy
+func BuildExtensionsClientV1(cfg rest.Config) (*rest.RESTClient, error) {
+	// Generate config using the base config.
+	cfg.GroupVersion = &schema.GroupVersion{
+		Group:   "extensions",
+		Version: "v1beta1",
+	}
+	cfg.APIPath = "/apis"
+	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: clientapi.Codecs}
+
+	cli, err := rest.RESTClientFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove the client-go type for NetworkPolicy since we want to
+	// register our own to get new API features.
+	akt := clientapi.Scheme.AllKnownTypes()
+	gvk := schema.GroupVersionKind{
+		Group:   "extensions",
+		Version: "v1beta1",
+		Kind:    "NetworkPolicy",
+	}
+	delete(akt, gvk)
+
+	// Register our resource.
+	schemeBuilder := runtime.NewSchemeBuilder(
+		func(scheme *runtime.Scheme) error {
+			scheme.AddKnownTypes(
+				*cfg.GroupVersion,
+				&extensions.NetworkPolicy{},
+			)
+			return nil
+		})
 	schemeBuilder.AddToScheme(clientapi.Scheme)
 
 	return cli, nil
@@ -628,7 +678,7 @@ func (c *KubeClient) listPolicies(ctx context.Context, l model.ResourceListOptio
 
 	// Otherwise, list all NetworkPolicy objects in all Namespaces.
 	networkPolicies := extensions.NetworkPolicyList{}
-	err := c.clientSet.Extensions().RESTClient().
+	err := c.extensionsClientV1Beta1.
 		Get().
 		Resource("networkpolicies").
 		Timeout(10 * time.Second).
@@ -676,7 +726,7 @@ func (c *KubeClient) getPolicy(ctx context.Context, k model.ResourceKey, revisio
 
 		// Get the NetworkPolicy from the API and convert it.
 		networkPolicy := extensions.NetworkPolicy{}
-		err = c.clientSet.Extensions().RESTClient().
+		err = c.extensionsClientV1Beta1.
 			Get().
 			Resource("networkpolicies").
 			Namespace(namespace).

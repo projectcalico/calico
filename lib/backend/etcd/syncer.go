@@ -400,7 +400,7 @@ func (syn *etcdSyncer) pollClusterID(interval time.Duration) {
 	}
 }
 
-// mergeUpdates is a goroutine that processes updates from the snapshot and wathcer threads,
+// mergeUpdates is a goroutine that processes updates from the snapshot and watcher threads,
 // merging them into an eventually-consistent stream of updates.
 //
 // The merging includes resolving deletions where the watcher may be ahead of the snapshot

@@ -116,6 +116,7 @@ func init() {
 		Entry("should marshal port of 10", portFromString("10"), "10"),
 		Entry("should marshal port range of 10:20", portFromRange(10, 20), "\"10:20\""),
 		Entry("should marshal port range of 20:30", portFromRange(20, 30), "\"20:30\""),
+		Entry("should marshal named port", numorstring.NamedPort("foobar"), `"foobar"`),
 
 		// Protocol tests.
 		Entry("should marshal protocol of 0", numorstring.ProtocolFromInt(0), "0"),

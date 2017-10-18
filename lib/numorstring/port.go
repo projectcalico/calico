@@ -121,7 +121,9 @@ func (p *Port) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON implements the json.Marshaller interface.
 func (p Port) MarshalJSON() ([]byte, error) {
-	if p.MinPort == p.MaxPort {
+	if p.PortName != "" {
+		return json.Marshal(p.PortName)
+	} else if p.MinPort == p.MaxPort {
 		return json.Marshal(p.MinPort)
 	} else {
 		return json.Marshal(p.String())
@@ -132,7 +134,9 @@ func (p Port) MarshalJSON() ([]byte, error) {
 // this returns a single string representation of the port number, otherwise
 // if returns a colon separated range of ports.
 func (p Port) String() string {
-	if p.MinPort == p.MaxPort {
+	if p.PortName != "" {
+		return p.PortName
+	} else if p.MinPort == p.MaxPort {
 		return strconv.FormatUint(uint64(p.MinPort), 10)
 	} else {
 		return fmt.Sprintf("%d:%d", p.MinPort, p.MaxPort)

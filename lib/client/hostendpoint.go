@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -140,6 +140,15 @@ func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPai
 		}
 	}
 
+	var ports []model.EndpointPort
+	for _, port := range ah.Spec.Ports {
+		ports = append(ports, model.EndpointPort{
+			Name:     port.Name,
+			Protocol: port.Protocol,
+			Port:     port.Port,
+		})
+	}
+
 	d := model.KVPair{
 		Key: k,
 		Value: &model.HostEndpoint{
@@ -149,6 +158,7 @@ func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPai
 			ProfileIDs:        ah.Spec.Profiles,
 			ExpectedIPv4Addrs: ipv4Addrs,
 			ExpectedIPv6Addrs: ipv6Addrs,
+			Ports:             ports,
 		},
 	}
 
@@ -172,6 +182,16 @@ func (h *hostEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resourc
 	ah.Spec.InterfaceName = bh.Name
 	ah.Spec.Profiles = bh.ProfileIDs
 	ah.Spec.ExpectedIPs = ips
+
+	var ports []api.EndpointPort
+	for _, port := range bh.Ports {
+		ports = append(ports, api.EndpointPort{
+			Name:     port.Name,
+			Protocol: port.Protocol,
+			Port:     port.Port,
+		})
+	}
+	ah.Spec.Ports = ports
 
 	return ah, nil
 }
