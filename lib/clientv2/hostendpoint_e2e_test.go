@@ -28,6 +28,7 @@ import (
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -41,10 +42,29 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 	spec1 := apiv2.HostEndpointSpec{
 		Node:          "node1",
 		InterfaceName: "eth0",
+		Ports: []apiv2.EndpointPort{
+			{
+				Port:     1234,
+				Name:     "foobar",
+				Protocol: numorstring.ProtocolFromString("tcp"),
+			},
+			{
+				Port:     5432,
+				Name:     "bop",
+				Protocol: numorstring.ProtocolFromString("tcp"),
+			},
+		},
 	}
 	spec2 := apiv2.HostEndpointSpec{
 		Node:          "node2",
 		InterfaceName: "eth1",
+		Ports: []apiv2.EndpointPort{
+			{
+				Port:     5678,
+				Name:     "bazzbiff",
+				Protocol: numorstring.ProtocolFromString("udp"),
+			},
+		},
 	}
 
 	DescribeTable("HostEndpoint e2e CRUD tests",
