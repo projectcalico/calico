@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -579,7 +579,32 @@ class TestCalicoctlCommands(TestBase):
 #             'spec': {'interfaceName': 'cali7',
 #                      'profiles': ['prof1',
 #                                   'prof2'],
-#                      'node': 'host2'}
+#                      'node': 'host2',
+#                      'ports': [{"name": "tcp-port",
+#                                 "port": 1234,
+#                                 "protocol": "tcp"},
+#                                {"name": "udp-port",
+#                                 "port": 5000,
+#                                 "protocol": "udp"}]}}
+#         }),
+#         ("workloadEndpoint1", {
+#             'apiVersion': API_VERSION,
+#             'kind': 'WorkloadEndpoint',
+#             'metadata': {'name': 'endpoint2',
+#                          'labels': {'type': 'frontend'}},
+#             'spec': {'interfaceName': 'cali7',
+#                      'profiles': ['prof1',
+#                                   'prof2'],
+#                      'node': 'host2',
+#                      'orchestrator': 'orch',
+#                      'workload': 'workl',
+#                      'ipNetworks': ['10.0.0.1/32'],
+#                      'ports': [{"name": "tcp-port",
+#                                 "port": 1234,
+#                                 "protocol": "tcp"},
+#                                {"name": "udp-port",
+#                                 "port": 5000,
+#                                 "protocol": "udp"}]}
 #         }),
 #         ("networkPolicy1", {'apiVersion': API_VERSION,
 #                      'kind': 'NetworkPolicy',
@@ -613,7 +638,8 @@ class TestCalicoctlCommands(TestBase):
 #                                                'notTag': 'bartag',
 #                                                'nets': ['10.0.0.0/16'],
 #                                                'ports': [1234,
-#                                                          '10:1024'],
+#                                                          '10:1024',
+#                                                          'named-port'],
 #                                                'selector':
 #                                                    "type=='application'",
 #                                                'tag': 'footag'}}],
@@ -634,9 +660,44 @@ class TestCalicoctlCommands(TestBase):
 #                                            'protocol': 'udp',
 #                                            'source': {}}],
 #                               'order': 100000,
+#                               'applyOnForward': True,
 #                               'doNotTrack': True,
 #                               'types': ['ingress', 'egress']}
 #         }),
+#         ("networkPolicy3", {'apiVersion': API_VERSION,
+#                      'kind': 'NetworkPolicy',
+#                      'metadata': {'name': 'policy2',
+#                                   'namespace': 'default'},
+#                      'spec': {'egress': [{'action': 'allow',
+#                                           'destination': {
+#                                               'ports': ['http-port']},
+#                                           'protocol': 'tcp',
+#                                           'source': {}}],
+#                               'selector': "type=='application'",
+#                               'types': ['egress']}
+#         }),
+#         ("networkPolicy4", {'apiVersion': API_VERSION,
+#                      'kind': 'NetworkPolicy',
+#                      'metadata': {'name': 'policy2',
+#                                   'namespace': 'default'},
+#                      'spec': {
+#                          'egress': [{
+#                              'action': 'allow',
+#                              'destination': {'ports': ['Telnet']},
+#                              'protocol': 'udp',
+#                              'source': {},
+#                          }],
+#                          'ingress': [{
+#                              'action': 'allow',
+#                              'destination': {
+#                                  'ports': ['echo', 53, 17, 'Quote']
+#                              },
+#                              'protocol': 'udp',
+#                              'source': {},
+#                          }],
+#                          'selector': "type=='application'",
+#                          'types': ['egress', 'ingress']
+#                    }}),
 #         ("pool1", {'apiVersion': API_VERSION,
 #                    'kind': 'IPPool',
 #                    'metadata': {'name': 'ippool1'},
@@ -1416,6 +1477,22 @@ class TestCalicoctlCommands(TestBase):
 #                        'kind': 'NetworkPolicy',
 #                        'metadata': {'name': 'policy2'},
 #                        'spec': {'egress': [{'action': 'jumpupanddown',  # invalid action
+#                                             'destination': {},
+#                                             'protocol': 'tcp',
+#                                             'source': {},
+#                                             }],
+#                                 'ingress': [{'action': 'allow',
+#                                              'destination': {},
+#                                              'protocol': 'udp',
+#                                              'source': {}}],
+#                                 'order': 100000,
+#                                 'selector': ""}}),
+#                    ("policy-NetworkPolicyNameRejected", {
+#                        'apiVersion': API_VERSION,
+#                        'kind': 'NetworkPolicy',
+#                        'metadata': {'name': 'knp.default.rejectmeplease',
+#                                     'namespace': 'default'},
+#                        'spec': {'egress': [{'action': 'allow',
 #                                             'destination': {},
 #                                             'protocol': 'tcp',
 #                                             'source': {},

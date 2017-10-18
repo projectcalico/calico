@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,10 +174,7 @@ func (r resourcePrinterTemplate) print(client client.Interface, resources []runt
 	}
 
 	err = tmpl.Execute(os.Stdout, resources)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // join is similar to strings.Join() but takes an arbitrary slice of interfaces and converts

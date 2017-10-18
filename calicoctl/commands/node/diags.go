@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,8 +86,8 @@ func runDiags(logDir string) {
 		{"Dumping routes (IPv6)", "ip -6 route", "ipv6_route"},
 		{"Dumping interface info (IPv4)", "ip -4 addr", "ipv4_addr"},
 		{"Dumping interface info (IPv6)", "ip -6 addr", "ipv6_addr"},
-		{"Dumping iptables (IPv4)", "iptables-save", "ipv4_tables"},
-		{"Dumping iptables (IPv6)", "ip6tables-save", "ipv6_tables"},
+		{"Dumping iptables (IPv4)", "iptables-save -c", "ipv4_tables"},
+		{"Dumping iptables (IPv6)", "ip6tables-save -c", "ipv6_tables"},
 		{"Dumping ipsets", "ipset list", "ipsets"},
 		{"Dumping ipsets (container)", "docker run --privileged --net=host calico/node ipset list", "ipset_container"},
 		{"Copying journal for calico-node.service", "journalctl -u calico-node.service --no-pager", "journalctl_calico_node"},
@@ -152,7 +152,7 @@ func runDiags(logDir string) {
 	tarFilePath := filepath.Join(tmpDir, tarFile)
 
 	fmt.Printf("\nDiags saved to %s\n", tarFilePath)
-	fmt.Printf(`If required, you can upload the diagnostics bundle to a file sharing service 
+	fmt.Printf(`If required, you can upload the diagnostics bundle to a file sharing service
 such as transfer.sh using curl or similar.  For example:
 
     curl --upload-file %s https://transfer.sh/%s`, tarFilePath, tarFilePath)
