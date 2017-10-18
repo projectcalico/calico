@@ -28,8 +28,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 var (

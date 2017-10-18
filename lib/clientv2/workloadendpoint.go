@@ -19,10 +19,10 @@ import (
 	"fmt"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
-	"github.com/projectcalico/libcalico-go/lib/names"
-	"github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 // WorkloadEndpointInterface has methods to work with WorkloadEndpoint resources.
@@ -103,12 +103,12 @@ func (r workloadEndpoints) Watch(ctx context.Context, opts options.ListOptions) 
 func (r workloadEndpoints) validate(res *apiv2.WorkloadEndpoint) error {
 	// Validate the workload endpoint indices and the name match.
 	wepids := names.WorkloadEndpointIdentifiers{
-		Node: res.Spec.Node,
+		Node:         res.Spec.Node,
 		Orchestrator: res.Spec.Orchestrator,
-		Endpoint: res.Spec.Endpoint,
-		Workload: res.Spec.Workload,
-		Pod: res.Spec.Pod,
-		ContainerID: res.Spec.ContainerID,
+		Endpoint:     res.Spec.Endpoint,
+		Workload:     res.Spec.Workload,
+		Pod:          res.Spec.Pod,
+		ContainerID:  res.Spec.ContainerID,
 	}
 	expectedName, err := wepids.CalculateWorkloadEndpointName(false)
 	if err != nil {
@@ -122,8 +122,8 @@ func (r workloadEndpoints) validate(res *apiv2.WorkloadEndpoint) error {
 	if res.Name != expectedName {
 		return errors.ErrorValidation{
 			ErroredFields: []errors.ErroredField{{
-				Name: "Name",
-				Value: res.Name,
+				Name:   "Name",
+				Value:  res.Name,
 				Reason: fmt.Sprintf("the WorkloadEndpoint name does not match the primary identifiers assigned in the Spec: expected name %s", expectedName),
 			}},
 		}

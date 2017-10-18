@@ -19,13 +19,14 @@ import (
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 )
+
 type DatastoreType string
 
 const (
-	EtcdV2     DatastoreType = "etcdv2"
-	EtcdV3     DatastoreType = "etcdv3"
-	Kubernetes DatastoreType = "kubernetes"
-	KindCalicoAPIConfig     = "CalicoAPIConfig"
+	EtcdV2              DatastoreType = "etcdv2"
+	EtcdV3              DatastoreType = "etcdv3"
+	Kubernetes          DatastoreType = "kubernetes"
+	KindCalicoAPIConfig               = "CalicoAPIConfig"
 )
 
 // CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource
@@ -34,7 +35,7 @@ type CalicoAPIConfig struct {
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Specification of the BGPConfiguration.
-	Spec     CalicoAPIConfigSpec     `json:"spec,omitempty"`
+	Spec CalicoAPIConfigSpec `json:"spec,omitempty"`
 }
 
 // CalicoAPIConfigSpec contains the specification for a Calico CalicoAPIConfig resource.
@@ -73,7 +74,7 @@ type KubeConfig struct {
 func NewCalicoAPIConfig() *CalicoAPIConfig {
 	return &CalicoAPIConfig{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindCalicoAPIConfig ,
+			Kind:       KindCalicoAPIConfig,
 			APIVersion: apiv2.GroupVersionCurrent,
 		},
 	}

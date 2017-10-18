@@ -187,7 +187,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		res.Spec.BGP = &apiv2.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/240",
 			IPv6Address: "aa:bb:cc::ffff/120",
-			ASNumber: &asn,
+			ASNumber:    &asn,
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v2NodeKey1,

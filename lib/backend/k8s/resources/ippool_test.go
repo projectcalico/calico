@@ -60,7 +60,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 		CIDR:     cidr2.String(),
 		Disabled: false,
 		IPIP: &apiv2.IPIPConfiguration{
-			Mode:    "cross-subnet",
+			Mode: "cross-subnet",
 		},
 	}
 	kvp1 := &model.KVPair{
@@ -77,7 +77,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 			CIDR:     cidr2.String(),
 			Disabled: false,
 			IPIP: &apiv2.IPIPConfiguration{
-				Mode:    "cross-subnet",
+				Mode: "cross-subnet",
 			},
 		},
 	}
