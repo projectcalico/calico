@@ -522,16 +522,16 @@ class TestCalicoctlCommands(TestBase):
             "get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
         rc.assert_error(NOT_FOUND)
 
-        # Replace the BGP Configuration (with no resource version) and get it to
-        # assert the resource version is not the same.
+        # Replace the cluster information (with no resource version) - assert not supported.
         rc = calicoctl("replace", data=clusterinfo_name1_rev2)
         rc.assert_error(NOT_FOUND)
 
-        # Apply an update to the BGP Configuration and assert the resource version is not the same.
+        # Apply an update to the cluster information and assert not found (we need the node to
+        # create it).
         rc = calicoctl("apply", data=clusterinfo_name1_rev2)
-        rc.assert_error(NOT_SUPPORTED)
+        rc.assert_error(NOT_FOUND)
 
-        # Delete the resource by name (i.e. without using a resource version).
+        # Delete the resource by name (i.e. without using a resource version) - assert not supported.
         rc = calicoctl("delete clusterinfo %s" % name(clusterinfo_name1_rev1))
         rc.assert_error(NOT_SUPPORTED)
 
