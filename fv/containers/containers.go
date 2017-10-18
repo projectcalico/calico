@@ -285,8 +285,10 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 
 	felixNode := api.NewNode()
 	felixNode.Name = felix.Hostname
-	_, err := client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
-	Expect(err).NotTo(HaveOccurred())
+	Eventually(func() error {
+		_, err := client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
+		return err
+	}, "10s", "500ms").ShouldNot(HaveOccurred())
 
 	success = true
 	return
