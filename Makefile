@@ -31,7 +31,7 @@ CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
-DIST=dist-$(ARCH)
+DIST=dist/$(ARCH)
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p $(DIST))
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
