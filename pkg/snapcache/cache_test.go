@@ -429,7 +429,7 @@ func (f *follower) Loop(cxt context.Context) {
 	for item := range crumb.KVs.Iterator(cxt.Done()) {
 		upd := item.Value.(syncproto.SerializedUpdate)
 		f.state[upd.Key] = upd
-		newRev, err := strconv.Atoi(upd.Revision)
+		newRev, err := strconv.Atoi(upd.Revision.(string))
 		Expect(err).NotTo(HaveOccurred())
 		if newRev > maxRev {
 			maxRev = newRev
@@ -454,7 +454,7 @@ func (f *follower) Loop(cxt context.Context) {
 		//logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got next crumb")
 		for _, upd := range crumb.Deltas {
 			f.state[upd.Key] = upd
-			newRev, err := strconv.Atoi(upd.Revision)
+			newRev, err := strconv.Atoi(upd.Revision.(string))
 			Expect(err).NotTo(HaveOccurred())
 			if newRev > maxRev {
 				maxRev = newRev
