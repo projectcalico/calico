@@ -21,6 +21,9 @@ const (
 	KindWorkloadEndpointList = "WorkloadEndpointList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // WorkloadEndpoint contains information about a WorkloadEndpoint resource that is a peer of a Calico
 // compute node.
 type WorkloadEndpoint struct {
@@ -79,6 +82,8 @@ type IPNAT struct {
 	// The external IP address.
 	ExternalIP string `json:"externalIP" validate:"omitempty,ip"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // WorkloadEndpointList contains a list of WorkloadEndpoint resources.
 type WorkloadEndpointList struct {

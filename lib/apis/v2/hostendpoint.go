@@ -24,6 +24,9 @@ const (
 	KindHostEndpointList = "HostEndpointList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // HostEndpoint contains information about a HostEndpoint resource that represents a “bare-metal”
 // interface attached to the host that is running Calico’s agent, Felix. By default, Calico doesn’t
 // apply any policy to such interfaces.
@@ -65,6 +68,8 @@ type EndpointPort struct {
 	Protocol numorstring.Protocol `json:"protocol"`
 	Port     uint16               `json:"port" validate:"gt=0"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // HostEndpointList contains a list of HostEndpoint resources.
 type HostEndpointList struct {

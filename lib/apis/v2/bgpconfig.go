@@ -25,6 +25,9 @@ const (
 	KindBGPConfigurationList = "BGPConfigurationList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // BGPConfiguration contains the configuration for any BGP routing.
 type BGPConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
@@ -44,6 +47,8 @@ type BGPConfigurationSpec struct {
 	// ASNumber is the default AS number used by a node. [Default: 64512]
 	ASNumber *numorstring.ASNumber `json:"asNumber,omitempty" validate:"omitempty" confignamev1:"as_num"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // BGPConfigurationList contains a list of BGPConfiguration resources.
 type BGPConfigurationList struct {

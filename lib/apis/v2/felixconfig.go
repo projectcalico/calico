@@ -23,6 +23,9 @@ const (
 	KindFelixConfigurationList = "FelixConfigurationList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // Felix Configuration contains the configuration for Felix.
 type FelixConfiguration struct {
 	metav1.TypeMeta `json:",inline"`
@@ -187,6 +190,8 @@ type ProtoPort struct {
 	Protocol string
 	Port     uint16
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // FelixConfigurationList contains a list of FelixConfiguration resources.
 type FelixConfigurationList struct {

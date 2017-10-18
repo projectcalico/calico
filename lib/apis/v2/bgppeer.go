@@ -25,6 +25,9 @@ const (
 	KindBGPPeerList = "BGPPeerList"
 )
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // BGPPeer contains information about a BGPPeer resource that is a peer of a Calico
 // compute node.
 type BGPPeer struct {
@@ -46,6 +49,8 @@ type BGPPeerSpec struct {
 	// The AS Number of the peer.
 	ASNumber numorstring.ASNumber `json:"asNumber"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // BGPPeerList contains a list of BGPPeer resources.
 type BGPPeerList struct {

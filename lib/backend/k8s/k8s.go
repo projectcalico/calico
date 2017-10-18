@@ -225,7 +225,7 @@ func (c *KubeClient) ensureClusterType() (bool, error) {
 	return true, nil
 }
 
-// buildCRDClientV1 builds a RESTClient co"k8s.io/client-go/kubernetes/scheme" nfigured to interact with Calico CustomResourceDefinitions
+// buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
 func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	// Generate config using the base config.
 	cfg.GroupVersion = &schema.GroupVersion{
