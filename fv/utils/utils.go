@@ -93,7 +93,7 @@ func Command(name string, args ...string) *exec.Cmd {
 func GetEtcdClient(etcdIP string) client.Interface {
 	client, err := client.New(apiconfig.CalicoAPIConfig{
 		Spec: apiconfig.CalicoAPIConfigSpec{
-			DatastoreType: apiconfig.EtcdV2,
+			DatastoreType: apiconfig.EtcdV3,
 			EtcdConfig: apiconfig.EtcdConfig{
 				EtcdEndpoints: "http://" + etcdIP + ":2379",
 			},

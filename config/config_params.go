@@ -90,7 +90,7 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
-	DatastoreType string `config:"oneof(kubernetes,etcdv2);etcdv2;non-zero,die-on-fail"`
+	DatastoreType string `config:"oneof(kubernetes,etcdv2,etcdv3);etcdv2;non-zero,die-on-fail"`
 
 	FelixHostname string `config:"hostname;;local,non-zero"`
 

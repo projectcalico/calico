@@ -252,10 +252,10 @@ func RunEtcd() *Container {
 func RunFelix(etcdIP string) *Container {
 	return Run("felix",
 		"--privileged",
-		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
+		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
 		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
-		"-e", "FELIX_DATASTORETYPE=etcdv2",
-		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
+		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
 		"-e", "FELIX_IPV6SUPPORT=false",
