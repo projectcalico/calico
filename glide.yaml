@@ -35,5 +35,9 @@ import:
   version: release-1.8 
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
+- package: k8s.io/code-generator
+  version: release-1.8
+- package: k8s.io/gengo
+  version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
 testImport:
 - package: github.com/onsi/gomega

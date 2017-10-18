@@ -1,5 +1,5 @@
-hash: 134086884d5f45e58d192d9a0987e300e4c118dd619869d5ca1662d017b45578
-updated: 2017-10-17T21:32:20.770472125-07:00
+hash: c0e7407ccf235e89513f6a3e4f2a01bd3ceca847ff3a50378b3e97bc84d16c30
+updated: 2017-10-18T11:59:01.494957752-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -412,6 +412,10 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
+- name: k8s.io/code-generator
+  version: 0c5165a97e055df28cca8bbcb8b7c8ae1019b3f1
+- name: k8s.io/gengo
+  version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
 - name: k8s.io/kube-openapi
   version: 868f2f29720b192240e18284659231b440f9cda5
   subpackages:
