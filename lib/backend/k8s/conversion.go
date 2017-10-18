@@ -21,20 +21,20 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	log "github.com/sirupsen/logrus"
+	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	kapiv1 "k8s.io/client-go/pkg/api/v1"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	extensions "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var (
-	protoTCP = extensions.ProtocolTCP
+	protoTCP = kapiv1.ProtocolTCP
 )
 
 //TODO: make this private and expose a public conversion interface instead
@@ -379,7 +379,7 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 			port.Protocol = &protoTCP
 		}
 		if p.Protocol != nil {
-			protval := extensions.Protocol(fmt.Sprintf("%s", *p.Protocol))
+			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
 			port.Protocol = &protval
 		}
 		ports = append(ports, &port)
@@ -443,7 +443,7 @@ func (c Converter) k8sPortToCalicoFields(port *extensions.NetworkPolicyPort) (pr
 	return
 }
 
-func (c Converter) k8sProtocolToCalico(protocol *extensions.Protocol) *numorstring.Protocol {
+func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	if protocol != nil {
 		p := numorstring.ProtocolFromString(strings.ToLower(string(*protocol)))
 		return &p

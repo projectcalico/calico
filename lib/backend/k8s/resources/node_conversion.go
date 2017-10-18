@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	log "github.com/sirupsen/logrus"
-	kapiv1 "k8s.io/client-go/pkg/api/v1"
+	kapiv1 "k8s.io/api/core/v1"
 )
 
 // K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.

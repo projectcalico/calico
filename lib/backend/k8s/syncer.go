@@ -24,11 +24,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	log "github.com/sirupsen/logrus"
 
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
+	k8sapi "k8s.io/api/core/v1"
+	extensions "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
-	k8sapi "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -56,18 +56,18 @@ type realKubeAPI struct {
 }
 
 func (k *realKubeAPI) NamespaceWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
-	watch, err = k.kc.clientSet.Namespaces().Watch(opts)
+	watch, err = k.kc.clientSet.CoreV1().Namespaces().Watch(opts)
 	return
 }
 
 func (k *realKubeAPI) PodWatch(namespace string, opts metav1.ListOptions) (watch watch.Interface, err error) {
-	watch, err = k.kc.clientSet.Pods(namespace).Watch(opts)
+	watch, err = k.kc.clientSet.CoreV1().Pods(namespace).Watch(opts)
 	return
 }
 
 func (k *realKubeAPI) NetworkPolicyWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	netpolListWatcher := cache.NewListWatchFromClient(
-		k.kc.extensionsClientV1Beta1,
+		k.kc.clientSet.ExtensionsV1beta1().RESTClient(),
 		"networkpolicies",
 		"",
 		fields.Everything())
@@ -96,18 +96,18 @@ func (k *realKubeAPI) IPPoolWatch(opts metav1.ListOptions) (watch watch.Interfac
 }
 
 func (k *realKubeAPI) NodeWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
-	watch, err = k.kc.clientSet.Nodes().Watch(opts)
+	watch, err = k.kc.clientSet.CoreV1().Nodes().Watch(opts)
 	return
 }
 
 func (k *realKubeAPI) NamespaceList(opts metav1.ListOptions) (list *k8sapi.NamespaceList, err error) {
-	list, err = k.kc.clientSet.Namespaces().List(opts)
+	list, err = k.kc.clientSet.CoreV1().Namespaces().List(opts)
 	return
 }
 
 func (k *realKubeAPI) NetworkPolicyList() (list extensions.NetworkPolicyList, err error) {
 	list = extensions.NetworkPolicyList{}
-	err = k.kc.extensionsClientV1Beta1.
+	err = k.kc.clientSet.ExtensionsV1beta1().RESTClient().
 		Get().
 		Resource("networkpolicies").
 		Timeout(10 * time.Second).
@@ -130,7 +130,7 @@ func (k *realKubeAPI) GlobalNetworkPolicyList() ([]*model.KVPair, string, error)
 }
 
 func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
-	list, err = k.kc.clientSet.Pods(namespace).List(opts)
+	list, err = k.kc.clientSet.CoreV1().Pods(namespace).List(opts)
 	return
 }
 
@@ -150,7 +150,7 @@ func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, st
 }
 
 func (k *realKubeAPI) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
-	list, err = k.kc.clientSet.Nodes().List(opts)
+	list, err = k.kc.clientSet.CoreV1().Nodes().List(opts)
 	return
 }
 

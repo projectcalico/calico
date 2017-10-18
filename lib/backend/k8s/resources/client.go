@@ -19,7 +19,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
-	apiv1 "k8s.io/client-go/pkg/api/v1"
+	apiv1 "k8s.io/api/core/v1"
 )
 
 // K8sResourceClient is the interface to the k8s datastore for CRUD operations
