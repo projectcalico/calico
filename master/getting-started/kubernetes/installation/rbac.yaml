@@ -10,7 +10,6 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: calico-kube-controllers
-  namespace: kube-system
 rules:
   - apiGroups:
     - ""
