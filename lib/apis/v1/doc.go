@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
-Package api implements the struct definitions used on the northbound client API.
+Package v1 implements the struct definitions used on the northbound client API.
 
 In particular this includes:
 	-  The various resource types as exposed on the Northbound API.  The valid resource
@@ -29,4 +29,4 @@ The resource structures include the JSON tags for each exposed field.  These are
 go-lang tags that define the JSON format of the structures as used by calicoctl.  The YAML
 format also used by calicoctl is directly mapped from the JSON.
 */
-package api
+package v1

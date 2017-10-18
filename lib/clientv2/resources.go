@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"

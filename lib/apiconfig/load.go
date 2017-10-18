@@ -7,7 +7,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	log "github.com/sirupsen/logrus"
 )
 

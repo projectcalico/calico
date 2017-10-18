@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-Package apiv2 implements the resource definitions used on the Calico client API.
+package v2
 
-The valid resource types are:
-	-  BGPPeer
-	-  GlobalNetworkPolicy
-	-  HostEndpoint
-	-  IPPool
-	-  NetworkPolicy
-	-  Profile
-	-  WorkloadEndpoint
+const (
+	// API group details for the Calico v2 API.
+	Group               = "projectcalico.org"
+	VersionCurrent      = "v2"
+	GroupVersionCurrent = Group + "/" + VersionCurrent
 
-The resource structures include the JSON tags for each exposed field.  These are standard
-golang tags that define the JSON format of the structures as used by calicoctl.  The YAML
-format also used by calicoctl is directly mapped from the JSON.
-*/
-package apiv2
+	// AllNamepaces is used for client instantiation, either for when the namespace
+	// will be specified in the resource request, or for List or Watch queries across
+	// all namespaces.
+	AllNamespaces = ""
+
+	// AllNames is used for List or Watch queries to wildcard the name.
+	AllNames = ""
+)

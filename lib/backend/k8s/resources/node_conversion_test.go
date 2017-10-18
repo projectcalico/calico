@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sapi "k8s.io/client-go/pkg/api/v1"

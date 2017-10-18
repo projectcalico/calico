@@ -21,7 +21,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 )
 
 // fakeconverter allows us to tune what is returned from the converter to test different

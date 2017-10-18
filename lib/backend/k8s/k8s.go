@@ -27,7 +27,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
