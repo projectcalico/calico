@@ -196,14 +196,6 @@ var _ = BeforeSuite(func() {
 	}, "60s", "2s").ShouldNot(HaveOccurred())
 
 	Eventually(func() (err error) {
-		err = calicoClient.EnsureInitialized()
-		if err != nil {
-			log.WithError(err).Warn("Waiting to initialize datastore")
-		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-
-	Eventually(func() (err error) {
 		k8sClient, err = kubernetes.NewForConfig(&rest.Config{
 			Transport: insecureTransport,
 			Host:      "https://" + apiServerContainer.IP + ":6443",
