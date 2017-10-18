@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/libcalico-go/lib/apiv2"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 	"github.com/projectcalico/libcalico-go/lib/names"

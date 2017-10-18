@@ -14,7 +14,7 @@
 
 package namespace
 
-import "github.com/projectcalico/libcalico-go/lib/apiv2"
+import apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 
 func IsNamespaced(kind string) bool {
 	switch kind {
