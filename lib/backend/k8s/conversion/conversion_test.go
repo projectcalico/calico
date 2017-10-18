@@ -33,11 +33,14 @@ var _ = Describe("Test parsing strings", func() {
 	// Use a single instance of the Converter for these tests.
 	c := Converter{}
 
-	It("should parse workloadIDs", func() {
-		workloadName := "Namespace.podName"
-		ns, podName := c.ParseWorkloadID(workloadName)
-		Expect(ns).To(Equal("Namespace"))
-		Expect(podName).To(Equal("podName"))
+	It("should parse WorkloadEndpoint name", func() {
+		wepName := "node-k8s-pod--name-eth0"
+		weid, err := c.ParseWorkloadEndpointName(wepName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(weid.Node).To(Equal("node"))
+		Expect(weid.Orchestrator).To(Equal("k8s"))
+		Expect(weid.Endpoint).To(Equal("eth0"))
+		Expect(weid.Pod).To(Equal("pod-name"))
 	})
 
 	It("should parse valid policy names", func() {
@@ -143,16 +146,16 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
-		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("podA"))
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
+		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
 		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv2.KindWorkloadEndpoint))
 
-		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Workload).To(Equal("default.podA"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Pod).To(Equal("podA"))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Node).To(Equal("nodeA"))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Endpoint).To(Equal("eth0"))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
 		Expect(len(wep.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(1))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks[0]).To(Equal("192.168.0.1/32"))
-		//Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
 		expectedLabels := map[string]string{"labelA": "valueA", "labelB": "valueB", "calico/k8s_ns": "default"}
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
 
@@ -215,19 +218,19 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
-		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("podA"))
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
+		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
 		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv2.KindWorkloadEndpoint))
 		// Assert value fields.
-		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Workload).To(Equal("default.podA"))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Pod).To(Equal("podA"))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Node).To(Equal("nodeA"))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Endpoint).To(Equal("eth0"))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
 		Expect(len(wep.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(1))
 		Expect(wep.Value.(*apiv2.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
-		//Expect(wep.Value.(*apiv2.WorkloadEndpoint).State).To(Equal("active"))
 	})
 
-	It("should Parse a Pod with no NodeName", func() {
+	It("should not parse a Pod with no NodeName", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
@@ -240,7 +243,7 @@ var _ = Describe("Test Pod conversion", func() {
 		}
 
 		_, err := c.PodToWorkloadEndpoint(&pod)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(HaveOccurred())
 	})
 
 })
