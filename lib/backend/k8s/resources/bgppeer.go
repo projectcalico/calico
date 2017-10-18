@@ -66,7 +66,7 @@ func (_ BGPPeerConverter) NameToKey(name string) (model.Key, error) {
 	}, nil
 }
 
-func (c BGPPeerConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+func (c BGPPeerConverter) ToKVPair(r Resource) (*model.KVPair, error) {
 	t := r.(*apiv2.BGPPeer)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
@@ -85,7 +85,7 @@ func (c BGPPeerConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
 	}, nil
 }
 
-func (c BGPPeerConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+func (c BGPPeerConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
 	v := kvp.Value.(*apiv2.BGPPeer)
 
 	return &apiv2.BGPPeer{

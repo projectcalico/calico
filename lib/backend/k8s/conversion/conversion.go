@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package conversion
 
 import (
 	"crypto/sha1"
@@ -51,14 +51,14 @@ func VethNameForWorkload(workload string) string {
 	return fmt.Sprintf("cali%s", hex.EncodeToString(h.Sum(nil))[:11])
 }
 
-// parseWorkloadID extracts the Namespace and Pod name from the given workload ID.
-func (c Converter) parseWorkloadID(workloadID string) (string, string) {
+// ParseWorkloadID extracts the Namespace and Pod name from the given workload ID.
+func (c Converter) ParseWorkloadID(workloadID string) (string, string) {
 	splits := strings.SplitN(workloadID, ".", 2)
 	return splits[0], splits[1]
 }
 
-// parsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
-func (c Converter) parsePolicyNameNetworkPolicy(name string) (string, string, error) {
+// ParsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
+func (c Converter) ParsePolicyNameNetworkPolicy(name string) (string, string, error) {
 	// Policies backed by NetworkPolicies have form "knp.default.<ns_name>.<np_name>"
 	if !strings.HasPrefix(name, "knp.default.") {
 		// This is not backed by a Kubernetes NetworkPolicy.
@@ -71,17 +71,6 @@ func (c Converter) parsePolicyNameNetworkPolicy(name string) (string, string, er
 	}
 	// Return Namespace, NetworkPolicy name.
 	return splits[0], splits[1], nil
-}
-
-// parseProfileName extracts the Namespace name from the given Profile name.
-func (c Converter) parseProfileName(profileName string) (string, error) {
-	// Profile objects backed by Namespaces have form "k8s_ns.<ns_name>"
-	if !strings.HasPrefix(profileName, "k8s_ns.") {
-		// This is not backed by a Kubernetes Namespace.
-		return "", fmt.Errorf("Profile %s not backed by a Namespace", profileName)
-	}
-
-	return strings.TrimPrefix(profileName, "k8s_ns."), nil
 }
 
 // NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
@@ -103,7 +92,9 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		},
 		Value: &apiv2.Profile{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: labels,
+				Labels:            labels,
+				CreationTimestamp: ns.CreationTimestamp,
+				UID:               ns.UID,
 			},
 			Spec: apiv2.ProfileSpec{
 				IngressRules: []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
@@ -115,31 +106,31 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	return &kvp, nil
 }
 
-// isReadyCalicoPod returns true if the pod should be shown as a workloadEndpoint
+// IsReadyCalicoPod returns true if the pod should be shown as a workloadEndpoint
 // in the Calico API and false otherwise.
-func (c Converter) isReadyCalicoPod(pod *kapiv1.Pod) bool {
-	if c.isHostNetworked(pod) {
+func (c Converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
+	if c.IsHostNetworked(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is host networked.")
 		return false
-	} else if !c.hasIPAddress(pod) {
+	} else if !c.HasIPAddress(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod does not have an IP address.")
 		return false
-	} else if !c.isScheduled(pod) {
+	} else if !c.IsScheduled(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is not scheduled.")
 		return false
 	}
 	return true
 }
 
-func (c Converter) isScheduled(pod *kapiv1.Pod) bool {
+func (c Converter) IsScheduled(pod *kapiv1.Pod) bool {
 	return pod.Spec.NodeName != ""
 }
 
-func (c Converter) isHostNetworked(pod *kapiv1.Pod) bool {
+func (c Converter) IsHostNetworked(pod *kapiv1.Pod) bool {
 	return pod.Spec.HostNetwork
 }
 
-func (c Converter) hasIPAddress(pod *kapiv1.Pod) bool {
+func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
 	return pod.Status.PodIP != ""
 }
 
@@ -153,7 +144,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	// We do, in some circumstances, want to parse Pods without an IP address.  For example,
 	// a DELETE update will not include an IP.
 	ipNets := []string{}
-	if c.hasIPAddress(pod) {
+	if c.HasIPAddress(pod) {
 		_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
 		if err != nil {
 			log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
@@ -503,4 +494,15 @@ func (c Converter) k8sPortToCalico(port extensions.NetworkPolicyPort) []numorstr
 
 	// No ports - return empty list.
 	return portList
+}
+
+// ProfileNameToNamespace extracts the Namespace name from the given Profile name.
+func (c Converter) ProfileNameToNamespace(profileName string) (string, error) {
+	// Profile objects backed by Namespaces have form "k8s_ns.<ns_name>"
+	if !strings.HasPrefix(profileName, "k8s_ns.") {
+		// This is not backed by a Kubernetes Namespace.
+		return "", fmt.Errorf("Profile %s not backed by a Namespace", profileName)
+	}
+
+	return strings.TrimPrefix(profileName, "k8s_ns."), nil
 }

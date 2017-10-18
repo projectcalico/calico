@@ -36,7 +36,7 @@ import (
 )
 
 // Perform additional watch tests
-var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
 	numEvents := 10000
@@ -81,7 +81,7 @@ var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.Datas
 			By("Creating a watcher, watching the current resource version")
 			w, outError := c.BGPPeers().Watch(ctx, options.ListOptions{ResourceVersion: outList.ResourceVersion})
 			Expect(outError).NotTo(HaveOccurred())
-			testWatcher := testutils.TestResourceWatch(w)
+			testWatcher := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher.Stop()
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")

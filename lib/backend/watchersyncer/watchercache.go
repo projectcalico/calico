@@ -158,7 +158,8 @@ func (wc *watcherCache) resyncAndCreateWatcher() {
 			// tight loop.  Since we have just performed a list, we need a slightly longer
 			// delay to avoid overloading the datastore.  If the watcher keeps failing then
 			// we are effectively operating in a polling mode, so the interval should be a
-			// sensible polling interval.
+			// sensible polling interval.  Some resource types cannot be watched, so receiving
+			// an error here is not necessarily an error condition.
 			wc.logger.WithError(err).Debug("Failed to create watcher")
 			time.Sleep(WatchPollInterval)
 			continue

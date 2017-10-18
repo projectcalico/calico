@@ -16,6 +16,7 @@ package testutils
 import (
 	"sync"
 	"time"
+	"sort"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,6 +27,7 @@ import (
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 	"k8s.io/apimachinery/pkg/conversion"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 )
 
 // ExpectResource is a test validation function that checks the specified resource
@@ -47,8 +49,9 @@ func ExpectResource(res runtime.Object, kind, namespace, name string, spec inter
 // TestResourceWatch is a test helper used to validate a set of events are received
 // from a watcher.  The caller creates a watch.Interface from the resource-specific
 // client and passes that to TestResourceWatch to create a TestResourceWatchInterface.
-func TestResourceWatch(w watch.Interface) TestResourceWatchInterface {
+func NewTestResourceWatch(datastoreType apiconfig.DatastoreType, w watch.Interface) TestResourceWatchInterface {
 	tw := &testResourceWatcher{
+		datastoreType: datastoreType,
 		watch:         w,
 		events:        []watch.Event{},
 		watchClosedCh: make(chan struct{}),
@@ -67,11 +70,18 @@ type TestResourceWatchInterface interface {
 	// ExpectEvents is used to validate the events received by the Watcher match the
 	// set of expected events.
 	ExpectEvents(kind string, events []watch.Event)
+
+	// ExpectEventsAnyOrder is used to validate the events received by the Watcher match the
+	// set of expected events.  The order of events is not important.  This should only be
+	// called with sets of added events (not deleted or modified), and is used to verify an
+	// initial snapshot.
+	ExpectEventsAnyOrder(kind string, events []watch.Event)
 }
 
 // testResourceWatch implements the set of watch-test function described in the docs
 // for testResourceWatch.  Do not instantiate this struct directly.
 type testResourceWatcher struct {
+	datastoreType apiconfig.DatastoreType
 	watch         watch.Interface
 	events        []watch.Event
 	watchClosedCh chan struct{}
@@ -107,13 +117,32 @@ func (t *testResourceWatcher) Stop() {
 
 // ExpectEvents validates the received events match those expected.  This should be called
 // within a Ginkgo test.
-func (t *testResourceWatcher) ExpectEvents(kind string, events []watch.Event) {
+func (t *testResourceWatcher) ExpectEvents(kind string, expectedEvents []watch.Event) {
+	t.expectEvents(kind, true, expectedEvents)
+}
+
+// ExpectEventsAnyOrder validates the received events match those expected but the order
+// is not necessarily fixed.  KDD watch without a resource version does not appear to be
+// deterministic in the order of events from the initial "list".
+//
+// This should be called within a Ginkgo test, and should only be called when listing the
+// current snapshot - it should only include added event types.
+func (t *testResourceWatcher) ExpectEventsAnyOrder(kind string, expectedEvents []watch.Event) {
+	for _, e := range expectedEvents {
+		Expect(e.Type).To(Equal(watch.Added))
+	}
+	t.expectEvents(kind, true, expectedEvents)
+}
+
+// ExpectEvents validates the received events match those expected.  This should be called
+// within a Ginkgo test.
+func (t *testResourceWatcher) expectEvents(kind string, fixedOrder bool, expectedEvents []watch.Event) {
 	By("Waiting for the correct number of events")
 	log.Infof("Start waiting at %s", time.Now())
 	t.lock.Lock()
 	cur := len(t.events)
 	t.lock.Unlock()
-	for ii := 0; ii < 10 && cur != len(events); ii++ {
+	for ii := 0; ii < 10 && cur != len(expectedEvents); ii++ {
 		time.Sleep(100 * time.Millisecond)
 		t.lock.Lock()
 		newcur := len(t.events)
@@ -130,37 +159,77 @@ func (t *testResourceWatcher) ExpectEvents(kind string, events []watch.Event) {
 	// lock the events list and compare the events.
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	Expect(t.events).To(HaveLen(len(events)))
-	for i, event := range events {
-		Expect(t.events[i].Type).To(Equal(event.Type))
-		if event.Object != nil {
-			Expect(t.events[i].Object).NotTo(BeNil())
+
+	// If the order is not fixed, sort the expected and actual events based on name.
+	actualEvents := t.events[:len(expectedEvents)]
+	if !fixedOrder {
+		expectedEvents = t.sortEvents(expectedEvents)
+		actualEvents = t.sortEvents(actualEvents)
+	}
+
+	Expect(t.events).To(HaveLen(len(expectedEvents)))
+	for i, expectedEvent := range expectedEvents {
+		Expect(actualEvents[i].Type).To(Equal(expectedEvent.Type))
+		if expectedEvent.Object != nil {
+			Expect(actualEvents[i].Object).NotTo(BeNil())
 			ExpectResource(
-				t.events[i].Object,
+				actualEvents[i].Object,
 				kind,
-				event.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
-				event.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
-				getSpec(event.Object),
+				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+				getSpec(expectedEvent.Object),
 			)
 		} else {
-			Expect(t.events[i].Object).To(BeNil())
+			Expect(actualEvents[i].Object).To(BeNil())
 		}
-		if event.Previous != nil {
-			Expect(t.events[i].Previous).NotTo(BeNil())
+
+		// Kubernetes does not provide the "previous" value in a modified event, so don't
+		// check for that if the datastore is KDD.
+		if expectedEvent.Previous != nil  && (expectedEvent.Type == watch.Deleted || t.datastoreType != apiconfig.Kubernetes){
+			Expect(actualEvents[i].Previous).NotTo(BeNil())
 			ExpectResource(
-				t.events[i].Previous,
+				actualEvents[i].Previous,
 				kind,
-				event.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
-				event.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
-				getSpec(event.Previous),
+				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+				getSpec(expectedEvent.Previous),
 			)
 		} else {
-			Expect(t.events[i].Previous).To(BeNil())
+			Expect(actualEvents[i].Previous).To(BeNil())
 		}
 	}
 
 	// Remove the events we've already validated.
-	t.events = t.events[len(events):]
+	t.events = t.events[len(expectedEvents):]
+}
+
+// sortEvents sorts the events by name order.  Only one event should exist per name.
+func (t *testResourceWatcher) sortEvents(events []watch.Event) []watch.Event {
+	names := []string{}
+	eventsByName := map[string]watch.Event{}
+	ordered := []watch.Event{}
+
+	for _, e := range events {
+		var name string
+		if e.Object != nil {
+			name = e.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName()
+		} else {
+			name = e.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetName()
+		}
+		names = append(names, name)
+
+		// Makes sure we don't have multiple entries for the same name.
+		Expect(eventsByName[name]).To(BeNil())
+		eventsByName[name] = e
+	}
+
+	sort.Strings(names)
+
+	for _, name := range names {
+		ordered = append(ordered, eventsByName[name])
+	}
+
+	return ordered
 }
 
 // getSpec returns the Spec structure from the supplied resource.

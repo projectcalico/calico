@@ -94,9 +94,6 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 	DescribeTable("WorkloadEndpoint e2e CRUD tests",
 		func(namespace1, namespace2, name1, name2 string, spec1_1, spec1_2, spec2_1 apiv2.WorkloadEndpointSpec) {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("WorkloadEndpoint CRUD not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -105,20 +102,18 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			be.Clean()
 
 			By("Updating the WorkloadEndpoint before it is created")
-			res, outError := c.WorkloadEndpoints().Update(ctx, &apiv2.WorkloadEndpoint{
+			_, outError := c.WorkloadEndpoints().Update(ctx, &apiv2.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234"},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(res).To(BeNil())
 			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
 
 			By("Attempting to creating a new WorkloadEndpoint with name1/spec1_1 and a non-empty ResourceVersion")
-			res, outError = c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
+			_, outError = c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
-			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
@@ -134,24 +129,21 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same WorkloadEndpoint with name1 but with spec1_2")
-			res1, outError = c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
+			_, outError = c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1},
 				Spec:       spec1_2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
-			// Check return value is actually the previously stored value.
-			testutils.ExpectResource(res1, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_1)
-			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting WorkloadEndpoint (name1) and comparing the output against spec1_1")
-			res, outError = c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{})
+			res, outError := c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_1)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting WorkloadEndpoint (name2) before it is created")
-			res, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
+			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
 
@@ -200,18 +192,16 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Updating BGPPeer name1 without specifying a resource version")
 			res1.Spec = spec1_1
 			res1.ObjectMeta.ResourceVersion = ""
-			res, outError = c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '' (field must be set for an Update request)"))
-			Expect(res).To(BeNil())
 
 			By("Updating WorkloadEndpoint name1 using the previous resource version")
 			res1.Spec = spec1_1
 			res1.ResourceVersion = rv1_1
-			res1, outError = c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
-			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
 			By("Getting WorkloadEndpoint (name1) with the original resource version and comparing the output against spec1_1")
 			res, outError = c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
@@ -284,7 +274,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outList.Items).To(HaveLen(0))
 
 			By("Getting WorkloadEndpoint (name2) and expecting an error")
-			res, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
+			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
 		},
@@ -299,9 +289,6 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 	Describe("WorkloadEndpoint watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("Watch not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -341,7 +328,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.WorkloadEndpoints().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher1 := testutils.TestResourceWatch(w)
+			testWatcher1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
@@ -364,7 +351,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Starting a watcher from rev0 - this should get all events")
 			w, err = c.WorkloadEndpoints().Watch(ctx, options.ListOptions{ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2 := testutils.TestResourceWatch(w)
+			testWatcher2 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
@@ -398,27 +385,30 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			})
 			testWatcher2.Stop()
 
-			By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
-			w, err = c.WorkloadEndpoints().Watch(ctx, options.ListOptions{Namespace: namespace1, Name: name1, ResourceVersion: rev0})
-			Expect(err).NotTo(HaveOccurred())
-			testWatcher2_1 := testutils.TestResourceWatch(w)
-			defer testWatcher2_1.Stop()
-			testWatcher2_1.ExpectEvents(apiv2.KindWorkloadEndpoint, []watch.Event{
-				{
-					Type:   watch.Added,
-					Object: outRes1,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-			})
-			testWatcher2_1.Stop()
+			// Only etcdv3 supports watching a specific instance of a resource.
+			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+				By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
+				w, err = c.WorkloadEndpoints().Watch(ctx, options.ListOptions{Namespace: namespace1, Name: name1, ResourceVersion: rev0})
+				Expect(err).NotTo(HaveOccurred())
+				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+				defer testWatcher2_1.Stop()
+				testWatcher2_1.ExpectEvents(apiv2.KindWorkloadEndpoint, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes1,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+				})
+				testWatcher2_1.Stop()
+			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.WorkloadEndpoints().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher3 := testutils.TestResourceWatch(w)
+			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
 			testWatcher3.ExpectEvents(apiv2.KindWorkloadEndpoint, []watch.Event{
 				{
@@ -431,7 +421,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Starting a watcher at rev0 in namespace1 - expect the events for policy in namespace1")
 			w, err = c.WorkloadEndpoints().Watch(ctx, options.ListOptions{Namespace: namespace1, ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher4 := testutils.TestResourceWatch(w)
+			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
 			testWatcher4.ExpectEvents(apiv2.KindWorkloadEndpoint, []watch.Event{
 				{

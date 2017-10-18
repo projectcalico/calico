@@ -33,7 +33,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
-var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
 	order1 := 99.999
@@ -59,9 +59,6 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 	DescribeTable("NetworkPolicy e2e CRUD tests",
 		func(namespace1, namespace2, name1, name2 string, spec1, spec2 apiv2.PolicySpec) {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("NetworkPolicy CRUD not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -70,20 +67,18 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			be.Clean()
 
 			By("Updating the NetworkPolicy before it is created")
-			res, outError := c.NetworkPolicies().Update(ctx, &apiv2.NetworkPolicy{
+			_, outError := c.NetworkPolicies().Update(ctx, &apiv2.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234"},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(res).To(BeNil())
 			Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace1 + "/" + name1 + ")"))
 
 			By("Attempting to creating a new NetworkPolicy with name1/spec1 and a non-empty ResourceVersion")
-			res, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
+			_, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1,
 			}, options.SetOptions{})
-			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
@@ -99,24 +94,21 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			rv1_1 := res1.ResourceVersion
 
 			By("Attempting to create the same NetworkPolicy with name1 but with spec2")
-			res1, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
+			_, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1},
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: NetworkPolicy(" + namespace1 + "/" + name1 + ")"))
-			// Check return value is actually the previously stored value.
-			testutils.ExpectResource(res1, apiv2.KindNetworkPolicy, namespace1, name1, spec1)
-			Expect(res1.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting NetworkPolicy (name1) and comparing the output against spec1")
-			res, outError = c.NetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{})
+			res, outError := c.NetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res, apiv2.KindNetworkPolicy, namespace1, name1, spec1)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting NetworkPolicy (name2) before it is created")
-			res, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+			_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace2 + "/" + name2 + ")"))
 
@@ -165,18 +157,16 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			By("Updating BGPPeer name1 without specifying a resource version")
 			res1.Spec = spec1
 			res1.ObjectMeta.ResourceVersion = ""
-			res, outError = c.NetworkPolicies().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.NetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '' (field must be set for an Update request)"))
-			Expect(res).To(BeNil())
 
 			By("Updating NetworkPolicy name1 using the previous resource version")
 			res1.Spec = spec1
 			res1.ResourceVersion = rv1_1
-			res1, outError = c.NetworkPolicies().Update(ctx, res1, options.SetOptions{})
+			_, outError = c.NetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: NetworkPolicy(" + namespace1 + "/" + name1 + ")"))
-			Expect(res1.ResourceVersion).To(Equal(rv1_2))
 
 			By("Getting NetworkPolicy (name1) with the original resource version and comparing the output against spec1")
 			res, outError = c.NetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
@@ -249,7 +239,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			Expect(outList.Items).To(HaveLen(0))
 
 			By("Getting NetworkPolicy (name2) and expecting an error")
-			res, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+			_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace2 + "/" + name2 + ")"))
 		},
@@ -264,9 +254,6 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 	Describe("NetworkPolicy watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				Skip("Watch not supported yet with Kubernetes Backend")
-			}
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -304,7 +291,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.NetworkPolicies().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher1 := testutils.TestResourceWatch(w)
+			testWatcher1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
@@ -327,7 +314,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			By("Starting a watcher from rev0 - this should get all events")
 			w, err = c.NetworkPolicies().Watch(ctx, options.ListOptions{ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher2 := testutils.TestResourceWatch(w)
+			testWatcher2 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
@@ -361,27 +348,30 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			})
 			testWatcher2.Stop()
 
-			By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
-			w, err = c.NetworkPolicies().Watch(ctx, options.ListOptions{Namespace: namespace1, Name: name1, ResourceVersion: rev0})
-			Expect(err).NotTo(HaveOccurred())
-			testWatcher2_1 := testutils.TestResourceWatch(w)
-			defer testWatcher2_1.Stop()
-			testWatcher2_1.ExpectEvents(apiv2.KindNetworkPolicy, []watch.Event{
-				{
-					Type:   watch.Added,
-					Object: outRes1,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-			})
-			testWatcher2_1.Stop()
+			// Only etcdv3 supports watching a specific instance of a resource.
+			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+				By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
+				w, err = c.NetworkPolicies().Watch(ctx, options.ListOptions{Namespace: namespace1, Name: name1, ResourceVersion: rev0})
+				Expect(err).NotTo(HaveOccurred())
+				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
+				defer testWatcher2_1.Stop()
+				testWatcher2_1.ExpectEvents(apiv2.KindNetworkPolicy, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes1,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+				})
+				testWatcher2_1.Stop()
+			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.NetworkPolicies().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher3 := testutils.TestResourceWatch(w)
+			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher3.Stop()
 			testWatcher3.ExpectEvents(apiv2.KindNetworkPolicy, []watch.Event{
 				{
@@ -394,7 +384,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			By("Starting a watcher at rev0 in namespace1 - expect the events for policy in namespace1")
 			w, err = c.NetworkPolicies().Watch(ctx, options.ListOptions{Namespace: namespace1, ResourceVersion: rev0})
 			Expect(err).NotTo(HaveOccurred())
-			testWatcher4 := testutils.TestResourceWatch(w)
+			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
 			testWatcher4.ExpectEvents(apiv2.KindNetworkPolicy, []watch.Event{
 				{

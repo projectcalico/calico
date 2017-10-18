@@ -66,7 +66,7 @@ func (_ ClusterInfoConverter) NameToKey(name string) (model.Key, error) {
 	}, nil
 }
 
-func (c ClusterInfoConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
+func (c ClusterInfoConverter) ToKVPair(r Resource) (*model.KVPair, error) {
 	t := r.(*apiv2.ClusterInformation)
 
 	// Clear any CRD TypeMeta fields and then create a KVPair.
@@ -85,7 +85,7 @@ func (c ClusterInfoConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, erro
 	}, nil
 }
 
-func (c ClusterInfoConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource, error) {
+func (c ClusterInfoConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
 	v := kvp.Value.(*apiv2.ClusterInformation)
 
 	return &apiv2.ClusterInformation{

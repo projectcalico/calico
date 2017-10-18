@@ -26,6 +26,8 @@ import (
 
 	k8sapi "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
@@ -125,7 +127,8 @@ func (k *realKubeAPI) GlobalNetworkPolicyWatch(opts metav1.ListOptions) (watch.I
 }
 
 func (k *realKubeAPI) GlobalNetworkPolicyList() ([]*model.KVPair, string, error) {
-	kvpl, err := k.kc.gnpClient.List(context.Background(), model.PolicyListOptions{}, "")
+	gnpClient := k.kc.getResourceClientFromResourceKind(apiv2.KindGlobalNetworkPolicy)
+	kvpl, err := gnpClient.List(context.Background(), model.PolicyListOptions{}, "")
 	return kvpl.KVPairs, "", err
 }
 
@@ -135,7 +138,8 @@ func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *
 }
 
 func (k *realKubeAPI) FelixConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
-	kvpl, err := k.kc.felixConfigClient.List(context.Background(), l, "")
+	felixConfigClient := k.kc.getResourceClientFromResourceKind(apiv2.KindFelixConfiguration)
+	kvpl, err := felixConfigClient.List(context.Background(), l, "")
 	return kvpl.KVPairs, "", err
 }
 
@@ -145,7 +149,8 @@ func (k *realKubeAPI) HostConfigList(l model.HostConfigListOptions) ([]*model.KV
 }
 
 func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, string, error) {
-	kvpl, err := k.kc.ipPoolClient.List(context.Background(), l, "")
+	ipPoolClient := k.kc.getResourceClientFromResourceKind(apiv2.KindIPPool)
+	kvpl, err := ipPoolClient.List(context.Background(), l, "")
 	return kvpl.KVPairs, "", err
 }
 
@@ -158,7 +163,7 @@ func (k *realKubeAPI) getReadyStatus(key model.ReadyFlagKey) (*model.KVPair, err
 	return k.kc.getReadyStatus(context.Background(), key, "")
 }
 
-func newSyncer(kubeAPI kubeAPI, converter Converter, callbacks api.SyncerCallbacks, disableNodePoll bool) *kubeSyncer {
+func newSyncer(kubeAPI kubeAPI, converter conversion.Converter, callbacks api.SyncerCallbacks, disableNodePoll bool) *kubeSyncer {
 	syn := &kubeSyncer{
 		kubeAPI:   kubeAPI,
 		converter: converter,
@@ -194,7 +199,7 @@ func newSyncer(kubeAPI kubeAPI, converter Converter, callbacks api.SyncerCallbac
 
 type kubeSyncer struct {
 	kubeAPI         kubeAPI
-	converter       Converter
+	converter       conversion.Converter
 	callbacks       api.SyncerCallbacks
 	OneShot         bool
 	disableNodePoll bool
@@ -719,7 +724,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 			versions.podVersion = poList.ListMeta.ResourceVersion
 			for _, po := range poList.Items {
 				// Ignore any updates for pods which are not ready / valid.
-				if !syn.converter.isReadyCalicoPod(&po) {
+				if !syn.converter.IsReadyCalicoPod(&po) {
 					log.Debugf("Skipping pod %s/%s", po.ObjectMeta.Namespace, po.ObjectMeta.Name)
 					continue
 				}
@@ -976,7 +981,7 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 	case watch.Deleted:
 		// For deletes, the validity conditions are different.  We only care if the update
 		// is not for a host-networked Pods, but don't care about IP / scheduled state.
-		if syn.converter.isHostNetworked(pod) {
+		if syn.converter.IsHostNetworked(pod) {
 			log.WithField("pod", pod.Name).Debug("Pod is host networked.")
 			log.Debugf("Skipping delete for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 			return nil
@@ -984,7 +989,7 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 	default:
 		// Ignore add/modify updates for Pods that shouldn't be shown in the Calico API.
 		// e.g host networked Pods, or Pods that don't yet have an IP address.
-		if !syn.converter.isReadyCalicoPod(pod) {
+		if !syn.converter.IsReadyCalicoPod(pod) {
 			log.Debugf("Skipping add/modify for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 			return nil
 		}
@@ -1052,7 +1057,7 @@ func (syn *kubeSyncer) parseCustomK8sResourceEvent(
 		"ResourceType": resourceType,
 		"EventType":    e.Type,
 	})
-	crd, ok := e.Object.(resources.CustomK8sResource)
+	crd, ok := e.Object.(resources.Resource)
 	if !ok {
 		logContext.Panicf("Invalid custom resource event. Object: %+v", e.Object)
 	}

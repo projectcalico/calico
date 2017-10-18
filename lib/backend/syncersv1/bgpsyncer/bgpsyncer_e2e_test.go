@@ -40,7 +40,7 @@ import (
 // handled correctly by the syncer.  We don't validate in detail the behavior of
 // each of udpate handlers that are invoked, since these are tested more thoroughly
 // elsewhere.
-var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
 

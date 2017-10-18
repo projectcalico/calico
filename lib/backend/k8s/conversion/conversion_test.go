@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package conversion
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -35,7 +35,7 @@ var _ = Describe("Test parsing strings", func() {
 
 	It("should parse workloadIDs", func() {
 		workloadName := "Namespace.podName"
-		ns, podName := c.parseWorkloadID(workloadName)
+		ns, podName := c.ParseWorkloadID(workloadName)
 		Expect(ns).To(Equal("Namespace"))
 		Expect(podName).To(Equal("podName"))
 	})
@@ -43,7 +43,7 @@ var _ = Describe("Test parsing strings", func() {
 	It("should parse valid policy names", func() {
 		// Parse a NetworkPolicy backed Policy.
 		name := "knp.default.Namespace.policyName"
-		ns, polName, err := c.parsePolicyNameNetworkPolicy(name)
+		ns, polName, err := c.ParsePolicyNameNetworkPolicy(name)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ns).To(Equal("Namespace"))
 		Expect(polName).To(Equal("policyName"))
@@ -53,7 +53,7 @@ var _ = Describe("Test parsing strings", func() {
 		name := "something.projectcalico.org/Namespace.Name"
 
 		// As a NetworkPolicy.
-		ns, polName, err := c.parsePolicyNameNetworkPolicy(name)
+		ns, polName, err := c.ParsePolicyNameNetworkPolicy(name)
 		Expect(err).To(HaveOccurred())
 		Expect(ns).To(Equal(""))
 		Expect(polName).To(Equal(""))
@@ -61,14 +61,14 @@ var _ = Describe("Test parsing strings", func() {
 
 	It("should parse valid profile names", func() {
 		name := "k8s_ns.default"
-		ns, err := c.parseProfileName(name)
+		ns, err := c.ProfileNameToNamespace(name)
 		Expect(ns).To(Equal("default"))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should not parse invalid profile names", func() {
 		name := "ns.projectcalico.org/default"
-		ns, err := c.parseProfileName(name)
+		ns, err := c.ProfileNameToNamespace(name)
 		Expect(err).To(HaveOccurred())
 		Expect(ns).To(Equal(""))
 	})
