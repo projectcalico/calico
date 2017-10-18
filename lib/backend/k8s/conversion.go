@@ -398,7 +398,7 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 	// into a rule.  We can combine these so that we don't need as many rules!
 	for _, port := range ports {
 		for _, peer := range peers {
-			protocol, ports := c.k8sPortToCalicoFields(port)
+			protocol, calicoPorts := c.k8sPortToCalicoFields(port)
 			selector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
 			if ingress {
 				// Build inbound rule and append to list.
@@ -406,10 +406,12 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 					Action:   "allow",
 					Protocol: protocol,
 					Source: apiv2.EntityRule{
-						Ports:    ports,
 						Selector: selector,
 						Nets:     nets,
 						NotNets:  notNets,
+					},
+					Destination: apiv2.EntityRule{
+						Ports: calicoPorts,
 					},
 				})
 			} else {
@@ -418,7 +420,7 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 					Action:   "allow",
 					Protocol: protocol,
 					Destination: apiv2.EntityRule{
-						Ports:    ports,
+						Ports:    calicoPorts,
 						Selector: selector,
 						Nets:     nets,
 						NotNets:  notNets,
