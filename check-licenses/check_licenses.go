@@ -52,10 +52,18 @@ var (
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/beorn7/perks/quantile",
 			license: "MIT License (98%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/davecgh/go-spew/spew",
+			license: "ISC License (98%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/dgrijalva/jwt-go",
+			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/gogo/protobuf",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (90%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/golang/protobuf",
+			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/golang/protobuf/proto",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/gregjones/httpcache/diskcache",
+			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/howeyc/gopass",
 			license: "ISC License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/imdario/mergo",
@@ -68,10 +76,14 @@ var (
 			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/pborman/uuid",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/peterbourgon/diskv",
+			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/satori/go.uuid",
 			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/spf13/pflag",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/google.golang.org/grpc",
+			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/gopkg.in/inf.v0",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
 
@@ -80,10 +92,19 @@ var (
 			license: "? (BSD 3-clause \"New\" or \"Revised\" License, 83%)"},
 
 		// Apache license with copyright statement in file.
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/Azure/go-autorest/autorest",
+			license: "Apache License 2.0 (96%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/gophercloud/gophercloud",
+			license: "Apache License 2.0 (96%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/vishvananda/netlink/nl",
 			license: "Apache License 2.0 (96%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/vishvananda/netns",
 			license: "Apache License 2.0 (96%)"},
+
+		// Mozilla Public License.  Note, would prohibit us from ever releasing our code
+		// under a *GPL license (if we wanted to do that).
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/hashicorp/golang-lru/simplelru",
+			license: "Mozilla Public License 2.0"},
 	})
 	whitelistedPrefixes = []string{
 		// Standard golang BSD-like license.
