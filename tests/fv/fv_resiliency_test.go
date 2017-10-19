@@ -103,8 +103,17 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			return policy
 		}).ShouldNot(BeNil())
 	})
+
+	AfterEach(func() {
+		calicoEtcd.Stop()
+		policyController.Stop()
+		k8sEtcd.Stop()
+		apiserver.Stop()
+	})
+
 	Context("when apiserver goes down momentarily and data is removed from calico's etcd", func() {
 		It("should eventually add the data to calico's etcd", func() {
+			Skip("TODO: improve FV framework to handle pod restart")
 			testutils.Stop(apiserver)
 			err := calicoClient.Policies().Delete(api.PolicyMetadata{Name: genPolicyName})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -117,6 +126,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 	})
 	Context("when calico's etcd goes down momentarily and data is removed from k8s-apiserver", func() {
 		It("should eventually remove the data from calico's etcd", func() {
+			Skip("TODO: improve FV framework to handle pod restart")
 			// Delete the Policy.
 			testutils.Stop(calicoEtcd)
 			err := k8sClient.Extensions().RESTClient().

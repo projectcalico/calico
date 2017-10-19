@@ -75,6 +75,12 @@ var _ = Describe("PolicyController", func() {
 		time.Sleep(time.Second * 15)
 	})
 
+	AfterEach(func() {
+		etcd.Stop()
+		policyController.Stop()
+		apiserver.Stop()
+	})
+
 	Context("profiles", func() {
 		var profName string
 		BeforeEach(func() {
