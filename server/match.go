@@ -90,11 +90,6 @@ func matchHTTPMethods(methods []string, reqMethod string) bool {
 		log.Debug("Rule has 0 HTTP Methods, matched.")
 		return true
 	}
-	// TODO: Correctly handle TCP vs HTTP traffic
-	if reqMethod == "" {
-		log.Debug("Request does not have HTTP Method.  Matched.")
-		return true
-	}
 	for _, method := range methods {
 		if method == "*" {
 			log.Debug("Rule matches all methods with wildcard *")
