@@ -51,6 +51,7 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv2.NetworkPolicy, o
 // Update takes the representation of a NetworkPolicy and updates it. Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Update(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
+	r.defaultTypesField(res)
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindNetworkPolicy, res)
 	if out != nil {
 		return out.(*apiv2.NetworkPolicy), err

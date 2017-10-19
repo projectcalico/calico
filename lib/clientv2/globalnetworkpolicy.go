@@ -51,6 +51,7 @@ func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetw
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
+	r.defaultTypesField(res)
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		return out.(*apiv2.GlobalNetworkPolicy), err
