@@ -395,7 +395,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher4 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 			defer testWatcher4.Stop()
-			testWatcher4.ExpectEvents(apiv2.KindIPPool, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv2.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes1,
