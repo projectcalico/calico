@@ -218,17 +218,31 @@ compare_templates() {
     rc=0
     for f in `ls /tests/compiled_templates/${testdir}`; do
         if ! diff -q /tests/compiled_templates/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
+            rc=1
             if [ $output -ne 0 ]; then
                 echo "Failed: $f templates do not match, showing diff of expected vs received"
                 set +e
                 diff /tests/compiled_templates/${testdir}/${f} /etc/calico/confd/config/${f}
                 echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
                 cp /etc/calico/confd/config/${f} ${LOGPATH}/rendered/${f}
-                ps
                 set -e
+                rc=2
             fi
-            rc=1
         fi
     done
+
+    if [ $rc -eq 2 ]; then
+        echo "Copying nodes to ${LOGPATH}/nodes.yaml"
+        calicoctl get nodes -o yaml > ${LOGPATH}/nodes.yaml
+        echo "Copying bgp config to ${LOGPATH}/bgpconfig.yaml"
+        calicoctl get bgpconfigs -o yaml > ${LOGPATH}/bgpconfig.yaml
+        echo "Copying bgp peers to ${LOGPATH}/bgppeers.yaml"
+        calicoctl get bgppeers -o yaml > ${LOGPATH}/bgppeers.yaml
+        echo "Copying ip pools to ${LOGPATH}/ippools.yaml"
+        calicoctl get ippools -o yaml > ${LOGPATH}/bgppeers.yaml
+        echo "Listing running processes"
+        ps
+    fi
+
     return $rc
 }

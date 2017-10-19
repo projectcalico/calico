@@ -14,6 +14,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 )
 
 type ConfdFormatter struct {
@@ -31,7 +33,8 @@ var tag string
 
 func init() {
 	tag = os.Args[0]
-	log.SetFormatter(&ConfdFormatter{})
+	log.AddHook(logutils.ContextHook{})
+	log.SetFormatter(&logutils.Formatter{})
 }
 
 // SetTag sets the tag.
