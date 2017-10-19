@@ -169,7 +169,10 @@ func (rh resourceHelper) Apply(ctx context.Context, client client.Interface, res
 	// Try to create the resource first.
 	ro, err := rh.Create(ctx, client, resource)
 
-	if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+	// Fall back to an Update if the resource already exists, or the datastore does not support
+	// create operations for that resource.
+	switch err.(type) {
+	case cerrors.ErrorResourceAlreadyExists, cerrors.ErrorOperationNotSupported:
 		// Insert the original ResourceVersion back into the object before trying the Update.
 		resource.(ResourceObject).GetObjectMeta().SetResourceVersion(originalRV)
 
