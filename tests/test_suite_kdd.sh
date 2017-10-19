@@ -19,7 +19,7 @@ script_dir="$(dirname "$0")"
 source "$script_dir/test_suite_common.sh"
 
 # Set the log output directory and ensure the directory exists.
-export LOGPATH=/tests/logs/etcd
+export LOGPATH=/tests/logs/kdd
 
 # We are using kdd.  Set the datastore parms for calicoctl/confd/etcdctl
 export DATASTORE_TYPE=kubernetes
@@ -32,14 +32,15 @@ echo "Waiting for k8s API server to come on line"
 for i in $(seq 1 30); do kubectl apply -f /tests/mock_data/kdd/crds.yaml 1>/dev/null 2>&1 && break || sleep 1; done
 
 echo "Populating k8s with test data that cannot be handled by calicoctl"
-kubectl apply -f kubectl apply -f /tests/mock_data/kdd/crds.yaml
+kubectl apply -f /tests/mock_data/kdd/crds.yaml
 kubectl apply -f /tests/mock_data/kdd/nodes.yaml
 
 # Use calicoctl to apply some data - this will require the CRDs to be online.  Repeat
 # until successful.
 echo "Waiting for CRDs to be ready"
-for i in $(seq 1 30); do calicoctl apply -f -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml 1>/dev/null 2>&1 && break || sleep 1; done
-calicoctl apply -f -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml
+for i in $(seq 1 30); do calicoctl apply -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml 1>/dev/null 2>&1 && break || sleep 1; done
+calicoctl apply -f /tests/mock_data/calicoctl/explicit_peering/specific_node/input.yaml
+calicoctl delete -f /tests/mock_data/calicoctl/explicit_peering/specific_node/delete.yaml
 
 # Run the tests a few times.
 execute_test_suite
