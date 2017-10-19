@@ -67,24 +67,7 @@ func convertPolicyV2ToV1Spec(spec apiv2.PolicySpec) (interface{}, error) {
 		PreDNAT:       spec.PreDNAT,
 		Types:         policyTypesAPIV2ToBackend(spec.Types),
 	}
-	if len(spec.Types) == 0 {
-		// Default the Types field according to what inbound and outbound rules are present
-		// in the policy.
-		if len(spec.EgressRules) == 0 {
-			// Policy has no egress rules, so apply this policy to ingress only.  (Note:
-			// intentionally including the case where the policy also has no ingress
-			// rules.)
-			v1value.Types = []string{string(apiv2.PolicyTypeIngress)}
-		} else if len(spec.IngressRules) == 0 {
-			// Policy has egress rules but no ingress rules, so apply this policy to
-			// egress only.
-			v1value.Types = []string{string(apiv2.PolicyTypeEgress)}
-		} else {
-			// Policy has both ingress and egress rules, so apply this policy to both
-			// ingress and egress.
-			v1value.Types = []string{string(apiv2.PolicyTypeIngress), string(apiv2.PolicyTypeEgress)}
-		}
-	}
+
 	return v1value, nil
 }
 
