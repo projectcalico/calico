@@ -27,7 +27,7 @@ import (
 
 func Create(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl create --filename=<FILENAME> [--skip-exists] [--config=<CONFIG>]
+  calicoctl create --filename=<FILENAME> [--skip-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Create a policy using the data in policy.yaml.
@@ -45,6 +45,9 @@ Options:
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
                             [default: ` + constants.DefaultConfigPath + `]
+  -n --namespace=<NS>       Namespace of the resource.
+                            Only applicable to NetworkPolicy and WorkloadEndpoint.
+                            Uses the default namespace if not specified.
 
 Description:
   The create command is used to create a set of resources by filename or stdin.
@@ -52,13 +55,16 @@ Description:
 
   Valid resource types are:
 
-    * node
+    * bgpConfiguration
     * bgpPeer
+    * felixConfiguration
+    * globalNetworkPolicy
     * hostEndpoint
-    * workloadEndpoint
     * ipPool
-    * policy
+    * networkPolicy
+    * node
     * profile
+    * workloadEndpoint
 
   Attempting to create a resource that already exists is treated as a
   terminating error unless the --skip-exists flag is set.  If this flag is set,

@@ -23,12 +23,20 @@ import (
 	"reflect"
 	"strings"
 
+	"time"
+
+	"context"
+
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
 	"github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/validator"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // The ResourceManager interface provides useful function for each resource type.  This includes:
@@ -37,14 +45,35 @@ import (
 type ResourceManager interface {
 	GetTableDefaultHeadings(wide bool) []string
 	GetTableTemplate(columns []string) (string, error)
-	Apply(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
-	Create(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
-	Update(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
-	Delete(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
-	List(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
+	GetObjectType() reflect.Type
+	IsNamespaced() bool
+	Apply(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error)
+	Create(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error)
+	Update(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error)
+	Delete(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error)
+	GetOrList(ctx context.Context, client client.Interface, resource ResourceObject) (runtime.Object, error)
 }
 
-type ResourceActionCommand func(*client.Client, unversioned.Resource) (unversioned.Resource, error)
+// All Calico resources implement the resource interface.
+type ResourceObject interface {
+	runtime.Object
+	v1.ObjectMetaAccessor
+}
+
+// All Calico resources list implement the resource interface.
+type ResourceListObject interface {
+	runtime.Object
+	v1.ListMetaAccessor
+}
+
+// Composition of resource and listResource
+type resourceObj struct {
+	ResourceObject
+	ResourceListObject
+}
+
+type ResourceActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceObject, error)
+type ResourceListActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceListObject, error)
 
 // ResourceHelper encapsulates details about a specific version of a specific resource:
 //
@@ -56,78 +85,233 @@ type ResourceActionCommand func(*client.Client, unversioned.Resource) (unversion
 //         These functions are an untyped interface (generic Resource interfaces) that map through
 //         to the Calico clients typed interface.
 type resourceHelper struct {
-	typeMetadata      unversioned.TypeMetadata
+	resource          runtime.Object
+	listResource      ResourceListObject
 	resourceType      reflect.Type
 	tableHeadings     []string
 	tableHeadingsWide []string
 	headingsMap       map[string]string
 	isList            bool
-	apply             ResourceActionCommand
+	isNamespaced      bool
 	create            ResourceActionCommand
 	update            ResourceActionCommand
 	delete            ResourceActionCommand
-	list              ResourceActionCommand
+	get               ResourceActionCommand
+	list              ResourceListActionCommand
 }
 
 func (r resourceHelper) String() string {
-	return fmt.Sprintf("Resource(%s %s)", r.typeMetadata.Kind, r.typeMetadata.APIVersion)
+	if !r.isList {
+		return fmt.Sprintf("Resource(%s %s)", r.resource.GetObjectKind(), r.resource.GetObjectKind().GroupVersionKind())
+
+	}
+	return fmt.Sprintf("Resource(%s %s)", r.listResource.GetObjectKind(), r.listResource.GetListMeta().GetResourceVersion())
 }
 
-// Store a resourceHelper for each resource unversioned.TypeMetadata.
-var helpers map[unversioned.TypeMetadata]resourceHelper
+// Store a resourceHelper for each resource.
+var helpers map[schema.GroupVersionKind]resourceHelper
+var kindToRes = make(map[string]ResourceObject)
 
-func registerResource(res unversioned.Resource, resList unversioned.Resource,
+func registerResource(res ResourceObject, resList ResourceListObject, isNamespaced bool, names []string,
 	tableHeadings []string, tableHeadingsWide []string, headingsMap map[string]string,
-	apply, create, update, delete, list ResourceActionCommand) {
+	create, update, delete, get ResourceActionCommand, list ResourceListActionCommand) {
 
 	if helpers == nil {
-		helpers = make(map[unversioned.TypeMetadata]resourceHelper)
+		helpers = make(map[schema.GroupVersionKind]resourceHelper)
 	}
 
-	tmd := res.GetTypeMetadata()
 	rh := resourceHelper{
-		typeMetadata:      tmd,
+		resource:          res,
 		resourceType:      reflect.ValueOf(res).Elem().Type(),
 		tableHeadings:     tableHeadings,
 		tableHeadingsWide: tableHeadingsWide,
 		headingsMap:       headingsMap,
 		isList:            false,
-		apply:             apply,
+		isNamespaced:      isNamespaced,
 		create:            create,
 		update:            update,
 		delete:            delete,
+		get:               get,
 		list:              list,
 	}
-	helpers[tmd] = rh
+	helpers[res.GetObjectKind().GroupVersionKind()] = rh
 
-	tmd = resList.GetTypeMetadata()
 	rh = resourceHelper{
-		typeMetadata:      tmd,
+		listResource:      resList.(ResourceListObject),
 		resourceType:      reflect.ValueOf(resList).Elem().Type(),
 		tableHeadings:     tableHeadings,
 		tableHeadingsWide: tableHeadingsWide,
 		headingsMap:       headingsMap,
 		isList:            true,
 	}
-	helpers[tmd] = rh
+	helpers[resList.GetObjectKind().GroupVersionKind()] = rh
+
+	for _, v := range names {
+		kindToRes[v] = res
+	}
+}
+
+func (rh resourceHelper) GetObjectType() reflect.Type {
+	return rh.resourceType
+}
+
+// Apply is an un-typed method to apply (create or update) a resource. This calls Create
+// and if the resource already exists then we call the Update method.
+func (rh resourceHelper) Apply(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+	// Store the original ResourceVersion for the Update operation later.
+	originalRV := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
+
+	// Remove the resourceVersion, because Create call can't have
+	// resourceVersion set and Update automatically gets and sets
+	// the resourceVersion to the latest one from the datastore.
+	resource.GetObjectMeta().SetResourceVersion("")
+
+	// Try to create the resource first.
+	ro, err := rh.Create(ctx, client, resource)
+
+	// Fall back to an Update if the resource already exists, or the datastore does not support
+	// create operations for that resource.
+	switch err.(type) {
+	case cerrors.ErrorResourceAlreadyExists, cerrors.ErrorOperationNotSupported:
+		// Insert the original ResourceVersion back into the object before trying the Update.
+		resource.(ResourceObject).GetObjectMeta().SetResourceVersion(originalRV)
+
+		// Try updating if the resource already exists.
+		return rh.Update(ctx, client, resource)
+	}
+
+	// For any other errors, return the error
+	return ro, err
+}
+
+// Create is an un-typed method to create a new resource.  This calls directly
+// through to the resource helper specific Create method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) Create(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+	return rh.create(ctx, client, resource)
+}
+
+// Update is an un-typed method to update an existing resource. This calls the resource
+// specific Get method to get the resourceVersion, and then calls resource specific
+// Update method with the resource with the updated resourceVersion, but if the resourceVersion is provided
+// then we use that. We retry 5 times if there is an update conflict during the Update operation.
+func (rh resourceHelper) Update(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+	var err error
+
+	// Check to see if the resourceVersion is specified in the resource object.
+	rv := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
+
+	// If the resourceVersion is specified then we don't try to Get it or retry.
+	if rv != "" {
+		return rh.update(ctx, client, resource)
+	}
+
+	// If the resourceVersion is not specified then we do a Get to get
+	// the latest resourceVersion and then do an Update with it.
+	// We retry only if we get an update conflict.
+	for i := 0; i < 5; i++ {
+		// Get the resource to get the resourceVersion.
+		ro, err := rh.get(ctx, client, resource)
+		if err != nil {
+			return ro, err
+		}
+
+		// Set the resource-to-be-updated's resourceVersion to the one we got from the Get call.
+		resource.(ResourceObject).GetObjectMeta().SetResourceVersion(ro.GetObjectMeta().GetResourceVersion())
+
+		// Try to update with the resource with the updated resourceVersion.
+		ru, err := rh.update(ctx, client, resource)
+		if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+			// Wait for a second and try again if there was a conflict during the resource update.
+			log.Infof("Error updating the resource %s: %s. Retrying.", resource.GetObjectMeta().GetName(), err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		// For any other errors or nil error, return the result and error.
+		return ru, err
+	}
+
+	return nil, fmt.Errorf("failed to update the resource: %s", err)
+}
+
+// Delete is an un-typed method to delete an existing resource.  This calls directly
+// through to the resource helper specific Delete method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) Delete(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+	return rh.delete(ctx, client, resource)
+}
+
+// GetOrList is an un-typed method to get an existing resource. This calls directly
+// through to the resource helper specific Get (if the resource name is set)
+// or List (if the resource name is empty) method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) GetOrList(ctx context.Context, client client.Interface, resource ResourceObject) (runtime.Object, error) {
+	if resource.GetObjectMeta().GetName() != "" {
+		if resource.GetObjectMeta().GetNamespace() == "" && rh.isNamespaced {
+			return nil, fmt.Errorf("cannot use --all-namespace flag for getting a single resource")
+		}
+		return rh.get(ctx, client, resource)
+	}
+
+	return rh.list(ctx, client, resource)
+}
+
+// Return the Resource Manager for a particular resource type.
+func GetResourceManager(resource runtime.Object) ResourceManager {
+	return helpers[resource.GetObjectKind().GroupVersionKind()]
+}
+
+// Gets resource from arguments.
+// This function also inserts resource name, namespace if specified.
+// Example "calicoctl get bgppeer peer123" will return
+// a BGPPeer resource with name field populated to "peer123".
+func GetResourceFromArgs(args map[string]interface{}) (ResourceObject, error) {
+	kind := args["<KIND>"].(string)
+	name := argutils.ArgStringOrBlank(args, "<NAME>")
+	namespace := argutils.ArgStringOrBlank(args, "--namespace")
+
+	res, ok := kindToRes[strings.ToLower(kind)]
+	if !ok {
+		return nil, fmt.Errorf("resource type '%s' is not supported", kind)
+	}
+	res.(ResourceObject).GetObjectMeta().SetName(name)
+
+	// Set the namespace if the object kind is namespaced.
+	if helpers[res.GetObjectKind().GroupVersionKind()].isNamespaced {
+		res.(ResourceObject).GetObjectMeta().SetNamespace(namespace)
+	}
+
+	return res, nil
+}
+
+// Check if the resource kind is namespaced.
+func (rh resourceHelper) IsNamespaced() bool {
+	return rh.isNamespaced
 }
 
 // Create a new concrete resource structure based on the type.  If the type is
 // a list, this creates a concrete Resource-List of the required type.
-func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
+func newResource(tm schema.GroupVersionKind) (runtime.Object, error) {
 	rh, ok := helpers[tm]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion))
+		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.GroupVersion().String()))
 	}
 	log.Infof("Found resource helper: %s", rh)
 
 	// Create new resource and fill in the type metadata.
 	new := reflect.New(rh.resourceType)
 	elem := new.Elem()
-	elem.FieldByName("Kind").SetString(rh.typeMetadata.Kind)
-	elem.FieldByName("APIVersion").SetString(rh.typeMetadata.APIVersion)
+	elem.FieldByName("Kind").SetString(tm.Kind)
+	elem.FieldByName("APIVersion").SetString(tm.GroupVersion().String())
 
-	return new.Interface().(unversioned.Resource), nil
+	_, ok = new.Interface().(ResourceObject)
+	if ok {
+		return new.Interface().(ResourceObject), nil
+	} else {
+		return new.Interface().(ResourceListObject), nil
+	}
+
 }
 
 // Create the resource from the specified byte array encapsulating the resource.
@@ -136,12 +320,12 @@ func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
 //
 // The returned Resource will either be a single resource document or a List of documents.
 // If the file does not contain any valid Resources this function returns an error.
-func createResourcesFromBytes(b []byte) ([]unversioned.Resource, error) {
+func createResourcesFromBytes(b []byte) ([]runtime.Object, error) {
 	// Start by unmarshalling the bytes into a TypeMetadata structure - this will ignore
 	// other fields.
 	var err error
-	tm := unversioned.TypeMetadata{}
-	tms := []unversioned.TypeMetadata{}
+	tm := unstructured.Unstructured{}
+	tms := []unstructured.Unstructured{}
 	if err = yaml.Unmarshal(b, &tm); err == nil {
 		// We processed a metadata, so create a concrete resource struct to unpack
 		// into.
@@ -161,9 +345,9 @@ func createResourcesFromBytes(b []byte) ([]unversioned.Resource, error) {
 //
 // Return as a slice of Resource interfaces, containing a single element that is
 // the unmarshalled resource.
-func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
-	log.Infof("Processing type %s", tm.Kind)
-	unpacked, err := newResource(tm)
+func unmarshalResource(tm unstructured.Unstructured, b []byte) ([]runtime.Object, error) {
+	log.Infof("Processing type %s", tm.GetObjectKind())
+	unpacked, err := newResource(tm.GroupVersionKind())
 	if err != nil {
 		return nil, err
 	}
@@ -173,13 +357,14 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 	}
 
 	log.Infof("Type of unpacked data: %v", reflect.TypeOf(unpacked))
-	if err = validator.Validate(unpacked); err != nil {
-		return nil, err
-	}
+	// TODO: Remember to uncommment this once libcalico has validation code.
+	// if err = validator.Validate(unpacked); err != nil {
+	// 	return nil, err
+	// }
 
 	log.Infof("Unpacked: %+v", unpacked)
 
-	return []unversioned.Resource{unpacked}, nil
+	return []runtime.Object{unpacked}, nil
 }
 
 // Unmarshal a bytearray containing a list of resources of the specified types into
@@ -187,12 +372,12 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 //
 // Return as a slice of Resource interfaces, containing an element that is each of
 // the unmarshalled resources.
-func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
+func unmarshalSliceOfResources(tml []unstructured.Unstructured, b []byte) ([]runtime.Object, error) {
 	log.Infof("Processing list of resources")
-	unpacked := make([]unversioned.Resource, len(tml))
+	unpacked := make([]runtime.Object, len(tml))
 	for i, tm := range tml {
-		log.Infof("  - processing type %s", tm.Kind)
-		r, err := newResource(tm)
+		log.Infof("  - processing type %s", tm.GetObjectKind())
+		r, err := newResource(tm.GroupVersionKind())
 		if err != nil {
 			return nil, err
 		}
@@ -205,11 +390,12 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 
 	// Validate the data in the structures.  The validator does not handle slices, so
 	// validate each resource separately.
-	for _, r := range unpacked {
-		if err := validator.Validate(r); err != nil {
-			return nil, err
-		}
-	}
+	// TODO: uncomment this once libcalico has validation
+	// for _, r := range unpacked {
+	// 	if err := validator.Validate(r); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	log.Infof("Unpacked: %+v", unpacked)
 
@@ -223,7 +409,7 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 //
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
-func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
+func CreateResourcesFromFile(f string) ([]runtime.Object, error) {
 	// Load the bytes from file or from stdin.
 	var reader io.Reader
 	var err error
@@ -231,12 +417,12 @@ func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 		reader = os.Stdin
 	} else {
 		reader, err = os.Open(f)
-	}
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	var resources []unversioned.Resource
+	var resources []runtime.Object
 	separator := yamlsep.NewYAMLDocumentSeparator(reader)
 	for {
 		b, err := separator.Next()
@@ -266,9 +452,9 @@ func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 func (rh resourceHelper) GetTableDefaultHeadings(wide bool) []string {
 	if wide {
 		return rh.tableHeadingsWide
-	} else {
-		return rh.tableHeadings
 	}
+
+	return rh.tableHeadings
 }
 
 // GetTableTemplate constructs the go-lang template string from the supplied set of headings.
@@ -311,44 +497,4 @@ func (rh resourceHelper) GetTableTemplate(headings []string) (string, error) {
 	}
 
 	return buf.String(), nil
-}
-
-// Apply is an un-typed method to apply (create or update) a resource.  This calls directly
-// through to the resource helper specific Apply method which will map the untyped call to
-// the typed interface on the client.
-func (rh resourceHelper) Apply(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	return rh.apply(client, resource)
-}
-
-// Create is an un-typed method to create a new resource.  This calls directly
-// through to the resource helper specific Create method which will map the untyped call to
-// the typed interface on the client.
-func (rh resourceHelper) Create(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	return rh.create(client, resource)
-}
-
-// Update is an un-typed method to update an existing resource.  This calls directly
-// through to the resource helper specific Update method which will map the untyped call to
-// the typed interface on the client.
-func (rh resourceHelper) Update(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	return rh.update(client, resource)
-}
-
-// Delete is an un-typed method to delete an existing resource.  This calls directly
-// through to the resource helper specific Delete method which will map the untyped call to
-// the typed interface on the client.
-func (rh resourceHelper) Delete(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	return rh.delete(client, resource)
-}
-
-// List is an un-typed method to list existing resources.  This calls directly
-// through to the resource helper specific List method which will map the untyped call to
-// the typed interface on the client.
-func (rh resourceHelper) List(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	return rh.list(client, resource)
-}
-
-// Return the Resource Manager for a particular resource type.
-func GetResourceManager(resource unversioned.Resource) ResourceManager {
-	return helpers[resource.GetTypeMetadata()]
 }

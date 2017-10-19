@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -152,7 +152,7 @@ func runDiags(logDir string) {
 	tarFilePath := filepath.Join(tmpDir, tarFile)
 
 	fmt.Printf("\nDiags saved to %s\n", tarFilePath)
-	fmt.Printf(`If required, you can upload the diagnostics bundle to a file sharing service 
+	fmt.Printf(`If required, you can upload the diagnostics bundle to a file sharing service
 such as transfer.sh using curl or similar.  For example:
 
     curl --upload-file %s https://transfer.sh/%s`, tarFilePath, tarFilePath)

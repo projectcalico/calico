@@ -28,7 +28,7 @@ import (
 
 func Replace(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl replace --filename=<FILENAME> [--config=<CONFIG>]
+  calicoctl replace --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
 
 Examples:
   # Replace a policy using the data in policy.yaml.
@@ -44,6 +44,9 @@ Options:
   -c --config=<CONFIG>       Path to the file containing connection
                              configuration in YAML or JSON format.
                              [default: ` + constants.DefaultConfigPath + `]
+  -n --namespace=<NS>       Namespace of the resource.
+                            Only applicable to NetworkPolicy and WorkloadEndpoint.
+                            Uses the default namespace if not specified.
 
 Description:
   The replace command is used to replace a set of resources by filename or
@@ -51,13 +54,16 @@ Description:
 
   Valid resource types are:
 
-    * node
+    * bgpConfiguration
     * bgpPeer
+    * felixConfiguration
+    * globalNetworkPolicy
     * hostEndpoint
-    * workloadEndpoint
     * ipPool
-    * policy
+    * networkPolicy
+    * node
     * profile
+    * workloadEndpoint
 
   Attempting to replace a resource that does not exist is treated as a
   terminating error.

@@ -19,15 +19,15 @@ import (
 	"os"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	log "github.com/sirupsen/logrus"
 )
 
 // NewClient creates a new CalicoClient using connection information in the specified
 // filename (if it exists), dropping back to environment variables for any
 // parameter not loaded from file.
-func NewClient(cf string) (*client.Client, error) {
+func NewClient(cf string) (client.Interface, error) {
 	cfg, err := LoadClientConfig(cf)
 	if err != nil {
 		log.Info("Error loading config")
@@ -45,7 +45,7 @@ func NewClient(cf string) (*client.Client, error) {
 
 // LoadClientConfig loads the client config from file if the file exists,
 // otherwise will load from environment variables.
-func LoadClientConfig(cf string) (*api.CalicoAPIConfig, error) {
+func LoadClientConfig(cf string) (*apiconfig.CalicoAPIConfig, error) {
 	if _, err := os.Stat(cf); err != nil {
 		if cf != constants.DefaultConfigPath {
 			fmt.Printf("Error reading config file: %s\n", cf)
@@ -55,5 +55,5 @@ func LoadClientConfig(cf string) (*api.CalicoAPIConfig, error) {
 		cf = ""
 	}
 
-	return client.LoadClientConfig(cf)
+	return apiconfig.LoadClientConfig(cf)
 }

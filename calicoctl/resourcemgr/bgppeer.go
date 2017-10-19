@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,42 +15,46 @@
 package resourcemgr
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"context"
+
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
 		api.NewBGPPeer(),
 		api.NewBGPPeerList(),
-		[]string{"SCOPE", "PEERIP", "NODE", "ASN"},
-		[]string{"SCOPE", "PEERIP", "NODE", "ASN"},
+		false,
+		[]string{"bgppeer", "bgppeers", "bgpp", "bgpps", "bp", "bps"},
+		[]string{"NAME", "PEERIP", "NODE", "ASN"},
+		[]string{"NAME", "PEERIP", "NODE", "ASN"},
 		map[string]string{
-			"SCOPE":  "{{.Metadata.Scope}}",
-			"PEERIP": "{{.Metadata.PeerIP}}",
-			"NODE":   "{{.Metadata.Node}}",
+			"NAME":   "{{.ObjectMeta.Name}}",
+			"PEERIP": "{{.Spec.PeerIP}}",
+			"NODE":   "{{ if eq .Spec.Node `` }}(global){{ else }}{{.Spec.Node}}{{ end }}",
 			"ASN":    "{{.Spec.ASNumber}}",
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.BGPPeer)
-			return client.BGPPeers().Apply(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.BGPPeer)
+			return client.BGPPeers().Create(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.BGPPeer)
-			return client.BGPPeers().Create(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.BGPPeer)
+			return client.BGPPeers().Update(ctx, r, options.SetOptions{})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.BGPPeer)
-			return client.BGPPeers().Update(&r)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.BGPPeer)
+			return client.BGPPeers().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.BGPPeer)
-			return nil, client.BGPPeers().Delete(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+			r := resource.(*api.BGPPeer)
+			return client.BGPPeers().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
-		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.BGPPeer)
-			return client.BGPPeers().List(r.Metadata)
+		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
+			r := resource.(*api.BGPPeer)
+			return client.BGPPeers().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

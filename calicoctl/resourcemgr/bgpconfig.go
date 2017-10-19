@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,38 +24,37 @@ import (
 
 func init() {
 	registerResource(
-		api.NewIPPool(),
-		api.NewIPPoolList(),
+		api.NewBGPConfiguration(),
+		api.NewBGPConfigurationList(),
 		false,
-		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
-		[]string{"NAME", "CIDR"},
-		[]string{"NAME", "CIDR", "NAT", "IPIP", "DISABLED"},
+		[]string{"bgpconfiguration", "bgpconfigurations", "bgpconfig", "bgpconfigs"},
+		[]string{"NAME", "LOGSEVERITY", "MESHENABLED", "DEFAULTASN"},
+		[]string{"NAME", "LOGSEVERITY", "MESHENABLED", "DEFAULTASN"},
 		map[string]string{
-			"NAME":     "{{.ObjectMeta.Name}}",
-			"CIDR":     "{{.Spec.CIDR}}",
-			"NAT":      "{{.Spec.NATOutgoing}}",
-			"IPIP":     "{{if .Spec.IPIP}}{{.Spec.IPIP.Mode}}{{else}}Always{{end}}",
-			"DISABLED": "{{.Spec.Disabled}}",
+			"NAME":        "{{.ObjectMeta.Name}}",
+			"LOGSEVERITY": "{{.Spec.LogSeverityScreen}}",
+			"MESHENABLED": "{{if .Spec.NodeToNodeMeshEnabled}}{{.Spec.NodeToNodeMeshEnabled}}{{ else }}-{{ end }}",
+			"DEFAULTASN":  "{{if .Spec.DefaultNodeASNumber}}{{.Spec.DefaultNodeASNumber}}{{ else }}-{{ end }}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.BGPConfiguration)
+			return client.BGPConfigurations().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.BGPConfiguration)
+			return client.BGPConfigurations().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.BGPConfiguration)
+			return client.BGPConfigurations().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.BGPConfiguration)
+			return client.BGPConfigurations().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+			r := resource.(*api.BGPConfiguration)
+			return client.BGPConfigurations().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

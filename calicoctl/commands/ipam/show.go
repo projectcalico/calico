@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -52,6 +53,8 @@ Description:
 		return
 	}
 
+	ctx := context.Background()
+
 	// Create a new backend client from env vars.
 	cf := parsedArgs["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
@@ -63,7 +66,7 @@ Description:
 	ipamClient := client.IPAM()
 	passedIP := parsedArgs["--ip"].(string)
 	ip := argutils.ValidateIP(passedIP)
-	attr, err := ipamClient.GetAssignmentAttributes(ip)
+	attr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 
 	// IP address is not assigned, this prints message like
 	// `IP 192.168.71.1 is not assigned in block`. This is not exactly an error,

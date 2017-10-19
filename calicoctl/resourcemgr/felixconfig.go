@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,38 +24,34 @@ import (
 
 func init() {
 	registerResource(
-		api.NewIPPool(),
-		api.NewIPPoolList(),
+		api.NewFelixConfiguration(),
+		api.NewFelixConfigurationList(),
 		false,
-		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
-		[]string{"NAME", "CIDR"},
-		[]string{"NAME", "CIDR", "NAT", "IPIP", "DISABLED"},
+		[]string{"felixconfiguration", "felixconfigurations", "felixconfig", "felixconfigs"},
+		[]string{"NAME"},
+		[]string{"NAME"},
 		map[string]string{
-			"NAME":     "{{.ObjectMeta.Name}}",
-			"CIDR":     "{{.Spec.CIDR}}",
-			"NAT":      "{{.Spec.NATOutgoing}}",
-			"IPIP":     "{{if .Spec.IPIP}}{{.Spec.IPIP.Mode}}{{else}}Always{{end}}",
-			"DISABLED": "{{.Spec.Disabled}}",
+			"NAME": "{{.ObjectMeta.Name}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.FelixConfiguration)
+			return client.FelixConfigurations().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.FelixConfiguration)
+			return client.FelixConfigurations().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.FelixConfiguration)
+			return client.FelixConfigurations().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.FelixConfiguration)
+			return client.FelixConfigurations().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+			r := resource.(*api.FelixConfiguration)
+			return client.FelixConfigurations().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

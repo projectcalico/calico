@@ -29,7 +29,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
 )
@@ -239,7 +239,7 @@ Description:
 		fmt.Println("Error executing command: invalid config file")
 		os.Exit(1)
 	}
-	if cfg.Spec.DatastoreType != api.EtcdV2 {
+	if cfg.Spec.DatastoreType != apiconfig.EtcdV3 {
 		fmt.Println("Error executing command: unsupported backend specified in config")
 		os.Exit(1)
 	}

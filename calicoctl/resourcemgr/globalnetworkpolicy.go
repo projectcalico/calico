@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,38 +24,36 @@ import (
 
 func init() {
 	registerResource(
-		api.NewIPPool(),
-		api.NewIPPoolList(),
+		api.NewGlobalNetworkPolicy(),
+		api.NewGlobalNetworkPolicyList(),
 		false,
-		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
-		[]string{"NAME", "CIDR"},
-		[]string{"NAME", "CIDR", "NAT", "IPIP", "DISABLED"},
+		[]string{"globalnetworkpolicy", "globalnetworkpolicies", "gnp", "gnps"},
+		[]string{"NAME"},
+		[]string{"NAME", "ORDER", "SELECTOR"},
 		map[string]string{
 			"NAME":     "{{.ObjectMeta.Name}}",
-			"CIDR":     "{{.Spec.CIDR}}",
-			"NAT":      "{{.Spec.NATOutgoing}}",
-			"IPIP":     "{{if .Spec.IPIP}}{{.Spec.IPIP.Mode}}{{else}}Always{{end}}",
-			"DISABLED": "{{.Spec.Disabled}}",
+			"ORDER":    "{{.Spec.Order}}",
+			"SELECTOR": "{{.Spec.Selector}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+			r := resource.(*api.GlobalNetworkPolicy)
+			return client.GlobalNetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }

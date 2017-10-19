@@ -36,7 +36,6 @@ func main() {
               name.
     get       Get a resource identified by file, stdin or resource type and
               name.
-    config    Manage system-wide and low-level node configuration options.
     ipam      IP address management.
     node      Calico node management.
     version   Display the version of calicoctl.
@@ -88,8 +87,6 @@ Description:
 			commands.Node(args)
 		case "ipam":
 			commands.IPAM(args)
-		case "config":
-			commands.Config(args)
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
 			fmt.Println(doc)

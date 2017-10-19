@@ -24,42 +24,37 @@ import (
 
 func init() {
 	registerResource(
-		api.NewWorkloadEndpoint(),
-		api.NewWorkloadEndpointList(),
+		api.NewNetworkPolicy(),
+		api.NewNetworkPolicyList(),
 		true,
-		[]string{"workloadendpoint", "workloadendpoints", "wep", "weps"},
-		[]string{"NAME", "NODE", "WORKLOAD", "INTERFACE"},
-		[]string{"NAME", "NODE", "NAMESPACE", "WORKLOAD", "NETWORKS", "INTERFACE", "PROFILES", "NATS"},
+		[]string{"networkpolicy", "networkpolicies", "policy", "np", "policies", "pol", "pols"},
+		[]string{"NAME"},
+		[]string{"NAME", "ORDER", "SELECTOR", "NAMESPACE"},
 		map[string]string{
-			"NAME":         "{{.ObjectMeta.Name}}",
-			"NAMESPACE":    "{{.ObjectMeta.Namespace}}",
-			"NODE":         "{{.Spec.Node}}",
-			"ORCHESTRATOR": "{{.Spec.Orchestrator}}",
-			"WORKLOAD":     "{{.Spec.Workload}}",
-			"NETWORKS":     "{{join .Spec.IPNetworks \",\"}}",
-			"NATS":         "{{join .Spec.IPNATs \",\"}}",
-			"PROFILES":     "{{join .Spec.Profiles \",\"}}",
-			"INTERFACE":    "{{.Spec.InterfaceName}}",
+			"NAME":      "{{.ObjectMeta.Name}}",
+			"NAMESPACE": "{{.ObjectMeta.Namespace}}",
+			"ORDER":     "{{.Spec.Order}}",
+			"SELECTOR":  "{{.Spec.Selector}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().Get(ctx, r.Namespace, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().Get(ctx, r.Namespace, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.WorkloadEndpoint)
-			return client.WorkloadEndpoints().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Namespace: r.Namespace, Name: r.Name})
+			r := resource.(*api.NetworkPolicy)
+			return client.NetworkPolicies().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Namespace: r.Namespace, Name: r.Name})
 		},
 	)
 }

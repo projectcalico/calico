@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,43 +19,49 @@ import (
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 func init() {
 	registerResource(
-		api.NewIPPool(),
-		api.NewIPPoolList(),
+		api.NewClusterInformation(),
+		api.NewClusterInformationList(),
 		false,
-		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
-		[]string{"NAME", "CIDR"},
-		[]string{"NAME", "CIDR", "NAT", "IPIP", "DISABLED"},
+		[]string{"clusterinformation", "clusterinformations", "clusterinfo", "clusterinfos"},
+		[]string{"NAME", "CLUSTERGUID", "CLUSTERTYPE", "CALICOVERSION"},
+		[]string{"NAME", "CLUSTERGUID", "CLUSTERTYPE", "CALICOVERSION"},
 		map[string]string{
-			"NAME":     "{{.ObjectMeta.Name}}",
-			"CIDR":     "{{.Spec.CIDR}}",
-			"NAT":      "{{.Spec.NATOutgoing}}",
-			"IPIP":     "{{if .Spec.IPIP}}{{.Spec.IPIP.Mode}}{{else}}Always{{end}}",
-			"DISABLED": "{{.Spec.Disabled}}",
+			"NAME":          "{{.ObjectMeta.Name}}",
+			"CLUSTERGUID":   "{{.Spec.ClusterGUID}}",
+			"CLUSTERTYPE":   "{{.Spec.ClusterType}}",
+			"CALICOVERSION": "{{.Spec.CalicoVersion}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Create(ctx, r, options.SetOptions{})
+			return nil, cerrors.ErrorOperationNotSupported{
+				Operation:  "create or apply",
+				Identifier: "ClusterInformation",
+			}
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Update(ctx, r, options.SetOptions{})
+			return nil, cerrors.ErrorOperationNotSupported{
+				Operation:  "apply or replace",
+				Identifier: "ClusterInformation",
+			}
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			return nil, cerrors.ErrorOperationNotSupported{
+				Operation:  "delete",
+				Identifier: "ClusterInformation",
+			}
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.ClusterInformation)
+			return client.ClusterInformation().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.IPPool)
-			return client.IPPools().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+			r := resource.(*api.ClusterInformation)
+			return client.ClusterInformation().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
 		},
 	)
 }
