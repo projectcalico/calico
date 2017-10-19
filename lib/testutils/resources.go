@@ -210,7 +210,7 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		expectedYaml, _ := yaml.Marshal(expectedEvent)
 		traceString := fmt.Sprintf("\nTracing out event details\nActual event: %s\nExpected event: %s\n", actualYaml, expectedYaml)
 
-		Expect(actualEvent.Type).To(Equal(expectedEvent.Type))
+		Expect(actualEvent.Type).To(Equal(expectedEvent.Type), traceString)
 		if expectedEvent.Object != nil {
 			Expect(actualEvent.Object).NotTo(BeNil(), traceString)
 			ExpectResource(

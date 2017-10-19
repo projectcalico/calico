@@ -297,7 +297,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			_, err = c.IPPools().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking for two events, create res2 and delete re1")
+			By("Checking for two events, create res2 and delete res1")
 			testWatcher1.ExpectEvents(apiv2.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
