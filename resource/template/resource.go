@@ -48,8 +48,8 @@ type TemplateResource struct {
 	Src           string
 	StageFile     *os.File
 	Uid           int
+	PrefixedKeys  []string
 	funcMap       map[string]interface{}
-	lastIndex     uint64
 	keepStageFile bool
 	noop          bool
 	store         memkv.Store
@@ -103,6 +103,9 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	if tr.Gid == -1 {
 		tr.Gid = os.Getegid()
 	}
+
+	// Calculate the set of keys including the prefix.
+	tr.PrefixedKeys = appendPrefix(tr.Prefix, tr.Keys)
 
 	tr.Src = filepath.Join(config.TemplateDir, tr.Src)
 	return &tr, nil
@@ -192,7 +195,10 @@ func (t *TemplateResource) sync() error {
 		log.Info("Target config " + t.Dest + " out of sync")
 		if !t.syncOnly && t.CheckCmd != "" {
 			if err := t.check(); err != nil {
-				return errors.New("Config check failed: " + err.Error())
+				if isFileExist(t.Dest) {
+					return errors.New("Config check failed: " + err.Error())
+				}
+				log.Info("Check failed, but file does not yet exist - create anyway")
 			}
 		}
 		log.Debug("Overwriting target config " + t.Dest)
@@ -246,28 +252,28 @@ func (t *TemplateResource) check() error {
 	if err := tmpl.Execute(&cmdBuffer, data); err != nil {
 		return err
 	}
-	log.Debug("Running " + cmdBuffer.String())
+	log.Debug("Running checkcmd: " + cmdBuffer.String())
 	c := exec.Command("/bin/sh", "-c", cmdBuffer.String())
 	output, err := c.CombinedOutput()
 	if err != nil {
-		log.Error(fmt.Sprintf("%q", string(output)))
+		log.Error(fmt.Sprintf("Error from checkcmd: %q", string(output)))
 		return err
 	}
-	log.Debug(fmt.Sprintf("%q", string(output)))
+	log.Debug(fmt.Sprintf("Output from checkcmd: %q", string(output)))
 	return nil
 }
 
 // reload executes the reload command.
 // It returns nil if the reload command returns 0.
 func (t *TemplateResource) reload() error {
-	log.Debug("Running " + t.ReloadCmd)
+	log.Debug("Running reloadcmd: " + t.ReloadCmd)
 	c := exec.Command("/bin/sh", "-c", t.ReloadCmd)
 	output, err := c.CombinedOutput()
 	if err != nil {
-		log.Error(fmt.Sprintf("%q", string(output)))
+		log.Error(fmt.Sprintf("Error from reloadcmd: %q", string(output)))
 		return err
 	}
-	log.Debug(fmt.Sprintf("%q", string(output)))
+	log.Debug(fmt.Sprintf("Output from reloadcmd: %q", string(output)))
 	return nil
 }
 

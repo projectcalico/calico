@@ -13,10 +13,6 @@ templates, and will also log the output of confd into `tests/logs`.
 
 ## Mock Data
 
-The `mock_data` directory structure indicates which cluster configuration
-it represents, e.g. `mock_data/etcd/mesh/ipip-always` represents an etcd
-backend running Calico in full mesh, with IPIP set to `always`.
-
 The mock data, and compiled templates, were generated in a cluster setup 
 with three nodes:
 
@@ -27,9 +23,13 @@ with three nodes:
 The cluster is spun up and Calico deployed as the CNI provider, doing additional
 configuration as necessary (e.g. explicit peering) with `calicoctl`.
 
-The mock data can be edited directly or pulled from a working cluster setup similarly
-to the above.  If the expected output from confd needs to be adjust as well
-then the corresponding changes should be made in the `compiled_templates`.
+The mock data is split into 3 input formats:
+-  etcd contains etcdv3 data to configure using etcdctl.  This is done just before the tests
+   and is used to configure allocation blocks that cannot be configured through calicoctl.
+-  kdd contains kubectl manifests used to configure the k8s nodes.  This is done just before
+   the tests and is required because kdd nodes canot be configured through calicoctl.
+-  calicocl contains most of the test data in calicoctl manifests.  The same data is shared
+   by both the etcdv3 and kdd tests.
 
 ## Compiled Templates
 
