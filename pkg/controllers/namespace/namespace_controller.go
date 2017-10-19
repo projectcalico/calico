@@ -15,15 +15,17 @@
 package namespace
 
 import (
+	"context"
 	"reflect"
 	"strings"
 
-	calicocache "github.com/projectcalico/kube-controllers/pkg/cache"
+	rcache "github.com/projectcalico/kube-controllers/pkg/cache"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -36,15 +38,13 @@ import (
 // Responsible for monitoring kubernetes namespaces and
 // syncing them to Calico datastore.
 type NamespaceController struct {
-	indexer        cache.Indexer
-	informer       cache.Controller
-	calicoObjCache calicocache.ResourceCache
-	calicoClient   *client.Client
-	k8sClientset   *kubernetes.Clientset
+	informer      cache.Controller
+	resourceCache rcache.ResourceCache
+	calicoClient  client.Interface
 }
 
 // NewNamespaceController Constructor for NamespaceController
-func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *client.Client) controller.Controller {
+func NewNamespaceController(k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
@@ -54,16 +54,15 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 		log.Debugf("Listing profiles from Calico datastore")
 		filteredProfiles := make(map[string]interface{})
 
-		// Get all profile objects from Calico datastore
-		calicoProfiles, err := calicoClient.Profiles().List(api.ProfileMetadata{})
+		// Get all profile objects from Calico datastore.
+		profileList, err := c.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
 		if err != nil {
 			return nil, err
 		}
 
-		// Filter out only objects that are written by policy controller
-		for _, profile := range calicoProfiles.Items {
-			profileName := profile.Metadata.Name
-			if strings.HasPrefix(profileName, converter.ProfileNameFormat) {
+		// Filter out only objects that are written by policy controller.
+		for _, profile := range profileList.Items {
+			if strings.HasPrefix(profile.Name, converter.ProfileNameFormat) {
 				key := namespaceConverter.GetKey(profile)
 				filteredProfiles[key] = profile
 			}
@@ -73,18 +72,18 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 	}
 
 	// Create a Cache to store Profiles in.
-	cacheArgs := calicocache.ResourceCacheArgs{
+	cacheArgs := rcache.ResourceCacheArgs{
 		ListFunc:   listFunc,
 		ObjectType: reflect.TypeOf(api.Profile{}),
 	}
-	ccache := calicocache.NewResourceCache(cacheArgs)
+	ccache := rcache.NewResourceCache(cacheArgs)
 
 	// Create a Namespace watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "namespaces", "", fields.Everything())
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	indexer, informer := cache.NewIndexerInformer(listWatcher, &v1.Namespace{}, 0, cache.ResourceEventHandlerFuncs{
+	_, informer := cache.NewIndexerInformer(listWatcher, &v1.Namespace{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			log.Debugf("Got ADD event for Namespace: %#v", obj)
 			profile, err := namespaceConverter.Convert(obj)
@@ -133,7 +132,7 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, calicoClient *cl
 		},
 	}, cache.Indexers{})
 
-	return &NamespaceController{indexer, informer, ccache, calicoClient, k8sClientset}
+	return &NamespaceController{informer, ccache, c}
 }
 
 // Run starts the controller.
@@ -141,7 +140,7 @@ func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stop
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
-	workqueue := c.calicoObjCache.GetQueue()
+	workqueue := c.resourceCache.GetQueue()
 	defer workqueue.ShutDown()
 
 	log.Info("Starting Namespace/Profile controller")
@@ -154,7 +153,7 @@ func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stop
 	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
 
 	// Start Calico cache.
-	c.calicoObjCache.Run(reconcilerPeriod)
+	c.resourceCache.Run(reconcilerPeriod)
 
 	// Start a number of worker threads to read from the queue.
 	for i := 0; i < threadiness; i++ {
@@ -173,7 +172,7 @@ func (c *NamespaceController) runWorker() {
 
 func (c *NamespaceController) processNextItem() bool {
 	// Wait until there is a new item in the work queue.
-	workqueue := c.calicoObjCache.GetQueue()
+	workqueue := c.resourceCache.GetQueue()
 	key, quit := workqueue.Get()
 	if quit {
 		return false
@@ -193,29 +192,45 @@ func (c *NamespaceController) processNextItem() bool {
 // syncToCalico syncs the given update to the Calico datastore.
 func (c *NamespaceController) syncToCalico(key string) error {
 	// Check if it exists in the controller's cache.
-	obj, exists := c.calicoObjCache.Get(key)
+	obj, exists := c.resourceCache.Get(key)
 	if !exists {
 		// The object no longer exists - delete from the datastore.
 		log.Infof("Deleting Profile %s from Calico datastore", key)
-		if err := c.calicoClient.Profiles().Delete(api.ProfileMetadata{Name: key}); err != nil {
+		if _, err := c.calicoClient.Profiles().Delete(context.Background(), key, options.DeleteOptions{}); err != nil {
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 				// We hit an error other than "does not exist".
 				return err
 			}
 		}
-		return nil
 	} else {
 		// The object exists - update the datastore to reflect.
 		log.Infof("Add/Update Profile %s in Calico datastore", key)
 		p := obj.(api.Profile)
-		_, err := c.calicoClient.Profiles().Apply(&p)
-		return err
+
+		// Create the object.
+		_, err := c.calicoClient.Profiles().Create(context.Background(), &p, options.SetOptions{})
+		if err != nil {
+			if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+				// Not an already exists error, so return it.
+				log.WithError(err).Warning("Failed to create profile")
+				return err
+			}
+
+			// The object already exists, so update it.
+			_, err := c.calicoClient.Profiles().Update(context.Background(), &p, options.SetOptions{})
+			if err != nil {
+				log.WithError(err).Warning("Failed to update profile")
+				return err
+			}
+		}
 	}
+
+	return nil
 }
 
 // handleErr checks if an error happened and makes sure we will retry later.
 func (c *NamespaceController) handleErr(err error, key string) {
-	workqueue := c.calicoObjCache.GetQueue()
+	workqueue := c.resourceCache.GetQueue()
 	if err == nil {
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.
 		// This ensures that future processing of updates for this key is not delayed because of

@@ -24,13 +24,10 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
-	k8s "github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -101,29 +98,25 @@ func main() {
 }
 
 // getClients builds and returns Kubernetes, Calico and Extensions clients.
-func getClients(kubeconfig string) (*kubernetes.Clientset, *client.Client, error) {
-	// First, build the Calico client using the configured environment variables.
-	cconfig, err := client.LoadClientConfig("")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, error) {
 	// Get Calico client
-	calicoClient, err := client.New(*cconfig)
+	calicoClient, err := client.NewFromEnv()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
+		return nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
 
 	// Now build the Kubernetes client, we support in-cluster config and kubeconfig
 	// as means of configuring the client.
 	k8sconfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
+		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
 	// Get kubenetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
+		return nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
+
+	return k8sClientset, calicoClient, nil
 }

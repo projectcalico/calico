@@ -31,6 +31,8 @@ import:
 - package: github.com/projectcalico/libcalico-go
   version: master
 - package: github.com/projectcalico/felix
+  repo: https://github.com/neiljerram/felix.git
+  version: v3-integration
   subpackages:
   - fv
   - fv.containers

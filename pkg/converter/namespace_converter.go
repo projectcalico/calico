@@ -18,8 +18,7 @@ import (
 	"fmt"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -38,7 +37,7 @@ func NewNamespaceConverter() Converter {
 	return &namespaceConverter{}
 }
 func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	var c k8s.Converter
+	var c conversion.Converter
 	namespace, ok := k8sObj.(*v1.Namespace)
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
@@ -50,17 +49,11 @@ func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("tombstone contained object that is not a Namespace %+v", k8sObj)
 		}
 	}
-	kvpair, err := c.NamespaceToProfile(namespace)
+	kvp, err := c.NamespaceToProfile(namespace)
 	if err != nil {
 		return nil, err
 	}
-
-	var bc backendConverter.ProfileConverter
-	p, err := bc.ConvertKVPairToAPI(kvpair)
-	if err != nil {
-		return nil, err
-	}
-	profile := p.(*api.Profile)
+	profile := kvp.Value.(*api.Profile)
 
 	return *profile, nil
 }
@@ -70,5 +63,5 @@ func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 // is of format `k8s_ns.name`.
 func (nc *namespaceConverter) GetKey(obj interface{}) string {
 	profile := obj.(api.Profile)
-	return profile.Metadata.Name
+	return profile.Name
 }

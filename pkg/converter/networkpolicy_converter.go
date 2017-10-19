@@ -18,10 +18,9 @@ import (
 	"fmt"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	backendconverter "github.com/projectcalico/libcalico-go/lib/converter"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 
-	v1beta1 "k8s.io/api/extensions"
+	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -47,18 +46,12 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 		}
 	}
 
-	var policyConverter k8s.Converter
-	kvpair, err := policyConverter.NetworkPolicyToPolicy(np)
+	var c conversion.Converter
+	kvp, err := c.NetworkPolicyToPolicy(np)
 	if err != nil {
 		return nil, err
 	}
-
-	var backendConverter backendconverter.PolicyConverter
-	policy, err := backendConverter.ConvertKVPairToAPI(kvpair)
-	if err != nil {
-		return nil, err
-	}
-	calicoPolicy := policy.(*api.Policy)
+	calicoPolicy := kvp.Value.(*api.NetworkPolicy)
 
 	// To ease upgrade path, create an allow-all Egress rule, but with Types: Ingress
 	// In the case where there's an older Felix interoperating with a new kube-controllers
@@ -75,6 +68,7 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 // and backed by NetworkPolicy objects, the name is of the format
 // `knp.default.namespace.name`.
 func (p *policyConverter) GetKey(obj interface{}) string {
-	policy := obj.(api.Policy)
-	return policy.Metadata.Name
+	policy := obj.(api.NetworkPolicy)
+	k, _ := cache.MetaNamespaceKeyFunc(policy)
+	return k
 }
