@@ -18,7 +18,6 @@ import (
 	"reflect"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -38,63 +37,11 @@ func NewIPPoolClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceCli
 		resource:        IPPoolResourceName,
 		description:     "Calico IP Pools",
 		k8sResourceType: reflect.TypeOf(apiv2.IPPool{}),
-		k8sListType:     reflect.TypeOf(apiv2.IPPoolList{}),
-		converter:       IPPoolConverter{},
-	}
-}
-
-// IPPoolConverter implements the K8sResourceConverter interface.
-type IPPoolConverter struct {
-}
-
-func (_ IPPoolConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
-	il := l.(model.ResourceListOptions)
-	if il.Name != "" {
-		return model.ResourceKey{Name: il.Name, Kind: il.Kind}
-	}
-	return nil
-}
-
-func (_ IPPoolConverter) KeyToName(k model.Key) (string, error) {
-	return k.(model.ResourceKey).Name, nil
-}
-
-func (_ IPPoolConverter) NameToKey(name string) (model.Key, error) {
-	return model.ResourceKey{
-		Name: name,
-		Kind: apiv2.KindIPPool,
-	}, nil
-}
-
-func (i IPPoolConverter) ToKVPair(r Resource) (*model.KVPair, error) {
-	t := r.(*apiv2.IPPool)
-
-	// Clear any CRD TypeMeta fields and then create a KVPair.
-	res := apiv2.NewIPPool()
-	res.ObjectMeta.Name = t.ObjectMeta.Name
-	res.ObjectMeta.Namespace = t.ObjectMeta.Namespace
-	res.Spec = t.Spec
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name:      t.ObjectMeta.Name,
-			Namespace: t.ObjectMeta.Namespace,
-			Kind:      apiv2.KindIPPool,
+		k8sResourceTypeMeta: metav1.TypeMeta{
+			Kind:       apiv2.KindIPPool,
+			APIVersion: apiv2.GroupVersionCurrent,
 		},
-		Value:    res,
-		Revision: t.ObjectMeta.ResourceVersion,
-	}, nil
-
-}
-
-func (i IPPoolConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
-	v := kvp.Value.(*apiv2.IPPool)
-
-	return &apiv2.IPPool{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            v.ObjectMeta.Name,
-			Namespace:       v.ObjectMeta.Namespace,
-			ResourceVersion: kvp.Revision,
-		},
-		Spec: v.Spec,
-	}, nil
+		k8sListType:  reflect.TypeOf(apiv2.IPPoolList{}),
+		resourceKind: apiv2.KindIPPool,
+	}
 }

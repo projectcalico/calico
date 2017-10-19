@@ -51,7 +51,6 @@ func NewNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		description:     "Calico Network Policies",
 		k8sResourceType: reflect.TypeOf(apiv2.NetworkPolicy{}),
 		k8sListType:     reflect.TypeOf(apiv2.NetworkPolicyList{}),
-		converter:       NetworkPolicyConverter{},
 		namespaced:      true,
 	}
 	return &networkPolicyClient{
@@ -235,60 +234,4 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 	}
 	return newK8sWatcherConverter(ctx, converter, k8sWatch), nil
 	// return c.crdClient.Watch(ctx, list, revision)
-}
-
-// NetworkPolicyConverter implements the K8sResourceConverter interface.
-type NetworkPolicyConverter struct {
-}
-
-func (_ NetworkPolicyConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
-	pl := l.(model.ResourceListOptions)
-	if pl.Name != "" {
-		return model.ResourceKey{Name: pl.Name, Kind: pl.Kind, Namespace: pl.Namespace}
-	}
-	return nil
-}
-
-func (_ NetworkPolicyConverter) KeyToName(k model.Key) (string, error) {
-	return k.(model.ResourceKey).Name, nil
-}
-
-func (_ NetworkPolicyConverter) NameToKey(name string) (model.Key, error) {
-	return model.ResourceKey{
-		Name: name,
-		Kind: apiv2.KindNetworkPolicy,
-	}, nil
-}
-
-func (c NetworkPolicyConverter) ToKVPair(r Resource) (*model.KVPair, error) {
-	t := r.(*apiv2.NetworkPolicy)
-
-	// Clear any CRD TypeMeta fields and then create a KVPair.
-	conf := apiv2.NewNetworkPolicy()
-	conf.ObjectMeta.Name = t.ObjectMeta.Name
-	conf.ObjectMeta.Namespace = t.ObjectMeta.Namespace
-	conf.Spec = t.Spec
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name:      t.ObjectMeta.Name,
-			Namespace: t.ObjectMeta.Namespace,
-			Kind:      apiv2.KindNetworkPolicy,
-		},
-		Value:    conf,
-		Revision: t.ObjectMeta.ResourceVersion,
-	}, nil
-}
-
-func (c NetworkPolicyConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
-	v := kvp.Value.(*apiv2.NetworkPolicy)
-
-	crd := apiv2.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            v.ObjectMeta.Name,
-			Namespace:       v.ObjectMeta.Namespace,
-			ResourceVersion: kvp.Revision,
-		},
-		Spec: v.Spec,
-	}
-	return &crd, nil
 }

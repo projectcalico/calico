@@ -14,6 +14,8 @@
 
 package k8s
 
+/*
+// TODO: Replace this code when the Syncer with the v2 client changes are ready.
 import (
 	"context"
 	"time"
@@ -1091,3 +1093,4 @@ func (syn *kubeSyncer) parseCustomK8sResourceEvent(
 	logContext.WithError(err).Error("Failed to parse resource spec and metadata, ignoring event")
 	return nil
 }
+*/
