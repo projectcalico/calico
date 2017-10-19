@@ -33,6 +33,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
+var ingressEgress = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
+
 var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
@@ -55,7 +57,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 	}
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 apiv2.PolicySpec) {
+		func(name1, name2 string, spec1, spec2 apiv2.PolicySpec, types1, types2 []apiv2.PolicyType) {
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -87,6 +89,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			spec1.Types = types1
 			testutils.ExpectResource(res1, apiv2.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1)
 
 			// Track the version of the original data for name1.
@@ -126,6 +129,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			spec2.Types = types2
 			testutils.ExpectResource(res2, apiv2.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, name2, spec2)
 
 			By("Getting GlobalNetworkPolicy (name2) and comparing the output against spec2")
@@ -258,7 +262,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		},
 
 		// Test 1: Pass two fully populated GlobalNetworkPolicySpecs and expect the series of operations to succeed.
-		Entry("Two fully populated GlobalNetworkPolicySpecs", name1, name2, spec1, spec2),
+		Entry("Two fully populated GlobalNetworkPolicySpecs", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
 	)
 
 	Describe("GlobalNetworkPolicy watch functionality", func() {
