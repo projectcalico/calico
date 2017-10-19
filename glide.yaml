@@ -18,12 +18,17 @@ import:
   subpackages:
   - json
 - package: golang.org/x/sys
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
   - unix
   - windows
+- package: golang.org/x/crypto
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  subpackages:
+  - ssh/terminal
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: bb0e4b2ddbdc73d3718fd61d7e3f5b17216a5dca
+  version: master
   subpackages:
   - lib/apis/v2
   - lib/clientv2
@@ -37,3 +42,5 @@ import:
   - lib/scope
   - lib/validator
 - package: github.com/termie/go-shutil
+- package: google.golang.org/grpc
+  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
