@@ -1,5 +1,5 @@
-hash: b919866d74e3b46a5bdb00b6081c3cca6ddb4e4aae65be06e9720f6c1d338dfc
-updated: 2017-10-18T11:31:25.595959165Z
+hash: c09bdf15c4c46a80986c56ecb349bba08d51a15880bef3338fc582a81324801f
+updated: 2017-10-19T23:13:16.443202046Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 222486e763b3598e75127adfc7de4e2e0c21e626
+  version: e661addd9596b291db14c489f6e56575d493982f
   subpackages:
   - lib
   - lib/apiconfig
@@ -180,6 +180,7 @@ imports:
   - lib/backend/compat
   - lib/backend/etcdv3
   - lib/backend/k8s
+  - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
   - lib/backend/syncersv1/felixsyncer
@@ -236,7 +237,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
