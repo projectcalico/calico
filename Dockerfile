@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 FROM alpine:3.5
-MAINTAINER Casey Davenport <casey@tigera.io> 
+LABEL maintainer "Casey Davenport <casey@tigera.io>" 
 
 ADD dist/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ENTRYPOINT ["/usr/bin/kube-controllers"]
