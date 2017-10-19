@@ -98,7 +98,8 @@ var (
 	}
 )
 
-var _ = BeforeSuite(func() {
+//var _ = BeforeSuite(func() {
+var _ = func() {
 	log.Info(">>> BeforeSuite <<<")
 	err := envconfig.Process("k8sfv", &config)
 	Expect(err).NotTo(HaveOccurred())
@@ -205,14 +206,19 @@ var _ = BeforeSuite(func() {
 		}
 		return
 	}, "60s", "2s").ShouldNot(HaveOccurred())
-})
+}
 
-var _ = AfterSuite(func() {
+//)
+
+//var _ = AfterSuite(func() {
+var _ = func() {
 	apiServerContainer.Stop()
 	etcdContainer.Stop()
-})
+}
 
-var _ = Describe("health tests", func() {
+//)
+
+var _ = PDescribe("health tests", func() {
 	var felixContainer *containers.Container
 	var felixReady, felixLiveness func() int
 
