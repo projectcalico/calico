@@ -109,6 +109,7 @@ func (c *AffinityBlockClient) List(ctx context.Context, list model.ListInterface
 				CIDR: *cidr,
 				Host: bl.Host,
 			},
+			Value: "{}",
 			Revision: node.ResourceVersion,
 		})
 

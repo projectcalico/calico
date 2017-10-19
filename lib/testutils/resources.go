@@ -24,10 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/go-yaml-wrapper"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 	"k8s.io/apimachinery/pkg/conversion"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"fmt"
 )
 
 // ExpectResource is a test validation function that checks the specified resource
@@ -35,15 +37,15 @@ import (
 // should be called within a Ginkgo test.
 const ExpectNoNamespace = ""
 
-func ExpectResource(res runtime.Object, kind, namespace, name string, spec interface{}) {
+func ExpectResource(res runtime.Object, kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) {
 	ma := res.(v1.ObjectMetaAccessor)
-	Expect(ma.GetObjectMeta().GetNamespace()).To(Equal(namespace))
-	Expect(ma.GetObjectMeta().GetName()).To(Equal(name))
-	Expect(ma.GetObjectMeta().GetResourceVersion()).ToNot(BeEmpty())
-	Expect(res.GetObjectKind().GroupVersionKind().Kind).To(Equal(kind))
-	Expect(res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv2.Group))
-	Expect(res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv2.VersionCurrent))
-	Expect(getSpec(res)).To(Equal(spec))
+	Expect(ma.GetObjectMeta().GetNamespace()).To(Equal(namespace), optionalDescription...)
+	Expect(ma.GetObjectMeta().GetName()).To(Equal(name), optionalDescription...)
+	Expect(ma.GetObjectMeta().GetResourceVersion()).ToNot(BeEmpty(), optionalDescription...)
+	Expect(res.GetObjectKind().GroupVersionKind().Kind).To(Equal(kind), optionalDescription...)
+	Expect(res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv2.Group), optionalDescription...)
+	Expect(res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv2.VersionCurrent), optionalDescription...)
+	Expect(getSpec(res)).To(Equal(spec), optionalDescription...)
 }
 
 // TestResourceWatch is a test helper used to validate a set of events are received
@@ -118,7 +120,7 @@ func (t *testResourceWatcher) Stop() {
 // ExpectEvents validates the received events match those expected.  This should be called
 // within a Ginkgo test.
 func (t *testResourceWatcher) ExpectEvents(kind string, expectedEvents []watch.Event) {
-	t.expectEvents(kind, true, expectedEvents)
+	t.expectEvents(kind, false, expectedEvents)
 }
 
 // ExpectEventsAnyOrder validates the received events match those expected but the order
@@ -136,7 +138,7 @@ func (t *testResourceWatcher) ExpectEventsAnyOrder(kind string, expectedEvents [
 
 // ExpectEvents validates the received events match those expected.  This should be called
 // within a Ginkgo test.
-func (t *testResourceWatcher) expectEvents(kind string, fixedOrder bool, expectedEvents []watch.Event) {
+func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedEvents []watch.Event) {
 	By("Waiting for the correct number of events")
 	log.Infof("Start waiting at %s", time.Now())
 	t.lock.Lock()
@@ -160,42 +162,83 @@ func (t *testResourceWatcher) expectEvents(kind string, fixedOrder bool, expecte
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	// If the order is not fixed, sort the expected and actual events based on name.
+	// If the events may be expected in any order, then sort the events so that we
+	// can compare like with like.
 	actualEvents := t.events[:len(expectedEvents)]
-	if !fixedOrder {
+	if anyOrder {
+		log.Info("Ordering events")
 		expectedEvents = t.sortEvents(expectedEvents)
 		actualEvents = t.sortEvents(actualEvents)
 	}
 
-	Expect(t.events).To(HaveLen(len(expectedEvents)))
+	log.Info("Comparing actual events against expected events.  Summary:")
 	for i, expectedEvent := range expectedEvents {
-		Expect(actualEvents[i].Type).To(Equal(expectedEvent.Type))
+		actualEvent := actualEvents[i]
+		var expectedObject runtime.Object
+		var actualObject runtime.Object
+		if expectedEvent.Type == watch.Deleted {
+			expectedObject = expectedEvent.Previous
+		} else {
+			expectedObject = expectedEvent.Object
+		}
+		if actualEvent.Type == watch.Deleted {
+			actualObject = actualEvent.Previous
+		} else {
+			actualObject = actualEvent.Object
+		}
+		log.Infof(
+			"Actual:   EventType:%s; Kind:%s; Name:%s; Namespace:%s",
+			actualEvent.Type, 
+			actualObject.GetObjectKind().GroupVersionKind(),
+			actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+			actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),				
+		)
+		log.Infof(
+			"Expected: EventType:%s; Kind:%s; Name:%s; Namespace:%s",
+			expectedEvent.Type,
+			expectedObject.GetObjectKind().GroupVersionKind(),
+			expectedObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+			expectedObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+		)
+	}
+
+	Expect(actualEvents).To(HaveLen(len(expectedEvents)))
+
+	for i, expectedEvent := range expectedEvents {
+		actualEvent := actualEvents[i]
+		actualYaml, _ := yaml.Marshal(actualEvent)
+		expectedYaml, _ := yaml.Marshal(expectedEvent)
+		traceString := fmt.Sprintf("\nTracing out event details\nActual event: %s\nExpected event: %s\n", actualYaml, expectedYaml)
+
+		Expect(actualEvent.Type).To(Equal(expectedEvent.Type))
 		if expectedEvent.Object != nil {
-			Expect(actualEvents[i].Object).NotTo(BeNil())
+			Expect(actualEvent.Object).NotTo(BeNil(), traceString)
 			ExpectResource(
-				actualEvents[i].Object,
+				actualEvent.Object,
 				kind,
 				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 				getSpec(expectedEvent.Object),
+				traceString,
 			)
 		} else {
-			Expect(actualEvents[i].Object).To(BeNil())
+			Expect(actualEvent.Object).To(BeNil(), traceString)
 		}
 
 		// Kubernetes does not provide the "previous" value in a modified event, so don't
 		// check for that if the datastore is KDD.
 		if expectedEvent.Previous != nil  && (expectedEvent.Type == watch.Deleted || t.datastoreType != apiconfig.Kubernetes){
-			Expect(actualEvents[i].Previous).NotTo(BeNil())
+			Expect(actualEvent.Previous).NotTo(BeNil(), traceString)
 			ExpectResource(
-				actualEvents[i].Previous,
+				actualEvent.Previous,
 				kind,
 				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 				getSpec(expectedEvent.Previous),
+				traceString,
 			)
 		} else {
-			Expect(actualEvents[i].Previous).To(BeNil())
+			Expect(actualEvent.Previous).To(BeNil(), traceString)
 		}
 	}
 
@@ -219,7 +262,7 @@ func (t *testResourceWatcher) sortEvents(events []watch.Event) []watch.Event {
 		names = append(names, name)
 
 		// Makes sure we don't have multiple entries for the same name.
-		Expect(eventsByName[name]).To(BeNil())
+		Expect(eventsByName).To(Not(HaveKey(name)))
 		eventsByName[name] = e
 	}
 
