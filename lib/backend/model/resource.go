@@ -26,23 +26,89 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/namespace"
 )
 
+// Name/type information about a single resource.
+type resourceInfo struct {
+	typeOf reflect.Type
+	plural string
+	kind string
+}
+
 var (
-	matchGlobalResource     = regexp.MustCompile("^/calico/resources/v2/([^/]+)/([^/]+)$")
-	matchNamespacedResource = regexp.MustCompile("^/calico/resources/v2/([^/]+)/([^/]+)/([^/]+)$")
-	kindToType              = map[string]reflect.Type{
-		strings.ToLower(apiv2.KindBGPPeer):             reflect.TypeOf(apiv2.BGPPeer{}),
-		strings.ToLower(apiv2.KindBGPConfiguration):    reflect.TypeOf(apiv2.BGPConfiguration{}),
-		strings.ToLower(apiv2.KindClusterInformation):  reflect.TypeOf(apiv2.ClusterInformation{}),
-		strings.ToLower(apiv2.KindFelixConfiguration):  reflect.TypeOf(apiv2.FelixConfiguration{}),
-		strings.ToLower(apiv2.KindGlobalNetworkPolicy): reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
-		strings.ToLower(apiv2.KindHostEndpoint):        reflect.TypeOf(apiv2.HostEndpoint{}),
-		strings.ToLower(apiv2.KindIPPool):              reflect.TypeOf(apiv2.IPPool{}),
-		strings.ToLower(apiv2.KindNetworkPolicy):       reflect.TypeOf(apiv2.NetworkPolicy{}),
-		strings.ToLower(apiv2.KindNode):                reflect.TypeOf(apiv2.Node{}),
-		strings.ToLower(apiv2.KindProfile):             reflect.TypeOf(apiv2.Profile{}),
-		strings.ToLower(apiv2.KindWorkloadEndpoint):    reflect.TypeOf(apiv2.WorkloadEndpoint{}),
-	}
+	matchGlobalResource     = regexp.MustCompile("^/calico/resources/v2/projectcalico[.]org/([^/]+)/([^/]+)$")
+	matchNamespacedResource = regexp.MustCompile("^/calico/resources/v2/projectcalico[.]org/([^/]+)/([^/]+)/([^/]+)$")
+	resourceInfoByKind      = make(map[string]resourceInfo)
+	resourceInfoByPlural    = make(map[string]resourceInfo)
 )
+
+func registerResourceInfo(kind string, plural string, typeOf reflect.Type) {
+	kind = strings.ToLower(kind)
+	plural = strings.ToLower(plural)
+	ri := resourceInfo{
+		typeOf: typeOf,
+		kind: kind,
+		plural: plural,
+	}
+	resourceInfoByKind[kind] = ri
+	resourceInfoByPlural[plural] = ri
+}
+
+func init() {
+	registerResourceInfo(
+		apiv2.KindBGPPeer,
+		"bgppeers",
+		reflect.TypeOf(apiv2.BGPPeer{}),
+	)
+	registerResourceInfo(
+		apiv2.KindBGPConfiguration,
+		"bgpconfigurations",
+		reflect.TypeOf(apiv2.BGPConfiguration{}),
+	)
+	registerResourceInfo(
+		apiv2.KindClusterInformation,
+		"clusterinformations",
+		reflect.TypeOf(apiv2.ClusterInformation{}),
+	)
+	registerResourceInfo(
+		apiv2.KindFelixConfiguration,
+		"felixconfigurations",
+		reflect.TypeOf(apiv2.FelixConfiguration{}),
+	)
+	registerResourceInfo(
+		apiv2.KindGlobalNetworkPolicy,
+		"globalnetworkpolicies",
+		reflect.TypeOf(apiv2.GlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
+		apiv2.KindHostEndpoint,
+		"hostendpoints",
+		reflect.TypeOf(apiv2.HostEndpoint{}),
+	)
+	registerResourceInfo(
+		apiv2.KindIPPool,
+		"ippools",
+		reflect.TypeOf(apiv2.IPPool{}),
+	)
+	registerResourceInfo(
+		apiv2.KindNetworkPolicy,
+		"networkpolicies",
+		reflect.TypeOf(apiv2.NetworkPolicy{}),
+	)
+	registerResourceInfo(
+		apiv2.KindNode,
+		"nodes",
+		reflect.TypeOf(apiv2.Node{}),
+	)
+	registerResourceInfo(
+		apiv2.KindProfile,
+		"profiles",
+		reflect.TypeOf(apiv2.Profile{}),
+	)
+	registerResourceInfo(
+		apiv2.KindWorkloadEndpoint,
+		"workloadendpoints",
+		reflect.TypeOf(apiv2.WorkloadEndpoint{}),
+	)
+}
 
 type ResourceKey struct {
 	// The name of the resource.
@@ -58,10 +124,14 @@ func (key ResourceKey) defaultPath() (string, error) {
 }
 
 func (key ResourceKey) defaultDeletePath() (string, error) {
-	if namespace.IsNamespaced(key.Kind) {
-		return fmt.Sprintf("/calico/resources/v2/%s/%s/%s", strings.ToLower(key.Kind), key.Namespace, key.Name), nil
+	ri, ok := resourceInfoByKind[strings.ToLower(key.Kind)]
+	if !ok {
+		log.Fatal("Unexpected resource kind: " + key.Kind)
 	}
-	return fmt.Sprintf("/calico/resources/v2/%s/%s", strings.ToLower(key.Kind), key.Name), nil
+	if namespace.IsNamespaced(key.Kind) {
+		return fmt.Sprintf("/calico/resources/v2/projectcalico.org/%s/%s/%s", ri.plural, key.Namespace, key.Name), nil
+	}
+	return fmt.Sprintf("/calico/resources/v2/projectcalico.org/%s/%s", ri.plural, key.Name), nil
 }
 
 func (key ResourceKey) defaultDeleteParentPaths() ([]string, error) {
@@ -69,11 +139,11 @@ func (key ResourceKey) defaultDeleteParentPaths() ([]string, error) {
 }
 
 func (key ResourceKey) valueType() reflect.Type {
-	t := kindToType[strings.ToLower(key.Kind)]
-	if t == nil {
+	ri, ok := resourceInfoByKind[strings.ToLower(key.Kind)]
+	if !ok {
 		log.Fatal("Unexpected resource kind: " + key.Kind)
 	}
-	return t
+	return ri.typeOf
 }
 
 func (key ResourceKey) String() string {
@@ -104,8 +174,9 @@ func (options ResourceListOptions) IsLastSegmentIsPrefix() bool {
 }
 
 func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
-	if len(options.Kind) == 0 {
-		log.Fatal("Kind must be specified in List option but is not")
+	ri, ok := resourceInfoByKind[strings.ToLower(options.Kind)]
+	if !ok {
+		log.Fatal("Unexpected resource kind: " + options.Kind)
 	}
 
 	if namespace.IsNamespaced(options.Kind) {
@@ -115,14 +186,14 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 			log.Debugf("Didn't match regex")
 			return nil
 		}
-		kind := r[0][1]
+		kindPlural := r[0][1]
 		namespace := r[0][2]
 		name := r[0][3]
 		if len(options.Kind) == 0 {
 			panic("Kind must be specified in List option but is not")
 		}
-		if kind != strings.ToLower(options.Kind) {
-			log.Debugf("Didn't match kind %s != %s", options.Kind, kind)
+		if kindPlural != ri.plural {
+			log.Debugf("Didn't match kind %s != %s", kindPlural, kindPlural)
 			return nil
 		}
 		if len(options.Namespace) != 0 && namespace != options.Namespace {
@@ -147,10 +218,10 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match regex")
 		return nil
 	}
-	kind := r[0][1]
+	kindPlural := r[0][1]
 	name := r[0][2]
-	if kind != strings.ToLower(options.Kind) {
-		log.Debugf("Didn't match name %s != %s", options.Kind, kind)
+	if kindPlural != ri.plural {
+		log.Debugf("Didn't match kind %s != %s", kindPlural, kindPlural)
 		return nil
 	}
 	if len(options.Name) != 0 {
@@ -166,11 +237,12 @@ func (options ResourceListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 func (options ResourceListOptions) defaultPathRoot() string {
-	if len(options.Kind) == 0 {
-		log.Fatal("Kind must be specified in List option but is not")
+	ri, ok := resourceInfoByKind[strings.ToLower(options.Kind)]
+	if !ok {
+		log.Fatal("Unexpected resource kind: " + options.Kind)
 	}
 
-	k := "/calico/resources/v2/" + strings.ToLower(options.Kind)
+	k := "/calico/resources/v2/projectcalico.org/" + ri.plural
 	if namespace.IsNamespaced(options.Kind) {
 		if options.Namespace == "" {
 			return k
