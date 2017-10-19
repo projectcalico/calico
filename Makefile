@@ -388,7 +388,6 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	# if we could give the build container access to the docker API but we've so-far struggled
 	# to get that working.
 	@echo Running Go FVs.
-	mkdir -p bin
 	$(DOCKER_GO_BUILD) cp /go/bin/ginkgo bin/ginkgo
 	# fv.test is not expecting a container name with an ARCHTAG.
 	-docker tag calico/felix$(ARCHTAG) calico/felix
