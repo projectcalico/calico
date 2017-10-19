@@ -44,8 +44,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  repo: https://github.com/neiljerram/typha
-  version: update-libcalico-go-pin
+  version: b085d3ae58eaed8230f83a0847dc78b20c79775f
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
