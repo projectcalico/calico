@@ -1,5 +1,5 @@
-hash: 4431b14886dce3593223744142653cb90923cc24810cab05a7bfeb047b17b070
-updated: 2017-10-18T18:04:09.809027477-07:00
+hash: 623ea57c2f2a3ce8511943d50684f028fbdf34251358b4caeb1f0555f32634bd
+updated: 2017-10-19T14:08:35.74996411-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -99,7 +99,7 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hashicorp/hcl
-  version: 42e33e2d55a0ff1d6263f738896ea8c13571a8d0
+  version: 23c074d0eceb2b8a5bfdbb271ab780cde70f05a8
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -114,7 +114,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 5bf9191a8272d4980a5bed78029b905ed69040a2
+  version: 5650ac7320cd8e1b0d4dc2dc98739acdbe6e7f6b
   subpackages:
   - client/v2
   - models
@@ -140,7 +140,7 @@ imports:
 - name: github.com/mitchellh/go-ps
   version: 4fdf99ab29366514c69ccccddab5dc58b8d84062
 - name: github.com/mitchellh/mapstructure
-  version: d0303fe809921458f417bcf828397a65db30a7e4
+  version: 06020f85339e21b2478f756a78e295255ffa4d6a
 - name: github.com/olekukonko/tablewriter
   version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
 - name: github.com/onsi/ginkgo
@@ -165,7 +165,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
   subpackages:
   - format
   - internal/assertion
@@ -204,7 +204,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: bb0e4b2ddbdc73d3718fd61d7e3f5b17216a5dca
+  version: 40ba8d2ce57db27061a6b7a1fdf7001b13582933
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -242,7 +242,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
-  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
+  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/spf13/afero
   version: e67d870304c4bca21331b02f414f970df13aa694
   subpackages:
@@ -264,7 +264,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 86bef332bfc3b59b7624a600bd53009ce91a9829
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -290,7 +290,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: e48874b42435b4347fc52bdee0424a52abc974d7
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
   - unix
   - windows
