@@ -1,0 +1,26 @@
+- project:
+    name: openstack/networking-calico
+    check:
+      jobs:
+        - networking-calico-tempest-dsvm
+    gate:
+      jobs:
+        - networking-calico-tempest-dsvm
+    periodic:
+      jobs:
+        - networking-calico-tempest-dsvm:
+            branches: master
+
+- job:
+    name: networking-calico-tempest-dsvm
+    parent: legacy-dsvm-base
+    run: playbooks/legacy/tempest-dsvm-networking-calico/run.yaml
+    post-run: playbooks/legacy/tempest-dsvm-networking-calico/post.yaml
+    timeout: 7800
+    required-projects:
+      - openstack-infra/devstack-gate
+      - openstack/networking-calico
+      - openstack/tempest
+    irrelevant-files:
+      - ^(test-|)requirements.txt$
+      - ^setup.cfg$
