@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -337,8 +337,23 @@ class TestCalicoctlCommands(TestBase):
         # Create resource with name1 and with name2.  If the resource is
         # namespaced, leave the first namespace blank and the second set to
         # namespace2 for the actual create request.
-        data1['metadata']['name'] = "name1"
-        data2['metadata']['name'] = "name2"
+        if kind == "WorkloadEndpoint":
+            # The validation in libcalico-go WorkloadEndpoint checks the
+            # construction of the name so keep the name on the workloadendpoint.
+
+            # Below namespace2 is searched for the WorkloadEndpoint data1
+            # name so we need data2 to have a different name than data1 so we
+            # change it to have eth1 instead of eth0
+
+            # Strip off the last character (the zero in eth0) and replace it
+            # with a 1
+            data2['metadata']['name'] = data1['metadata']['name'][:len(data1['metadata']['name'])-1] + "1"
+            # Change endpoint to eth1 so the validation works on the WEP
+            data2['spec']['endpoint'] = "eth1"
+        else:
+            data1['metadata']['name'] = "name1"
+            data2['metadata']['name'] = "name2"
+
         if namespaced:
             data1['metadata']['namespace'] = ""
             data2['metadata']['namespace'] = "namespace2"
@@ -357,7 +372,7 @@ class TestCalicoctlCommands(TestBase):
         # Get the resource with name1 and namespace2.  For a namespaced
         # resource this should match the modified data to default the
         # namespace.  For non-namespaced resources this will error.
-        rc = calicoctl("get %s name1 --namespace default -o yaml" % kind)
+        rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))
         if namespaced:
             rc.assert_data(data1)
         else:
@@ -412,10 +427,10 @@ class TestCalicoctlCommands(TestBase):
             rc.assert_error(NOT_FOUND)
 
         # Deleting without a namespace will delete the default.
-        rc = calicoctl("delete %s name1" % kind)
+        rc = calicoctl("delete %s %s" % (kind, data1['metadata']['name']))
         rc.assert_no_error()
 
-        rc = calicoctl("delete %s name2" % kind)
+        rc = calicoctl("delete %s %s" % (kind, data2['metadata']['name']))
         if namespaced:
             rc.assert_error(NOT_FOUND)
             rc = calicoctl("delete", data2)
@@ -579,7 +594,32 @@ class TestCalicoctlCommands(TestBase):
 #             'spec': {'interfaceName': 'cali7',
 #                      'profiles': ['prof1',
 #                                   'prof2'],
-#                      'node': 'host2'}
+#                      'node': 'host2',
+#                      'ports': [{"name": "tcp-port",
+#                                 "port": 1234,
+#                                 "protocol": "tcp"},
+#                                {"name": "udp-port",
+#                                 "port": 5000,
+#                                 "protocol": "udp"}]}}
+#         }),
+#         ("workloadEndpoint1", {
+#             'apiVersion': API_VERSION,
+#             'kind': 'WorkloadEndpoint',
+#             'metadata': {'name': 'endpoint2',
+#                          'labels': {'type': 'frontend'}},
+#             'spec': {'interfaceName': 'cali7',
+#                      'profiles': ['prof1',
+#                                   'prof2'],
+#                      'node': 'host2',
+#                      'orchestrator': 'orch',
+#                      'workload': 'workl',
+#                      'ipNetworks': ['10.0.0.1/32'],
+#                      'ports': [{"name": "tcp-port",
+#                                 "port": 1234,
+#                                 "protocol": "tcp"},
+#                                {"name": "udp-port",
+#                                 "port": 5000,
+#                                 "protocol": "udp"}]}
 #         }),
 #         ("networkPolicy1", {'apiVersion': API_VERSION,
 #                      'kind': 'NetworkPolicy',
@@ -613,7 +653,8 @@ class TestCalicoctlCommands(TestBase):
 #                                                'notTag': 'bartag',
 #                                                'nets': ['10.0.0.0/16'],
 #                                                'ports': [1234,
-#                                                          '10:1024'],
+#                                                          '10:1024',
+#                                                          'named-port'],
 #                                                'selector':
 #                                                    "type=='application'",
 #                                                'tag': 'footag'}}],
@@ -634,9 +675,44 @@ class TestCalicoctlCommands(TestBase):
 #                                            'protocol': 'udp',
 #                                            'source': {}}],
 #                               'order': 100000,
+#                               'applyOnForward': True,
 #                               'doNotTrack': True,
 #                               'types': ['ingress', 'egress']}
 #         }),
+#         ("networkPolicy3", {'apiVersion': API_VERSION,
+#                      'kind': 'NetworkPolicy',
+#                      'metadata': {'name': 'policy2',
+#                                   'namespace': 'default'},
+#                      'spec': {'egress': [{'action': 'allow',
+#                                           'destination': {
+#                                               'ports': ['http-port']},
+#                                           'protocol': 'tcp',
+#                                           'source': {}}],
+#                               'selector': "type=='application'",
+#                               'types': ['egress']}
+#         }),
+#         ("networkPolicy4", {'apiVersion': API_VERSION,
+#                      'kind': 'NetworkPolicy',
+#                      'metadata': {'name': 'policy2',
+#                                   'namespace': 'default'},
+#                      'spec': {
+#                          'egress': [{
+#                              'action': 'allow',
+#                              'destination': {'ports': ['Telnet']},
+#                              'protocol': 'udp',
+#                              'source': {},
+#                          }],
+#                          'ingress': [{
+#                              'action': 'allow',
+#                              'destination': {
+#                                  'ports': ['echo', 53, 17, 'Quote']
+#                              },
+#                              'protocol': 'udp',
+#                              'source': {},
+#                          }],
+#                          'selector': "type=='application'",
+#                          'types': ['egress', 'ingress']
+#                    }}),
 #         ("pool1", {'apiVersion': API_VERSION,
 #                    'kind': 'IPPool',
 #                    'metadata': {'name': 'ippool1'},
@@ -1416,6 +1492,22 @@ class TestCalicoctlCommands(TestBase):
 #                        'kind': 'NetworkPolicy',
 #                        'metadata': {'name': 'policy2'},
 #                        'spec': {'egress': [{'action': 'jumpupanddown',  # invalid action
+#                                             'destination': {},
+#                                             'protocol': 'tcp',
+#                                             'source': {},
+#                                             }],
+#                                 'ingress': [{'action': 'allow',
+#                                              'destination': {},
+#                                              'protocol': 'udp',
+#                                              'source': {}}],
+#                                 'order': 100000,
+#                                 'selector': ""}}),
+#                    ("policy-NetworkPolicyNameRejected", {
+#                        'apiVersion': API_VERSION,
+#                        'kind': 'NetworkPolicy',
+#                        'metadata': {'name': 'knp.default.rejectmeplease',
+#                                     'namespace': 'default'},
+#                        'spec': {'egress': [{'action': 'allow',
 #                                             'destination': {},
 #                                             'protocol': 'tcp',
 #                                             'source': {},

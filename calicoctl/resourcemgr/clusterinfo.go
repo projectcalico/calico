@@ -17,7 +17,7 @@ package resourcemgr
 import (
 	"context"
 
-	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"

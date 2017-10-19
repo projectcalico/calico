@@ -17,14 +17,16 @@ import:
 - package: github.com/projectcalico/go-json
   subpackages:
   - json
+- package: golang.org/x/sys
+  subpackages:
+  - unix
+  - windows
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: v3.0-integration
+  version: bb0e4b2ddbdc73d3718fd61d7e3f5b17216a5dca
   subpackages:
-  - lib/api
-  - lib/apiv2
+  - lib/apis/v2
   - lib/clientv2
-  - lib/api/unversioned
   - lib/backend
   - lib/backend/api
   - lib/backend/model
