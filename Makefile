@@ -3,11 +3,18 @@
 default: all
 all: test
 test: ut
+generate-files: .generate_files
 
-K8S_VERSION=v1.8.1
-CALICO_BUILD?=calico/go-build
-PACKAGE_NAME?=projectcalico/libcalico-go
-LOCAL_USER_ID?=$(shell id -u $$USER)
+# Define some constants
+#######################
+K8S_VERSION       = v1.8.1
+CALICO_BUILD     ?= calico/go-build
+PACKAGE_NAME     ?= projectcalico/libcalico-go
+LOCAL_USER_ID    ?= $(shell id -u $$USER)
+BINDIR           ?= bin
+LIBCALICO-GO_PKG  = github.com/projectcalico/libcalico-go
+TOP_SRC_DIR       = lib
+MY_UID           := $(shell id -u)
 
 ## Use this to populate the vendor directory after checking out the repository.
 vendor: glide.yaml
@@ -110,9 +117,16 @@ stop-etcd:
 
 .PHONY: clean
 ## Removes all .coverprofile files, the vendor dir, and .go-pkg-cache
-clean:
+clean: clean-generated clean-bin
 	find . -name '*.coverprofile' -type f -delete
 	rm -rf vendor .go-pkg-cache
+
+clean-generated:
+	rm -f .generate_files
+	find $(TOP_SRC_DIR) -name zz_generated* -exec rm {} \;
+
+clean-bin:
+	rm -rf $(BINDIR) .generate_exes
 
 .PHONY: help
 ## Display this help text
@@ -130,3 +144,32 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=23                                                            \
 	$(MAKEFILE_LIST)
+
+DOCKER_GO_BUILD := \
+	mkdir -p .go-pkg-cache && \
+	docker run --rm \
+		--net=host \
+		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(MY_UID) \
+		-v $${PWD}:/go/src/github.com/projectcalico/libcalico-go \
+		-v $${PWD}/.go-pkg-cache:/go/pkg:rw \
+		-w /go/src/github.com/projectcalico/libcalico-go \
+		$(CALICO_BUILD)
+
+.generate_exes: $(BINDIR)/deepcopy-gen
+	touch $@
+
+$(BINDIR)/deepcopy-gen:
+	$(DOCKER_GO_BUILD) \
+		sh -c 'go build -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
+
+# Regenerate all files if the gen exe(s) changed
+.generate_files: .generate_exes
+	# Generate deep copies
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(BINDIR)/deepcopy-gen \
+			--v 1 --logtostderr \
+			--go-header-file "./docs/boilerplate.go.txt" \
+			--input-dirs "$(LIBCALICO-GO_PKG)/lib/apis/v2" \
+			--bounding-dirs "github.com/projectcalico/libcalico-go" \
+			--output-file-base zz_generated.deepcopy'
