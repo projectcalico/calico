@@ -69,7 +69,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		Name: "node.bgpnode1",
 	}
 	numFelixConfigs := 46
-	numClusterConfigs := 4
+	numClusterConfigs := 3
 	numBgpConfigs := 3
 	felixMappedNames := map[string]interface{}{
 		"RouteRefreshInterval":    nil,
