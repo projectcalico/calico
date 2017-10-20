@@ -542,8 +542,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			BeforeEach(func() {
 				rule := api.EntityRule{
 					Nets: []string{
-						w[0].IPNet().String(),
-						w[1].IPNet().String(),
+						w[0].IPNet(),
+						w[1].IPNet(),
 					},
 				}
 				if testSourcePorts {
@@ -560,8 +560,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			BeforeEach(func() {
 				rule := api.EntityRule{
 					NotNets: []string{
-						w[2].IPNet().String(),
-						w[3].IPNet().String(),
+						w[2].IPNet(),
+						w[3].IPNet(),
 					},
 				}
 				if testSourcePorts {
@@ -578,12 +578,12 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			BeforeEach(func() {
 				rule := api.EntityRule{
 					Nets: []string{
-						w[0].IPNet().String(),
-						w[1].IPNet().String(),
-						w[2].IPNet().String(), // Allowed here but excluded below.
+						w[0].IPNet(),
+						w[1].IPNet(),
+						w[2].IPNet(), // Allowed here but excluded below.
 					},
 					NotNets: []string{
-						w[2].IPNet().String(),
+						w[2].IPNet(),
 					},
 				}
 				if testSourcePorts {
@@ -598,9 +598,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with all positive CIDRs replacing the selector", func() {
 			BeforeEach(func() {
 				nets := []string{
-					w[0].IPNet().String(),
-					w[1].IPNet().String(),
-					w[2].IPNet().String(),
+					w[0].IPNet(),
+					w[1].IPNet(),
+					w[2].IPNet(),
 				}
 				if testSourcePorts {
 					policy.Spec.IngressRules[0].Source.Selector = ""
@@ -616,8 +616,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			Describe("with negative destination nets blocking w[2] and w[3]", func() {
 				BeforeEach(func() {
 					nets := []string{
-						w[2].IPNet().String(),
-						w[3].IPNet().String(),
+						w[2].IPNet(),
+						w[3].IPNet(),
 					}
 					if testSourcePorts {
 						policy.Spec.IngressRules[0].Source.NotNets = nets
