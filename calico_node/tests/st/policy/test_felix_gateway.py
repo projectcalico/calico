@@ -205,9 +205,12 @@ class TestFelixOnGateway(TestBase):
         # Add allow policy for host, make sure it applies to forward and has order lower than
         # empty forward.
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'host-out'},
+            'metadata': {
+                'name': 'host-out',
+                'namespace': 'default',
+            },
             'spec': {
                 'order': 100,
                 'selector': 'nodeEth == "host"',
@@ -244,9 +247,12 @@ class TestFelixOnGateway(TestBase):
 
         # Add empty policy forward, but only to host endpoint.
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'empty-forward'},
+            'metadata': {
+                'name': 'empty-forward',
+                'namespace': 'default',
+            },
             'spec': {
                 'order': 500,
                 'selector': 'has(nodeEth)',
@@ -496,9 +502,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_workload_ingress(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'workload-ingress'},
+            'metadata': {
+                'name': 'workload-ingress',
+                'namespace': 'default'
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -517,9 +526,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_workload_egress(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'workload-egress'},
+            'metadata': {
+                'name': 'workload-egress',
+                # deliberately omitted 'namespace' for variation - should end up in 'default'
+            },
             'spec': {
                 'order': order,
                 'ingress': [],
@@ -539,9 +551,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_prednat_ingress(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'prednat'},
+            'metadata': {
+                'name': 'prednat',
+                'namespace': 'default',
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -565,9 +580,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_untrack_gw_int(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'untrack-ingress'},
+            'metadata': {
+                'name': 'untrack-ingress',
+                'namespace': 'default',
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -599,9 +617,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_untrack_gw_ext(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'untrack-egress'},
+            'metadata': {
+                'name': 'untrack-egress',
+                # Namespace omitted deliberately - should default to 'default'
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -635,9 +656,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_ingress_policy(self, order, action, forward):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'port80-int-%s' % str(forward)},
+            'metadata': {
+                'name': 'port80-int-%s' % str(forward),
+                # Namespace omitted deliberately - should default to 'default'
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -657,9 +681,12 @@ class TestFelixOnGateway(TestBase):
 
     def add_egress_policy(self, order, action, forward):
         self.add_policy({
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'policy',
-            'metadata': {'name': 'port80-ext-%s' % str(forward)},
+            'metadata': {
+                'name': 'port80-ext-%s' % str(forward),
+                'namespace': 'default',
+             },
             'spec': {
                 'order': order,
                 'ingress': [],
@@ -683,14 +710,14 @@ class TestFelixOnGateway(TestBase):
 
     def add_gateway_internal_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'hostEndpoint',
             'metadata': {
                 'name': 'gw-int',
-                'node': self.gateway_hostname,
                 'labels': {'nodeEth': 'gateway-int'}
             },
             'spec': {
+                'node': self.gateway_hostname,
                 'interfaceName': 'eth0'
             }
         }
@@ -698,14 +725,14 @@ class TestFelixOnGateway(TestBase):
 
     def add_gateway_external_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'hostEndpoint',
             'metadata': {
                 'name': 'gw-ext',
-                'node': self.gateway_hostname,
                 'labels': {'nodeEth': 'gateway-ext'}
             },
             'spec': {
+                'node': self.gateway_hostname,
                 'interfaceName': 'eth1'
             }
         }
@@ -713,14 +740,14 @@ class TestFelixOnGateway(TestBase):
 
     def add_host_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'v1',
+            'apiVersion': 'projectcalico.org/v2',
             'kind': 'hostEndpoint',
             'metadata': {
                 'name': 'host-int',
-                'node': self.host_hostname,
                 'labels': {'nodeEth': 'host'}
             },
             'spec': {
+                'node': self.host_hostname,
                 'interfaceName': 'eth0',
                 'expectedIPs': [str(self.host.ip)],
             }
