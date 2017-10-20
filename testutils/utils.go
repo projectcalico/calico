@@ -25,9 +25,9 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
-	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
@@ -73,7 +73,7 @@ func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipa
 	if ipip {
 		mode = api.IPIPModeAlways
 	} else {
-		mode = api.IPIPModeOff
+		mode = api.IPIPModeNever
 	}
 
 	pool := api.NewIPPool()
@@ -81,7 +81,7 @@ func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipa
 	pool.Spec.CIDR = cidr
 	pool.Spec.NATOutgoing = natOutgoing
 	pool.Spec.Disabled = !ipam
-	pool.Spec.IPIP = &api.IPIPConfiguration{Mode: mode}
+	pool.Spec.IPIPMode = mode
 
 	_, err := c.IPPools().Create(context.Background(), pool, options.SetOptions{})
 	if err != nil {
@@ -129,13 +129,13 @@ func WipeK8sPods() {
 	if err != nil {
 		panic(err)
 	}
-	pods, err := clientset.Pods(K8S_TEST_NS).List(metav1.ListOptions{})
+	pods, err := clientset.CoreV1().Pods(K8S_TEST_NS).List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
 	for _, pod := range pods.Items {
-		err = clientset.Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
+		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
 
 		if err != nil {
 			panic(err)
@@ -308,6 +308,9 @@ func RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerId, ifName 
 
 	session, err = gexec.Start(subProcess, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
 	session.Wait(5)
+	if err != nil {
+		panic(err)
+	}
 
 	err = targetNs.Do(func(_ ns.NetNS) error {
 		contVeth, err = netlink.LinkByName(ifName)
@@ -335,7 +338,7 @@ func CreateHostVeth(containerId string, k8sName string, k8sNamespace string) err
 	hostVethName := "cali" + containerId[:min(11, len(containerId))]
 	if k8sName != "" {
 		workload := fmt.Sprintf("%s.%s", k8sNamespace, k8sName)
-		hostVethName = k8sbackend.VethNameForWorkload(workload)
+		hostVethName = k8sconversion.VethNameForWorkload(workload)
 	}
 
 	peerVethName := "calipeer"

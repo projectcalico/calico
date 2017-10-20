@@ -5,8 +5,8 @@
 # - Expects the host CNI network config path to be mounted at /host/etc/cni/net.d.
 # - Expects the desired CNI config in the CNI_NETWORK_CONFIG env variable.
 
-# Ensure all variables are defined.
-set -u
+# Ensure all variables are defined, and that the script fails when an error is hit.
+set -u -e
 
 # The directory on the host where CNI networks are installed. Defaults to
 # /etc/cni/net.d, but can be overridden by setting CNI_NET_DIR.  This is used
@@ -24,7 +24,8 @@ rm -f /host/opt/cni/bin/calico /host/opt/cni/bin/calico-ipam
 rm -f /host/etc/cni/net.d/calico-tls/*
 
 # Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
-if [ -e "${SECRETS_MOUNT_DIR}" ];
+# First check if the dir exists and has anything in it.
+if [ "$(ls -A ${SECRETS_MOUNT_DIR} 2>/dev/null)" ];
 then
 	echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
 	mkdir -p /host/etc/cni/net.d/calico-tls
@@ -127,7 +128,8 @@ sed -i s~__ETCD_CA_CERT_FILE__~${CNI_CONF_ETCD_CA:-}~g $TMP_CONF
 sed -i s~__ETCD_ENDPOINTS__~${ETCD_ENDPOINTS:-}~g $TMP_CONF
 sed -i s~__LOG_LEVEL__~${LOG_LEVEL:-warn}~g $TMP_CONF
 
-FILENAME=${CNI_CONF_NAME:-10-calico.conf}
+CNI_CONF_NAME=${CNI_CONF_NAME:-10-calico.conf}
+CNI_OLD_CONF_NAME=${CNI_OLD_CONF_NAME:-10-calico.conf}
 
 # Log the config file before inserting service account token.
 # This way auth token is not visible in the logs.
@@ -135,10 +137,14 @@ echo "CNI config: $(cat ${TMP_CONF})"
 
 sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g $TMP_CONF
 
+# Delete old CNI config files for upgrades.
+if [ "${CNI_CONF_NAME}" != "${CNI_OLD_CONF_NAME}" ]; then
+    rm -f "/host/etc/cni/net.d/${CNI_OLD_CONF_NAME}"
+fi
 # Move the temporary CNI config into place.
-mv $TMP_CONF /host/etc/cni/net.d/${FILENAME}
+mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME}
 
-echo "Created CNI config $FILENAME"
+echo "Created CNI config ${CNI_CONF_NAME}"
 
 # Unless told otherwise, sleep forever.
 # This prevents Kubernetes from restarting the pod repeatedly.
@@ -148,10 +154,15 @@ while [ "$should_sleep" == "true"  ]; do
 	# Kubernetes Secrets can be updated.  If so, we need to install the updated
 	# version to the host. Just check the timestamp on the certificate to see if it
 	# has been updated.  A bit hokey, but likely good enough.
-	stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
-	sleep 10;
-	if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
-		echo "Updating installed secrets at: $(date)"
-		cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
-	fi
+	if [ "$(ls -A ${SECRETS_MOUNT_DIR} 2>/dev/null)" ];
+	then
+        stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
+        sleep 10;
+        if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
+            echo "Updating installed secrets at: $(date)"
+            cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+        fi
+    else
+        sleep 10
+    fi
 done

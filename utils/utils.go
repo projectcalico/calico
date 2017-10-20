@@ -31,7 +31,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
