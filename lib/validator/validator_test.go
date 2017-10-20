@@ -246,7 +246,7 @@ func init() {
 			},
 			false,
 		),
-		Entry("should reject WorkloadEndpoint with name-clashing ports (m)",
+		Entry("should accept WorkloadEndpoint with name-clashing ports (m)",
 			model.WorkloadEndpoint{
 				Ports: []model.EndpointPort{
 					{
@@ -261,7 +261,7 @@ func init() {
 					},
 				},
 			},
-			false,
+			true,
 		),
 
 		// (API) WorkloadEndpointSpec.
@@ -290,7 +290,7 @@ func init() {
 			},
 			false,
 		),
-		Entry("should reject WorkloadEndpointSpec with name-clashing ports (m)",
+		Entry("should accept WorkloadEndpointSpec with name-clashing ports (m)",
 			api.WorkloadEndpointSpec{
 				InterfaceName: "eth0",
 				Ports: []api.EndpointPort{
@@ -306,7 +306,7 @@ func init() {
 					},
 				},
 			},
-			false,
+			true,
 		),
 
 		// (Backend model) HostEndpoint.
@@ -333,7 +333,7 @@ func init() {
 			},
 			false,
 		),
-		Entry("should reject HostEndpoint with name-clashing ports (m)",
+		Entry("should accept HostEndpoint with name-clashing ports (m)",
 			model.HostEndpoint{
 				Ports: []model.EndpointPort{
 					{
@@ -348,7 +348,7 @@ func init() {
 					},
 				},
 			},
-			false,
+			true,
 		),
 
 		// (API) HostEndpointSpec.
@@ -377,7 +377,7 @@ func init() {
 			},
 			false,
 		),
-		Entry("should reject HostEndpointSpec with name-clashing ports (m)",
+		Entry("should accept HostEndpointSpec with name-clashing ports (m)",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
 				Ports: []api.EndpointPort{
@@ -393,7 +393,7 @@ func init() {
 					},
 				},
 			},
-			false,
+			true,
 		),
 
 		// (API) IP version.

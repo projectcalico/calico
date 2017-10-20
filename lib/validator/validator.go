@@ -123,8 +123,6 @@ func init() {
 	// Backend model types.
 	registerStructValidator(validateBackendRule, model.Rule{})
 	registerStructValidator(validateBackendEndpointPort, model.EndpointPort{})
-	registerStructValidator(validateBackendWorkloadEndpoint, model.WorkloadEndpoint{})
-	registerStructValidator(validateBackendHostEndpoint, model.HostEndpoint{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -337,20 +335,6 @@ func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.
 				"IPNATs", "", reason("NAT is not in the endpoint networks"))
 		}
 	}
-
-	// Check for duplicate named ports.
-	seenPortNames := map[string]bool{}
-	for _, port := range w.Ports {
-		if seenPortNames[port.Name] {
-			structLevel.ReportError(
-				reflect.ValueOf(port.Name),
-				"Ports",
-				"",
-				reason("Ports list contains duplicate named port."),
-			)
-		}
-		seenPortNames[port.Name] = true
-	}
 }
 
 func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -360,20 +344,6 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 	if h.InterfaceName == "" && len(h.ExpectedIPs) == 0 {
 		structLevel.ReportError(reflect.ValueOf(h.InterfaceName),
 			"InterfaceName", "", reason("no interface or expected IPs have been specified"))
-	}
-
-	// Check for duplicate named ports.
-	seenPortNames := map[string]bool{}
-	for _, port := range h.Ports {
-		if seenPortNames[port.Name] {
-			structLevel.ReportError(
-				reflect.ValueOf(port.Name),
-				"Ports",
-				"",
-				reason("Ports list contains duplicate named port."),
-			)
-		}
-		seenPortNames[port.Name] = true
 	}
 }
 
@@ -585,40 +555,6 @@ func validateEndpointPort(v *validator.Validate, structLevel *validator.StructLe
 			"",
 			reason("EndpointPort protocol must be 'tcp' or 'udp'."),
 		)
-	}
-}
-
-func validateBackendWorkloadEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
-	ep := structLevel.CurrentStruct.Interface().(model.WorkloadEndpoint)
-
-	seenPortNames := map[string]bool{}
-	for _, port := range ep.Ports {
-		if seenPortNames[port.Name] {
-			structLevel.ReportError(
-				reflect.ValueOf(port.Name),
-				"WorkloadEndpoint.Ports",
-				"",
-				reason("Ports list contains duplicate named port."),
-			)
-		}
-		seenPortNames[port.Name] = true
-	}
-}
-
-func validateBackendHostEndpoint(v *validator.Validate, structLevel *validator.StructLevel) {
-	ep := structLevel.CurrentStruct.Interface().(model.HostEndpoint)
-
-	seenPortNames := map[string]bool{}
-	for _, port := range ep.Ports {
-		if seenPortNames[port.Name] {
-			structLevel.ReportError(
-				reflect.ValueOf(port.Name),
-				"HostEndpoint.Ports",
-				"",
-				reason("Ports list contains duplicate named port."),
-			)
-		}
-		seenPortNames[port.Name] = true
 	}
 }
 
