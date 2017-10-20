@@ -7,7 +7,7 @@ A [Felix]({{site.baseurl}}/{{page.version}}/reference/architecture/#felix) confi
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `felixconfiguration`, `felixconfig`, `felixconfigurations`, `felixconfigs`.
 
-See [Configuring Felix]({{site.baseurl}}/{{page.version}}/referance/felix/configuration) for more details.
+See [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration) for more details.
 
 ### Sample YAML
 
