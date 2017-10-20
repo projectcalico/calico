@@ -103,6 +103,16 @@ run-kubernetes-master: stop-kubernetes-master
 		--server=http://127.0.0.1:8080 \
 		apply -f manifests/test/mock-node.yaml
 
+	# Create Namespaces required by namespaced Calico `NetworkPolicy`
+	# tests from the manifests namespaces.yaml.
+	docker run \
+	    --net=host \
+	    --rm \
+		-v  $(CURDIR):/manifests \
+		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
+		--server=http://localhost:8080 \
+		apply -f manifests/test/namespaces.yaml
+
 ## Stop the local kubernetes master
 stop-kubernetes-master:
 	# Delete the cluster role binding.

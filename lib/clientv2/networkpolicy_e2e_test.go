@@ -170,11 +170,13 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("update conflict: NetworkPolicy(" + namespace1 + "/" + name1 + ")"))
 
-			By("Getting NetworkPolicy (name1) with the original resource version and comparing the output against spec1")
-			res, outError = c.NetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindNetworkPolicy, namespace1, name1, spec1)
-			Expect(res.ResourceVersion).To(Equal(rv1_1))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Getting NetworkPolicy (name1) with the original resource version and comparing the output against spec1")
+				res, outError = c.NetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(res, apiv2.KindNetworkPolicy, namespace1, name1, spec1)
+				Expect(res.ResourceVersion).To(Equal(rv1_1))
+			}
 
 			By("Getting NetworkPolicy (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.NetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_2})
@@ -182,11 +184,13 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			testutils.ExpectResource(res, apiv2.KindNetworkPolicy, namespace1, name1, spec2)
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
-			By("Listing NetworkPolicies with the original resource version and checking for a single result with name1/spec1")
-			outList, outError = c.NetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace1, ResourceVersion: rv1_1})
-			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindNetworkPolicy, namespace1, name1, spec1)
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Listing NetworkPolicies with the original resource version and checking for a single result with name1/spec1")
+				outList, outError = c.NetworkPolicies().List(ctx, options.ListOptions{Namespace: namespace1, ResourceVersion: rv1_1})
+				Expect(outError).NotTo(HaveOccurred())
+				Expect(outList.Items).To(HaveLen(1))
+				testutils.ExpectResource(&outList.Items[0], apiv2.KindNetworkPolicy, namespace1, name1, spec1)
+			}
 
 			By("Listing NetworkPolicies (all namespaces) with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.NetworkPolicies().List(ctx, options.ListOptions{})
@@ -195,40 +199,51 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			testutils.ExpectResource(&outList.Items[0], apiv2.KindNetworkPolicy, namespace1, name1, spec2)
 			testutils.ExpectResource(&outList.Items[1], apiv2.KindNetworkPolicy, namespace2, name2, spec2)
 
-			By("Deleting NetworkPolicy (name1) with the old resource version")
-			_, outError = c.NetworkPolicies().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_1})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("update conflict: NetworkPolicy(" + namespace1 + "/" + name1 + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Deleting NetworkPolicy (name1) with the old resource version")
+				_, outError = c.NetworkPolicies().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_1})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("update conflict: NetworkPolicy(" + namespace1 + "/" + name1 + ")"))
+			}
 
 			By("Deleting NetworkPolicy (name1) with the new resource version")
 			dres, outError := c.NetworkPolicies().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(dres, apiv2.KindNetworkPolicy, namespace1, name1, spec2)
 
-			By("Updating NetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.NetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace2 + "/" + name2 + ")"))
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				By("Updating NetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
+				_, outError = c.NetworkPolicies().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(1 * time.Second)
+				_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(2 * time.Second)
+				_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace2 + "/" + name2 + ")"))
 
-			By("Creating NetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
-			_, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace2, Name: name2},
-				Spec:       spec2,
-			}, options.SetOptions{TTL: 2 * time.Second})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(1 * time.Second)
-			_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).NotTo(HaveOccurred())
-			time.Sleep(2 * time.Second)
-			_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace2 + "/" + name2 + ")"))
+				By("Creating NetworkPolicy name2 with a 2s TTL and waiting for the entry to be deleted")
+				_, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace2, Name: name2},
+					Spec:       spec2,
+				}, options.SetOptions{TTL: 2 * time.Second})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(1 * time.Second)
+				_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				time.Sleep(2 * time.Second)
+				_, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal("resource does not exist: NetworkPolicy(" + namespace2 + "/" + name2 + ")"))
+			}
+
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				By("Attempting to deleting NetworkPolicy (name2) again")
+				dres, outError = c.NetworkPolicies().Delete(ctx, namespace2, name2, options.DeleteOptions{})
+				Expect(outError).NotTo(HaveOccurred())
+				testutils.ExpectResource(dres, apiv2.KindNetworkPolicy, namespace2, name2, spec2)
+			}
 
 			By("Attempting to deleting NetworkPolicy (name2) again")
 			_, outError = c.NetworkPolicies().Delete(ctx, namespace2, name2, options.DeleteOptions{})
