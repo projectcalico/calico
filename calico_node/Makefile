@@ -498,6 +498,7 @@ node-test-containerized: vendor run-etcd-host run-k8s-apiserver
 	-v $(VERSIONS_FILE):/versions.yaml:ro \
 	-e VERSIONS_FILE=/versions.yaml \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	--net=host \
 	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
 
