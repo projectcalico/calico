@@ -15,6 +15,7 @@
 package statusrep
 
 import (
+	"context"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -100,9 +101,9 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 // datastore is a copy of the parts of the backend client API that we need.
 // See github.com/projectcalico/libcalico-go/lib/backend/api for more detail.
 type datastore interface {
-	List(list model.ListInterface) ([]*model.KVPair, error)
+	List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
 	Apply(object *model.KVPair) (*model.KVPair, error)
-	Delete(object *model.KVPair) error
+	Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
 }
 
 type stoppable interface {
@@ -125,6 +126,7 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 		esr.reportingDelay)
 	datamodelInSync := false
 	resyncRequested := false
+	ctx := context.Background()
 
 loop:
 	for {
@@ -198,7 +200,7 @@ loop:
 			// out-of-sync keys in the datastore and mark them as
 			// dirty so that we'll make delete/update them below.
 			log.Debug("Doing endpoint status resync")
-			esr.attemptResync()
+			esr.attemptResync(ctx)
 			resyncRequested = false
 		}
 
@@ -217,7 +219,7 @@ loop:
 				// Then try to write the update to the datastore.
 				// Note: the update could be a deletion, in which case
 				// the read from the cache wil return nil.
-				err := esr.writeEndpointStatus(statID,
+				err := esr.writeEndpointStatus(ctx, statID,
 					esr.epStatusIDToStatus[statID])
 				if err != nil {
 					log.WithError(err).Warn(
@@ -245,14 +247,18 @@ loop:
 	}
 }
 
-func (esr *EndpointStatusReporter) attemptResync() {
+func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
+	var kvs []*model.KVPair
+
 	wlListOpts := model.WorkloadEndpointStatusListOptions{
 		Hostname: esr.hostname,
 	}
-	kvs, err := esr.datastore.List(wlListOpts)
-	if err != nil {
+	kvl, err := esr.datastore.List(ctx, wlListOpts, "")
+	if err == nil {
+		kvs = kvl.KVPairs
+	} else {
 		log.WithError(err).Errorf("Failed to load workload endpoint statuses")
-		kvs = nil // Skip the loop and try host endpoints.
+		kvs = nil // Skip the following loop and try host endpoints.
 	}
 	for _, kv := range kvs {
 		if kv.Value == nil {
@@ -274,10 +280,12 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	hostListOpts := model.HostEndpointStatusListOptions{
 		Hostname: esr.hostname,
 	}
-	kvs, err = esr.datastore.List(hostListOpts)
-	if err != nil {
+	kvl, err = esr.datastore.List(ctx, hostListOpts, "")
+	if err == nil {
+		kvs = kvl.KVPairs
+	} else {
 		log.WithError(err).Error("Failed to load host endpoint statuses")
-		kvs = nil // Make sure we skip the loop.
+		kvs = nil // Make sure we skip the following loop.
 	}
 	for _, kv := range kvs {
 		if kv.Value == nil {
@@ -297,7 +305,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	}
 }
 
-func (esr *EndpointStatusReporter) writeEndpointStatus(epID model.Key, status string) (err error) {
+func (esr *EndpointStatusReporter) writeEndpointStatus(ctx context.Context, epID model.Key, status string) (err error) {
 	kv := model.KVPair{Key: epID}
 	logCxt := log.WithFields(log.Fields{
 		"newStatus":  status,
@@ -314,7 +322,7 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(epID model.Key, status st
 		_, err = esr.datastore.Apply(&kv)
 	} else {
 		logCxt.Info("Deleting endpoint status")
-		err = esr.datastore.Delete(&kv)
+		_, err = esr.datastore.Delete(ctx, epID, "")
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
 			// Ignore non-existent resource.
 			err = nil

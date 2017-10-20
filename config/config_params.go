@@ -27,8 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 )
 
 var (
@@ -91,7 +90,7 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
-	DatastoreType string `config:"oneof(kubernetes,etcdv2);etcdv2;non-zero,die-on-fail"`
+	DatastoreType string `config:"oneof(kubernetes,etcdv2,etcdv3);etcdv2;non-zero,die-on-fail"`
 
 	FelixHostname string `config:"hostname;;local,non-zero"`
 
@@ -357,7 +356,7 @@ func (config *Config) resolve() (changed bool, err error) {
 	return
 }
 
-func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
+func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	// Special case for etcdv2 datastore, where we want to honour established Felix-specific
 	// config mechanisms.
 	if config.DatastoreType == "etcdv2" {
@@ -369,15 +368,15 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 		} else {
 			etcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
 		}
-		etcdCfg := api.EtcdConfig{
+		etcdCfg := apiconfig.EtcdConfig{
 			EtcdEndpoints:  etcdEndpoints,
 			EtcdKeyFile:    config.EtcdKeyFile,
 			EtcdCertFile:   config.EtcdCertFile,
 			EtcdCACertFile: config.EtcdCaFile,
 		}
-		return api.CalicoAPIConfig{
-			Spec: api.CalicoAPIConfigSpec{
-				DatastoreType: api.EtcdV2,
+		return apiconfig.CalicoAPIConfig{
+			Spec: apiconfig.CalicoAPIConfigSpec{
+				DatastoreType: apiconfig.EtcdV2,
 				EtcdConfig:    etcdCfg,
 			},
 		}
@@ -388,14 +387,14 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 	// variable, and that the datastore type can be set by a DATASTORE_TYPE or
 	// CALICO_DATASTORE_TYPE variable.  (Except in the etcdv2 case which is handled specially
 	// above.)
-	cfg, err := client.LoadClientConfigFromEnvironment()
+	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
 	}
 	// If that didn't set the datastore type (in which case the field will have been set to its
 	// default 'etcdv2' value), copy it from the Felix config.
 	if cfg.Spec.DatastoreType == "etcdv2" {
-		cfg.Spec.DatastoreType = api.DatastoreType(config.DatastoreType)
+		cfg.Spec.DatastoreType = apiconfig.DatastoreType(config.DatastoreType)
 	}
 
 	if !config.IpInIpEnabled {

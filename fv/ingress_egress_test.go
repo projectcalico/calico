@@ -23,9 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 )
 
 // So that we can say 'HaveConnectivityTo' without the 'workload.' prefix...
@@ -36,7 +37,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	var (
 		etcd   *containers.Container
 		felix  *containers.Container
-		client *client.Client
+		client client.Interface
 		w      [3]*workload.Workload
 	)
 
@@ -46,14 +47,14 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
-		defaultProfile.Metadata.Name = "default"
-		defaultProfile.Metadata.Tags = []string{"default"}
+		defaultProfile.Name = "default"
+		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
 		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
 		defaultProfile.Spec.IngressRules = []api.Rule{{
 			Action: "allow",
 			Source: api.EntityRule{Tag: "default"},
 		}}
-		_, err := client.Profiles().Create(defaultProfile)
+		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create three workloads, using that profile.
@@ -92,8 +93,9 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	Context("with ingress-only restriction for workload 0", func() {
 
 		BeforeEach(func() {
-			policy := api.NewPolicy()
-			policy.Metadata.Name = "policy-1"
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
 			allowFromW1 := api.Rule{
 				Action: "allow",
 				Source: api.EntityRule{
@@ -102,7 +104,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			}
 			policy.Spec.IngressRules = []api.Rule{allowFromW1}
 			policy.Spec.Selector = w[0].NameSelector()
-			_, err := client.Policies().Create(policy)
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -117,8 +119,9 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	Context("with egress-only restriction for workload 0", func() {
 
 		BeforeEach(func() {
-			policy := api.NewPolicy()
-			policy.Metadata.Name = "policy-1"
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
 			allowToW1 := api.Rule{
 				Action: "allow",
 				Destination: api.EntityRule{
@@ -127,7 +130,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			}
 			policy.Spec.EgressRules = []api.Rule{allowToW1}
 			policy.Spec.Selector = w[0].NameSelector()
-			_, err := client.Policies().Create(policy)
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -142,8 +145,9 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	Context("with ingress rules and types [ingress,egress]", func() {
 
 		BeforeEach(func() {
-			policy := api.NewPolicy()
-			policy.Metadata.Name = "policy-1"
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
 			allowFromW1 := api.Rule{
 				Action: "allow",
 				Source: api.EntityRule{
@@ -153,7 +157,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			policy.Spec.IngressRules = []api.Rule{allowFromW1}
 			policy.Spec.Selector = w[0].NameSelector()
 			policy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
-			_, err := client.Policies().Create(policy)
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -166,11 +170,12 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	})
 
 	Context("with an egress deny rule", func() {
-		var policy *api.Policy
+		var policy *api.NetworkPolicy
 
 		BeforeEach(func() {
-			policy = api.NewPolicy()
-			policy.Metadata.Name = "policy-1"
+			policy = api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
 			allowFromW1 := api.Rule{
 				Action: "allow",
 				Source: api.EntityRule{
@@ -183,7 +188,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		})
 
 		JustBeforeEach(func() {
-			_, err := client.Policies().Create(policy)
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

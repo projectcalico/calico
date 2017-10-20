@@ -24,11 +24,11 @@ import (
 	"github.com/containernetworking/cni/pkg/ns"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 )
 
 type podSpec struct {
@@ -86,14 +86,14 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		pod_in.ObjectMeta.Labels = spec.labels
 	}
 	log.WithField("pod_in", pod_in).Debug("Pod defined")
-	pod_out, err := clientset.Pods(nsName).Create(pod_in)
+	pod_out, err := clientset.CoreV1().Pods(nsName).Create(pod_in)
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("pod_out", pod_out).Debug("Created pod")
 	pod_in = pod_out
 	pod_in.Status.PodIP = ip
-	pod_out, err = clientset.Pods(nsName).UpdateStatus(pod_in)
+	pod_out, err = clientset.CoreV1().Pods(nsName).UpdateStatus(pod_in)
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +102,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	if host.isLocal {
 		// Create the cali interface, so that Felix does dataplane programming for the local
 		// endpoint.
-		interfaceName := k8s.VethNameForWorkload(nsName + "." + name)
+		interfaceName := conversion.VethNameForWorkload(nsName + "." + name)
 		log.WithField("interfaceName", interfaceName).Info("Prepare interface")
 
 		// Create a namespace.
@@ -202,7 +202,7 @@ var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")
 
 func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.WithField("nsPrefix", nsPrefix).Info("Cleaning up all pods...")
-	nsList, err := clientset.Namespaces().List(metav1.ListOptions{})
+	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -216,13 +216,13 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 		go func() {
 			admission <- 1
 			if strings.HasPrefix(nsName, nsPrefix) {
-				podList, err := clientset.Pods(nsName).List(metav1.ListOptions{})
+				podList, err := clientset.CoreV1().Pods(nsName).List(metav1.ListOptions{})
 				if err != nil {
 					panic(err)
 				}
 				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug("Pods present")
 				for _, pod := range podList.Items {
-					err = clientset.Pods(nsName).Delete(pod.ObjectMeta.Name, deleteImmediately)
+					err = clientset.CoreV1().Pods(nsName).Delete(pod.ObjectMeta.Name, deleteImmediately)
 					if err != nil {
 						panic(err)
 					}

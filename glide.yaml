@@ -6,7 +6,7 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
-  version: v3.1.8
+  version: ^3.2.7
   subpackages:
   - client
   - pkg/transport
@@ -26,15 +26,15 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: cc6687459006bd22a2ddc6b1f3d70d77ab5d0b1e
+  version: e661addd9596b291db14c489f6e56575d493982f
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
-  version: ^0.11.5
+  version: ^1.0.3
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
-  version: ^0.8.0
+  version: ^0.9.0-pre1
 - package: github.com/gogo/protobuf
   version: ^0.3.0
 - package: github.com/vishvananda/netlink
@@ -42,9 +42,9 @@ import:
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: k8s.io/client-go
-  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
+  version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 87db7812cfdf28a094de22491453ad87aa871fb4
+  version: b085d3ae58eaed8230f83a0847dc78b20c79775f
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful

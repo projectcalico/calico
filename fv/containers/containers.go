@@ -29,8 +29,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -252,10 +252,10 @@ func RunEtcd() *Container {
 func RunFelix(etcdIP string) *Container {
 	return Run("felix",
 		"--privileged",
-		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
+		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
 		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
-		"-e", "FELIX_DATASTORETYPE=etcdv2",
-		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
+		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
 		"-e", "FELIX_IPV6SUPPORT=false",
@@ -264,7 +264,7 @@ func RunFelix(etcdIP string) *Container {
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology() (felix, etcd *Container, client *client.Client) {
+func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interface) {
 	success := false
 	defer func() {
 		if !success {
@@ -277,17 +277,18 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client *client.Clien
 	// First start etcd.
 	etcd = RunEtcd()
 
-	// Connect to etcd and initialise the datastore.
+	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
-	Eventually(client.EnsureInitialized, "10s", "100ms").ShouldNot(HaveOccurred())
 
 	// Then start Felix and create a node for it.
 	felix = RunFelix(etcd.IP)
 
 	felixNode := api.NewNode()
-	felixNode.Metadata.Name = felix.Hostname
-	_, err := client.Nodes().Create(felixNode)
-	Expect(err).NotTo(HaveOccurred())
+	felixNode.Name = felix.Hostname
+	Eventually(func() error {
+		_, err := client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
+		return err
+	}, "10s", "500ms").ShouldNot(HaveOccurred())
 
 	success = true
 	return

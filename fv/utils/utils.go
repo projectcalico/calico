@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,9 +25,14 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
+
+var Ctx = context.Background()
+
+var NoOptions = options.SetOptions{}
 
 func Run(command string, args ...string) {
 	_ = run(true, command, args...)
@@ -84,11 +90,11 @@ func Command(name string, args ...string) *exec.Cmd {
 	return exec.Command(name, args...)
 }
 
-func GetEtcdClient(etcdIP string) *client.Client {
-	client, err := client.New(api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.EtcdV2,
-			EtcdConfig: api.EtcdConfig{
+func GetEtcdClient(etcdIP string) client.Interface {
+	client, err := client.New(apiconfig.CalicoAPIConfig{
+		Spec: apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.EtcdV3,
+			EtcdConfig: apiconfig.EtcdConfig{
 				EtcdEndpoints: "http://" + etcdIP + ":2379",
 			},
 		},
