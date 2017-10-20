@@ -18,7 +18,6 @@ import (
 	"reflect"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -38,63 +37,11 @@ func NewBGPConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResource
 		resource:        BGPConfigResourceName,
 		description:     "Calico BGP Configuration",
 		k8sResourceType: reflect.TypeOf(apiv2.BGPConfiguration{}),
-		k8sListType:     reflect.TypeOf(apiv2.BGPConfigurationList{}),
-		converter:       BGPConfigConverter{},
-	}
-}
-
-// BGPConfigConverter implements the K8sResourceConverter interface.
-type BGPConfigConverter struct {
-}
-
-func (_ BGPConfigConverter) ListInterfaceToKey(l model.ListInterface) model.Key {
-	pl := l.(model.ResourceListOptions)
-	if pl.Name != "" {
-		return model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
-	}
-	return nil
-}
-
-func (_ BGPConfigConverter) KeyToName(k model.Key) (string, error) {
-	return k.(model.ResourceKey).Name, nil
-}
-
-func (_ BGPConfigConverter) NameToKey(name string) (model.Key, error) {
-	return model.ResourceKey{
-		Name: name,
-		Kind: apiv2.KindBGPConfiguration,
-	}, nil
-}
-
-func (c BGPConfigConverter) ToKVPair(r Resource) (*model.KVPair, error) {
-	t := r.(*apiv2.BGPConfiguration)
-
-	// Clear any CRD TypeMeta fields and then create a KVPair.
-	conf := apiv2.NewBGPConfiguration()
-	conf.ObjectMeta.Name = t.ObjectMeta.Name
-	conf.ObjectMeta.Namespace = t.ObjectMeta.Namespace
-	conf.Spec = t.Spec
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name:      t.ObjectMeta.Name,
-			Namespace: t.ObjectMeta.Namespace,
-			Kind:      apiv2.KindBGPConfiguration,
+		k8sResourceTypeMeta: metav1.TypeMeta{
+			Kind:       apiv2.KindBGPConfiguration,
+			APIVersion: apiv2.GroupVersionCurrent,
 		},
-		Value:    conf,
-		Revision: t.ObjectMeta.ResourceVersion,
-	}, nil
-}
-
-func (c BGPConfigConverter) FromKVPair(kvp *model.KVPair) (Resource, error) {
-	v := kvp.Value.(*apiv2.BGPConfiguration)
-
-	crd := apiv2.BGPConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            v.ObjectMeta.Name,
-			Namespace:       v.ObjectMeta.Namespace,
-			ResourceVersion: kvp.Revision,
-		},
-		Spec: v.Spec,
+		k8sListType:  reflect.TypeOf(apiv2.BGPConfigurationList{}),
+		resourceKind: apiv2.KindBGPConfiguration,
 	}
-	return &crd, nil
 }

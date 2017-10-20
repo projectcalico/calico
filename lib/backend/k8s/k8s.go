@@ -376,7 +376,9 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 }
 
 func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return newSyncer(&realKubeAPI{c}, c.converter, callbacks, c.disableNodePoll)
+	// TODO: Fix this when we are done with the transition to v2 data model.
+	// return newSyncer(&realKubeAPI{c}, c.converter, callbacks, c.disableNodePoll)
+	return nil
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.
