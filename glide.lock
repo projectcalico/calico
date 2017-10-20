@@ -1,5 +1,5 @@
-hash: c09bdf15c4c46a80986c56ecb349bba08d51a15880bef3338fc582a81324801f
-updated: 2017-10-19T23:13:16.443202046Z
+hash: 1ba0f30e695074895db332bcbc6939503827993c85c08a41d10083a874a06cfb
+updated: 2017-10-20T14:37:36.980606262Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e661addd9596b291db14c489f6e56575d493982f
+  version: 470ff5ce834e1cfa500966ed1888e391d1fbd4b9
   subpackages:
   - lib
   - lib/apiconfig
@@ -237,7 +237,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 541b9d50ad47e36efd8fb423e938e59ff1691f68
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
