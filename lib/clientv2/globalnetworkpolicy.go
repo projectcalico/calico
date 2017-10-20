@@ -40,7 +40,7 @@ type globalnetworkpolicies struct {
 // Create takes the representation of a GlobalNetworkPolicy and creates it.  Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	r.defaultTypesField(res)
+	defaultPolicyTypesField(&res.Spec)
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		return out.(*apiv2.GlobalNetworkPolicy), err
@@ -51,7 +51,7 @@ func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetw
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	r.defaultTypesField(res)
+	defaultPolicyTypesField(&res.Spec)
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		return out.(*apiv2.GlobalNetworkPolicy), err
@@ -93,23 +93,23 @@ func (r globalnetworkpolicies) Watch(ctx context.Context, opts options.ListOptio
 	return r.client.resources.Watch(ctx, opts, apiv2.KindGlobalNetworkPolicy)
 }
 
-func (r globalnetworkpolicies) defaultTypesField(res *apiv2.GlobalNetworkPolicy) {
-	if len(res.Spec.Types) == 0 {
+func defaultPolicyTypesField(spec *apiv2.PolicySpec) {
+	if len(spec.Types) == 0 {
 		// Default the Types field according to what inbound and outbound rules are present
 		// in the policy.
-		if len(res.Spec.EgressRules) == 0 {
+		if len(spec.EgressRules) == 0 {
 			// Policy has no egress rules, so apply this policy to ingress only.  (Note:
 			// intentionally including the case where the policy also has no ingress
 			// rules.)
-			res.Spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
-		} else if len(res.Spec.IngressRules) == 0 {
+			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
+		} else if len(spec.IngressRules) == 0 {
 			// Policy has egress rules but no ingress rules, so apply this policy to
 			// egress only.
-			res.Spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeEgress}
+			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeEgress}
 		} else {
 			// Policy has both ingress and egress rules, so apply this policy to both
 			// ingress and egress.
-			res.Spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
+			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
 		}
 	}
 }
