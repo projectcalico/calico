@@ -96,6 +96,7 @@ var baseTests = []StateList{
 	// Named ports. Simple cases.
 	{localEp1WithNamedPortPolicy},
 	{localEp1WithNamedPortPolicyUDP},
+	{localEpsAndNamedPortPolicyDuplicatePorts},
 	{localEp1WithNamedPortPolicyNoSelector},
 	{localEp1WithNegatedNamedPortPolicyNoSelector},
 	{localEp1WithNegatedNamedPortPolicy},
@@ -129,6 +130,15 @@ var baseTests = []StateList{
 		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2,
 		// Ditto for EP1.  Now matches none of the EPs.
 		localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1},
+	// This scenario introduces ports with duplicate names.
+	{
+		// Start with endpoints and policy.
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+		// Adjust workload 1 to have duplicate ports.
+		localEpsAndNamedPortPolicyDuplicatePorts,
+		// Then go back...
+		localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs,
+	},
 	// In this scenario, we remove the profiles from the endpoints rather than changing the labels.
 	{
 		// Start with both matching, as in the middle of the above test.

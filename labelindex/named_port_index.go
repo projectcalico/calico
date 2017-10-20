@@ -67,13 +67,14 @@ func (d *endpointData) HasParent(parent *npParentData) bool {
 	return false
 }
 
-func (d *endpointData) LookupNamedPort(name string, proto IPSetPortProtocol) *model.EndpointPort {
+func (d *endpointData) LookupNamedPorts(name string, proto IPSetPortProtocol) []uint16 {
+	var matchingPorts []uint16
 	for _, p := range d.ports {
 		if p.Name == name && proto.MatchesModelProtocol(p.Protocol) {
-			return &p
+			matchingPorts = append(matchingPorts, p.Port)
 		}
 	}
-	return nil
+	return matchingPorts
 }
 
 type IPSetPortProtocol uint8
@@ -591,22 +592,26 @@ func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 // If the IP set represents a named port then the returned members will have a named port component.
 // Returns nil if the endpoint doesn't contribute to the IP set.
 func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointData, ipSetData *ipSetData) (contrib []IPSetMember) {
-	var namedPort *model.EndpointPort
 	if ipSetData.namedPortProtocol != ProtocolNone {
-		namedPort = d.LookupNamedPort(ipSetData.namedPort, ipSetData.namedPortProtocol)
-		if namedPort == nil {
-			return
+		// This IP set represents a named port match, calculate the cross product of
+		// matching named ports by IP address.
+		portNumbers := d.LookupNamedPorts(ipSetData.namedPort, ipSetData.namedPortProtocol)
+		for _, namedPort := range portNumbers {
+			for _, addr := range d.ipAddrs {
+				contrib = append(contrib, IPSetMember{
+					IP:         addr,
+					Protocol:   ipSetData.namedPortProtocol,
+					PortNumber: namedPort,
+				})
+			}
 		}
-	}
-	for _, addr := range d.ipAddrs {
-		member := IPSetMember{
-			IP: addr,
+	} else {
+		// Non-named port match, simply return the IP addresses.
+		for _, addr := range d.ipAddrs {
+			contrib = append(contrib, IPSetMember{
+				IP: addr,
+			})
 		}
-		if ipSetData.namedPortProtocol != ProtocolNone {
-			member.Protocol = ipSetData.namedPortProtocol
-			member.PortNumber = namedPort.Port
-		}
-		contrib = append(contrib, member)
 	}
 	return
 }
