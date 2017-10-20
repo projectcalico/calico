@@ -29,8 +29,8 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
-	api "github.com/projectcalico/libcalico-go/lib/apiv2"
-	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv2"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -87,6 +87,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			}
 			podCidr, err := getPodCidr(client, conf, epIDs.Node)
 			if err != nil {
+				logger.Info("Failed to getPodCidr")
 				return nil, err
 			}
 			logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
@@ -101,6 +102,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		labels := make(map[string]string)
 		annot := make(map[string]string)
+		var ports []api.EndpointPort
 
 		// Only attempt to fetch the labels and annotations from Kubernetes
 		// if the policy type has been set to "k8s". This allows users to
@@ -109,12 +111,13 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if conf.Policy.PolicyType == "k8s" {
 			var err error
 
-			labels, annot, err = getK8sLabelsAnnotations(client, epIDs.Pod, epIDs.Namespace)
+			labels, annot, ports, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
 			if err != nil {
 				return nil, err
 			}
 			logger.WithField("labels", labels).Debug("Fetched K8s labels")
 			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
+			logger.WithField("ports", ports).Debug("Fetched K8s ports")
 
 			// Check for calico IPAM specific annotations and set them if needed.
 			if conf.IPAM.Type == "calico-ipam" {
@@ -260,7 +263,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
-	hostVethName := k8sbackend.VethNameForWorkload(epIDs.WEPName)
+	hostVethName := k8sconversion.VethNameForWorkload(epIDs.WEPName)
 	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
@@ -622,20 +625,29 @@ func newK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	return kubernetes.NewForConfig(config)
 }
 
-func getK8sLabelsAnnotations(client *kubernetes.Clientset, podName, podNamespace string) (map[string]string, map[string]string, error) {
-	pod, err := client.Pods(podNamespace).Get(podName, metav1.GetOptions{})
+func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, err error) {
+	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(podName, metav1.GetOptions{})
+	logrus.Infof("pod info %+v", pod)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	labels := pod.Labels
+	labels = pod.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels["calico/k8s_ns"] = podNamespace
 
-	return labels, pod.Annotations, nil
+	var c k8sconversion.Converter
+	kvp, err := c.PodToWorkloadEndpoint(pod)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	ports = kvp.Value.(*api.WorkloadEndpoint).Spec.Ports
+
+	return labels, pod.Annotations, ports, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename string) (string, error) {
@@ -644,7 +656,7 @@ func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename strin
 		nodename = conf.Kubernetes.NodeName
 	}
 
-	node, err := client.Nodes().Get(nodename, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(nodename, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}

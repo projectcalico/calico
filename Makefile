@@ -39,7 +39,7 @@ docker-image: $(DEPLOY_CONTAINER_MARKER)
 
 .PHONY: clean
 clean:
-	rm -rf dist vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache
+	rm -rf dist vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 
 release: clean
 ifndef VERSION
@@ -94,7 +94,7 @@ dist/calico-ipam: $(SRCFILES) vendor
 
 .PHONY: test
 ## Run the unit tests.
-test: dist/calico dist/calico-ipam dist/host-local run-etcd run-k8s-apiserver
+test: dist/calico dist/calico-ipam dist/host-local run-etcd run-k8s-apiserver test-install-cni
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo)
 
@@ -133,11 +133,30 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-loc
 			ginkgo'
 	make stop-etcd
 
+# This does not currently work, kubernetes needs additional configuration
+# before the tests will run correctly.
 .PHONY: test-containerized-all-datastore
 test-containerized-all-datastore:
 	for datastore in "etcdv3" "kubernetes" ; do \
-		make test-containerized DATASTORE_TYPE=datastore; \
+		make test-containerized DATASTORE_TYPE=$$datastore; \
 	done
+
+# We pre-build the test binary so that we can run it outside a container and allow it
+# to interact with docker.
+k8s-install/scripts/install_cni.test: vendor
+	-mkdir -p .go-pkg-cache
+	docker run --rm \
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
+	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+		$(CALICO_BUILD) sh -c '\
+			cd /go/src/github.com/projectcalico/cni-plugin && \
+			go test ./k8s-install/scripts -c --tags install_cni_test -o ./k8s-install/scripts/install_cni.test'
+
+.PHONY: test-install-cni
+## Test the install-cni.sh script
+test-install-cni: docker-image k8s-install/scripts/install_cni.test
+	cd k8s-install/scripts && ./install_cni.test
 
 run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	docker run --rm --privileged --net=host \
@@ -174,7 +193,7 @@ build-containerized: vendor
 		$(CALICO_BUILD) sh -c '\
 			cd /go/src/github.com/projectcalico/cni-plugin && \
 			make binary'
-	
+
 ## Etcd is used by the tests
 run-etcd: stop-etcd
 	docker run --detach \
@@ -305,7 +324,7 @@ run-kube-proxy:
 	-docker rm -f calico-kube-proxy
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:v$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
 
-ci: clean static-checks test-containerized-cni-versions docker-image
+ci: clean static-checks test-containerized-cni-versions docker-image test-install-cni
 
 .PHONY: help
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660

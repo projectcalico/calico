@@ -14,7 +14,7 @@ import (
 	"github.com/onsi/gomega/gexec"
 	"github.com/projectcalico/cni-plugin/testutils"
 	"github.com/projectcalico/cni-plugin/utils"
-	api "github.com/projectcalico/libcalico-go/lib/apiv2"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
