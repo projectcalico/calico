@@ -122,8 +122,9 @@ func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterf
 	// workload endpoint.
 	if l.Name != "" {
 		kvp, err := c.Get(ctx, model.ResourceKey{
-			Name: l.Name,
-			Kind: l.Kind,
+			Name:      l.Name,
+			Namespace: l.Namespace,
+			Kind:      l.Kind,
 		}, revision)
 		if err != nil {
 			switch err.(type) {
