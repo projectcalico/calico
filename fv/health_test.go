@@ -109,7 +109,9 @@ var _ = BeforeSuite(func() {
 	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
-	apiServerContainer = containers.Run("apiserver", utils.Config.K8sImage,
+	apiServerContainer = containers.Run("apiserver",
+		containers.RunOpts{AutoRemove: true},
+		utils.Config.K8sImage,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
 		"--service-cluster-ip-range=10.101.0.0/16",
@@ -324,6 +326,7 @@ var _ = Describe("health tests", func() {
 
 	startTypha := func(endpoint string) {
 		typhaContainer = containers.Run("typha",
+			containers.RunOpts{AutoRemove: true},
 			"--privileged",
 			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
 			"-e", "TYPHA_HEALTHENABLED=true",
@@ -344,6 +347,7 @@ var _ = Describe("health tests", func() {
 
 	startFelix := func(typhaAddr string, calcGraphHangTime string, dataplaneHangTime string) {
 		felixContainer = containers.Run("felix",
+			containers.RunOpts{AutoRemove: true},
 			"--privileged",
 			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
 			"-e", "FELIX_IPV6SUPPORT=false",
