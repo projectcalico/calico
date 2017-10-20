@@ -154,9 +154,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreEt
 					ObjectMeta: metav1.ObjectMeta{Name: "mypool"},
 					Spec: apiv2.IPPoolSpec{
 						CIDR: poolCIDR,
-						IPIP: &apiv2.IPIPConfiguration{
-							Mode: apiv2.IPIPModeCrossSubnet,
-						},
+						IPIPMode: apiv2.IPIPModeCrossSubnet,
 						NATOutgoing: true,
 					},
 				},

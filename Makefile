@@ -3,7 +3,7 @@
 default: all
 all: test
 test: ut
-generate-files: .generate_files
+deepcopy-gen: .deepcopy_gen
 
 # Define some constants
 #######################
@@ -132,7 +132,7 @@ clean: clean-generated clean-bin
 	rm -rf vendor .go-pkg-cache
 
 clean-generated:
-	rm -f .generate_files
+	rm -f .deepcopy_gen
 	find $(TOP_SRC_DIR) -name zz_generated* -exec rm {} \;
 
 clean-bin:
@@ -174,7 +174,7 @@ $(BINDIR)/deepcopy-gen:
 		sh -c 'go build -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
 
 # Regenerate all files if the gen exe(s) changed
-.generate_files: .generate_exes
+.deepcopy_gen: .generate_exes
 	# Generate deep copies
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(BINDIR)/deepcopy-gen \

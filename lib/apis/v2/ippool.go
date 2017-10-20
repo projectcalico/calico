@@ -37,23 +37,14 @@ type IPPool struct {
 type IPPoolSpec struct {
 	// The pool CIDR.
 	CIDR string `json:"cidr" validate:"omitempty,cidr"`
-	// Contains configuration for ipip tunneling for this pool. If not specified,
-	// then ipip tunneling is disabled for this pool.
-	IPIP *IPIPConfiguration `json:"ipip,omitempty"`
+	// Contains configuration for IPIP tunneling for this pool. If not specified,
+	// then this is defaulted to "Never" (i.e. IPIP tunelling is disabled).
+	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipipmode"`
 	// When nat-outgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
 	NATOutgoing bool `json:"natOutgoing,omitempty"`
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
-}
-
-type IPIPConfiguration struct {
-	// The IPIP mode.  This can be one of "Never", "Always" or "CrossSubnet".  A mode
-	// of "Always" will also use IPIP tunneling for routing to destination IP
-	// addresses within this pool.  A mode of "CrossSubnet" will only use IPIP
-	// tunneling when the destination node is on a different subnet to the
-	// originating node.  The default value (if not specified) is "Always".
-	Mode IPIPMode `json:"mode,omitempty" validate:"omitempty,ipipmode"`
 }
 
 type IPIPMode string

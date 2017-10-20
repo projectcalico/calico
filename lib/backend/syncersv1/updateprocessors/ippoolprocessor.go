@@ -53,20 +53,16 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	}
 	var ipipInterface string
 	var ipipMode ipip.Mode
-	var ipm apiv2.IPIPMode
-	if v2res.Spec.IPIP != nil {
-		ipm = v2res.Spec.IPIP.Mode
-	}
-	switch ipm {
-	case apiv2.IPIPModeNever:
-		ipipInterface = ""
-		ipipMode = ipip.Undefined
+	switch v2res.Spec.IPIPMode {
+	case apiv2.IPIPModeAlways:
+		ipipInterface = "tunl0"
+		ipipMode = ipip.Always
 	case apiv2.IPIPModeCrossSubnet:
 		ipipInterface = "tunl0"
 		ipipMode = ipip.CrossSubnet
 	default:
-		ipipInterface = "tunl0"
-		ipipMode = ipip.Always
+		ipipInterface = ""
+		ipipMode = ipip.Undefined
 	}
 
 	return &model.KVPair{

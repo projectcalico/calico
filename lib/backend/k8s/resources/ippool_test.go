@@ -59,9 +59,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 	value1.Spec = apiv2.IPPoolSpec{
 		CIDR:     cidr2.String(),
 		Disabled: false,
-		IPIP: &apiv2.IPIPConfiguration{
-			Mode: "cross-subnet",
-		},
+		IPIPMode: "cross-subnet",
 	}
 	kvp1 := &model.KVPair{
 		Key:      key2,
@@ -76,9 +74,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 		Spec: apiv2.IPPoolSpec{
 			CIDR:     cidr2.String(),
 			Disabled: false,
-			IPIP: &apiv2.IPIPConfiguration{
-				Mode: "cross-subnet",
-			},
+			IPIPMode: "cross-subnet",
 		},
 	}
 
