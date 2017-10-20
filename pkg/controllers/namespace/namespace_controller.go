@@ -34,28 +34,28 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// NamespaceController Implements Controller interface
-// Responsible for monitoring kubernetes namespaces and
-// syncing them to Calico datastore.
-type NamespaceController struct {
+// namespaceController implements the Controller interface for managing Kubernetes namespaces
+// and syncing them to the Calico datastore as Profiles.
+type namespaceController struct {
 	informer      cache.Controller
 	resourceCache rcache.ResourceCache
 	calicoClient  client.Interface
+	ctx           context.Context
 }
 
-// NewNamespaceController Constructor for NamespaceController
-func NewNamespaceController(k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+// NewNamespaceController returns a controller which manages Namespace objects.
+func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
 	namespaceConverter := converter.NewNamespaceConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
-	// in the Calico datastore. Indentifies controller writen objects by
+	// in the Calico datastore. Indentifies controller written objects by
 	// their naming convention.
 	listFunc := func() (map[string]interface{}, error) {
 		log.Debugf("Listing profiles from Calico datastore")
 		filteredProfiles := make(map[string]interface{})
 
 		// Get all profile objects from Calico datastore.
-		profileList, err := c.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
+		profileList, err := c.Profiles().List(ctx, options.ListOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -132,11 +132,11 @@ func NewNamespaceController(k8sClientset *kubernetes.Clientset, c client.Interfa
 		},
 	}, cache.Indexers{})
 
-	return &NamespaceController{informer, ccache, c}
+	return &namespaceController{informer, ccache, c, ctx}
 }
 
 // Run starts the controller.
-func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+func (c *namespaceController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
@@ -165,12 +165,14 @@ func (c *NamespaceController) Run(threadiness int, reconcilerPeriod string, stop
 	log.Info("Stopping Namespace/Profile controller")
 }
 
-func (c *NamespaceController) runWorker() {
+func (c *namespaceController) runWorker() {
 	for c.processNextItem() {
 	}
 }
 
-func (c *NamespaceController) processNextItem() bool {
+// processNextItem waits for an event on the output queue from the resource cache and syncs
+// any received keys to the datastore.
+func (c *namespaceController) processNextItem() bool {
 	// Wait until there is a new item in the work queue.
 	workqueue := c.resourceCache.GetQueue()
 	key, quit := workqueue.Get()
@@ -179,7 +181,7 @@ func (c *NamespaceController) processNextItem() bool {
 	}
 
 	// Sync the object to the Calico datastore.
-	if err := c.syncToCalico(key.(string)); err != nil {
+	if err := c.syncToDatastore(key.(string)); err != nil {
 		c.handleErr(err, key.(string))
 	}
 
@@ -189,47 +191,65 @@ func (c *NamespaceController) processNextItem() bool {
 	return true
 }
 
-// syncToCalico syncs the given update to the Calico datastore.
-func (c *NamespaceController) syncToCalico(key string) error {
+// syncToDatastore syncs the given update to the Calico datastore. The provided key can be used to
+// find the corresponding resource within the resource cache. If the resource for the provided key
+// exists in the cache, then the value should be written to the datastore. If it does not exist
+// in the cache, then it should be deleted from the datastore.
+func (c *namespaceController) syncToDatastore(key string) error {
+	clog := log.WithField("key", key)
+
 	// Check if it exists in the controller's cache.
 	obj, exists := c.resourceCache.Get(key)
 	if !exists {
 		// The object no longer exists - delete from the datastore.
-		log.Infof("Deleting Profile %s from Calico datastore", key)
-		if _, err := c.calicoClient.Profiles().Delete(context.Background(), key, options.DeleteOptions{}); err != nil {
-			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-				// We hit an error other than "does not exist".
-				return err
-			}
+		clog.Infof("Deleting Profile from Calico datastore")
+		_, name := converter.NewNamespaceConverter().DeleteArgsFromKey(key)
+		_, err := c.calicoClient.Profiles().Delete(c.ctx, name, options.DeleteOptions{})
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			// We hit an error other than "does not exist".
+			return err
 		}
+		return nil
 	} else {
 		// The object exists - update the datastore to reflect.
-		log.Infof("Add/Update Profile %s in Calico datastore", key)
+		clog.Info("Create/Update Profile in Calico datastore")
 		p := obj.(api.Profile)
 
-		// Create the object.
-		_, err := c.calicoClient.Profiles().Create(context.Background(), &p, options.SetOptions{})
+		// Lookup to see if this object already exists in the datastore.
+		gp, err := c.calicoClient.Profiles().Get(c.ctx, p.Name, options.GetOptions{})
 		if err != nil {
-			if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
-				// Not an already exists error, so return it.
-				log.WithError(err).Warning("Failed to create profile")
+			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+				clog.WithError(err).Warning("Failed to get profile from datastore")
 				return err
 			}
 
-			// The object already exists, so update it.
-			_, err := c.calicoClient.Profiles().Update(context.Background(), &p, options.SetOptions{})
+			// Doesn't exist - create it.
+			_, err := c.calicoClient.Profiles().Create(c.ctx, &p, options.SetOptions{})
 			if err != nil {
-				log.WithError(err).Warning("Failed to update profile")
+				clog.WithError(err).Warning("Failed to create profile")
 				return err
 			}
+			clog.Info("Successfully created profile")
+			return nil
 		}
-	}
 
-	return nil
+		// The profile already exists - update it.
+		p.ResourceVersion = gp.ResourceVersion
+		clog.Infof("Update Profile in Calico datastore with resource version %s", p.ResourceVersion)
+		_, err = c.calicoClient.Profiles().Update(c.ctx, &p, options.SetOptions{})
+		if err != nil {
+			clog.WithError(err).Warning("Failed to update profile")
+			return err
+		}
+		clog.Infof("Successfully updated profile")
+		return nil
+	}
 }
 
-// handleErr checks if an error happened and makes sure we will retry later.
-func (c *NamespaceController) handleErr(err error, key string) {
+// handleErr handles errors which occur while processing a key received from the resource cache.
+// For a given error, we will re-queue the key in order to retry the datastore sync up to 5 times,
+// at which point the update is dropped.
+func (c *namespaceController) handleErr(err error, key string) {
 	workqueue := c.resourceCache.GetQueue()
 	if err == nil {
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.

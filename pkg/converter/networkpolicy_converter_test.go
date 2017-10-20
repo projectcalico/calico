@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"k8s.io/api/extensions"
+	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 
 	. "github.com/onsi/ginkgo"
@@ -35,24 +35,24 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 	It("should parse a basic NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
-		np := extensions.NetworkPolicy{
+		np := v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []v1beta1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []v1beta1.NetworkPolicyPort{
 							{Port: &port80},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []v1beta1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -64,7 +64,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
 			},
 		}
 
@@ -76,23 +76,23 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 
 		// Assert policy order.
 		By("returning calico policy with correct order", func() {
-			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+			Expect(int(*pol.(api.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		// Check the selector is correct, and that the matches are sorted.
 		By("returning a calico policy with correct selector", func() {
-			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
 				"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
 		})
 
 		protoTCP := numorstring.ProtocolFromString("tcp")
 		By("returning a calico policy with correct ingress rules", func() {
-			Expect(pol.(api.Policy).Spec.IngressRules).To(ConsistOf(api.Rule{
+			Expect(pol.(api.NetworkPolicy).Spec.IngressRules).To(ConsistOf(api.Rule{
 				Action:      "allow",
 				Protocol:    &protoTCP, // Defaulted to TCP.
 				Source:      api.EntityRule{Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'"},
@@ -100,30 +100,29 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 			}))
 		})
 
-		// There should be one OutboundRule
+		// There should be no egress rules.
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
+			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'ingress'
-		var policyType api.PolicyType = "ingress"
 		By("returning a calico policy with ingress type", func() {
-			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Types[0]).To(Equal(api.PolicyTypeIngress))
 		})
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
-		np := extensions.NetworkPolicy{
+		np := v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
 			},
 		}
 
@@ -135,47 +134,46 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 
 		// Assert policy order.
-		By("reteurning a calico policy with correct order", func() {
-			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+		By("returning a calico policy with correct order", func() {
+			Expect(int(*pol.(api.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		// Assert selectors
-		By("reteurning a calico policy with correct selector", func() {
-			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+		By("returning a calico policy with correct selector", func() {
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
 				"calico/k8s_ns == 'default' && label == 'value'"))
 		})
 
-		// There should be no inboundRules
-		By("reteurning a calico policy with no ingress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(0))
+		// There should be no egress rules.
+		By("returning a calico policy with no ingress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
 		})
 
-		// There should be one OutboundRule
-		By("reteurning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
+		// There should be no egress rules.
+		By("returning a calico policy with no egress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
 		})
 
-		var policyType api.PolicyType = "ingress"
 		// Check that Types field exists and has only 'ingress'
-		By("reteurning a calico policy with ingress type", func() {
-			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+		By("returning a calico policy with ingress type", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Types[0]).To(Equal(api.PolicyTypeIngress))
 		})
 	})
 
 	It("should parse a NetworkPolicy with an empty podSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
 			},
 		}
 
@@ -186,52 +184,51 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		})
 
 		// Assert policy name.
-		By("reteurning a calico policy with expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+		By("returning a calico policy with expected name", func() {
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 
 		// Assert policy order.
-		By("reteurning a calico policy with correct order", func() {
-			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+		By("returning a calico policy with correct order", func() {
+			Expect(int(*pol.(api.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		// Assert selectors
-		By("reteurning a calico policy with correct selector", func() {
-			Expect(pol.(api.Policy).Spec.Selector).To(Equal("calico/k8s_ns == 'default'"))
+		By("returning a calico policy with correct selector", func() {
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default'"))
 		})
 
-		// There should be no inboundRules
-		By("reteurning a calico policy with no ingress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(0))
+		// There should be no ingress rules.
+		By("returning a calico policy with no ingress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
 		})
 
-		// There should be one OutboundRule
-		By("reteurning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
+		// There should be no egress rules.
+		By("returning a calico policy with no egress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
 		})
 
-		var policyType api.PolicyType = "ingress"
 		// Check that Types field exists and has only 'ingress'
-		By("reteurning a calico policy with ingress type", func() {
-			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+		By("returning a calico policy with ingress type", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Types[0]).To(Equal(api.PolicyTypeIngress))
 		})
 	})
 
 	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
-						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+				Ingress: []v1beta1.NetworkPolicyIngressRule{
+					v1beta1.NetworkPolicyIngressRule{
+						From: []v1beta1.NetworkPolicyPeer{
+							v1beta1.NetworkPolicyPeer{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
 								},
@@ -239,7 +236,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
 			},
 		}
 
@@ -250,49 +247,48 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		})
 
 		// Assert policy name.
-		By("reteurning a calico policy with expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+		By("returning a calico policy with expected name", func() {
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 
 		// Assert policy order.
-		By("reteurning a calico policy with correct order", func() {
-			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+		By("returning a calico policy with correct order", func() {
+			Expect(int(*pol.(api.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		// Assert selectors
-		By("reteurning a calico policy with correct selector", func() {
-			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+		By("returning a calico policy with correct selector", func() {
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
 				"calico/k8s_ns == 'default' && label == 'value'"))
 		})
 
 		// Assert ingress rules
-		By("reteurning a calico policy with ingress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.IngressRules[0].Source.Selector).To(Equal("has(calico/k8s_ns)"))
+		By("returning a calico policy with ingress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("has(calico/k8s_ns)"))
 		})
 
-		// There should be one OutboundRule
-		By("reteurning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
+		// There should be no egress rules.
+		By("returning a calico policy with no egress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
 		})
 
-		var policyType api.PolicyType = "ingress"
 		// Check that Types field exists and has only 'ingress'
-		By("reteurning a calico policy with ingress type", func() {
-			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+		By("returning a calico policy with ingress type", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Types[0]).To(Equal(api.PolicyTypeIngress))
 		})
 	})
 
 	It("should handle cache.DeletedFinalStateUnknown conversion", func() {
 		np := cache.DeletedFinalStateUnknown{
 			Key: "cache.DeletedFinalStateUnknown",
-			Obj: &extensions.NetworkPolicy{
+			Obj: &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "testPolicy",
 					Namespace: "default",
 				},
-				Spec: extensions.NetworkPolicySpec{
+				Spec: v1beta1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{},
 				},
 			},
@@ -305,8 +301,8 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		})
 
 		// Assert policy name.
-		By("reteurning a calico policy with expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+		By("returning a calico policy with expected name", func() {
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 	})
 
@@ -334,9 +330,11 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 	It("should return the correct key", func() {
 		policyName := "allow-all"
-		policy := api.Policy{
-			Metadata: api.PolicyMetadata{
-				Name: policyName,
+		policyNS := "default"
+		policy := api.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      policyName,
+				Namespace: policyNS,
 			},
 			Spec: api.PolicySpec{},
 		}
@@ -344,30 +342,36 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		// Get key
 		key := npConverter.GetKey(policy)
 		By("returning the name of the policy", func() {
-			Expect(key).To(Equal(policyName))
+			Expect(key).To(Equal("default/allow-all"))
+		})
+
+		By("parsing the returned key back into component fields", func() {
+			ns, name := npConverter.DeleteArgsFromKey(key)
+			Expect(ns).To(Equal("default"))
+			Expect(name).To(Equal("allow-all"))
 		})
 	})
 
 	It("should parse a NetworkPolicy with an Egress rule", func() {
 		port80 := intstr.FromInt(80)
-		np := extensions.NetworkPolicy{
+		np := v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Egress: []extensions.NetworkPolicyEgressRule{
+				Egress: []v1beta1.NetworkPolicyEgressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []v1beta1.NetworkPolicyPort{
 							{Port: &port80},
 						},
-						To: []extensions.NetworkPolicyPeer{
+						To: []v1beta1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -379,7 +383,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeEgress},
 			},
 		}
 
@@ -391,23 +395,23 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 
 		// Assert policy order.
 		By("returning a calico policy with correct order", func() {
-			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+			Expect(int(*pol.(api.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		// Check the selector is correct, and that the matches are sorted.
 		By("returning a calico policy with correct selector", func() {
-			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
 				"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
 		})
 
 		protoTCP := numorstring.ProtocolFromString("tcp")
 		By("returning a calico policy with correct egress rules", func() {
-			Expect(pol.(api.Policy).Spec.EgressRules).To(ConsistOf(api.Rule{
+			Expect(pol.(api.NetworkPolicy).Spec.EgressRules).To(ConsistOf(api.Rule{
 				Action:   "allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Destination: api.EntityRule{Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
@@ -417,14 +421,13 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// There should be no InboundRules
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'egress'
-		var policyType api.PolicyType = "egress"
 		By("returning a calico policy with ingress type", func() {
-			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Types[0]).To(Equal(api.PolicyTypeEgress))
 		})
 	})
 })
@@ -436,18 +439,18 @@ var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
 	It("should parse a k8s v1.7 NetworkPolicy with an ingress rule", func() {
 		// <= v1.7 didn't include a polityTypes field, so it always comes back as an
 		// empty list.
-		np := extensions.NetworkPolicy{
+		np := v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []v1beta1.NetworkPolicyIngressRule{
 					{
-						From: []extensions.NetworkPolicyPeer{
+						From: []v1beta1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -470,35 +473,34 @@ var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("generating the expected name", func() {
-			Expect(pol.(api.Policy).Metadata.Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
 		})
 
 		// Assert policy order.
 		By("generating the correct order", func() {
-			Expect(int(*pol.(api.Policy).Spec.Order)).To(Equal(1000))
+			Expect(int(*pol.(api.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		})
 
 		// Assert selectors
 		By("generating the correct selector", func() {
-			Expect(pol.(api.Policy).Spec.Selector).To(Equal(
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
 				"calico/k8s_ns == 'default' && label == 'value'"))
 		})
 
 		// There should be one inbound rule.
 		By("returning a policy with a single ingress rule", func() {
-			Expect(len(pol.(api.Policy).Spec.IngressRules)).To(Equal(1))
+			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(1))
 		})
 
-		// There should be one OutboundRule to allow all egress traffic.
-		By("returning a policy with a single egress rule", func() {
-			Expect(len(pol.(api.Policy).Spec.EgressRules)).To(Equal(1))
+		// There should be no egress rules.
+		By("returning a policy with no egress rules", func() {
+			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
 		})
 
-		var policyType api.PolicyType = "ingress"
 		// Check that Types field exists and has only 'ingress'
 		By("returning a policy with types=[ingress]", func() {
-			Expect(len(pol.(api.Policy).Spec.Types)).To(Equal(1))
-			Expect(pol.(api.Policy).Spec.Types[0]).To(Equal(policyType))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Types[0]).To(Equal(api.PolicyTypeIngress))
 		})
 	})
 })

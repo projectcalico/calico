@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -77,16 +78,19 @@ func main() {
 	stop := make(chan struct{})
 	defer close(stop)
 
+	// Create the context.
+	ctx := context.Background()
+
 	for _, controllerType := range strings.Split(config.EnabledControllers, ",") {
 		switch controllerType {
 		case "workloadendpoint":
-			podController := pod.NewPodController(k8sClientset, calicoClient)
+			podController := pod.NewPodController(ctx, k8sClientset, calicoClient)
 			go podController.Run(config.WorkloadEndpointWorkers, config.ReconcilerPeriod, stop)
 		case "profile":
-			namespaceController := namespace.NewNamespaceController(k8sClientset, calicoClient)
+			namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient)
 			go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
 		case "policy":
-			policyController := networkpolicy.NewPolicyController(k8sClientset, calicoClient)
+			policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient)
 			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
@@ -112,7 +116,7 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
-	// Get kubenetes clientset
+	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)

@@ -16,7 +16,6 @@ package pod
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -44,23 +43,24 @@ type WorkloadEndpointCache struct {
 	m map[string]api.WorkloadEndpoint
 }
 
-// PodController implements the Controller interface.  It is responsible for monitoring
-// kubernetes pods and updating workload endpoints in the Calico datastore if changed.
-type PodController struct {
+// podController implements the Controller interface for managing Kubernetes pods
+// and syncing them to the Calico datastore as WorkloadEndpoints.
+type podController struct {
 	informer              cache.Controller
 	resourceCache         rcache.ResourceCache
 	calicoClient          client.Interface
 	workloadEndpointCache *WorkloadEndpointCache
+	ctx                   context.Context
 }
 
-// NewPodController Constructor for PodController
-func NewPodController(k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+// NewPodController returns a controller which manages Pod objects.
+func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
 	podConverter := converter.NewPodConverter()
 
 	// Function returns map of key->WorkloadEndpointData from the Calico datastore.
 	listFunc := func() (map[string]interface{}, error) {
 		// Get all workloadEndpoints for kubernetes orchestrator from the Calico datastore
-		workloadEndpoints, err := c.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
+		workloadEndpoints, err := c.WorkloadEndpoints().List(ctx, options.ListOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -184,12 +184,11 @@ func NewPodController(k8sClientset *kubernetes.Clientset, c client.Interface) co
 		},
 	}, cache.Indexers{})
 
-	return &PodController{informer, resourceCache, c, &workloadEndpointCache}
+	return &podController{informer, resourceCache, c, &workloadEndpointCache, ctx}
 }
 
-// Run starts controller.Internally it starts syncing
-// kubernetes and calico caches.
-func (c *PodController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+// Run starts the controller.
+func (c *podController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
@@ -225,12 +224,14 @@ func (c *PodController) Run(threadiness int, reconcilerPeriod string, stopCh cha
 	log.Info("Stopping Pod controller")
 }
 
-func (c *PodController) runWorker() {
+func (c *podController) runWorker() {
 	for c.processNextItem() {
 	}
 }
 
-func (c *PodController) processNextItem() bool {
+// processNextItem waits for an event on the output queue from the resource cache and syncs
+// any received keys to the datastore.
+func (c *podController) processNextItem() bool {
 	// Wait until there is a new item in the work queue.
 	workqueue := c.resourceCache.GetQueue()
 	key, quit := workqueue.Get()
@@ -249,8 +250,11 @@ func (c *PodController) processNextItem() bool {
 	return true
 }
 
-// syncToCalico syncs the given update to the Calico datastore.
-func (c *PodController) syncToCalico(key string) error {
+// syncToDatastore syncs the given update to the Calico datastore. The provided key can be used to
+// find the corresponding resource within the resource cache. If the resource for the provided key
+// exists in the cache, then the value should be written to the datastore. If it does not exist
+// in the cache, then it should be deleted from the datastore.
+func (c *podController) syncToCalico(key string) error {
 	// Check if the wep data exists in our cache.  If it doesn't, then we don't need to do anything,
 	// since CNI handles deletion of workload endpoints.
 	if wepData, exists := c.resourceCache.Get(key); exists {
@@ -288,7 +292,7 @@ func (c *PodController) syncToCalico(key string) error {
 			// The relevant wep data has changed - update the wep and write it to the datastore.
 			log.Infof("Writing endpoint %s with updated data %#v to Calico datastore", key, new)
 			converter.MergeWorkloadEndpointData(&wep, new)
-			_, err := c.calicoClient.WorkloadEndpoints().Update(context.Background(), &wep, options.SetOptions{})
+			_, err := c.calicoClient.WorkloadEndpoints().Update(c.ctx, &wep, options.SetOptions{})
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); !ok {
 					// Not an update conflict - return the error right away.
@@ -298,7 +302,7 @@ func (c *PodController) syncToCalico(key string) error {
 
 				// We hit an update conflict, re-query the WorkloadEndpoint before we try again.
 				clog.Warn("Update conflict, re-querying workload endpoint")
-				qwep, gErr := c.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, wep.Name, options.GetOptions{})
+				qwep, gErr := c.calicoClient.WorkloadEndpoints().Get(c.ctx, wep.Namespace, wep.Name, options.GetOptions{})
 				if gErr != nil {
 					log.WithError(err).Errorf("failed to query workload endpoint %s", key)
 					return gErr
@@ -311,7 +315,7 @@ func (c *PodController) syncToCalico(key string) error {
 			}
 
 			// Update endpoint cache as well with the modified workload endpoint.
-			updatedWep, err := c.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, wep.Name, options.GetOptions{})
+			updatedWep, err := c.calicoClient.WorkloadEndpoints().Get(c.ctx, wep.Namespace, wep.Name, options.GetOptions{})
 			if err != nil {
 				log.WithError(err).Errorf("failed to query workload endpoint %s", key)
 				return err
@@ -325,10 +329,11 @@ func (c *PodController) syncToCalico(key string) error {
 	return nil
 }
 
-// populateWorkloadEndpointCache loads a map of workload endpoint objects from the Calico datastore.
-func (c *PodController) populateWorkloadEndpointCache() error {
+// populateWorkloadEndpointCache loads a map of workload endpoint objects from the Calico datastore into the
+// worker's workload endpoint cache.
+func (c *podController) populateWorkloadEndpointCache() error {
 	// List all workload endpoints for kubernetes orchestrator
-	workloadEndpointList, err := c.calicoClient.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
+	workloadEndpointList, err := c.calicoClient.WorkloadEndpoints().List(c.ctx, options.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -336,8 +341,8 @@ func (c *PodController) populateWorkloadEndpointCache() error {
 	c.workloadEndpointCache.Lock()
 	for _, wep := range workloadEndpointList.Items {
 		if wep.Spec.Orchestrator == "k8s" {
-			// CD4: TODO
-			k := fmt.Sprintf("%s/%s", wep.Namespace, wep.Name)
+			wd := converter.BuildWorkloadEndpointData(wep)
+			k := converter.NewPodConverter().GetKey(wd)
 			c.workloadEndpointCache.m[k] = wep
 		}
 	}
@@ -345,8 +350,10 @@ func (c *PodController) populateWorkloadEndpointCache() error {
 	return nil
 }
 
-// handleErr checks if an error happened and makes sure we will retry later.
-func (c *PodController) handleErr(err error, key string) {
+// handleErr handles errors which occur while processing a key received from the resource cache.
+// For a given error, we will re-queue the key in order to retry the datastore sync up to 5 times,
+// at which point the update is dropped.
+func (c *podController) handleErr(err error, key string) {
 	workqueue := c.resourceCache.GetQueue()
 	if err == nil {
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.

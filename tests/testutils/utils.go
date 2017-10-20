@@ -27,11 +27,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/libcalico-go/lib/apis/v2"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -70,15 +69,12 @@ func RunEtcd() *containers.Container {
 		"--listen-client-urls", "http://0.0.0.0:2379")
 }
 
-func GetCalicoClient(etcdIP string) *client.Client {
-	client, err := client.New(api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.EtcdV2,
-			EtcdConfig: api.EtcdConfig{
-				EtcdEndpoints: "http://" + etcdIP + ":2379",
-			},
-		},
-	})
+func GetCalicoClient(etcdIP string) client.Interface {
+	cfg := apiconfig.NewCalicoAPIConfig()
+	cfg.Spec.DatastoreType = apiconfig.EtcdV3
+	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
+	client, err := client.New(*cfg)
+
 	Expect(err).NotTo(HaveOccurred())
 	return client
 }

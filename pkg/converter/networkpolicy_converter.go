@@ -16,6 +16,7 @@ package converter
 
 import (
 	"fmt"
+	"strings"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
@@ -32,6 +33,7 @@ func NewPolicyConverter() Converter {
 	return &policyConverter{}
 }
 
+// Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	np, ok := k8sObj.(*v1beta1.NetworkPolicy)
 
@@ -47,28 +49,21 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	}
 
 	var c conversion.Converter
-	kvp, err := c.NetworkPolicyToPolicy(np)
+	kvp, err := c.K8sNetworkPolicyToCalico(np)
 	if err != nil {
 		return nil, err
 	}
-	calicoPolicy := kvp.Value.(*api.NetworkPolicy)
-
-	// To ease upgrade path, create an allow-all Egress rule, but with Types: Ingress
-	// In the case where there's an older Felix interoperating with a new kube-controllers
-	// controller, Felix will respect the egress rule and ignore the types field.
-	// When Felix is upgraded, it will ignore the Egress allow-all rule due to
-	// Types: Ingress.
-	if len(calicoPolicy.Spec.Types) == 1 && calicoPolicy.Spec.Types[0] == api.PolicyTypeIngress {
-		calicoPolicy.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-	}
-	return *calicoPolicy, err
+	cnp := kvp.Value.(*api.NetworkPolicy)
+	return *cnp, err
 }
 
-// GetKey returns name of Policy as its key.  For Policies created by this controller
-// and backed by NetworkPolicy objects, the name is of the format
-// `knp.default.namespace.name`.
+// GetKey returns the 'namespace/name' for the given Calico NetworkPolicy as its key.
 func (p *policyConverter) GetKey(obj interface{}) string {
 	policy := obj.(api.NetworkPolicy)
-	k, _ := cache.MetaNamespaceKeyFunc(policy)
-	return k
+	return fmt.Sprintf("%s/%s", policy.Namespace, policy.Name)
+}
+
+func (p *policyConverter) DeleteArgsFromKey(key string) (string, string) {
+	splits := strings.SplitN(key, "/", 2)
+	return splits[0], splits[1]
 }

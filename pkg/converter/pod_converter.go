@@ -16,6 +16,8 @@ package converter
 
 import (
 	"fmt"
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
@@ -84,9 +86,14 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	return BuildWorkloadEndpointData(*wep), nil
 }
 
-// GetKey returns workloadID of the object as the key.
-// For pods, the workloadID is of the form `namespace.name`.
+// GetKey takes a WorkloadEndpointData and returns the key which
+// identifies it - namespace/name
 func (p *podConverter) GetKey(obj interface{}) string {
 	e := obj.(WorkloadEndpointData)
 	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
+}
+
+func (p *podConverter) DeleteArgsFromKey(key string) (string, string) {
+	splits := strings.SplitN(key, "/", 2)
+	return splits[0], splits[1]
 }

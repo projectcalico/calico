@@ -26,9 +26,6 @@ import (
 // ProfileNameFormat Format used by policy controller to name Calico profiles
 const ProfileNameFormat = "k8s_ns."
 
-// profileLabelFormat Format used by policy controller to label Calico profiles
-const profileLabelFormat = "pcns."
-
 type namespaceConverter struct {
 }
 
@@ -64,4 +61,9 @@ func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 func (nc *namespaceConverter) GetKey(obj interface{}) string {
 	profile := obj.(api.Profile)
 	return profile.Name
+}
+
+func (p *namespaceConverter) DeleteArgsFromKey(key string) (string, string) {
+	// Not namespaced, so just return the key, which is the profile name.
+	return "", key
 }
