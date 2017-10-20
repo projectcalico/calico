@@ -45,7 +45,7 @@ type ipPools struct {
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
 	// Validate the IPPool before creating the resource.
-	if err := r.ValidateIPPool(res); err != nil {
+	if err := r.validateAndSetDefaults(res); err != nil {
 		return nil, err
 	}
 
@@ -60,7 +60,7 @@ func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.Set
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Update(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
 	// Validate the IPPool updating the resource.
-	if err := r.ValidateIPPool(res); err != nil {
+	if err := r.validateAndSetDefaults(res); err != nil {
 		return nil, err
 	}
 
@@ -105,8 +105,8 @@ func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Int
 	return r.client.resources.Watch(ctx, opts, apiv2.KindIPPool)
 }
 
-// ValidateIPPool validates IPPool fields.
-func (_ ipPools) ValidateIPPool(pool *apiv2.IPPool) error {
+// validateAndSetDefaults validates IPPool fields.
+func (_ ipPools) validateAndSetDefaults(pool *apiv2.IPPool) error {
 	errFields := []cerrors.ErroredField{}
 
 	// Spec.CIDR field must not be empty.
@@ -130,8 +130,13 @@ func (_ ipPools) ValidateIPPool(pool *apiv2.IPPool) error {
 		}
 	}
 
+	// Make sure IPIPMode is defaulted to "Never".
+	if len(pool.Spec.IPIPMode) == 0 {
+		pool.Spec.IPIPMode = apiv2.IPIPModeNever
+	}
+
 	// IPIP cannot be enabled for IPv6.
-	if cidr.Version() == 6 && pool.Spec.IPIP != nil && pool.Spec.IPIP.Mode != apiv2.IPIPModeNever {
+	if cidr.Version() == 6 && pool.Spec.IPIPMode != apiv2.IPIPModeNever {
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.IPIP.Mode",
 			Reason: "IPIP is not supported on an IPv6 IP pool",

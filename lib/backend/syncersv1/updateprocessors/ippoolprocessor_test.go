@@ -75,9 +75,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 		res = apiv2.NewIPPool()
 		res.Name = v2PoolKey2.Name
 		res.Spec.CIDR = cidr1str
-		res.Spec.IPIP = &apiv2.IPIPConfiguration{
-			Mode: apiv2.IPIPModeNever,
-		}
+		res.Spec.IPIPMode = apiv2.IPIPModeNever
 		res.Spec.NATOutgoing = true
 		res.Spec.Disabled = true
 		kvps, err = up.Process(&model.KVPair{
