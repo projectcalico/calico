@@ -15,6 +15,9 @@
 package names
 
 import (
+	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -188,14 +191,7 @@ func escapeDashes(seg segment) (string, *cerrors.ErroredField) {
 	return strings.Replace(seg.value, "-", "--", -1), nil
 }
 
-// Extract the dash separated parms from the name.  Each parm will have had their dashes escaped,
-// this also removes that escaping.  Returns nil if the parameters could not be extracted.
-func ExtractDashSeparatedParms(name string, numParms int) []string {
-	// The name must be at least as long as the number of parameters plus the separators.
-	if len(name) < (2*numParms - 1) {
-		return nil
-	}
-
+func extractParts(name string) []string {
 	parts := []string{}
 	lastDash := -1
 	for i := 1; i < len(name); i++ {
@@ -215,10 +211,67 @@ func ExtractDashSeparatedParms(name string, numParms int) []string {
 	// Add the last segment.
 	parts = append(parts, strings.Replace(name[lastDash+1:], "--", "-", -1))
 
+	return parts
+}
+
+// Extract the dash separated parms from the name.  Each parm will have had their dashes escaped,
+// this also removes that escaping.  Returns nil if the parameters could not be extracted.
+func ExtractDashSeparatedParms(name string, numParms int) []string {
+	// The name must be at least as long as the number of parameters plus the separators.
+	if len(name) < (2*numParms - 1) {
+		return nil
+	}
+
+	parts := extractParts(name)
+
 	// We should have extracted the correct number of name segments.
 	if len(parts) != numParms {
 		return nil
 	}
 
 	return parts
+}
+
+var (
+	k8sFields        = []string{"Pod", "Endpoint"}
+	cniFields        = []string{"ContainerID", "Endpoint"}
+	libnetworkFields = []string{"Orchestrator", "Endpoint"}
+	otherFields      = []string{"Workload", "Endpoint"}
+)
+
+// ParseWorkloadEndpointName parses a given name and returns a WorkloadEndpointIdentifiers
+// instance with fields populated according to the WorkloadEndpoint name format.
+func ParseWorkloadEndpointName(wepName string) (WorkloadEndpointIdentifiers, error) {
+	if len(wepName) == 0 {
+		return WorkloadEndpointIdentifiers{}, errors.New("Cannot parse emty string")
+	}
+	parts := extractParts(wepName)
+	if parts == nil || len(parts) == 0 {
+		return WorkloadEndpointIdentifiers{}, fmt.Errorf("Cannot parse %s", wepName)
+	}
+	pl := len(parts)
+	weid := WorkloadEndpointIdentifiers{Node: parts[0]}
+	if pl > 1 {
+		weid.Orchestrator = parts[1]
+		var orchFlds []string
+		switch parts[1] {
+		case "k8s":
+			orchFlds = k8sFields
+		case "cni":
+			orchFlds = cniFields
+		case "libnetwork":
+			orchFlds = libnetworkFields
+		default:
+			orchFlds = otherFields
+		}
+		if pl > 2 {
+			weidR := reflect.ValueOf(&weid)
+			weidStruct := weidR.Elem()
+			for i, part := range parts[2:] {
+				fld := weidStruct.FieldByName(orchFlds[i])
+				fld.SetString(part)
+			}
+		}
+	}
+	return weid, nil
 }

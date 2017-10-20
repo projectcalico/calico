@@ -16,10 +16,15 @@ package resources
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
+	kapiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -47,11 +52,36 @@ func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) 
 }
 
 func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Update is not supported on WorkloadEndpoint type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
-		Operation:  "Create",
+	log.Debug("Received Update request on WorkloadEndpoint type")
+
+	// We only patch the existing Pod to include an IP address, if one has been
+	// set on the workload endpoint.
+	// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
+	// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
+	ips := kvp.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks
+	if len(ips) > 0 {
+		log.Debugf("Applying workload with IPs: %+v", ips)
+		wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
+		if err != nil {
+			return nil, err
+		}
+		if wepID.Pod == "" {
+			return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
+		}
+		ns := kvp.Key.(model.ResourceKey).Namespace
+		pod, err := c.clientSet.CoreV1().Pods(ns).Get(wepID.Pod, metav1.GetOptions{})
+		if err != nil {
+			return nil, K8sErrorToCalico(err, kvp.Key)
+		}
+		pod.Status.PodIP = ips[0]
+		pod, err = c.clientSet.CoreV1().Pods(ns).UpdateStatus(pod)
+		if err != nil {
+			return nil, K8sErrorToCalico(err, kvp.Key)
+		}
+		log.Debugf("Successfully applied pod: %+v", pod)
+		return c.converter.PodToWorkloadEndpoint(pod)
 	}
+	return kvp, nil
 }
 
 func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
@@ -63,65 +93,35 @@ func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revi
 }
 
 func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	log.Warn("Operation Get is not supported on WorkloadEndpoint type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: key,
-		Operation:  "Get",
+	log.Debug("Received Get request on WorkloadEndpoint type")
+	k := key.(model.ResourceKey)
+
+	// Parse resource name so we can get get the podName
+	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
+	if err != nil {
+		return nil, err
 	}
+
+	pod, err := c.clientSet.CoreV1().Pods(k.Namespace).Get(wepID.Pod, metav1.GetOptions{})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, k)
+	}
+
+	// Decide if this pod should be displayed.
+	if !c.converter.IsReadyCalicoPod(pod) {
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+	}
+	return c.converter.PodToWorkloadEndpoint(pod)
 }
 
 func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Warn("Operation List is not supported on WorkloadEndpoint type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "List",
-	}
-}
+	log.Debug("Received List request on WorkloadEndpoint type")
+	l := list.(model.ResourceListOptions)
 
-func (c *WorkloadEndpointClient) EnsureInitialized() error {
-	return nil
-}
-
-func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	log.Warn("Operation Watch is not supported on WorkloadEndpoint type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "Watch",
-	}
-}
-
-/*
-
-// applyWorkloadEndpoint patches the existing Pod to include an IP address, if
-// one has been set on the workload endpoint.
-// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
-// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
-func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, error) {
-	ips := k.Value.(*model.WorkloadEndpoint).IPv4Nets
-	if len(ips) > 0 {
-		log.Debugf("Applying workload with IPs: %+v", ips)
-		ns, name := c.converter.ParseWorkloadID(k.Key.(model.WorkloadEndpointKey).WorkloadID)
-		pod, err := c.clientSet.Pods(ns).Get(name, metav1.GetOptions{})
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k.Key)
-		}
-		pod.Status.PodIP = ips[0].IP.String()
-		pod, err = c.clientSet.Pods(ns).UpdateStatus(pod)
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k.Key)
-		}
-		log.Debugf("Successfully applied pod: %+v", pod)
-		return c.converter.PodToWorkloadEndpoint(pod)
-	}
-	return k, nil
-}
-
-// listWorkloadEndpoints lists WorkloadEndpoints from the k8s API based on existing Pods.
-func (c *KubeClient) listWorkloadEndpoints(ctx context.Context, l model.ResourceListOptions, revision string) (*model.KVPairList, error) {
 	// If a workload is provided, we can do an exact lookup of this
 	// workload endpoint.
 	if l.Name != "" {
-		kvp, err := c.getWorkloadEndpoint(ctx, model.ResourceKey{
+		kvp, err := c.Get(ctx, model.ResourceKey{
 			Name: l.Name,
 			Kind: l.Kind,
 		}, revision)
@@ -144,11 +144,10 @@ func (c *KubeClient) listWorkloadEndpoints(ctx context.Context, l model.Resource
 		}, nil
 	}
 
-	// Otherwise, enumerate all pods in all namespaces.
-	// We don't yet support hostname, orchestratorID, for the k8s backend.
-	pods, err := c.clientSet.Pods("").List(metav1.ListOptions{})
+	// Otherwise, enumerate all pods in a namespace.
+	pods, err := c.clientSet.CoreV1().Pods(l.Namespace).List(metav1.ListOptions{})
 	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, l)
+		return nil, K8sErrorToCalico(err, l)
 	}
 
 	// For each Pod, return a workload endpoint.
@@ -171,22 +170,26 @@ func (c *KubeClient) listWorkloadEndpoints(ctx context.Context, l model.Resource
 	}, nil
 }
 
-// getWorkloadEndpoint gets the WorkloadEndpoint from the k8s API based on existing Pods.
-func (c *KubeClient) getWorkloadEndpoint(ctx context.Context, k model.ResourceKey, revision string) (*model.KVPair, error) {
-	// The workloadID is of the form namespace.podname.  Parse it so we
-	// can find the correct namespace to get the pod.
-	namespace, podName := c.converter.ParseWorkloadID(k.Name)
-
-	pod, err := c.clientSet.Pods(namespace).Get(podName, metav1.GetOptions{})
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, k)
-	}
-
-	// Decide if this pod should be displayed.
-	if !c.converter.IsReadyCalicoPod(pod) {
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
-	}
-	return c.converter.PodToWorkloadEndpoint(pod)
+func (c *WorkloadEndpointClient) EnsureInitialized() error {
+	return nil
 }
 
-*/
+func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+	if len(list.(model.ResourceListOptions).Name) != 0 {
+		return nil, fmt.Errorf("cannot watch specific resource instance: %s", list.(model.ResourceListOptions).Name)
+	}
+
+	ns := list.(model.ResourceListOptions).Namespace
+	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(metav1.ListOptions{ResourceVersion: revision})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, list)
+	}
+	converter := func(r Resource) (*model.KVPair, error) {
+		k8sPod, ok := r.(*kapiv1.Pod)
+		if !ok {
+			return nil, errors.New("Pod conversion with incorrect k8s resource type")
+		}
+		return c.converter.PodToWorkloadEndpoint(k8sPod)
+	}
+	return newK8sWatcherConverter(ctx, converter, k8sWatch), nil
+}

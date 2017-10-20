@@ -27,6 +27,7 @@ import (
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	extensions "k8s.io/api/extensions/v1beta1"
@@ -51,10 +52,11 @@ func VethNameForWorkload(workload string) string {
 	return fmt.Sprintf("cali%s", hex.EncodeToString(h.Sum(nil))[:11])
 }
 
-// ParseWorkloadID extracts the Namespace and Pod name from the given workload ID.
-func (c Converter) ParseWorkloadID(workloadID string) (string, string) {
-	splits := strings.SplitN(workloadID, ".", 2)
-	return splits[0], splits[1]
+// ParseWorkloadName extracts the Node name, Orchestrator, Pod name and endpoint from the
+// given WorkloadEndpoint name.
+// The expected format for k8s is <node>-k8s-<pod>-<endpoint>
+func (c Converter) ParseWorkloadEndpointName(workloadName string) (names.WorkloadEndpointIdentifiers, error) {
+	return names.ParseWorkloadEndpointName(workloadName)
 }
 
 // ParsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
@@ -136,10 +138,21 @@ func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
 
 // PodToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
 // has verified that the provided Pod is valid to convert to a WorkloadEndpoint.
+// PodToWorkloadEndpoint requires a Pods Name and Node Name to be populated. It will
+// fail to convert from a Pod to WorkloadEndpoint otherwise.
 func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
 	// Pull out the profile and workload ID based on pod name and Namespace.
 	profile := fmt.Sprintf("k8s_ns.%s", pod.ObjectMeta.Namespace)
-	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
+	wepids := names.WorkloadEndpointIdentifiers{
+		Node:         pod.Spec.NodeName,
+		Orchestrator: "k8s",
+		Endpoint:     "eth0",
+		Pod:          pod.ObjectMeta.Name,
+	}
+	wepName, err := wepids.CalculateWorkloadEndpointName(false)
+	if err != nil {
+		return nil, err
+	}
 
 	// We do, in some circumstances, want to parse Pods without an IP address.  For example,
 	// a DELETE update will not include an IP.
@@ -153,9 +166,9 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		ipNets = append(ipNets, ipNet.String())
 	}
 
-	// Generate the interface name and MAC based on workload.  This must match
+	// Generate the interface name based on workload.  This must match
 	// the host-side veth configured by the CNI plugin.
-	interfaceName := VethNameForWorkload(workload)
+	interfaceName := VethNameForWorkload(wepName)
 
 	// Build the labels map.
 	labels := map[string]string{}
@@ -196,19 +209,20 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	// Create the key / value pair to return.
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
-			Name: pod.ObjectMeta.Name,
-			Kind: apiv2.KindWorkloadEndpoint,
+			Name:      wepName,
+			Namespace: pod.ObjectMeta.Namespace,
+			Kind:      apiv2.KindWorkloadEndpoint,
 		},
 		Value: &apiv2.WorkloadEndpoint{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      pod.ObjectMeta.Name,
+				Name:      wepName,
 				Namespace: pod.ObjectMeta.Namespace,
 				Labels:    labels,
 			},
 			Spec: apiv2.WorkloadEndpointSpec{
 				Orchestrator:  "k8s",
 				Node:          pod.Spec.NodeName,
-				Workload:      workload,
+				Pod:           pod.Name,
 				Endpoint:      "eth0",
 				InterfaceName: interfaceName,
 				Profiles:      []string{profile},

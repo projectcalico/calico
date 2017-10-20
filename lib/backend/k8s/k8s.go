@@ -128,12 +128,12 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 	}
 
 	kubeClient := &KubeClient{
-		clientSet:               cs,
-		crdClientV1:             crdClientV1,
-		disableNodePoll:         kc.K8sDisableNodePoll,
+		clientSet:             cs,
+		crdClientV1:           crdClientV1,
+		disableNodePoll:       kc.K8sDisableNodePoll,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
-		clientsByKeyType: make(map[reflect.Type]resources.K8sResourceClient),
-		clientsByListType: make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
 	}
 
 	// Create the Calico sub-clients and register them.
@@ -184,6 +184,12 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv2.KindProfile,
 		resources.NewProfileClient(cs),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv2.KindWorkloadEndpoint,
+		resources.NewWorkloadEndpointClient(cs),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.BlockAffinityKey{}),

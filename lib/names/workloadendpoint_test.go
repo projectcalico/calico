@@ -196,3 +196,47 @@ var _ = DescribeTable("WorkloadEndpoint name matching",
 		Endpoint:     "eth0",
 	}, "node--1-k8s-pod-eth0-extra", false, ""),
 )
+
+var _ = DescribeTable("WorkloadEndpoint name parsing",
+	func(name string, expectError bool, expectedWeid names.WorkloadEndpointIdentifiers) {
+		weid, err := names.ParseWorkloadEndpointName(name)
+		if expectError {
+			Expect(err).To(HaveOccurred())
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+			Expect(weid).To(Equal(expectedWeid))
+		}
+	},
+	Entry("Empty string", "", true, names.WorkloadEndpointIdentifiers{}),
+	Entry("Fully populated k8s wep name", "node-k8s-pod-eth0", false, names.WorkloadEndpointIdentifiers{
+		Node:         "node",
+		Orchestrator: "k8s",
+		Pod:          "pod",
+		Endpoint:     "eth0",
+	}),
+	Entry("K8s prefix match with only node", "node-", false, names.WorkloadEndpointIdentifiers{
+		Node: "node",
+	}),
+	Entry("K8s prefix match with node and pod", "node-k8s-pod--name-", false, names.WorkloadEndpointIdentifiers{
+		Node:         "node",
+		Orchestrator: "k8s",
+		Pod:          "pod-name",
+	}),
+	Entry("Fully populated cni", "node-cni-xyz-eth0", false, names.WorkloadEndpointIdentifiers{
+		Node:         "node",
+		Orchestrator: "cni",
+		ContainerID:  "xyz",
+		Endpoint:     "eth0",
+	}),
+	Entry("Fully populated libnetwork", "node-libnetwork-libnetwork-eth0", false, names.WorkloadEndpointIdentifiers{
+		Node:         "node",
+		Orchestrator: "libnetwork",
+		Endpoint:     "eth0",
+	}),
+	Entry("Fully populated other orchestrators", "node-foo--orch-workload-eth0", false, names.WorkloadEndpointIdentifiers{
+		Node:         "node",
+		Orchestrator: "foo-orch",
+		Workload:     "workload",
+		Endpoint:     "eth0",
+	}),
+)
