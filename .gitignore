@@ -12,3 +12,4 @@ delstats
 tmp-cni
 k8s-install/scripts/tmp/
 install_cni.test
+*.swp

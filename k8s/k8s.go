@@ -11,61 +11,52 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package k8s
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
-	"strings"
-
 	"os"
+	"strings"
 
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	backendconverter "github.com/projectcalico/libcalico-go/lib/converter"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv2"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-
-	"encoding/json"
-
+	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-
-	calicoclient "github.com/projectcalico/libcalico-go/lib/client"
-	log "github.com/sirupsen/logrus"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
 // more special casing than the mainline code.
-func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoClient *calicoclient.Client, endpoint *api.WorkloadEndpoint) (*current.Result, error) {
+func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient calicoclient.Interface, endpoint *api.WorkloadEndpoint) (*current.Result, error) {
 	var err error
 	var result *current.Result
 
-	k8sArgs := utils.K8sArgs{}
-	err = types.LoadArgs(args.Args, &k8sArgs)
-	if err != nil {
-		return nil, err
-	}
-
 	utils.ConfigureLogging(conf.LogLevel)
 
-	workload, orchestrator, err := utils.GetIdentifiers(args)
-	if err != nil {
-		return nil, err
-	}
-	logger := utils.CreateContextLogger(workload)
-	logger.WithFields(log.Fields{
-		"Orchestrator": orchestrator,
-		"Node":         nodename,
-	}).Info("Extracted identifiers for CmdAddK8s")
+	logger := logrus.WithFields(logrus.Fields{
+		"WorkloadEndpoint": epIDs.WEPName,
+		"ContainerID":      epIDs.ContainerID,
+		"Pod":              epIDs.Pod,
+		"Namespace":        epIDs.Namespace,
+	})
+
+	logger.Info("Extracted identifiers for CmdAddK8s")
 
 	if endpoint != nil {
 		// This happens when Docker or the node restarts. K8s calls CNI with the same parameters as before.
@@ -89,13 +80,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
 			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
 			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
-			fmt.Fprintf(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
+			fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
 			var stdinData map[string]interface{}
 			if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 				return nil, err
 			}
-			podCidr, err := getPodCidr(client, conf, nodename)
+			podCidr, err := getPodCidr(client, conf, epIDs.Node)
 			if err != nil {
+				logger.Info("Failed to getPodCidr")
 				return nil, err
 			}
 			logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
@@ -119,7 +111,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		if conf.Policy.PolicyType == "k8s" {
 			var err error
 
-			labels, annot, ports, err = getK8sPodInfo(client, k8sArgs)
+			labels, annot, ports, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
 			if err != nil {
 				return nil, err
 			}
@@ -209,7 +201,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 
 		case ipAddrs != "" && ipAddrsNoIpam != "":
 			// Can't have both ipAddrs and ipAddrsNoIpam annotations at the same time.
-			e := fmt.Errorf("Can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
+			e := fmt.Errorf("can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
 			logger.Error(e)
 			return nil, e
 		case ipAddrsNoIpam != "":
@@ -228,7 +220,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 			}
 
 			if len(result.IPs) == 0 {
-				return nil, errors.New("Failed to build result")
+				return nil, errors.New("failed to build result")
 			}
 
 		case ipAddrs != "":
@@ -243,18 +235,19 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 
 		// Create the endpoint object and configure it.
 		endpoint = api.NewWorkloadEndpoint()
-		endpoint.Metadata.Name = args.IfName
-		endpoint.Metadata.Node = nodename
-		endpoint.Metadata.Orchestrator = orchestrator
-		endpoint.Metadata.Workload = workload
-		endpoint.Metadata.Labels = labels
-		endpoint.Spec.Ports = ports
+		endpoint.Name = epIDs.WEPName
+		endpoint.Namespace = epIDs.Namespace
+		endpoint.Labels = labels
+		endpoint.Spec.Endpoint = epIDs.Endpoint
+		endpoint.Spec.Node = epIDs.Node
+		endpoint.Spec.Orchestrator = epIDs.Orchestrator
+		endpoint.Spec.Pod = epIDs.Pod
 
 		// Set the profileID according to whether Kubernetes policy is required.
 		// If it's not, then just use the network name (which is the normal behavior)
 		// otherwise use one based on the Kubernetes pod's Namespace.
 		if conf.Policy.PolicyType == "k8s" {
-			endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)}
+			endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", epIDs.Namespace)}
 		} else {
 			endpoint.Spec.Profiles = []string{conf.Name}
 		}
@@ -270,7 +263,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
-	hostVethName := k8sbackend.VethNameForWorkload(workload)
+	hostVethName := k8sconversion.VethNameForWorkload(epIDs.WEPName)
 	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
@@ -286,13 +279,13 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
-	endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
+	endpoint.Spec.MAC = mac.String()
 	endpoint.Spec.InterfaceName = hostVethName
-	endpoint.Metadata.ActiveInstanceID = args.ContainerID
+	endpoint.Spec.ContainerID = epIDs.ContainerID
 	logger.WithField("endpoint", endpoint).Info("Added Mac, interface name, and active container ID to endpoint")
 
 	// Write the endpoint object (either the newly created one, or the updated one)
-	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
+	if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
 		// Cleanup IP allocation and return the error.
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
@@ -308,13 +301,13 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 // We store CNI_CONTAINERID as ActiveInstanceID in WEP Metadata for k8s,
 // so in this function we need to get the WEP and make sure we check if ContainerID and ActiveInstanceID
 // are the same before deleting the pod being deleted.
-func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *skel.CmdArgs, conf utils.NetConf, logger *log.Entry) error {
-	wep, err := c.WorkloadEndpoints().Get(ep)
+func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIdentifiers, args *skel.CmdArgs, conf types.NetConf, logger *logrus.Entry) error {
+	wep, err := c.WorkloadEndpoints().Get(ctx, epIDs.Namespace, epIDs.WEPName, options.GetOptions{})
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// We can talk to the datastore but WEP doesn't exist in there,
 			// but we still want to go ahead with the clean up. So, log a warning and continue with the clean up.
-			logger.WithField("WorkloadEndpoint", ep).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
+			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
 		} else {
 			// Could not connect to datastore (connection refused, unauthorized, etc.)
 			// so we have no way of knowing/checking ActiveInstanceID. To protect the endpoint
@@ -325,15 +318,15 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 		// Check if ActiveInstanceID is populated (it will be an empty string "" if it was populated
 		// before this field was added to the API), and if it is there then compare it with ContainerID
 		// passed by the orchestrator to make sure they are the same, return without deleting if they aren't.
-	} else if wep.Metadata.ActiveInstanceID != "" && args.ContainerID != wep.Metadata.ActiveInstanceID {
-		logger.WithField("WorkloadEndpoint", wep).Warning("CNI_ContainerID does not match WorkloadEndpoint ActiveInstanceID so ignoring the DELETE cmd.")
+	} else if wep.Spec.ContainerID != "" && args.ContainerID != wep.Spec.ContainerID {
+		logger.WithField("WorkloadEndpoint", wep).Warning("CNI_CONTAINERID does not match WorkloadEndpoint ActiveInstanceID so ignoring the DELETE cmd.")
 		return nil
 
 		// Delete the WorkloadEndpoint object from the datastore.
 		// In case of k8s, where we are deleting the WEP we got from the Datastore,
 		// this Delete is a Compare-and-Delete, so if *any* field in the WEP changed from
 		// the time we get WEP until here then the Delete operation will fail.
-	} else if err = c.WorkloadEndpoints().Delete(wep.Metadata); err != nil {
+	} else if _, err = c.WorkloadEndpoints().Delete(ctx, wep.Namespace, wep.Name, options.DeleteOptions{}); err != nil {
 		switch err := err.(type) {
 		case cerrors.ErrorResourceDoesNotExist:
 			// Log and proceed with the clean up if WEP doesn't exist.
@@ -343,7 +336,7 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 			// so it's not a safe Compare-and-Delete operation, so log and abort with the error.
 			// Returning an error here is with the assumption that k8s (kubelet) retries deleting again.
 			logger.WithField("endpoint", wep).Warning("Error deleting endpoint: endpoint was modified before it could be deleted.")
-			return fmt.Errorf("Error deleting endpoint: endpoint was modified before it could be deleted: %v", err)
+			return fmt.Errorf("error deleting endpoint: endpoint was modified before it could be deleted: %v", err)
 		case cerrors.ErrorOperationNotSupported:
 			// KDD does not support WorkloadEndpoint deletion, the WEP is backed by the Pod and the
 			// deletion will be handled by Kubernetes. This error can be ignored.
@@ -376,7 +369,7 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
 // each IP passed to it by setting the IP field in CNI_ARGS, and returns the result of calling the IPAM plugin.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func ipAddrsResult(ipAddrs string, conf utils.NetConf, args *skel.CmdArgs, logger *log.Entry) (*current.Result, error) {
+func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*current.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -395,7 +388,7 @@ func ipAddrsResult(ipAddrs string, conf utils.NetConf, args *skel.CmdArgs, logge
 		// Call callIPAMWithIP with the ip address.
 		r, err := callIPAMWithIP(ip, conf, args, logger)
 		if err != nil {
-			return nil, fmt.Errorf("Error getting IP from IPAM: %s", err)
+			return nil, fmt.Errorf("error getting IP from IPAM: %s", err)
 		}
 
 		result.IPs = append(result.IPs, r.IPs[0])
@@ -408,18 +401,18 @@ func ipAddrsResult(ipAddrs string, conf utils.NetConf, args *skel.CmdArgs, logge
 // callIPAMWithIP sets CNI_ARGS with the IP and calls the IPAM plugin with it
 // to get current.Result and then it unsets the IP field from CNI_ARGS ENV var,
 // so it doesn't pollute the subsequent requests.
-func callIPAMWithIP(ip net.IP, conf utils.NetConf, args *skel.CmdArgs, logger *log.Entry) (*current.Result, error) {
+func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*current.Result, error) {
 
 	// Save the original value of the CNI_ARGS ENV var for backup.
 	originalArgs := os.Getenv("CNI_ARGS")
 	logger.Debugf("Original CNI_ARGS=%s", originalArgs)
 
 	ipamArgs := struct {
-		types.CommonArgs
+		cnitypes.CommonArgs
 		IP net.IP `json:"ip,omitempty"`
 	}{}
 
-	if err := types.LoadArgs(args.Args, &ipamArgs); err != nil {
+	if err := cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
 		return nil, err
 	}
 
@@ -435,7 +428,7 @@ func callIPAMWithIP(ip net.IP, conf utils.NetConf, args *skel.CmdArgs, logger *l
 	// Set CNI_ARGS to the new value.
 	err := os.Setenv("CNI_ARGS", newArgs)
 	if err != nil {
-		return nil, fmt.Errorf("Error setting CNI_ARGS environment variable: %v", err)
+		return nil, fmt.Errorf("error setting CNI_ARGS environment variable: %v", err)
 	}
 
 	// Run the IPAM plugin.
@@ -479,7 +472,7 @@ func callIPAMWithIP(ip net.IP, conf utils.NetConf, args *skel.CmdArgs, logger *l
 // overrideIPAMResult generates current.Result like the one produced by IPAM plugin,
 // but sets IP field manually since IPAM is bypassed with this annotation.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*current.Result, error) {
+func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*current.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrsNoIpam\":%s", ipAddrsNoIpam)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -522,16 +515,16 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*current.Resul
 
 // validateAndExtractIPs is a utility function that validates the passed IP list to make sure
 // there is one IPv4 and/or one IPv6 and then returns the slice of IPs.
-func validateAndExtractIPs(ipAddrs string, annotation string, logger *log.Entry) ([]net.IP, error) {
+func validateAndExtractIPs(ipAddrs string, annotation string, logger *logrus.Entry) ([]net.IP, error) {
 	// Parse IPs from JSON.
 	ips, err := parseIPAddrs(ipAddrs, logger)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse IPs %s for annotation \"%s\": %s", ipAddrs, annotation, err)
+		return nil, fmt.Errorf("failed to parse IPs %s for annotation \"%s\": %s", ipAddrs, annotation, err)
 	}
 
 	// annotation value can't be empty.
 	if len(ips) == 0 {
-		return nil, fmt.Errorf("Annotation \"%s\" specified but empty", annotation)
+		return nil, fmt.Errorf("annotation \"%s\" specified but empty", annotation)
 	}
 
 	var hasIPv4, hasIPv6 bool
@@ -543,7 +536,7 @@ func validateAndExtractIPs(ipAddrs string, annotation string, logger *log.Entry)
 		ipAddr := net.ParseIP(ip)
 		if ipAddr == nil {
 			logger.WithField("IP", ip).Error("Invalid IP format")
-			return nil, fmt.Errorf("Invalid IP format: %s", ip)
+			return nil, fmt.Errorf("invalid IP format: %s", ip)
 		}
 
 		if ipAddr.To4() != nil {
@@ -570,12 +563,12 @@ func validateAndExtractIPs(ipAddrs string, annotation string, logger *log.Entry)
 // parseIPAddrs is a utility function that parses string of IPs in json format that are
 // passed in as a string and returns a slice of string with IPs.
 // It also makes sure the slice isn't empty.
-func parseIPAddrs(ipAddrsStr string, logger *log.Entry) ([]string, error) {
+func parseIPAddrs(ipAddrsStr string, logger *logrus.Entry) ([]string, error) {
 	var ips []string
 
 	err := json.Unmarshal([]byte(ipAddrsStr), &ips)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse '%s' as JSON: %s", ipAddrsStr, err)
+		return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", ipAddrsStr, err)
 	}
 
 	logger.Debugf("IPs parsed: %v", ips)
@@ -583,7 +576,7 @@ func parseIPAddrs(ipAddrsStr string, logger *log.Entry) ([]string, error) {
 	return ips, nil
 }
 
-func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset, error) {
+func newK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
 	// Some config can be passed in a kubeconfig file
 	kubeconfig := conf.Kubernetes.Kubeconfig
 
@@ -632,8 +625,9 @@ func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset,
 	return kubernetes.NewForConfig(config)
 }
 
-func getK8sPodInfo(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, err error) {
-	pod, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME), metav1.GetOptions{})
+func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, err error) {
+	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(podName, metav1.GetOptions{})
+	logrus.Infof("pod info %+v", pod)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -643,39 +637,32 @@ func getK8sPodInfo(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (labels 
 		labels = make(map[string]string)
 	}
 
-	labels["calico/k8s_ns"] = fmt.Sprintf("%s", k8sargs.K8S_POD_NAMESPACE)
+	labels["calico/k8s_ns"] = podNamespace
 
-	var c k8sbackend.Converter
-	var bc backendconverter.WorkloadEndpointConverter
+	var c k8sconversion.Converter
 	kvp, err := c.PodToWorkloadEndpoint(pod)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	fwep, err := bc.ConvertKVPairToAPI(kvp)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	wep := fwep.(*api.WorkloadEndpoint)
+	ports = kvp.Value.(*api.WorkloadEndpoint).Spec.Ports
 
-	return labels, pod.Annotations, wep.Spec.Ports, nil
+	return labels, pod.Annotations, ports, nil
 }
 
-func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, nodename string) (string, error) {
+func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename string) (string, error) {
 	// Pull the node name out of the config if it's set. Defaults to nodename
 	if conf.Kubernetes.NodeName != "" {
 		nodename = conf.Kubernetes.NodeName
 	}
 
-	node, err := client.Nodes().Get(nodename, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(nodename, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 
 	if node.Spec.PodCIDR == "" {
-		err = fmt.Errorf("No podCidr for node %s", nodename)
-		return "", err
-	} else {
-		return node.Spec.PodCIDR, nil
+		return "", fmt.Errorf("no podCidr for node %s", nodename)
 	}
+	return node.Spec.PodCIDR, nil
 }

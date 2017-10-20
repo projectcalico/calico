@@ -1,7 +1,7 @@
 package: github.com/projectcalico/cni-plugin
 import:
 - package: github.com/sirupsen/logrus
-  version: ^0.10.0
+  version: ^1.0.3
 - package: github.com/containernetworking/cni
   version: v0.5.2
   subpackages:
@@ -12,30 +12,31 @@ import:
   - pkg/types
 - package: github.com/golang/glog
 - package: github.com/onsi/ginkgo
-  version: ^1.3.1
+  version: ^1.4.0
 - package: github.com/onsi/gomega
   version: ^1.1.0
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: 4db56aa2f763478265b424ef04988cc6ddd30537
+  version: master
   subpackages:
-  - lib/api
-  - lib/client
+  - lib/apiconfig
+  - lib/apis/v2
+  - lib/clientv2
   - lib/errors
   - lib/net
   - lib/logutils
 - package: github.com/vishvananda/netlink
 - package: k8s.io/client-go
-  # Pin to this commit to match libcalico-go, which includes
-  # this fix: https://github.com/kubernetes/kubernetes/pull/44221/files
   # Update this when libcalico-go updates its pin.
-  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
+  version: 82aa063804cf055e16e8911250f888bc216e8b61
   subpackages:
   - kubernetes
   - tools/clientcmd
 - package: github.com/mcuadros/go-version
 - package: github.com/projectcalico/felix
+  #  repo: https://github.com/neiljerram/felix.git
+  #version: v3-integration
   subpackages:
   - fv
   - fv.containers

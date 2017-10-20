@@ -5,19 +5,19 @@ import (
 	"io"
 	"net"
 	"os"
-
 	"reflect"
 
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types/current"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/cni-plugin/types"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
 // DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logger *log.Entry, desiredVethName string) (hostVethName, contVethMAC string, err error) {
+func DoNetworking(args *skel.CmdArgs, conf types.NetConf, result *current.Result, logger *logrus.Entry, desiredVethName string) (hostVethName, contVethMAC string, err error) {
 	// Select the first 11 characters of the containerID for the host veth.
 	hostVethName = "cali" + args.ContainerID[:Min(11, len(args.ContainerID))]
 	contVethName := args.IfName
@@ -28,12 +28,14 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 		hostVethName = desiredVethName
 	}
 
+	logger.Infof("Setting the host side veth name to %s", hostVethName)
+
 	// Clean up if hostVeth exists.
 	if oldHostVeth, err := netlink.LinkByName(hostVethName); err == nil {
 		if err = netlink.LinkDel(oldHostVeth); err != nil {
 			return "", "", fmt.Errorf("failed to delete old hostVeth %v: %v", hostVethName, err)
 		}
-		logger.Infof("cleaning old hostVeth: %v", hostVethName)
+		logger.Infof("Cleaning old hostVeth: %v", hostVethName)
 	}
 
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
@@ -232,7 +234,7 @@ func setupRoutes(hostVeth netlink.Link, result *current.Result) error {
 				for _, r := range routes {
 					if reflect.DeepEqual(r, route) {
 						// Route was already present on the host.
-						log.Infof("CNI skipping add route. Route already exists for %s\n", hostVeth.Attrs().Name)
+						logrus.Infof("CNI skipping add route. Route already exists for %s\n", hostVeth.Attrs().Name)
 						return nil
 					}
 				}
@@ -242,7 +244,7 @@ func setupRoutes(hostVeth netlink.Link, result *current.Result) error {
 			}
 		}
 
-		log.Debugf("CNI adding route for interface: %v, IP: %s", hostVeth, ipAddr.Address)
+		logrus.Debugf("CNI adding route for interface: %v, IP: %s", hostVeth, ipAddr.Address)
 	}
 	return nil
 }

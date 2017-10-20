@@ -14,26 +14,29 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"regexp"
-
-	log "github.com/sirupsen/logrus"
-
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/cni-plugin/types"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
 
@@ -44,8 +47,34 @@ func Min(a, b int) int {
 	return b
 }
 
+// DetermineNodename gets the node name, in order of priority:
+// 1. Hostname field in NetConf (DEPRECATED).
+// 2. Nodename field in NetConf.
+// 3. OS Hostname.
+func DetermineNodename(conf types.NetConf) string {
+	nodename, _ := os.Hostname()
+	if conf.Hostname != "" {
+		nodename = conf.Hostname
+		logrus.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
+	}
+	if conf.Nodename != "" {
+		nodename = conf.Nodename
+	}
+	return nodename
+}
+
+// CreateOrUpdate creates the WorkloadEndpoint if ResourceVersion is not specified,
+// or Update if it's specified.
+func CreateOrUpdate(ctx context.Context, client client.Interface, wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
+	if wep.ResourceVersion != "" {
+		return client.WorkloadEndpoints().Update(ctx, wep, options.SetOptions{})
+	}
+
+	return client.WorkloadEndpoints().Create(ctx, wep, options.SetOptions{})
+}
+
 // CleanUpNamespace deletes the devices in the network namespace.
-func CleanUpNamespace(args *skel.CmdArgs, logger *log.Entry) error {
+func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 	// Only try to delete the device if a namespace was passed in.
 	if args.Netns != "" {
 		logger.Debug("Checking namespace & device exist.")
@@ -74,9 +103,9 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *log.Entry) error {
 
 // CleanUpIPAM calls IPAM plugin to release the IP address.
 // It also contains IPAM plugin specific changes needed before calling the plugin.
-func CleanUpIPAM(conf NetConf, args *skel.CmdArgs, logger *log.Entry) error {
-	fmt.Fprintf(os.Stderr, "Calico CNI releasing IP address\n")
-	logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
+func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
+	fmt.Fprint(os.Stderr, "Calico CNI releasing IP address\n")
+	logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
 		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 
 	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
@@ -117,8 +146,8 @@ func ValidateNetworkName(name string) error {
 		return err
 	}
 	if !matched {
-		return errors.New("Invalid characters detected in the given network name. " +
-			"Only letters a-z, numbers 0-9, and symbols _.- are supported.")
+		return errors.New("invalid characters detected in the given network name. " +
+			"Only letters a-z, numbers 0-9, and symbols _.- are supported")
 	}
 	return nil
 }
@@ -133,15 +162,21 @@ func AddIgnoreUnknownArgs() error {
 	return os.Setenv("CNI_ARGS", cniArgs)
 }
 
-func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*current.Result, error) {
+// CreateResultFromEndpoint takes a WorkloadEndpoint, extracts IP information
+// and populates that into a CNI Result.
+func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*current.Result, error) {
 	result := &current.Result{}
-
-	for _, v := range ep.Spec.IPNetworks {
+	for _, v := range wep.Spec.IPNetworks {
 		parsedIPConfig := current.IPConfig{}
 
-		parsedIPConfig.Address = v.IPNet
+		ipAddr, ipNet, err := net.ParseCIDR(v)
+		if err != nil {
+			return nil, err
+		}
 
-		if v.IP.To4() != nil {
+		parsedIPConfig.Address = *ipNet
+
+		if ipAddr.To4() != nil {
 			parsedIPConfig.Version = "4"
 		} else {
 			parsedIPConfig.Version = "6"
@@ -153,42 +188,64 @@ func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*current.Result, error)
 	return result, nil
 }
 
-func GetIdentifiers(args *skel.CmdArgs) (workloadID string, orchestratorID string, err error) {
-	// Determine if running under k8s by checking the CNI args
-	k8sArgs := K8sArgs{}
-	if err = types.LoadArgs(args.Args, &k8sArgs); err != nil {
-		return workloadID, orchestratorID, err
-	}
-
-	if string(k8sArgs.K8S_POD_NAMESPACE) != "" && string(k8sArgs.K8S_POD_NAME) != "" {
-		workloadID = fmt.Sprintf("%s.%s", k8sArgs.K8S_POD_NAMESPACE, k8sArgs.K8S_POD_NAME)
-		orchestratorID = "k8s"
-	} else {
-		workloadID = args.ContainerID
-		orchestratorID = "cni"
-	}
-	return workloadID, orchestratorID, nil
-}
-
-func PopulateEndpointNets(endpoint *api.WorkloadEndpoint, result *current.Result) error {
+// PopulateEndpointNets takes a WorkloadEndpoint and a CNI Result, extracts IP address and mask
+// and populates that information into the WorkloadEndpoint.
+func PopulateEndpointNets(wep *api.WorkloadEndpoint, result *current.Result) error {
 	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin did not return any IP addresses")
 	}
 
-	for _, ip := range result.IPs {
-		if ip.Version == "4" {
-			ip.Address.Mask = net.CIDRMask(32, 32)
+	for _, ipNet := range result.IPs {
+		if ipNet.Version == "4" {
+			ipNet.Address.Mask = net.CIDRMask(32, 32)
 		} else {
-			ip.Address.Mask = net.CIDRMask(128, 128)
+			ipNet.Address.Mask = net.CIDRMask(128, 128)
 		}
 
-		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, cnet.IPNet{ip.Address})
+		wep.Spec.IPNetworks = append(wep.Spec.IPNetworks, ipNet.Address.String())
 	}
 
 	return nil
 }
 
-func CreateClient(conf NetConf) (*client.Client, error) {
+type WEPIdentifiers struct {
+	Namespace string
+	WEPName   string
+	names.WorkloadEndpointIdentifiers
+}
+
+// GetIdentifiers takes CNI command arguments, and extracts identifiers i.e. pod name, pod namespace,
+// container ID, endpoint(container interface name) and orchestratorID based on the orchestrator.
+func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error) {
+	// Determine if running under k8s by checking the CNI args
+	k8sArgs := types.K8sArgs{}
+	if err := cnitypes.LoadArgs(args.Args, &k8sArgs); err != nil {
+		return nil, err
+	}
+	logrus.Debugf("Getting WEP identifiers with arguments: %s, for node %s", args.Args, nodename)
+	logrus.Debugf("Loaded k8s arguments: %v", k8sArgs)
+
+	epIDs := WEPIdentifiers{}
+	epIDs.ContainerID = args.ContainerID
+	epIDs.Node = nodename
+	epIDs.Endpoint = args.IfName
+
+	// Check if the workload is running under Kubernetes.
+	if string(k8sArgs.K8S_POD_NAMESPACE) != "" && string(k8sArgs.K8S_POD_NAME) != "" {
+		epIDs.Orchestrator = "k8s"
+		epIDs.Pod = string(k8sArgs.K8S_POD_NAME)
+		epIDs.Namespace = string(k8sArgs.K8S_POD_NAMESPACE)
+	} else {
+		epIDs.Orchestrator = "cni"
+		epIDs.Pod = ""
+		// For any non-k8s orchestrator we set the namespace to default.
+		epIDs.Namespace = "default"
+	}
+
+	return &epIDs, nil
+}
+
+func CreateClient(conf types.NetConf) (client.Interface, error) {
 	if err := ValidateNetworkName(conf.Name); err != nil {
 		return nil, err
 	}
@@ -247,10 +304,10 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 			return nil, err
 		}
 	}
-	log.Infof("Configured environment: %+v", os.Environ())
+	logrus.Infof("Configured environment: %+v", os.Environ())
 
 	// Load the client config from the current environment.
-	clientConfig, err := client.LoadClientConfig("")
+	clientConfig, err := apiconfig.LoadClientConfig("")
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +322,7 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution.
-func ReleaseIPAllocation(logger *log.Entry, ipamType string, stdinData []byte) {
+func ReleaseIPAllocation(logger *logrus.Entry, ipamType string, stdinData []byte) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
@@ -281,26 +338,15 @@ func ReleaseIPAllocation(logger *log.Entry, ipamType string, stdinData []byte) {
 // Set up logging for both Calico and libcalico using the provided log level,
 func ConfigureLogging(logLevel string) {
 	if strings.EqualFold(logLevel, "debug") {
-		log.SetLevel(log.DebugLevel)
+		logrus.SetLevel(logrus.DebugLevel)
 	} else if strings.EqualFold(logLevel, "info") {
-		log.SetLevel(log.InfoLevel)
+		logrus.SetLevel(logrus.InfoLevel)
 	} else {
 		// Default level
-		log.SetLevel(log.WarnLevel)
+		logrus.SetLevel(logrus.WarnLevel)
 	}
 
-	log.SetOutput(os.Stderr)
-}
-
-// Create a logger which always includes common fields
-func CreateContextLogger(workload string) *log.Entry {
-	// A common pattern is to re-use fields between logging statements by re-using
-	// the logrus.Entry returned from WithFields()
-	contextLogger := log.WithFields(log.Fields{
-		"Workload": workload,
-	})
-
-	return contextLogger
+	logrus.SetOutput(os.Stderr)
 }
 
 // Takes as array of IPv4 or IPv6 pools and parses them into an array of IPnet's

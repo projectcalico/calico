@@ -14,27 +14,28 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	goerrors "errors"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"runtime"
 
-	"net"
-
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/projectcalico/cni-plugin/k8s"
-	. "github.com/projectcalico/cni-plugin/utils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/cni-plugin/types"
+	"github.com/projectcalico/cni-plugin/utils"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var nodename string
@@ -44,71 +45,125 @@ func init() {
 	// since namespace ops (unshare, setns) are done for a single thread, we
 	// must ensure that the goroutine does not jump from OS thread to thread
 	runtime.LockOSThread()
-
-	nodename, _ = os.Hostname()
-}
-
-func updateNodename(conf NetConf, logger *log.Entry) {
-	if conf.Hostname != "" {
-		nodename = conf.Hostname
-		logger.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
-	}
-	if conf.Nodename != "" {
-		nodename = conf.Nodename
-	}
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
 	// Unmarshal the network config, and perform validation
-	conf := NetConf{}
+	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	cniVersion := conf.CNIVersion
-
-	ConfigureLogging(conf.LogLevel)
-
-	workload, orchestrator, err := GetIdentifiers(args)
-	if err != nil {
-		return err
-	}
-
-	logger := CreateContextLogger(workload)
+	utils.ConfigureLogging(conf.LogLevel)
 
 	// Allow the nodename to be overridden by the network config
-	updateNodename(conf, logger)
+	nodename = utils.DetermineNodename(conf)
 
-	logger.WithFields(log.Fields{
-		"Orchestrator": orchestrator,
-		"Node":         nodename,
-		"Workload":     workload,
-		"ContainerID":  args.ContainerID,
-	}).Info("Extracted identifiers")
-
-	logger.WithFields(log.Fields{"NetConfg": conf}).Info("Loaded CNI NetConf")
-	calicoClient, err := CreateClient(conf)
+	// Extract WEP identifiers such as pod name, pod namespace (for k8s), containerID, IfName.
+	wepIDs, err := utils.GetIdentifiers(args, nodename)
 	if err != nil {
 		return err
 	}
 
-	// Always check if there's an existing endpoint.
-	endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{
-		Node:         nodename,
-		Orchestrator: orchestrator,
-		Workload:     workload})
+	logrus.WithField("EndpointIDs", wepIDs).Info("Extracted identifiers")
+	logrus.WithField("NetConfg", conf).Info("Loaded CNI NetConf")
+
+	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
 		return err
 	}
 
-	logger.Debugf("Retrieved endpoints: %v", endpoints)
+	// Remove the endpoint field (IfName) from the wepIDs so we can get a WEP name prefix.
+	// We use the WEP name prefix (e.g. prefix: "node1-k8s-mypod--1-", full name: "node1-k8s-mypod--1-eth0"
+	// to list all the WEPs so if we have a WEP with a different IfName (e.g. "node1-k8s-mypod--1-eth1")
+	// we could still get that.
+	wepIDs.Endpoint = ""
+
+	// Calculate the workload name prefix from the WEP specific identifiers
+	// for the given orchestrator.
+	wepPrefix, err := wepIDs.CalculateWorkloadEndpointName(true)
+	if err != nil {
+		return fmt.Errorf("error constructing WorkloadEndpoint prefix: %s", err)
+	}
+
+	ctx := context.Background()
+
+	// Check if there's an existing endpoint by listing the existing endpoints based on the WEP name prefix.
+	endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{Name: wepPrefix, Namespace: wepIDs.Namespace, Prefix: true})
+	if err != nil {
+		return err
+	}
+
+	var logger *logrus.Entry
+	if wepIDs.Orchestrator == "k8s" {
+		logger = logrus.WithFields(logrus.Fields{
+			"WorkloadEndpoint": fmt.Sprintf("%s%s", wepPrefix, wepIDs.Endpoint),
+			"ContainerID":      wepIDs.ContainerID,
+			"Pod":              wepIDs.Pod,
+			"Namespace":        wepIDs.Namespace,
+		})
+	} else {
+		logger = logrus.WithFields(logrus.Fields{
+			"ContainerID": wepIDs.ContainerID,
+		})
+	}
+
+	logger.Debugf("Retrieved list of endpoints: %v", endpoints)
 
 	var endpoint *api.WorkloadEndpoint
-	if len(endpoints.Items) == 1 {
-		endpoint = &endpoints.Items[0]
+
+	// If the prefix list returns 1 or more items, we go through the items and try to see if the name matches the WEP
+	// identifiers we have. The identifiers we use for this match at this point are:
+	// 1. Node name
+	// 2. Orchestrator ID ('cni' or 'k8s')
+	// 3. ContainerID
+	// 4. Pod name (only for k8s)
+	// Note we don't use the interface name (endpoint) for this match.
+	// If we find a match from the returned list then we've found the workload endpoint,
+	// and we reuse that even if it has a different interface name, because
+	// we only support one interface per pod right now.
+	// For example, you have a WEP for a k8s pod "mypod-1", and IfName "eth0" on node "node1", that will result in
+	// a WEP name "node1-k8s-mypod--1-eth0" in the datastore, now you're trying to schedule another pod "mypod",
+	// IfName "eth0" and node "node1", so we do a prefix list to get all the endpoints for that workload, with
+	// the prefix "node1-k8s-mypod-". Now this search would return any existing endpoints for "mypod", but it will also
+	// list "node1-k8s-mypod--1-eth0" which is not the same WorkloadEndpoint, so to avoid that, we go through the
+	// list of returned WEPs from the prefix list and call NameMatches() based on all the
+	// identifiers (pod name, containerID, node name, orchestrator), but omit the IfName (Endpoint field) since we can
+	// only have one interface per pod right now, and NameMatches() will return true if the WEP matches the identifiers.
+	// It is possible that none of the WEPs in the list match the identifiers, which means we don't already have an
+	// existing WEP to reuse. See `names.WorkloadEndpointIdentifiers` GoDoc comments for more details.
+	if len(endpoints.Items) > 0 {
+		logger.Debugf("List of WorkloadEndpoints %v", endpoints.Items)
+		for _, ep := range endpoints.Items {
+			match, err := wepIDs.WorkloadEndpointIdentifiers.NameMatches(ep.Name)
+			if err != nil {
+				// We should never hit this error, because it should have already been
+				// caught by CalculateWorkloadEndpointName.
+				return fmt.Errorf("invalid WorkloadEndpoint identifiers: %v", wepIDs.WorkloadEndpointIdentifiers)
+			}
+
+			if match {
+				logger.Debugf("Found a match for WorkloadEndpoint: %v", ep)
+				endpoint = &ep
+				// Assign the WEP name to wepIDs' WEPName field.
+				wepIDs.WEPName = endpoint.Name
+				// Put the endpoint name from the matched WEP in the identifiers.
+				wepIDs.Endpoint = ep.Spec.Endpoint
+				logger.Infof("Calico CNI found existing endpoint: %v", endpoint)
+				break
+			}
+		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Calico CNI checking for existing endpoint: %v\n", endpoint)
+	// If we don't find a match from the existing WorkloadEndpoints then we calculate
+	// the WEP name with the IfName passed in so we can create the WorkloadEndpoint later in the process.
+	if endpoint == nil {
+		wepIDs.Endpoint = args.IfName
+		wepIDs.WEPName, err = wepIDs.CalculateWorkloadEndpointName(false)
+		if err != nil {
+			return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
+		}
+	}
 
 	// Collect the result in this variable - this is ultimately what gets "returned" by this function by printing
 	// it to stdout.
@@ -116,8 +171,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
-	if orchestrator == "k8s" {
-		if result, err = k8s.CmdAddK8s(args, conf, nodename, calicoClient, endpoint); err != nil {
+	if wepIDs.Orchestrator == "k8s" {
+		if result, err = k8s.CmdAddK8s(ctx, args, conf, *wepIDs, calicoClient, endpoint); err != nil {
 			return err
 		}
 	} else {
@@ -131,9 +186,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Don't create the veth or do any networking.
 			// Just update the profile on the endpoint. The profile will be created if needed during the
 			// profile processing step.
-			fmt.Fprintf(os.Stderr, "Calico CNI appending profile: %s\n", profileID)
+			logger.Infof("Calico CNI appending profile: %s\n", profileID)
 			endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
-			result, err = CreateResultFromEndpoint(endpoint)
+			result, err = utils.CreateResultFromEndpoint(endpoint)
 			logger.WithField("result", result).Debug("Created result from endpoint")
 			if err != nil {
 				return err
@@ -145,7 +200,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// 3) Create the veth, configuring it on both the host and container namespace.
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
-			logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
+			logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
 				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 			ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
@@ -159,13 +214,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// See CNI Spec doc for more details.
 			result, err = current.NewResultFromResult(ipamResult)
 			if err != nil {
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
 			if len(result.IPs) == 0 {
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return goerrors.New("IPAM plugin returned missing IP config")
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				return errors.New("IPAM plugin returned missing IP config")
 			}
 
 			// Parse endpoint labels passed in by Mesos, and store in a map.
@@ -176,17 +231,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			// 2) Create the endpoint object
 			endpoint = api.NewWorkloadEndpoint()
-			endpoint.Metadata.Name = args.IfName
-			endpoint.Metadata.Node = nodename
-			endpoint.Metadata.Orchestrator = orchestrator
-			endpoint.Metadata.Workload = workload
-			endpoint.Metadata.Labels = labels
+			endpoint.Name = wepIDs.WEPName
+			endpoint.Namespace = wepIDs.Namespace
+			endpoint.Spec.Endpoint = wepIDs.Endpoint
+			endpoint.Spec.Node = wepIDs.Node
+			endpoint.Spec.Orchestrator = wepIDs.Orchestrator
+			endpoint.Spec.ContainerID = wepIDs.ContainerID
+			endpoint.Labels = labels
 			endpoint.Spec.Profiles = []string{profileID}
 
 			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
-			if err = PopulateEndpointNets(endpoint, result); err != nil {
+			if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
@@ -194,33 +251,26 @@ func cmdAdd(args *skel.CmdArgs) error {
 			fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 			// 3) Set up the veth
-			hostVethName, contVethMac, err := DoNetworking(args, conf, result, logger, "")
+			hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result, logger, "")
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
-			logger.WithFields(log.Fields{
+			logger.WithFields(logrus.Fields{
 				"HostVethName":     hostVethName,
 				"ContainerVethMac": contVethMac,
 			}).Info("Networked namespace")
 
-			mac, err := net.ParseMAC(contVethMac)
-			if err != nil {
-				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return err
-			}
-
-			endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
+			endpoint.Spec.MAC = contVethMac
 			endpoint.Spec.InterfaceName = hostVethName
 		}
 
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
-		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
+		if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
 			// Cleanup IP allocation and return the error.
-			ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return err
 		}
 
@@ -233,14 +283,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Start by checking if the profile already exists. If it already exists then there is no work to do.
 		// The CNI plugin never updates a profile.
 		exists := true
-		_, err = calicoClient.Profiles().Get(api.ProfileMetadata{Name: conf.Name})
+		_, err = calicoClient.Profiles().Get(ctx, conf.Name, options.GetOptions{})
 		if err != nil {
-			_, ok := err.(errors.ErrorResourceDoesNotExist)
+			_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 			if ok {
 				exists = false
 			} else {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 		}
@@ -251,16 +301,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Otherwise, incoming traffic is only allowed from profiles with the same tag.
 			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
 			var inboundRules []api.Rule
-			if orchestrator == "k8s" {
+			if wepIDs.Orchestrator == "k8s" {
 				inboundRules = []api.Rule{{Action: "allow"}}
 			} else {
 				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Tag: conf.Name}}}
 			}
 
 			profile := &api.Profile{
-				Metadata: api.ProfileMetadata{
-					Name: conf.Name,
-					Tags: []string{conf.Name},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   conf.Name,
+					Labels: map[string]string{conf.Name: ""},
 				},
 				Spec: api.ProfileSpec{
 					EgressRules:  []api.Rule{{Action: "allow"}},
@@ -270,9 +320,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			logger.WithField("profile", profile).Info("Creating profile")
 
-			if _, err := calicoClient.Profiles().Create(profile); err != nil {
+			if _, err := calicoClient.Profiles().Create(ctx, profile, options.SetOptions{}); err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 		}
@@ -286,66 +336,69 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
-	return types.PrintResult(result, cniVersion)
+	return cnitypes.PrintResult(result, conf.CNIVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	conf := NetConf{}
+	conf := types.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	ConfigureLogging(conf.LogLevel)
-
-	workload, orchestrator, err := GetIdentifiers(args)
-	if err != nil {
-		return err
-	}
-
-	logger := CreateContextLogger(workload)
+	utils.ConfigureLogging(conf.LogLevel)
 
 	// Allow the nodename to be overridden by the network config
-	updateNodename(conf, logger)
+	nodename := utils.DetermineNodename(conf)
 
-	logger.WithFields(log.Fields{
-		"Orchestrator": orchestrator,
-		"Node":         nodename,
-		"Workload":     workload,
-		"ContainerID":  args.ContainerID,
-	}).Info("Extracted identifiers")
-
-	calicoClient, err := CreateClient(conf)
+	epIDs, err := utils.GetIdentifiers(args, nodename)
 	if err != nil {
 		return err
 	}
 
-	wep := api.WorkloadEndpointMetadata{
-		Name:         args.IfName,
-		Node:         nodename,
-		Orchestrator: orchestrator,
-		Workload:     workload,
+	logger := logrus.WithFields(logrus.Fields{
+		"ContainerID": epIDs.ContainerID,
+	})
+
+	calicoClient, err := utils.CreateClient(conf)
+	if err != nil {
+		return err
 	}
 
+	// Calculate the WEP name so we can call DEL on the exact endpoint.
+	epIDs.WEPName, err = epIDs.CalculateWorkloadEndpointName(false)
+	if err != nil {
+		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"Orchestrator":     epIDs.Orchestrator,
+		"Node":             epIDs.Node,
+		"WorkloadEndpoint": epIDs.WEPName,
+		"ContainerID":      epIDs.ContainerID,
+	}).Info("Extracted identifiers")
+
+	ctx := context.Background()
+
 	// Handle k8s specific bits of handling the DEL.
-	if orchestrator == "k8s" {
-		return k8s.CmdDelK8s(calicoClient, wep, args, conf, logger)
+	if epIDs.Orchestrator == "k8s" {
+		return k8s.CmdDelK8s(ctx, calicoClient, *epIDs, args, conf, logger)
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := CleanUpIPAM(conf, args, logger)
+	ipamErr := utils.CleanUpIPAM(conf, args, logger)
 
 	// Delete the WorkloadEndpoint object from the datastore.
-	if err = calicoClient.WorkloadEndpoints().Delete(wep); err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// Log and proceed with the clean up if WEP doesn't exist.
-			logger.WithField("endpoint", wep).Info("Endpoint object does not exist, no need to clean up.")
+			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Info("Endpoint object does not exist, no need to clean up.")
 		} else {
 			return err
 		}
 	}
 
 	// Clean up namespace by removing the interfaces.
-	err = CleanUpNamespace(args, logger)
+	err = utils.CleanUpNamespace(args, logger)
 	if err != nil {
 		return err
 	}
@@ -360,10 +413,10 @@ var VERSION string
 
 func main() {
 	// Set up logging formatting.
-	log.SetFormatter(&logutils.Formatter{})
+	logrus.SetFormatter(&logutils.Formatter{})
 
 	// Install a hook that adds file/line no information.
-	log.AddHook(&logutils.ContextHook{})
+	logrus.AddHook(&logutils.ContextHook{})
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
@@ -380,7 +433,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := AddIgnoreUnknownArgs(); err != nil {
+	if err := utils.AddIgnoreUnknownArgs(); err != nil {
 		os.Exit(1)
 	}
 
