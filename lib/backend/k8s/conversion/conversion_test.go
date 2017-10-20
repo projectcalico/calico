@@ -1374,7 +1374,7 @@ var _ = Describe("Test Namespace conversion", func() {
 		Expect(egressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
 
 		// Check labels.
-		labels := p.Value.(*apiv2.Profile).Labels
+		labels := p.Value.(*apiv2.Profile).Spec.LabelsToApply
 		Expect(labels["pcns.foo"]).To(Equal("bar"))
 		Expect(labels["pcns.roger"]).To(Equal("rabbit"))
 	})
@@ -1402,7 +1402,7 @@ var _ = Describe("Test Namespace conversion", func() {
 		Expect(egressRules[0]).To(Equal(apiv2.Rule{Action: apiv2.Allow}))
 
 		// Check labels.
-		labels := p.Value.(*apiv2.Profile).ObjectMeta.Labels
+		labels := p.Value.(*apiv2.Profile).Spec.LabelsToApply
 		Expect(len(labels)).To(Equal(0))
 	})
 

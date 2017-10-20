@@ -95,13 +95,13 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		Value: &apiv2.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              name,
-				Labels:            labels,
 				CreationTimestamp: ns.CreationTimestamp,
 				UID:               ns.UID,
 			},
 			Spec: apiv2.ProfileSpec{
-				IngressRules: []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
-				EgressRules:  []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+				IngressRules:  []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+				EgressRules:   []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+				LabelsToApply: labels,
 			},
 		},
 		Revision: ns.ObjectMeta.ResourceVersion,
