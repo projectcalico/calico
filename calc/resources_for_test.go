@@ -98,6 +98,27 @@ var localWlEp1WithLabelsButNoProfiles = WorkloadEndpoint{
 	},
 }
 
+var localWlEp1WithDupeNamedPorts = WorkloadEndpoint{
+	State:      "active",
+	Name:       "cali1",
+	Mac:        mustParseMac("01:02:03:04:05:06"),
+	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
+	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.1/32"),
+		mustParseNet("10.0.0.2/32")},
+	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::1/128"),
+		mustParseNet("fc00:fe11::2/128")},
+	Labels: map[string]string{
+		"id": "loc-ep-1",
+		"a":  "a",
+		"b":  "b",
+	},
+	Ports: []EndpointPort{
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8081},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8082},
+	},
+}
+
 var localWlEp1NoProfiles = WorkloadEndpoint{
 	State: "active",
 	Name:  "cali1",

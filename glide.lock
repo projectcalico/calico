@@ -1,5 +1,5 @@
-hash: 2dd3dbe86aaa882014f76ca679837dcc1ba06113fdf16ff46c2ca0f617bfb256
-updated: 2017-10-13T13:11:00.818429475Z
+hash: 0546bf48d5babec9b49e486dc07ece4a936a20f68e02d00c15c8480807df1cfb
+updated: 2017-10-20T15:13:37.979804384Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -65,15 +65,15 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 20b96f641a5ea98f2f8619ff4f3e061cff4833bd
+  version: 5b3e00af70a9484542169a976dcab8d03e601a17
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
   version: 13c6e3589ad90f49bd3e3bbe2c2cb3d7a4142272
 - name: github.com/go-openapi/spec
-  version: 6aced65f8501fe1217321abf0749d354824ba2ff
+  version: 7abd5745472fff5eb3685386d5fb8bf38683154d
 - name: github.com/go-openapi/swag
-  version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
+  version: f3f9494671f93fcff853e3c6e9e948b3eb71e590
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
@@ -116,7 +116,7 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
-  version: d5b7844b561a7bc640052f1b935f7b800330d7e0
+  version: 2f5df55504ebc322e4d52d34df6a1f5b503bf26d
   subpackages:
   - buffer
   - jlexer
@@ -171,7 +171,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: cc6687459006bd22a2ddc6b1f3d70d77ab5d0b1e
+  version: febb01a4b32897dd1ab2064958c54a1cf84ea652
   subpackages:
   - lib
   - lib/api
@@ -224,7 +224,7 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -273,7 +273,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 43eea11bc92608addb41b8a406b0407495c106f6
+  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
   subpackages:
   - unix
 - name: golang.org/x/text
