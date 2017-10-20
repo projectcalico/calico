@@ -31,7 +31,6 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 type Workload struct {
@@ -149,9 +148,8 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	return
 }
 
-func (w *Workload) IPNet() *net.IPNet {
-	ipNet := net.MustParseCIDR(w.IP + "/32")
-	return &ipNet
+func (w *Workload) IPNet() string {
+	return w.IP + "/32"
 }
 
 func (w *Workload) Configure(client client.Interface) {
