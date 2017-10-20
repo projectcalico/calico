@@ -578,6 +578,28 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPo
 	"fc00:fe11::3,tcp:8080",
 }).withName("2 local WEPs with policy matching inherited label on both WEPs")
 
+// Adjust workload 1 so it has duplicate named ports.
+var localEpsAndNamedPortPolicyDuplicatePorts = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1WithDupeNamedPorts},
+).withIPSet(namedPortInheritIPSetID, []string{
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.1,tcp:8081", // ep1
+	"fc00:fe11::1,tcp:8081",
+	"10.0.0.1,tcp:8082", // ep1
+	"fc00:fe11::1,tcp:8082",
+	"10.0.0.2,tcp:8081", // ep1
+	"fc00:fe11::2,tcp:8081",
+	"10.0.0.2,tcp:8082", // ep1
+	"fc00:fe11::2,tcp:8082",
+
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
+}).withName("2 local WEPs with policy and duplicate named port on WEP1")
+
 // Then, change the label on EP2 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
 	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels2},
