@@ -725,11 +725,11 @@ func convertV2ConfigToMap(configType string, v2Config *model.KVPair) (map[string
 		logCxt.Info("No config of this type")
 		return nil, nil
 	}
-	// Re-use the update processor logic implemented for hte syncer.  We give it a v2 config
+	// Re-use the update processor logic implemented for the Syncer.  We give it a v2 config
 	// object in a KVPair and it uses the annotations defined on it to split it into v1-style
 	// KV pairs.
-	configConvertor := updateprocessors.NewFelixConfigUpdateProcessor()
-	v1kvs, err := configConvertor.Process(v2Config)
+	configConverter := updateprocessors.NewFelixConfigUpdateProcessor()
+	v1kvs, err := configConverter.Process(v2Config)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to convert configuration")
 	}
