@@ -62,8 +62,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
 				CIDR:          v1PoolKeyCidr1.CIDR,
-				IPIPInterface: "tunl0",
-				IPIPMode:      ipip.Always,
+				IPIPMode:      ipip.Undefined,
 				Masquerade:    false,
 				IPAM:          true,
 				Disabled:      false,
@@ -75,7 +74,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 		res = apiv2.NewIPPool()
 		res.Name = v2PoolKey2.Name
 		res.Spec.CIDR = cidr1str
-		res.Spec.IPIPMode = apiv2.IPIPModeNever
+		res.Spec.IPIPMode = apiv2.IPIPModeAlways
 		res.Spec.NATOutgoing = true
 		res.Spec.Disabled = true
 		kvps, err = up.Process(&model.KVPair{
@@ -101,8 +100,8 @@ var _ = Describe("Test the IPPool update processor", func() {
 				Key: v1PoolKeyCidr1,
 				Value: &model.IPPool{
 					CIDR:          v1PoolKeyCidr1.CIDR,
-					IPIPInterface: "",
-					IPIPMode:      ipip.Undefined,
+					IPIPInterface: "tunl0",
+					IPIPMode:      ipip.Always,
 					Masquerade:    true,
 					IPAM:          false,
 					Disabled:      true,
@@ -113,8 +112,8 @@ var _ = Describe("Test the IPPool update processor", func() {
 				Key: v1PoolKeyCidr2,
 				Value: &model.IPPool{
 					CIDR:          v1PoolKeyCidr2.CIDR,
-					IPIPInterface: "tunl0",
-					IPIPMode:      ipip.Always,
+					IPIPInterface: "",
+					IPIPMode:      ipip.Undefined,
 					Masquerade:    false,
 					IPAM:          true,
 					Disabled:      false,
