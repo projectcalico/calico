@@ -57,6 +57,7 @@ type k8sWatcherConverter struct {
 // This calls through to the context cancel function.
 func (crw *k8sWatcherConverter) Stop() {
 	crw.cancel()
+	crw.k8sWatch.Stop()
 }
 
 // ResultChan returns a channel used to receive WatchEvents.
@@ -75,6 +76,8 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 	log.Info("Watcher process started")
 	defer func() {
 		log.Info("Watcher process terminated")
+		crw.Stop()
+		close(crw.resultChan)
 		atomic.AddUint32(&crw.terminated, 1)
 	}()
 
@@ -92,7 +95,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 					log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
 					if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
 						log.Info("Watch terminated event")
-						crw.Stop()
+						return
 					}
 				}
 			case <-crw.context.Done():

@@ -410,7 +410,7 @@ func (c *etcdV3Client) Clean() error {
 
 // Syncer returns a v1 Syncer used to stream resource updates.
 func (c *etcdV3Client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return felixsyncer.New(c, callbacks)
+	return felixsyncer.New(c, callbacks, apiconfig.EtcdV3)
 }
 
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.

@@ -15,6 +15,7 @@
 package felixsyncer
 
 import (
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -24,7 +25,7 @@ import (
 
 // New creates a new Felix v1 Syncer.  Currently only the etcdv3 backend is supported
 // since KDD does not yet fully support Watchers.
-func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
+func New(client api.Client, callbacks api.SyncerCallbacks, datastoreType apiconfig.DatastoreType) api.Syncer {
 	// Create the set of ResourceTypes required for Felix.  Since the update processors
 	// also cache state, we need to create individual ones per syncer rather than create
 	// a common global set.
@@ -42,16 +43,8 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindHostEndpoint},
-			UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
-		},
-		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindIPPool},
 			UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
-		},
-		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNetworkPolicy},
-			UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNode},
@@ -65,6 +58,19 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindWorkloadEndpoint},
 			UpdateProcessor: updateprocessors.NewWorkloadEndpointUpdateProcessor(),
 		},
+		{
+			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNetworkPolicy},
+			UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
+		},
+	}
+
+	if datastoreType != apiconfig.Kubernetes {
+		resourceTypes = append(resourceTypes,
+			watchersyncer.ResourceType{
+				ListInterface:   model.ResourceListOptions{Kind: apiv2.KindHostEndpoint},
+				UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
+			},
+		)
 	}
 
 	return watchersyncer.New(

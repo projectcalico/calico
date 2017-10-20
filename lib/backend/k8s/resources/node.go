@@ -20,9 +20,9 @@ import (
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
+	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	kapiv1 "k8s.io/api/core/v1"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -94,7 +94,7 @@ func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string)
 
 func (c *nodeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	log.Debug("Received Get request on Node type")
-	node, err := c.clientSet.CoreV1().Nodes().Get(key.(model.ResourceKey).Name, metav1.GetOptions{})
+	node, err := c.clientSet.CoreV1().Nodes().Get(key.(model.ResourceKey).Name, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
@@ -134,7 +134,7 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	}
 
 	// Listing all nodes.
-	nodes, err := c.clientSet.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodes, err := c.clientSet.CoreV1().Nodes().List(metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {
 		K8sErrorToCalico(err, list)
 	}

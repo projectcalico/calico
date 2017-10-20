@@ -20,9 +20,9 @@ import (
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
+	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	kapiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
@@ -76,7 +76,7 @@ func (c *profileClient) Get(ctx context.Context, key model.Key, revision string)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse Profile name: %s", err)
 	}
-	namespace, err := c.clientSet.CoreV1().Namespaces().Get(namespaceName, metav1.GetOptions{})
+	namespace, err := c.clientSet.CoreV1().Namespaces().Get(namespaceName, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, rk)
 	}
@@ -110,7 +110,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 	}
 
 	// Otherwise, enumerate all.
-	namespaces, err := c.clientSet.CoreV1().Namespaces().List(metav1.ListOptions{})
+	namespaces, err := c.clientSet.CoreV1().Namespaces().List(metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, nl)
 	}

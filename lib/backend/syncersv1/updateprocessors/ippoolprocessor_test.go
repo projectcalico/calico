@@ -61,11 +61,11 @@ var _ = Describe("Test the IPPool update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
-				CIDR:          v1PoolKeyCidr1.CIDR,
-				IPIPMode:      ipip.Undefined,
-				Masquerade:    false,
-				IPAM:          true,
-				Disabled:      false,
+				CIDR:       v1PoolKeyCidr1.CIDR,
+				IPIPMode:   ipip.Undefined,
+				Masquerade: false,
+				IPAM:       true,
+				Disabled:   false,
 			},
 			Revision: "abcde",
 		}))

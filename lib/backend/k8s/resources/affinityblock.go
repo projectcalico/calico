@@ -84,7 +84,7 @@ func (c *AffinityBlockClient) List(ctx context.Context, list model.ListInterface
 	// If a host is specified, then do an exact lookup (ip version should not be expected in the query)
 	if bl.Host != "" && bl.IPVersion == 0 {
 		// Get the node settings, we use the nodes PodCIDR as the only node affinity block.
-		node, err := c.clientSet.CoreV1().Nodes().Get(bl.Host, metav1.GetOptions{})
+		node, err := c.clientSet.CoreV1().Nodes().Get(bl.Host, metav1.GetOptions{ResourceVersion: revision})
 		if err != nil {
 			err = K8sErrorToCalico(err, list)
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -109,7 +109,7 @@ func (c *AffinityBlockClient) List(ctx context.Context, list model.ListInterface
 				CIDR: *cidr,
 				Host: bl.Host,
 			},
-			Value: "{}",
+			Value:    "{}",
 			Revision: node.ResourceVersion,
 		})
 
