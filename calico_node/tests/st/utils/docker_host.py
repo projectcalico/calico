@@ -48,6 +48,7 @@ else:
     CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
                                 get_ip()
 
+
 class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by
@@ -186,9 +187,12 @@ class DockerHost(object):
         Pass a command into a host container.
 
         Raises a CommandExecError() if the command returns a non-zero
-        return code.
+        return code if raise_exception_on_failure=True.
 
         :param command:  The command to execute.
+        :param raise_exception_on_failure:  Raises an exception if the command exits with
+        non-zero return code.
+
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
@@ -520,11 +524,14 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network="bridge", ip=None, labels=[]):
+    def create_workload(self, name,
+                        image="busybox", network="bridge",
+                        ip=None, labels=[], namespace=None):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, image=image, network=network, ip=ip, labels=labels)
+        workload = Workload(self, name, image=image, network=network,
+                            ip=ip, labels=labels, namespace=namespace)
         self.workloads.add(workload)
         return workload
 
