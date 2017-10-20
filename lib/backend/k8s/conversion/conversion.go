@@ -158,7 +158,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	// a DELETE update will not include an IP.
 	ipNets := []string{}
 	if c.HasIPAddress(pod) {
-		_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
+		_, ipNet, err := cnet.ParseCIDROrIP(pod.Status.PodIP)
 		if err != nil {
 			log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
 			return nil, err
