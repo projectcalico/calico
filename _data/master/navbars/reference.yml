@@ -57,14 +57,20 @@ toc:
         path: /reference/calicoctl/resources/
       - title: BGP Peer
         path: /reference/calicoctl/resources/bgppeer
+      - title: BGP Configuration
+        path: /reference/calicoctl/resources/bgpconfig
+      - title: Felix Configuration
+        path: /reference/calicoctl/resources/felixconfig
       - title: Host Endpoint
         path: /reference/calicoctl/resources/hostendpoint
       - title: IP Pool
         path: /reference/calicoctl/resources/ippool
       - title: Node
         path: /reference/calicoctl/resources/node
-      - title: Policy
-        path: /reference/calicoctl/resources/policy
+      - title: Network Policy
+        path: /reference/calicoctl/resources/networkpolicy
+      - title: Global Network Policy
+        path: /reference/calicoctl/resources/globalnetworkpolicy
       - title: Profile
         path: /reference/calicoctl/resources/profile
       - title: Workload Endpoint

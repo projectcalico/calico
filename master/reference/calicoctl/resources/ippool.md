@@ -1,24 +1,23 @@
 ---
-title: IP Pool Resource (ipPool)
+title: IP Pool Resource (IPPool)
 ---
 
-An IP pool resource (ipPool) represents a collection of IP addresses from which Calico expects
+An IP pool resource (`IPPool`) represents a collection of IP addresses from which Calico expects
 endpoint IPs to be assigned.
 
-For `calicoctl` commands that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `ippool`, `ippools`, `ipp`, `ipps`, `pool`, `pools`.
 
 ### Sample YAML
 
 ```yaml
-apiVersion: v1
-kind: ipPool
+apiVersion: projectcalico.org/v2
+kind: IPPool
 metadata:
-  cidr: 10.1.0.0/16
+  name: my.ippool-1
 spec:
-  ipip:
-    enabled: true
-    mode: cross-subnet
+  cidr: 10.1.0.0/16
+  ipipMode: CrossSubnet
   nat-outgoing: true
   disabled: false
 ```
@@ -29,27 +28,21 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. | string |
+| name     |  The name of this IPPool resource. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
 
 #### Spec
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| ipip | ipip tunneling configuration for this pool. If not specified, ipip tunneling is disabled for this pool. | | [IPIP](#ipip) |
-| nat-outgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | false
-| disabled | When set to true, Calico IPAM will not assign addresses from this pool. | true, false | boolean | false
+| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. | string | |
+| ipipMode | The IPIP mode defining when IPIP will be used. | Always, CrossSubnet, Never | string| `Never` |
+| nat-outgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
+| disabled | When set to true, Calico IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
 
-#### IPIP
-
-| Field    | Description                 | Accepted Values | Schema  | Default    |
-|----------|-----------------------------|--------------|---------|------------|
-| enabled  | When set to true, ipip encapsulation will be used. | true, false | boolean | true |
-| mode     | The IPIP mode defining when IPIP will be used.     | always, cross-subnet | string | always |
-
-Routing of packets using IP in IP will be used when the destination IP address
-is in an IP Pool that has IPIP enabled.  In addition, if the `mode` is set to `cross-subnet`,
-Calico will only route using IP in IP if the IP address of the destination node is in a different
-subnet.  The subnet of each node is configured on the node resource (which may be automatically 
+Routing of packets using IP-in-IP will be used when the destination IP address
+is in an IP Pool that has IPIP enabled.  In addition, if the `ipipMode` is set to `CrossSubnet`,
+Calico will only route using IP-in-IP if the IP address of the destination node is in a different
+subnet. The subnet of each node is configured on the node resource (which may be automatically 
 determined when running the calico/node service).
 
 For details on configuring IP-in-IP on your deployment, please read the
@@ -66,5 +59,5 @@ Hosts running Calico is asymmetric and may cause traffic to be filtered due to
 
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
-| etcdv2                | Yes           | Yes    | Yes      |
+| etcdv3                | Yes           | Yes    | Yes      |
 | Kubernetes API server | Yes           | Yes    | Yes      |
