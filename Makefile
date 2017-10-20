@@ -127,16 +127,16 @@ stop-etcd:
 
 .PHONY: clean
 ## Removes all .coverprofile files, the vendor dir, and .go-pkg-cache
-clean: clean-generated clean-bin
+clean: clean-deepcopy-gen clean-bin
 	find . -name '*.coverprofile' -type f -delete
 	rm -rf vendor .go-pkg-cache
 
-clean-generated:
+clean-deepcopy-gen:
 	rm -f .deepcopy_gen
 	find $(TOP_SRC_DIR) -name zz_generated* -exec rm {} \;
 
 clean-bin:
-	rm -rf $(BINDIR) .generate_exes
+	rm -rf $(BINDIR) .deepcopy_gen_exes
 
 .PHONY: help
 ## Display this help text
@@ -166,7 +166,7 @@ DOCKER_GO_BUILD := \
 		-w /go/src/github.com/projectcalico/libcalico-go \
 		$(CALICO_BUILD)
 
-.generate_exes: $(BINDIR)/deepcopy-gen
+.deepcopy_gen_exes: $(BINDIR)/deepcopy-gen
 	touch $@
 
 $(BINDIR)/deepcopy-gen:
@@ -174,7 +174,7 @@ $(BINDIR)/deepcopy-gen:
 		sh -c 'go build -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
 
 # Regenerate all files if the gen exe(s) changed
-.deepcopy_gen: .generate_exes
+.deepcopy_gen: .deepcopy_gen_exes
 	# Generate deep copies
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(BINDIR)/deepcopy-gen \

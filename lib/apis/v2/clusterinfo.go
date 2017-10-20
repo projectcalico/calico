@@ -41,8 +41,6 @@ type ClusterInformationSpec struct {
 	ClusterGUID string `json:"clusterGUID,omitempty" validate:"omitempty"`
 	// ClusterType describes the type of the cluster
 	ClusterType string `json:"clusterType,omitempty" validate:"omitempty"`
-	// ClusterName is a user-readable name for the cluster
-	ClusterName string `json:"clusterName,omitempty" validate:"omitempty"`
 	// CalicoVersion is the version of Calico that the cluster is running
 	CalicoVersion string `json:"calicoVersion,omitempty" validate:"omitempty"`
 }
