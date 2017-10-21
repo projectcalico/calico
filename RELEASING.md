@@ -11,6 +11,9 @@ and ensure tests pass and merge.
 
 You should have no local changes and tests should be passing.
 
+Verify that the versions of calicoctl etc. at the top of the Makefile are correct, and that
+glide has been revved to the appropriate version of libcalico-go.
+
 ## Creating the release
 1. `make clean && make`
 2. Tag the release and push the tag
