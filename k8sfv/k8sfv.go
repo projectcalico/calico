@@ -27,9 +27,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
-
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
 // Global config - these are set by arguments on the ginkgo command line.
@@ -131,8 +128,6 @@ var _ = AfterSuite(func() {
 
 func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 
-	initializeCalicoDeployment(k8sServerEndpoint)
-
 	config, err := clientcmd.NewNonInteractiveClientConfig(*api.NewConfig(),
 		"",
 		&clientcmd.ConfigOverrides{
@@ -154,28 +149,6 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 	}
 
 	return
-}
-
-func initializeCalicoDeployment(k8sServerEndpoint string) {
-	// Create client into the Kubernetes datastore.
-	c, err := client.New(apiconfig.CalicoAPIConfig{
-		Spec: apiconfig.CalicoAPIConfigSpec{
-			DatastoreType: apiconfig.Kubernetes,
-			KubeConfig: apiconfig.KubeConfig{
-				K8sAPIEndpoint:           k8sServerEndpoint,
-				K8sInsecureSkipTLSVerify: true,
-			},
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// Establish the other global config that Calico requires.
-	err = c.EnsureInitialized()
-	if err != nil {
-		panic(err)
-	}
 }
 
 func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
