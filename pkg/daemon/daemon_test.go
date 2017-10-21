@@ -16,9 +16,7 @@ package daemon_test
 
 import (
 	"errors"
-	"strconv"
 	"sync"
-	"time"
 
 	. "github.com/projectcalico/typha/pkg/daemon"
 
@@ -107,48 +105,6 @@ var _ = Describe("Daemon", func() {
 		AfterEach(func() {
 			err := os.Remove(configFile.Name())
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		const (
-			downSecs  = 2
-			checkTime = "2s"
-		)
-		downSecsStr := strconv.Itoa(downSecs)
-
-		It("should load the configuration and connect to the datastore", func() {
-			Eventually(backend.getNumInitCalls).Should(Equal(1))
-			Consistently(backend.getNumInitCalls, checkTime, "1s").Should(Equal(1))
-		})
-
-		Describe("with datastore down for "+downSecsStr+"s", func() {
-			BeforeEach(func() {
-				backend.mutex.Lock()
-				defer backend.mutex.Unlock()
-				backend.failInit = true
-			})
-			JustBeforeEach(func() {
-				time.Sleep(downSecs * time.Second)
-			})
-
-			It("should try >="+downSecsStr+" times to initialize the datastore", func() {
-				Eventually(backend.getNumInitCalls).Should(BeNumerically(">=", downSecs))
-			})
-
-			Describe("with datastore now available", func() {
-				var numFailedInitCalls int
-
-				JustBeforeEach(func() {
-					backend.mutex.Lock()
-					defer backend.mutex.Unlock()
-					backend.failInit = false
-					numFailedInitCalls = backend.initCalled
-				})
-
-				It("should initialize the datastore", func() {
-					Eventually(backend.getNumInitCalls).Should(Equal(numFailedInitCalls + 1))
-					Consistently(backend.getNumInitCalls, checkTime, "1s").Should(Equal(numFailedInitCalls + 1))
-				})
-			})
 		})
 
 		It("should create the server components", func() {
