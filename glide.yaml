@@ -27,7 +27,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 11200bc3dea05305c956d356cd977c90c4cf9097
+  version: 12032b32ae3f84f17cc483c5df6216a097a610fe
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
