@@ -1,6 +1,6 @@
 ---
 title:  Manual Installation of Calico with rkt
-no-canonical: true
+canonical: false
 ---
 
 This tutorial describes how to manually configure a working environment for

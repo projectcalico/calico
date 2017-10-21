@@ -1,6 +1,6 @@
 ---
 title: Felix Configuration Resource (FelixConfiguration)
-no_canonical: true
+canonical: false
 ---
 
 A [Felix]({{site.baseurl}}/{{page.version}}/reference/architecture/#felix) configuration resource (`FelixConfiguration`) represents Felix configuration options for the cluster.

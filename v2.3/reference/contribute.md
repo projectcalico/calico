@@ -1,6 +1,6 @@
 ---
 title: Contribution Guidelines
-no_canonical: true
+canonical: false
 ---
 
 Features or any changes to the codebase should be done as follows:

@@ -45,6 +45,7 @@ defaults:
     values:
       layout: docwithnav
       version: master
+      canonical: true
   -
     scope:
       path: master

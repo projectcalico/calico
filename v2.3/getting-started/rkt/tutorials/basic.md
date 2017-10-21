@@ -1,6 +1,6 @@
 ---
 title: Basic Network Isolation
-no-canonical: true
+canonical: false
 ---
 
 This guide provides a simple way to try out rkt network isolation with Calico.
