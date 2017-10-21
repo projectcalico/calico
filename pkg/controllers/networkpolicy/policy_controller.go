@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"k8s.io/api/extensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -68,6 +69,10 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 		m := make(map[string]interface{})
 		for _, policy := range calicoPolicies.Items {
 			if strings.HasPrefix(policy.Name, "knp.default.") {
+				// Update the network policy's ObjectMeta so that it simply contains the name and namespace.
+				// There is other metadata that we might receive (like resource version) that we don't want to
+				// compare in the cache.
+				policy.ObjectMeta = metav1.ObjectMeta{Name: policy.Name, Namespace: policy.Namespace}
 				k := policyConverter.GetKey(policy)
 				m[k] = policy
 			}
