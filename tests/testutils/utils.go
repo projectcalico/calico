@@ -20,19 +20,18 @@ package testutils
 
 import (
 	"fmt"
-	"os/exec"
 	"os"
+	"os/exec"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/rest"
 )
 
 const KubeconfigTemplate = `apiVersion: v1
@@ -52,7 +51,7 @@ current-context: test-context`
 
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
-		fmt.Sprintf("%s",os.Getenv("HYPERKUBE_IMAGE")),
+		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
 		"/hyperkube", "apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=AlwaysAllow",
@@ -64,21 +63,18 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
-		fmt.Sprintf("%s",os.Getenv("ETCD_IMAGE")),
+		fmt.Sprintf("%s", os.Getenv("ETCD_IMAGE")),
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379")
 }
 
-func GetCalicoClient(etcdIP string) *client.Client {
-	client, err := client.New(api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.EtcdV2,
-			EtcdConfig: api.EtcdConfig{
-				EtcdEndpoints: "http://" + etcdIP + ":2379",
-			},
-		},
-	})
+func GetCalicoClient(etcdIP string) client.Interface {
+	cfg := apiconfig.NewCalicoAPIConfig()
+	cfg.Spec.DatastoreType = apiconfig.EtcdV3
+	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
+	client, err := client.New(*cfg)
+
 	Expect(err).NotTo(HaveOccurred())
 	return client
 }
@@ -96,20 +92,6 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 	}
 
 	return k8sClientset, nil
-}
-
-func GetExtensionsClient(kubeconfig string) (*rest.RESTClient, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
-	}
-
-	extensionsClient, err := k8s.BuildExtensionsClientV1(*config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build extensions client config: %s", err)
-	}
-
-	return extensionsClient, nil
 }
 
 func Stop(c *containers.Container) {

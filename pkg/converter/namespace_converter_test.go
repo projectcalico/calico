@@ -17,16 +17,20 @@ package converter_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/k8s-policy/pkg/converter"
-	"github.com/projectcalico/libcalico-go/lib/api"
+
+	"github.com/projectcalico/kube-controllers/pkg/converter"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+
+	k8sapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8sapi "k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
-var _ = Describe("NamespaceConverter", func() {
+var _ = Describe("Namespace conversion tests", func() {
+
 	nsConverter := converter.NewNamespaceConverter()
-	Context("should parse a Namespace to a Profile", func() {
+
+	It("should parse a Namespace to a Profile", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
@@ -40,40 +44,36 @@ var _ = Describe("NamespaceConverter", func() {
 		}
 
 		p, err := nsConverter.Convert(&ns)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		// Ensure correct profile name
 		expectedName := "k8s_ns.default"
-		actualName := p.(api.Profile).Metadata.Name
-		It("should return calico profile with expected name", func() {
+		actualName := p.(api.Profile).Name
+		By("returning a Calico profile with the expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
 		})
 
-		// Ensure rules are correct for profile.
 		inboundRules := p.(api.Profile).Spec.IngressRules
 		outboundRules := p.(api.Profile).Spec.EgressRules
-		It("should return calico profile with single rules", func() {
+		By("returning a Calico profile with the correct number of rules", func() {
 			Expect(len(inboundRules)).To(Equal(1))
 			Expect(len(outboundRules)).To(Equal(1))
 		})
 
-		// Ensure both inbound and outbound rules are set to allow.
-		It("should return calico profile with rules set to allow", func() {
-			Expect(inboundRules[0]).To(Equal(api.Rule{Action: "allow"}))
-			Expect(outboundRules[0]).To(Equal(api.Rule{Action: "allow"}))
+		By("returning a Calico profile with rules set to allow", func() {
+			Expect(inboundRules[0]).To(Equal(api.Rule{Action: api.Allow}))
+			Expect(outboundRules[0]).To(Equal(api.Rule{Action: api.Allow}))
 		})
 
-		// Check labels.
-		labels := p.(api.Profile).Metadata.Labels
-		It("should return calico profile with correct labels", func() {
+		labels := p.(api.Profile).Spec.LabelsToApply
+		By("returning a Calico profile with the correct labels to apply", func() {
 			Expect(labels["pcns.foo.org/bar"]).To(Equal("baz"))
 			Expect(labels["pcns.roger"]).To(Equal("rabbit"))
 		})
 	})
 
-	Context("should parse a Namespace to a Profile with no labels", func() {
+	It("should parse a Namespace to a Profile with no labels", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "default",
@@ -82,39 +82,37 @@ var _ = Describe("NamespaceConverter", func() {
 			Spec: k8sapi.NamespaceSpec{},
 		}
 		p, err := nsConverter.Convert(&ns)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Ensure correct profile name
 		expectedName := "k8s_ns.default"
-		actualName := p.(api.Profile).Metadata.Name
-		It("should return calico profile with expected name", func() {
+		actualName := p.(api.Profile).Name
+		By("returning a Calico profile with the expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
 		})
 
 		// Ensure rules are correct for profile.
 		inboundRules := p.(api.Profile).Spec.IngressRules
 		outboundRules := p.(api.Profile).Spec.EgressRules
-		It("should return calico profile with single rules", func() {
+		By("returning a Calico profile with the correct rules", func() {
 			Expect(len(inboundRules)).To(Equal(1))
 			Expect(len(outboundRules)).To(Equal(1))
 		})
 
-		// Ensure both inbound and outbound rules are set to allow.
-		It("should return calico profile with rules set to allow", func() {
-			Expect(inboundRules[0]).To(Equal(api.Rule{Action: "allow"}))
-			Expect(outboundRules[0]).To(Equal(api.Rule{Action: "allow"}))
+		By("returning a Calico profile with rules set to allow", func() {
+			Expect(inboundRules[0]).To(Equal(api.Rule{Action: api.Allow}))
+			Expect(outboundRules[0]).To(Equal(api.Rule{Action: api.Allow}))
 		})
 
-		// Check labels.
-		labels := p.(api.Profile).Metadata.Labels
-		It("should return calico profile with no labels", func() {
+		labels := p.(api.Profile).Spec.LabelsToApply
+		By("returning a Calico profile with no labels to apply", func() {
 			Expect(len(labels)).To(Equal(0))
 		})
 	})
 
-	Context("should handle cache.DeletedFinalStateUnknown conversion", func() {
+	It("should handle cache.DeletedFinalStateUnknown conversion", func() {
 		ns := cache.DeletedFinalStateUnknown{
 			Key: "cache.DeletedFinalStateUnknown",
 			Obj: &k8sapi.Namespace{
@@ -126,43 +124,43 @@ var _ = Describe("NamespaceConverter", func() {
 			},
 		}
 		p, err := nsConverter.Convert(ns)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Ensure correct profile name
 		expectedName := "k8s_ns.default"
-		actualName := p.(api.Profile).Metadata.Name
-		It("should return calico profile with expected name", func() {
+		actualName := p.(api.Profile).Name
+		By("returning a Calico profile with expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
 		})
 	})
 
-	Context("should handle cache.DeletedFinalStateUnknown with non-Namespace Obj", func() {
+	It("should handle cache.DeletedFinalStateUnknown with non-Namespace Obj", func() {
 		ns := cache.DeletedFinalStateUnknown{
 			Key: "cache.DeletedFinalStateUnknown",
 			Obj: "just a string",
 		}
 
 		_, err := nsConverter.Convert(ns)
-		It("should generate a conversion error", func() {
+		By("generating a conversion error", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
 
-	Context("should handle invalid object conversion", func() {
+	It("should handle invalid object conversion", func() {
 		ns := "just a string"
 
 		_, err := nsConverter.Convert(ns)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
 
-	Context("GetKey should return the right key", func() {
+	It("should generate the right key for a Profile", func() {
 		profileName := "k8s_ns.default"
 		profile := api.Profile{
-			Metadata: api.ProfileMetadata{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: profileName,
 			},
 			Spec: api.ProfileSpec{},
@@ -170,8 +168,15 @@ var _ = Describe("NamespaceConverter", func() {
 
 		// Get key of profile
 		key := nsConverter.GetKey(profile)
-		It("should return name as key", func() {
+		By("returning the profile's name as its key", func() {
 			Expect(key).To(Equal(profileName))
 		})
+
+		By("parsing the returned key back into component fields", func() {
+			ns, name := nsConverter.DeleteArgsFromKey(key)
+			Expect(ns).To(Equal(""))
+			Expect(name).To(Equal("k8s_ns.default"))
+		})
+
 	})
 })

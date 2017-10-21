@@ -17,10 +17,10 @@ package converter_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/k8s-policy/pkg/converter"
-	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/kube-controllers/pkg/converter"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -28,7 +28,7 @@ var _ = Describe("PodConverter", func() {
 
 	c := converter.NewPodConverter()
 
-	Context("Pod with no labels", func() {
+	It("should convert a Pod with no labels", func() {
 		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
@@ -40,22 +40,23 @@ var _ = Describe("PodConverter", func() {
 		}
 
 		wepData, err := c.Convert(&pod)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Assert workloadID.
-		It("should return a WorkloadEndpointData with the correct Key", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Key).To(Equal("default.podA"))
+		By("returning a WorkloadEndpointData with the correct key information", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
 		})
 
 		// Assert labels.
-		It("should return a WorkloadEndpointData with the Namespace label present", func() {
+		By("returning a WorkloadEndpointData with the Namespace label present", func() {
 			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
 		})
 	})
 
-	Context("Pod with labels", func() {
+	It("should convert a Pod with labels", func() {
 		pod := v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
@@ -71,18 +72,26 @@ var _ = Describe("PodConverter", func() {
 		}
 
 		wepData, err := c.Convert(&pod)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		// Assert that the returned Key is the same as the workload ID.
-		It("should return a WorkloadEndpointData with the correct Key", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Key).To(Equal("default.podA"))
+		// Assert that the returned name / namespace is correct.
+		By("returning a WorkloadEndpointData with the correct key information", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
 		})
 
 		// Assert that GetKey returns the right value.
-		It("should support getting a Key with GetKey", func() {
-			Expect(c.GetKey(wepData)).To(Equal("default.podA"))
+		key := c.GetKey(wepData)
+		By("generating the correct key from the wepData", func() {
+			Expect(key).To(Equal("default/nodeA-k8s-podA-eth0"))
+		})
+
+		By("parsing the returned key back into component fields", func() {
+			ns, name := c.DeleteArgsFromKey(key)
+			Expect(ns).To(Equal("default"))
+			Expect(name).To(Equal("nodeA-k8s-podA-eth0"))
 		})
 
 		// Assert labels are correct.
@@ -92,12 +101,12 @@ var _ = Describe("PodConverter", func() {
 			"calico/k8s_ns": "default",
 		}
 
-		It("should return workloadendpoint with correct labels", func() {
+		By("returning a WorkloadEndpointData with the pod's labels", func() {
 			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(labels))
 		})
 	})
 
-	Context("should handle cache.DeletedFinalStateUnknown conversion", func() {
+	It("should handle cache.DeletedFinalStateUnknown conversion", func() {
 		pod := cache.DeletedFinalStateUnknown{
 			Key: "cache.DeletedFinalStateUnknown",
 			Obj: &v1.Pod{
@@ -116,55 +125,56 @@ var _ = Describe("PodConverter", func() {
 		}
 
 		wepData, err := c.Convert(pod)
-		It("should not generate a conversion error", func() {
+		By("not generating a conversion error", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		// Assert that the returned Key is the same as the workload ID.
-		It("should return a WorkloadEndpointData with the correct Key", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Key).To(Equal("default.podA"))
+		By("returning a WorkloadEndpointData with the correct name and namespace", func() {
+			Expect(wepData.(converter.WorkloadEndpointData).Name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
 		})
 	})
 
-	Context("should handle cache.DeletedFinalStateUnknown with non-Pod Obj", func() {
+	It("should handle cache.DeletedFinalStateUnknown with non-Pod Obj", func() {
 		pod := cache.DeletedFinalStateUnknown{
 			Key: "cache.DeletedFinalStateUnknown",
 			Obj: "just a string",
 		}
 
 		_, err := c.Convert(pod)
-		It("should generate a conversion error", func() {
+		By("generating a conversion error", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
 
-	Context("should handle bad ojbect conversion", func() {
+	It("should handle bad object conversion", func() {
 		pod := "just a string"
 
 		_, err := c.Convert(pod)
-		It("should generate a conversion error", func() {
+		By("generating a conversion error", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
 
-	Context("MergeWorkloadEndpointData", func() {
-		expectedKey := "default.testwep"
+	It("should properly merge weps and WorkloadEndpointData", func() {
 		expectedLabels := map[string]string{
 			"key": "value",
 			"foo": "bar",
 		}
 		wep := api.NewWorkloadEndpoint()
-		wep.Metadata.Workload = expectedKey
+		wep.Name = "testwep"
+		wep.Namespace = "default"
 		wepData := converter.WorkloadEndpointData{
-			Key:    "default.testwep",
-			Labels: expectedLabels,
+			Name:      "testwep",
+			Namespace: "default",
+			Labels:    expectedLabels,
 		}
 
 		// Merge the wep and the updated data.
 		converter.MergeWorkloadEndpointData(wep, wepData)
 
-		It("should update the wep's labels", func() {
-			Expect(wep.Metadata.Labels).To(Equal(expectedLabels))
+		By("updating the wep's labels", func() {
+			Expect(wep.Labels).To(Equal(expectedLabels))
 		})
 	})
 })

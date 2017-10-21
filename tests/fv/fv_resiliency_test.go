@@ -15,22 +15,24 @@
 package fv_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
 
+	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/k8s-policy/tests/testutils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/kube-controllers/tests/testutils"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 var _ = Describe("[Resilience] PolicyController", func() {
@@ -39,19 +41,18 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		policyController *containers.Container
 		k8sEtcd          *containers.Container
 		apiserver        *containers.Container
-		calicoClient     *client.Client
+		calicoClient     client.Interface
 		k8sClient        *kubernetes.Clientset
 
-		policyName    string
-		genPolicyName string
+		policyName      string
+		genPolicyName   string
+		policyNamespace string
 	)
 
 	BeforeEach(func() {
 		// Run etcd.
 		calicoEtcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(calicoEtcd.IP)
-		err := calicoClient.EnsureInitialized()
-		Expect(err).NotTo(HaveOccurred())
 
 		// Run apiserver.
 		k8sEtcd = testutils.RunEtcd()
@@ -73,13 +74,14 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		// Create a Kubernetes NetworkPolicy.
 		policyName = "jelly"
 		genPolicyName = "knp.default.default." + policyName
-		var np *extensions.NetworkPolicy
-		np = &extensions.NetworkPolicy{
+		policyNamespace = "default"
+		var np *v1beta1.NetworkPolicy
+		np = &v1beta1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      policyName,
-				Namespace: "default",
+				Namespace: policyNamespace,
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: v1beta1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"fools": "gold",
@@ -87,10 +89,10 @@ var _ = Describe("[Resilience] PolicyController", func() {
 				},
 			},
 		}
-		err = k8sClient.Extensions().RESTClient().
+		err = k8sClient.ExtensionsV1beta1().RESTClient().
 			Post().
 			Resource("networkpolicies").
-			Namespace("default").
+			Namespace(policyNamespace).
 			Body(np).
 			Do().Error()
 		Expect(err).NotTo(HaveOccurred())
@@ -98,10 +100,10 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		policyController = testutils.RunPolicyController(calicoEtcd.IP, kfconfigfile.Name())
 
 		// Wait for it to appear in Calico's etcd.
-		Eventually(func() *api.Policy {
-			policy, _ := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+		Eventually(func() *api.NetworkPolicy {
+			policy, _ := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 			return policy
-		}).ShouldNot(BeNil())
+		}, time.Second*5, 500*time.Millisecond).ShouldNot(BeNil())
 	})
 
 	AfterEach(func() {
@@ -115,11 +117,11 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		It("should eventually add the data to calico's etcd", func() {
 			Skip("TODO: improve FV framework to handle pod restart")
 			testutils.Stop(apiserver)
-			err := calicoClient.Policies().Delete(api.PolicyMetadata{Name: genPolicyName})
+			_, err := calicoClient.NetworkPolicies().Delete(context.Background(), policyNamespace, genPolicyName, options.DeleteOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			testutils.Start(apiserver)
 			Eventually(func() error {
-				_, err := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				_, err := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 				return err
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
 		})
@@ -129,10 +131,10 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			Skip("TODO: improve FV framework to handle pod restart")
 			// Delete the Policy.
 			testutils.Stop(calicoEtcd)
-			err := k8sClient.Extensions().RESTClient().
+			err := k8sClient.ExtensionsV1beta1().RESTClient().
 				Delete().
 				Resource("networkpolicies").
-				Namespace("default").
+				Namespace(policyNamespace).
 				Name(policyName).
 				Do().Error()
 			Expect(err).NotTo(HaveOccurred())
@@ -140,7 +142,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			time.Sleep(10 * time.Second)
 			testutils.Start(calicoEtcd)
 			Eventually(func() error {
-				_, err := calicoClient.Policies().Get(api.PolicyMetadata{Name: genPolicyName})
+				_, err := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 				return err
 			}, time.Second*15, 500*time.Millisecond).Should(HaveOccurred())
 		})

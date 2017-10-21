@@ -29,7 +29,7 @@ func RunPolicyController(etcdIP, kconfigfile string) *containers.Container {
 		"--privileged",
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", "ENABLED_CONTROLLERS=workloadendpoint,profile,policy",
-		"-e", "LOG_LEVEL=debug",
+		"-e", "LOG_LEVEL=info",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),

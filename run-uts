@@ -35,7 +35,7 @@ echo '| All coverage |'
 echo '+==============+'
 echo
 go tool cover -func combined.coverprofile | \
-  sed 's=github.com/projectcalico/k8s-policy/==' | \
+  sed 's=github.com/projectcalico/kube-controllers/==' | \
   column -t
 
 echo
@@ -44,5 +44,5 @@ echo '| Missing coverage |'
 echo '+==================+'
 echo
 go tool cover -func combined.coverprofile | \
-  sed 's=github.com/projectcalico/k8s-policy/==' | grep -v '100.0%' | \
+  sed 's=github.com/projectcalico/kube-controllers/==' | grep -v '100.0%' | \
   column -t

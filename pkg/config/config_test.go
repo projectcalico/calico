@@ -19,13 +19,13 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/k8s-policy/pkg/config"
+	"github.com/projectcalico/kube-controllers/pkg/config"
 )
 
 var _ = Describe("Config", func() {
 
 	// unsetEnv() function that unsets environment variables
-	// required by k8s-policy controller
+	// required by kube-controllers controller
 	unsetEnv := func() {
 		os.Unsetenv("LOG_LEVEL")
 		os.Unsetenv("RECONCILER_PERIOD")

@@ -16,20 +16,23 @@ package converter
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
 	log "github.com/sirupsen/logrus"
-	k8sApiV1 "k8s.io/client-go/pkg/api/v1"
+
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+
+	"k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
 // WorkloadEndpointData is an internal struct used to store the various bits
 // of information that the policy controller cares about on a workload endpoint.
 type WorkloadEndpointData struct {
-	Key    string
-	Labels map[string]string
+	Name      string
+	Namespace string
+	Labels    map[string]string
 }
 
 type podConverter struct {
@@ -39,18 +42,19 @@ type podConverter struct {
 // WorkloadEndpoint, extracting fields that the policy controller is responsible for syncing.
 func BuildWorkloadEndpointData(wep api.WorkloadEndpoint) WorkloadEndpointData {
 	return WorkloadEndpointData{
-		Key:    wep.Metadata.Workload,
-		Labels: wep.Metadata.Labels,
+		Name:      wep.Name,
+		Namespace: wep.Namespace,
+		Labels:    wep.Labels,
 	}
 }
 
 // MergeWorkloadEndpointData applies the given WorkloadEndpointData to the provided
 // WorkloadEndpoint, updating relevant fields with new values.
 func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointData) {
-	if wep.Metadata.Workload != upd.Key {
-		log.Fatalf("Bad attempt to merge data for %s into wep %s", upd.Key, wep.Metadata.Workload)
+	if wep.Name != upd.Name || wep.Namespace != upd.Namespace {
+		log.Fatalf("Bad attempt to merge data for %s/%s into wep %s/%s", upd.Name, upd.Namespace, wep.Name, wep.Namespace)
 	}
-	wep.Metadata.Labels = upd.Labels
+	wep.Labels = upd.Labels
 }
 
 // NewPodConverter Constructor for podConverter
@@ -60,15 +64,14 @@ func NewPodConverter() Converter {
 
 func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	// Convert Pod into a workload endpoint.
-	var c k8s.Converter
-	var bc backendConverter.WorkloadEndpointConverter
-	pod, ok := k8sObj.(*k8sApiV1.Pod)
+	var c conversion.Converter
+	pod, ok := k8sObj.(*v1.Pod)
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
 		}
-		pod, ok = tombstone.Obj.(*k8sApiV1.Pod)
+		pod, ok = tombstone.Obj.(*v1.Pod)
 		if !ok {
 			return nil, fmt.Errorf("tombstone contained object that is not a Pod %+v", k8sObj)
 		}
@@ -77,20 +80,20 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fwep, err := bc.ConvertKVPairToAPI(kvp)
-	if err != nil {
-		return nil, err
-	}
-	wep := fwep.(*api.WorkloadEndpoint)
+	wep := kvp.Value.(*api.WorkloadEndpoint)
 
 	// Build and return a WorkloadEndpointData struct using the data.
 	return BuildWorkloadEndpointData(*wep), nil
 }
 
-// GetKey returns workloadID of the object as the key.
-// For pods, the workloadID is of the form `namespace.name`.
+// GetKey takes a WorkloadEndpointData and returns the key which
+// identifies it - namespace/name
 func (p *podConverter) GetKey(obj interface{}) string {
 	e := obj.(WorkloadEndpointData)
-	return e.Key
+	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
+}
+
+func (p *podConverter) DeleteArgsFromKey(key string) (string, string) {
+	splits := strings.SplitN(key, "/", 2)
+	return splits[0], splits[1]
 }

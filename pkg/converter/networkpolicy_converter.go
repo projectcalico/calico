@@ -16,11 +16,12 @@ package converter
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	backendConverter "github.com/projectcalico/libcalico-go/lib/converter"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+
+	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -32,48 +33,37 @@ func NewPolicyConverter() Converter {
 	return &policyConverter{}
 }
 
+// Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	np, ok := k8sObj.(*extensions.NetworkPolicy)
+	np, ok := k8sObj.(*v1beta1.NetworkPolicy)
 
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
 		}
-		np, ok = tombstone.Obj.(*extensions.NetworkPolicy)
+		np, ok = tombstone.Obj.(*v1beta1.NetworkPolicy)
 		if !ok {
 			return nil, fmt.Errorf("tombstone contained object that is not a NetworkPolicy %+v", k8sObj)
 		}
 	}
 
-	var policyConverter k8s.Converter
-	kvpair, err := policyConverter.NetworkPolicyToPolicy(np)
+	var c conversion.Converter
+	kvp, err := c.K8sNetworkPolicyToCalico(np)
 	if err != nil {
 		return nil, err
 	}
-
-	var backendConverter backendConverter.PolicyConverter
-	policy, err := backendConverter.ConvertKVPairToAPI(kvpair)
-	if err != nil {
-		return nil, err
-	}
-	calicoPolicy := policy.(*api.Policy)
-
-	// To ease upgrade path, create an allow-all Egress rule, but with Types: Ingress
-	// In the case where there's an older Felix interoperating with a new k8s-policy
-	// controller, Felix will respect the egress rule and ignore the types field.
-	// When Felix is upgraded, it will ignore the Egress allow-all rule due to
-	// Types: Ingress.
-	if len(calicoPolicy.Spec.Types) == 1 && calicoPolicy.Spec.Types[0] == api.PolicyTypeIngress {
-		calicoPolicy.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-	}
-	return *calicoPolicy, err
+	cnp := kvp.Value.(*api.NetworkPolicy)
+	return *cnp, err
 }
 
-// GetKey returns name of Policy as its key.  For Policies created by this controller
-// and backed by NetworkPolicy objects, the name is of the format
-// `knp.default.namespace.name`.
+// GetKey returns the 'namespace/name' for the given Calico NetworkPolicy as its key.
 func (p *policyConverter) GetKey(obj interface{}) string {
-	policy := obj.(api.Policy)
-	return policy.Metadata.Name
+	policy := obj.(api.NetworkPolicy)
+	return fmt.Sprintf("%s/%s", policy.Namespace, policy.Name)
+}
+
+func (p *policyConverter) DeleteArgsFromKey(key string) (string, string) {
+	splits := strings.SplitN(key, "/", 2)
+	return splits[0], splits[1]
 }
