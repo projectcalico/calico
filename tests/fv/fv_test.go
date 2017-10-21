@@ -68,8 +68,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
-		// TODO: Use upcoming port checker functions to wait until apiserver is responding to requests.
-		time.Sleep(time.Second * 15)
+		// Wait for the apiserver to be available.
+		Eventually(func() error {
+			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+			return err
+		}, 15*time.Second, 500*time.Millisecond).Should(BeNil())
 	})
 
 	AfterEach(func() {
@@ -203,6 +206,25 @@ var _ = Describe("kube-controllers FV tests", func() {
 					p, _ := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 					return p.Spec.Selector
 				}, time.Second*15, 500*time.Millisecond).Should(Equal("calico/k8s_ns == 'default' && fools == 'gold'"))
+			})
+		})
+
+		It("should delete policies when they are deleted from the Kubernetes API", func() {
+			By("deleting the policy", func() {
+				err := k8sClient.ExtensionsV1beta1().RESTClient().
+					Delete().
+					Resource("networkpolicies").
+					Namespace("default").
+					Name(policyName).
+					Do().Error()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("waiting for it to be removed from etcd", func() {
+				Eventually(func() error {
+					_, err := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
+					return err
+				}, time.Second*15, 500*time.Millisecond).Should(HaveOccurred())
 			})
 		})
 	})

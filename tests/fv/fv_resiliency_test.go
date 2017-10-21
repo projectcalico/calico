@@ -68,8 +68,11 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
-		// TODO: Use upcoming port checker functions to wait until apiserver is responding to requests.
-		time.Sleep(time.Second * 15)
+		// Wait for the apiserver to be available.
+		Eventually(func() error {
+			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+			return err
+		}, 15*time.Second, 500*time.Millisecond).Should(BeNil())
 
 		// Create a Kubernetes NetworkPolicy.
 		policyName = "jelly"
