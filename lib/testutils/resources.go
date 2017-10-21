@@ -14,9 +14,9 @@
 package testutils
 
 import (
+	"sort"
 	"sync"
 	"time"
-	"sort"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -24,12 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"fmt"
+
 	"github.com/projectcalico/go-yaml-wrapper"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 	"k8s.io/apimachinery/pkg/conversion"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"fmt"
 )
 
 // ExpectResource is a test validation function that checks the specified resource
@@ -188,10 +189,10 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		}
 		log.Infof(
 			"Actual:   EventType:%s; Kind:%s; Name:%s; Namespace:%s",
-			actualEvent.Type, 
+			actualEvent.Type,
 			actualObject.GetObjectKind().GroupVersionKind(),
 			actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
-			actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),				
+			actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 		)
 		log.Infof(
 			"Expected: EventType:%s; Kind:%s; Name:%s; Namespace:%s",
@@ -227,7 +228,7 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 
 		// Kubernetes does not provide the "previous" value in a modified event, so don't
 		// check for that if the datastore is KDD.
-		if expectedEvent.Previous != nil  && (expectedEvent.Type == watch.Deleted || t.datastoreType != apiconfig.Kubernetes){
+		if expectedEvent.Previous != nil && (expectedEvent.Type == watch.Deleted || t.datastoreType != apiconfig.Kubernetes) {
 			Expect(actualEvent.Previous).NotTo(BeNil(), traceString)
 			ExpectResource(
 				actualEvent.Previous,

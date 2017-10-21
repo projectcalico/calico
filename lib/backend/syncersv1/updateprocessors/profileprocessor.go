@@ -81,8 +81,10 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	}
 
 	if v1profile != nil {
-		labelskvp.Value = v1profile.Labels
-		labelskvp.Revision = kvp.Revision
+		if len(v1profile.Labels) > 0 {
+			labelskvp.Value = v1profile.Labels
+			labelskvp.Revision = kvp.Revision
+		}
 		ruleskvp.Value = &v1profile.Rules
 		ruleskvp.Revision = kvp.Revision
 	}

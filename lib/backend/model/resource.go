@@ -30,7 +30,7 @@ import (
 type resourceInfo struct {
 	typeOf reflect.Type
 	plural string
-	kind string
+	kind   string
 }
 
 var (
@@ -45,7 +45,7 @@ func registerResourceInfo(kind string, plural string, typeOf reflect.Type) {
 	plural = strings.ToLower(plural)
 	ri := resourceInfo{
 		typeOf: typeOf,
-		kind: kind,
+		kind:   kind,
 		plural: plural,
 	}
 	resourceInfoByKind[kind] = ri

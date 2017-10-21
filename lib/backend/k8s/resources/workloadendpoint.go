@@ -102,7 +102,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 		return nil, err
 	}
 
-	pod, err := c.clientSet.CoreV1().Pods(k.Namespace).Get(wepID.Pod, metav1.GetOptions{})
+	pod, err := c.clientSet.CoreV1().Pods(k.Namespace).Get(wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, k)
 	}
@@ -146,7 +146,7 @@ func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterf
 	}
 
 	// Otherwise, enumerate all pods in a namespace.
-	pods, err := c.clientSet.CoreV1().Pods(l.Namespace).List(metav1.ListOptions{})
+	pods, err := c.clientSet.CoreV1().Pods(l.Namespace).List(metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, l)
 	}

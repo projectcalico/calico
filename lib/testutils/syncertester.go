@@ -16,7 +16,9 @@ package testutils
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -61,6 +63,7 @@ type SyncerTester struct {
 // OnStatusUpdated updates the current status and then blocks until a call to
 // ExpectStatusUpdate() has been called.
 func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
+	defer GinkgoRecover()
 	st.lock.Lock()
 	current := st.status
 	st.status = status
@@ -94,39 +97,43 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 
 // OnUpdates just stores the update and asserts the state of the cache and the update.
 func (st *SyncerTester) OnUpdates(updates []api.Update) {
-	// Store the updates and onUpdates.
-	st.lock.Lock()
-	st.onUpdates = append(st.onUpdates, updates)
-	for _, u := range updates {
-		// Append the updates to the total set of updates.
-		st.updates = append(st.updates, u)
+	defer GinkgoRecover()
 
-		// Update our cache of current entries.
-		k, err := model.KeyToDefaultPath(u.Key)
-		Expect(err).NotTo(HaveOccurred())
-		switch u.UpdateType {
-		case api.UpdateTypeKVDeleted:
-			Expect(st.cache).To(HaveKey(k))
-			delete(st.cache, k)
-		case api.UpdateTypeKVNew:
-			log.WithFields(log.Fields{
-				"Key":   k,
-				"Value": u.KVPair.Value,
-			}).Info("Handling new cache entry")
-			Expect(st.cache).NotTo(HaveKey(k))
-			Expect(u.Value).NotTo(BeNil())
-			st.cache[k] = u.KVPair
-		case api.UpdateTypeKVUpdated:
-			log.WithFields(log.Fields{
-				"Key":   k,
-				"Value": u.KVPair.Value,
-			}).Info("Handling modified cache entry")
-			Expect(st.cache).To(HaveKey(k))
-			Expect(u.Value).NotTo(BeNil())
-			st.cache[k] = u.KVPair
+	func() {
+		// Store the updates and onUpdates.
+		st.lock.Lock()
+		defer st.lock.Unlock()
+		st.onUpdates = append(st.onUpdates, updates)
+		for _, u := range updates {
+			// Append the updates to the total set of updates.
+			st.updates = append(st.updates, u)
+
+			// Update our cache of current entries.
+			k, err := model.KeyToDefaultPath(u.Key)
+			Expect(err).NotTo(HaveOccurred())
+			switch u.UpdateType {
+			case api.UpdateTypeKVDeleted:
+				Expect(st.cache).To(HaveKey(k))
+				delete(st.cache, k)
+			case api.UpdateTypeKVNew:
+				log.WithFields(log.Fields{
+					"Key":   k,
+					"Value": u.KVPair.Value,
+				}).Info("Handling new cache entry")
+				Expect(st.cache).NotTo(HaveKey(k))
+				Expect(u.Value).NotTo(BeNil())
+				st.cache[k] = u.KVPair
+			case api.UpdateTypeKVUpdated:
+				log.WithFields(log.Fields{
+					"Key":   k,
+					"Value": u.KVPair.Value,
+				}).Info("Handling modified cache entry")
+				Expect(st.cache).To(HaveKey(k))
+				Expect(u.Value).NotTo(BeNil())
+				st.cache[k] = u.KVPair
+			}
 		}
-	}
-	st.lock.Unlock()
+	}()
 
 	// We may need to block if the test has blocked the main event processing.
 	st.updateBlocker.Wait()
@@ -151,7 +158,7 @@ func (st *SyncerTester) ExpectStatusUpdate(status api.SyncStatus) {
 		defer st.lock.Unlock()
 		return st.status
 	}
-	Eventually(cs).Should(Equal(status))
+	Eventually(cs, 6*time.Second, 500*time.Millisecond).Should(Equal(status))
 	Consistently(cs).Should(Equal(status))
 
 	log.Infof("Status is at expected status: %s", status)
@@ -182,7 +189,7 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 		defer st.lock.Unlock()
 		return st.statusChanged
 	}
-	Eventually(sc).Should(BeFalse())
+	Eventually(sc, 6*time.Second, 500*time.Millisecond).Should(BeFalse())
 	Consistently(sc).Should(BeFalse())
 }
 
@@ -193,21 +200,34 @@ func (st *SyncerTester) ExpectCacheSize(size int) {
 		defer st.lock.Unlock()
 		return len(st.cache)
 	}
-	Eventually(sfn).Should(Equal(size))
+	Eventually(sfn, 6*time.Second, 500*time.Millisecond).Should(Equal(size))
 	Consistently(sfn).Should(Equal(size))
 }
 
-// ExpectData verifies that a KVPair is in the cache.
+// ExpectData verifies that a KVPair is in the cache.  If a Revision is not supplied, then
+// just the value will be compared (useful for Kubernetes node backed resources where the
+// revision number is not stable).
 func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 	key, err := model.KeyToDefaultPath(kvp.Key)
 	Expect(err).NotTo(HaveOccurred())
-	efn := func() model.KVPair {
-		st.lock.Lock()
-		defer st.lock.Unlock()
-		return st.cache[key]
+
+	if kvp.Revision == "" {
+		efn := func() interface{} {
+			st.lock.Lock()
+			defer st.lock.Unlock()
+			return st.cache[key].Value
+		}
+		Eventually(efn, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp.Value))
+		Consistently(efn).Should(Equal(kvp.Value))
+	} else {
+		efn := func() model.KVPair {
+			st.lock.Lock()
+			defer st.lock.Unlock()
+			return st.cache[key]
+		}
+		Eventually(efn, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp))
+		Consistently(efn).Should(Equal(kvp))
 	}
-	Eventually(efn).Should(Equal(kvp))
-	Consistently(efn).Should(Equal(kvp))
 }
 
 // ExpectNoData verifies that a Key is not in the cache.

@@ -131,7 +131,7 @@ func (wc *watcherCache) resyncAndCreateWatcher() {
 		l, err := wc.client.List(context.Background(), wc.resourceType.ListInterface, "")
 		if err != nil {
 			// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
-			wc.logger.WithError(err).Debug("Failed to perform list of current data during resync")
+			wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
 			time.Sleep(ListRetryInterval)
 			continue
 		}

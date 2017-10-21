@@ -18,8 +18,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -34,12 +32,12 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -252,15 +250,12 @@ func (c *KubeClient) getResourceClientFromList(list model.ListInterface) resourc
 // known custom resource is defined: GlobalFelixConfig. It accomplishes this
 // by trying to set the ClusterType (an instance of GlobalFelixConfig).
 func (c *KubeClient) EnsureInitialized() error {
-	log.Info("Ensuring datastore has been initialized.")
-	err := c.waitForClusterType()
-	if err != nil {
-		return fmt.Errorf("Failed to ensure datastore has been initialized: \"%s\". Make sure the Custom Resource Definitions have been created and Calico has been authorized to access them.", err)
-	}
-	log.Info("Confirmed datastore has been initialized.")
+	log.Info("EnsuringInitialized - noop")
 	return nil
 }
 
+// Remove Calico-creatable data from the datastore.  This is purely used for the
+// test framework.
 func (c *KubeClient) Clean() error {
 	log.Warning("Cleaning KDD of all Calico-creatable data")
 	kinds := []string{
@@ -274,61 +269,30 @@ func (c *KubeClient) Clean() error {
 	ctx := context.Background()
 	for _, k := range kinds {
 		lo := model.ResourceListOptions{Kind: k}
-		rs, _ := c.List(ctx, lo, "")
-		for _, r := range rs.KVPairs {
-			log.WithField("Key", r.Key).Info("Deleting from KDD")
-			c.Delete(ctx, r.Key, r.Revision)
+		if rs, err := c.List(ctx, lo, ""); err != nil {
+			log.WithField("Kind", k).Warning("Failed to list resources")
+		} else {
+			for _, r := range rs.KVPairs {
+				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
+					log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+				}
+			}
+		}
+	}
+
+	// Get a list of Nodes and remove all BGP configuration from the nodes.
+	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv2.KindNode}, ""); err != nil {
+		log.Warning("Failed to list Nodes")
+	} else {
+		for _, nodeKvp := range nodes.KVPairs {
+			node := nodeKvp.Value.(*apiv2.Node)
+			node.Spec.BGP = nil
+			if _, err := c.Update(ctx, nodeKvp); err != nil {
+				log.WithField("Node", node.Name).Warning("Failed to remove Calico config from node")
+			}
 		}
 	}
 	return nil
-}
-
-// waitForClusterType polls until GlobalFelixConfig is ready, or until 30 seconds have passed.
-func (c *KubeClient) waitForClusterType() error {
-	return wait.PollImmediate(1*time.Second, 30*time.Second, func() (bool, error) {
-		return c.ensureClusterType()
-	})
-}
-
-// ensureClusterType ensures that the ClusterType is configured.
-func (c *KubeClient) ensureClusterType() (bool, error) {
-	k := model.GlobalConfigKey{
-		Name: "ClusterType",
-	}
-	value := "KDD"
-
-	// See if a cluster type has been set.  If so, append
-	// any existing values to it.
-	ct, err := c.Get(context.Background(), k, "")
-	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-			// Resource exists but we got another error.
-			return false, err
-		}
-		// Resource does not exist.
-	}
-	rv := ""
-	if ct != nil {
-		existingValue := ct.Value.(string)
-		if !strings.Contains(existingValue, "KDD") {
-			existingValue = fmt.Sprintf("%s,KDD", existingValue)
-		}
-		value = existingValue
-		rv = ct.Revision
-	}
-	log.WithField("value", value).Debug("Setting ClusterType")
-	_, err = c.Apply(&model.KVPair{
-		Key:      k,
-		Value:    value,
-		Revision: rv,
-	})
-	if err != nil {
-		// Don't return an error, but indicate that we need
-		// to retry.
-		log.Warnf("Failed to apply ClusterType: %s", err)
-		return false, nil
-	}
-	return true, nil
 }
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
@@ -375,10 +339,9 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	return cli, nil
 }
 
+// Syncer returns a v1 Syncer used to stream resource updates.
 func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	// TODO: Fix this when we are done with the transition to v2 data model.
-	// return newSyncer(&realKubeAPI{c}, c.converter, callbacks, c.disableNodePoll)
-	return nil
+	return felixsyncer.New(c, callbacks, apiconfig.Kubernetes)
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.
