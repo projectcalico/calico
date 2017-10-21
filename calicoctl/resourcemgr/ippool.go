@@ -29,12 +29,12 @@ func init() {
 		false,
 		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
 		[]string{"NAME", "CIDR"},
-		[]string{"NAME", "CIDR", "NAT", "IPIP", "DISABLED"},
+		[]string{"NAME", "CIDR", "NAT", "IPIPMODE", "DISABLED"},
 		map[string]string{
 			"NAME":     "{{.ObjectMeta.Name}}",
 			"CIDR":     "{{.Spec.CIDR}}",
 			"NAT":      "{{.Spec.NATOutgoing}}",
-			"IPIP":     "{{if .Spec.IPIP}}{{.Spec.IPIP.Mode}}{{else}}Always{{end}}",
+			"IPIPMODE": "{{if .Spec.IPIPMode}}{{.Spec.IPIPMode}}{{else}}Never{{end}}",
 			"DISABLED": "{{.Spec.Disabled}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
