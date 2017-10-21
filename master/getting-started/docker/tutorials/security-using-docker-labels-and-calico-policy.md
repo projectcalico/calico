@@ -6,7 +6,7 @@ title: Security using Docker Labels and Calico Policy
 
 With Calico as a Docker network plugin, Calico can be configured to extract the
 labels on a container and apply them to the workload endpoint for use with Calico
-[policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy).
+[policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy).
 By default, Calico blocks all traffic unless it has been explicitly allowed
 through configuration of the globally
 defined policy which uses selectors to determine which subset of the policy is
@@ -146,7 +146,7 @@ This works as follows:
    `role = database` (i.e. to database containers)
 
 For details on all of the possible match criteria, see the
-[policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy)
+[policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
 documentation.
 
 ## Multiple networks

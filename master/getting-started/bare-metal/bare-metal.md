@@ -42,7 +42,7 @@ You can apply host endpoint policies to three types of traffic:
 same host.
 
 Set the `applyOnForward` flag to `true` to apply a policy to forwarded traffic.
-See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy#spec).
+See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#spec).
 
 > **Note**: Both traffic forwarded between host endpoints and traffic forwarded 
 > between a host endpoint and a workload endpoint on the same host is regarded as
@@ -531,7 +531,7 @@ EOF
 > **Note**: This policy has no `order` field specified which causes it to default
 > to the highest value. Because higher order values have the lowest order of precedence,
 > Calico will apply this policy after all other policies. Refer to the 
-> [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy#spec) for
+> [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#spec) for
 > more discussion.
 {: .alert .alert-info}
 

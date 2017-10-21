@@ -1,8 +1,8 @@
 ---
-title: Node Resource (node)
+title: Node Resource (Node)
 ---
 
-An Node resource (node) represents a node running Calico.  When adding a host
+An node resource (`Node`) represents a node running Calico.  When adding a host
 to a Calico cluster, a Node resource needs to be created which contains the
 configuration for the Calico Node instance running on the host.
 
@@ -12,14 +12,14 @@ match the name configured in the Node resource.
 By default, starting a `calico/node` instance will automatically create a node resource 
 using the `hostname` of the compute host.
 
-For `calicoctl` commands that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
 
 ### Sample YAML
 
 ```yaml
-apiVersion: v1
-kind: node
+apiVersion: projectcalico.org/v2
+kind: Node
 metadata:
   name: node-hostname
 spec:
@@ -35,7 +35,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | The name of this node.          | The value passed to the node instance on the host. | string |
+| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
 
 #### Spec
 
@@ -49,11 +49,12 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | asNumber    | The AS Number of your Calico node. | Optional.  If omitted the global value is used (see [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config) for details). | integer |
 | ipv4Address | The IPv4 address and subnet exported as the next-hop for the Calico endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
-| ipv6Address | The IPv6 address and subnet exported as the next-hop for the Calico endpoints on the host | Optional.  | string |
+| ipv6Address | The IPv6 address and subnet exported as the next-hop for the Calico endpoints on the host | Optional | string |
+| ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel | Optional IPv4 address | string |
 
 ### Supported operations
 
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
-| etcdv2                | Yes           | Yes    | Yes      |
+| etcdv3                | Yes           | Yes    | Yes      |
 | Kubernetes API server | No            | Yes    | Yes      | Calico Node data is directly tied to the Kubernetes nodes.
