@@ -22,7 +22,7 @@ all: clean test
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
-CALICOCTL_VER=v2.0.0-alpha1-rc1
+CALICOCTL_VER=v2.0.0-alpha1-rc2
 K8S_VERSION=v1.8.1
 ETCD_VER=v3.2.5
 BIRD_VER=v0.3.1

@@ -167,8 +167,6 @@ download_templates_from_calico() {
         git clone https://github.com/projectcalico/calico.git ${repo_dir}
         ln -s ${repo_dir}/calico_node/filesystem/etc/calico/ /etc/calico
     fi
-    #TODO remove one this is in master
-    cd $repo_dir; git checkout v3.0-integration; git pull origin v3.0-integration; cd -
 }
 
 build_tomls_for_node() {

@@ -65,7 +65,6 @@ metadata:
   name: ippool-1
 spec:
   cidr: 192.168.0.0/16
-  ipip:
-    mode: Always
+  ipipMode: Always
   natOutgoing: true
 
