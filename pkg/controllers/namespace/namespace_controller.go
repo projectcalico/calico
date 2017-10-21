@@ -19,6 +19,8 @@ import (
 	"reflect"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	rcache "github.com/projectcalico/kube-controllers/pkg/cache"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
@@ -26,8 +28,9 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	log "github.com/sirupsen/logrus"
+
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -63,6 +66,10 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 		// Filter out only objects that are written by policy controller.
 		for _, profile := range profileList.Items {
 			if strings.HasPrefix(profile.Name, converter.ProfileNameFormat) {
+				// Update the profile's ObjectMeta so that it simply contains the name and namespace.
+				// There is other metadata that we might receive (like resource version) that we don't want to
+				// compare in the cache.
+				profile.ObjectMeta = metav1.ObjectMeta{Name: profile.Name, Namespace: profile.Namespace}
 				key := namespaceConverter.GetKey(profile)
 				filteredProfiles[key] = profile
 			}

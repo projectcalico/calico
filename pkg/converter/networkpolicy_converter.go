@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 
 	"k8s.io/api/extensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -54,6 +55,11 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 		return nil, err
 	}
 	cnp := kvp.Value.(*api.NetworkPolicy)
+
+	// Isolate the metadata fields that we care about. ResourceVersion, CreationTimeStamp, etc are
+	// not relevant so we ignore them. This prevents uncessary updates.
+	cnp.ObjectMeta = metav1.ObjectMeta{Name: cnp.Name, Namespace: cnp.Namespace}
+
 	return *cnp, err
 }
 
