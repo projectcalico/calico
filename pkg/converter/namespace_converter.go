@@ -56,7 +56,7 @@ func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 
 	// Isolate the metadata fields that we care about. ResourceVersion, CreationTimeStamp, etc are
 	// not relevant so we ignore them. This prevents uncessary updates.
-	profile.ObjectMeta = metav1.ObjectMeta{Name: profile.Name, Namespace: profile.Namespace}
+	profile.ObjectMeta = metav1.ObjectMeta{Name: profile.Name}
 
 	return *profile, nil
 }
