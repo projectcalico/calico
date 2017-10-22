@@ -49,8 +49,6 @@ import (
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -63,7 +61,7 @@ import (
 
 type EnvConfig struct {
 	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"v0.5.1-3-g00cc5d2"`
+	TyphaVersion string `default:"latest"`
 }
 
 var config EnvConfig
@@ -98,8 +96,7 @@ var (
 	}
 )
 
-//var _ = BeforeSuite(func() {
-var _ = func() {
+var _ = BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
 	err := envconfig.Process("k8sfv", &config)
 	Expect(err).NotTo(HaveOccurred())
@@ -206,48 +203,36 @@ var _ = func() {
 		}
 		return
 	}, "60s", "2s").ShouldNot(HaveOccurred())
-}
+})
 
-//)
-
-//var _ = AfterSuite(func() {
-var _ = func() {
+var _ = AfterSuite(func() {
 	apiServerContainer.Stop()
 	etcdContainer.Stop()
-}
+})
 
-//)
-
-var _ = PDescribe("health tests", func() {
+var _ = Describe("health tests", func() {
 	var felixContainer *containers.Container
 	var felixReady, felixLiveness func() int
 
 	createPerNodeConfig := func() {
 		// Make a k8s Node using the hostname of Felix's container.
-		_, err := k8sClient.CoreV1().Nodes().Create(&v1.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: felixContainer.Hostname,
-			},
-			Spec: v1.NodeSpec{},
-		})
-		Expect(err).NotTo(HaveOccurred())
+		//_, err := k8sClient.CoreV1().Nodes().Create(&v1.Node{
+		//	ObjectMeta: metav1.ObjectMeta{
+		//		Name: felixContainer.Hostname,
+		//	},
+		//	Spec: v1.NodeSpec{},
+		//})
+		//Expect(err).NotTo(HaveOccurred())
 	}
 
 	removePerNodeConfig := func() {
-		err := k8sClient.CoreV1().Nodes().Delete(felixContainer.Hostname, nil)
-		Expect(err).NotTo(HaveOccurred())
+		//err := k8sClient.CoreV1().Nodes().Delete(felixContainer.Hostname, nil)
+		//Expect(err).NotTo(HaveOccurred())
 	}
 
 	// describeCommonFelixTests creates specs for Felix tests that are common between the
 	// two scenarios below (with and without Typha).
 	describeCommonFelixTests := func() {
-		Describe("with no per-node config in datastore", func() {
-			It("should not open port due to lack of config", func() {
-				// With no config, Felix won't even open the socket.
-				Consistently(felixReady, "5s", "1s").Should(BeErr())
-			})
-		})
-
 		Describe("with per-node config in datastore", func() {
 			BeforeEach(createPerNodeConfig)
 			AfterEach(removePerNodeConfig)
@@ -300,6 +285,7 @@ var _ = PDescribe("health tests", func() {
 			AfterEach(removePerNodeConfig)
 
 			It("should delay readiness", func() {
+				Eventually(felixReady, "5s", "100ms").ShouldNot(BeGood())
 				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
 				Eventually(felixReady, "10s", "100ms").Should(BeGood())
 				Consistently(felixReady, "10s", "1s").Should(BeGood())
