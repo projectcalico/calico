@@ -57,25 +57,9 @@ case "$CALICO_NETWORKING_BACKEND" in
 	sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird_aggr.toml.template > /etc/calico/confd/conf.d/bird_aggr.toml
 	sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird_ipam.toml.template > /etc/calico/confd/conf.d/bird_ipam.toml
 
-	# Run confd twice.  Our confd TOML files are also generated from confd, so
-	# running twice ensures our starting configuration is correct.
-	if [ "$DATASTORE_TYPE" = "kubernetes" ]; then
-		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug -keep-stage-file >/felix-startup-1.log 2>&1 || true
-		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug -keep-stage-file >/felix-startup-2.log 2>&1 || true
-	else
-		# Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
-		ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
-
-		# confd needs a "-node" arguments for each etcd endpoint.
-		ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
-
-		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
-			  -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-			  -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-1.log 2>&1 || true
-		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
-			  -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-			  -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-2.log 2>&1 || true
-	fi
+	# Run confd once - this ensures we have sensible config generated at the point we start
+	# bird.
+    confd -confdir=/etc/calico/confd -onetime -keep-stage-file >/felix-startup-1.log 2>&1 || true
 
 	# Enable the confd and bird services
 	cp -a /etc/service/available/bird  /etc/service/enabled/
