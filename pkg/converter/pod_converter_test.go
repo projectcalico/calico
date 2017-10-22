@@ -46,7 +46,7 @@ var _ = Describe("PodConverter", func() {
 
 		// Assert workloadID.
 		By("returning a WorkloadEndpointData with the correct key information", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(wepData.(converter.WorkloadEndpointData).PodName).To(Equal("podA"))
 			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
 		})
 
@@ -78,20 +78,14 @@ var _ = Describe("PodConverter", func() {
 
 		// Assert that the returned name / namespace is correct.
 		By("returning a WorkloadEndpointData with the correct key information", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(wepData.(converter.WorkloadEndpointData).PodName).To(Equal("podA"))
 			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
 		})
 
 		// Assert that GetKey returns the right value.
 		key := c.GetKey(wepData)
 		By("generating the correct key from the wepData", func() {
-			Expect(key).To(Equal("default/nodeA-k8s-podA-eth0"))
-		})
-
-		By("parsing the returned key back into component fields", func() {
-			ns, name := c.DeleteArgsFromKey(key)
-			Expect(ns).To(Equal("default"))
-			Expect(name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(key).To(Equal("default/podA"))
 		})
 
 		// Assert labels are correct.
@@ -130,7 +124,7 @@ var _ = Describe("PodConverter", func() {
 		})
 
 		By("returning a WorkloadEndpointData with the correct name and namespace", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Name).To(Equal("nodeA-k8s-podA-eth0"))
+			Expect(wepData.(converter.WorkloadEndpointData).PodName).To(Equal("podA"))
 			Expect(wepData.(converter.WorkloadEndpointData).Namespace).To(Equal("default"))
 		})
 	})
@@ -162,10 +156,11 @@ var _ = Describe("PodConverter", func() {
 			"foo": "bar",
 		}
 		wep := api.NewWorkloadEndpoint()
-		wep.Name = "testwep"
+		wep.Name = "nodename-k8s-testwep-eth0"
 		wep.Namespace = "default"
+		wep.Spec.Pod = "testwep"
 		wepData := converter.WorkloadEndpointData{
-			Name:      "testwep",
+			PodName:   "testwep",
 			Namespace: "default",
 			Labels:    expectedLabels,
 		}

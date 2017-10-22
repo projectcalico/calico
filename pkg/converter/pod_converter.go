@@ -16,7 +16,6 @@ package converter
 
 import (
 	"fmt"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -30,7 +29,7 @@ import (
 // WorkloadEndpointData is an internal struct used to store the various bits
 // of information that the policy controller cares about on a workload endpoint.
 type WorkloadEndpointData struct {
-	Name      string
+	PodName   string
 	Namespace string
 	Labels    map[string]string
 }
@@ -42,7 +41,7 @@ type podConverter struct {
 // WorkloadEndpoint, extracting fields that the policy controller is responsible for syncing.
 func BuildWorkloadEndpointData(wep api.WorkloadEndpoint) WorkloadEndpointData {
 	return WorkloadEndpointData{
-		Name:      wep.Name,
+		PodName:   wep.Spec.Pod,
 		Namespace: wep.Namespace,
 		Labels:    wep.Labels,
 	}
@@ -51,8 +50,8 @@ func BuildWorkloadEndpointData(wep api.WorkloadEndpoint) WorkloadEndpointData {
 // MergeWorkloadEndpointData applies the given WorkloadEndpointData to the provided
 // WorkloadEndpoint, updating relevant fields with new values.
 func MergeWorkloadEndpointData(wep *api.WorkloadEndpoint, upd WorkloadEndpointData) {
-	if wep.Name != upd.Name || wep.Namespace != upd.Namespace {
-		log.Fatalf("Bad attempt to merge data for %s/%s into wep %s/%s", upd.Name, upd.Namespace, wep.Name, wep.Namespace)
+	if wep.Spec.Pod != upd.PodName || wep.Namespace != upd.Namespace {
+		log.Fatalf("Bad attempt to merge data for %s/%s into wep %s/%s", upd.PodName, upd.Namespace, wep.Name, wep.Namespace)
 	}
 	wep.Labels = upd.Labels
 }
@@ -76,6 +75,13 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("tombstone contained object that is not a Pod %+v", k8sObj)
 		}
 	}
+
+	// The conversion logic always requires a node, but we don't always have one. We don't actually
+	// care about the value used for the node in this controller, so just dummy it out if it doesn't exist.
+	if pod.Spec.NodeName == "" {
+		pod.Spec.NodeName = "unknown.node"
+	}
+
 	kvp, err := c.PodToWorkloadEndpoint(pod)
 	if err != nil {
 		return nil, err
@@ -90,10 +96,13 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 // identifies it - namespace/name
 func (p *podConverter) GetKey(obj interface{}) string {
 	e := obj.(WorkloadEndpointData)
-	return fmt.Sprintf("%s/%s", e.Namespace, e.Name)
+	return fmt.Sprintf("%s/%s", e.Namespace, e.PodName)
 }
 
 func (p *podConverter) DeleteArgsFromKey(key string) (string, string) {
-	splits := strings.SplitN(key, "/", 2)
-	return splits[0], splits[1]
+	// We don't have enough information to generate the delete args from the key that's used
+	// for Pods / WorkloadEndpoints, so just panic. This should never be called but is necessary
+	// to satisfy the interface.
+	log.Panicf("DeleteArgsFromKey call for WorkloadEndpoints is not allowed")
+	return "", ""
 }
