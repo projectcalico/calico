@@ -90,7 +90,7 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
-	DatastoreType string `config:"oneof(kubernetes,etcdv2,etcdv3);etcdv2;non-zero,die-on-fail"`
+	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail"`
 
 	FelixHostname string `config:"hostname;;local,non-zero"`
 
@@ -357,9 +357,9 @@ func (config *Config) resolve() (changed bool, err error) {
 }
 
 func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
-	// Special case for etcdv2 datastore, where we want to honour established Felix-specific
+	// Special case for etcdv3 datastore, where we want to honour established Felix-specific
 	// config mechanisms.
-	if config.DatastoreType == "etcdv2" {
+	if config.DatastoreType == "etcdv3" {
 		// Build a CalicoAPIConfig with the etcd fields filled in from Felix-specific
 		// config.
 		var etcdEndpoints string
@@ -376,7 +376,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		}
 		return apiconfig.CalicoAPIConfig{
 			Spec: apiconfig.CalicoAPIConfigSpec{
-				DatastoreType: apiconfig.EtcdV2,
+				DatastoreType: apiconfig.EtcdV3,
 				EtcdConfig:    etcdCfg,
 			},
 		}
@@ -385,15 +385,15 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	// Build CalicoAPIConfig from the environment.  This means that any XxxYyy field in
 	// CalicoAPIConfigSpec can be set by a corresponding XXX_YYY or CALICO_XXX_YYY environment
 	// variable, and that the datastore type can be set by a DATASTORE_TYPE or
-	// CALICO_DATASTORE_TYPE variable.  (Except in the etcdv2 case which is handled specially
+	// CALICO_DATASTORE_TYPE variable.  (Except in the etcdv3 case which is handled specially
 	// above.)
 	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
 	}
 	// If that didn't set the datastore type (in which case the field will have been set to its
-	// default 'etcdv2' value), copy it from the Felix config.
-	if cfg.Spec.DatastoreType == "etcdv2" {
+	// default 'etcdv3' value), copy it from the Felix config.
+	if cfg.Spec.DatastoreType == "etcdv3" {
 		cfg.Spec.DatastoreType = apiconfig.DatastoreType(config.DatastoreType)
 	}
 
@@ -412,7 +412,7 @@ func (config *Config) Validate() (err error) {
 		err = errors.New("Failed to determine hostname")
 	}
 
-	if config.DatastoreType == "etcdv2" && len(config.EtcdEndpoints) == 0 {
+	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
 		if config.EtcdScheme == "" {
 			err = errors.New("EtcdEndpoints and EtcdScheme both missing")
 		}
