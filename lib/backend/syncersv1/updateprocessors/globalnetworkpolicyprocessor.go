@@ -43,5 +43,5 @@ func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error)
 	if !ok {
 		return nil, errors.New("Value is not a valid GlobalNetworkPolicy resource value")
 	}
-	return convertPolicyV2ToV1Spec(v2res.Spec)
+	return convertPolicyV2ToV1Spec(v2res.Spec, "")
 }

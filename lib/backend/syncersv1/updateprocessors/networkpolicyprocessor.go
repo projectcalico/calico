@@ -16,6 +16,7 @@ package updateprocessors
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
@@ -44,25 +45,36 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")
 	}
-	return convertPolicyV2ToV1Spec(v2res.Spec)
+	return convertPolicyV2ToV1Spec(v2res.Spec, v2res.Namespace)
 }
 
-func convertPolicyV2ToV1Spec(spec apiv2.PolicySpec) (interface{}, error) {
+func convertPolicyV2ToV1Spec(spec apiv2.PolicySpec, ns string) (interface{}, error) {
 	var irules []model.Rule
 	for _, irule := range spec.IngressRules {
-		irules = append(irules, RuleAPIV2ToBackend(irule))
+		irules = append(irules, RuleAPIV2ToBackend(irule, ns))
 	}
 
 	var erules []model.Rule
 	for _, erule := range spec.EgressRules {
-		erules = append(erules, RuleAPIV2ToBackend(erule))
+		erules = append(erules, RuleAPIV2ToBackend(erule, ns))
+	}
+
+	// If this policy is namespaced, then add a namespace selector.
+	selector := spec.Selector
+	if ns != "" {
+		nsSelector := fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
+		if selector == "" {
+			selector = nsSelector
+		} else {
+			selector = fmt.Sprintf("(%s) && %s", selector, nsSelector)
+		}
 	}
 
 	v1value := &model.Policy{
 		Order:          spec.Order,
 		InboundRules:   irules,
 		OutboundRules:  erules,
-		Selector:       spec.Selector,
+		Selector:       selector,
 		DoNotTrack:     spec.DoNotTrack,
 		PreDNAT:        spec.PreDNAT,
 		ApplyOnForward: spec.ApplyOnForward,

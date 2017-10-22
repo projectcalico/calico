@@ -97,21 +97,17 @@ var _ = Describe("Test the Profile update processor", func() {
 				Code: &incode,
 			},
 			Source: apiv2.EntityRule{
-				Tag:         "tag1",
 				Nets:        []string{"10.100.10.1"},
 				Selector:    "calico/k8s_ns == selector1",
 				Ports:       []numorstring.Port{port80},
-				NotTag:      "nottag1",
 				NotNets:     []string{"192.168.40.1"},
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
 			},
 			Destination: apiv2.EntityRule{
-				Tag:         "tag2",
 				Nets:        []string{"10.100.1.1"},
 				Selector:    "calico/k8s_ns == selector2",
 				Ports:       []numorstring.Port{port443},
-				NotTag:      "nottag2",
 				NotNets:     []string{"192.168.80.1"},
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
@@ -138,21 +134,17 @@ var _ = Describe("Test the Profile update processor", func() {
 				Code: &encode,
 			},
 			Source: apiv2.EntityRule{
-				Tag:         "tag2",
 				Nets:        []string{"10.100.1.1"},
 				Selector:    "calico/k8s_ns == selector2",
 				Ports:       []numorstring.Port{port443},
-				NotTag:      "nottag2",
 				NotNets:     []string{"192.168.80.1"},
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
 			},
 			Destination: apiv2.EntityRule{
-				Tag:         "tag1",
 				Nets:        []string{"10.100.10.1"},
 				Selector:    "calico/k8s_ns == selector1",
 				Ports:       []numorstring.Port{port80},
-				NotTag:      "nottag1",
 				NotNets:     []string{"192.168.40.1"},
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
@@ -168,8 +160,8 @@ var _ = Describe("Test the Profile update processor", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		v1irule := updateprocessors.RuleAPIV2ToBackend(irule)
-		v1erule := updateprocessors.RuleAPIV2ToBackend(erule)
+		v1irule := updateprocessors.RuleAPIV2ToBackend(irule, "")
+		v1erule := updateprocessors.RuleAPIV2ToBackend(erule, "")
 		Expect(kvps).To(HaveLen(2))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key:      model.ProfileLabelsKey{v1ProfileKey2},

@@ -57,7 +57,6 @@ var InRule1 = apiv2.Rule{
 	Protocol:  &strProtocol1,
 	ICMP:      &icmp1,
 	Source: apiv2.EntityRule{
-		Tag:      "tag1",
 		Nets:     []string{cidr1},
 		Selector: "label1 == 'value1'",
 		Ports: []numorstring.Port{
@@ -74,7 +73,6 @@ var InRule2 = apiv2.Rule{
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
 	Source: apiv2.EntityRule{
-		Tag:      "tag2",
 		Nets:     []string{cidrv61},
 		Selector: "has(label2)",
 	},
@@ -86,7 +84,6 @@ var EgressRule1 = apiv2.Rule{
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
 	Source: apiv2.EntityRule{
-		Tag:      "tag3",
 		Nets:     []string{cidr2},
 		Selector: "all()",
 	},
@@ -98,7 +95,6 @@ var EgressRule2 = apiv2.Rule{
 	Protocol:  &strProtocol2,
 	ICMP:      &icmp1,
 	Source: apiv2.EntityRule{
-		Tag:      "tag4",
 		Nets:     []string{cidrv62},
 		Selector: "label2 == '1234'",
 	},

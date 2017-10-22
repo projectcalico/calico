@@ -124,6 +124,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res1, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(res1.Labels[apiv2.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
+			Expect(res1.Labels[apiv2.LabelNamespace]).To(Equal(res1.Namespace))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -141,6 +143,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_1)
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
+			Expect(res.Labels[apiv2.LabelOrchestrator]).To(Equal(res.Spec.Orchestrator))
+			Expect(res.Labels[apiv2.LabelNamespace]).To(Equal(res.Namespace))
 
 			By("Getting WorkloadEndpoint (name2) before it is created")
 			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
@@ -152,6 +156,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(1))
 			testutils.ExpectResource(&outList.Items[0], apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(outList.Items[0].Labels[apiv2.LabelOrchestrator]).To(Equal(outList.Items[0].Spec.Orchestrator))
+			Expect(outList.Items[0].Labels[apiv2.LabelNamespace]).To(Equal(outList.Items[0].Namespace))
 
 			By("Creating a new WorkloadEndpoint with name2/spec2_1")
 			res2, outError := c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
@@ -185,6 +191,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			res1, outError = c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(res1, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_2)
+			Expect(res1.Labels[apiv2.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
+			Expect(res1.Labels[apiv2.LabelNamespace]).To(Equal(res1.Namespace))
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
@@ -237,6 +245,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			dres, outError := c.WorkloadEndpoints().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			testutils.ExpectResource(dres, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_2)
+			Expect(dres.Labels[apiv2.LabelOrchestrator]).To(Equal(dres.Spec.Orchestrator))
+			Expect(dres.Labels[apiv2.LabelNamespace]).To(Equal(dres.Namespace))
 
 			By("Updating WorkloadEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.WorkloadEndpoints().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})

@@ -75,6 +75,15 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 
 		By("converting a WorkloadEndpoint with minimum configuration")
 		res := apiv2.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
 		res.Spec.InterfaceName = iface1
 
 		kvps, err := up.Process(&model.KVPair{
@@ -90,13 +99,26 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
+				Labels: map[string]string{
+					"projectcalico.org/namespace":    ns1,
+					"projectcalico.org/orchestrator": oid1,
+				},
 			},
 			Revision: "abcde",
 		}))
 
 		By("adding another WorkloadEndpoint with a full configuration")
 		res = apiv2.NewWorkloadEndpoint()
-		res.Labels = map[string]string{"testLabel": "label"}
+		res.Namespace = ns2
+		res.Labels = map[string]string{
+			"testLabel":                      "label",
+			"projectcalico.org/namespace":    ns2,
+			"projectcalico.org/orchestrator": oid2,
+		}
+		res.Spec.Node = hn2
+		res.Spec.Orchestrator = oid2
+		res.Spec.Workload = wid2
+		res.Spec.Endpoint = eid2
 		res.Spec.InterfaceName = iface2
 		res.Spec.ContainerID = "container2"
 		res.Spec.MAC = "01:23:45:67:89:ab"
@@ -134,18 +156,21 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 			{
 				Key: v1WorkloadEndpointKey2,
 				Value: &model.WorkloadEndpoint{
-					State:            "active",
-					Name:             iface2,
-					ActiveInstanceID: "container2",
-					Mac:              &mac2,
-					ProfileIDs:       []string{"testProfile"},
-					IPv4Nets:         []cnet.IPNet{expectedIPv4Net},
-					IPv4NAT:          []model.IPNAT{expectedIPv4NAT},
-					Labels:           map[string]string{"testLabel": "label"},
-					IPv4Gateway:      expectedIPv4Gateway,
-					IPv6Gateway:      expectedIPv6Gateway,
+					State:      "active",
+					Name:       iface2,
+					Mac:        &mac2,
+					ProfileIDs: []string{"testProfile"},
+					IPv4Nets:   []cnet.IPNet{expectedIPv4Net},
+					IPv4NAT:    []model.IPNAT{expectedIPv4NAT},
+					Labels: map[string]string{
+						"testLabel":                      "label",
+						"projectcalico.org/namespace":    ns2,
+						"projectcalico.org/orchestrator": oid2,
+					},
+					IPv4Gateway: expectedIPv4Gateway,
+					IPv6Gateway: expectedIPv6Gateway,
 					Ports: []model.EndpointPort{
-						model.EndpointPort{
+						{
 							Name:     "portname",
 							Protocol: numorstring.ProtocolFromInt(uint8(30)),
 							Port:     uint16(8080),

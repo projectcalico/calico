@@ -27,4 +27,17 @@ const (
 
 	// AllNames is used for List or Watch queries to wildcard the name.
 	AllNames = ""
+
+	// Label used to denote the Namespace.  This is added to the workload endpoints by Calico
+	// and may be used for label matches by Policy selectors.
+	LabelNamespace = "projectcalico.org/namespace"
+
+	// Label used to denote the Orchestrator.  This is added to the workload endpoints by an
+	// orchestrator.
+	LabelOrchestrator = "projectcalico.org/orchestrator"
+
+	// Known orchestrators.  Orchestrators are not limited to this list.
+	OrchestratorKubernetes = "k8s"
+	OrchestratorCNI        = "cni"
+	OrchestratorDocker     = "libnetwork"
 )

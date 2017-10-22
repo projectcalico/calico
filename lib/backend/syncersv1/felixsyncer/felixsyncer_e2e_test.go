@@ -68,35 +68,35 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				expectedCacheSize += 5
 				syncTester.ExpectCacheSize(expectedCacheSize)
 				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "k8s_ns.default"}},
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
 					Value: &model.ProfileRules{
 						InboundRules:  []model.Rule{{Action: "allow"}},
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "k8s_ns.kube-public"}},
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-public"}},
 					Value: &model.ProfileRules{
 						InboundRules:  []model.Rule{{Action: "allow"}},
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "k8s_ns.kube-system"}},
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-system"}},
 					Value: &model.ProfileRules{
 						InboundRules:  []model.Rule{{Action: "allow"}},
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "k8s_ns.namespace-1"}},
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.namespace-1"}},
 					Value: &model.ProfileRules{
 						InboundRules:  []model.Rule{{Action: "allow"}},
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "k8s_ns.namespace-2"}},
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.namespace-2"}},
 					Value: &model.ProfileRules{
 						InboundRules:  []model.Rule{{Action: "allow"}},
 						OutboundRules: []model.Rule{{Action: "allow"}},
