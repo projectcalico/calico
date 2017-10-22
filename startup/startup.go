@@ -671,7 +671,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 		Spec: api.IPPoolSpec{
 			CIDR:        cidr.String(),
 			NATOutgoing: isNATOutgoingEnabled,
-			IPIPMode: ipipMode,
+			IPIPMode:    ipipMode,
 		},
 	}
 
@@ -703,13 +703,13 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 	}
 
 	ourIPv4, _, err := cnet.ParseCIDROrIP(node.Spec.BGP.IPv4Address)
-	if err != nil {
-		fatal("Error parsing CIDR '%s'", node.Spec.BGP.IPv4Address)
+	if err != nil && node.Spec.BGP.IPv4Address != "" {
+		fatal("Error parsing IPv4 CIDR '%s' for node '%s': %s", node.Spec.BGP.IPv4Address, node.Name, err)
 		terminate()
 	}
-	ourIPv6, _, err := cnet.ParseCIDR(node.Spec.BGP.IPv6Address)
-	if err != nil {
-		fatal("Error parsing CIDR '%s'", node.Spec.BGP.IPv6Address)
+	ourIPv6, _, err := cnet.ParseCIDROrIP(node.Spec.BGP.IPv6Address)
+	if err != nil && node.Spec.BGP.IPv6Address != "" {
+		fatal("Error parsing IPv6 CIDR '%s' for node '%s': %s", node.Spec.BGP.IPv6Address, node.Name, err)
 		terminate()
 	}
 
@@ -722,15 +722,15 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 			continue
 		}
 
-		theirIPv4, _, err := cnet.ParseCIDR(theirNode.Spec.BGP.IPv4Address)
-		if err != nil {
-			fatal("Error parsing CIDR '%s'", theirNode.Spec.BGP.IPv4Address)
+		theirIPv4, _, err := cnet.ParseCIDROrIP(theirNode.Spec.BGP.IPv4Address)
+		if err != nil && theirNode.Spec.BGP.IPv4Address != "" {
+			fatal("Error parsing IPv4 CIDR '%s' for node '%s': %s", theirNode.Spec.BGP.IPv4Address, theirNode.Name, err)
 			terminate()
 		}
 
-		theirIPv6, _, err := cnet.ParseCIDR(theirNode.Spec.BGP.IPv6Address)
-		if err != nil {
-			fatal("Error parsing CIDR '%s'", theirNode.Spec.BGP.IPv6Address)
+		theirIPv6, _, err := cnet.ParseCIDROrIP(theirNode.Spec.BGP.IPv6Address)
+		if err != nil && theirNode.Spec.BGP.IPv6Address != "" {
+			fatal("Error parsing IPv6 CIDR '%s' for node '%s': %s", theirNode.Spec.BGP.IPv6Address, theirNode.Name, err)
 			terminate()
 		}
 

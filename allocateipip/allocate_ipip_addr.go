@@ -213,7 +213,10 @@ func getIPIPEnabledPoolCIDRs(ctx context.Context, c client.Interface) []net.IPNe
 	var cidrs []net.IPNet
 	for _, ipPool := range ipPoolList.Items {
 		_, poolCidr, err := net.ParseCIDR(ipPool.Spec.CIDR)
-		log.WithError(err).Fatalf("Failed to parse CIDR: '%s'", ipPool.Spec.CIDR)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to parse CIDR '%s' for IPPool '%s'", ipPool.Spec.CIDR, ipPool.Name)
+		}
+
 		// Check if IPIP is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support IPIP with IPv6.
 		if (ipPool.Spec.IPIPMode == api.IPIPModeCrossSubnet || ipPool.Spec.IPIPMode == api.IPIPModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
 			cidrs = append(cidrs, *poolCidr)
