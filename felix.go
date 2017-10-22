@@ -58,6 +58,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	errors2 "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/syncclient"
@@ -670,83 +671,101 @@ func loadConfigFromDatastore(
 	//	continue
 	//}
 
-	g, err := client.Get(ctx, model.ResourceKey{
-		Kind:      apiv2.KindFelixConfiguration,
-		Name:      "default",
-		Namespace: "",
-	}, "")
-	if _, ok := err.(errors2.ErrorResourceDoesNotExist); err != nil && !ok {
-		return
-	}
-	h, err := client.Get(ctx, model.ResourceKey{
-		Kind:      apiv2.KindFelixConfiguration,
-		Name:      "node." + hostname,
-		Namespace: "",
-	}, "")
-	if _, ok := err.(errors2.ErrorResourceDoesNotExist); err != nil && !ok {
-		return
-	}
-	ci, err := client.Get(ctx, model.ResourceKey{
-		Kind:      apiv2.KindClusterInformation,
-		Name:      "node." + hostname,
-		Namespace: "",
-	}, "")
-	if _, ok := err.(errors2.ErrorResourceDoesNotExist); err != nil && !ok {
-		return
-	}
-
-	globalConfig, err = convertV2ConfigToMap("global", g)
+	// The configuration is split over 3 different resource types and 4 different resource
+	// instances in the v2 data model:
+	// -  FelixConfiguration (global): name "default"
+	// -  ClusterInformation (global): name "default"
+	// -  FelixConfiguration (per-host): name "node.<hostname>"
+	// -  Node (per-host): name: <hostname>
+	// Get the global values and host specific values separately.  We re-use the updateprocessor
+	// logic to convert the single v2 resource to a set of v1 key/values.
+	hostConfig = make(map[string]string)
+	globalConfig = make(map[string]string)
+	err = getAndMergeConfig(
+		ctx, client, globalConfig,
+		apiv2.KindFelixConfiguration, "default",
+		updateprocessors.NewFelixConfigUpdateProcessor(),
+	)
 	if err != nil {
 		return
 	}
-	hostConfig, err = convertV2ConfigToMap("per-host", h)
+	err = getAndMergeConfig(
+		ctx, client, globalConfig,
+		apiv2.KindClusterInformation, "default",
+		updateprocessors.NewClusterInfoUpdateProcessor(),
+	)
 	if err != nil {
 		return
 	}
-
-	// Merge in the global cluster info config.
-	ciConfig, err := convertV2ConfigToMap("cluster-info", ci)
+	err = getAndMergeConfig(
+		ctx, client, hostConfig,
+		apiv2.KindFelixConfiguration, "node."+hostname,
+		updateprocessors.NewFelixConfigUpdateProcessor(),
+	)
 	if err != nil {
 		return
 	}
-	for k, v := range ciConfig {
-		globalConfig[k] = v
+	err = getAndMergeConfig(
+		ctx, client, hostConfig,
+		apiv2.KindNode, hostname,
+		updateprocessors.NewFelixNodeUpdateProcessor(),
+	)
+	if err != nil {
+		return
 	}
 
 	return
 }
 
-// convertV2ConfigToMap converts a v2 datamodel config struct (where each configuration entry
-// is stored in a field of the struct) into a map, as required by our v1-style configuration
-// loader.
-func convertV2ConfigToMap(configType string, v2Config *model.KVPair) (map[string]string, error) {
-	logCxt := log.WithField("type", configType)
-	if v2Config == nil {
-		logCxt.Info("No config of this type")
-		return nil, nil
+// getAndMergeConfig gets the v2 resource configuration extracts the separate config values
+// (where each configuration value is stored in a field of the v2 resource Spec) and merges into
+// the supplied map, as required by our v1-style configuration loader.
+func getAndMergeConfig(
+	ctx context.Context, client bapi.Client, config map[string]string,
+	kind string, name string,
+	configConverter watchersyncer.SyncerUpdateProcessor,
+) error {
+	logCxt := log.WithFields(log.Fields{"kind": kind, "name": name})
+
+	cfg, err := client.Get(ctx, model.ResourceKey{
+		Kind:      kind,
+		Name:      name,
+		Namespace: "",
+	}, "")
+	if err != nil {
+		switch err.(type) {
+		case errors2.ErrorResourceDoesNotExist:
+			logCxt.Info("No config of this type")
+			return nil
+		default:
+			logCxt.WithError(err).Info("Failed to load config from datastore")
+			return err
+		}
 	}
+
 	// Re-use the update processor logic implemented for the Syncer.  We give it a v2 config
 	// object in a KVPair and it uses the annotations defined on it to split it into v1-style
-	// KV pairs.
-	configConverter := updateprocessors.NewFelixConfigUpdateProcessor()
-	v1kvs, err := configConverter.Process(v2Config)
+	// KV pairs.  Log any errors - but don't fail completely to avoid cyclic restarts.
+	v1kvs, err := configConverter.Process(cfg)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to convert configuration")
 	}
-	c := map[string]string{}
+
+	// Loop through the converted values and update our config map with values from either the
+	// Global or Host configs.
 	for _, v1KV := range v1kvs {
 		if v1KV.Value != nil {
 			switch k := v1KV.Key.(type) {
 			case model.GlobalConfigKey:
-				c[k.Name] = v1KV.Value.(string)
+				config[k.Name] = v1KV.Value.(string)
 			case model.HostConfigKey:
-				c[k.Name] = v1KV.Value.(string)
+				config[k.Name] = v1KV.Value.(string)
 			default:
-				logCxt.WithField("KV", v1KV).Warn("Skipping config of unknown KV type.")
+				logCxt.WithField("KV", v1KV).Debug("Skipping config - not required for initial loading")
 			}
 		}
 	}
-	return c, nil
+	return nil
 }
 
 type dataplaneDriver interface {
