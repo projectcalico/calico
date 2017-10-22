@@ -33,7 +33,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
-var ingressEgress = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
+var (
+	ingressEgress = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
+	ingress       = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
+	egress        = []apiv2.PolicyType{apiv2.PolicyTypeEgress}
+)
 
 var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
@@ -56,6 +60,16 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		DoNotTrack:     true,
 		ApplyOnForward: true,
 	}
+	// Specs with only ingress or egress rules, without Types set.
+	ingressSpec1 := spec1
+	ingressSpec1.EgressRules = nil
+	egressSpec2 := spec2
+	egressSpec2.IngressRules = nil
+	// Specs with ingress and egress rules, with Types set to just ingress or egress.
+	ingressTypesSpec1 := spec1
+	ingressTypesSpec1.Types = ingress
+	egressTypesSpec2 := spec2
+	egressTypesSpec2.Types = egress
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv2.PolicySpec, types1, types2 []apiv2.PolicyType) {
@@ -255,8 +269,12 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkPolicy(" + name2 + ")"))
 		},
 
-		// Test 1: Pass two fully populated GlobalNetworkPolicySpecs and expect the series of operations to succeed.
+		// Pass two fully populated GlobalNetworkPolicySpecs and expect the series of operations to succeed.
 		Entry("Two fully populated GlobalNetworkPolicySpecs", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
+		// Check defaulting for policies with ingress rules and egress rules only.
+		Entry("Ingress-only and egress-only policies", name1, name2, ingressSpec1, egressSpec2, ingress, egress),
+		// Check non-defaulting for policies with explicit Types value.
+		Entry("Policies with explicit ingress and egress Types", name1, name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
 	)
 
 	Describe("GlobalNetworkPolicy watch functionality", func() {
