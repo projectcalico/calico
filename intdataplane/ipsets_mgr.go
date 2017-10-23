@@ -46,6 +46,8 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 		log.WithField("ipSetId", msg.Id).Debug("IP set update")
 		var setType ipsets.IPSetType
 		switch msg.Type {
+		case proto.IPSetUpdate_IP:
+			setType = ipsets.IPSetTypeHashIP
 		case proto.IPSetUpdate_NET:
 			setType = ipsets.IPSetTypeHashNet
 		case proto.IPSetUpdate_IP_AND_PORT:

@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -211,7 +210,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			idx.UpdateEndpoint(
 				key,
 				endpoint.Labels,
-				convertIPsWithSubnetToCIDRs(endpoint.IPv4Nets, endpoint.IPv6Nets),
+				extractCIDRsFromWorkloadEndpoint(endpoint),
 				endpoint.Ports,
 				profileIDs)
 		} else {
@@ -227,7 +226,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			idx.UpdateEndpoint(
 				key,
 				endpoint.Labels,
-				convertIPsToCIDRs(endpoint.ExpectedIPv4Addrs, endpoint.ExpectedIPv6Addrs),
+				extractCIDRsFromHostEndpoint(endpoint),
 				endpoint.Ports,
 				profileIDs)
 		} else {
@@ -242,7 +241,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			idx.UpdateEndpoint(
 				key,
 				netSet.Labels,
-				convertIPNetsToCIDRs(netSet.Nets),
+				extractCIDRsFromNetworkSet(netSet),
 				nil,
 				nil)
 		} else {
@@ -271,29 +270,40 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
-func convertIPsToCIDRs(a, b []calinet.IP) []ip.CIDR {
-	combined := make([]ip.CIDR, 0, len(a)+len(b))
-	for _, addr := range a {
+// extractCIDRsFromHostEndpoint converts the expected IPs of the host endpoint into /32 and /128
+// CIDRs.
+func extractCIDRsFromHostEndpoint(endpoint *model.HostEndpoint) []ip.CIDR {
+	v4Addrs := endpoint.ExpectedIPv4Addrs
+	v6Addrs := endpoint.ExpectedIPv6Addrs
+	combined := make([]ip.CIDR, 0, len(v4Addrs)+len(v6Addrs))
+	for _, addr := range v4Addrs {
 		combined = append(combined, ip.FromNetIP(addr.IP).AsCIDR())
 	}
-	for _, addr := range b {
+	for _, addr := range v6Addrs {
 		combined = append(combined, ip.FromNetIP(addr.IP).AsCIDR())
 	}
 	return combined
 }
 
-func convertIPsWithSubnetToCIDRs(a, b []calinet.IPNet) []ip.CIDR {
-	combined := make([]ip.CIDR, 0, len(a)+len(b))
-	for _, addr := range a {
+// extractCIDRsFromWorkloadEndpoint converts the IPv[46]Nets fields of the WorkloadEndpoint into
+// /32 and /128 CIDRs.  It ignores any prefix length (but our validation ensures those nets are
+// /32s or /128s in any case).
+func extractCIDRsFromWorkloadEndpoint(endpoint *model.WorkloadEndpoint) []ip.CIDR {
+	v4Nets := endpoint.IPv4Nets
+	v6Nets := endpoint.IPv6Nets
+	combined := make([]ip.CIDR, 0, len(v4Nets)+len(v6Nets))
+	for _, addr := range v4Nets {
 		combined = append(combined, ip.CIDRFromNetIP(addr.IP))
 	}
-	for _, addr := range b {
+	for _, addr := range v6Nets {
 		combined = append(combined, ip.CIDRFromNetIP(addr.IP))
 	}
 	return combined
 }
 
-func convertIPNetsToCIDRs(a []calinet.IPNet) []ip.CIDR {
+// extractCIDRsFromNetworkSet converts the Nets field of the NetworkSet into an []ip.CIDR slice.
+func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
+	a := netSet.Nets
 	combined := make([]ip.CIDR, 0, len(a))
 	for _, addr := range a {
 		combined = append(combined, ip.CIDRFromCalicoNet(addr))

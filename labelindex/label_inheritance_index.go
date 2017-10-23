@@ -159,16 +159,6 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Deleting host endpoint %v from InheritIndex", key)
 			l.DeleteLabels(key)
 		}
-	case model.NetworkSetKey:
-		if update.Value != nil {
-			// Figure out what's changed and update the cache.
-			log.Debugf("Updating InheritIndex for network set %v", key)
-			ns := update.Value.(*model.NetworkSet)
-			l.UpdateLabels(key, ns.Labels, nil)
-		} else {
-			log.Debugf("Deleting network set %v from InheritIndex", key)
-			l.DeleteLabels(key)
-		}
 	case model.ProfileLabelsKey:
 		if update.Value != nil {
 			log.Debugf("Updating InheritIndex for profile labels %v", key)
