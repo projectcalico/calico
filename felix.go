@@ -891,16 +891,27 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				fc.InSync <- true
 			}
 		case *proto.ConfigUpdate:
-			logCxt := log.WithFields(log.Fields{
+			log.WithFields(log.Fields{
 				"old": config,
 				"new": msg.Config,
-			})
-			logCxt.Info("Possible config update")
+			}).Info("Possible config update")
 			if config != nil && !reflect.DeepEqual(msg.Config, config) {
-				logCxt.Warn("Felix configuration changed. Need to restart.")
+				log.Warn("Felix configuration changed. Need to restart.")
+				for kNew, vNew := range msg.Config {
+					if vOld, prs := config[kNew]; !prs {
+						log.WithFields(log.Fields{"key": kNew, "value": vNew}).Warn("Key added")
+					} else if vNew != vOld {
+						log.WithFields(log.Fields{"key": kNew, "old": vOld, "new": vNew}).Warn("Key changed")
+					}
+				}
+				for kOld, vOld := range config {
+					if _, prs := config[kOld]; !prs {
+						log.WithFields(log.Fields{"key": kOld, "value": vOld}).Warn("Key deleted")
+					}
+				}
 				fc.shutDownProcess("config changed")
 			} else if config == nil {
-				logCxt.Info("Config resolved.")
+				log.Info("Config resolved.")
 				config = make(map[string]string)
 				for k, v := range msg.Config {
 					config[k] = v
