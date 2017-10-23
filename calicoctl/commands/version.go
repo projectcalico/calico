@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,15 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	//"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 var VERSION, BUILD_DATE, GIT_REVISION string
@@ -58,27 +60,28 @@ Description:
 	fmt.Println("Git commit:       ", GIT_REVISION)
 
 	// Load the client config and connect.
-	//cf := parsedArgs["--config"].(string)
-	//client, err := clientmgr.NewClient(cf)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	os.Exit(1)
-	//}
-	//cfg := client.Config()
-	//a := apiconfig.NewCalicoAPIConfig()
-	//
-	//val, assigned, err := cfg.GetFelixConfig("CalicoVersion", "")
-	//if err != nil {
-	//	val = fmt.Sprintf("unknown (%s)", err)
-	//} else if !assigned {
-	//	val = "unknown"
-	//}
-	//fmt.Println("Cluster Version:  ", val)
-	//val, assigned, err = cfg.GetFelixConfig("ClusterType", "")
-	//if err != nil {
-	//	val = fmt.Sprintf("unknown (%s)", err)
-	//} else if !assigned {
-	//	val = "unknown"
-	//}
-	//fmt.Println("Cluster Type:     ", val)
+	cf := parsedArgs["--config"].(string)
+	client, err := clientmgr.NewClient(cf)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	ctx := context.Background()
+	ci, err := client.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		fmt.Println("Unable to retrieve Cluster Version or Type: ", err)
+		os.Exit(1)
+	}
+
+	v := ci.Spec.CalicoVersion
+	if v == "" {
+		v = "unknown"
+	}
+	t := ci.Spec.ClusterType
+	if t == "" {
+		t = "unknown"
+	}
+
+	fmt.Println("Cluster Version:  ", v)
+	fmt.Println("Cluster Type:     ", t)
 }
