@@ -1,5 +1,5 @@
-hash: 0cfb6f27e0194d78eaf8be3f9d797ee932ed55e7dab70dc4fd347cb896138986
-updated: 2017-10-20T18:49:10.937103-07:00
+hash: 9c72b0416410bc2c7078dff02af0d04ee6971e32df0e9653a0f146eceeaee8d4
+updated: 2017-10-23T10:37:57.816238711-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -127,7 +127,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 12032b32ae3f84f17cc483c5df6216a097a610fe
+  version: 80853cf81b74dbde7b6c55dae0d52cfe8e0001c9
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -180,7 +180,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: edd5e9b0879d13ee6970a50153d85b8fec9f7686
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -205,7 +205,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
   - unix
   - windows
