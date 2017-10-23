@@ -369,6 +369,10 @@ class TestCalicoctlCommands(TestBase):
         if namespaced:
             data1['metadata']['namespace'] = "default"
 
+
+        if kind == "WorkloadEndpoint":
+            data1['metadata']['labels']['projectcalico.org/namespace'] = 'default'
+
         # Get the resource with name1 and namespace2.  For a namespaced
         # resource this should match the modified data to default the
         # namespace.  For non-namespaced resources this will error.
@@ -377,6 +381,9 @@ class TestCalicoctlCommands(TestBase):
             rc.assert_data(data1)
         else:
             rc.assert_error(NOT_NAMESPACED)
+
+        if kind == "WorkloadEndpoint":
+            data2['metadata']['labels']['projectcalico.org/namespace'] = 'namespace2'
 
         # Get the resource type for all namespaces.  For a namespaced resource
         # this will return everything.  For non-namespaced resources this will
