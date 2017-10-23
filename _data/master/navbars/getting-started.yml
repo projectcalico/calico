@@ -142,22 +142,6 @@ toc:
   - title: Use of the Neutron API
     path: /getting-started/openstack/neutron-api
 
-- title: rkt
-  section:
-  - title: Overview
-    path: /getting-started/rkt/
-  - title: Installation
-    section:
-    - title: 'Manual Installation'
-      path: /getting-started/rkt/installation/manual
-    - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /getting-started/rkt/installation/vagrant-coreos/
-  - title: Tutorials
-    section:
-    - title: Basic Network Isolation
-      path: /getting-started/rkt/tutorials/basic
-  - title: Troubleshooting
-    path: /getting-started/rkt/troubleshooting
 
 - title: Host Protection
   section:
