@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	kdd "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -68,7 +69,7 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 		// Filter in only objects that are written by policy controller.
 		m := make(map[string]interface{})
 		for _, policy := range calicoPolicies.Items {
-			if strings.HasPrefix(policy.Name, "knp.default.") {
+			if strings.HasPrefix(policy.Name, kdd.K8sNetworkPolicyNamePrefix) {
 				// Update the network policy's ObjectMeta so that it simply contains the name and namespace.
 				// There is other metadata that we might receive (like resource version) that we don't want to
 				// compare in the cache.

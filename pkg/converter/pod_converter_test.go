@@ -52,7 +52,11 @@ var _ = Describe("PodConverter", func() {
 
 		// Assert labels.
 		By("returning a WorkloadEndpointData with the Namespace label present", func() {
-			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
+			l := map[string]string{
+				"projectcalico.org/namespace":    "default",
+				"projectcalico.org/orchestrator": "k8s",
+			}
+			Expect(wepData.(converter.WorkloadEndpointData).Labels).To(Equal(l))
 		})
 	})
 
@@ -90,9 +94,10 @@ var _ = Describe("PodConverter", func() {
 
 		// Assert labels are correct.
 		var labels = map[string]string{
-			"foo":           "bar",
-			"roger":         "rabbit",
-			"calico/k8s_ns": "default",
+			"foo":   "bar",
+			"roger": "rabbit",
+			"projectcalico.org/orchestrator": "k8s",
+			"projectcalico.org/namespace":    "default",
 		}
 
 		By("returning a WorkloadEndpointData with the pod's labels", func() {

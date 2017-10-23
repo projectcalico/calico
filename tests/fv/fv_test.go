@@ -85,7 +85,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		var profName string
 		BeforeEach(func() {
 			nsName := "peanutbutter"
-			profName = "k8s_ns." + nsName
+			profName = "kns." + nsName
 			ns := &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nsName,
@@ -146,7 +146,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		BeforeEach(func() {
 			// Create a Kubernetes NetworkPolicy.
 			policyName = "jelly"
-			genPolicyName = "knp.default.default." + policyName
+			genPolicyName = "knp.default." + policyName
 			policyNamespace = "default"
 			np := &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
@@ -205,7 +205,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 				Eventually(func() string {
 					p, _ := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 					return p.Spec.Selector
-				}, time.Second*15, 500*time.Millisecond).Should(Equal("calico/k8s_ns == 'default' && fools == 'gold'"))
+				}, time.Second*15, 500*time.Millisecond).Should(Equal("projectcalico.org/orchestrator == 'k8s' && fools == 'gold'"))
 			})
 		})
 
@@ -239,7 +239,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		BeforeEach(func() {
 			// Create a Kubernetes NetworkPolicy.
 			policyName = "jelly"
-			genPolicyName = "knp.default.default." + policyName
+			genPolicyName = "knp.default." + policyName
 			policyNamespace = "default"
 			var np *v1beta1.NetworkPolicy
 			np = &v1beta1.NetworkPolicy{
@@ -295,7 +295,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 
 			By("checking the policy's selector is correct", func() {
-				Expect(p.Spec.Selector).Should(Equal("calico/k8s_ns == 'default' && fools == 'gold'"))
+				Expect(p.Spec.Selector).Should(Equal("projectcalico.org/orchestrator == 'k8s' && fools == 'gold'"))
 			})
 
 			By("checking the policy's egress rule is correct", func() {
@@ -355,8 +355,9 @@ var _ = Describe("kube-controllers FV tests", func() {
 			wep.Name = fmt.Sprintf("%s-k8s-%s-eth0", nodeName, podName)
 			wep.Namespace = podNamespace
 			wep.Labels = map[string]string{
-				"foo":           "label1",
-				"calico/k8s_ns": podNamespace,
+				"foo": "label1",
+				"projectcalico.org/namespace":    podNamespace,
+				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}
 			wep.Spec = api.WorkloadEndpointSpec{
 				ContainerID:  "container_id_1",

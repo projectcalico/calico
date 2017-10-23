@@ -25,9 +25,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// ProfileNameFormat Format used by policy controller to name Calico profiles
-const ProfileNameFormat = "k8s_ns."
-
 type namespaceConverter struct {
 }
 
@@ -63,7 +60,7 @@ func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 
 // GetKey returns name of the Profile as its key.  For Profiles
 // backed by Kubernetes namespaces and managed by this controller, the name
-// is of format `k8s_ns.name`.
+// is of format `kns.name`.
 func (nc *namespaceConverter) GetKey(obj interface{}) string {
 	profile := obj.(api.Profile)
 	return profile.Name

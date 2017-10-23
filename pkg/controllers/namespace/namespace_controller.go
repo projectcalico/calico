@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/converter"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	kdd "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -65,7 +66,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 
 		// Filter out only objects that are written by policy controller.
 		for _, profile := range profileList.Items {
-			if strings.HasPrefix(profile.Name, converter.ProfileNameFormat) {
+			if strings.HasPrefix(profile.Name, kdd.NamespaceProfileNamePrefix) {
 				// Update the profile's ObjectMeta so that it simply contains the name.
 				// There is other metadata that we might receive (like resource version) that we don't want to
 				// compare in the cache.
