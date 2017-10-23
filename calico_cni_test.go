@@ -72,7 +72,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(profile.Labels).Should(Equal(map[string]string{"net1": ""}))
 				Expect(profile.Spec.EgressRules).Should(Equal([]api.Rule{{Action: "allow"}}))
-				Expect(profile.Spec.IngressRules).Should(Equal([]api.Rule{{Action: "allow", Source: api.EntityRule{Tag: "net1"}}}))
+				Expect(profile.Spec.IngressRules).Should(Equal([]api.Rule{{Action: "allow", Source: api.EntityRule{Selector: "has(net1)"}}}))
 
 				// The endpoint is created in etcd
 				endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
