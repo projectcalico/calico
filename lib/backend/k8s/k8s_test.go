@@ -351,12 +351,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Performing a Get on the Profile and ensure no error in the Calico API", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name), Kind: capiv2.KindProfile}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("kns.%s", ns.ObjectMeta.Name), Kind: capiv2.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking the correct entries are in our cache", func() {
-			expectedName := "k8s_ns.test-syncer-namespace-default-deny"
+			expectedName := "kns.test-syncer-namespace-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 		})
@@ -367,7 +367,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking the correct entries are no longer in our cache", func() {
-			expectedName := "k8s_ns.test-syncer-namespace-default-deny"
+			expectedName := "kns.test-syncer-namespace-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
 		})
@@ -407,13 +407,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Perform a Get and ensure no error in the Calico API.
 		By("getting a Profile", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name), Kind: capiv2.KindProfile}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("kns.%s", ns.ObjectMeta.Name), Kind: capiv2.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Expect corresponding Profile updates over the syncer for this Namespace.
 		By("Checking the correct entries are in our cache", func() {
-			expectedName := "k8s_ns.test-syncer-namespace-no-default-deny"
+			expectedName := "kns.test-syncer-namespace-no-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 		})
@@ -424,7 +424,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking the correct entries are in no longer in our cache", func() {
-			expectedName := "k8s_ns.test-syncer-namespace-no-default-deny"
+			expectedName := "kns.test-syncer-namespace-no-default-deny"
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
 		})
@@ -483,7 +483,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Perform a Get and ensure no error in the Calico API.
-		_, err = c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("knp.default.default.%s", np.ObjectMeta.Name), Kind: capiv2.KindNetworkPolicy}, "")
+		_, err = c.Get(ctx, model.ResourceKey{
+			Name:      fmt.Sprintf("knp.default.%s", np.ObjectMeta.Name),
+			Namespace: "default",
+			Kind:      capiv2.KindNetworkPolicy,
+		}, "")
 		Expect(err).NotTo(HaveOccurred())
 	})
 

@@ -71,7 +71,7 @@ type networkPolicyClient struct {
 func (c *networkPolicyClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debug("Received Create request on NetworkPolicy type")
 	key := kvp.Key.(model.ResourceKey)
-	if strings.HasPrefix(key.Name, "knp.default.") {
+	if strings.HasPrefix(key.Name, conversion.K8sNetworkPolicyNamePrefix) {
 		// We don't support Create of a Kubernetes NetworkPolicy.
 		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: kvp.Key,
@@ -84,7 +84,7 @@ func (c *networkPolicyClient) Create(ctx context.Context, kvp *model.KVPair) (*m
 func (c *networkPolicyClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debug("Received Update request on NetworkPolicy type")
 	key := kvp.Key.(model.ResourceKey)
-	if strings.HasPrefix(key.Name, "knp.default.") {
+	if strings.HasPrefix(key.Name, conversion.K8sNetworkPolicyNamePrefix) {
 		// We don't support Update of a Kubernetes NetworkPolicy.
 		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: kvp.Key,
@@ -104,7 +104,7 @@ func (c *networkPolicyClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 func (c *networkPolicyClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	log.Debug("Received Delete request on NetworkPolicy type")
 	k := key.(model.ResourceKey)
-	if strings.HasPrefix(k.Name, "knp.default.") {
+	if strings.HasPrefix(k.Name, conversion.K8sNetworkPolicyNamePrefix) {
 		// We don't support Delete of a Kubernetes NetworkPolicy.
 		return nil, cerrors.ErrorOperationNotSupported{
 			Identifier: key,
@@ -120,21 +120,21 @@ func (c *networkPolicyClient) Get(ctx context.Context, key model.Key, revision s
 	if k.Name == "" {
 		return nil, errors.New("Missing policy name")
 	}
+	if k.Namespace == "" {
+		return nil, errors.New("Missing policy namespace")
+	}
 
 	// Check to see if this is backed by a NetworkPolicy.
-	if strings.HasPrefix(k.Name, "knp.default.") {
-		// Backed by a NetworkPolicy. Parse out the namespace / name.
-		namespace, policyName, err := c.converter.ParsePolicyNameNetworkPolicy(k.Name)
-		if err != nil {
-			return nil, cerrors.ErrorResourceDoesNotExist{Err: err, Identifier: k}
-		}
+	if strings.HasPrefix(k.Name, conversion.K8sNetworkPolicyNamePrefix) {
+		// Backed by a NetworkPolicy - extract the name.
+		policyName := strings.TrimPrefix(k.Name, conversion.K8sNetworkPolicyNamePrefix)
 
 		// Get the NetworkPolicy from the API and convert it.
 		networkPolicy := extensions.NetworkPolicy{}
-		err = c.clientSet.Extensions().RESTClient().
+		err := c.clientSet.Extensions().RESTClient().
 			Get().
 			Resource("networkpolicies").
-			Namespace(namespace).
+			Namespace(k.Namespace).
 			Name(policyName).
 			VersionedParams(&metav1.GetOptions{ResourceVersion: revision}, scheme.ParameterCodec).
 			Do().Into(&networkPolicy)

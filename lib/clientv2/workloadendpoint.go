@@ -46,6 +46,7 @@ func (r workloadEndpoints) Create(ctx context.Context, res *apiv2.WorkloadEndpoi
 	if err := r.validate(res); err != nil {
 		return nil, err
 	}
+	r.updateLabelsForStorage(res)
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindWorkloadEndpoint, res)
 	if out != nil {
 		return out.(*apiv2.WorkloadEndpoint), err
@@ -59,6 +60,7 @@ func (r workloadEndpoints) Update(ctx context.Context, res *apiv2.WorkloadEndpoi
 	if err := r.validate(res); err != nil {
 		return nil, err
 	}
+	r.updateLabelsForStorage(res)
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindWorkloadEndpoint, res)
 	if out != nil {
 		return out.(*apiv2.WorkloadEndpoint), err
@@ -129,4 +131,15 @@ func (r workloadEndpoints) validate(res *apiv2.WorkloadEndpoint) error {
 		}
 	}
 	return nil
+}
+
+// updateLabelsForStorage updates the set of labels that we persist.  It adds/overrides
+// the Namespace and Orchestrator labels which must be set to the correct values and are
+// not user configurable.
+func (r workloadEndpoints) updateLabelsForStorage(res *apiv2.WorkloadEndpoint) {
+	if res.Labels == nil {
+		res.Labels = make(map[string]string, 2)
+	}
+	res.Labels[apiv2.LabelNamespace] = res.Namespace
+	res.Labels[apiv2.LabelOrchestrator] = res.Spec.Orchestrator
 }

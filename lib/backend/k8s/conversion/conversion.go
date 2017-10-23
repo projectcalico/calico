@@ -38,6 +38,13 @@ var (
 	protoTCP = kapiv1.ProtocolTCP
 )
 
+type selectorType int8
+
+const (
+	SelectorNamespace selectorType = iota
+	SelectorPod
+)
+
 //TODO: make this private and expose a public conversion interface instead
 type Converter struct {
 }
@@ -59,22 +66,6 @@ func (c Converter) ParseWorkloadEndpointName(workloadName string) (names.Workloa
 	return names.ParseWorkloadEndpointName(workloadName)
 }
 
-// ParsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
-func (c Converter) ParsePolicyNameNetworkPolicy(name string) (string, string, error) {
-	// Policies backed by NetworkPolicies have form "knp.default.<ns_name>.<np_name>"
-	if !strings.HasPrefix(name, "knp.default.") {
-		// This is not backed by a Kubernetes NetworkPolicy.
-		return "", "", fmt.Errorf("Policy %s not backed by a NetworkPolicy", name)
-	}
-
-	splits := strings.SplitN(strings.TrimPrefix(name, "knp.default."), ".", 2)
-	if len(splits) != 2 {
-		return "", "", fmt.Errorf("Name does not include both Namespace and NetworkPolicy: %s", name)
-	}
-	// Return Namespace, NetworkPolicy name.
-	return splits[0], splits[1], nil
-}
-
 // NamespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
 // labels from the Namespace which are inherited by the WorkloadEndpoints within
 // the Profile. This Profile also has the default ingress and egress rules, which are both 'allow'.
@@ -82,12 +73,12 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	// Generate the labels to apply to the profile, using a special prefix
 	// to indicate that these are the labels from the parent Kubernetes Namespace.
 	labels := map[string]string{}
-	for k, v := range ns.ObjectMeta.Labels {
-		labels[fmt.Sprintf("pcns.%s", k)] = v
+	for k, v := range ns.Labels {
+		labels[NamespaceLabelPrefix+k] = v
 	}
 
 	// Create the profile object.
-	name := fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name)
+	name := NamespaceProfileNamePrefix + ns.Name
 	profile := apiv2.NewProfile()
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
@@ -95,8 +86,8 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		UID:               ns.UID,
 	}
 	profile.Spec = apiv2.ProfileSpec{
-		IngressRules:  []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
-		EgressRules:   []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+		IngressRules:  []apiv2.Rule{{Action: apiv2.Allow}},
+		EgressRules:   []apiv2.Rule{{Action: apiv2.Allow}},
 		LabelsToApply: labels,
 	}
 
@@ -107,7 +98,7 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 			Kind: apiv2.KindProfile,
 		},
 		Value:    profile,
-		Revision: ns.ObjectMeta.ResourceVersion,
+		Revision: ns.ResourceVersion,
 	}
 	return &kvp, nil
 }
@@ -146,12 +137,12 @@ func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
 // fail to convert from a Pod to WorkloadEndpoint otherwise.
 func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
 	// Pull out the profile and workload ID based on pod name and Namespace.
-	profile := fmt.Sprintf("k8s_ns.%s", pod.ObjectMeta.Namespace)
+	profile := NamespaceProfileNamePrefix + pod.Namespace
 	wepids := names.WorkloadEndpointIdentifiers{
 		Node:         pod.Spec.NodeName,
-		Orchestrator: "k8s",
+		Orchestrator: apiv2.OrchestratorKubernetes,
 		Endpoint:     "eth0",
-		Pod:          pod.ObjectMeta.Name,
+		Pod:          pod.Name,
 	}
 	wepName, err := wepids.CalculateWorkloadEndpointName(false)
 	if err != nil {
@@ -174,12 +165,14 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	// the host-side veth configured by the CNI plugin.
 	interfaceName := VethNameForWorkload(wepName)
 
-	// Build the labels map.
-	labels := map[string]string{}
-	if pod.ObjectMeta.Labels != nil {
-		labels = pod.ObjectMeta.Labels
+	// Build the labels map.  Start with the pod labels, and append two additional labels for
+	// namespace and orchestrator matches.
+	labels := pod.Labels
+	if labels == nil {
+		labels = make(map[string]string, 2)
 	}
-	labels["calico/k8s_ns"] = pod.ObjectMeta.Namespace
+	labels[apiv2.LabelNamespace] = pod.Namespace
+	labels[apiv2.LabelOrchestrator] = apiv2.OrchestratorKubernetes
 
 	// Map any named ports through.
 	var endpointPorts []apiv2.EndpointPort
@@ -214,7 +207,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	wep := apiv2.NewWorkloadEndpoint()
 	wep.ObjectMeta = metav1.ObjectMeta{
 		Name:              wepName,
-		Namespace:         pod.ObjectMeta.Namespace,
+		Namespace:         pod.Namespace,
 		CreationTimestamp: pod.CreationTimestamp,
 		UID:               pod.UID,
 		Labels:            labels,
@@ -234,11 +227,11 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
 			Name:      wepName,
-			Namespace: pod.ObjectMeta.Namespace,
+			Namespace: pod.Namespace,
 			Kind:      apiv2.KindWorkloadEndpoint,
 		},
 		Value:    wep,
-		Revision: pod.ObjectMeta.ResourceVersion,
+		Revision: pod.ResourceVersion,
 	}
 	return &kvp, nil
 }
@@ -246,7 +239,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
 func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf("knp.default.%s.%s", np.ObjectMeta.Namespace, np.ObjectMeta.Name)
+	policyName := fmt.Sprintf(K8sNetworkPolicyNamePrefix + np.Name)
 
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.
@@ -255,13 +248,13 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 	// Generate the ingress rules list.
 	var ingressRules []apiv2.Rule
 	for _, r := range np.Spec.Ingress {
-		ingressRules = append(ingressRules, c.k8sRuleToCalico(r.From, r.Ports, np.ObjectMeta.Namespace, true)...)
+		ingressRules = append(ingressRules, c.k8sRuleToCalico(r.From, r.Ports, np.Namespace, true)...)
 	}
 
 	// Generate the egress rules list.
 	var egressRules []apiv2.Rule
 	for _, r := range np.Spec.Egress {
-		egressRules = append(egressRules, c.k8sRuleToCalico(r.To, r.Ports, np.ObjectMeta.Namespace, false)...)
+		egressRules = append(egressRules, c.k8sRuleToCalico(r.To, r.Ports, np.Namespace, false)...)
 	}
 
 	// Calculate Types setting.
@@ -299,13 +292,13 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 	policy := apiv2.NewNetworkPolicy()
 	policy.ObjectMeta = metav1.ObjectMeta{
 		Name:              policyName,
-		Namespace:         np.ObjectMeta.Namespace,
+		Namespace:         np.Namespace,
 		CreationTimestamp: np.CreationTimestamp,
 		UID:               np.UID,
 	}
 	policy.Spec = apiv2.PolicySpec{
 		Order:        &order,
-		Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
+		Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
 		IngressRules: ingressRules,
 		EgressRules:  egressRules,
 		Types:        types,
@@ -314,24 +307,26 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 	// Build and return the KVPair.
 	return &model.KVPair{
 		Key: model.ResourceKey{
-			Name: policyName,
-			Kind: apiv2.KindNetworkPolicy,
+			Name:      policyName,
+			Namespace: np.Namespace,
+			Kind:      apiv2.KindNetworkPolicy,
 		},
 		Value:    policy,
-		Revision: np.ObjectMeta.ResourceVersion,
+		Revision: np.ResourceVersion,
 	}, nil
 }
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
 // equivalent.
-func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) string {
-	// If this is a podSelector, it needs to be namespaced, and it
-	// uses a different prefix.  Otherwise, treat this as a NamespaceSelector.
-	selectors := []string{}
-	prefix := "pcns."
-	if ns != nil {
-		prefix = ""
-		selectors = append(selectors, fmt.Sprintf("calico/k8s_ns == '%s'", *ns))
+func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
+	// All selectors should be limited in scope to Kubernetes pods.
+	selectors := []string{fmt.Sprintf("%s == 'k8s'", apiv2.LabelOrchestrator)}
+
+	// If this is a namespace selector, the labels need to be prefixed with the profile namespace
+	// prefix.
+	var prefix string
+	if selectorType == SelectorNamespace {
+		prefix = NamespaceLabelPrefix
 	}
 
 	// matchLabels is a map key => value, it means match if (label[key] ==
@@ -361,11 +356,6 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) stri
 		case metav1.LabelSelectorOpDoesNotExist:
 			selectors = append(selectors, fmt.Sprintf("! has(%s%s)", prefix, e.Key))
 		}
-	}
-
-	// If namespace selector is empty then we select all namespaces.
-	if len(selectors) == 0 && ns == nil {
-		selectors = []string{"has(calico/k8s_ns)"}
 	}
 
 	return strings.Join(selectors, " && ")
@@ -481,11 +471,11 @@ func (c Converter) k8sPeerToCalicoFields(peer *extensions.NetworkPolicyPeer, ns 
 	// Determine the source selector for the rule.
 	// Only one of PodSelector / NamespaceSelector can be defined.
 	if peer.PodSelector != nil {
-		selector = c.k8sSelectorToCalico(peer.PodSelector, &ns)
+		selector = c.k8sSelectorToCalico(peer.PodSelector, SelectorPod)
 		return
 	}
 	if peer.NamespaceSelector != nil {
-		selector = c.k8sSelectorToCalico(peer.NamespaceSelector, nil)
+		selector = c.k8sSelectorToCalico(peer.NamespaceSelector, SelectorNamespace)
 		return
 	}
 	if peer.IPBlock != nil {
@@ -528,11 +518,11 @@ func (c Converter) k8sPortToCalico(port extensions.NetworkPolicyPort) []numorstr
 
 // ProfileNameToNamespace extracts the Namespace name from the given Profile name.
 func (c Converter) ProfileNameToNamespace(profileName string) (string, error) {
-	// Profile objects backed by Namespaces have form "k8s_ns.<ns_name>"
-	if !strings.HasPrefix(profileName, "k8s_ns.") {
+	// Profile objects backed by Namespaces have form "kns.<ns_name>"
+	if !strings.HasPrefix(profileName, NamespaceProfileNamePrefix) {
 		// This is not backed by a Kubernetes Namespace.
 		return "", fmt.Errorf("Profile %s not backed by a Namespace", profileName)
 	}
 
-	return strings.TrimPrefix(profileName, "k8s_ns."), nil
+	return strings.TrimPrefix(profileName, NamespaceProfileNamePrefix), nil
 }

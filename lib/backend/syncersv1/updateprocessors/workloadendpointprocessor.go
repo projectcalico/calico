@@ -115,19 +115,18 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 	}
 
 	v1value := &model.WorkloadEndpoint{
-		State:            "active",
-		Name:             v2res.Spec.InterfaceName,
-		ActiveInstanceID: v2res.Spec.ContainerID,
-		Mac:              cmac,
-		ProfileIDs:       v2res.Spec.Profiles,
-		IPv4Nets:         ipv4Nets,
-		IPv6Nets:         ipv6Nets,
-		IPv4NAT:          ipv4NAT,
-		IPv6NAT:          ipv6NAT,
-		Labels:           v2res.GetLabels(),
-		IPv4Gateway:      ipv4Gateway,
-		IPv6Gateway:      ipv6Gateway,
-		Ports:            ports,
+		State:       "active",
+		Name:        v2res.Spec.InterfaceName,
+		Mac:         cmac,
+		ProfileIDs:  v2res.Spec.Profiles,
+		IPv4Nets:    ipv4Nets,
+		IPv6Nets:    ipv6Nets,
+		IPv4NAT:     ipv4NAT,
+		IPv6NAT:     ipv6NAT,
+		Labels:      v2res.GetLabels(),
+		IPv4Gateway: ipv4Gateway,
+		IPv6Gateway: ipv6Gateway,
+		Ports:       ports,
 	}
 
 	return v1value, nil
