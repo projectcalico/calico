@@ -312,11 +312,7 @@ Description:
 			vol{hostPath: "/var/run/docker.sock", containerPath: "/var/run/docker.sock"})
 	}
 
-	if etcdcfg.EtcdEndpoints == "" {
-		envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdScheme + "://" + etcdcfg.EtcdAuthority
-	} else {
-		envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdEndpoints
-	}
+	envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdEndpoints
 	if etcdcfg.EtcdCACertFile != "" {
 		envs["ETCD_CA_CERT_FILE"] = ETCD_CA_CERT_NODE_FILE
 		vols = append(vols, vol{hostPath: etcdcfg.EtcdCACertFile, containerPath: ETCD_CA_CERT_NODE_FILE})

@@ -65,7 +65,6 @@ Description:
 
     * bgpConfiguration
     * bgpPeer
-    * clusterInformation
     * felixConfiguration
     * globalNetworkPolicy
     * hostEndpoint

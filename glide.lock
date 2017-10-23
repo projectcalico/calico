@@ -1,5 +1,5 @@
-hash: 57c26af2d28b80040a21b38eea37bd4b70e946dc839f2137d5390657af4614bd
-updated: 2017-10-27T14:16:32.890007-07:00
+hash: bc006be1f71e306bae56a3fd5f5487c2cce7255d22a81941f84f41acc6ca812f
+updated: 2017-11-01T19:01:43.871129953-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -191,6 +191,8 @@ imports:
   - server
   - table
   - zebra
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/pelletier/go-toml
   version: 4e9e0ee19b60b13eb79915933f44d8ed5f268bdd
 - name: github.com/peterbourgon/diskv
@@ -204,7 +206,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dae320cd652b66d908eb5d59209717e3c3514c26
+  version: dae5f7c41e68cbf278abd2c2a46af904e011a835
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -351,7 +353,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 6c6dac0277229b9e9578c5ca3f74a4345d35cdc2
+  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -413,6 +415,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait

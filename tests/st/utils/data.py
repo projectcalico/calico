@@ -289,6 +289,26 @@ hostendpoint_name1_rev2 = {
     }
 }
 
+hostendpoint_name1_rev3 = {
+    'apiVersion': API_VERSION,
+    'kind': 'HostEndpoint',
+    'metadata': {
+        'name': 'endpoint1',
+        'labels': {'type': 'frontend', 'misc': 'version1'},
+        'annotations': {'key': 'value'},
+        'selfLink': 'test-self-link',
+        'uid': 'test-uid-change',
+        'generation': 3,
+        'finalizers': ['finalizer1', 'finalizer2'],
+        'creationTimestamp': '2006-01-02T15:04:05Z',
+    },
+    'spec': {
+        'interfaceName': 'cali7',
+        'profiles': ['prof1', 'prof2'],
+        'node': 'host2'
+    }
+}
+
 #
 # Profiles
 #
