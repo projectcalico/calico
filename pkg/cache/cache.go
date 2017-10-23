@@ -276,6 +276,8 @@ func (c *calicoCache) performDatastoreSync() error {
 			// Objects differ - queue an update to re-program if configured to do so.
 			if !c.reconcilerConfig.DisableUpdateOnChange {
 				c.log.WithField("key", key).Warn("Value for key has changed, queueing update to reprogram")
+				c.log.Debugf("Cached:  %+v", cachedObj)
+				c.log.Debugf("Updated: %+v", obj)
 				c.workqueue.Add(key)
 			}
 			continue
