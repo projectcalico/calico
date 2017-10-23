@@ -76,7 +76,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 
 		// Create a Kubernetes NetworkPolicy.
 		policyName = "jelly"
-		genPolicyName = "knp.default.default." + policyName
+		genPolicyName = "knp.default." + policyName
 		policyNamespace = "default"
 		var np *v1beta1.NetworkPolicy
 		np = &v1beta1.NetworkPolicy{

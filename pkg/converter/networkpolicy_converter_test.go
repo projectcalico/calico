@@ -76,7 +76,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 
 		// Assert policy order.
@@ -87,7 +87,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		// Check the selector is correct, and that the matches are sorted.
 		By("returning a calico policy with correct selector", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
-				"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
+				"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
 		})
 
 		protoTCP := numorstring.ProtocolFromString("tcp")
@@ -95,7 +95,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.IngressRules).To(ConsistOf(api.Rule{
 				Action:      "allow",
 				Protocol:    &protoTCP, // Defaulted to TCP.
-				Source:      api.EntityRule{Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'"},
+				Source:      api.EntityRule{Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'"},
 				Destination: api.EntityRule{Ports: []numorstring.Port{numorstring.SinglePort(80)}},
 			}))
 		})
@@ -134,7 +134,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 
 		// Assert policy order.
@@ -145,7 +145,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		// Assert selectors
 		By("returning a calico policy with correct selector", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
-				"calico/k8s_ns == 'default' && label == 'value'"))
+				"projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		})
 
 		// There should be no egress rules.
@@ -185,7 +185,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 
 		// Assert policy order.
@@ -195,7 +195,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert selectors
 		By("returning a calico policy with correct selector", func() {
-			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal("calico/k8s_ns == 'default'"))
+			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		})
 
 		// There should be no ingress rules.
@@ -248,7 +248,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 
 		// Assert policy order.
@@ -259,13 +259,13 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		// Assert selectors
 		By("returning a calico policy with correct selector", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
-				"calico/k8s_ns == 'default' && label == 'value'"))
+				"projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		})
 
 		// Assert ingress rules
 		By("returning a calico policy with ingress rules", func() {
 			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(1))
-			Expect(pol.(api.NetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("has(calico/k8s_ns)"))
+			Expect(pol.(api.NetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		})
 
 		// There should be no egress rules.
@@ -302,7 +302,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 	})
 
@@ -395,7 +395,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("returning a calico policy with expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 
 		// Assert policy order.
@@ -406,7 +406,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 		// Check the selector is correct, and that the matches are sorted.
 		By("returning a calico policy with correct selector", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
-				"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
+				"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
 		})
 
 		protoTCP := numorstring.ProtocolFromString("tcp")
@@ -414,7 +414,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.EgressRules).To(ConsistOf(api.Rule{
 				Action:   "allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
-				Destination: api.EntityRule{Selector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
+				Destination: api.EntityRule{Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 					Ports: []numorstring.Port{numorstring.SinglePort(80)}},
 			}))
 		})
@@ -473,7 +473,7 @@ var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
 
 		// Assert policy name.
 		By("generating the expected name", func() {
-			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.default.testPolicy"))
+			Expect(pol.(api.NetworkPolicy).Name).To(Equal("knp.default.testPolicy"))
 		})
 
 		// Assert policy order.
@@ -484,7 +484,7 @@ var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
 		// Assert selectors
 		By("generating the correct selector", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Selector).To(Equal(
-				"calico/k8s_ns == 'default' && label == 'value'"))
+				"projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		})
 
 		// There should be one inbound rule.

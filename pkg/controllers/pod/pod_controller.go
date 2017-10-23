@@ -69,7 +69,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 		m := make(map[string]interface{})
 		for _, wep := range workloadEndpoints.Items {
 			// We only care about Kubernetes workload endpoints.
-			if wep.Spec.Orchestrator == "k8s" {
+			if wep.Spec.Orchestrator == api.OrchestratorKubernetes {
 				d := converter.BuildWorkloadEndpointData(wep)
 				key := podConverter.GetKey(d)
 				m[key] = d
@@ -340,7 +340,7 @@ func (c *podController) populateWorkloadEndpointCache() error {
 
 	c.workloadEndpointCache.Lock()
 	for _, wep := range workloadEndpointList.Items {
-		if wep.Spec.Orchestrator == "k8s" {
+		if wep.Spec.Orchestrator == api.OrchestratorKubernetes {
 			wd := converter.BuildWorkloadEndpointData(wep)
 			k := converter.NewPodConverter().GetKey(wd)
 			c.workloadEndpointCache.m[k] = wep

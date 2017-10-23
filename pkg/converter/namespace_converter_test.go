@@ -48,7 +48,7 @@ var _ = Describe("Namespace conversion tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		expectedName := "k8s_ns.default"
+		expectedName := "kns.default"
 		actualName := p.(api.Profile).Name
 		By("returning a Calico profile with the expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
@@ -87,7 +87,7 @@ var _ = Describe("Namespace conversion tests", func() {
 		})
 
 		// Ensure correct profile name
-		expectedName := "k8s_ns.default"
+		expectedName := "kns.default"
 		actualName := p.(api.Profile).Name
 		By("returning a Calico profile with the expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
@@ -129,7 +129,7 @@ var _ = Describe("Namespace conversion tests", func() {
 		})
 
 		// Ensure correct profile name
-		expectedName := "k8s_ns.default"
+		expectedName := "kns.default"
 		actualName := p.(api.Profile).Name
 		By("returning a Calico profile with expected name", func() {
 			Expect(actualName).Should(Equal(expectedName))
@@ -158,7 +158,7 @@ var _ = Describe("Namespace conversion tests", func() {
 	})
 
 	It("should generate the right key for a Profile", func() {
-		profileName := "k8s_ns.default"
+		profileName := "kns.default"
 		profile := api.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: profileName,
@@ -175,7 +175,7 @@ var _ = Describe("Namespace conversion tests", func() {
 		By("parsing the returned key back into component fields", func() {
 			ns, name := nsConverter.DeleteArgsFromKey(key)
 			Expect(ns).To(Equal(""))
-			Expect(name).To(Equal("k8s_ns.default"))
+			Expect(name).To(Equal("kns.default"))
 		})
 
 	})
