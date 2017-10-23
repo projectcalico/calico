@@ -247,7 +247,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		// If it's not, then just use the network name (which is the normal behavior)
 		// otherwise use one based on the Kubernetes pod's Namespace.
 		if conf.Policy.PolicyType == "k8s" {
-			endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", epIDs.Namespace)}
+			endpoint.Spec.Profiles = []string{k8sconversion.NamespaceProfileNamePrefix + epIDs.Namespace}
 		} else {
 			endpoint.Spec.Profiles = []string{conf.Name}
 		}
@@ -632,13 +632,6 @@ func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (
 		return nil, nil, nil, err
 	}
 
-	labels = pod.Labels
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	labels["calico/k8s_ns"] = podNamespace
-
 	var c k8sconversion.Converter
 	kvp, err := c.PodToWorkloadEndpoint(pod)
 	if err != nil {
@@ -646,6 +639,7 @@ func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (
 	}
 
 	ports = kvp.Value.(*api.WorkloadEndpoint).Spec.Ports
+	labels = kvp.Value.(*api.WorkloadEndpoint).Labels
 
 	return labels, pod.Annotations, ports, nil
 }
