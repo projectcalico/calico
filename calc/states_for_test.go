@@ -94,10 +94,10 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 var localEp1WithNamedPortPolicy = localEp1WithPolicy.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
-	"10.0.0.1/32,tcp:8080",
-	"10.0.0.2/32,tcp:8080",
-	"fc00:fe11::1/128,tcp:8080",
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
 }).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
 
 // localEp1WithNamedPortPolicy as above but with negated named port in the policy.
@@ -105,10 +105,10 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_negated_named_port_tcpport},
 ).withIPSet(namedPortAllLessFoobarTCPID, []string{
-	"10.0.0.1/32,tcp:8080",
-	"10.0.0.2/32,tcp:8080",
-	"fc00:fe11::1/128,tcp:8080",
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
 }).withIPSet(allLessFoobarSelectorId, []string{
 	// The selector gets filled in because it's needed when doing the negation.
 	"10.0.0.1/32",
@@ -144,10 +144,10 @@ var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithNamedPorts},
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_tcpport},
 ).withIPSet(namedPortAllTCPID, []string{
-	"10.0.0.1/32,tcp:8080",
-	"10.0.0.2/32,tcp:8080",
-	"fc00:fe11::1/128,tcp:8080",
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.1,tcp:8080",
+	"10.0.0.2,tcp:8080",
+	"fc00:fe11::1,tcp:8080",
+	"fc00:fe11::2,tcp:8080",
 }).withIPSet(bEqBSelectorId, []string{
 	"10.0.0.1/32",
 	"fc00:fe11::1/128",
@@ -199,10 +199,10 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 var localEp1WithNamedPortPolicyUDP = localEp1WithPolicy.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_with_selector_and_named_port_udpport},
 ).withIPSet(namedPortAllUDPID, []string{
-	"10.0.0.1/32,udp:9091",
-	"10.0.0.2/32,udp:9091",
-	"fc00:fe11::1/128,udp:9091",
-	"fc00:fe11::2/128,udp:9091",
+	"10.0.0.1,udp:9091",
+	"10.0.0.2,udp:9091",
+	"fc00:fe11::1,udp:9091",
+	"fc00:fe11::2,udp:9091",
 }).withIPSet(allSelectorId, nil).withName("ep1 local, named port policy")
 
 var hostEp1WithPolicy = withPolicy.withKVUpdates(
@@ -481,12 +481,12 @@ var localEpsWithNamedPortsPolicy = localEpsWithPolicy.withKVUpdates(
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(namedPortAllTCPID, []string{
-	"10.0.0.1/32,tcp:8080", // ep1
-	"fc00:fe11::1/128,tcp:8080",
-	"10.0.0.2/32,tcp:8080", // ep1 and ep2
-	"fc00:fe11::2/128,tcp:8080",
-	"10.0.0.3/32,tcp:8080", // ep2
-	"fc00:fe11::3/128,tcp:8080",
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
 }).withName("2 local, overlapping IPs & a named port policy")
 
 var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
@@ -494,16 +494,16 @@ var localEpsWithNamedPortsPolicyTCPPort2 = localEpsWithPolicy.withKVUpdates(
 ).withIPSet(
 	allSelectorId, nil,
 ).withIPSet(namedPortAllTCP2ID, []string{
-	"10.0.0.1/32,tcp:1234", // ep1
-	"fc00:fe11::1/128,tcp:1234",
+	"10.0.0.1,tcp:1234", // ep1
+	"fc00:fe11::1,tcp:1234",
 
-	"10.0.0.2/32,tcp:1234", // IP shared between ep1 and ep2 but different port no
-	"10.0.0.2/32,tcp:2345",
-	"fc00:fe11::2/128,tcp:1234",
-	"fc00:fe11::2/128,tcp:2345",
+	"10.0.0.2,tcp:1234", // IP shared between ep1 and ep2 but different port no
+	"10.0.0.2,tcp:2345",
+	"fc00:fe11::2,tcp:1234",
+	"fc00:fe11::2,tcp:2345",
 
-	"10.0.0.3/32,tcp:2345", // ep2
-	"fc00:fe11::3/128,tcp:2345",
+	"10.0.0.3,tcp:2345", // ep2
+	"fc00:fe11::3,tcp:2345",
 }).withName("2 local, overlapping IPs & a named port policy")
 
 // localEpsWithMismatchedNamedPortsPolicy contains a policy that has named port matches where the
@@ -559,10 +559,10 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlapp
 		EgressPolicyNames:  []string{"inherit-pol"},
 	}},
 ).withIPSet(namedPortInheritIPSetID, []string{
-	"10.0.0.1/32,tcp:8080", // ep1
-	"fc00:fe11::1/128,tcp:8080",
-	"10.0.0.2/32,tcp:8080", // ep1 and ep2
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
 	// ep2 doesn't match because it doesn't inherit the profile.
 }).withName("2 local WEPs with policy matching inherited label on WEP1")
 
@@ -570,44 +570,44 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlapp
 var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1.withKVUpdates(
 	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels1},
 ).withIPSet(namedPortInheritIPSetID, []string{
-	"10.0.0.1/32,tcp:8080", // ep1
-	"fc00:fe11::1/128,tcp:8080",
-	"10.0.0.2/32,tcp:8080", // ep1 and ep2
-	"fc00:fe11::2/128,tcp:8080",
-	"10.0.0.3/32,tcp:8080", // ep2
-	"fc00:fe11::3/128,tcp:8080",
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
 }).withName("2 local WEPs with policy matching inherited label on both WEPs")
 
 // Adjust workload 1 so it has duplicate named ports.
 var localEpsAndNamedPortPolicyDuplicatePorts = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1WithDupeNamedPorts},
 ).withIPSet(namedPortInheritIPSetID, []string{
-	"10.0.0.1/32,tcp:8080", // ep1
-	"fc00:fe11::1/128,tcp:8080",
-	"10.0.0.1/32,tcp:8081", // ep1
-	"fc00:fe11::1/128,tcp:8081",
-	"10.0.0.1/32,tcp:8082", // ep1
-	"fc00:fe11::1/128,tcp:8082",
-	"10.0.0.2/32,tcp:8081", // ep1
-	"fc00:fe11::2/128,tcp:8081",
-	"10.0.0.2/32,tcp:8082", // ep1
-	"fc00:fe11::2/128,tcp:8082",
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.1,tcp:8081", // ep1
+	"fc00:fe11::1,tcp:8081",
+	"10.0.0.1,tcp:8082", // ep1
+	"fc00:fe11::1,tcp:8082",
+	"10.0.0.2,tcp:8081", // ep1
+	"fc00:fe11::2,tcp:8081",
+	"10.0.0.2,tcp:8082", // ep1
+	"fc00:fe11::2,tcp:8082",
 
-	"10.0.0.2/32,tcp:8080", // ep1 and ep2
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
 
-	"10.0.0.3/32,tcp:8080", // ep2
-	"fc00:fe11::3/128,tcp:8080",
+	"10.0.0.3,tcp:8080", // ep2
+	"fc00:fe11::3,tcp:8080",
 }).withName("2 local WEPs with policy and duplicate named port on WEP1")
 
 // Then, change the label on EP2 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
 	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
-	"10.0.0.1/32,tcp:8080", // ep1
-	"fc00:fe11::1/128,tcp:8080",
-	"10.0.0.2/32,tcp:8080", // ep1 and ep2
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
 	// ep2 no longer matches
 }).withName("2 local WEPs with policy matching inherited label on WEP1; WEP2 has different label")
 
@@ -622,10 +622,10 @@ var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndN
 var localEpsAndNamedPortPolicyEP2ProfileRemoved = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
 	KVPair{Key: localWlEpKey2, Value: &localWlEp2WithLabelsButNoProfiles},
 ).withIPSet(namedPortInheritIPSetID, []string{
-	"10.0.0.1/32,tcp:8080", // ep1
-	"fc00:fe11::1/128,tcp:8080",
-	"10.0.0.2/32,tcp:8080", // ep1 and ep2
-	"fc00:fe11::2/128,tcp:8080",
+	"10.0.0.1,tcp:8080", // ep1
+	"fc00:fe11::1,tcp:8080",
+	"10.0.0.2,tcp:8080", // ep1 and ep2
+	"fc00:fe11::2,tcp:8080",
 	// ep2 no longer matches
 }).withActiveProfiles(
 	proto.ProfileID{"prof-1"},

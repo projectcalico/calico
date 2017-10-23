@@ -48,8 +48,8 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 		switch msg.Type {
 		case proto.IPSetUpdate_NET:
 			setType = ipsets.IPSetTypeHashNet
-		case proto.IPSetUpdate_NET_AND_PORT:
-			setType = ipsets.IPSetTypeHashNetPort
+		case proto.IPSetUpdate_IP_AND_PORT:
+			setType = ipsets.IPSetTypeHashIPPort
 		default:
 			log.WithField("type", msg.Type).Panic("Unknown IP set type")
 		}

@@ -115,7 +115,7 @@ func (d *IPSetData) UniqueID() string {
 // One of the proto.IPSetUpdate_IPSetType constants.
 func (d *IPSetData) DataplaneProtocolType() proto.IPSetUpdate_IPSetType {
 	if d.NamedPortProtocol != labelindex.ProtocolNone {
-		return proto.IPSetUpdate_NET_AND_PORT
+		return proto.IPSetUpdate_IP_AND_PORT
 	}
 	return proto.IPSetUpdate_NET
 }

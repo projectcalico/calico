@@ -58,73 +58,57 @@ var _ = Describe("IPSetType", func() {
 	It("should treat hash:net as valid", func() {
 		Expect(IPSetType("hash:net").IsValid()).To(BeTrue())
 	})
-	It("should treat hash:net,port as valid", func() {
-		Expect(IPSetType("hash:net,port").IsValid()).To(BeTrue())
+	It("should treat hash:ip,port as valid", func() {
+		Expect(IPSetType("hash:ip,port").IsValid()).To(BeTrue())
 	})
 })
 
-var _ = Describe("IPSetTypeHashNetPort", func() {
+var _ = Describe("IPSetTypeHashIPPort", func() {
 	It("should return its string form from SetType()", func() {
-		Expect(IPSetTypeHashNetPort.SetType()).To(Equal("hash:net,port"))
+		Expect(IPSetTypeHashIPPort.SetType()).To(Equal("hash:ip,port"))
 	})
 	It("should canonicalise an IPv4 IP,port", func() {
-		Expect(IPSetTypeHashNetPort.CanonicaliseMember("10.0.0.1,TCP:1234")).
-			To(Equal(V4CIDRPort{
-				CIDR:     ip.MustParseCIDROrIP("10.0.0.1").(ip.V4CIDR),
+		Expect(IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,TCP:1234")).
+			To(Equal(V4IPPort{
+				IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
 				Protocol: labelindex.ProtocolTCP,
 				Port:     1234,
 			}))
 	})
 	It("should canonicalise an IPv6 IP,port", func() {
-		Expect(IPSetTypeHashNetPort.CanonicaliseMember("feed:0::beef,uDp:3456")).
-			To(Equal(V6CIDRPort{
-				CIDR:     ip.MustParseCIDROrIP("feed::beef").(ip.V6CIDR),
-				Protocol: labelindex.ProtocolUDP,
-				Port:     3456,
-			}))
-	})
-	It("should canonicalise an IPv4 IP,port", func() {
-		Expect(IPSetTypeHashNetPort.CanonicaliseMember("10.0.10.0/24,TCP:1234")).
-			To(Equal(V4CIDRPort{
-				CIDR:     ip.MustParseCIDROrIP("10.0.10.0/24").(ip.V4CIDR),
-				Protocol: labelindex.ProtocolTCP,
-				Port:     1234,
-			}))
-	})
-	It("should canonicalise an IPv6 IP,port", func() {
-		Expect(IPSetTypeHashNetPort.CanonicaliseMember("feed:0::/96,uDp:3456")).
-			To(Equal(V6CIDRPort{
-				CIDR:     ip.MustParseCIDROrIP("feed::/96").(ip.V6CIDR),
+		Expect(IPSetTypeHashIPPort.CanonicaliseMember("feed:0::beef,uDp:3456")).
+			To(Equal(V6IPPort{
+				IP:       ip.FromString("feed::beef").(ip.V6Addr),
 				Protocol: labelindex.ProtocolUDP,
 				Port:     3456,
 			}))
 	})
 	It("should panic on bad IP,port", func() {
-		Expect(func() { IPSetTypeHashNetPort.CanonicaliseMember("foobar") }).To(Panic())
+		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar") }).To(Panic())
 	})
 	It("should panic on bad IP,port (IP)", func() {
-		Expect(func() { IPSetTypeHashNetPort.CanonicaliseMember("foobar,tcp:1234") }).To(Panic())
+		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar,tcp:1234") }).To(Panic())
 	})
 	It("should panic on bad IP,port (protocol)", func() {
-		Expect(func() { IPSetTypeHashNetPort.CanonicaliseMember("10.0.0.1,foo:1234") }).To(Panic())
+		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,foo:1234") }).To(Panic())
 	})
 	It("should panic on bad IP,port (port)", func() {
-		Expect(func() { IPSetTypeHashNetPort.CanonicaliseMember("10.0.0.1,tcp:bar") }).To(Panic())
+		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,tcp:bar") }).To(Panic())
 	})
 	It("should panic on bad IP,port (too long)", func() {
-		Expect(func() { IPSetTypeHashNetPort.CanonicaliseMember("10.0.0.1,tcp:1234,5") }).To(Panic())
+		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,tcp:1234,5") }).To(Panic())
 	})
 	It("should detect IPv6 for an IP,port", func() {
-		Expect(IPSetTypeHashNetPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
 	})
 	It("should detect IPv4 for an IP,port", func() {
-		Expect(IPSetTypeHashNetPort.IsMemberIPV6("10.0.0.1,tcp:1234")).To(BeFalse())
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("10.0.0.1,tcp:1234")).To(BeFalse())
 	})
 	It("should detect IPv6 for an IP,port", func() {
-		Expect(IPSetTypeHashNetPort.IsMemberIPV6("feed:beef::/96,tcp:1234")).To(BeTrue())
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
 	})
 	It("should detect IPv4 for an IP,port", func() {
-		Expect(IPSetTypeHashNetPort.IsMemberIPV6("10.0.0.0/16,tcp:1234")).To(BeFalse())
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("10.0.0.0,tcp:1234")).To(BeFalse())
 	})
 })
 
@@ -166,18 +150,18 @@ var _ = Describe("IPSetTypeHashNet", func() {
 
 var _ = Describe("IPPort types", func() {
 	It("V4 should stringify correctly", func() {
-		Expect(V4CIDRPort{
-			CIDR:     ip.MustParseCIDROrIP("10.0.0.0/16").(ip.V4CIDR),
+		Expect(V4IPPort{
+			IP:       ip.FromString("10.0.0.0").(ip.V4Addr),
 			Protocol: labelindex.ProtocolTCP,
 			Port:     1234,
-		}.String()).To(Equal("10.0.0.0/16,tcp:1234"))
+		}.String()).To(Equal("10.0.0.0,tcp:1234"))
 	})
 	It("V6 should stringify correctly", func() {
-		Expect(V6CIDRPort{
-			CIDR:     ip.MustParseCIDROrIP("feed:beef::/96").(ip.V6CIDR),
+		Expect(V6IPPort{
+			IP:       ip.FromString("feed:beef::").(ip.V6Addr),
 			Protocol: labelindex.ProtocolUDP,
 			Port:     1234,
-		}.String()).To(Equal("feed:beef::/96,udp:1234"))
+		}.String()).To(Equal("feed:beef::,udp:1234"))
 	})
 })
 

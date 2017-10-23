@@ -102,7 +102,7 @@ message IPSetUpdate {
   repeated string members = 2;
   enum IPSetType {
     NET = 0;  // Each member is "<CIDR>"
-    NET_AND_PORT = 1;  // Each member is "<CIDR>,(tcp|udp):port"
+    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp):port"
   }
   IPSetType type = 3;
 }

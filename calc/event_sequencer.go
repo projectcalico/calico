@@ -520,9 +520,9 @@ func memberToProto(member labelindex.IPSetMember) string {
 	case labelindex.ProtocolNone:
 		return member.CIDR.String()
 	case labelindex.ProtocolTCP:
-		return fmt.Sprintf("%s,tcp:%d", member.CIDR, member.PortNumber)
+		return fmt.Sprintf("%s,tcp:%d", member.CIDR.Addr(), member.PortNumber)
 	case labelindex.ProtocolUDP:
-		return fmt.Sprintf("%s,udp:%d", member.CIDR, member.PortNumber)
+		return fmt.Sprintf("%s,udp:%d", member.CIDR.Addr(), member.PortNumber)
 	}
 	log.WithField("member", member).Panic("Unknown IP set member type")
 	return ""
