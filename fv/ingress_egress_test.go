@@ -49,10 +49,10 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "default"
 		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
 		defaultProfile.Spec.IngressRules = []api.Rule{{
-			Action: "allow",
-			Source: api.EntityRule{Tag: "default"},
+			Action: api.Allow,
+			Source: api.EntityRule{Selector: "default == ''"},
 		}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
@@ -97,7 +97,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			policy.Namespace = "fv"
 			policy.Name = "policy-1"
 			allowFromW1 := api.Rule{
-				Action: "allow",
+				Action: api.Allow,
 				Source: api.EntityRule{
 					Selector: w[1].NameSelector(),
 				},
@@ -123,7 +123,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			policy.Namespace = "fv"
 			policy.Name = "policy-1"
 			allowToW1 := api.Rule{
-				Action: "allow",
+				Action: api.Allow,
 				Destination: api.EntityRule{
 					Selector: w[1].NameSelector(),
 				},
@@ -149,7 +149,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			policy.Namespace = "fv"
 			policy.Name = "policy-1"
 			allowFromW1 := api.Rule{
-				Action: "allow",
+				Action: api.Allow,
 				Source: api.EntityRule{
 					Selector: w[1].NameSelector(),
 				},
@@ -177,13 +177,13 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 			policy.Namespace = "fv"
 			policy.Name = "policy-1"
 			allowFromW1 := api.Rule{
-				Action: "allow",
+				Action: api.Allow,
 				Source: api.EntityRule{
 					Selector: w[1].NameSelector(),
 				},
 			}
 			policy.Spec.IngressRules = []api.Rule{allowFromW1}
-			policy.Spec.EgressRules = []api.Rule{{Action: "deny"}}
+			policy.Spec.EgressRules = []api.Rule{{Action: api.Deny}}
 			policy.Spec.Selector = w[0].NameSelector()
 		})
 
