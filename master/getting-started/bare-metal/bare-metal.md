@@ -152,8 +152,8 @@ hostname.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: v1
-  kind: node
+- apiVersion: projectcalico.org/v2
+  kind: Node
   metadata:
     name: <node name or hostname>
 EOF
@@ -197,8 +197,8 @@ appropriate values for your deployment.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: failsafe
   spec:
@@ -268,8 +268,8 @@ appropriate values for your deployment.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: v1
-  kind: hostEndpoint
+- apiVersion: projectcalico.org/v2
+  kind: HostEndpoint
   metadata:
     name: <name of endpoint>
     node: <node name or hostname>
@@ -314,8 +314,8 @@ of the interface:
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: v1
-  kind: hostEndpoint
+- apiVersion: projectcalico.org/v2
+  kind: HostEndpoint
   metadata:
     name: <name of endpoint>
     node: <node name or hostname>
@@ -363,8 +363,8 @@ endpoints that match particular label selectors.
 
 ```
 cat << EOF | dist/calicoctl create -f -
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: webserver
   spec:
@@ -516,8 +516,8 @@ policy that explicitly allows that traffic.
 {: .alert .alert-info}
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: empty-default-deny
   spec:
@@ -661,8 +661,8 @@ in general:
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: allow-cluster-internal-ingress
   spec:
@@ -674,8 +674,8 @@ calicoctl apply -f - <<EOF
         source:
           nets: [10.240.0.0/16, 192.168.0.0/16]
     selector: has(host-endpoint)
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: drop-other-ingress
   spec:
@@ -713,8 +713,8 @@ rule for forwarded traffic, forwarded traffic will be allowed for host endpoints
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: allow-outbound-external
   spec:
@@ -748,8 +748,8 @@ definitions.  For example, for `eth0` on `node1`:
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: v1
-  kind: hostEndpoint
+- apiVersion: projectcalico.org/v2
+  kind: HostEndpoint
   metadata:
     name: node1-eth0
     node: node1
@@ -774,8 +774,8 @@ pre-DNAT policy like this:
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: v1
-  kind: policy
+- apiVersion: projectcalico.org/v2
+  kind: GlobalNetworkPolicy
   metadata:
     name: allow-nodeport
   spec:

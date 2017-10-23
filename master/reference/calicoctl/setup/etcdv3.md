@@ -1,10 +1,11 @@
 ---
-title: Configuring calicoctl - etcdv2 datastore
+title: Configuring calicoctl - etcdv3 datastore
+no_canonical: true
 ---
 
-This document covers the configuration options for calicoctl when using an etcdv2 datastore.
+This document covers the configuration options for calicoctl when using an etcdv3 datastore.
 
-There are two ways to configure calicoctl with your etcdv2 cluster details:
+There are two ways to configure calicoctl with your etcdv3 cluster details:
 configuration file or environment variables.
 
 
@@ -18,16 +19,16 @@ datastore access.
 The config file is a yaml or json document in the following format:
 
 ```
-apiVersion: v1
-kind: calicoApiConfig
+apiVersion: projectcalico.org/v2
+kind: CalicoApiConfig
 metadata:
 spec:
-  datastoreType: "etcdv2"
+  datastoreType: "etcdv3"
   etcdEndpoints: "http://etcd1:2379,http://etcd2:2379"
   ...
 ```
 
-See table below for details on the etcdv2 specific fields that may be included in
+See table below for details on the etcdv3 specific fields that may be included in
 the spec section.
 
 If the file exists, then it must be valid and readable by calicoctl.  If the file
@@ -38,19 +39,19 @@ does not exist, calicoctl will read access details from the environment variable
 If you are not using a config file to specify your access information, calicoctl
 will check a particular set of environment variables.
 
-See the table below for details on the etcdv2 specific environment variables.
+See the table below for details on the etcdv3 specific environment variables.
 
 > **Note**: If neither file nor environment variables are set, calicoctl defaults to
-> using etcdv2 with a single endpoint of http://127.0.0.1:2379.
+> using etcdv3 with a single endpoint of http://127.0.0.1:2379.
 {: .alert .alert-info}
 
 
-## Complete list of etcdv2 connection configuration
+## Complete list of etcdv3 connection configuration
 
 | Setting (Environment variable)     | Description                                                                            | Schema
 | ---------------------------------- | -------------------------------------------------------------------------------------- | ------
-| datastoreType (DATASTORE_TYPE)     | Indicates the datastore to use [Default: `etcdv2`] (optional)                          | kubernetes, etcdv2
-| etcdEndpoints (ETCD_ENDPOINTS)     | A comma separated list of etcd endpoints [Default: `http://127.0.0.1:2379]` (optional) | string
+| datastoreType (DATASTORE_TYPE)     | Indicates the datastore to use [Default: `etcdv3`] (optional)                          | kubernetes, etcdv3
+| etcdEndpoints (ETCD_ENDPOINTS)     | A comma separated list of etcd endpoints [Default: `http://127.0.0.1:2379`] (optional) | string
 | etcdUsername (ETCD_USERNAME)       | Username for RBAC, e.g. `user` (optional)                                              | string
 | etcdPassword (ETCD_PASSWORD)       | Password for the given username, e.g. `password` (optional)                            | string
 | etcdKeyFile (ETCD_KEY_FILE)        | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)                       | string
@@ -60,7 +61,7 @@ See the table below for details on the etcdv2 specific environment variables.
 > **Note**:
 > - If you are running with TLS enabled, ensure your endpoint addresses use HTTPS.
 > - When specifying through environment variables, the `DATASTORE_TYPE` environment
->   is not required for etcdv2.
+>   is not required for etcdv3.
 > - All environment variables may also be prefixed with `CALICO_`, for example
 >   `CALICO_DATASTORE_TYPE` and `CALICO_ETCD_ENDPOINTS` etc. may also be used.
 >   This is useful if the non-prefixed names clash with existing environment
@@ -76,8 +77,8 @@ See the table below for details on the etcdv2 specific environment variables.
 #### Example configuration file
 
 ```yaml
-apiVersion: v1
-kind: calicoApiConfig
+apiVersion: projectcalico.org/v2
+kind: CalicoApiConfig
 metadata:
 spec:
   etcdEndpoints: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379

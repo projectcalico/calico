@@ -89,13 +89,13 @@ documents *mandates* the use of VLANs.
    for other settings that can be edited.)
    
    ```shell
-   - apiVersion: v1
-     kind: ipPool
+   - apiVersion: projectcalico.org/v2
+     kind: IPPool
      metadata:
-       cidr: 192.168.0.0/16
+      name: ippool-1
      spec:
-       ipip:
-   	  enabled: true
+       cidr: 192.168.0.0/16
+       ipipMode: Always
        nat-outgoing: true
    ```
 
@@ -269,11 +269,12 @@ node on which each container is hosted.
 
 ```
 cat << EOF | calicoctl apply -f -
-apiVersion: v1
-kind: ipPool
+apiVersion: projectcalico.org/v2
+kind: IPPool
 metadata:
-  cidr: <CIDR>
+  name: ippool-1
 spec:
+  cidr: <CIDR>
   nat-outgoing: true
 EOF
 ```
@@ -334,13 +335,13 @@ Yes.  If you are running in a public cloud that doesn't allow either L3 peering 
 
 ```shell
 cat << EOF | calicoctl apply -f -
-apiVersion: v1
-kind: ipPool
+apiVersion: projectcalico.org/v2
+kind: IPPool
 metadata:
-  cidr: <CIDR>
+  name: ippool-1
 spec:
-  ipip:
-    enabled: true
+  cidr: <CIDR>
+  ipipMode: Always
   nat-outgoing: true
 EOF
 ```
@@ -353,11 +354,12 @@ In AWS, you disable `Source/Dest. Check` instead of using IP in IP as long as al
 aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
 
 cat << EOF | calicoctl apply -f -
-apiVersion: v1
-kind: ipPool
+apiVersion: projectcalico.org/v2
+kind: IPPool
 metadata:
-  cidr: <CIDR>
+  name: ippool-2
 spec:
+  cidr: <CIDR>
   nat-outgoing: true
 EOF
 ```

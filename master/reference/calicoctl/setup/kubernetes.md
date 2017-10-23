@@ -5,8 +5,8 @@ layout: docwithnav
 
 This document covers the configuration options for calicoctl when using the Kubernetes API as a datastore.
 
-> **Note**: If running Calico on Kubernetes with the etcdv2
-> datastore, see the [etcdv2 configuration document](etcdv2) instead.
+> **Note**: If running Calico on Kubernetes with the etcdv3
+> datastore, see the [etcdv3 configuration document](etcdv3) instead.
 > For more information on running with the Kubernetes datastore, see
 > [the installation guide](/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/).
 >
@@ -25,7 +25,7 @@ datastore access.
 The config file is a yaml or json document in the following format:
 
 ```
-apiVersion: v1
+apiVersion: projectcalico.org/v2
 kind: calicoApiConfig
 metadata:
 spec:
@@ -48,7 +48,7 @@ will check a particular set of environment variables.
 See the table below for details on the Kubernetes specific environment variables.
 
 > **Note**: If neither file nor environment variables are set, `calicoctl` defaults to
-> using etcdv2 as the datastore with a single endpoint of http://127.0.0.1:2379.
+> using etcdv3 as the datastore with a single endpoint of http://127.0.0.1:2379.
 {: .alert .alert-info}
 
 
@@ -56,7 +56,7 @@ See the table below for details on the Kubernetes specific environment variables
 
 | Setting (Environment variable)    | Description                                                                                               | Schema
 | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------
-| datastoreType (DATASTORE_TYPE)    | Indicates the datastore to use. [Default: `etcdv2`]                                                       | kubernetes, etcdv2
+| datastoreType (DATASTORE_TYPE)    | Indicates the datastore to use. [Default: `etcdv3`]                                                       | kubernetes, etcdv3
 | kubeconfig (KUBECONFIG)           | When using the Kubernetes datastore, the location of a kubeconfig file to use, e.g. /path/to/kube/config. | string
 | k8sAPIEndpoint (K8S_API_ENDPOINT) | Location of the Kubernetes API. Not required if using kubeconfig. [Default: `https://kubernetes-api:443`] | string
 | k8sCertFile (K8S_CERT_FILE)       | Location of a client certificate for accessing the Kubernetes API, e.g. /path/to/cert.                    | string
@@ -77,7 +77,7 @@ See the table below for details on the Kubernetes specific environment variables
 #### Example configuration file
 
 ```yaml
-apiVersion: v1
+apiVersion: projectcalico.org/v2
 kind: calicoApiConfig
 metadata:
 spec:

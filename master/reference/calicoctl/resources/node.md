@@ -27,6 +27,7 @@ spec:
     asNumber: 64512
     ipv4Address: 10.244.0.1/24
     ipv6Address: 2001:db8:85a3::8a2e:370:7334/120
+    ipv4IPIPTunnelAddr: 192.168.0.1
 ```
 
 ### Definition

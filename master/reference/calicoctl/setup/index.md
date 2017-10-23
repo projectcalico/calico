@@ -12,11 +12,11 @@ environment variables.  Configuration is determined as follows:
 -  if a configuration file is present, the file is read and that configuration
    is used, otherwise
 -  if the environment variables are set, those are used, otherwise
--  a default etcdv2 endpoint at http://127.0.0.1:2379 is assumed.
+-  a default etcdv3 endpoint at http://127.0.0.1:2379 is assumed.
 
 Calico currently supports the following datastores:
 
-- [etcdv2](etcdv2) (default, recommended) 
+- [etcdv3](etcdv3) (default, recommended) 
 - [Kubernetes API](kubernetes)
 
 Calico supports, but does not require:
@@ -30,6 +30,6 @@ Calico supports, but does not require:
 For detailed information on configuring calicoctl, see the documentation for your chosen
 datastore.
 
-- [etcdv2](etcdv2) (default, recommended) 
+- [etcdv3](etcdv3) (default, recommended) 
 - [Kubernetes API](kubernetes)
 

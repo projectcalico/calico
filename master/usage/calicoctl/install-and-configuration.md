@@ -37,7 +37,7 @@ Datastore configuration may be as simple as using the defaults but in most
 cases the endpoint will need to be specified and possibly other settings too,
 all which depend on how your datastore is configured.
 
-Here is a simple etcdv2 example.
+Here is a simple etcdv3 example.
 
 ```
 ETCD_ENDPOINTS=http://etcd:2379 calicoctl get nodes

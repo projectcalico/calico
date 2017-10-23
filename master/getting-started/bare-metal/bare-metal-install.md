@@ -36,7 +36,7 @@ Felix has the following pre-requisites:
 -   The conntrack, iptables and ipsets kernel modules must be available
     (or compiled-in).
 -   An [etcd](https://github.com/coreos/etcd/releases/) cluster that
-    supports the etcdv2 protocol.  We recommend running the latest
+    supports the etcdv3 protocol.  We recommend running the latest
     stable release of etcd v3.x. To check the version, run
     `etcd --version`
     

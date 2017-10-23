@@ -147,12 +147,12 @@ the following command on any node:
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: v1
-kind: bgpPeer
+apiVersion: projectcalico.org/v2
+kind: BGPPeer
 metadata:
-  peerIP: 192.20.30.40
-  scope: global
+  name: bgppeer-global-3040
 spec:
+  peerIP: 192.20.30.40
   asNumber: 64567
 EOF
 ```
@@ -192,13 +192,13 @@ peering with Calico node "node1", run the following command on any node:
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: v1
-kind: bgpPeer
+apiVersion: projectcalico.org/v2
+kind: BGPPeer
 metadata:
-  peerIP: aa:bb::ff
-  scope: node
-  node: node1
+  name: bgppeer-node-aabbff
 spec:
+  peerIP: aa:bb::ff
+  node: node1
   asNumber: 64514
 EOF
 ```

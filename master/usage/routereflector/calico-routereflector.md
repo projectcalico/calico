@@ -33,7 +33,7 @@ For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bi
 -  There is no `calicoctl` integration or similar.
 -  If you are using Kubernetes API as the Calico datastore, the Route Reflector container
    currently only supports running as a single-instance.
--  For etcdv2, the Route Reflector container may be used to form a cluster of route reflectors that
+-  For etcdv3, the Route Reflector container may be used to form a cluster of route reflectors that
    automatically create a full mesh between each Route Reflector.
    -  Note that there is no `calicoctl` integration and to form a cluster it is necessary to
       configure data directly into the `etcd` datastore for each Route Reflector instance.
@@ -45,10 +45,10 @@ For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bi
 Follow the appropriate section to start and configure your route reflectors depending on
 the datastore you are using for Calico:
 
--  [Using etcdv2 as the Calico datastore](#using-etcdv2-as-the-calico-datastore)
+-  [Using etcdv3 as the Calico datastore](#using-etcdv3-as-the-calico-datastore)
 -  [Using the Kubernetes API as the Calico datastore](#using-the-kubernetes-api-as-the-calico-datastore)
 
-### Using etcdv2 as the Calico datastore
+### Using etcdv3 as the Calico datastore
 
 #### Starting a Route Reflector instance
 
@@ -250,12 +250,11 @@ peers with every node in the deployment):
 ```
 calicoctl bgp peer add <IP_RR> as <AS_NUM>
 $ calicoctl create -f - << EOF
-apiVersion: v1
-kind: bgpPeer
+apiVersion: projectcalico.org/v2
+kind: BGPPeer
 metadata:
+  name: bgppeer-global
   peerIP: <IP_RR>
-  scope: global
-spec:
   asNumber: <AS_NUM>
 EOF
 ```
@@ -286,13 +285,13 @@ To configure a Route Reflector as a peer of a specific node, run the following
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: v1
-kind: bgpPeer
+apiVersion: projectcalico.org/v2
+kind: BGPPeer
 metadata:
-  peerIP: <IP_RR>
-  scope: node
-  node: <NODENAME>
+  name: bgppeer-2
 spec:
+  peerIP: <IP_RR>
+  node: <NODENAME>
   asNumber: <AS_NUM>
 EOF
 ```

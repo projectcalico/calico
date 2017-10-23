@@ -15,78 +15,76 @@ on the [IP pool resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/
 When enabled, Calico will use IP-in-IP encapsulation when routing packets *to*
 workload IPs falling in the IP pool range.
 
-An optional `mode` field toggles when IP-in-IP is used, see following sections for
+An optional `ipipMode` field toggles when IP-in-IP is used, see following sections for
 details.
 
 ### Configuring IP-in-IP for all inter-workload traffic
 
-With the IP-in-IP `mode` set to `always`, Calico will route using IP-in-IP for
+With the IP-in-IP `ipipMode` set to `Always`, Calico will route using IP-in-IP for
 all traffic originating from a Calico enabled host to all Calico networked containers
 and VMs within the IP Pool.
 
 The following `calicoctl` command will create or modify an IPv4 pool with
-CIDR 192.168.0.0/16 to use IP-in-IP with mode `always`:
+CIDR 192.168.0.0/16 to use IP-in-IP with mode `Always`:
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: v1
-kind: ipPool
+apiVersion: projectcalico.org/v2
+kind: IPPool
 metadata:
-  cidr: 192.168.0.0/16
+  name: ippool-ipip-1
 spec:
-  ipip:
-    enabled: true
-    mode: always
+  cidr: 192.168.0.0/16
+  ipipMode: Always
   nat-outgoing: true
 EOF
 ```
 
 
-> **Note**: The default value for `mode` is `always`, and therefore may be omitted
+> **Note**: The default value for `ipipMode` is `Always`, and therefore may be omitted
 > from the request. It is included above for clarity.
 {: .alert .alert-info}
 
 
-### Configuring cross-subnet IP-in-IP
+### Configuring CrossSubnet IP-in-IP
 
 IP-in-IP encapsulation can also be performed selectively, only for traffic crossing
 subnet boundaries.  This provides better performance in AWS multi-AZ deployments,
 and in general when deploying on networks where pools of nodes with L2 connectivity
 are connected via a router.
 
-To enable this feature, using an IP-in-IP `mode` of `cross-subnet`.
+To enable this feature, using an IP-in-IP `ipipMode` of `CrossSubnet`.
 
 The following `calicoctl` command will create or modify an IPv4 pool with
-CIDR 192.168.0.0/16 to use IP-in-IP with mode `cross-subnet`:
+CIDR 192.168.0.0/16 to use IP-in-IP with mode `CrossSubnet`:
 
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: v1
-kind: ipPool
+apiVersion: projectcalico.org/v2
+kind: IPPool
 metadata:
-  cidr: 192.168.0.0/16
+  name: ippool-cs-1
 spec:
-  ipip:
-    enabled: true
-    mode: cross-subnet
+  cidr: 192.168.0.0/16
+  ipipMode: CrossSubnet
   nat-outgoing: true
 EOF
 ```
 
-> **Note**: The `cross-subnet` mode option requires each Calico node to be configured
+> **Note**: The `CrossSubnet` mode option requires each Calico node to be configured
 > with the IP address and subnet of the host. However, the subnet configuration
 > was only introduced in Calico v2.1. If any nodes in your deployment were originally
 > created with an older version of Calico, or if you are unsure whether
 > your deployment is configured correctly, follow the steps in
-> [Upgrading from pre-v2.1](#upgrading-from-pre-v21) before enabling `cross-subnet` IPIP.
+> [Upgrading from pre-v2.1](#upgrading-from-pre-v21) before enabling `CrossSubnet` IPIP.
 >
 {: .alert .alert-info}
 
 
 #### Upgrading from pre-v2.1
 
-If you are planning to use cross-subnet IPIP, your entire deployment must be running with
+If you are planning to use CrossSubnet IPIP, your entire deployment must be running with
 Calico v2.1 or higher.  See [releases page]({{site.baseurl}}/{{page.version}}/releases)
 for details on the component versions for each release.
 
@@ -96,7 +94,7 @@ will be dependent on your orchestration system (if using one).
 Prior to Calico v2.1, the subnet information was not detected and stored on the
 node configuration.  Thus, if you have calico/node instances that were deployed
 prior to v2.1, the node configuration may need updating to fix the host subnet.
-The subnet configuration must be set correctly for each node before `cross-subnet`
+The subnet configuration must be set correctly for each node before `CrossSubnet`
 IPIP mode is enabled.
 
 You can verify which of your nodes is correctly configured using calicoctl.
