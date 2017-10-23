@@ -56,8 +56,8 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "default"
 		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.IngressRules = []api.Rule{{Action: api.Allow}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -122,16 +122,15 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		Context("with pre-DNAT policy to prevent access from outside", func() {
 
 			BeforeEach(func() {
-				policy := api.NewNetworkPolicy()
-				policy.Namespace = "fv"
+				policy := api.NewGlobalNetworkPolicy()
 				policy.Name = "deny-ingress"
 				order := float64(20)
 				policy.Spec.Order = &order
 				policy.Spec.PreDNAT = true
 				policy.Spec.ApplyOnForward = true
-				policy.Spec.IngressRules = []api.Rule{{Action: "deny"}}
+				policy.Spec.IngressRules = []api.Rule{{Action: api.Deny}}
 				policy.Spec.Selector = "has(host-endpoint)"
-				_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 
 				hostEp := api.NewHostEndpoint()
@@ -155,8 +154,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 			Context("with pre-DNAT policy to open pinhole to 32010", func() {
 
 				BeforeEach(func() {
-					policy := api.NewNetworkPolicy()
-					policy.Namespace = "fv"
+					policy := api.NewGlobalNetworkPolicy()
 					policy.Name = "allow-ingress-32010"
 					order := float64(10)
 					policy.Spec.Order = &order
@@ -165,14 +163,14 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					protocol := numorstring.ProtocolFromString("tcp")
 					ports := numorstring.SinglePort(32010)
 					policy.Spec.IngressRules = []api.Rule{{
-						Action:   "allow",
+						Action:   api.Allow,
 						Protocol: &protocol,
 						Destination: api.EntityRule{Ports: []numorstring.Port{
 							ports,
 						}},
 					}}
 					policy.Spec.Selector = "has(host-endpoint)"
-					_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+					_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -189,8 +187,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 			Context("with pre-DNAT policy to open pinhole to 8055", func() {
 
 				BeforeEach(func() {
-					policy := api.NewNetworkPolicy()
-					policy.Namespace = "fv"
+					policy := api.NewGlobalNetworkPolicy()
 					policy.Name = "allow-ingress-8055"
 					order := float64(10)
 					policy.Spec.Order = &order
@@ -199,14 +196,14 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					protocol := numorstring.ProtocolFromString("tcp")
 					ports := numorstring.SinglePort(8055)
 					policy.Spec.IngressRules = []api.Rule{{
-						Action:   "allow",
+						Action:   api.Allow,
 						Protocol: &protocol,
 						Destination: api.EntityRule{Ports: []numorstring.Port{
 							ports,
 						}},
 					}}
 					policy.Spec.Selector = "has(host-endpoint)"
-					_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+					_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 				})
 

@@ -122,14 +122,13 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		Context("with pre-DNAT policy defined", func() {
 
 			BeforeEach(func() {
-				policy := api.NewNetworkPolicy()
-				policy.Namespace = "fv"
+				policy := api.NewGlobalNetworkPolicy()
 				policy.Name = "pre-dnat-policy-1"
 				policy.Spec.PreDNAT = true
 				policy.Spec.ApplyOnForward = true
 				protocol := numorstring.ProtocolFromString("tcp")
 				allowMetricsPortRule := api.Rule{
-					Action:   "allow",
+					Action:   api.Allow,
 					Protocol: &protocol,
 					Destination: api.EntityRule{
 						Ports: []numorstring.Port{numorstring.SinglePort(uint16(metrics.Port))},
@@ -137,7 +136,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 				}
 				policy.Spec.IngressRules = []api.Rule{allowMetricsPortRule}
 				policy.Spec.Selector = "host-endpoint=='true'"
-				_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
