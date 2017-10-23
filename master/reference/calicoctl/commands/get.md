@@ -146,7 +146,7 @@ Example
 $ calicoctl get hostEndpoint
 HOSTNAME   NAME        
 host1      endpoint1   
-myhost     eth0        
+myhost     myhost-eth0        
 ```
 
 #### `wide`
@@ -160,7 +160,7 @@ Example
 $ calicoctl get hostEndpoint --output=wide
 HOSTNAME   NAME        INTERFACE   IPS                PROFILES      
 host1      endpoint1               1.2.3.4,0:bb::aa   prof1,prof2   
-myhost     eth0                                       profile1      
+myhost     myhost-eth0                                profile1      
 ```
 
 #### `custom-columns`
@@ -174,7 +174,7 @@ Example
 $ calicoctl get hostEndpoint --output=custom-columns=NAME,IPS
 NAME        IPS                
 endpoint1   1.2.3.4,0:bb::aa   
-eth0                           
+myhost-eth0                           
 ```
 
 #### `yaml / json`
@@ -187,26 +187,26 @@ The output from either of these formats may be used as input for all of the reso
 Example
 ```
 $ calicoctl get hostEndpoint --output=yaml
-- apiVersion: v1
-  kind: hostEndpoint
+- apiVersion: projectcalico.org/v2
+  kind: HostEndpoint
   metadata:
-    hostname: host1
     labels:
       type: database
     name: endpoint1
   spec:
+    node: host1
     expectedIPs:
     - 1.2.3.4
     - 0:bb::aa
     profiles:
     - prof1
     - prof2
-- apiVersion: v1
-  kind: hostEndpoint
+- apiVersion: projectcalico.org/v2
+  kind: HostEndpoint
   metadata:
-    hostname: myhost
-    name: eth0
+    name: myhost-eth0
   spec:
+    node: myhost
     profiles:
     - profile1
 ```

@@ -10,7 +10,7 @@ address.  For example:
 -  Your host has multiple external interfaces.
 -  Your host may have multiple IP addresses assigned to each interface.
 -  You want to change the subnet configuration of each Node to use Calico's
-   [cross-subnet IPIP]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip) feature.
+   [CrossSubnet IPIP]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip) feature.
 -  You have changed the IP of your host.
 
 This guide explains the various methods for configuring a Node's IP and subnet.
@@ -96,8 +96,8 @@ For example:
 ```
 # Start by querying the current node configuration
 $ calicoctl get node node2 -o yaml
-- apiVersion: v1
-  kind: node
+- apiVersion: projectcalico.org/v2
+  kind: Node
   metadata:
     name: node2
   spec:
@@ -108,8 +108,8 @@ $ calicoctl get node node2 -o yaml
 # Now reconfigure the node with updated ipv4Address to include the correct
 # subnet.
 $ calicoctl apply -f - << EOF
-- apiVersion: v1
-  kind: node
+- apiVersion: projectcalico.org/v2
+  kind: Node
   metadata:
     name: node2
   spec:

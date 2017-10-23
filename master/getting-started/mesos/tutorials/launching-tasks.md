@@ -96,8 +96,8 @@ of Marathon running at 172.24.197.101:
 
 ```yaml
 cat << EOF | calicoctl apply -f -
-apiVersion: v1
-kind: profile
+apiVersion: projectcalico.org/v2
+kind: Profile
 metadata:
   name: calico
 spec:

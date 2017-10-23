@@ -18,7 +18,7 @@ The `calico/node` container is primarily configured through environment variable
 | IP6_AUTODETECTION_METHOD | The method to use to autodetect the IPv6 address for this host. This is only used when the IPv6 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
 | DISABLE_NODE_IP_CHECK | Skips checks for duplicate Node IPs. This can reduce the load on the cluster when a large number of Nodes are restarting. [Default: `false`] | boolean |
 | AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (managed through `calicoctl config set/get asnumber`). | int |
-| DATASTORE_TYPE | Type of datastore. [Default: `etcdv2`] | kubernetes, etcdv2 |
+| DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. [Default: `false`] | boolean |
 | CALICO_LIBNETWORK_CREATE_PROFILES | Enables creating a Calico profile resource for each Docker network.  When disabled, no profiles will be processed even if manually created. [Default: `true`] | boolean |
 | CALICO_LIBNETWORK_LABEL_ENDPOINTS | Enables copying a subset of the Docker container labels for use as Calico labels on workloadendpoints. [Default: `false`] | boolean |
@@ -27,7 +27,7 @@ The `calico/node` container is primarily configured through environment variable
 | CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use [Default: `bird`] | gobgp, bird, none |
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `192.168.0.0/16`] | IPv4 CIDR |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `fd80:24e2:f998:72d6::/64`] | IPv6 CIDR |
-| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. [Default: `off`] | off, always, cross-subnet |
+| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. [Default: `Off`] | Off, Always, CrossSubnet |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_STARTUP_LOGLEVEL      | The log severity above which startup calico/node logs are sent to the stdout. [Default: `Error`] | DEBUG, INFO, WARNING, ERROR, CRITICAL, or NONE (case-insensitive) |

@@ -79,8 +79,8 @@ toc:
     section:
       - title: Overview
         path: /reference/calicoctl/setup/
-      - title: etcdv2 datastore
-        path: /reference/calicoctl/setup/etcdv2
+      - title: etcdv3 datastore
+        path: /reference/calicoctl/setup/etcdv3
       - title: kubernetes api datastore
         path: /reference/calicoctl/setup/kubernetes
 - title: calico/node

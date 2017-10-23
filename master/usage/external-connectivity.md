@@ -23,16 +23,17 @@ calicoctl get ipPool
 # For each pool that needs connectivity:
 ```
 cat << EOF | calicoctl apply -f -
-- apiVersion: v1
-  kind: ipPool
+- apiVersion: projectcalico.org/v2
+  kind: IPPool
   metadata:
-    cidr: 192.168.0.0/16
+    name: ippool-ext-1
   spec:
+    cidr: 192.168.0.0/16
     nat-outgoing: true
 EOF
 ```
 
-[set `ipip:` `enabled:true` if needed]
+[set `ipipMode: Always` if needed]
 
 Please note that many solutions for inbound connectivity will also provide
 outbound connectivity.

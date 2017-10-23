@@ -60,12 +60,12 @@ Below is an example of how to create a file of Nodes and delete them.
    to be removed.  For example:
 
    ```
-   - apiVersion: v1
-     kind: node
+   - apiVersion: projectcalico.org/v2
+     kind: Node
      metadata:
        name: node-02
-   - apiVersion: v1
-     kind: node
+   - apiVersion: projectcalico.org/v2
+     kind: Node
      metadata:
        name: node-03
    ```

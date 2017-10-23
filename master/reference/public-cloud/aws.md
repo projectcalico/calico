@@ -49,8 +49,8 @@ By default, Calico's IPIP encapsulation applies to all container-to-container tr
 encapsulation is only required for container traffic that crosses a VPC subnet boundary.  For better
 performance, you can configure Calico to perform IPIP encapsulation only across VPC subnet boundaries.
 
-To enable the "cross-subnet" IPIP feature, configure your Calico IP pool resources
-to enable IPIP and set the mode to "cross-subnet".
+To enable the "CrossSubnet" IPIP feature, configure your Calico IP pool resources
+to enable IPIP and set the mode to "CrossSubnet".
 
 > **Note**: This feature was introduced in Calico v2.1, if your deployment was created with 
 > an older version of Calico, or if you if you are unsure whether your deployment 
@@ -60,18 +60,17 @@ to enable IPIP and set the mode to "cross-subnet".
 {: .alert .alert-info}
 
 The following `calicoctl` command will create or modify an IPv4 pool with
-CIDR 192.168.0.0/16 using IPIP mode `cross-subnet`. Adjust the pool CIDR for your deployment.
+CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet`. Adjust the pool CIDR for your deployment.
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: v1
-kind: ipPool
-metadata:
+apiVersion: projectcalico.org/v2
+kind: IPPool
+  metadata:
+    name: ippool-cs-1
+  spec:
   cidr: 192.168.0.0/16
-spec:
-  ipip:
-    enabled: true
-    mode: cross-subnet
+  ipipMode: CrossSubnet
 EOF
 ```
 
@@ -85,19 +84,18 @@ machine instance.  By enabling outgoing NAT on your Calico IP pool, Calico will
 NAT any outbound traffic from the containers hosted on the EC2 virtual machine instances.
 
 The following `calicoctl` command will create or modify an IPv4 pool with
-CIDR 192.168.0.0/16 using IPIP mode `cross-subnet` and enables outgoing NAT.
+CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet` and enables outgoing NAT.
 Adjust the pool CIDR for your deployment.
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: v1
-kind: ipPool
-metadata:
+apiVersion: projectcalico.org/v2
+kind: IPPool
+  metadata:
+    name: ippool-1
+  spec:
   cidr: 192.168.0.0/16
-spec:
-  ipip:
-    enabled: true
-    mode: cross-subnet
+  ipipMode: CrossSubnet
   nat-outgoing: true
 EOF
 ```

@@ -173,12 +173,12 @@ To create a global peer for the route reflector:
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: v1
-kind: bgpPeer
+apiVersion: projectcalico.org/v2
+kind: BGPPeer
 metadata:
-  peerIP: 192.20.30.40
-  scope: global
+  name: bgppeer-global-1
 spec:
+  peerIP: 192.20.30.40
   asNumber: 64567
 EOF
 ```

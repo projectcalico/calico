@@ -18,7 +18,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    sudo chmod +x /usr/local/bin/calicoctl
    ```
 
-2. Configure access to your etcd cluster, [calicoctl - etcd datastore]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2).
+2. Configure access to your etcd cluster, [calicoctl - etcd datastore](/{{page.version}}/reference/calicoctl/setup/etcdv3).
 3. Launch `calico/node`:
 
    ```

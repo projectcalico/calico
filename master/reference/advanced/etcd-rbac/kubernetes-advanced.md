@@ -37,7 +37,7 @@ components listed above and links to their detailed configuration pages:
 - [cni-plugin]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
 - [Calico Kubernetes controllers]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
 - [calico/node]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
-- [calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
+- [calicoctl](/{{page.version}}/reference/calicoctl/setup/etcdv3)
 
 Below are examples and suggestions when using a hosted Calico install where
 the Calico components are launched through a Kuberenetes manifest file, this

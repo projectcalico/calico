@@ -16,9 +16,11 @@ Calico IP pool.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: v1
-  kind: ipPool
+- apiVersion: projectcalico.org/v2
+  kind: IPPool
   metadata:
+    name: ippool-1
+  spec:
     cidr: 192.0.2.0/24
 EOF
 ```

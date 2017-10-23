@@ -38,16 +38,16 @@ Additional configuration can be added as detailed below.
 
 The following option allows configuration of the Calico datastore type.
 
-* `datastore_type` (default: etcdv2)
+* `datastore_type` (default: etcdv3)
 
 The Calico CNI plugin supports the following datastore types:
 
-* etcdv2 (default)
+* etcdv3 (default)
 * kubernetes
 
 ### Etcd location
 
-The following options are valid when `datastore_type` is `etcdv2`.
+The following options are valid when `datastore_type` is `etcdv3`.
 
 Configure access to your etcd cluster using the following options
 
