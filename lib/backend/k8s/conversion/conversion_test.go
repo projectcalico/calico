@@ -145,6 +145,10 @@ var _ = Describe("Test Pod conversion", func() {
 		wep, err := c.PodToWorkloadEndpoint(&pod)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Make sure the type information is correct.
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).Kind).To(Equal(apiv2.KindWorkloadEndpoint))
+		Expect(wep.Value.(*apiv2.WorkloadEndpoint).APIVersion).To(Equal(apiv2.GroupVersionCurrent))
+
 		// Assert key fields.
 		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
 		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
@@ -293,6 +297,10 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// Parse the policy.
 		pol, err := c.K8sNetworkPolicyToCalico(&np)
 		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure the type information is correct.
+		Expect(pol.Value.(*apiv2.NetworkPolicy).Kind).To(Equal(apiv2.KindNetworkPolicy))
+		Expect(pol.Value.(*apiv2.NetworkPolicy).APIVersion).To(Equal(apiv2.GroupVersionCurrent))
 
 		// Assert key fields are correct.
 		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.default.testPolicy"))
@@ -1463,6 +1471,10 @@ var _ = Describe("Test Namespace conversion", func() {
 		By("converting to a Profile", func() {
 			p, err := c.NamespaceToProfile(&ns)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure it's a Profile.
+			Expect(p.Value.(*apiv2.Profile).Kind).To(Equal(apiv2.KindProfile))
+			Expect(p.Value.(*apiv2.Profile).APIVersion).To(Equal(apiv2.GroupVersionCurrent))
 
 			// Ensure rules are correct.
 			ingressRules := p.Value.(*apiv2.Profile).Spec.IngressRules

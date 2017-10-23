@@ -86,24 +86,27 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		labels[fmt.Sprintf("pcns.%s", k)] = v
 	}
 
+	// Create the profile object.
 	name := fmt.Sprintf("k8s_ns.%s", ns.ObjectMeta.Name)
+	profile := apiv2.NewProfile()
+	profile.ObjectMeta = metav1.ObjectMeta{
+		Name:              name,
+		CreationTimestamp: ns.CreationTimestamp,
+		UID:               ns.UID,
+	}
+	profile.Spec = apiv2.ProfileSpec{
+		IngressRules:  []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+		EgressRules:   []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
+		LabelsToApply: labels,
+	}
+
+	// Embed the profile in a KVPair.
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
 			Kind: apiv2.KindProfile,
 		},
-		Value: &apiv2.Profile{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              name,
-				CreationTimestamp: ns.CreationTimestamp,
-				UID:               ns.UID,
-			},
-			Spec: apiv2.ProfileSpec{
-				IngressRules:  []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
-				EgressRules:   []apiv2.Rule{apiv2.Rule{Action: apiv2.Allow}},
-				LabelsToApply: labels,
-			},
-		},
+		Value:    profile,
 		Revision: ns.ObjectMeta.ResourceVersion,
 	}
 	return &kvp, nil
@@ -207,30 +210,34 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		}
 	}
 
-	// Create the key / value pair to return.
+	// Create the workload endpoint.
+	wep := apiv2.NewWorkloadEndpoint()
+	wep.ObjectMeta = metav1.ObjectMeta{
+		Name:              wepName,
+		Namespace:         pod.ObjectMeta.Namespace,
+		CreationTimestamp: pod.CreationTimestamp,
+		UID:               pod.UID,
+		Labels:            labels,
+	}
+	wep.Spec = apiv2.WorkloadEndpointSpec{
+		Orchestrator:  "k8s",
+		Node:          pod.Spec.NodeName,
+		Pod:           pod.Name,
+		Endpoint:      "eth0",
+		InterfaceName: interfaceName,
+		Profiles:      []string{profile},
+		IPNetworks:    ipNets,
+		Ports:         endpointPorts,
+	}
+
+	// Embed the workload endpoint into a KVPair.
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
 			Name:      wepName,
 			Namespace: pod.ObjectMeta.Namespace,
 			Kind:      apiv2.KindWorkloadEndpoint,
 		},
-		Value: &apiv2.WorkloadEndpoint{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      wepName,
-				Namespace: pod.ObjectMeta.Namespace,
-				Labels:    labels,
-			},
-			Spec: apiv2.WorkloadEndpointSpec{
-				Orchestrator:  "k8s",
-				Node:          pod.Spec.NodeName,
-				Pod:           pod.Name,
-				Endpoint:      "eth0",
-				InterfaceName: interfaceName,
-				Profiles:      []string{profile},
-				IPNetworks:    ipNets,
-				Ports:         endpointPorts,
-			},
-		},
+		Value:    wep,
 		Revision: pod.ObjectMeta.ResourceVersion,
 	}
 	return &kvp, nil
@@ -288,25 +295,29 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 		types = append(types, apiv2.PolicyTypeIngress)
 	}
 
+	// Create the NetworkPolicy.
+	policy := apiv2.NewNetworkPolicy()
+	policy.ObjectMeta = metav1.ObjectMeta{
+		Name:              policyName,
+		Namespace:         np.ObjectMeta.Namespace,
+		CreationTimestamp: np.CreationTimestamp,
+		UID:               np.UID,
+	}
+	policy.Spec = apiv2.PolicySpec{
+		Order:        &order,
+		Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
+		IngressRules: ingressRules,
+		EgressRules:  egressRules,
+		Types:        types,
+	}
+
 	// Build and return the KVPair.
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: policyName,
 			Kind: apiv2.KindNetworkPolicy,
 		},
-		Value: &apiv2.NetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      policyName,
-				Namespace: np.ObjectMeta.Namespace,
-			},
-			Spec: apiv2.PolicySpec{
-				Order:        &order,
-				Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, &np.ObjectMeta.Namespace),
-				IngressRules: ingressRules,
-				EgressRules:  egressRules,
-				Types:        types,
-			},
-		},
+		Value:    policy,
 		Revision: np.ObjectMeta.ResourceVersion,
 	}, nil
 }
