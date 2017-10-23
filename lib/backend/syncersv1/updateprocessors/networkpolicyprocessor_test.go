@@ -179,73 +179,25 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Correct number of entries returned
-		Expect(kvps).To(HaveLen(1))
-		kvp := kvps[0]
-
-		// Correct Key and Revision
-		Expect(kvp.Key).To(Equal(v1NetworkPolicyKey2))
-		Expect(kvp.Revision).To(Equal("1234"))
-
-		// Correct top level Policy field values
-		value := kvp.Value.(*model.Policy)
-		Expect(value.Order).To(Equal(&order))
-		Expect(value.Selector).To(Equal("(mylabel == selectme) && projectcalico.org/namespace == 'namespace2'"))
-		Expect(value.DoNotTrack).To(BeTrue())
-		Expect(value.PreDNAT).To(BeFalse())
-		Expect(value.ApplyOnForward).To(BeTrue())
-		Expect(value.Types).To(Equal([]string{"ingress"}))
-		Expect(value.InboundRules).To(HaveLen(1))
-		Expect(value.OutboundRules).To(HaveLen(1))
-
-		// Correct inbound rule
-		rulev1 := value.InboundRules[0]
-		Expect(rulev1.Action).To(Equal("allow"))
-		Expect(rulev1.IPVersion).To(Equal(&v4))
-		Expect(rulev1.Protocol).To(Equal(&iproto))
-		Expect(rulev1.ICMPCode).To(Equal(&icode))
-		Expect(rulev1.ICMPType).To(Equal(&itype))
-		Expect(rulev1.NotProtocol).To(Equal(&inproto))
-		Expect(rulev1.NotICMPCode).To(Equal(&incode))
-		Expect(rulev1.NotICMPType).To(Equal(&intype))
-
-		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.SrcSelector).To(Equal("(mylabel = value1) && projectcalico.org/namespace == 'namespace2'"))
-		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port80}))
-		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
-		Expect(rulev1.DstSelector).To(Equal("projectcalico.org/namespace == 'namespace2'"))
-		Expect(rulev1.DstPorts).To(Equal([]numorstring.Port{port443}))
-
-		Expect(rulev1.NotSrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.40.1/32")}))
-		Expect(rulev1.NotSrcSelector).To(Equal("has(label1)"))
-		Expect(rulev1.NotSrcPorts).To(Equal([]numorstring.Port{port443}))
-		Expect(rulev1.NotDstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.80.1/32")}))
-		Expect(rulev1.NotDstSelector).To(Equal("has(label2)"))
-		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port80}))
-
-		// Correct outbound rule
-		rulev1 = value.OutboundRules[0]
-		Expect(rulev1.IPVersion).To(Equal(&v4))
-		Expect(rulev1.Protocol).To(Equal(&eproto))
-		Expect(rulev1.ICMPCode).To(Equal(&ecode))
-		Expect(rulev1.ICMPType).To(Equal(&etype))
-		Expect(rulev1.NotProtocol).To(Equal(&enproto))
-		Expect(rulev1.NotICMPCode).To(Equal(&encode))
-		Expect(rulev1.NotICMPType).To(Equal(&entype))
-
-		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
-		Expect(rulev1.SrcSelector).To(Equal("pcns.namespacelabel1 == 'value1'"))
-		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port443}))
-		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.DstSelector).To(Equal("pcns.namespacelabel2 == 'value2'"))
-		Expect(rulev1.DstPorts).To(Equal([]numorstring.Port{port80}))
-
-		Expect(rulev1.NotSrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.80.1/32")}))
-		Expect(rulev1.NotSrcSelector).To(Equal("has(label2)"))
-		Expect(rulev1.NotSrcPorts).To(Equal([]numorstring.Port{port80}))
-		Expect(rulev1.NotDstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.40.1/32")}))
-		Expect(rulev1.NotDstSelector).To(Equal("has(label1)"))
-		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port443}))
+		namespacedSelector := "(" + selector + ") && projectcalico.org/namespace == '" + ns2 + "'"
+		v1irule := updateprocessors.RuleAPIV2ToBackend(irule, ns2)
+		v1erule := updateprocessors.RuleAPIV2ToBackend(erule, ns2)
+		Expect(kvps).To(Equal([]*model.KVPair{
+			{
+				Key: v1NetworkPolicyKey2,
+				Value: &model.Policy{
+					Order:          &order,
+					InboundRules:   []model.Rule{v1irule},
+					OutboundRules:  []model.Rule{v1erule},
+					Selector:       namespacedSelector,
+					DoNotTrack:     true,
+					PreDNAT:        false,
+					ApplyOnForward: true,
+					Types:          []string{"ingress"},
+				},
+				Revision: "1234",
+			},
+		}))
 
 		By("deleting the first network policy")
 
