@@ -111,7 +111,7 @@ spec:
               value: "192.168.0.0/16"
             # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
-              value: "always"
+              value: "Always"
             # Set based on the k8s node name.
             - name: NODENAME
               valueFrom:
