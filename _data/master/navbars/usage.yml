@@ -11,7 +11,7 @@ toc:
     path: /usage/calicoctl/install-and-configuration
   - title: calico/ctl container
     path: /usage/calicoctl/container
-- title: Calico and Systemd
+- title: Running Calico with an init system
   path: /usage/configuration/as-service
 - title: Configuring BGP Peers
   path: /usage/configuration/bgp
