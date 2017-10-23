@@ -263,11 +263,16 @@ func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemon
 }
 
 func (dp *mockDataplane) expectLinkStateCb(ifaceName string, state ifacemonitor.State) {
-	upd := <-dp.linkC
+	var upd linkUpdate
+	Eventually(dp.linkC).Should(Receive(&upd))
 	Expect(upd).To(Equal(linkUpdate{
 		name:  ifaceName,
 		state: state,
 	}))
+}
+
+func (dp *mockDataplane) notExpectLinkStateCb() {
+	Consistently(dp.linkC, "200ms", "20ms").ShouldNot(Receive())
 }
 
 func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
@@ -279,35 +284,35 @@ func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 	log.Info("mock dataplane reported address callback")
 }
 
+func (dp *mockDataplane) notExpectAddrStateCb() {
+	Consistently(dp.addrC, "200ms", "20ms").ShouldNot(Receive())
+}
+
 func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, present bool) {
+	var cbIface addrState
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addr":      addr,
 		"present":   present,
 	}).Debug("expectAddrStateCb")
-	for {
-		cbIface := <-dp.addrC
-		log.WithFields(log.Fields{
-			"ifaceName": cbIface.ifaceName,
-			"addrs":     cbIface.addrs,
-		}).Debug("Mock dp got addr cb")
-		if cbIface.ifaceName != ifaceName {
-			log.Debug("Wrong interface")
-			continue
-		}
-		if (addr == "") && (!present) && (cbIface.addrs != nil) {
-			log.Debug("Expected nil addrs, didn't get it")
-			continue
-		}
-		if (addr != "") && (!present) && cbIface.addrs != nil && cbIface.addrs.Contains(addr) {
-			log.Debug("Expected addr to be missing, but it's there")
-			continue
-		}
-		if (addr != "") && present && !cbIface.addrs.Contains(addr) {
-			log.Debug("Expected addr to be present, but it's missing")
-			continue
-		}
-		break
+
+	Eventually(dp.addrC).Should(Receive(&cbIface))
+	log.WithFields(log.Fields{
+		"ifaceName": cbIface.ifaceName,
+		"addrs":     cbIface.addrs,
+	}).Debug("Mock dp got addr cb")
+	Expect(cbIface.ifaceName).To(Equal(ifaceName))
+	if (addr == "") && (!present) {
+		// Expected to get a nil addrs.
+		Expect(cbIface.addrs).To(BeNil())
+	}
+	if (addr != "") && (!present) && cbIface.addrs != nil {
+		// Expected addr to be missing
+		Expect(cbIface.addrs.Contains(addr)).To(BeFalse())
+	}
+	if (addr != "") && present {
+		// Expected addr to be present
+		Expect(cbIface.addrs.Contains(addr)).To(BeTrue())
 	}
 }
 
@@ -324,7 +329,10 @@ var _ = Describe("ifacemonitor", func() {
 			userSubscribed: make(chan int),
 		}
 		resyncC = make(chan time.Time)
-		im = ifacemonitor.NewWithStubs(nl, resyncC)
+		config := ifacemonitor.Config{
+			InterfaceExcludes: []string{"kube-ipvs0"},
+		}
+		im = ifacemonitor.NewWithStubs(config, nl, resyncC)
 
 		// Register this test code's callbacks, which (a) log; and (b) send to a 1- or
 		// 2-buffered channel, so that the test code _must_ explicitly indicate when it
@@ -345,6 +353,36 @@ var _ = Describe("ifacemonitor", func() {
 		// stub.
 		go im.MonitorInterfaces()
 		<-nl.userSubscribed
+	})
+
+	It("should skip netlink address updates for ipvs", func() {
+		// Should not receives any callbacks.
+		nl.addLink("kube-ipvs0")
+		resyncC <- time.Time{}
+		dp.notExpectAddrStateCb()
+		dp.notExpectLinkStateCb()
+		nl.addAddr("kube-ipvs0", "10.100.0.1/32")
+		dp.notExpectAddrStateCb()
+
+		nl.changeLinkState("kube-ipvs0", "up")
+		dp.notExpectLinkStateCb()
+		nl.changeLinkState("kube-ipvs0", "down")
+		dp.notExpectLinkStateCb()
+		nl.delLink("kube-ipvs0")
+		dp.notExpectAddrStateCb()
+		dp.notExpectLinkStateCb()
+
+		// Check it can be added again.
+		nl.addLink("kube-ipvs0")
+		resyncC <- time.Time{}
+		dp.notExpectAddrStateCb()
+		dp.notExpectLinkStateCb()
+
+		// Clean it.
+		nl.delLink("kube-ipvs0")
+		dp.notExpectAddrStateCb()
+		dp.notExpectLinkStateCb()
+
 	})
 
 	It("should handle mainline netlink updates", func() {

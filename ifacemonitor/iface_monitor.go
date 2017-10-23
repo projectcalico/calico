@@ -43,7 +43,13 @@ const (
 type InterfaceStateCallback func(ifaceName string, ifaceState State)
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
+type Config struct {
+	// List of interface names that dataplane receives no callbacks from them.
+	InterfaceExcludes []string
+}
 type InterfaceMonitor struct {
+	Config
+
 	netlinkStub  netlinkStub
 	resyncC      <-chan time.Time
 	upIfaces     set.Set
@@ -53,14 +59,15 @@ type InterfaceMonitor struct {
 	ifaceAddrs   map[int]set.Set
 }
 
-func New() *InterfaceMonitor {
+func New(config Config) *InterfaceMonitor {
 	// Interface monitor using the real netlink, and resyncing every 10 seconds.
 	resyncTicker := time.NewTicker(10 * time.Second)
-	return NewWithStubs(&netlinkReal{}, resyncTicker.C)
+	return NewWithStubs(config, &netlinkReal{}, resyncTicker.C)
 }
 
-func NewWithStubs(netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceMonitor {
+func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceMonitor {
 	return &InterfaceMonitor{
+		Config:      config,
 		netlinkStub: netlinkStub,
 		resyncC:     resyncC,
 		upIfaces:    set.New(),
@@ -120,21 +127,39 @@ readLoop:
 	log.Panic("Failed to read events from Netlink.")
 }
 
+func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
+	for _, name := range m.InterfaceExcludes {
+		if ifName == name {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {
 	attrs := update.Attrs()
-	if attrs == nil {
+	linkAttrs := update.Link.Attrs()
+	if attrs == nil || linkAttrs == nil {
 		// Defensive, some sort of interface that the netlink lib doesn't understand?
 		log.WithField("update", update).Warn("Missing attributes on netlink update.")
 		return
 	}
+
 	msgType := update.Header.Type
 	ifaceExists := msgType == syscall.RTM_NEWLINK // Alternative is an RTM_DELLINK
 	m.storeAndNotifyLink(ifaceExists, update.Link)
 }
 
 func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
-	addr := update.LinkAddress.IP.String()
 	ifIndex := update.LinkIndex
+	if ifName, known := m.ifaceName[ifIndex]; known {
+		if m.isExcludedInterface(ifName) {
+			return
+		}
+	}
+
+	addr := update.LinkAddress.IP.String()
 	exists := update.NewAddr
 	log.WithFields(log.Fields{
 		"addr":    addr,
@@ -188,15 +213,23 @@ func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
 }
 
 func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Link) {
+	attrs := link.Attrs()
+	ifIndex := attrs.Index
+	newName := attrs.Name
+	if m.isExcludedInterface(newName) {
+		if ifaceExists {
+			m.ifaceName[ifIndex] = newName
+		} else {
+			delete(m.ifaceName, ifIndex)
+		}
+		return
+	}
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
 		"link":        link,
 	}).Debug("storeAndNotifyLink called")
 
-	attrs := link.Attrs()
-	ifIndex := attrs.Index
 	oldName := m.ifaceName[ifIndex]
-	newName := attrs.Name
 	if oldName != "" && oldName != newName {
 		log.WithFields(log.Fields{
 			"oldName": oldName,
@@ -264,6 +297,7 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 		}
 		if (m.ifaceAddrs[ifIndex] == nil) || !m.ifaceAddrs[ifIndex].Equals(newAddrs) {
 			m.ifaceAddrs[ifIndex] = newAddrs
+
 			m.notifyIfaceAddrs(ifIndex)
 		}
 	}

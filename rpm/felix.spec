@@ -163,11 +163,26 @@ rm -rf $RPM_BUILD_ROOT
     [Changes recorded in 2.6.0 tag]
     By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
     v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
-    
+
     In addition, libcalico-go now supports a new `Types` field which
     specifies whether a rule should apply to `ingress`, `egress` or
     both types of traffic.
-    
+
+    - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
+    - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
+    - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)
+    - Adding support for ppc64le. [#1516](https://github.com/projectcalico/felix/pull/1516)
+
+* Tue Sep 26 2017 Brendan Creane <brendan@tigera.io> 2.6.0-1
+  - Felix 2.6.0 (from Git commit 64caa62).
+    [Changes recorded in 2.6.0 tag]
+    By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
+    v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
+
+    In addition, libcalico-go now supports a new `Types` field which
+    specifies whether a rule should apply to `ingress`, `egress` or
+    both types of traffic.
+
     - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
     - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
     - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)

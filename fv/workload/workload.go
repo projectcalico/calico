@@ -40,11 +40,13 @@ type Workload struct {
 	InterfaceName    string
 	IP               string
 	Ports            string
+	DefaultPort      string
 	runCmd           *exec.Cmd
 	outPipe          io.ReadCloser
 	errPipe          io.ReadCloser
 	namespacePath    string
 	WorkloadEndpoint *api.WorkloadEndpoint
+	Protocol         string // "tcp" or "udp"
 }
 
 var workloadIdx = 0
@@ -65,7 +67,7 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Workload) {
+func Run(c *containers.Container, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
 
 	// Build unique workload name and struct.
 	workloadIdx++
@@ -75,6 +77,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 		InterfaceName: interfaceName,
 		IP:            ip,
 		Ports:         ports,
+		Protocol:      protocol,
 	}
 
 	// Ensure that the host has the 'test-workload' binary.
@@ -82,10 +85,15 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
+	var udpArg string
+	if protocol == "udp" {
+		udpArg = "--udp"
+	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v",
+		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v %v",
 			w.Name,
+			udpArg,
 			w.InterfaceName,
 			w.IP,
 			w.Ports))
@@ -141,6 +149,11 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 	return
 }
 
+func (w *Workload) IPNet() *net.IPNet {
+	ipNet := net.MustParseCIDR(w.IP + "/32")
+	return &ipNet
+}
+
 func (w *Workload) Configure(client *client.Client) {
 	_, err := client.WorkloadEndpoints().Apply(w.WorkloadEndpoint)
 	Expect(err).NotTo(HaveOccurred())
@@ -154,14 +167,53 @@ func (w *Workload) SourceName() string {
 	return w.Name
 }
 
-func (w *Workload) CanConnectTo(ip, port string) bool {
+func (w *Workload) CanConnectTo(ip, port, protocol string) bool {
+	anyPort := Port{
+		Workload: w,
+	}
+	return anyPort.CanConnectTo(ip, port, protocol)
+}
+
+func (w *Workload) Port(port uint16) *Port {
+	return &Port{
+		Workload: w,
+		Port:     port,
+	}
+}
+
+type Port struct {
+	*Workload
+	Port uint16
+}
+
+func (w *Port) SourceName() string {
+	if w.Port == 0 {
+		return w.Name
+	}
+	return fmt.Sprintf("%s:%d", w.Name, w.Port)
+}
+
+func (p *Port) CanConnectTo(ip, port, protocol string) bool {
 
 	// Ensure that the host has the 'test-connection' binary.
-	w.C.EnsureBinary("test-connection")
+	p.C.EnsureBinary("test-connection")
+
+	if protocol == "udp" {
+		// If this is a retry then we may have stale conntrack entries and we don't want those
+		// to influence the connectivity check.  Only an issue for UDP due to the lack of a
+		// sequence number.
+		p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+	}
 
 	// Run 'test-connection' to the target.
-	connectionCmd := utils.Command("docker", "exec", w.C.Name,
-		"/test-connection", w.namespacePath, ip, port)
+	args := []string{
+		"exec", p.C.Name, "/test-connection", p.namespacePath, ip, port, "--protocol=" + protocol,
+	}
+	if p.Port != 0 {
+		// If we are using a particular source port, fill it in.
+		args = append(args, fmt.Sprintf("--source-port=%d", p.Port))
+	}
+	connectionCmd := utils.Command("docker", args...)
 	outPipe, err := connectionCmd.StdoutPipe()
 	Expect(err).NotTo(HaveOccurred())
 	errPipe, err := connectionCmd.StderrPipe()
@@ -182,6 +234,19 @@ func (w *Workload) CanConnectTo(ip, port string) bool {
 	return err == nil
 }
 
+// ToMatcher implements the connectionTarget interface, allowing this port to be used as
+// target.
+func (p *Port) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
+	if p.Port == 0 {
+		return p.Workload.ToMatcher(explicitPort...)
+	}
+	return &connectivityMatcher{
+		ip:         p.Workload.IP,
+		port:       fmt.Sprint(p.Port),
+		targetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
+	}
+}
+
 type connectionTarget interface {
 	ToMatcher(explicitPort ...uint16) *connectivityMatcher
 }
@@ -193,19 +258,31 @@ func (s IP) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
 		panic("Explicit port needed with IP as a connectivity target")
 	}
 	port := fmt.Sprintf("%d", explicitPort[0])
-	return &connectivityMatcher{string(s), port, string(s) + ":" + port}
+	return &connectivityMatcher{
+		ip:         string(s),
+		port:       port,
+		targetName: string(s) + ":" + port,
+		protocol:   "tcp",
+	}
 }
 
 func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
 	var port string
 	if len(explicitPort) == 1 {
 		port = fmt.Sprintf("%d", explicitPort[0])
+	} else if w.DefaultPort != "" {
+		port = w.DefaultPort
 	} else if !strings.Contains(w.Ports, ",") {
 		port = w.Ports
 	} else {
 		panic("Explicit port needed for workload with multiple ports")
 	}
-	return &connectivityMatcher{w.IP, port, fmt.Sprintf("%s on port %s", w.Name, port)}
+	return &connectivityMatcher{
+		ip:         w.IP,
+		port:       port,
+		targetName: fmt.Sprintf("%s on port %s", w.Name, port),
+		protocol:   "tcp",
+	}
 }
 
 func HaveConnectivityTo(target connectionTarget, explicitPort ...uint16) types.GomegaMatcher {
@@ -213,16 +290,16 @@ func HaveConnectivityTo(target connectionTarget, explicitPort ...uint16) types.G
 }
 
 type connectivityMatcher struct {
-	ip, port, targetName string
+	ip, port, targetName, protocol string
 }
 
 type connectionSource interface {
-	CanConnectTo(ip, port string) bool
+	CanConnectTo(ip, port, protocol string) bool
 	SourceName() string
 }
 
 func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error) {
-	success = actual.(connectionSource).CanConnectTo(m.ip, m.port)
+	success = actual.(connectionSource).CanConnectTo(m.ip, m.port, m.protocol)
 	return
 }
 
@@ -255,15 +332,27 @@ type expectation struct {
 // Note that the ActualConnectivity method is passed to Eventually as a function pointer to allow
 // Ginkgo to re-evaluate the result as needed.
 type ConnectivityChecker struct {
-	expectations []expectation
+	ReverseDirection bool
+	Protocol         string // "tcp" or "udp"
+	expectations     []expectation
 }
 
 func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	if c.ReverseDirection {
+		from, to = to.(connectionSource), from.(connectionTarget)
+	}
 	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true})
 }
 
 func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	if c.ReverseDirection {
+		from, to = to.(connectionSource), from.(connectionTarget)
+	}
 	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false})
+}
+
+func (c *ConnectivityChecker) ResetExpectations() {
+	c.expectations = nil
 }
 
 // ActualConnectivity calculates the current connectivity for all the expected paths.  One string is
@@ -277,11 +366,16 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 		wg.Add(1)
 		go func(i int, exp expectation) {
 			defer wg.Done()
-			hasConnectivity := exp.from.CanConnectTo(exp.to.ip, exp.to.port)
+			p := "tcp"
+			if c.Protocol != "" {
+				p = c.Protocol
+			}
+			hasConnectivity := exp.from.CanConnectTo(exp.to.ip, exp.to.port, p)
 			result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, hasConnectivity)
 		}(i, exp)
 	}
 	wg.Wait()
+	log.Debug("Connectivity", result)
 	return result
 }
 

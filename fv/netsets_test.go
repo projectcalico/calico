@@ -18,10 +18,14 @@ package fv_test
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
@@ -29,9 +33,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	log "github.com/sirupsen/logrus"
-	"math/rand"
-	"time"
 )
 
 const (
@@ -63,7 +64,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start a workload so we have something to add policy to
-		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055")
+		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", "tcp")
 		w.Configure(client)
 
 		// Generate policies and network sets.
@@ -111,7 +112,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		etcd.Stop()
 	})
 
-	FIt("should withstand churn", func() {
+	PIt("should withstand churn", func() {
 		var wg sync.WaitGroup
 		wg.Add(2)
 

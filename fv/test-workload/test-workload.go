@@ -31,7 +31,7 @@ import (
 const usage = `test-workload, test workload for Felix FV testing.
 
 Usage:
-  test-workload <interface-name> <ip-address> <ports>
+  test-workload [--udp] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -45,6 +45,7 @@ func main() {
 	interfaceName := arguments["<interface-name>"].(string)
 	ipAddress := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
+	udp := arguments["--udp"].(bool)
 	panicIfError(err)
 
 	ports := strings.Split(portsStr, ",")
@@ -128,23 +129,46 @@ func main() {
 			}
 		}
 
-		// Listen on each port.
+		// Listen on each port for either TCP or UDP.
 		for _, port := range ports {
-			log.WithField("port", port).Info("About to listen for connections")
-			l, err := net.Listen("tcp", ipAddress+":"+port)
-			panicIfError(err)
-			log.WithField("port", port).Info("Listening for connections")
+			myAddr := ipAddress + ":" + port
+			logCxt := log.WithFields(log.Fields{
+				"udp":    udp,
+				"myAddr": myAddr,
+			})
+			if udp {
+				// Since UDP is connectionless, we can't use Listen() as we do for TCP.  Instead,
+				// we use ListenPacket so that we can directly send/receive individual packets.
+				logCxt.Info("About to listen for UDP packets")
+				p, err := net.ListenPacket("udp", myAddr)
+				panicIfError(err)
+				logCxt.Info("Listening for UDP connections")
 
-			go func() {
-				defer l.Close()
-				for {
-					conn, err := l.Accept()
-					panicIfError(err)
-					go handleRequest(conn)
-				}
-			}()
+				go func() {
+					defer p.Close()
+					for {
+						buffer := make([]byte, 1024)
+						n, addr, err := p.ReadFrom(buffer)
+						panicIfError(err)
+						_, err = p.WriteTo(buffer[:n], addr)
+						logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
+					}
+				}()
+			} else {
+				logCxt.Info("About to listen for TCP connections")
+				l, err := net.Listen("tcp", myAddr)
+				panicIfError(err)
+				logCxt.Info("Listening for TCP connections")
+				go func() {
+					defer l.Close()
+					for {
+						conn, err := l.Accept()
+						panicIfError(err)
+						go handleRequest(conn)
+					}
+				}()
+			}
 		}
-
 		for {
 			time.Sleep(10 * time.Second)
 		}

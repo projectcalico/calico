@@ -44,8 +44,17 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 		m.ipsetsDataplane.RemoveMembers(msg.Id, msg.RemovedMembers)
 	case *proto.IPSetUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set update")
+		var setType ipsets.IPSetType
+		switch msg.Type {
+		case proto.IPSetUpdate_NET:
+			setType = ipsets.IPSetTypeHashNet
+		case proto.IPSetUpdate_NET_AND_PORT:
+			setType = ipsets.IPSetTypeHashNetPort
+		default:
+			log.WithField("type", msg.Type).Panic("Unknown IP set type")
+		}
 		metadata := ipsets.IPSetMetadata{
-			Type:    ipsets.IPSetTypeHashNet,
+			Type:    setType,
 			SetID:   msg.Id,
 			MaxSize: m.maxSize,
 		}

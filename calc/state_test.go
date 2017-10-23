@@ -17,7 +17,6 @@ package calc_test
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -127,13 +126,6 @@ func (s State) withIPSet(name string, members []string) (newState State) {
 	} else {
 		set := set.New()
 		for _, ip := range members {
-			if !strings.Contains(ip, "/") {
-				if strings.Contains(ip, ":") {
-					ip += "/128"
-				} else {
-					ip += "/32"
-				}
-			}
 			set.Add(ip)
 		}
 		newState.ExpectedIPSets[name] = set

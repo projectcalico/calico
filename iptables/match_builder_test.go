@@ -60,6 +60,11 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("NotSourceIPSet", Match().NotSourceIPSet("calits:12345abc-_"), "-m set ! --match-set calits:12345abc-_ src"),
 	Entry("DestIPSet", Match().DestIPSet("calits:12345abc-_"), "-m set --match-set calits:12345abc-_ dst"),
 	Entry("NotDestIPSet", Match().NotDestIPSet("calits:12345abc-_"), "-m set ! --match-set calits:12345abc-_ dst"),
+	// IP,Port IP sets.
+	Entry("SourceIPPortSet", Match().SourceIPPortSet("calitn:12345abc-_"), "-m set --match-set calitn:12345abc-_ src,src"),
+	Entry("NotSourceIPPortSet", Match().NotSourceIPPortSet("calitn:12345abc-_"), "-m set ! --match-set calitn:12345abc-_ src,src"),
+	Entry("DestIPPortSet", Match().DestIPPortSet("calitn:12345abc-_"), "-m set --match-set calitn:12345abc-_ dst,dst"),
+	Entry("NotDestIPPortSet", Match().NotDestIPPortSet("calitn:12345abc-_"), "-m set ! --match-set calitn:12345abc-_ dst,dst"),
 	// Ports.
 	Entry("SourcePorts", Match().SourcePorts(1234, 5678), "-m multiport --source-ports 1234,5678"),
 	Entry("NotSourcePorts", Match().NotSourcePorts(1234, 5678), "-m multiport ! --source-ports 1234,5678"),
@@ -81,4 +86,7 @@ var _ = DescribeTable("MatchBuilder",
 	// Check multiple match criteria are joined correctly.
 	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080),
 		"-p tcp -m multiport --source-ports 1234 -m multiport --destination-ports 8080"),
+	// IPVS.
+	Entry("IPVSConnection", Match().IPVSConnection(), "-m ipvs --ipvs"),
+	Entry("NotIPVSConnection", Match().NotIPVSConnection(), "-m ipvs ! --ipvs"),
 )

@@ -27,7 +27,7 @@ import:
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
   repo: http://github.com/fasaxc/libcalico-go.git
-  version: network-sets-2.6
+  version: network-sets-2.7
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -55,3 +55,6 @@ import:
   version: v0.5.2
 - package: github.com/onsi/gomega
   version: ^1.1.0
+- package: github.com/jbenet/go-reuseport
+  repo: https://github.com/fasaxc/go-reuseport.git
+  version: disable-dial-check

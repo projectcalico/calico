@@ -46,19 +46,21 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 
 func (r *DefaultRuleRenderer) HostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	applyOnForward bool,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, false)
+	return r.hostDispatchChains(endpoints, false, applyOnForward)
 }
 
 func (r *DefaultRuleRenderer) FromHostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, true)
+	return r.hostDispatchChains(endpoints, true, false)
 }
 
 func (r *DefaultRuleRenderer) hostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
 	fromOnly bool,
+	applyOnForward bool,
 ) []*Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering host dispatch chains")
@@ -76,7 +78,9 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			"",
 			false,
 		)
-	} else {
+	}
+
+	if !applyOnForward {
 		return r.dispatchChains(
 			names,
 			HostFromEndpointPfx,
@@ -85,7 +89,27 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			ChainDispatchToHostEndpoint,
 			false,
 		)
+
 	}
+
+	return append(
+		r.dispatchChains(
+			names,
+			HostFromEndpointPfx,
+			HostToEndpointPfx,
+			ChainDispatchFromHostEndpoint,
+			ChainDispatchToHostEndpoint,
+			false,
+		),
+		r.dispatchChains(
+			names,
+			HostFromEndpointForwardPfx,
+			HostToEndpointForwardPfx,
+			ChainDispatchFromHostEndPointForward,
+			ChainDispatchToHostEndpointForward,
+			false,
+		)...,
+	)
 }
 
 func (r *DefaultRuleRenderer) dispatchChains(
