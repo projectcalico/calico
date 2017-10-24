@@ -87,10 +87,10 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "default"
 		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
 		defaultProfile.Spec.IngressRules = []api.Rule{{
-			Action: "allow",
-			Source: api.EntityRule{Tag: "default"},
+			Action: api.Allow,
+			Source: api.EntityRule{Selector: "default == ''"},
 		}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
@@ -232,7 +232,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			}
 			protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoStruct,
 			}
 			if testSourcePorts {
@@ -401,7 +401,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoStruct,
 			}
 			if testSourcePorts {
@@ -702,10 +702,10 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 
 		// Create a namespace profile and write to the datastore.
 		defaultProfile := api.NewProfile()
-		defaultProfile.Name = "k8s_ns.test"
+		defaultProfile.Name = "kns.test"
 		defaultProfile.Labels = map[string]string{"name": "test"}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.IngressRules = []api.Rule{{Action: api.Allow}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -719,8 +719,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			"tcp",
 		)
 		nginx.WorkloadEndpoint.Labels = map[string]string{
-			"calico/k8s_ns": "test",
-			"name":          "nginx",
+			"name": "nginx",
 		}
 		nginx.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
 			{
@@ -729,7 +728,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 				Protocol: numorstring.ProtocolFromString("tcp"),
 			},
 		}
-		nginx.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
+		nginx.WorkloadEndpoint.Spec.Profiles = []string{"kns.test"}
 		nginx.DefaultPort = "80"
 		nginx.Configure(client)
 
@@ -742,26 +741,26 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			"1000",
 			"tcp",
 		)
-		nginxClient.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
+		nginxClient.WorkloadEndpoint.Spec.Profiles = []string{"kns.test"}
 		nginxClient.Configure(client)
 
 		// Create a default deny policy (but we don't actually write it to the datastore yet).
 		defaultDenyPolicy = api.NewNetworkPolicy()
 		defaultDenyPolicy.Namespace = "fv"
-		defaultDenyPolicy.Name = "knp.default.test.default-deny"
+		defaultDenyPolicy.Name = "knp.default.default-deny"
 		thousand := 1000.0
 		defaultDenyPolicy.Spec.Order = &thousand
-		defaultDenyPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		defaultDenyPolicy.Spec.Selector = "name == 'nginx'"
 		defaultDenyPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
 		// Create a policy that opens up the HTTP named port (but we don't actually write it to the
 		// datastore yet).
 		allowHTTPPolicy = api.NewNetworkPolicy()
 		allowHTTPPolicy.Namespace = "fv"
-		allowHTTPPolicy.Name = "knp.default.test.access-nginx"
+		allowHTTPPolicy.Name = "knp.default.access-nginx"
 		protoStruct := numorstring.ProtocolFromString("tcp")
 		apiRule := api.Rule{
-			Action:   "allow",
+			Action:   api.Allow,
 			Protocol: &protoStruct,
 			Destination: api.EntityRule{
 				Ports: []numorstring.Port{
@@ -773,7 +772,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			apiRule,
 		}
 		allowHTTPPolicy.Spec.Order = &thousand
-		allowHTTPPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		allowHTTPPolicy.Spec.Selector = "name == 'nginx'"
 		allowHTTPPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
 		cc = &workload.ConnectivityChecker{}
@@ -843,8 +842,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		// Create a profile that opens up traffic by default.
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "open"
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
+		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.IngressRules = []api.Rule{{Action: api.Allow}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -859,8 +858,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 				protocol,
 			)
 			w.WorkloadEndpoint.Labels = map[string]string{
-				"calico/k8s_ns": "test",
-				"name":          "nginx",
+				"name": "nginx",
 			}
 			w.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
 				{
@@ -897,12 +895,12 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		// Create a policy that tries to open up the TCP named port over UDP and vice/versa.
 		allowConfusedProtocolPolicy = api.NewNetworkPolicy()
 		allowConfusedProtocolPolicy.Namespace = "fv"
-		allowConfusedProtocolPolicy.Name = "knp.default.test.confused"
+		allowConfusedProtocolPolicy.Name = "knp.default.confused"
 		protoUDPStruct := numorstring.ProtocolFromString("udp")
 		protoTCPStruct := numorstring.ProtocolFromString("tcp")
 		allowConfusedProtocolPolicy.Spec.IngressRules = []api.Rule{
 			{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoTCPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
@@ -911,7 +909,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 				},
 			},
 			{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoUDPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
@@ -920,7 +918,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 				},
 			},
 		}
-		allowConfusedProtocolPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		allowConfusedProtocolPolicy.Spec.Selector = "name == 'nginx'"
 		allowConfusedProtocolPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
 		udpCC = &workload.ConnectivityChecker{Protocol: "udp"}

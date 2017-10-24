@@ -105,21 +105,14 @@ func createNetworkPolicy(clientset *kubernetes.Clientset, namespace string) {
 			Name:      "test-syncer-basic-net-policy",
 		},
 		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{"calico/k8s_ns": namespace},
-			},
+			// An empty PodSelector selects all pods in this Namespace.
+			PodSelector: metav1.LabelSelector{},
 			Ingress: []networkingv1.NetworkPolicyIngressRule{
 				networkingv1.NetworkPolicyIngressRule{
-					Ports: []networkingv1.NetworkPolicyPort{
-						networkingv1.NetworkPolicyPort{},
-					},
 					From: []networkingv1.NetworkPolicyPeer{
 						networkingv1.NetworkPolicyPeer{
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"calico/k8s_ns": namespace,
-								},
-							},
+							// An empty PodSelector selects all pods in this Namespace.
+							PodSelector: &metav1.LabelSelector{},
 						},
 					},
 				},
