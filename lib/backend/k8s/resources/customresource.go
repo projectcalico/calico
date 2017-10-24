@@ -312,7 +312,7 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 		r.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
 		return c.convertResourceToKVPair(r)
 	}
-	return newK8sWatcherConverter(ctx, toKVPair, k8sWatch), nil
+	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
 }
 
 // EnsureInitialized is a no-op since the CRD should be

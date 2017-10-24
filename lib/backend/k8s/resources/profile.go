@@ -150,5 +150,5 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		}
 		return c.converter.NamespaceToProfile(k8sNamespace)
 	}
-	return newK8sWatcherConverter(ctx, converter, k8sWatch), nil
+	return newK8sWatcherConverter(ctx, "Profile", converter, k8sWatch), nil
 }

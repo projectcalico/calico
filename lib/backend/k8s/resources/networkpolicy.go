@@ -63,9 +63,10 @@ func NewNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 
 // Implements the api.Client interface for NetworkPolicys.
 type networkPolicyClient struct {
-	clientSet *kubernetes.Clientset
-	crdClient *customK8sResourceClient
-	converter conversion.Converter
+	resourceName string
+	clientSet    *kubernetes.Clientset
+	crdClient    *customK8sResourceClient
+	converter    conversion.Converter
 }
 
 func (c *networkPolicyClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -256,7 +257,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 		}
 		return c.converter.K8sNetworkPolicyToCalico(np)
 	}
-	k8sWatch := newK8sWatcherConverter(ctx, converter, k8sRawWatch)
+	k8sWatch := newK8sWatcherConverter(ctx, "NetworkPolicy (namespaced)", converter, k8sRawWatch)
 
 	calicoWatch, err := c.crdClient.Watch(ctx, list, crdRev)
 	if err != nil {
