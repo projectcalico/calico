@@ -127,10 +127,11 @@ running, you've still got full functionality.
 The bulk of global state is mastered in whatever component hosts the
 plugin.
 
--   In the case of OpenStack, this means a Neutron database. Our
+<!--- -   In the case of OpenStack, this means a Neutron database. Our
     OpenStack plugin (more strictly a Neutron ML2 driver) queries the
     Neutron database to find out state about the entire deployment. That
-    state is then reflected to `etcd` and so to Felix.
+    state is then reflected to `etcd` and so to Felix. -->
+    
 -   In certain cases, `etcd` itself contains the master copy of
     the data. This is because some Docker deployments have an `etcd`
     cluster that has the required resiliency characteristics, used to
@@ -210,11 +211,11 @@ update policy: the reachability information does not change. If later
 they should be denied the ability to communicate, the policy is updated
 again, and again the reachability doesn’t have to change.
 
-## "How does Calico interact with the Neutron API?"
+<!--- ## "How does Calico interact with the Neutron API?" -->
 
-[This document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/neutron-api)
+<!--- [This document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/neutron-api)
 document goes into extensive detail about how
-various Neutron API calls translate into Calico actions.
+various Neutron API calls translate into Calico actions. -->
 
 ## Why isn't the `-p` flag on `docker run` working as expected?
 
