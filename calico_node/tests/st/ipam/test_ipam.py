@@ -15,6 +15,7 @@ import logging
 import random
 
 import netaddr
+import time
 import yaml
 from nose_parameterized import parameterized
 
@@ -44,12 +45,13 @@ class MultiHostIpam(TestBase):
                                     start_calico=False))
         cls.hosts[0].start_calico_node()
         cls.hosts[1].start_calico_node()
-        cls.network = cls.hosts[0].create_network("testnet1", ipam_driver="calico-ipam")
+        #cls.network = cls.hosts[0].create_network("testnet1", ipam_driver="calico-ipam")
+        cls.network = 'none'
 
     @classmethod
     def tearDownClass(cls):
         # Tidy up
-        cls.network.delete()
+        #cls.network.delete()
         for host in cls.hosts:
             host.cleanup()
             del host
@@ -81,8 +83,14 @@ class MultiHostIpam(TestBase):
         Then Delete that pool.
         Add a new pool, create containers, check IPs assigned from NEW pool
         """
+        response = self.hosts[0].calicoctl("get IPpool -o yaml")
+        pools = yaml.safe_load(response)
+        if len(pools['items']) > 0:
+            self.hosts[0].writefile("pools.yaml", response)
+            self.hosts[0].calicoctl("delete -f pools.yaml")
+
         old_pool_workloads = []
-        ipv4_subnet = netaddr.IPNetwork("192.168.0.0/24")
+        ipv4_subnet = netaddr.IPNetwork("192.168.11.0/24")
         new_pool = {'apiVersion': 'projectcalico.org/v2',
                     'kind': 'IPPool',
                     'metadata': {'name': 'ippool-name-1'},
@@ -90,6 +98,7 @@ class MultiHostIpam(TestBase):
                     }
         self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
         self.hosts[0].calicoctl("create -f newpool.yaml")
+        self.hosts[0].calicoctl("get IPpool -o yaml")
 
         for host in self.hosts:
             workload = host.create_workload("wlda-%s" % host.name,
@@ -107,7 +116,10 @@ class MultiHostIpam(TestBase):
         wl_ip = netaddr.IPNetwork(output[0].split()[0])
         assert wl_ip in ipv4_subnet
 
+        self.hosts[0].remove_workloads()
+
         self.hosts[0].calicoctl("delete -f newpool.yaml")
+        self.hosts[0].calicoctl("get IPpool -o yaml")
 
         ipv4_subnet = netaddr.IPNetwork("10.0.1.0/24")
         new_pool = {'apiVersion': 'projectcalico.org/v2',
@@ -117,8 +129,6 @@ class MultiHostIpam(TestBase):
                     }
         self.hosts[0].writefile("pools.yaml", yaml.dump(new_pool))
         self.hosts[0].calicoctl("create -f pools.yaml")
-
-        self.hosts[0].remove_workloads()
 
         for host in self.hosts:
             workload = host.create_workload("wlda2-%s" % host.name,

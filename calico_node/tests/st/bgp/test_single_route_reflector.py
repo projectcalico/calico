@@ -41,8 +41,20 @@ class TestSingleRouteReflector(TestBase):
 
             # Set the default AS number - as this is used by the RR mesh, and
             # turn off the node-to-node mesh (do this from any host).
-            host1.calicoctl("config set asNumber 64514")
-            host1.calicoctl("config set nodeToNodeMesh off")
+            bgpconfig = {
+                    'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'BGPConfiguration',
+                    'metadata': {
+                        'name': 'default',
+                    },
+                    'spec': {
+                        'asNumber': 12345,
+                        'nodeToNodeMeshEnabled': False
+                    }
+                }
+
+            host1.writefile("bgpconfig.yaml", bgpconfig)
+            host1.calicoctl("apply -f bgpconfig.yaml")
 
             # Create a workload on each host in the same network.
             network1 = host1.create_network("subnet1")

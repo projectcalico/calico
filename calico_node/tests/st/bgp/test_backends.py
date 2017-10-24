@@ -41,8 +41,20 @@ class _TestBGPBackends(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=True) as host3:
 
+            bgpconfig = {
+                    'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'BGPConfiguration',
+                    'metadata': {
+                        'name': 'default',
+                    },
+                    'spec': {
+                        'ASNumber': LARGE_AS_NUM
+                    }
+                }
+
+            host1.writefile("bgpconfig.yaml", bgpconfig)
             # Set the default AS number.
-            host1.calicoctl("config set asNumber %s" % LARGE_AS_NUM)
+            host1.calicoctl("apply -f bgpconfig.yaml")
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).  These hosts use the gobgp backend, whereas
