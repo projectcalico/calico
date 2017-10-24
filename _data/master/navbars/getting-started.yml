@@ -111,36 +111,6 @@ toc:
     - title: IPAM
       path: /getting-started/docker/tutorials/ipam
 
-- title: OpenStack
-  section:
-  - title: Overview
-    path: /getting-started/openstack/
-  - title: Installation
-    section:
-    - title: Overview
-      path: /getting-started/openstack/installation/
-    - title: Ubuntu
-      path: /getting-started/openstack/installation/ubuntu
-    - title: Red Hat Enterprise Linux 7
-      path: /getting-started/openstack/installation/redhat
-    - title: Juju Charms
-      path: /getting-started/openstack/installation/juju
-    - title: Fuel
-      path: /getting-started/openstack/installation/fuel
-    - title: DevStack
-      path: /getting-started/openstack/installation/devstack
-    - title: Chef
-      path: /getting-started/openstack/installation/chef
-  - title: Upgrade
-    path: /getting-started/openstack/upgrade
-  - title: Tutorials
-    path: /getting-started/openstack/tutorials
-  - title: Troubleshooting
-    path: /getting-started/openstack/verification
-  - title: IP Addressing and Connectivity
-    path: /getting-started/openstack/connectivity
-  - title: Use of the Neutron API
-    path: /getting-started/openstack/neutron-api
 
 - title: rkt
   section:
