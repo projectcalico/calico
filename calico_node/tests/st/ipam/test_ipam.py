@@ -78,10 +78,13 @@ class MultiHostIpam(TestBase):
         """
         old_pool_workloads = []
         ipv4_subnet = netaddr.IPNetwork("192.168.0.0/24")
-        new_pool = {'apiVersion': 'v1',
-                    'kind': 'ipPool',
-                    'metadata': {'cidr': str(ipv4_subnet.ipv4())},
+        new_pool = {'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'IPPool',
+                    'metadata': {'name': 'ippool-name'},
+                    'spec': {'cidr': str(ipv4_subnet.ipv4())},
                     }
+        print("HERE")
+        import pdb; pdb.set_trace()
         self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
         self.hosts[0].calicoctl("create -f newpool.yaml")
 
@@ -104,8 +107,8 @@ class MultiHostIpam(TestBase):
         self.hosts[0].calicoctl("delete -f newpool.yaml")
 
         ipv4_subnet = netaddr.IPNetwork("10.0.1.0/24")
-        new_pool = {'apiVersion': 'v1',
-                    'kind': 'ipPool',
+        new_pool = {'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'IPPool',
                     'metadata': {'cidr': str(ipv4_subnet.ipv4())},
                     }
         self.hosts[0].writefile("pools.yaml", yaml.dump(new_pool))
@@ -138,8 +141,8 @@ class MultiHostIpam(TestBase):
         workload_ips = []
 
         ipv4_subnet = netaddr.IPNetwork("192.168.45.0/25")
-        new_pool = {'apiVersion': 'v1',
-                    'kind': 'ipPool',
+        new_pool = {'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'IPPool',
                     'metadata': {'cidr': str(ipv4_subnet.ipv4())},
                     }
         self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
@@ -175,8 +178,8 @@ class MultiHostIpam(TestBase):
         """
 
         ipv4_subnet = netaddr.IPNetwork("192.168.46.0/25")
-        new_pool = {'apiVersion': 'v1',
-                    'kind': 'ipPool',
+        new_pool = {'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'IPPool',
                     'metadata': {'cidr': str(ipv4_subnet.ipv4())},
                     }
         self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
