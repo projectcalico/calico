@@ -31,9 +31,15 @@ const (
 	resultsBufSize = 100
 )
 
-func newK8sWatcherConverter(ctx context.Context, converter ConvertK8sResourceToKVPair, k8sWatch kwatch.Interface) api.WatchInterface {
+func newK8sWatcherConverter(
+	ctx context.Context,
+	name string,
+	converter ConvertK8sResourceToKVPair,
+	k8sWatch kwatch.Interface,
+) api.WatchInterface {
 	ctx, cancel := context.WithCancel(ctx)
 	wc := &k8sWatcherConverter{
+		logCxt:     log.WithField("resource", name),
 		converter:  converter,
 		k8sWatch:   k8sWatch,
 		context:    ctx,
@@ -45,6 +51,7 @@ func newK8sWatcherConverter(ctx context.Context, converter ConvertK8sResourceToK
 }
 
 type k8sWatcherConverter struct {
+	logCxt     *log.Entry
 	converter  ConvertK8sResourceToKVPair
 	k8sWatch   kwatch.Interface
 	context    context.Context
@@ -73,9 +80,9 @@ func (crw *k8sWatcherConverter) HasTerminated() bool {
 // Loop to process the events stream from the underlying k8s Watcher and convert them to
 // backend KVPs.
 func (crw *k8sWatcherConverter) processK8sEvents() {
-	log.Info("Watcher process started")
+	crw.logCxt.Info("Watcher process started")
 	defer func() {
-		log.Info("Watcher process terminated")
+		crw.logCxt.Info("Watcher process terminated")
 		crw.Stop()
 		close(crw.resultChan)
 		atomic.AddUint32(&crw.terminated, 1)
@@ -87,23 +94,23 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 			e := crw.convertEvent(event)
 			select {
 			case crw.resultChan <- e:
-				log.Debug("Kubernetes event converted and sent to backend watcher")
+				crw.logCxt.Debug("Kubernetes event converted and sent to backend watcher")
 
 				// If this is an error event, check to see if it's a terminating one (the
 				// convertEvent method will decide that).  If so, terminate this watcher.
 				if e.Type == api.WatchError {
-					log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
+					crw.logCxt.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
 					if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-						log.Info("Watch terminated event")
+						crw.logCxt.Info("Watch terminated event")
 						return
 					}
 				}
 			case <-crw.context.Done():
-				log.Info("Process watcher done event during watch event in kdd client")
+				crw.logCxt.Info("Process watcher done event during watch event in kdd client")
 				return
 			}
 		case <-crw.context.Done(): // user cancel
-			log.Info("Process watcher done event in kdd client")
+			crw.logCxt.Info("Process watcher done event in kdd client")
 			return
 		}
 	}
@@ -114,11 +121,11 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) api.WatchEvent {
 	var kvp *model.KVPair
 	var err error
-	if kevent.Type != kwatch.Error {
+	if kevent.Type != kwatch.Error && kevent.Type != "" {
 		k8sRes := kevent.Object.(Resource)
 		kvp, err = crw.converter(k8sRes)
 		if err != nil {
-			log.WithError(err).Warning("Error converting Kubernetes resource to Calico resource")
+			crw.logCxt.WithError(err).Warning("Error converting Kubernetes resource to Calico resource")
 			return api.WatchEvent{
 				Type:  api.WatchError,
 				Error: err,
@@ -127,7 +134,7 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) api.WatchEvent
 	}
 
 	switch kevent.Type {
-	case kwatch.Error:
+	case kwatch.Error, "":
 		// An error directly from the k8s watcher is a terminating event.
 		return api.WatchEvent{
 			Type: api.WatchError,

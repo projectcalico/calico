@@ -233,7 +233,6 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		Expect(rulev1.NotICMPCode).To(Equal(&encode))
 		Expect(rulev1.NotICMPType).To(Equal(&entype))
 
-
 		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
 		Expect(rulev1.SrcSelector).To(Equal("kns.namespacelabel1 == 'value1'"))
 		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port443}))

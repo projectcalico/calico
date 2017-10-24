@@ -174,7 +174,7 @@ func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 		}
 		return K8sNodeToCalico(k8sNode)
 	}
-	return newK8sWatcherConverter(ctx, converter, k8sWatch), nil
+	return newK8sWatcherConverter(ctx, "Node", converter, k8sWatch), nil
 }
 
 // K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.

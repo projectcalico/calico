@@ -192,5 +192,5 @@ func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInter
 		}
 		return c.converter.PodToWorkloadEndpoint(k8sPod)
 	}
-	return newK8sWatcherConverter(ctx, converter, k8sWatch), nil
+	return newK8sWatcherConverter(ctx, "Pod", converter, k8sWatch), nil
 }
