@@ -574,7 +574,7 @@ IfaceLoop:
 			}
 		}
 	}
-	if eui != "" {
+	if eui[0:4] == "fe80" && len(eui) == 26 {
 		date := fmt.Sprint(time.Now().Unix())
 		d := []byte(date)
 		h := sha1.New()
