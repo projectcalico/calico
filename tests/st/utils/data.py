@@ -138,11 +138,9 @@ networkpolicy_name1_rev1 = {
                     'notNets': ['10.3.0.0/16'],
                     'notPorts': ['110:1050'],
                     'notSelector': "type=='apples'",
-                    'notTag': "bananas",
                     'nets': ['10.2.0.0/16'],
                     'ports': ['100:200'],
                     'selector': "type=='application'",
-                    'tag': 'alphatag'
                 },
                 'icmp': {'type': 10, 'code': 6},
                 'protocol': 'tcp',
@@ -150,11 +148,9 @@ networkpolicy_name1_rev1 = {
                     'notNets': ['10.1.0.0/16'],
                     'notPorts': [1050],
                     'notSelector': "type=='database'",
-                    'notTag': 'bartag',
                     'nets': ['10.0.0.0/16'],
                     'ports': [1234, '10:1024'],
                     'selector': "type=='application'",
-                    'tag': 'footag'
                 }
             }
         ],
@@ -217,11 +213,9 @@ globalnetworkpolicy_name1_rev1 = {
                     'notNets': ['10.3.0.0/16'],
                     'notPorts': ['110:1050'],
                     'notSelector': "type=='apples'",
-                    'notTag': "bananas",
                     'nets': ['10.2.0.0/16'],
                     'ports': ['100:200'],
                     'selector': "type=='application'",
-                    'tag': 'alphatag'
                 },
                 'icmp': {'type': 10, 'code': 6},
                 'protocol': 'tcp',
@@ -229,11 +223,9 @@ globalnetworkpolicy_name1_rev1 = {
                     'notNets': ['10.1.0.0/16'],
                     'notPorts': [1050],
                     'notSelector': "type=='database'",
-                    'notTag': 'bartag',
                     'nets': ['10.0.0.0/16'],
                     'ports': [1234, '10:1024'],
                     'selector': "type=='application'",
-                    'tag': 'footag'
                 }
             }
         ],
@@ -325,22 +317,18 @@ profile_name1_rev1 = {
                    'notNets': ['10.3.0.0/16'],
                    'notPorts': ['110:1050'],
                    'notSelector': "type=='apples'",
-                   'notTag': "bananas",
                    'nets': ['10.2.0.0/16'],
                    'ports': ['100:200'],
-                   'selector': "type=='application'",
-                   'tag': 'alphatag'},
+                   'selector': "type=='application'"},
                 'icmp': {'type': 10, 'code': 6},
                 'protocol': 'tcp',
                 'source': {
                    'notNets': ['10.1.0.0/16'],
                    'notPorts': [1050],
                    'notSelector': "type=='database'",
-                   'notTag': 'bartag',
                    'nets': ['10.0.0.0/16'],
                    'ports': [1234, '10:20'],
                    'selector': "type=='application'",
-                   'tag': "production"
                 }
             }
         ],
@@ -375,9 +363,13 @@ workloadendpoint_name1_rev1 = {
     'apiVersion': API_VERSION,
     'kind': 'WorkloadEndpoint',
     'metadata': {
+        'labels': {
+            'projectcalico.org/namespace': 'namespace1',
+            'projectcalico.org/orchestrator': 'k8s',
+            'type': 'database',
+        },
         'name': 'node1-k8s-abcd-eth0',
         'namespace': 'namespace1',
-        'labels': {'type': 'database'},
     },
     'spec': {
         'node': 'node1',
@@ -395,9 +387,13 @@ workloadendpoint_name2_rev1 = {
     'apiVersion': API_VERSION,
     'kind': 'WorkloadEndpoint',
     'metadata': {
+        'labels': {
+            'projectcalico.org/namespace': 'namespace1',
+            'projectcalico.org/orchestrator': 'cni',
+            'type': 'database'
+        },
         'name': 'node2-cni-container1234-eth0',
         'namespace': 'namespace1',
-        'labels': {'type': 'database'},
     },
     'spec': {
         'node': 'node2',
