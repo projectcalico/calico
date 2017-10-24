@@ -18,7 +18,7 @@ For users who want to learn more about the project or get started with Calico, s
 
 ## Get Started Developing Calico
 
-- [Contribution guidlines](CONTRIBUTING_CODE.md): submitting patches to Calico and contribution workflow.
+- [Contribution guidelines](CONTRIBUTING_CODE.md): submitting patches to Calico and contribution workflow.
 - [Building Calico](BUILDING_CALICO.md): building Calico from source and developer workflow.
 - [Contributing to the Calico documentation](CONTRIBUTING_DOCS.md): submitting patches to [docs.projectcalico.org](https://docs.projectcalico.org)
 
