@@ -25,6 +25,8 @@ Usage:
               name.
     get       Get a resource identified by file, stdin or resource type and 
               name.
+    edit      Edit a resource identified by file, stdin or resource type and
+              name.
     config    Manage system-wide and low-level node configuration options.
     ipam      IP address management.
     node      Calico node management.
@@ -53,6 +55,7 @@ organized by top level command.
 -  [calicoctl apply]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/apply)
 -  [calicoctl delete]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/delete)
 -  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get)
+-  [calicoctl edit] ({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/edit)
 -  [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config)
 -  [calicoctl ipam]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam)
 -  [calicoctl node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node)
