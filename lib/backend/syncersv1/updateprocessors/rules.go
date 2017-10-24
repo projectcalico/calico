@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
@@ -53,7 +54,7 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 	// If we have any selector specified, then we may need to add the namespace selector.
 	// We do this if this policy is namespaced AND if the Selector does not have any other
 	// k8s namespace (profile label) selector in it.
-	// TODO this is TEMPORARY CODE:  We currently do a simple regex to search for kns. in the
+	// TODO this is TEMPORARY CODE:  We currently do a simple regex to search for pcns. in the
 	// selector to see if we are performing k8s namespace queries.
 	nsSelector := fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
 	if ns != "" && (ar.Source.Selector != "" || ar.Source.NotSelector != "") {
@@ -63,7 +64,7 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 			"NotSelector": ar.Source.NotSelector,
 		})
 		logCxt.Debug("Maybe update source Selector to include namespace")
-		if !strings.Contains(ar.Source.Selector, "kns.") {
+		if !strings.Contains(ar.Source.Selector, conversion.NamespaceLabelPrefix) {
 			logCxt.Debug("Updating source selector")
 			if ar.Source.Selector == "" {
 				ar.Source.Selector = nsSelector
@@ -79,7 +80,7 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 			"NotSelector": ar.Destination.NotSelector,
 		})
 		logCxt.Debug("Maybe update Destination Selector to include namespace")
-		if !strings.Contains(ar.Destination.Selector, "kns.") {
+		if !strings.Contains(ar.Destination.Selector, conversion.NamespaceLabelPrefix) {
 			logCxt.Debug("Updating Destination selector")
 			if ar.Destination.Selector == "" {
 				ar.Destination.Selector = nsSelector

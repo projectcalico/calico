@@ -144,7 +144,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			},
 			Source: apiv2.EntityRule{
 				Nets:        []string{"10.100.1.1"},
-				Selector:    "kns.namespacelabel1 == 'value1'",
+				Selector:    "pcns.namespacelabel1 == 'value1'",
 				Ports:       []numorstring.Port{port443},
 				NotNets:     []string{"192.168.80.1"},
 				NotSelector: "has(label2)",
@@ -152,7 +152,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			},
 			Destination: apiv2.EntityRule{
 				Nets:        []string{"10.100.10.1"},
-				Selector:    "kns.namespacelabel2 == 'value2'",
+				Selector:    "pcns.namespacelabel2 == 'value2'",
 				Ports:       []numorstring.Port{port80},
 				NotNets:     []string{"192.168.40.1"},
 				NotSelector: "has(label1)",
@@ -234,10 +234,10 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		Expect(rulev1.NotICMPType).To(Equal(&entype))
 
 		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
-		Expect(rulev1.SrcSelector).To(Equal("kns.namespacelabel1 == 'value1'"))
+		Expect(rulev1.SrcSelector).To(Equal("pcns.namespacelabel1 == 'value1'"))
 		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port443}))
 		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.DstSelector).To(Equal("kns.namespacelabel2 == 'value2'"))
+		Expect(rulev1.DstSelector).To(Equal("pcns.namespacelabel2 == 'value2'"))
 		Expect(rulev1.DstPorts).To(Equal([]numorstring.Port{port80}))
 
 		Expect(rulev1.NotSrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.80.1/32")}))
