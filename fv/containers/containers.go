@@ -249,11 +249,11 @@ func RunEtcd() *Container {
 		"--listen-client-urls", "http://0.0.0.0:2379")
 }
 
-func RunFelix(etcdIP string) *Container {
+func RunFelix(etcdIP string, options TopologyOptions) *Container {
 	return Run("felix",
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv2",
-		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
+		"-e", "FELIX_LOGSEVERITYSCREEN="+options.felixLogSeverity(),
 		"-e", "FELIX_DATASTORETYPE=etcdv2",
 		"-e", "FELIX_ETCDENDPOINTS=http://"+etcdIP+":2379",
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
@@ -262,9 +262,25 @@ func RunFelix(etcdIP string) *Container {
 		"calico/felix:latest")
 }
 
+type TopologyOptions struct {
+	FelixLogSeverity string
+}
+
+func (o TopologyOptions) felixLogSeverity() string {
+	if o.FelixLogSeverity == "" {
+		return "debug"
+	}
+	return o.FelixLogSeverity
+}
+
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology() (felix, etcd *Container, client *client.Client) {
+func StartSingleNodeEtcdTopology(options ...TopologyOptions) (felix, etcd *Container, client *client.Client) {
+	var opts TopologyOptions
+	if len(options) > 0 {
+		opts = options[0]
+	}
+
 	success := false
 	defer func() {
 		if !success {
@@ -282,7 +298,7 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client *client.Clien
 	Eventually(client.EnsureInitialized, "10s", "100ms").ShouldNot(HaveOccurred())
 
 	// Then start Felix and create a node for it.
-	felix = RunFelix(etcd.IP)
+	felix = RunFelix(etcd.IP, opts)
 
 	felixNode := api.NewNode()
 	felixNode.Metadata.Name = felix.Hostname

@@ -28,7 +28,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -51,20 +50,19 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	)
 
 	BeforeEach(func() {
-		etcd = containers.RunEtcd()
-
-		client = utils.GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
-
-		felix = containers.RunFelix(etcd.IP)
-
-		felixNode := api.NewNode()
-		felixNode.Metadata.Name = felix.Hostname
-		_, err := client.Nodes().Create(felixNode)
-		Expect(err).NotTo(HaveOccurred())
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.TopologyOptions{
+			FelixLogSeverity: "info",
+		})
 
 		// Start a workload so we have something to add policy to
-		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", "tcp")
+		w := workload.Run(
+			felix,
+			"w",
+			"cali12345",
+			"10.65.0.2",
+			"8055",
+			"tcp",
+		)
 		w.Configure(client)
 
 		// Generate policies and network sets.
@@ -112,63 +110,72 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		etcd.Stop()
 	})
 
-	PIt("should withstand churn", func() {
+	churnPolicies := func(iterations int) {
+		log.Info("Churning policies...")
+		created := false
+		for i := 0; i < iterations; i++ {
+			if created {
+				for _, pol := range policies {
+					log.WithField("policy", pol.Metadata.Name).Info("Deleting policy")
+					err := client.Policies().Delete(pol.Metadata)
+					if err != nil {
+						log.WithError(err).Error("XXXFailed to delete policy")
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+			for _, pol := range policies {
+				log.WithField("policy", pol.Metadata.Name).Info("Creating policy")
+				_, err := client.Policies().Apply(pol)
+				if err != nil {
+					log.WithError(err).Error("Failed to add policy")
+				}
+				time.Sleep(101 * time.Millisecond)
+			}
+			created = true
+		}
+	}
+
+	churnNetworkSets := func(iterations int) {
+		log.Info("Churning network sets...")
+		created := false
+		for i := 0; i < iterations; i++ {
+			if created {
+				for _, ns := range networkSets {
+					log.WithField("name", ns.Metadata.Name).Info("Deleting network set")
+					err := client.NetworkSets().Delete(ns.Metadata)
+					if err != nil {
+						log.WithError(err).Error("Failed to delete network set")
+					}
+					time.Sleep(73 * time.Millisecond)
+				}
+			}
+			for _, ns := range networkSets {
+				log.WithField("name", ns.Metadata.Name).Info("Creating network set")
+				_, err := client.NetworkSets().Apply(ns)
+				if err != nil {
+					log.WithError(err).Error("Failed to add network set")
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			created = true
+		}
+	}
+
+	FIt("should withstand churn", func() {
 		var wg sync.WaitGroup
 		wg.Add(2)
 
 		go func() {
 			defer wg.Done()
 			defer log.Info("XXXFinished churning policies")
-			log.Info("XXXChurning policies...")
-			created := false
-			for {
-				if created {
-					for _, pol := range policies {
-						log.WithField("policy", pol.Metadata.Name).Info("XXXDeleting policy")
-						err := client.Policies().Delete(pol.Metadata)
-						if err != nil {
-							log.WithError(err).Error("XXXFailed to delete policy")
-						}
-						time.Sleep(100 * time.Millisecond)
-					}
-				}
-				for _, pol := range policies {
-					log.WithField("policy", pol.Metadata.Name).Info("XXXCreating policy")
-					_, err := client.Policies().Apply(pol)
-					if err != nil {
-						log.WithError(err).Error("XXXFailed to add policy")
-					}
-					time.Sleep(101 * time.Millisecond)
-				}
-				created = true
-			}
+			churnPolicies(20)
 		}()
 		go func() {
+			RegisterFailHandler(Fail)
 			defer wg.Done()
 			defer log.Info("XXXFinished churning network sets")
-			log.Info("XXXChurning network sets...")
-			created := false
-			for {
-				if created {
-					for _, ns := range networkSets {
-						log.WithField("name", ns.Metadata.Name).Info("XXXDeleting network set")
-						err := client.NetworkSets().Delete(ns.Metadata)
-						if err != nil {
-							log.WithError(err).Error("XXXFailed to delete network set")
-						}
-						time.Sleep(73 * time.Millisecond)
-					}
-				}
-				for _, ns := range networkSets {
-					log.WithField("name", ns.Metadata.Name).Info("XXXCreating network set")
-					_, err := client.NetworkSets().Apply(ns)
-					if err != nil {
-						log.WithError(err).Error("XXXFailed to add network set")
-					}
-					time.Sleep(100 * time.Millisecond)
-				}
-				created = true
-			}
+			churnNetworkSets(10)
 		}()
 
 		wg.Wait()
