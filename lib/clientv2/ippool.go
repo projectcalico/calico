@@ -49,11 +49,19 @@ func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.Set
 		return nil, err
 	}
 
+	// Enable IPIP globally if required.  Do this before the Create so if it fails the user
+	// can retry the same command.
+	err := r.maybeEnableIPIP(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindIPPool, res)
 	if out != nil {
 		return out.(*apiv2.IPPool), err
 	}
 	return nil, err
+
 }
 
 // Update takes the representation of a IPPool and updates it. Returns the stored
@@ -61,6 +69,13 @@ func (r ipPools) Create(ctx context.Context, res *apiv2.IPPool, opts options.Set
 func (r ipPools) Update(ctx context.Context, res *apiv2.IPPool, opts options.SetOptions) (*apiv2.IPPool, error) {
 	// Validate the IPPool updating the resource.
 	if err := r.validateAndSetDefaults(res); err != nil {
+		return nil, err
+	}
+
+	// Enable IPIP globally if required.  Do this before the Update so if it fails the user
+	// can retry the same command.
+	err := r.maybeEnableIPIP(ctx, res)
+	if err != nil {
 		return nil, err
 	}
 
@@ -198,7 +213,7 @@ func (_ ipPools) validateAndSetDefaults(pool *apiv2.IPPool) error {
 		})
 	}
 
-	// If return the errors if we have one or more validation errors.
+	// Return the errors if we have one or more validation errors.
 	if len(errFields) > 0 {
 		return cerrors.ErrorValidation{
 			ErroredFields: errFields,
@@ -206,4 +221,64 @@ func (_ ipPools) validateAndSetDefaults(pool *apiv2.IPPool) error {
 	}
 
 	return nil
+}
+
+// maybeEnableIPIP enables global IPIP if a default setting is not already configured
+// and the pool has IPIP enabled.
+func (c ipPools) maybeEnableIPIP(ctx context.Context, pool *apiv2.IPPool) error {
+	if pool.Spec.IPIPMode == apiv2.IPIPModeNever {
+		log.Debug("IPIP is not enabled for this pool - no need to check global setting")
+		return nil
+	}
+
+	var err error
+	ipEnabled := true
+	for i := 0; i < maxApplyRetries; i++ {
+		log.WithField("Retry", i).Debug("Checking global IPIP setting")
+		res, err := c.client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok && err != nil {
+			log.WithError(err).Debug("Error getting current FelixConfiguration resource")
+			return err
+		}
+
+		if res == nil {
+			log.Debug("Global FelixConfiguration does not exist - creating")
+			res = apiv2.NewFelixConfiguration()
+			res.Name = "default"
+		} else if res.Spec.IpInIpEnabled != nil {
+			// A value for the default config is set so leave unchanged.  It may be set to false,
+			// so log the actual value - but we shouldn't update it if someone has explicitly
+			// disabled it globally.
+			log.WithField("IpInIpEnabled", res.Spec.IpInIpEnabled).Debug("Global IpInIpEnabled setting is already configured")
+			return nil
+		}
+
+		// Enable IpInIp and do the Create or Update.
+		res.Spec.IpInIpEnabled = &ipEnabled
+		if res.ResourceVersion == "" {
+			res, err = c.client.FelixConfigurations().Create(ctx, res, options.SetOptions{})
+			if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+				log.Debug("FelixConfiguration already exists - retry update")
+				continue
+			}
+		} else {
+			res, err = c.client.FelixConfigurations().Update(ctx, res, options.SetOptions{})
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				log.Debug("FelixConfiguration update conflict - retry update")
+				continue
+			}
+		}
+
+		if err == nil {
+			log.Debug("FelixConfiguration updated successfully")
+			return nil
+		}
+
+		log.WithError(err).Debug("Error updating FelixConfiguration to enable IPIP")
+		return err
+	}
+
+	// Return the error from the final Update.
+	log.WithError(err).Info("Too many conflict failures attempting to update FelixConfiguration to enable IPIP")
+	return err
 }

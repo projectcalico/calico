@@ -16,7 +16,6 @@ package clientv2
 
 import (
 	"context"
-	"errors"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -63,10 +62,6 @@ func (r felixConfigurations) Update(ctx context.Context, res *apiv2.FelixConfigu
 // Delete takes name of the FelixConfiguration and deletes it. Returns an
 // error if one occurs.
 func (r felixConfigurations) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv2.FelixConfiguration, error) {
-	// Check if we are trying to delete "default". Prevent deletion for now.
-	if name == "default" {
-		return nil, errors.New("Cannot delete default Felix Configuration.")
-	}
 	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindFelixConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*apiv2.FelixConfiguration), err

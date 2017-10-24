@@ -36,6 +36,7 @@ import (
 const (
 	noNamespace      = ""
 	defaultNamespace = "default"
+	maxApplyRetries  = 10
 )
 
 // All Calico resources implement the resource interface.

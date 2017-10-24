@@ -28,6 +28,7 @@ import (
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -415,6 +416,147 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 			})
 			testWatcher4.Stop()
+		})
+	})
+
+	Describe("Verify handling of IPIP mode", func() {
+		var err error
+		var c clientv2.Interface
+
+		BeforeEach(func() {
+			c, err = clientv2.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+		})
+
+		getGlobalSetting := func() (*bool, error) {
+			cfg, err := c.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+			if err != nil {
+				return nil, err
+			}
+			return cfg.Spec.IpInIpEnabled, nil
+		}
+
+		It("should enable IPIP globally on an IPPool Create (IPIPModeAlways) if the global setting is not configured", func() {
+			By("Getting the current felix configuration - checking does not exist")
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
+
+			By("Creating a non-IPIP pool and verifying no felix configuration still and default IPIPMode set to Never")
+			pool, err := c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Spec.IPIPMode).To(Equal(apiv2.IPIPModeNever))
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
+
+			By("Attempting to create an IPIP IPv6 pool and verifying no felix configuration still")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR:     "aa:bb::cc/120",
+					IPIPMode: apiv2.IPIPModeAlways,
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
+
+			By("Creating an IPIPModeAlways pool and verifying global felix config is updated")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool2"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR:     "1.2.4.0/24",
+					IPIPMode: apiv2.IPIPModeAlways,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			enabled, err := getGlobalSetting()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*enabled).To(BeTrue())
+		})
+
+		It("should enable IPIP globally on an IPPool Create (IPIPModeNever) if the global setting is not configured", func() {
+			By("Getting the current felix configuration - checking does not exist")
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
+
+			By("Creating an IPIPModeCrossSubnet pool and verifying global felix config is updated")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR:     "1.2.4.0/24",
+					IPIPMode: apiv2.IPIPModeCrossSubnet,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			enabled, err := getGlobalSetting()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*enabled).To(BeTrue())
+		})
+
+		It("should enable IPIP globally on an IPPool Update if the global setting is not configured", func() {
+			By("Getting the current felix configuration - checking does not exist")
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
+
+			By("Creating a non-IPIP pool and verifying no felix configuration still")
+			pool, err := c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = getGlobalSetting()
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceDoesNotExist{}))
+
+			By("Updating the pool to enabled IPIP and checking felix configuration is added")
+			pool.Spec.IPIPMode = apiv2.IPIPModeAlways
+			_, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			enabled, err := getGlobalSetting()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*enabled).To(BeTrue())
+		})
+
+		It("should not enable IPIP globally on an IPPool Create if the global setting already configured to false", func() {
+			By("Setting the global felix IPIP enabled to false")
+			ipipEnabled := false
+			_, err = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: apiv2.FelixConfigurationSpec{
+					IpInIpEnabled: &ipipEnabled,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating an IPIPModeCrossSubnet pool and verifying global felix config is not updated")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR:     "1.2.4.0/24",
+					IPIPMode: apiv2.IPIPModeCrossSubnet,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			enabled, err := getGlobalSetting()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*enabled).To(BeFalse())
 		})
 	})
 })
