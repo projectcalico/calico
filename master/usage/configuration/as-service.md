@@ -1,19 +1,25 @@
 ---
-title: Running Calico Node Container as a Service
+title: Running calico/node with an init system
 ---
 
-This guide explains how to run Calico as a system process or service,
-with a focus on running in a Dockerized deployment. We include
-examples for Systemd, but the commands can be applied to other init
-daemons such as upstart as well.
+This guide explains how to run `calico/node` with an init system like
+systemd, inside either of the following container types:
+- [Docker](#running-caliconode-in-a-docker-container)
+- [rkt](#running-caliconode-in-a-rkt-container)
 
-## Running the Calico Node Container as a Service
-This section describes how to run the Calico node as a Docker container
-in Systemd.  Included here is an EnvironmentFile that defines the Environment
+## Running calico/node in a Docker container
+
+This section describes how to run `calico/node` as a Docker container.
+
+> **Note**: We include examples for systemd, but the commands can be 
+> applied to other init daemons such as upstart.
+{: .alert .alert-info}
+
+Included here is an `EnvironmentFile` that defines the environment
 variables for Calico and a sample systemd service file that uses the
-environment file and starts the Calico node image as a service.
+environment file and starts the `calico/node` image as a service.
 
-`calico.env` - the EnvironmentFile:
+`calico.env` - the `EnvironmentFile`:
 
 ```shell
 ETCD_ENDPOINTS=http://localhost:2379
@@ -58,14 +64,14 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 >
 > The `CALICO_NETWORKING_BACKEND` defaults to use BIRD as the routing daemon.
 > This may also be set to `gobgp` (to use GoBGP as the routing daemon, but note
-> that this does not support IP in IP), or `none` (if routing is handled by an
+> that this does not support IP-in-IP), or `none` (if routing is handled by an
 > alternative mechanism).
 {: .alert .alert-info}
 
 
-### Systemd Service Example
+### systemd service example
 
-`calico-node.service` - the Systemd service:
+`calico-node.service` - the systemd service:
 
 ```shell
 [Unit]
@@ -105,8 +111,8 @@ StartLimitInterval=60s
 WantedBy=multi-user.target
 ```
 
-The Systemd service above does the following on start:
-  - Confirm docker is installed under the `[Unit]` section
+The systemd service above does the following on start:
+  - Confirm Docker is installed under the `[Unit]` section
   - Get environment variables from the environment file above
   - Remove existing `calico-node` container (if it exists)
   - Start `calico/node`
@@ -118,3 +124,39 @@ The script will also stop the calico-node container when the service is stopped.
 > Be sure to check this before starting the service.
 {: .alert .alert-info}
 
+
+## Running calico/node in a rkt container
+
+Each Calico-rkt enabled node requires the `calico/node` container to be running.
+
+The `calico/node` container can be run directly through rkt and needs to be run as
+as a fly stage-1 container.
+
+```shell
+sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
+  --set-env=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> \
+  --set-env=IP=autodetect \
+  --insecure-options=image \
+  --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false \
+  --mount=volume=birdctl,target=/var/run/calico \
+  --volume=mods,kind=host,source=/lib/modules,readOnly=false  \
+  --mount=volume=mods,target=/lib/modules \
+  --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
+  --mount=volume=logs,target=/var/log/calico \
+  --net=host \
+  quay.io/calico/node:{{site.data.versions[page.version].first.title}} &
+```
+
+> **Note**: Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration. The `ETCD_ENDPOINTS`
+> environment may contain a comma separated list of endpoints of your etcd cluster.
+> If the environment is omitted, Calico defaults to a single etcd
+> endpoint at http://127.0.0.1:2379.
+{: .alert .alert-info}
+
+You can check that it's running using `sudo rkt list`.
+
+```shell
+$ sudo rkt list
+UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
+b52bba11  node  quay.io/calico/node:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
+```

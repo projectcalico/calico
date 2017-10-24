@@ -1,5 +1,6 @@
 ---
 title: Calico Networking with rkt
+no-canonical: true
 ---
 
 This tutorial describes how to set up a Calico cluster in a pure rkt environment.

@@ -1,5 +1,6 @@
 ---
 title: Manage `calico/node` using systemd
+no-canonical: true
 ---
 
 It is recommended to use systemd to run the `calico/node` container in production.  Use the following [sample `systemd` unit file]({{site.baseurl}}/{{page.version}}/getting-started/rkt/vagrant/systemd/calico-node.service) to manage the `calico/node` container using rkt.
