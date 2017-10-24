@@ -1,6 +1,7 @@
 ---
 title: Calico with rkt
 redirect_from: latest/getting-started/rkt/index
+no-canonical: true
 ---
 
 Calico supports networking and network policy in a pure rkt container environment.
