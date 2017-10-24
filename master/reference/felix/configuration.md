@@ -117,12 +117,19 @@ convenient.
 ### Datastore
 
 Felix also reads configuration parameters from the datastore.  It supports
-a global setting and a per-host override.  Datastore-based configuration
-can be set using the `--raw=felix` option of the calicoctl tool.  For example,
-to set a per-host override for "myhost" to move the log file to /tmp/felix.log:
+a global setting and a per-host override.
 
-    ./calicoctl config set --raw=felix --node=myhost LogFilePath /tmp/felix.log
+```
+# Get the current felixconfig settings
+$ calicoctl get felixconfig -o yaml > felix.yaml
 
-(For a global setting, omit the `--node=` option.)
+# Modify logFilePath to your intended path, e.g. "/tmp/felix.log"
+#   Global change: set name to "default"
+#   Node-specific change: set name to the node name, e.g. "Calico-Node-1"
+$ vim felix.yaml
 
-For more information, see the [calicoctl config documentation](../calicoctl/commands/config).
+# Replace the current felixconfig settings
+$ calicoctl replace -f felix.yaml
+```
+
+For more information, see [Felix Configuration Resource](../calicoctl/resources/felixconfig).

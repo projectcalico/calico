@@ -2,7 +2,7 @@
 title: Node Resource (Node)
 ---
 
-An node resource (`Node`) represents a node running Calico.  When adding a host
+A node resource (`Node`) represents a node running Calico.  When adding a host
 to a Calico cluster, a Node resource needs to be created which contains the
 configuration for the Calico Node instance running on the host.
 
@@ -48,7 +48,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| asNumber    | The AS Number of your Calico node. | Optional.  If omitted the global value is used (see [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config) for details). | integer |
+| asNumber    | The AS Number of your Calico node. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/{{page.version}}/usage/configuration/bgp#example) for details about modifying the `asNumber` setting). | integer |
 | ipv4Address | The IPv4 address and subnet exported as the next-hop for the Calico endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
 | ipv6Address | The IPv6 address and subnet exported as the next-hop for the Calico endpoints on the host | Optional | string |
 | ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel | Optional IPv4 address | string |
