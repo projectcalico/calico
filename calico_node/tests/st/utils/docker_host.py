@@ -259,15 +259,14 @@ class DockerHost(object):
         # use of | or ;
         #
         # Pass in all etcd params, the values will be empty if not set anyway
-        ETCD_ENDPOINTS = "%s://%s " % (ETCD_SCHEME,etcd_auth)
         calicoctl = "export ETCD_AUTHORITY=%s; " \
                     "export ETCD_SCHEME=%s; " \
                     "export ETCD_CA_CERT_FILE=%s; " \
                     "export ETCD_CERT_FILE=%s; " \
                     "export ETCD_KEY_FILE=%s; " \
-                    "export ETCD_ENDPOINTS=%s; %s" % \
-                    (etcd_auth, ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_ENDPOINTS,
-                     calicoctl)
+                    "export ETCD_ENDPOINTS=%s://%s; %s" % \
+                    (etcd_auth, ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY,
+                     ETCD_SCHEME, etcd_auth, calicoctl)
         # If the hostname is being overriden, then export the HOSTNAME
         # environment.
         if self.override_hostname:
