@@ -20,7 +20,10 @@ import (
 	"io"
 )
 
-const yamlSeparator = "\n---"
+const (
+	yamlSeparator = "\n---"
+	maxDocumentLength = 10 * 1024 * 1024 // 10MB.
+)
 
 type Separator interface {
 	Next() ([]byte, error)
@@ -32,6 +35,7 @@ type YAMLSeparator struct {
 
 func NewYAMLDocumentSeparator(reader io.Reader) Separator {
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 1024), maxDocumentLength)
 	scanner.Split(splitYAMLDocument)
 	return &YAMLSeparator{
 		scanner: scanner,

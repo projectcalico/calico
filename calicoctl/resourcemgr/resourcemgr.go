@@ -411,6 +411,7 @@ func unmarshalSliceOfResources(tml []unstructured.Unstructured, b []byte) ([]run
 // Resources.  If the file does not contain any valid Resources this function returns an error.
 func CreateResourcesFromFile(f string) ([]runtime.Object, error) {
 	// Load the bytes from file or from stdin.
+	logCxt := log.WithField("source", f)
 	var reader io.Reader
 	var err error
 	if f == "-" {
@@ -418,10 +419,12 @@ func CreateResourcesFromFile(f string) ([]runtime.Object, error) {
 	} else {
 		reader, err = os.Open(f)
 		if err != nil {
+			logCxt.WithError(err).Error("Failed to open file")
 			return nil, err
 		}
 	}
 
+	logCxt.Debug("Creating document separator")
 	var resources []runtime.Object
 	separator := yamlsep.NewYAMLDocumentSeparator(reader)
 	for {
@@ -430,17 +433,21 @@ func CreateResourcesFromFile(f string) ([]runtime.Object, error) {
 			if err == io.EOF {
 				break
 			}
+			logCxt.WithError(err).Error("Document separator failed")
 			return nil, err
 		}
 
+		logCxt.WithField("byteLength", len(b)).Debug("Found a resource")
 		r, err := createResourcesFromBytes(b)
 		if err != nil {
+			logCxt.WithError(err).Error("Failed to parse resource from bytes")
 			return nil, err
 		}
 
 		resources = append(resources, r...)
 	}
 
+	logCxt.WithField("numResources", len(resources)).Info("Finished parsing")
 	return resources, nil
 }
 
