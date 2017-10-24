@@ -15,9 +15,11 @@ package main
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -44,7 +46,6 @@ import (
 
 const (
 	DEFAULT_IPV4_POOL_CIDR              = "192.168.0.0/16"
-	DEFAULT_IPV6_POOL_CIDR              = "fd80:24e2:f998:72d6::/64"
 	DEFAULT_IPV4_POOL_NAME              = "default-ipv4-ippool"
 	DEFAULT_IPV6_POOL_NAME              = "default-ipv6-ippool"
 	AUTODETECTION_METHOD_FIRST          = "first-found"
@@ -617,6 +618,21 @@ func configureASNumber(node *api.Node) {
 	}
 }
 
+// generateIPv6ULAPrefix return a random generated ULA IPv6 prefix as per RFC 4193.  The pool
+// is generated from bytes pulled from a secure random source.
+func GenerateIPv6ULAPrefix() (string, error) {
+	ulaAddr := []byte{0xfd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	_, err := cryptorand.Read(ulaAddr[1:6])
+	if err != nil {
+		return "", err
+	}
+	ipNet := net.IPNet{
+		IP:   net.IP(ulaAddr),
+		Mask: net.CIDRMask(48, 128),
+	}
+	return ipNet.String(), nil
+}
+
 // configureIPPools ensures that default IP pools are created (unless explicitly
 // requested otherwise).
 func configureIPPools(ctx context.Context, client client.Interface) {
@@ -671,9 +687,13 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 		return // not really needed but allows testing to function
 	}
 
-	// Read IPV6 CIDR from env if set and parse then check it for errors
+	// If no IPv6 pool is specified, generate one.
 	if ipv6Pool == "" {
-		ipv6Pool = DEFAULT_IPV6_POOL_CIDR
+		ipv6Pool, err = GenerateIPv6ULAPrefix()
+		if err != nil {
+			log.Errorf("Failed to generate an IPv6 default pool")
+			terminate()
+		}
 	}
 	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
 	if err != nil || ipv6Cidr.Version() != 6 {
