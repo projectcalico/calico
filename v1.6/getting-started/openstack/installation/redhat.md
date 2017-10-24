@@ -282,9 +282,9 @@ On each control node, perform the following steps:
     > left around.
     >
 
-2.  Run `yum update`. This will bring in Calico-specific updates to the
-    OpenStack packages and to `dnsmasq`. (OpenStack updates are not
-    needed for Liberty.)
+2.  Run `yum update`. For OpenStack Kilo and earlier, this will bring in
+    Calico-specific updates to the OpenStack packages. (OpenStack updates are
+    not needed for Liberty and later.)
 
 3.  Edit the `/etc/neutron/neutron.conf` file. In the \[DEFAULT\]
     section:
@@ -411,9 +411,9 @@ On each compute node, perform the following steps:
         neutron agent-delete <agent-id>
     ```
 
-4.  Run `yum update`. This will bring in Calico-specific updates to the
-    OpenStack packages and to `dnsmasq`. For OpenStack Liberty, this
-    step only upgrades `dnsmasq`.
+4.  Run `yum update`. For OpenStack Kilo and earlier, this will bring in
+    Calico-specific updates to the OpenStack packages. (OpenStack updates are
+    not needed for Liberty and later.)
 
 5.  Install Neutron infrastructure code on the compute host:
 

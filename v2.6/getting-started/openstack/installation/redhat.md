@@ -12,8 +12,6 @@ using OpenStack Liberty or later.
 >
 > - Using Newton or later (recommended), or
 >
-> - Using RHEL/CentOS 7.2, instead of 7.3, or
->
 > - Manually [patching](https://review.openstack.org/#/c/425637/) your Nova
 >   install on each compute node.
 {: .alert .alert-info}
@@ -98,7 +96,7 @@ through the process.
         cd etcd-v2.0.11-linux-amd64
         mv etcd* /usr/local/bin/
         ```
-        
+
         > **Important**: We've seen certificate errors downloading etcd—you may need
         > to add `--insecure` to the curl command to ignore this.
         >
@@ -257,7 +255,7 @@ On each control node, perform the following steps:
     routers, subnets and networks (in that order) created by the install
     process referenced above. You can do this using the web dashboard or
     at the command line.
-    
+
     > **Tip**: The Admin and Project sections of the web dashboard both
     > have subsections for networks and routers. Some networks may
     > need to be deleted from the Admin section.
@@ -267,9 +265,7 @@ On each control node, perform the following steps:
     > left around.
     {: .alert .alert-danger}
 
-2.  Run `yum update`. This will bring in Calico-specific updates to `dnsmasq`.
-
-3.  Edit the `/etc/neutron/neutron.conf` file. In the `\[DEFAULT\]`
+3.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
     section, find the line beginning with `core_plugin`, and change it to
     read `core_plugin = calico`.
 
@@ -318,8 +314,8 @@ On each compute node, perform the following steps:
         "/dev/rtc", "/dev/hpet", "/dev/net/tun",
     ]
     ```
-    
-    
+
+
     > **Note**: The `cgroup_device_acl` entry is subtly different than the
     > default. It now contains `/dev/net/tun`.
     >
@@ -332,7 +328,7 @@ On each compute node, perform the following steps:
     service libvirtd restart
     ```
 
-2.  Open `/etc/nova/nova.conf` and remove the line from the \[DEFAULT\]
+2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
     ```
@@ -383,8 +379,6 @@ On each compute node, perform the following steps:
     ```
     neutron agent-delete <agent-id>
     ```
-
-4.  Run `yum update`. This will bring in Calico-specific updates to `dnsmasq`.
 
 5.  Install Neutron infrastructure code on the compute host:
 

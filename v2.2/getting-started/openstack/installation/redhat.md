@@ -13,8 +13,6 @@ using OpenStack Liberty or later.
 >
 > - using Newton or later (recommended)
 >
-> - or using RHEL/CentOS 7.2, instead of 7.3
->
 > - or manually [patching](https://review.openstack.org/#/c/425637/) your Nova
 >   install on each compute node.
 
@@ -274,8 +272,6 @@ On each control node, perform the following steps:
     > left around.
     >
 
-2.  Run `yum update`. This will bring in Calico-specific updates to `dnsmasq`.
-
 3.  Edit the `/etc/neutron/neutron.conf` file. In the \[DEFAULT\]
     section:
     -   Find the line beginning with `core_plugin`, and change it to
@@ -391,8 +387,6 @@ On each compute node, perform the following steps:
     ```
         neutron agent-delete <agent-id>
     ```
-
-4.  Run `yum update`. This will bring in Calico-specific updates to `dnsmasq`.
 
 5.  Install Neutron infrastructure code on the compute host:
 
