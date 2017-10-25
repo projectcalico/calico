@@ -369,7 +369,13 @@ class MultiHostMainline(TestBase):
         assert_number_endpoints(host1, 4)
         assert_number_endpoints(host2, 2)
 
-        self._check_original_connectivity(n1_workloads, n2_workloads)
+        try:
+            self._check_original_connectivity(n1_workloads, n2_workloads)
+        except Exception as e:
+            _log.exception(e)
+            host1.log_extra_diags()
+            host2.log_extra_diags()
+            raise
 
         # Test deleting the network. It will fail if there are any
         # endpoints connected still.

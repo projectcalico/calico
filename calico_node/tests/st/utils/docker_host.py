@@ -657,3 +657,5 @@ class DockerHost(object):
         self.execute("iptables-save", raise_exception_on_failure=False)
         self.execute("ip6tables-save", raise_exception_on_failure=False)
         self.execute("ipset save", raise_exception_on_failure=False)
+        self.execute("ps", raise_exception_on_failure=False)
+        self.execute("cat /etc/bird/bird.conf", raise_exception_on_failure=False)
