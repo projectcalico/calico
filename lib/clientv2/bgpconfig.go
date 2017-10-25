@@ -16,7 +16,6 @@ package clientv2
 
 import (
 	"context"
-	"errors"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -73,10 +72,6 @@ func (r bgpConfigurations) Update(ctx context.Context, res *apiv2.BGPConfigurati
 // Delete takes name of the BGPConfiguration and deletes it. Returns an
 // error if one occurs.
 func (r bgpConfigurations) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv2.BGPConfiguration, error) {
-	// Check if we are trying to delete "default". Prevent deletion for now.
-	if name == "default" {
-		return nil, errors.New("Cannot delete default BGP Configuration.")
-	}
 	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindBGPConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*apiv2.BGPConfiguration), err
