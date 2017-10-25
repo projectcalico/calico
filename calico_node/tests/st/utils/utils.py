@@ -276,8 +276,8 @@ def assert_number_endpoints(host, expected):
     out = host.calicoctl("get workloadEndpoint -o yaml")
     output = yaml.safe_load(out)
     actual = 0
-    for endpoint in output:
-        if endpoint['metadata']['node'] == hostname:
+    for endpoint in output['items']:
+        if endpoint['spec']['node'] == hostname:
             actual += 1
 
     if int(actual) != int(expected):
