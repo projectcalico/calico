@@ -225,8 +225,16 @@ global configuration.
 
 From any Calico Docker node, run the following:
 
-    calicoctl config set nodeToNodeMesh off
+```
+# Get the current bgpconfig settings
+$ calicoctl get bgpconfig -o yaml > bgp.yaml
 
+# Set nodeToNodeMeshEnabled to false
+$ vim bgp.yaml
+
+# Replace the current bgpconfig settings
+$ calicoctl replace -f bgp.yaml
+```
 
 ### Determine the AS number for your network
 

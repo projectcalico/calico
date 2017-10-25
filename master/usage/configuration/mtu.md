@@ -86,7 +86,14 @@ To set the IP-in-IP MTU value for all calico nodes in your cluster, use the
 following command to set the global config value.
 
 ```
-calicoctl config set --raw=felix IpInIpMtu 1480
+# Get the current Felix settings
+$ calicoctl get felixconfig -o yaml > felix.yaml
+
+# Modify ipInIpMtu to the intended integer value
+$ vim felix.yaml
+
+# Replace the current felixconfig settings
+$ calicoctl replace -f felix.yaml
 ```
 
 > **Note**: Setting the `IpInIpMtu` config option will result in an immediate

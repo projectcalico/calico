@@ -62,8 +62,8 @@ When creating a Calico node, you can optionally specify an AS number to use for
 the node.  If no AS number if specified, the node will use the global default
 value.
 
-Use the `calicoctl config set asNumber` command to set the global default AS
-number.  If no value is configured, the default AS number is 64512.
+See [Example](#example) to set the global default AS number.
+to set the global default AS number. If no value is configured, the default AS number is 64512.
 
 If all of your Calico nodes are within the same AS, but you require a
 different AS number to be used (e.g because you are peering with a border
@@ -79,25 +79,12 @@ not necessary.
 > global value that was previously set.
 {: .alert .alert-info}
 
-#### Example
-
-To set the default AS number to 64513, run the following calicoctl command on
-any node:
-
-	$ calicoctl config set asNumber 64513
-
-To view the current default value, run the command without specifying an AS
-number, the command will output the current value.
-
-	$ calicoctl config get asNumber
-	64513
-
-
 ### Disabling the full node-to-node BGP mesh
 
 If you are explicitly configuring the BGP topology for your Calico network,
-you may wish to disable the full node-to-node mesh.  Use the
-`calicoctl config set nodeToNodeMesh` command to disable or re-enable the mesh.
+you may wish to disable the full node-to-node mesh. See
+[Example](#example) 
+for instructions to change the `nodeToNodeMesh` global BGP setting.
 
 If you are building your network from scratch and do not need the full
 node-to-node mesh we recommend turning off the mesh before configuring your
@@ -108,22 +95,21 @@ to ensure continuity of service.
 
 #### Example
 
-To turn off the full BGP node-to-node mesh run the following command on any
-node:
+To turn off the full BGP node-to-node mesh, or to modify the global AS number,
+run the following command on any node:
 
-	$ calicoctl config set nodeToNodeMesh off
+```
+# Get the current bgpconfig settings
+$ calicoctl get bgpconfig -o yaml > bgp.yaml
 
-If you need to turn the full BGP node-to-node mesh back on run the following
-command on any node:
+# Modify nodeToNodeMeshEnabled to true or false
+# -or-
+# modify the asNumber to appropropriate integer
+$ vim bgp.yaml
 
-	$ calicoctl config set nodeToNodeMesh on
-
-To view whether the BGP node-to-node mesh is on or off, enter the command
-without specifying the parameter, the command will output the current state.
-
-	$ calicoctl config get nodeToNodeMesh
-	on
-
+# Replace the current bgpconfig settings
+$ calicoctl replace -f bgp.yaml
+```
 
 ### Configuring a global BGP peer
 

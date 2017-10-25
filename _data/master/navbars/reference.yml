@@ -26,8 +26,6 @@ toc:
       path: /reference/calicoctl/commands/delete
     - title: get
       path: /reference/calicoctl/commands/get
-    - title: config
-      path: /reference/calicoctl/commands/config
     - title: ipam
       section:
       - title: Overview
