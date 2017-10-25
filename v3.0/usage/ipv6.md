@@ -13,40 +13,6 @@ terminate an IPv6 connection from outside.
 Containers have no specific requirements for utilising IPv6
 connectivity.
 
-## Requirements for guest VM images
-
-When using Calico with a VM platform (e.g. OpenStack), obtaining IPv6
-connectivity requires certain configuration in the guest VM image:
-
--   When it boots up, the VM should issue a DHCPv6 request for each of
-    its interfaces, so that it can learn the IPv6 addresses that
-    OpenStack has allocated for it.
--   The VM must be configured to accept Router Advertisements.
--   If it uses the widely deployed DHCP client from ISC, the VM must
-    have a fix or workaround for [this known
-    issue](https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html).
-
-These requirements are not yet all met in common cloud images - but it
-is easy to remedy that by launching an image, making appropriate changes
-to its configuration files, taking a snapshot, and then using that
-snapshot thereafter instead of the original image.
-
-For example, starting from the Ubuntu 14.04 cloud image, the following
-changes will suffice to meet the requirements just listed.
-
--   In `/etc/network/interfaces.d/eth0.cfg`, add:
-
-        iface eth0 inet6 dhcp
-                accept_ra 1
-
--   In `/sbin/dhclient-script`, add at the start of the script:
-
-        new_ip6_prefixlen=128
-
--   In `/etc/sysctl.d`, create a file named `30-eth0-rs-delay.conf` with
-    contents:
-
-        net.ipv6.conf.eth0.router_solicitation_delay = 10
 
 ## Implementation details
 
@@ -75,21 +41,3 @@ implemented in Calico.
         move it into the container.
 -   BIRD6 runs between the compute hosts to distribute routes.
 
-OpenStack Specific Details
---------------------------
-
-In OpenStack, IPv6 connectivity requires defining an IPv6 subnet, in
-each Neutron network, with:
-
--   the IPv6 address range that you want your VMs to use
--   DHCP enabled
--   (from Juno onwards) IPv6 address mode set to DHCPv6 stateful.
-
-We suggest initially configuring both IPv4 and IPv6 subnets in each
-network. This allows handling VM images that support only IPv4 alongside
-those that support both IPv4 and IPv6, and allows a VM to be accessed
-over IPv4 in case this is needed to troubleshoot any issues with its
-IPv6 configuration.
-
-In principle, though, we are not aware of any problems with configuring
-and using IPv6-only networks in OpenStack.

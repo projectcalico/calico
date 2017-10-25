@@ -18,8 +18,6 @@ However, it may provide a useful framework for future development.
 These instructions are focused around container-based deployments that use the
 calico/node container image.
 
-For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bird-rr-config).
-
 > **Note**: The API and behavior of the calico/routereflector is likely to change in
 > future releases.
 {: .alert .alert-info}
