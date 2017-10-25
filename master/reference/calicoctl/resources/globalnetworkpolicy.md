@@ -4,9 +4,9 @@ no_canonical: true
 ---
 
 A global network policy resource (`GlobalNetworkPolicy`) represents an ordered set of rules which are applied
-to a collection of endpoints which match a [label selector](#selector).
+to a collection of endpoints that match a [label selector](#selector).
 
-GlobalNetworkPolicy is not a namespaced resource. GlobalNetworkPolicy applies to [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) in all namespaces. 
+GlobalNetworkPolicy is not a namespaced resource. GlobalNetworkPolicy applies to [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) in all namespaces, and to [HostEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
 See [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for namespaced Network Policy.
 
 GlobalNetworkPolicy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
@@ -80,4 +80,4 @@ spec:
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
 | etcdv3                | Yes           | Yes    | Yes      |
-| Kubernetes API server | No            | No     | Yes      | 
+| Kubernetes API server | No            | No     | Yes      |
