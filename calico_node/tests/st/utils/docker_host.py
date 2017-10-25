@@ -319,8 +319,9 @@ class DockerHost(object):
             # CALICO_IPV4POOL_CIDR setting.
             modified_cmd = (
                 prefix +
-                " -e CALICO_IPV4POOL_CIDR=%s -e " % DEFAULT_IPV4_POOL_CIDR +
-                suffix
+                (" -e CALICO_IPV4POOL_CIDR=%s " % DEFAULT_IPV4_POOL_CIDR) +
+                " -e DISABLE_NODE_IP_CHECK=true -e FELIX_IPINIPENABLED=true " +
+                " -e " + suffix
             )
 
             # Now run that.
