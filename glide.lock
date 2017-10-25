@@ -1,5 +1,5 @@
-hash: 48c1d21c9cfa5cf1ac4c6f2c1e4fda54e3018400781b55bba32be1604d1c93d1
-updated: 2017-10-23T10:56:32.553558508-07:00
+hash: 7dad9ea8f8f1377cbfb44a9e4ce6aae564bd1afdc8abec5cb06dc0d6b838d67d
+updated: 2017-10-24T18:11:10.621788095-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -43,7 +43,7 @@ imports:
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
 - name: github.com/gavv/monotime
-  version: 6f8212e8d10df7383609d3c377ca08884d8f3ec0
+  version: 47d58efa69556a936a3c15eb2ed42706d968ab01
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 80853cf81b74dbde7b6c55dae0d52cfe8e0001c9
+  version: 3265689af5de15e20427ff12c5dd4a9d1d311e16
   subpackages:
   - lib
   - lib/apiconfig
@@ -236,7 +236,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -292,7 +292,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: a2e0dc829727a4f957a7428b1f322805cfc1f362
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity
