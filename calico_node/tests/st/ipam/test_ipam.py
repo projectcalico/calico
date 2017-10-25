@@ -64,8 +64,13 @@ class MultiHostIpam(TestBase):
 
     def tearDown(self):
         # Replace original pool, if any
+        response = self.hosts[0].calicoctl("get IPpool -o yaml")
+        self.orig_pools = yaml.safe_load(response)
         if len(self.orig_pools) > 0:
+            self.hosts[0].writefile("pre_orig_pools.yaml", response)
+            self.hosts[0].calicoctl("delete -f pre_orig_pools.yaml")
             self.hosts[0].calicoctl("apply -f orig_pools.yaml")
+        #import pdb; pdb.set_trace()# Remove all workloads
         # Remove all workloads
         for host in self.hosts:
             host.remove_workloads()
