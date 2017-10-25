@@ -62,3 +62,5 @@ In order to update low-level Felix or BGP settings:
 1. optionally `get` the appropriate resource and store the yaml output in a file
 1. optionally modify the resource using your favorite editor
 1. `replace` the resource
+
+See [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration) for more details.

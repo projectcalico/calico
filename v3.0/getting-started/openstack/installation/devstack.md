@@ -39,19 +39,7 @@ and compute functions running on the same node:
 
        sysctl -w net.ipv4.ip_forward=1
        sysctl -w net.ipv6.conf.all.forwarding=1
-       
-> **Note**: There is an
-> [OpenStack CI job](http://git.openstack.org/cgit/openstack-infra/project-config/tree/jenkins/jobs/networking-calico.yaml)
-> that tests the networking-calico DevStack plugin against the latest master
-> OpenStack code. In case you hit trouble with the procedure above, please
-> check the latest
-> [logs from that job](http://logs.openstack.org/periodic/periodic-tempest-dsvm-networking-calico-master/) to
-> see if there is also a problem in the OpenStack CI, and let us know if so.
-> (Occasionally that test fails because there is some change in the master
-> Neutron code that requires a corresponding change in networking-calico.  We
-> may not notice that straightaway, so will always appreciate a prompt!)
->
-{: .alert .alert-info}
+
 
 
 Multi-node setup
