@@ -328,22 +328,6 @@ def get_profile_name(host, network):
 
 
 @debug_failures
-def assert_network(host, network):
-    """
-    Checks that the given network is in Docker
-    Raises an exception if the network is not found
-
-    :param host: DockerHost object
-    :param network: Network object
-    :return: None
-    """
-    try:
-        host.execute("docker network inspect %s" % network.name)
-    except CommandExecError:
-        raise AssertionError("Docker network %s not found" % network.name)
-
-
-@debug_failures
 def get_host_ips(version=4, exclude=None):
     """
     Gets all IP addresses assigned to this host.

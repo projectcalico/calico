@@ -20,7 +20,7 @@ from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.network import NETWORKING_CNI, NETWORKING_LIBNETWORK
-from tests.st.utils.utils import assert_network, assert_profile, \
+from tests.st.utils.utils import assert_profile, \
     assert_number_endpoints, get_profile_name
 
 POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
@@ -331,10 +331,6 @@ class MultiHostMainline(TestBase):
         network1 = host1.create_network("testnet1")
         network2 = host1.create_network("testnet2")
         networks = [network1, network2]
-
-        # Assert that the networks can be seen on host2
-        assert_network(host2, network2)
-        assert_network(host2, network1)
 
         n1_workloads = []
         n2_workloads = []
