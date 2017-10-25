@@ -87,6 +87,7 @@ class TestBGP(TestBase):
     def test_bird_as_num(self):
         self._test_as_num(backend='bird')
 
+    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
     @attr('slow')
     def test_gobgp_as_num(self):
         self._test_as_num(backend='gobgp')
