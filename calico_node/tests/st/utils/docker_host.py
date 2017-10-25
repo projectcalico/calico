@@ -548,13 +548,14 @@ class DockerHost(object):
         :param subnet: The subnet IP pool to assign IPs from.
         :return: A DockerNetwork object.
         """
-        nw = DockerNetwork(self, name, driver=driver, ipam_driver=ipam_driver,
-                           subnet=subnet)
+        #nw = DockerNetwork(self, name, driver=driver, ipam_driver=ipam_driver,
+        #                   subnet=subnet)
 
         # Store the network so that we can attempt to remove it when this host
         # or another host exits.
-        self.docker_networks.append(nw)
-        return nw
+        #self.docker_networks.append(nw)
+
+        return "bridge"
 
     @staticmethod
     def escape_shell_single_quotes(command):
