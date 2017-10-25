@@ -129,13 +129,13 @@ class MultiHostMainline(TestBase):
             ip = workload.ip
             rule = {'action': 'allow',
                     'source':
-                        {'net': '%s/32' % ip}}
+                        {'nets': ['%s/32' % ip]}}
             prof_n2['spec']['ingress'].append(rule)
         for workload in self.n2_workloads:
             ip = workload.ip
             rule = {'action': 'allow',
                     'source':
-                        {'net': '%s/32' % ip}}
+                        {'nets': ['%s/32' % ip]}}
             prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
@@ -149,11 +149,11 @@ class MultiHostMainline(TestBase):
         n2_subnet = netaddr.spanning_cidr(n2_ips)
         rule = {'action': 'allow',
                 'source':
-                    {'net': str(n1_subnet)}}
+                    {'nets': [str(n1_subnet)]}}
         prof_n2['spec']['ingress'].append(rule)
         rule = {'action': 'allow',
                 'source':
-                    {'net': str(n2_subnet)}}
+                    {'nets': [str(n2_subnet)]}}
         prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,

@@ -536,7 +536,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'destination': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -623,7 +623,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'source': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -633,7 +633,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'destination': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -686,7 +686,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'destination': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
