@@ -1346,6 +1346,75 @@ v2.1:
       version: 1.4.1
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.1
 
+v3.0:
+- title: v3.0.0-alpha1-rc1
+  note: |
+    24 October 2017
+
+    **What's new**
+
+    - Support for the [etcd version 3 datastore](https://coreos.com/blog/etcd3-a-new-etcd.html).
+
+    - Two new `calicoctl` resources: [BGP Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgpconfig) and [Felix Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/felixconfig).
+
+    - The `calicoctl` Policy resource has been split into [Network Policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) and [Global Network Policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy).
+
+    - You can now name [host](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/hostendpoint#endpointport) and [workload](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint#endpointport) endpoint ports and reference them by name in your [policy rules](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/policy#ports).
+
+    - The new `ApplyOnForward` flag allows you to specify if a host endpoint policy should apply to forwarded traffic or not. Forwarded traffic includes traffic forwarded between host endpoints and traffic forwarded between a host endpoint and a workload endpoint on the same host. Refer to [Using Calico to secure host interfaces](https://docs.projectcalico.org/v3.0/getting-started/bare-metal/bare-metal) for more details.
+
+    - Calico now works with Kubernetes network services proxy with IPVS/LVS. Calico enforces network policies with kube-proxy running in ipvs mode for Kubernetes clusters. Currently only workload ingress policy is supported.
+
+    **Limitations**
+
+    - **No upgrades**: Calico v3.0.0 ends support for etcd version 2. Existing customers must migrate their data to etcd version 3. The alpha release does not provide migration capabilities, nor does it support upgrades. We plan to add migration and upgrade support in the GA release.
+
+    - **Integrates only with Kubernetes and host endpoints**: the Docker, OpenStack, OpenShift, Mesos, DC/OS, and rkt orchestrators have not been tested and are not supported. (Calico v3.0.0 still supports Docker and rkt containers.)
+
+    - **Lack of `calicoctl` data validation**: `calicoctl` does not perform as much validation on data, increasing the potential for bad data. Use caution when entering data via `calicoctl`.
+
+    - **No support for BGP route reflection**: large deployments that require [BGP route reflection](https://docs.projectcalico.org/v3.0/usage/routereflector/bird-rr-config) are not supported.
+
+    <!-- Once migration from etcdv2 to etcdv3 is supported, restore the following warning -->
+    <!-- <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div> -->
+
+  components:
+    felix:
+      version: 3.0.0-alpha1-rc1
+      url: https://github.com/projectcalico/felix/releases/tag/3.0.0-alpha1-rc1
+    typha:
+      version: v0.6.0-alpha1-rc1
+      url: https://github.com/projectcalico/typha/releases/tag/v0.6.0-alpha1-rc1
+    calicoctl:
+      version: v2.0.0-alpha1-rc2
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.0.0-alpha1-rc2
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.0.0-alpha1-rc2/calicoctl
+    calico/node:
+      version: v3.0.0-alpha1-rc1
+      url: https://github.com/projectcalico/calico/releases/tag/v3.0.0-alpha1-rc1
+    calico/cni:
+      version: v2.0.0-alpha1-rc1
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.0.0-alpha1-rc1
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0-alpha1-rc1/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0-alpha1-rc1/calico-ipam
+    calico/kube-controllers:
+      version: v2.0.0-alpha1-rc1
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0-alpha1-rc1
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    networking-calico:
+      version: 1.4.3
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
+    calico/routereflector:
+      version: v0.4.0
+      url: ""
 
 # The master release stream is used to generate the master version of the docs,
 # as well as for builds of `calico/node:master` via CI.  Submit PRs to update the
@@ -1355,7 +1424,7 @@ master:
   note: ""
   components:
      felix:
-      version: master 
+      version: master
       url: ""
      calicoctl:
       version: master
@@ -1373,8 +1442,8 @@ master:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
      confd:
-      version: v1.0.0-alpha1-rc3
-      url: https://github.com/projectcalico/confd/releases/tag/v1.0.0-alpha1-rc3
+      version: v1.0.0-alpha1-rc4
+      url: https://github.com/projectcalico/confd/releases/tag/v1.0.0-alpha1-rc4
      calico-bgp-daemon:
       version: v0.2.2
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.2
@@ -1392,7 +1461,7 @@ master:
       url: ""
 
 # vX.Y format: update during major release process
-currentReleaseStream: v2.6
+currentReleaseStream: v3.0
 
 # Local directories to ignore when checking external links
 htmlProoferLocalDirIgnore: /v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/
