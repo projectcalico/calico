@@ -164,6 +164,11 @@ func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 	}
 	log.Info("Done")
 
+	Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
+		BeNumerically("==", 1000),
+		"Addition of pods wasn't reflected in Felix metrics",
+	)
+
 	return nil
 }
 
