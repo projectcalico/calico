@@ -849,7 +849,11 @@ class TestFelixOnGateway(TestBase):
         objects = yaml.load(self.hosts[0].calicoctl("get %s -o yaml" % resource))
         # and delete them (if there are any)
         if len(objects) > 0:
-            self._delete_data(objects, self.hosts[0])
+            _log.info("objects: %s", objects)
+            if 'items' in objects and len(objects['items']) == 0:
+                pass
+            else:
+                self._delete_data(objects, self.hosts[0])
 
     def _delete_data(self, data, host):
         _log.debug("Deleting data with calicoctl: %s", data)
