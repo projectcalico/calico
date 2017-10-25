@@ -206,10 +206,9 @@ class TestFelixOnGateway(TestBase):
         # empty forward.
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'host-out',
-                'namespace': 'default',
             },
             'spec': {
                 'order': 100,
@@ -248,10 +247,9 @@ class TestFelixOnGateway(TestBase):
         # Add empty policy forward, but only to host endpoint.
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'empty-forward',
-                'namespace': 'default',
             },
             'spec': {
                 'order': 500,
@@ -503,10 +501,9 @@ class TestFelixOnGateway(TestBase):
     def add_workload_ingress(self, order, action):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'workload-ingress',
-                'namespace': 'default'
             },
             'spec': {
                 'order': order,
@@ -527,10 +524,9 @@ class TestFelixOnGateway(TestBase):
     def add_workload_egress(self, order, action):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'workload-egress',
-                # deliberately omitted 'namespace' for variation - should end up in 'default'
             },
             'spec': {
                 'order': order,
@@ -552,10 +548,9 @@ class TestFelixOnGateway(TestBase):
     def add_prednat_ingress(self, order, action):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'prednat',
-                'namespace': 'default',
             },
             'spec': {
                 'order': order,
@@ -576,15 +571,14 @@ class TestFelixOnGateway(TestBase):
         })
 
     def del_prednat_ingress(self):
-        self.delete_all("pol prednat")
+        self.delete_all("globalnetworkpolicy prednat")
 
     def add_untrack_gw_int(self, order, action):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'untrack-ingress',
-                'namespace': 'default',
             },
             'spec': {
                 'order': order,
@@ -613,15 +607,14 @@ class TestFelixOnGateway(TestBase):
         })
 
     def del_untrack_gw_int(self):
-        self.delete_all("pol untrack-ingress")
+        self.delete_all("globalnetworkpolicy untrack-ingress")
 
     def add_untrack_gw_ext(self, order, action):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'untrack-egress',
-                # Namespace omitted deliberately - should default to 'default'
             },
             'spec': {
                 'order': order,
@@ -652,15 +645,14 @@ class TestFelixOnGateway(TestBase):
         })
 
     def del_untrack_gw_ext(self):
-        self.delete_all("pol untrack-egress")
+        self.delete_all("globalnetworkpolicy untrack-egress")
 
     def add_ingress_policy(self, order, action, forward):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'port80-int-%s' % str(forward),
-                # Namespace omitted deliberately - should default to 'default'
             },
             'spec': {
                 'order': order,
@@ -682,10 +674,9 @@ class TestFelixOnGateway(TestBase):
     def add_egress_policy(self, order, action, forward):
         self.add_policy({
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'policy',
+            'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'port80-ext-%s' % str(forward),
-                'namespace': 'default',
              },
             'spec': {
                 'order': order,
@@ -711,7 +702,7 @@ class TestFelixOnGateway(TestBase):
     def add_gateway_internal_iface(self):
         host_endpoint_data = {
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'hostEndpoint',
+            'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'gw-int',
                 'labels': {'nodeEth': 'gateway-int'}
@@ -726,7 +717,7 @@ class TestFelixOnGateway(TestBase):
     def add_gateway_external_iface(self):
         host_endpoint_data = {
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'hostEndpoint',
+            'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'gw-ext',
                 'labels': {'nodeEth': 'gateway-ext'}
@@ -741,7 +732,7 @@ class TestFelixOnGateway(TestBase):
     def add_host_iface(self):
         host_endpoint_data = {
             'apiVersion': 'projectcalico.org/v2',
-            'kind': 'hostEndpoint',
+            'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'host-int',
                 'labels': {'nodeEth': 'host'}
@@ -839,7 +830,7 @@ class TestFelixOnGateway(TestBase):
             self.fail("Internal host can curl external server IP: %s" % self.ext_server_ip)
 
     def remove_pol_and_endpoints(self):
-        self.delete_all("pol")
+        self.delete_all("globalnetworkpolicy")
         self.delete_all("hostEndpoint")
         # Wait for felix to remove the policy and allow traffic through the gateway.
         retry_until_success(self.assert_host_can_curl_ext)
