@@ -313,8 +313,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 					Labels: map[string]string{conf.Name: ""},
 				},
 				Spec: api.ProfileSpec{
-					EgressRules:  []api.Rule{{Action: "allow"}},
-					IngressRules: inboundRules,
+					EgressRules:   []api.Rule{{Action: "allow"}},
+					IngressRules:  inboundRules,
+					LabelsToApply: map[string]string{conf.Name: ""},
 				},
 			}
 
