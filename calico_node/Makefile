@@ -42,19 +42,6 @@ KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
 LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
 TYPHA_VER ?= $(V_TYPHA)
 
-$(info RELEASE_STREAM=$(RELEASE_STREAM))
-$(info CALICO_VER=$(CALICO_VER))
-$(info CALICO_GIT_VER=$(CALICO_GIT_VER))
-$(info BIRD_VER=$(BIRD_VER))
-$(info CALICOCTL_VER=$(CALICOCTL_VER))
-$(info CONFD_VER=$(CONFD_VER))
-$(info CNI_VER=$(CNI_VER))
-$(info FELIX_VER=$(FELIX_VER))
-$(info GOBGPD_VER=$(GOBGPD_VER))
-$(info KUBE_CONTROLLERS_VER=$(KUBE_CONTROLLERS_VER))
-$(info LIBNETWORK_PLUGIN_VER=$(LIBNETWORK_PLUGIN_VER))
-$(info TYPHA_VER=$(TYPHA_VER))
-
 SYSTEMTEST_CONTAINER_VER ?= latest
 # we can use "custom" build image and test image name
 SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
@@ -678,3 +665,18 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
+
+.PHONY: check-versions
+check-versions:
+	$(info RELEASE_STREAM=$(RELEASE_STREAM))
+	$(info CALICO_VER=$(CALICO_VER))
+	$(info CALICO_GIT_VER=$(CALICO_GIT_VER))
+	$(info BIRD_VER=$(BIRD_VER))
+	$(info CALICOCTL_VER=$(CALICOCTL_VER))
+	$(info CONFD_VER=$(CONFD_VER))
+	$(info CNI_VER=$(CNI_VER))
+	$(info FELIX_VER=$(FELIX_VER))
+	$(info GOBGPD_VER=$(GOBGPD_VER))
+	$(info KUBE_CONTROLLERS_VER=$(KUBE_CONTROLLERS_VER))
+	$(info LIBNETWORK_PLUGIN_VER=$(LIBNETWORK_PLUGIN_VER))
+	$(info TYPHA_VER=$(TYPHA_VER))
