@@ -94,7 +94,8 @@ func NewHostEndpoint() *HostEndpoint {
 func NewHostEndpointList() *HostEndpointList {
 	return &HostEndpointList{
 		TypeMeta: metav1.TypeMeta{
-			Kind: KindHostEndpointList,
+			Kind:       KindHostEndpointList,
+			APIVersion: GroupVersionCurrent,
 		},
 	}
 }
