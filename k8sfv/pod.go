@@ -128,7 +128,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		err = netlink.LinkSetNsFd(podIf, int(podNamespace.Fd()))
 		panicIfError(err)
 		err = podNamespace.Do(func(_ ns.NetNS) (err error) {
-			err = netlink.LinkSetUp(podIf)
+			err = runCommand("ip", "link", "set", veth.PeerName, "up")
 			if err != nil {
 				return
 			}
@@ -254,6 +254,6 @@ func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
-	log.Infof("output: %v", string(output))
+	log.WithField("rc", err).Infof("output: %v", string(output))
 	return err
 }
