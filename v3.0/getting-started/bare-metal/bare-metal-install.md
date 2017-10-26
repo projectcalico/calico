@@ -9,9 +9,7 @@ These instructions apply to Calico v2.1.0 and above.  Older versions
  
 > **Note**: This install process is most suited to bare-metal-only
 > installations where Felix is to be used to control policy for the
-> host's interfaces. For OpenStack and containers there are
-> additional daemons that need to be installed, which are not
-> covered here.
+> host's interfaces. 
 {: .alert .alert-info}
 
 

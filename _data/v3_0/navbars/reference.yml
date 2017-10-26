@@ -5,8 +5,6 @@ order: 3
 toc:
 - title: Reference
   path: /reference/
-- title: Supported Platforms
-  path: /reference/supported-platforms
 - title: calicoctl
   section:
   - title: Overview

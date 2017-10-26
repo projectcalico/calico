@@ -74,7 +74,7 @@ and operators of the network.
 
 Unlike Felix there is no single 'orchestrator plugin': instead, there
 are separate plugins for each major cloud orchestration platform (e.g.
-OpenStack, Kubernetes). The purpose of these plugins is to bind Calico
+Kubernetes). The purpose of these plugins is to bind Calico
 more tightly into the orchestrator, allowing users to manage the Calico
 network just as they'd manage network tools that were built into the
 orchestrator.
@@ -114,10 +114,7 @@ a consistent data store, which ensures Calico can always build an
 accurate network.
 
 Depending on the orchestrator plugin, etcd may either be the master data
-store or a lightweight mirror of a separate data store. For example, in
-an OpenStack deployment, the OpenStack database is considered the
-"source of truth" and etcd is used to mirror information about the
-network to the other Calico components.
+store or a lightweight mirror of a separate data store. 
 
 The etcd component is distributed across the entire deployment. It is
 divided into two groups of machines: the core cluster, and the proxies.
@@ -125,8 +122,7 @@ divided into two groups of machines: the core cluster, and the proxies.
 For small deployments, the core cluster can be an etcd cluster of one
 node (which would typically be co-located with the
 [orchestrator plugin](#orchestrator-plugin) component). This deployment model is simple but provides no redundancy for etcd -- in the case of etcd failure the
-[orchstrator plugin](#orchestrator-plugin) would have to rebuild the database which, as noted for OpenStack, will simply require that the plugin resynchronizes
-state to etcd from the OpenStack database.
+[orchstrator plugin](#orchestrator-plugin) would have to rebuild the database.
 
 In larger deployments, the core cluster can be scaled up, as per the
 [etcd admin guide](https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size).
