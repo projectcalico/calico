@@ -1,5 +1,5 @@
-hash: f464da0475fe1dc23ea83a62b960b3e9d32dbb503293ccdc0c5f7aeb44074fd4
-updated: 2017-10-23T10:18:59.231979-07:00
+hash: 64f745d48645fa2cb2707a33ba05ccfcfd1b03417a7bdb5e34378eb16d1fcb19
+updated: 2017-10-25T17:40:15.882725907-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -186,7 +186,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 80853cf81b74dbde7b6c55dae0d52cfe8e0001c9
+  version: efe4c982e79f82950179e8122bf95701ea7c6373
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -221,13 +221,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -245,7 +245,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 541b9d50ad47e36efd8fb423e938e59ff1691f68
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -301,7 +301,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: a2e0dc829727a4f957a7428b1f322805cfc1f362
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity

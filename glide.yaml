@@ -18,7 +18,7 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: 80853cf81b74dbde7b6c55dae0d52cfe8e0001c9
+  version: efe4c982e79f82950179e8122bf95701ea7c6373
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -28,15 +28,11 @@ import:
   - lib/logutils
 - package: github.com/vishvananda/netlink
 - package: k8s.io/client-go
-  # Update this when libcalico-go updates its pin.
-  version: 82aa063804cf055e16e8911250f888bc216e8b61
   subpackages:
   - kubernetes
   - tools/clientcmd
 - package: github.com/mcuadros/go-version
 - package: github.com/projectcalico/felix
-  #  repo: https://github.com/neiljerram/felix.git
-  #version: v3-integration
   subpackages:
   - fv
   - fv.containers
