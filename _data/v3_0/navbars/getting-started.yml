@@ -48,11 +48,6 @@ toc:
   - title: Upgrade
     path: /getting-started/kubernetes/upgrade
 
-- title: OpenShift
-  section:
-    - title: Installation
-      path: /getting-started/openshift/installation
-
 - title: Mesos
   section:
   - title: Overview
