@@ -23,7 +23,6 @@ import (
 	"net"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -592,8 +591,7 @@ IfaceLoop:
 		buf.WriteString(":")
 		buf.WriteString(sum[36:40])
 		buf.WriteString(":0000::/64")
-		t, _ := fmt.Print(buf.String())
-		final := strconv.Itoa(t)
+		final := fmt.Sprint(buf.String())
 		return final
 	} else {
 		warning("Unable to fetch fe80: IPv6 address, Is IPv6 enabled on the host ?")
