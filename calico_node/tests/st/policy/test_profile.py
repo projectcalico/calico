@@ -60,7 +60,7 @@ class MultiHostMainline(TestBase):
 
         # Get the original profiles:
         output = host1.calicoctl("get profile -o yaml")
-        self.original_profiles = yaml.safe_load(output)
+        self.original_profiles = yaml.safe_load(output)['items']
         # Make a copy of the profiles to mess about with.
         self.new_profiles = copy.deepcopy(self.original_profiles)
 

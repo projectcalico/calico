@@ -300,7 +300,7 @@ def assert_profile(host, profile_name):
     out = host.calicoctl("get -o yaml profile")
     output = yaml.safe_load(out)
     found = False
-    for profile in output:
+    for profile in output['items']:
         if profile['metadata']['name'] == profile_name:
             found = True
             break

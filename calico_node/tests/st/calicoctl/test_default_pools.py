@@ -104,7 +104,7 @@ class TestDefaultPools(TestBase):
         # check the expected pool is present
         pools_output = self.host.calicoctl("get ippool -o yaml")
         pools_dict = yaml.safe_load(pools_output)
-        cidrs = [pool['metadata']['cidr'] for pool in pools_dict]
+        cidrs = [pool['metadata']['cidr'] for pool in pools_dict['items']]
         # Convert to canonical form
         value = str(netaddr.IPNetwork(value))
         assert value in cidrs, "Didn't find %s in %s" % (value, cidrs)
@@ -155,7 +155,7 @@ class TestDefaultPools(TestBase):
         self.wait_for_node_log("Calico node started successfully")
         # check the expected pool is present
         pools_output = self.host.calicoctl("get ippool -o yaml")
-        pools_dict = yaml.safe_load(pools_output)
+        pools_dict = yaml.safe_load(pools_output)['items']
         assert pools_dict == [], "Pools not empty: %s" % pools_dict
 
     def assert_calico_node_log_contains(self, expected_string):

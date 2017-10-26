@@ -58,7 +58,7 @@ class MultiHostIpam(TestBase):
     def setUp(self):
         # Save off original pool if any, then wipe pools so we have a known ground state
         response = self.hosts[0].calicoctl("get IPpool -o yaml")
-        self.orig_pools = yaml.safe_load(response)
+        self.orig_pools = yaml.safe_load(response)['items']
         if len(self.orig_pools) > 0:
             self.hosts[0].writefile("orig_pools.yaml", response)
             self.hosts[0].calicoctl("delete -f orig_pools.yaml")
@@ -66,7 +66,7 @@ class MultiHostIpam(TestBase):
     def tearDown(self):
         # Replace original pool, if any
         response = self.hosts[0].calicoctl("get IPpool -o yaml")
-        self.orig_pools = yaml.safe_load(response)
+        self.orig_pools = yaml.safe_load(response)['items']
         if len(self.orig_pools) > 0:
             self.hosts[0].writefile("pre_orig_pools.yaml", response)
             self.hosts[0].calicoctl("delete -f pre_orig_pools.yaml")
