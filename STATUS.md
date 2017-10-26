@@ -1,0 +1,99 @@
+
+When running locally on my own laptop:
+
+RELEASE_STREAM=master ST_TO_RUN=tests.st.policy.test_profile make st
+
+	[success] 11.85% tests.st.policy.test_profile.MultiHostMainline.test_rules_source_ip_nets_2: 62.6870s
+	[success] 11.75% tests.st.policy.test_profile.MultiHostMainline.test_rules_selector: 62.1793s
+	[success] 11.53% tests.st.policy.test_profile.MultiHostMainline.test_rules_dest_ip_nets: 60.9902s
+	[success] 11.44% tests.st.policy.test_profile.MultiHostMainline.test_rules_source_ip_nets: 60.5427s
+	[success] 10.92% tests.st.policy.test_profile.MultiHostMainline.test_rules_udp_port: 57.8007s
+	[success] 10.92% tests.st.policy.test_profile.MultiHostMainline.test_rules_ip_net: 57.7978s
+	[success] 10.88% tests.st.policy.test_profile.MultiHostMainline.test_rules_ip_addr: 57.5839s
+	[success] 10.62% tests.st.policy.test_profile.MultiHostMainline.test_rules_tcp_port: 56.1875s
+	[success] 10.07% tests.st.policy.test_profile.MultiHostMainline.test_rules_protocol_icmp: 53.3030s
+
+RELEASE_STREAM=master ST_TO_RUN=tests.st.policy.test_felix_gateway make st
+
+	[success] 19.36% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_host_endpoint_combinations: 23.7687s
+	[success] 12.86% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_allow_with_forward_empty: 15.7852s
+	[success] 12.17% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_deny_with_lower_forward_allow: 14.9361s
+	[success] 11.04% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_egress_allow_with_lower_egress_forward_deny: 13.5534s
+	[success] 10.94% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_ingress_allow_with_lower_ingress_forward_deny: 13.4341s
+	[success] 8.14% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_empty_policy_for_forward_traffic: 9.9979s
+	[success] 7.98% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_forward_opposite_policy_0: 9.7984s
+	[success] 7.93% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_forward_opposite_policy_1: 9.7352s
+	[success] 5.32% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_default_deny_for_local_traffic: 6.5346s
+	[success] 4.26% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_can_connect_by_default: 5.2244s
+
+RELEASE_STREAM=master make st
+
+	 [error] 23.45% tests.st.bgp.test_route_reflector_cluster.TestRouteReflectorCluster.test_bird_route_reflector_cluster: 354.5883s
+	 [error] 7.67% tests.st.calicoctl.test_autodetection.TestAutodetection.test_autodetection: 116.0398s
+	 [error] 6.84% tests.st.bgp.test_single_route_reflector.TestSingleRouteReflector.test_bird_single_route_reflector: 103.4744s
+	 [error] 6.53% tests.st.bgp.test_ipip.TestIPIP.test_gce_rr_1: 98.7817s
+	 [error] 6.28% tests.st.bgp.test_ipip.TestIPIP.test_gce_rr_0: 94.9019s
+	 [fail] 5.17% tests.st.bgp.test_update_ip_addr.TestUpdateIPAddress.test_update_ip_address: 78.1854s
+	 [fail] 4.64% tests.st.bgp.test_node_peers.TestNodePeers.test_bird_node_peers: 70.1104s
+	 [success] 3.06% tests.st.ipam.test_ipam.MultiHostIpam.test_ipam_show: 46.2406s
+	 [error] 2.88% tests.st.bgp.test_global_peers.TestGlobalPeers.test_bird_node_peers: 43.6226s
+	 [error] 2.74% tests.st.bgp.test_ipip.TestIPIP.test_gce_0: 41.3963s
+	 [error] 2.68% tests.st.bgp.test_ipip.TestIPIP.test_gce_1: 40.5803s
+	 [error] 2.15% tests.st.bgp.test_ipip.TestIPIP.test_ipip_0_bird: 32.5609s
+	 [error] 1.96% tests.st.policy.test_profile.MultiHostMainline.test_rules_dest_ip_nets: 29.5628s
+	 [error] 1.92% tests.st.bgp.test_global_config.TestBGP.test_bird_as_num: 29.0128s
+	 [fail] 1.11% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_can_connect_by_default: 16.7346s
+	 [fail] 1.07% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_allow_with_forward_empty: 16.1378s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_deny_with_lower_forward_allow: 16.0458s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_default_deny_for_local_traffic: 16.0373s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_forward_opposite_policy_1: 16.0292s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_egress_allow_with_lower_egress_forward_deny: 16.0275s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_ingress_allow_with_lower_ingress_forward_deny: 16.0225s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_host_endpoint_combinations: 16.0180s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_local_forward_opposite_policy_0: 16.0099s
+	 [fail] 1.06% tests.st.policy.test_felix_gateway.TestFelixOnGateway.test_empty_policy_for_forward_traffic: 16.0018s
+	 [error] 0.72% tests.st.policy.test_profile.MultiHostMainline.test_rules_protocol_icmp: 10.8179s
+	 [error] 0.71% tests.st.policy.test_profile.MultiHostMainline.test_rules_udp_port: 10.6629s
+	 [error] 0.70% tests.st.policy.test_profile.MultiHostMainline.test_rules_selector: 10.6522s
+	 [error] 0.70% tests.st.policy.test_profile.MultiHostMainline.test_rules_ip_addr: 10.6511s
+	 [error] 0.70% tests.st.policy.test_profile.MultiHostMainline.test_rules_source_ip_nets_2: 10.6433s
+	 [error] 0.70% tests.st.policy.test_profile.MultiHostMainline.test_rules_source_ip_nets: 10.6422s
+	 [error] 0.70% tests.st.policy.test_profile.MultiHostMainline.test_rules_tcp_port: 10.6341s
+	 [error] 0.70% tests.st.policy.test_profile.MultiHostMainline.test_rules_ip_net: 10.6320s
+	 [fail] 0.41% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_1: 6.2231s
+	 [fail] 0.39% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_0: 5.9529s
+	 [fail] 0.37% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_16: 5.6144s
+	 [fail] 0.37% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_19: 5.6131s
+	 [fail] 0.37% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_18: 5.6108s
+	 [fail] 0.37% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_8: 5.5956s
+	 [fail] 0.37% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_7: 5.5850s
+	 [fail] 0.37% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_17: 5.5830s
+	 [fail] 0.24% tests.st.ipam.test_ipam.MultiHostIpam.test_pool_wrap_1: 3.5767s
+	 [success] 0.18% tests.st.calicoctl.test_node_status.TestNodeStatus.test_node_status: 2.6493s
+	 [fail] 0.18% tests.st.ipam.test_ipam.MultiHostIpam.test_pools_add: 2.6468s
+	 [fail] 0.16% tests.st.ipam.test_ipam.MultiHostIpam.test_pool_wrap_0: 2.4685s
+	 [error] 0.16% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_10: 2.4066s
+	 [error] 0.15% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_11: 2.2256s
+	 [error] 0.15% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_12: 2.2045s
+	 [error] 0.14% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_13: 2.1249s
+	 [error] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_15: 1.5579s
+	 [error] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_5: 1.5358s
+	 [error] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_14: 1.5305s
+	 [error] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_6: 1.5203s
+	 [success] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_21: 1.5171s
+	 [success] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_9: 1.5035s
+	 [success] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_2: 1.4952s
+	 [success] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_24: 1.4590s
+	 [error] 0.10% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_20: 1.4411s
+	 [error] 0.09% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_23: 1.4134s
+	 [success] 0.09% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_3: 1.3719s
+	 [error] 0.09% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_4: 1.3512s
+	 [success] 0.09% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_default_pools_22: 1.3310s
+	 [fail] 0.04% tests.st.calicoctl.test_default_pools.TestDefaultPools.test_no_default_pools: 0.6253s
+	 [success] 0.03% tests.st.calicoctl.test_node_diags.TestNodeDiags.test_node_diags: 0.4133s
+	 [error] 0.01% tests.st.bgp.test_global_config.TestBGP.test_defaults: 0.1262s
+	 [success] 0.01% tests.st.calicoctl.test_node_checksystem.TestNodeCheckSystem.test_node_checksystem: 0.0859s
+	 [success] 0.01% tests.st.calicoctl.test_node_run.TestNodeRun.test_node_run_dryrun: 0.0854s
+	 [success] 0.01% tests.st.calicoctl.test_node_status.TestNodeStatus.test_node_status_fails: 0.0813s
+	 [error] 0.01% tests.st.bgp.test_ipip.TestIPIP.test_ipip_addr_assigned: 0.0807s
+	 [error] 0.00% nose.failure.Failure.runTest: 0.0007s
