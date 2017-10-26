@@ -44,11 +44,36 @@ type WorkloadEndpointClient struct {
 }
 
 func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Create is not supported on WorkloadEndpoint type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
-		Operation:  "Create",
+	log.Debug("Received Create request on WorkloadEndpoint type")
+
+	// We only patch the existing Pod to include an IP address, if one has been
+	// set on the workload endpoint.
+	// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
+	// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
+	ips := kvp.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks
+	if len(ips) > 0 {
+		log.Debugf("Applying workload with IPs: %+v", ips)
+		wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
+		if err != nil {
+			return nil, err
+		}
+		if wepID.Pod == "" {
+			return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
+		}
+		ns := kvp.Key.(model.ResourceKey).Namespace
+		pod, err := c.clientSet.CoreV1().Pods(ns).Get(wepID.Pod, metav1.GetOptions{})
+		if err != nil {
+			return nil, K8sErrorToCalico(err, kvp.Key)
+		}
+		pod.Status.PodIP = ips[0]
+		pod, err = c.clientSet.CoreV1().Pods(ns).UpdateStatus(pod)
+		if err != nil {
+			return nil, K8sErrorToCalico(err, kvp.Key)
+		}
+		log.Debugf("Successfully applied pod: %+v", pod)
+		return c.converter.PodToWorkloadEndpoint(pod)
 	}
+	return kvp, nil
 }
 
 func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
