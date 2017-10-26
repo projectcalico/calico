@@ -607,7 +607,7 @@ IfaceLoop:
 func configureIPPools(ctx context.Context, client client.Interface) {
 	// Read in environment variables for use here and later.
 	ipv4Pool := os.Getenv("CALICO_IPV4POOL_CIDR")
-	ipv6Pool := fmt.Sprintf(getIPv6Pool())
+	ipv6Pool := getIPv6Pool()
 
 	if strings.ToLower(os.Getenv("NO_DEFAULT_POOLS")) == "true" {
 		if len(ipv4Pool) > 0 || len(ipv6Pool) > 0 {
