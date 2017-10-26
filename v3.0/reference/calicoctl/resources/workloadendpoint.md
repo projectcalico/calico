@@ -9,7 +9,7 @@ Each endpoint may specify a set of labels and list of profiles that Calico will 
 to apply policy to the interface.
 
 A workload endpoint is a namespaced resource, that means a
-[NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
+[NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
 in a specific namespace only applies to the WorkloadEndpoint in that namespace.
 Two resources are in the same namespace if the namespace value is set the same
 on both.
