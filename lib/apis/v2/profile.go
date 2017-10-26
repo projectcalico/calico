@@ -48,7 +48,7 @@ type ProfileSpec struct {
 	// An option set of labels to apply to each endpoint (in addition to their own labels)
 	// referencing this profile.  If labels configured on the endpoint have keys matching those
 	// labels inherited from the profile, the endpoint label values take precedence.
-	LabelsToApply map[string]string `json:"labels,omitempty" protobuf:"bytes,11,rep,name=labels"`
+	LabelsToApply map[string]string `json:"labelsToApply,omitempty" protobuf:"bytes,11,rep,name=labels"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
