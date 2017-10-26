@@ -25,6 +25,7 @@ from tests.st.utils.utils import check_bird_status, retry_until_success
 from time import sleep
 
 from .peer import create_bgp_peer
+from .peer import clear_bgp_peers
 
 """
 Test calico IPIP behaviour.
@@ -110,7 +111,7 @@ class TestIPIP(TestBase):
             # IPIP tunnel is being used.
             self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode=None)
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
-                                     True)
+                                     False)
 
             # Turn off IPIP and check IPIP tunnel is not being used.
             self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never")
@@ -189,7 +190,7 @@ class TestIPIP(TestBase):
         # Add optional fields if needed
         # ipip_mode could be Never, Always, CrossSubnet or not specified (defaults to Always)
         if ipip_mode is not None:
-            testdata['spec']['ipip'] = {'mode': ipip_mode}
+            testdata['spec']['ipipMode'] = ipip_mode
         # nat_outgoing could be True, False or not specified (defaults to False)
         if nat_outgoing is not None:
             testdata['spec']['natOutgoing'] = nat_outgoing
@@ -260,15 +261,14 @@ class TestIPIP(TestBase):
         """
         node = json.loads(host.calicoctl(
             "get node %s --output=json" % host.get_hostname()))
-        assert len(node) == 1
 
         # Get the current network and prefix len
-        ipnet = IPNetwork(node[0]["spec"]["bgp"]["ipv4Address"])
+        ipnet = IPNetwork(node["spec"]["bgp"]["ipv4Address"])
         current_prefix_len = ipnet.prefixlen
 
         # Update the prefix length
         ipnet.prefixlen = prefixlen
-        node[0]["spec"]["bgp"]["ipv4Address"] = str(ipnet)
+        node["spec"]["bgp"]["ipv4Address"] = str(ipnet)
 
         # Write the data back again.
         host.writejson("new_data", node)
@@ -284,9 +284,9 @@ class TestIPIP(TestBase):
             orig_tx = self.get_tunl_tx(host1)
             workload_host1.execute("ping -c 2 -W 1 %s" % workload_host2.ip)
             if expect_ipip:
-                assert self.get_tunl_tx(host1) == orig_tx + 2
+                self.assertEqual(self.get_tunl_tx(host1), orig_tx + 2)
             else:
-                assert self.get_tunl_tx(host1) == orig_tx
+                self.assertEqual(self.get_tunl_tx(host1), orig_tx)
         retry_until_success(check, retries=10)
 
     @staticmethod
@@ -360,6 +360,8 @@ class TestIPIP(TestBase):
 
     def _test_gce_int(self, with_ipip, backend, host1, host2, rrc):
 
+        clear_bgp_peers(host1)
+
         host1.start_calico_node("--backend={0}".format(backend))
         host2.start_calico_node("--backend={0}".format(backend))
 
@@ -369,12 +371,18 @@ class TestIPIP(TestBase):
         if rrc:
             # Set the default AS number - as this is used by the RR mesh,
             # and turn off the node-to-node mesh (do this from any host).
-            host1.calicoctl("config set asNumber 64513")
-            host1.calicoctl("config set nodeToNodeMesh off")
+            bgpconfig = {
+                    'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'BGPConfiguration',
+                    'metadata': { 'name': 'default', },
+                    'spec': { 'asNumber': 64513, 'nodeToNodeMeshEnabled': False} }
+
+            host1.writefile("bgpconfig.yaml", bgpconfig)
+            host1.calicoctl("apply -f bgpconfig.yaml")
             # Peer from each host to the route reflector.
             for host in [host1, host2]:
                 for rr in rrc.get_redundancy_group():
-                    create_bgp_peer(host, "node", rr.ip, 64513)
+                    create_bgp_peer(host, "node", rr.ip, 64513, metadata={'name':host.name})
 
         # Create a network and a workload on each host.
         network1 = host1.create_network("subnet1")

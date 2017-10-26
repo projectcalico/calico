@@ -20,10 +20,12 @@ from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
 from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.utils import check_bird_status
+from tests.st.utils.utils import update_bgp_config
+from tests.st.utils.utils import get_bgp_spec
 
 class TestBGP(TestBase):
 
-    def _test_defaults(self):
+    def test_defaults(self):
         """
         Test default BGP configuration commands.
         """
@@ -34,53 +36,27 @@ class TestBGP(TestBase):
             #bgpcfg = yaml.safe_load(response)
             #self.assertEquals(bgpcfg['items'][0]['spec']['asNumber'], 64512)
 
-            bgpconfig = {
-                    'apiVersion': 'projectcalico.org/v2',
-                    'kind': 'BGPConfiguration',
-                    'metadata': {
-                        'name': 'default',
-                    },
-                    'spec': {
-                        'asNumber': 12345
-                    }
-                }
-
-            host.writefile("bgpconfig.yaml", bgpconfig)
             # Set the default AS number.
-            host.calicoctl("apply -f bgpconfig.yaml")
+            update_bgp_config(host, asNum=12345)
 
-            response = host.calicoctl("get BGPConfiguration -o yaml")
-            bgpcfg = yaml.safe_load(response)
-            self.assertEquals(bgpcfg['items'][0]['spec']['asNumber'], 12345)
-            bgpconfig['spec']['asNumber'] = 99999999999999999999999
-            host.writefile("bgpconfig.yaml", bgpconfig)
+            self.assertEquals(get_bgp_spec(host)['asNumber'], 12345)
+
             with self.assertRaises(CommandExecError):
-                host.calicoctl("apply -f bgpconfig.yaml")
-            bgpconfig['spec']['asNumber'] = 'abcde'
-            host.writefile("bgpconfig.yaml", bgpconfig)
+                update_bgp_config(host, asNum=99999999999999999999999)
             with self.assertRaises(CommandExecError):
-                host.calicoctl("apply -f bgpconfig.yaml")
-            bgpconfig['spec']['asNumber'] = '64512'
+                update_bgp_config(host, asNum='abcde')
 
             # Check BGP mesh command
-            response = host.calicoctl("get BGPConfiguration -o yaml")
-            bgpcfg = yaml.safe_load(response)
-            if 'nodeToNodeMeshEnabled' in bgpcfg['items'][0]['spec']:
-                self.assertEquals(bgpcfg['items'][0]['spec']['nodeToNodeMeshEnabled'], True)
+            if 'nodeToNodeMeshEnabled' in get_bgp_spec(host):
+                self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
-            bgpconfig['spec']['nodeToNodeMeshEnabled'] = False
-            host.writefile("bgpconfig.yaml", bgpconfig)
-            host.calicoctl("apply -f bgpconfig.yaml")
-            response = host.calicoctl("get BGPConfiguration -o yaml")
-            bgpcfg = yaml.safe_load(response)
-            self.assertEquals(bgpcfg['items'][0]['spec']['nodeToNodeMeshEnabled'], False)
+            update_bgp_config(host, nodeMesh=False)
 
-            bgpconfig['spec']['nodeToNodeMeshEnabled'] = True
-            host.writefile("bgpconfig.yaml", bgpconfig)
-            host.calicoctl("apply -f bgpconfig.yaml")
-            response = host.calicoctl("get BGPConfiguration -o yaml")
-            bgpcfg = yaml.safe_load(response)
-            self.assertEquals(bgpcfg['items'][0]['spec']['nodeToNodeMeshEnabled'], True)
+            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
+
+            update_bgp_config(host, nodeMesh=True)
+
+            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
     @attr('slow')
     def _test_as_num(self, backend='bird'):
@@ -97,20 +73,7 @@ class TestBGP(TestBase):
                         start_calico=False) as host2:
 
             # Set the default AS number.
-            bgpconfig = {
-                    'apiVersion': 'projectcalico.org/v2',
-                    'kind': 'BGPConfiguration',
-                    'metadata': {
-                        'name': 'default',
-                    },
-                    'spec': {
-                        'asNumber': LARGE_AS_NUM
-                    }
-                }
-
-            host1.writefile("bgpconfig.yaml", bgpconfig)
-            # Set the default AS number.
-            host1.calicoctl("apply -f bgpconfig.yaml")
+            update_bgp_config(host1, asNum=LARGE_AS_NUM)
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).

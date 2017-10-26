@@ -19,9 +19,11 @@ from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       DEFAULT_IPV4_ADDR_3,
                                       DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
 from tests.st.utils.utils import check_bird_status
+from unittest import skip
 
 # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
-class _TestBGPBackends(TestBase):
+@skip("Disabled until gobgp is updated with libcalico-go v2")
+class TestBGPBackends(TestBase):
 
     @attr('slow')
     def test_bgp_backends(self):

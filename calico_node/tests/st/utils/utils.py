@@ -223,6 +223,42 @@ def check_bird_status(host, expected):
                   "Output: \n%s" % (ipaddr, peertype, state, output)
             raise AssertionError(msg)
 
+@debug_failures
+def update_bgp_config(host, nodeMesh=None, asNum=None):
+    response = host.calicoctl("get BGPConfiguration -o yaml")
+    bgpcfg = yaml.safe_load(response)
+
+    if len(bgpcfg['items']) == 0:
+        bgpcfg = {
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'BGPConfigurationList',
+            'items': [ {
+                    'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'BGPConfiguration',
+                    'metadata': { 'name': 'default', },
+                    'spec': {}
+                }
+            ]
+        }
+
+    if 'creationTimestamp' in bgpcfg['items'][0]['metadata']:
+        del bgpcfg['items'][0]['metadata']['creationTimestamp']
+
+    if nodeMesh is not None:
+        bgpcfg['items'][0]['spec']['nodeToNodeMeshEnabled'] = nodeMesh
+
+    if asNum is not None:
+        bgpcfg['items'][0]['spec']['asNumber'] = asNum
+
+    host.writefile("bgpconfig.yaml", bgpcfg)
+    host.calicoctl("apply -f bgpconfig.yaml")
+
+@debug_failures
+def get_bgp_spec(host):
+    response = host.calicoctl("get BGPConfiguration -o yaml")
+    bgpcfg = yaml.safe_load(response)
+
+    return bgpcfg['items'][0]['spec']
 
 @debug_failures
 def assert_number_endpoints(host, expected):
