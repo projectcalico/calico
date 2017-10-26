@@ -242,6 +242,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		endpoint.Spec.Node = epIDs.Node
 		endpoint.Spec.Orchestrator = epIDs.Orchestrator
 		endpoint.Spec.Pod = epIDs.Pod
+		endpoint.Spec.Ports = ports
 
 		// Set the profileID according to whether Kubernetes policy is required.
 		// If it's not, then just use the network name (which is the normal behavior)

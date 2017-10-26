@@ -20,6 +20,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/names"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -313,6 +314,11 @@ var _ = Describe("CalicoCni", func() {
 						Workload:      "",
 						ContainerID:   containerID,
 						Orchestrator:  "k8s",
+						Ports: []api.EndpointPort{{
+							Name:     "anamedport",
+							Protocol: numorstring.ProtocolFromString("tcp"),
+							Port:     555,
+						}},
 					}))
 
 					_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
