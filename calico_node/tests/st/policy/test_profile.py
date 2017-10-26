@@ -79,7 +79,7 @@ class MultiHostMainline(TestBase):
 
             super(MultiHostMainline, self).tearDown()
 
-    def test_tags(self):
+    def _test_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
         # Make a new profiles dict where the two networks have each
@@ -92,7 +92,7 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
 
-    def test_rules_tags(self):
+    def _test_rules_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
         rule0 = {'action': 'allow',
@@ -107,7 +107,7 @@ class MultiHostMainline(TestBase):
         # Check everything can contact everything else now
         self.assert_connectivity(retries=3,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 2
+    _test_rules_tags.batchnumber = 2
 
     def test_rules_protocol_icmp(self):
         rule = {'action': 'allow',
