@@ -18,7 +18,7 @@ from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       DEFAULT_IPV4_ADDR_3,
                                       DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
-from tests.st.utils.utils import check_bird_status
+from tests.st.utils.utils import check_bird_status, update_bgp_config
 from unittest import skip
 
 # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
@@ -43,20 +43,8 @@ class TestBGPBackends(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=True) as host3:
 
-            bgpconfig = {
-                    'apiVersion': 'projectcalico.org/v2',
-                    'kind': 'BGPConfiguration',
-                    'metadata': {
-                        'name': 'default',
-                    },
-                    'spec': {
-                        'ASNumber': LARGE_AS_NUM
-                    }
-                }
-
-            host1.writefile("bgpconfig.yaml", bgpconfig)
             # Set the default AS number.
-            host1.calicoctl("apply -f bgpconfig.yaml")
+            update_bgp_config(host1, asNum=LARGE_AS_NUM)
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).  These hosts use the gobgp backend, whereas
