@@ -121,7 +121,7 @@ var _ = BeforeSuite(func() {
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
 		"--service-cluster-ip-range=10.101.0.0/16",
-		"-v=10",
+		//"-v=10",
 		"--authorization-mode=RBAC",
 	)
 	Expect(apiServerContainer).NotTo(BeNil())
@@ -214,28 +214,10 @@ var _ = Describe("health tests", func() {
 	var felixContainer *containers.Container
 	var felixReady, felixLiveness func() int
 
-	createPerNodeConfig := func() {
-		// Make a k8s Node using the hostname of Felix's container.
-		//_, err := k8sClient.CoreV1().Nodes().Create(&v1.Node{
-		//	ObjectMeta: metav1.ObjectMeta{
-		//		Name: felixContainer.Hostname,
-		//	},
-		//	Spec: v1.NodeSpec{},
-		//})
-		//Expect(err).NotTo(HaveOccurred())
-	}
-
-	removePerNodeConfig := func() {
-		//err := k8sClient.CoreV1().Nodes().Delete(felixContainer.Hostname, nil)
-		//Expect(err).NotTo(HaveOccurred())
-	}
-
 	// describeCommonFelixTests creates specs for Felix tests that are common between the
 	// two scenarios below (with and without Typha).
 	describeCommonFelixTests := func() {
-		Describe("with per-node config in datastore", func() {
-			BeforeEach(createPerNodeConfig)
-			AfterEach(removePerNodeConfig)
+		Describe("with normal Felix startup", func() {
 
 			It("should become ready and stay ready", func() {
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
@@ -250,16 +232,13 @@ var _ = Describe("health tests", func() {
 
 		Describe("after removing iptables-restore", func() {
 			BeforeEach(func() {
-				// Delete iptables-restore in order to make the first apply() fail.
+				Eventually(felixReady, "5s", "100ms").Should(BeGood())
 				err := felixContainer.ExecMayFail("rm", "/sbin/iptables-restore")
 				Expect(err).NotTo(HaveOccurred())
-
-				createPerNodeConfig()
 			})
-			AfterEach(removePerNodeConfig)
 
-			It("should never be ready, then die", func() {
-				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
+			It("should become unready, then die", func() {
+				Eventually(felixReady, "120s", "10s").ShouldNot(BeGood())
 				Eventually(felixContainer.Stopped, "5s").Should(BeTrue())
 			})
 		})
@@ -278,11 +257,7 @@ var _ = Describe("health tests", func() {
 				// Make it executable.
 				err = felixContainer.ExecMayFail("chmod", "+x", "/sbin/iptables-restore")
 				Expect(err).NotTo(HaveOccurred())
-
-				// Insert per-node config.  This will trigger felix to start up.
-				createPerNodeConfig()
 			})
-			AfterEach(removePerNodeConfig)
 
 			It("should delay readiness", func() {
 				Eventually(felixReady, "5s", "100ms").ShouldNot(BeGood())
@@ -361,12 +336,10 @@ var _ = Describe("health tests", func() {
 	Describe("with Felix (no Typha) and Felix calc graph set to hang", func() {
 		BeforeEach(func() {
 			startFelix("", "5", "")
-			createPerNodeConfig()
 		})
 
 		AfterEach(func() {
 			felixContainer.Stop()
-			removePerNodeConfig()
 		})
 
 		It("should report live initially, then become non-live", func() {
@@ -379,12 +352,10 @@ var _ = Describe("health tests", func() {
 	Describe("with Felix (no Typha) and Felix dataplane set to hang", func() {
 		BeforeEach(func() {
 			startFelix("", "", "5")
-			createPerNodeConfig()
 		})
 
 		AfterEach(func() {
 			felixContainer.Stop()
-			removePerNodeConfig()
 		})
 
 		It("should report live initially, then become non-live", func() {
