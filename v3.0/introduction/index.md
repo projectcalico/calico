@@ -20,8 +20,14 @@ you can achieve fine-grained control over communications
 between containers, virtual machine workloads, and 
 bare metal host endpoints.
 
-Proven in production at scale, Calico features 
-integrations with Kubernetes, OpenShift, Docker, 
-Mesos, DC/OS, and OpenStack.
+Proven in production at scale, Calico v3.0 features 
+integration with Kubernetes.
+
+> **Note**: For integrations with the OpenShift, OpenStack, 
+> Mesos, DC/OS, and Docker orchestrators, use
+> [Calico v2.6](/v2.6/introduction/). We plan 
+> to resume support for these orchestrators in a future 
+> v3.x release.
+{: .alert .alert-info}
 
 <a href="/{{page.version}}/getting-started/" class="btn btn-primary btn-lg">Get started</a>
