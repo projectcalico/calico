@@ -318,10 +318,23 @@ class MultiHostMainline(TestBase):
         return prof_n1, prof_n2
 
     @staticmethod
-    def _apply_new_profile(new_profile, host):
+    def _apply_new_profile(new_profiles, host):
+        # Get profiles now, so we have up to date resource versions.
+        output = host.calicoctl("get profile -o yaml")
+        profiles_now = yaml.safe_load(output)['items']
+        resource_version_map = {
+            p['metadata']['name']: p['metadata']['resourceVersion']
+            for p in profiles_now
+        }
+        _log.info("resource_version_map = %r", resource_version_map)
+
+        # Set current resource versions in the profiles we are about to apply.
+        for p in new_profiles:
+            p['metadata']['resourceVersion'] = resource_version_map[p['metadata']['name']]
+
         # Apply new profiles
         host.writefile("new_profiles",
-                       yaml.dump(new_profile, default_flow_style=False))
+                       yaml.dump(new_profiles, default_flow_style=False))
         host.calicoctl("apply -f new_profiles")
 
     def _setup_workloads(self, host1, host2):

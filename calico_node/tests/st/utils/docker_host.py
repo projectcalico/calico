@@ -15,6 +15,7 @@ import logging
 import json
 import os
 import re
+import tempfile
 import uuid
 import yaml
 from functools import partial
@@ -606,7 +607,11 @@ class DockerHost(object):
         :param data: string, the data to put inthe file
         :return: Return code of execute operation.
         """
-        return self.execute("cat << EOF > %s\n%s" % (filename, data))
+        with tempfile.NamedTemporaryFile() as tmp:
+            tmp.write(data)
+            tmp.flush()
+            log_and_run("docker cp %s %s:%s" % (tmp.name, self.name, filename))
+        self.execute("cat %s" % filename)
 
     def writejson(self, filename, data):
         """
