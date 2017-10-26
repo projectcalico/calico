@@ -17,7 +17,7 @@ from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
-from tests.st.utils.utils import check_bird_status
+from tests.st.utils.utils import check_bird_status, update_bgp_config
 
 from .peer import create_bgp_peer
 from unittest import skip
@@ -53,15 +53,7 @@ class TestNodePeers(TestBase):
             self.assert_true(workload_host1.check_can_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
             # Turn the node-to-node mesh off and wait for connectivity to drop.
-            bgpconfig = {
-                    'apiVersion': 'projectcalico.org/v2',
-                    'kind': 'BGPConfiguration',
-                    'metadata': { 'name': 'default',},
-                    'spec': { 'nodeToNodeMeshEnabled': False }}
-
-            host1.writefile("bgpconfig.yaml", bgpconfig)
-            # Set the default AS number.
-            host1.calicoctl("apply -f bgpconfig.yaml")
+            update_bgp_config(host1, nodeMesh=False)
             self.assert_true(workload_host1.check_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
             # Configure node specific peers to explicitly set up a mesh.

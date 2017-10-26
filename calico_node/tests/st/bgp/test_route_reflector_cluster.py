@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from nose.plugins.attrib import attr
+from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -19,8 +20,8 @@ from tests.st.utils.route_reflector import RouteReflectorCluster
 
 from .peer import create_bgp_peer, clear_bgp_peers
 from tests.st.utils.utils import update_bgp_config
-from unittest import skip
 
+@skip("Disabled until routereflector is updated for libcalico-go v2")
 class TestRouteReflectorCluster(TestBase):
 
     def _test_route_reflector_cluster(self, backend='bird'):

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
+import yaml
 
 
 def create_bgp_peer(host, scope, ip, asNum, metadata=None):
@@ -34,12 +34,12 @@ def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     if metadata is not None:
         testdata['metadata'] = metadata
 
-    host.writefile("testfile.yaml", testdata)
+    host.writefile("testfile.yaml", yaml.dump(testdata))
     host.calicoctl("create -f testfile.yaml")
 
 def clear_bgp_peers(host):
-    peers = json.loads(host.calicoctl("get bgpPeer --output=json"))
+    peers = yaml.loads(host.calicoctl("get bgpPeer --output=yaml"))
     if len(peers['items']) == 0:
         return
-    host.writefile("bgppeers.yaml", peers)
+    host.writefile("bgppeers.yaml", yaml.dump(peers))
     host.calicoctl("delete -f bgppeers.yaml")

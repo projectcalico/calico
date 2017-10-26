@@ -24,8 +24,7 @@ from tests.st.utils.route_reflector import RouteReflectorCluster
 from tests.st.utils.utils import check_bird_status, retry_until_success
 from time import sleep
 
-from .peer import create_bgp_peer
-from .peer import clear_bgp_peers
+from .peer import create_bgp_peer, clear_bgp_peers
 
 """
 Test calico IPIP behaviour.
@@ -371,14 +370,7 @@ class TestIPIP(TestBase):
         if rrc:
             # Set the default AS number - as this is used by the RR mesh,
             # and turn off the node-to-node mesh (do this from any host).
-            bgpconfig = {
-                    'apiVersion': 'projectcalico.org/v2',
-                    'kind': 'BGPConfiguration',
-                    'metadata': { 'name': 'default', },
-                    'spec': { 'asNumber': 64513, 'nodeToNodeMeshEnabled': False} }
-
-            host1.writefile("bgpconfig.yaml", bgpconfig)
-            host1.calicoctl("apply -f bgpconfig.yaml")
+            update_bgp_config(host1, asNum=64513, nodeMesh=False)
             # Peer from each host to the route reflector.
             for host in [host1, host2]:
                 for rr in rrc.get_redundancy_group():

@@ -1,0 +1,8 @@
+apiVersion: projectcalico.org/v2
+items:
+- apiVersion: projectcalico.org/v2
+  kind: BGPConfiguration
+  metadata: {name: default, resourceVersion: '29'}
+  spec: {asNumber: 12345, nodeToNodeMeshEnabled: true}
+kind: BGPConfigurationList
+metadata: {resourceVersion: '29'}
