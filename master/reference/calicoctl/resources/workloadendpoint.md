@@ -64,7 +64,7 @@ spec:
 
 | Field     | Description                                                        | Accepted Values                                          | Schema | Default   |
 |-----------|--------------------------------------------------------------------|----------------------------------------------------------|--------|-----------|
-| name      | The name of this workload endpoint resource. Required.             |  Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |           |
+| name      | The name of this workload endpoint resource. Required.             |  Alphanumeric string with optional `.`, `_`, or `-`      | string |           |
 | namespace | Namespace provides an additional qualification to a resource name. |                                                          | string | "default" |
 
 #### Spec

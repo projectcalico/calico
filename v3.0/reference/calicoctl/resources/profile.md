@@ -44,7 +44,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 | labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
 | tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 

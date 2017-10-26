@@ -30,7 +30,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
 
