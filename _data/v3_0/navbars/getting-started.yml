@@ -48,39 +48,6 @@ toc:
   - title: Upgrade
     path: /getting-started/kubernetes/upgrade
 
-- title: Mesos
-  section:
-  - title: Overview
-    path: /getting-started/mesos/
-  - title: Installation
-    section:
-    - title: Requirements
-      path: /getting-started/mesos/installation/prerequisites
-    - title: Integration Guide
-      path: /getting-started/mesos/installation/integration
-    - title: DC/OS
-      section:
-      - title: Overview
-        path: /getting-started/mesos/installation/dc-os/
-      - title: Universe Package Install
-        path: /getting-started/mesos/installation/dc-os/framework
-      - title: Customize Universe Package Install
-        path: /getting-started/mesos/installation/dc-os/custom
-    - title: 'Vagrant/VirtualBox: CentOS'
-      path: /getting-started/mesos/installation/vagrant-centos/
-  - title: Tutorials
-    section:
-    - title: Launching Tasks
-      path: /getting-started/mesos/tutorials/launching-tasks
-    - title: Connecting to Tasks
-      path: /getting-started/mesos/tutorials/connecting-tasks
-    - title: Configuring Policy
-      section:
-      - title: Universal Containerizer
-        path: /getting-started/mesos/tutorials/policy/universal-containerizer
-      - title: Docker Containerizer
-        path: /getting-started/mesos/tutorials/policy/docker-containerizer
-
 - title: Docker
   section:
   - title: Overview
