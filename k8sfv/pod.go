@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 )
 
@@ -126,7 +128,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		err = netlink.LinkSetNsFd(podIf, int(podNamespace.Fd()))
 		panicIfError(err)
 		err = podNamespace.Do(func(_ ns.NetNS) (err error) {
-			err = netlink.LinkSetUp(podIf)
+			err = runCommand("ip", "link", "set", veth.PeerName, "up")
 			if err != nil {
 				return
 			}
@@ -220,7 +222,8 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 				if err != nil {
 					panic(err)
 				}
-				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug("Pods present")
+				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug(
+					"Pods present")
 				for _, pod := range podList.Items {
 					err = clientset.CoreV1().Pods(nsName).Delete(pod.ObjectMeta.Name, deleteImmediately)
 					if err != nil {
@@ -235,6 +238,11 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 		}()
 	}
 	waiter.Wait()
+
+	Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
+		BeNumerically("==", 0),
+		"Removal of pods wasn't reflected in Felix metrics",
+	)
 	log.WithField("podsDeleted", podsDeleted).Info("Cleaned up all pods")
 }
 
@@ -246,6 +254,6 @@ func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
-	log.Infof("output: %v", string(output))
+	log.WithField("rc", err).Infof("output: %v", string(output))
 	return err
 }
