@@ -43,6 +43,7 @@ import (
 
 const (
 	DEFAULT_IPV4_POOL_CIDR              = "192.168.0.0/16"
+	DEFAULT_IPV6_POOL_CIDR              = ""
 	DEFAULT_IPV4_POOL_NAME              = "default-ipv4-ippool"
 	DEFAULT_IPV6_POOL_NAME              = "default-ipv6-ippool"
 	AUTODETECTION_METHOD_FIRST          = "first-found"
@@ -598,7 +599,6 @@ IfaceLoop:
 		warning("Unable to fetch fe80: IPv6 address, Is IPv6 enabled on the host ?")
 		final := ""
 		return final
-
 	}
 }
 
@@ -607,7 +607,7 @@ IfaceLoop:
 func configureIPPools(ctx context.Context, client client.Interface) {
 	// Read in environment variables for use here and later.
 	ipv4Pool := os.Getenv("CALICO_IPV4POOL_CIDR")
-	ipv6Pool := getIPv6Pool()
+	ipv6Pool := os.Getenv("CALICO_IPV6POOL_CIDR")
 
 	if strings.ToLower(os.Getenv("NO_DEFAULT_POOLS")) == "true" {
 		if len(ipv4Pool) > 0 || len(ipv6Pool) > 0 {
@@ -658,7 +658,7 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 
 	// Read IPV6 CIDR from env if set and parse then check it for errors
 	if ipv6Pool == "" {
-		ipv6Pool = "fd80:24e2:f998:72d6::/64"
+		ipv6Pool = getIPv6Pool()
 	}
 	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
 	if err != nil || ipv6Cidr.Version() != 6 {
