@@ -595,8 +595,8 @@ IfaceLoop:
 		final := strconv.Itoa(t)
 		return final
 	} else {
-		warning("Unable to fetch fe80: IPv6 address, Is IPv6 enabled ?")
-		final := "fd80:24e2:f998:72d6::/64"
+		warning("Unable to fetch fe80: IPv6 address, Is IPv6 enabled on the host ?")
+		final := ""
 		return final
 
 	}
@@ -658,7 +658,7 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 
 	// Read IPV6 CIDR from env if set and parse then check it for errors
 	if ipv6Pool == "" {
-		ipv6Pool = DEFAULT_IPV6_POOL_CIDR
+		ipv6Pool := "fd80:24e2:f998:72d6::/64"
 	}
 	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
 	if err != nil || ipv6Cidr.Version() != 6 {
