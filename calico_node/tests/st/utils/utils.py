@@ -405,3 +405,5 @@ def wipe_etcd(ip):
     # We want to avoid polluting analytics data with unit test noise
     curl_etcd("calico/v1/config/UsageReportingEnabled",
                    options=["-XPUT -d value=False"], ip=ip)
+
+    check_output("docker exec calico-etcd sh -c 'ETCDCTL_API=3 etcdctl del --prefix /calico'", shell=True)
