@@ -739,14 +739,14 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 		// an indication of multiple nodes using the same name.  This
 		// is not an error condition as the IPs could actually change.
 		if theirNode.Name == node.Name {
-			if theirIPv4 != nil && ourIPv4 != nil && !theirIPv4.IP.Equal(ourIPv4.IP) {
+			if theirIPv4.IP != nil && ourIPv4.IP != nil && !theirIPv4.IP.Equal(ourIPv4.IP) {
 				warning("Calico node '%s' IPv4 address has changed:",
 					theirNode.Name)
 				message(" -  This could happen if multiple nodes are configured with the same name")
 				message(" -  Original IP: %s", theirIPv4.String())
 				message(" -  Updated IP: %s", ourIPv4.String())
 			}
-			if theirIPv6 != nil && ourIPv6 != nil && !theirIPv6.IP.Equal(ourIPv6.IP) {
+			if theirIPv6.IP != nil && ourIPv6.IP != nil && !theirIPv6.IP.Equal(ourIPv6.IP) {
 				warning("Calico node '%s' IPv6 address has changed:",
 					theirNode.Name)
 				message(" -  This could happen if multiple nodes are configured with the same name")
@@ -758,13 +758,14 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 
 		// Check that other nodes aren't using the same IP addresses.
 		// This is an error condition.
-		if theirIPv4 != nil && ourIPv4 != nil && theirIPv4.IP.Equal(ourIPv4.IP) {
+		if theirIPv4.IP != nil && ourIPv4.IP != nil && theirIPv4.IP.Equal(ourIPv4.IP) {
 			message("Calico node '%s' is already using the IPv4 address %s:",
 				theirNode.Name, ourIPv4.String())
 			message(" -  Check the node configuration to remove the IP address conflict")
 			errored = true
 		}
-		if theirIPv6 != nil && ourIPv6 != nil && theirIPv6.IP.Equal(ourIPv6.IP) {
+
+		if theirIPv6.IP != nil && ourIPv6.IP != nil && theirIPv6.IP.Equal(ourIPv6.IP) {
 			message("Calico node '%s' is already using the IPv6 address %s:",
 				theirNode.Name, ourIPv6.String())
 			message(" -  Check the node configuration to remove the IP address conflict")
