@@ -11,5 +11,4 @@ your own servers, a quick set-up in a virtualized environment using Vagrant and
 a number of cloud services.
 
 - [Calico with Kubernetes](kubernetes)
-- [Calico with Docker](docker)
 - [Host protection](bare-metal/bare-metal)
