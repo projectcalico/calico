@@ -6,6 +6,7 @@ go_library(
         "check.go",
         "match.go",
         "server.go",
+        "workload.go"
     ],
     visibility = ["//visibility:public"],
     deps = [
@@ -15,5 +16,9 @@ go_library(
         "//vendor/github.com/projectcalico/libcalico-go/lib/selector:go_default_library",
         "@com_github_sirupsen_logrus//:go_default_library",
         "@org_golang_x_net//context:go_default_library",
+        "@io_k8s_client_go//kubernetes:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@com_github_spiffe_spire//pkg/agent/auth:go_default_library",
     ],
 )

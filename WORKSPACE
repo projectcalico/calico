@@ -68,6 +68,12 @@ go_repository(
     importpath = "github.com/golang/glog",
 )
 
+go_repository(
+    name = "com_github_spiffe_spire",
+    importpath = "github.com/spiffe/spire",
+    commit = "c5479abc0cced444c3e968d21eb0b92d681ad56b",
+)
+
 # Libcalico and its deps
 
 go_repository(

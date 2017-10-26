@@ -17,6 +17,7 @@ go_library(
         "@io_k8s_apimachinery//pkg/util/validation:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
         "@org_golang_google_grpc//reflection:go_default_library",
+        "@com_github_spiffe_spire//pkg/agent/auth:go_default_library",
     ],
 )
 
