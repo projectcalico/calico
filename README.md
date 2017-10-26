@@ -67,10 +67,5 @@ Tests can be run in a container to ensure all build dependencies are met.
 
 To run the tests
 ```
-make ut
-```
-
-To run the tests in a container
-```
-make test-containerized
+make test
 ```

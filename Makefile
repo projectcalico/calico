@@ -1,8 +1,7 @@
 .PHONY: all binary test clean help
 default: help
-all: test                                               ## Run all the tests
-test: test-containerized                             ## Run all the tests
-all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe test-containerized
+all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe test
+test: test-containerized st                             ## Run all the tests
 
 ###############################################################################
 # calicoctl build
