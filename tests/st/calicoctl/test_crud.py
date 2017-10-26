@@ -20,7 +20,7 @@ from nose_parameterized import parameterized
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
-    DELETE_DEFAULT, SET_DEFAULT, NOT_SUPPORTED
+    SET_DEFAULT, NOT_SUPPORTED
 from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -470,7 +470,7 @@ class TestCalicoctlCommands(TestBase):
 
         # Attempt to delete the default resource by name (i.e. without using a resource version).
         rc = calicoctl("delete bgpconfig %s" % name(rev0))
-        rc.assert_error(DELETE_DEFAULT)
+        rc.assert_no_error()
 
         rc = calicoctl("create", data=bgpconfig_name2_rev1)
         rc.assert_no_error()

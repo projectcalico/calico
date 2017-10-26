@@ -41,7 +41,6 @@ API_VERSION = 'projectcalico.org/v2'
 ERROR_CONFLICT = "update conflict"
 NOT_FOUND = "resource does not exist"
 NOT_NAMESPACED = "is not namespaced"
-DELETE_DEFAULT = "Cannot delete default"
 SET_DEFAULT = "Cannot set"
 NOT_SUPPORTED = "is not supported on"
 
