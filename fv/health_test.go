@@ -35,20 +35,21 @@ package fv_test
 // says that it is ready.)
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"math/rand"
+	"net"
 	"net/http"
 	"time"
-
-	"crypto/tls"
-	"net"
 
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
-
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -217,6 +218,8 @@ var _ = Describe("health tests", func() {
 	// describeCommonFelixTests creates specs for Felix tests that are common between the
 	// two scenarios below (with and without Typha).
 	describeCommonFelixTests := func() {
+		var podsToCleanUp []string
+
 		Describe("with normal Felix startup", func() {
 
 			It("should become ready and stay ready", func() {
@@ -230,11 +233,49 @@ var _ = Describe("health tests", func() {
 			})
 		})
 
+		createLocalPod := func() {
+			testPodName := fmt.Sprintf("test-pod-%x", rand.Uint32())
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: testPodName},
+				Spec: v1.PodSpec{Containers: []v1.Container{{
+					Name:  fmt.Sprintf("container-foo"),
+					Image: "ignore",
+				}},
+					NodeName: felixContainer.Hostname,
+				},
+				Status: v1.PodStatus{
+					Phase: v1.PodRunning,
+					Conditions: []v1.PodCondition{{
+						Type:   v1.PodScheduled,
+						Status: v1.ConditionTrue,
+					}},
+					PodIP: "10.0.0.1",
+				},
+			}
+			_, err := k8sClient.CoreV1().Pods("default").Create(pod)
+			Expect(err).NotTo(HaveOccurred())
+			podsToCleanUp = append(podsToCleanUp, testPodName)
+		}
+
+		AfterEach(func() {
+			for _, name := range podsToCleanUp {
+				err := k8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+			podsToCleanUp = nil
+		})
+
 		Describe("after removing iptables-restore", func() {
 			BeforeEach(func() {
+				// Wait until felix gets into steady state.
 				Eventually(felixReady, "5s", "100ms").Should(BeGood())
+
+				// Then remove iptables-restore.
 				err := felixContainer.ExecMayFail("rm", "/sbin/iptables-restore")
 				Expect(err).NotTo(HaveOccurred())
+
+				// Make an update that will force felix to run iptables-restore.
+				createLocalPod()
 			})
 
 			It("should become unready, then die", func() {
@@ -243,8 +284,13 @@ var _ = Describe("health tests", func() {
 			})
 		})
 
-		Describe("after replacing iptables with a slow version, with per-node config", func() {
+		Describe("after replacing iptables with a slow version", func() {
 			BeforeEach(func() {
+				// Wait until felix gets into steady state.
+				Eventually(felixReady, "5s", "100ms").Should(BeGood())
+
+				// Then replace iptables-restore with the bad version:
+
 				// We need to delete the file first since it's a symlink and "docker cp"
 				// follows the link and overwrites the wrong file if we don't.
 				err := felixContainer.ExecMayFail("rm", "/sbin/iptables-restore")
@@ -254,21 +300,17 @@ var _ = Describe("health tests", func() {
 				err = felixContainer.CopyFileIntoContainer("slow-iptables-restore",
 					"/sbin/iptables-restore")
 				Expect(err).NotTo(HaveOccurred())
+
 				// Make it executable.
 				err = felixContainer.ExecMayFail("chmod", "+x", "/sbin/iptables-restore")
 				Expect(err).NotTo(HaveOccurred())
+
+				// Make an update that will force felix to run iptables-restore.
+				createLocalPod()
 			})
 
-			It("should delay readiness", func() {
-				Eventually(felixReady, "5s", "100ms").ShouldNot(BeGood())
-				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
-				Eventually(felixReady, "10s", "100ms").Should(BeGood())
-				Consistently(felixReady, "10s", "1s").Should(BeGood())
-			})
-
-			It("should become live as normal", func() {
-				Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
-				Consistently(felixLiveness, "10s", "1s").Should(BeGood())
+			It("should detect dataplane pause and become non-ready", func() {
+				Eventually(felixReady, "120s", "10s").ShouldNot(BeGood())
 			})
 		})
 	}
