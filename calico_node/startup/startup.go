@@ -658,7 +658,7 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 
 	// Read IPV6 CIDR from env if set and parse then check it for errors
 	if ipv6Pool == "" {
-		ipv6Pool := "fd80:24e2:f998:72d6::/64"
+		ipv6Pool = "fd80:24e2:f998:72d6::/64"
 	}
 	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
 	if err != nil || ipv6Cidr.Version() != 6 {
