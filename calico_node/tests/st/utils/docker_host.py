@@ -607,10 +607,15 @@ class DockerHost(object):
         :param data: string, the data to put inthe file
         :return: Return code of execute operation.
         """
-        with tempfile.NamedTemporaryFile() as tmp:
-            tmp.write(data)
-            tmp.flush()
-            log_and_run("docker cp %s %s:%s" % (tmp.name, self.name, filename))
+        if self.dind:
+            with tempfile.NamedTemporaryFile() as tmp:
+                tmp.write(data)
+                tmp.flush()
+                log_and_run("docker cp %s %s:%s" % (tmp.name, self.name, filename))
+        else:
+            with open(filename, 'w') as f:
+                f.write(data)
+
         self.execute("cat %s" % filename)
 
     def writejson(self, filename, data):

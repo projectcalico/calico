@@ -250,7 +250,7 @@ def update_bgp_config(host, nodeMesh=None, asNum=None):
     if asNum is not None:
         bgpcfg['items'][0]['spec']['asNumber'] = asNum
 
-    host.writefile("bgpconfig.yaml", bgpcfg)
+    host.writefile("bgpconfig.yaml", yaml.dump(bgpcfg))
     host.calicoctl("apply -f bgpconfig.yaml")
 
 @debug_failures
