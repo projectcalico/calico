@@ -204,10 +204,11 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			)
 			Expect(err).NotTo(HaveOccurred())
 			// The pool will add as single entry ( +1 )
+			poolKeyV1 := model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")}
 			expectedCacheSize += 1
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectData(model.KVPair{
-				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
+				Key: poolKeyV1,
 				Value: &model.IPPool{
 					CIDR:          poolCIDRNet,
 					IPIPInterface: "tunl0",
@@ -293,9 +294,10 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 
 			// For non-kubernetes, check that we can allocate an IP address and get a syncer update
 			// for the allocation block.
+			var blockAffinityKeyV1 model.BlockAffinityKey
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Allocating an IP address and checking that we get an allocation block")
-				_, _, err = c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+				ips1, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 					Num4:     1,
 					Hostname: "127.0.0.1",
 				})
@@ -306,16 +308,45 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				expectedCacheSize += 1
 				syncTester.ExpectCacheSize(expectedCacheSize)
 				current := syncTester.GetCacheEntries()
-				found := false
 				for _, kvp := range current {
 					if kab, ok := kvp.Key.(model.BlockAffinityKey); ok {
 						if kab.Host == "127.0.0.1" && poolCIDRNet.Contains(kab.CIDR.IP) {
-							found = true
+							blockAffinityKeyV1 = kab
 							break
 						}
 					}
 				}
-				Expect(found).To(BeTrue(), "Did not find affinity block in sync data")
+				Expect(blockAffinityKeyV1).NotTo(BeNil(), "Did not find affinity block in sync data")
+
+				By("Allocating an IP address on a different host and checking for no updates")
+				// The syncer only monitors affine blocks for one host, so IP allocations for a different
+				// host should not result in updates.
+				ips2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+					Num4:     1,
+					Hostname: "not-this-host",
+				})
+				Expect(err).NotTo(HaveOccurred())
+				syncTester.ExpectCacheSize(expectedCacheSize)
+
+				By("Releasing the IP addresses and checking for no updates")
+				// Releasing IPs should leave the affine blocks assigned, so releasing the IPs
+				// should result in no updates.
+				_, err = c.IPAM().ReleaseIPs(ctx, ips1)
+				Expect(err).NotTo(HaveOccurred())
+				_, err = c.IPAM().ReleaseIPs(ctx, ips2)
+				Expect(err).NotTo(HaveOccurred())
+				syncTester.ExpectCacheSize(expectedCacheSize)
+
+				By("Deleting the IPPool and checking for pool and affine block deletion")
+				// Deleting the pool will also release all affine blocks associated with the pool.
+				_, err = c.IPPools().Delete(ctx, "mypool", options.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// The pool and the affine block for 127.0.0.1 should have deletion events.
+				expectedCacheSize -= 2
+				syncTester.ExpectCacheSize(expectedCacheSize)
+				syncTester.ExpectNoData(blockAffinityKeyV1)
+				syncTester.ExpectNoData(poolKeyV1)
 			}
 
 			By("Starting a new syncer and verifying that all current entries are returned before sync status")
@@ -329,7 +360,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			// step.
 			syncTester.ExpectStatusUpdate(api.WaitForDatastore)
 			syncTester.ExpectStatusUpdate(api.ResyncInProgress)
-			syncTester.ExpectCacheSize(len(current))
+			syncTester.ExpectCacheSize(expectedCacheSize)
 			for _, e := range current {
 				if config.Spec.DatastoreType == apiconfig.Kubernetes {
 					// Don't check revisions for K8s since the node data gets updated constantly.

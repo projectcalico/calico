@@ -43,13 +43,23 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		CIDR:     "1.2.3.0/24",
 		IPIPMode: apiv2.IPIPModeAlways,
 	}
+	spec1_2 := apiv2.IPPoolSpec{
+		CIDR:        "1.2.3.0/24",
+		NATOutgoing: true,
+		IPIPMode:    apiv2.IPIPModeNever,
+	}
 	spec2 := apiv2.IPPoolSpec{
-		CIDR:     "2001::0/120",
+		CIDR:        "2001::/120",
+		NATOutgoing: true,
+		IPIPMode:    apiv2.IPIPModeNever,
+	}
+	spec2_1 := apiv2.IPPoolSpec{
+		CIDR:     "2001::/120",
 		IPIPMode: apiv2.IPIPModeNever,
 	}
 
 	DescribeTable("IPPool e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 apiv2.IPPoolSpec) {
+		func(name1, name2 string, spec1, spec1_2, spec2 apiv2.IPPoolSpec) {
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -130,11 +140,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			testutils.ExpectResource(&outList.Items[0], apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec1)
 			testutils.ExpectResource(&outList.Items[1], apiv2.KindIPPool, testutils.ExpectNoNamespace, name2, spec2)
 
-			By("Updating IPPool name1 with spec2")
-			res1.Spec = spec2
+			By("Updating IPPool name1 with spec1_2")
+			res1.Spec = spec1_2
 			res1, outError = c.IPPools().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec2)
+			testutils.ExpectResource(res1, apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec1_2)
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
@@ -161,10 +171,10 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				Expect(res.ResourceVersion).To(Equal(rv1_1))
 			}
 
-			By("Getting IPPool (name1) with the updated resource version and comparing the output against spec2")
+			By("Getting IPPool (name1) with the updated resource version and comparing the output against spec1_2")
 			res, outError = c.IPPools().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec2)
+			testutils.ExpectResource(res, apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec1_2)
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -175,11 +185,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				testutils.ExpectResource(&outList.Items[0], apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec1)
 			}
 
-			By("Listing IPPools with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
+			By("Listing IPPools with the latest resource version and checking for two results with name1/spec1_2 and name2/spec2")
 			outList, outError = c.IPPools().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec2)
+			testutils.ExpectResource(&outList.Items[0], apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec1_2)
 			testutils.ExpectResource(&outList.Items[1], apiv2.KindIPPool, testutils.ExpectNoNamespace, name2, spec2)
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -192,7 +202,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			By("Deleting IPPool (name1) with the new resource version")
 			dres, outError := c.IPPools().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(dres, apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec2)
+			// The pool will first be disabled, so tweak the Disabled field before doing the comparison.
+			spec1_2.Disabled = true
+			testutils.ExpectResource(dres, apiv2.KindIPPool, testutils.ExpectNoNamespace, name1, spec1_2)
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Updating IPPool name2 with a 2s TTL and waiting for the entry to be deleted")
@@ -222,9 +234,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				By("Attempting to deleting IPPool (name2) again")
+				// The pool will first be disabled, so tweak the Disabled field before doing the comparison.
+				By("Deleting IPPool (name2)")
 				dres, outError = c.IPPools().Delete(ctx, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
+				spec2.Disabled = true
 				testutils.ExpectResource(dres, apiv2.KindIPPool, testutils.ExpectNoNamespace, name2, spec2)
 			}
 
@@ -245,7 +259,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		},
 
 		// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated IPPoolSpecs", name1, name2, spec1, spec2),
+		Entry("Two fully populated IPPoolSpecs", name1, name2, spec1, spec1_2, spec2),
 	)
 
 	Describe("IPPool watch functionality", func() {
@@ -257,7 +271,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).NotTo(HaveOccurred())
 			be.Clean()
 
-			By("Listing IPPools with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
+			By("Listing IPPools with no resource version and checking for no results")
 			outList, outError := c.IPPools().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(0))
@@ -272,6 +286,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 				options.SetOptions{},
 			)
+			Expect(err).NotTo(HaveOccurred())
 			rev1 := outRes1.ResourceVersion
 
 			By("Configuring a IPPool name2/spec2 and storing the response")
@@ -283,6 +298,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 				options.SetOptions{},
 			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.IPPools().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
@@ -291,18 +307,23 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			defer testWatcher1.Stop()
 
 			By("Deleting res1")
-			_, err = c.IPPools().Delete(ctx, name1, options.DeleteOptions{})
+			outRes3, err := c.IPPools().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking for two events, create res2 and delete res1")
+			By("Checking for three events, create res2 and disable and delete res1")
 			testWatcher1.ExpectEvents(apiv2.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
 					Object: outRes2,
 				},
 				{
-					Type:     watch.Deleted,
+					Type:     watch.Modified,
+					Object:   outRes3,
 					Previous: outRes1,
+				},
+				{
+					Type:     watch.Deleted,
+					Previous: outRes3,
 				},
 			})
 			testWatcher1.Stop()
@@ -314,11 +335,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
-			outRes3, err := c.IPPools().Update(
+			outRes4, err := c.IPPools().Update(
 				ctx,
 				&apiv2.IPPool{
 					ObjectMeta: outRes2.ObjectMeta,
-					Spec:       spec1,
+					Spec:       spec2_1,
 				},
 				options.SetOptions{},
 			)
@@ -333,13 +354,18 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 					Object: outRes2,
 				},
 				{
-					Type:     watch.Deleted,
+					Type:     watch.Modified,
+					Object:   outRes3,
 					Previous: outRes1,
+				},
+				{
+					Type:     watch.Deleted,
+					Previous: outRes3,
 				},
 				{
 					Type:     watch.Modified,
 					Previous: outRes2,
-					Object:   outRes3,
+					Object:   outRes4,
 				},
 			})
 			testWatcher2.Stop()
@@ -357,8 +383,13 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 						Object: outRes1,
 					},
 					{
-						Type:     watch.Deleted,
+						Type:     watch.Modified,
+						Object:   outRes3,
 						Previous: outRes1,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes3,
 					},
 				})
 				testWatcher2_1.Stop()
@@ -372,7 +403,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			testWatcher3.ExpectEvents(apiv2.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes3,
+					Object: outRes4,
 				},
 			})
 			testWatcher3.Stop()
@@ -399,20 +430,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 				{
 					Type:   watch.Added,
-					Object: outRes3,
-				},
-			})
-
-			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
-			be.Clean()
-			testWatcher4.ExpectEvents(apiv2.KindIPPool, []watch.Event{
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes3,
+					Object: outRes4,
 				},
 			})
 			testWatcher4.Stop()
@@ -557,6 +575,92 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			enabled, err := getGlobalSetting()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*enabled).To(BeFalse())
+		})
+	})
+
+	Describe("Verify pool CIDR validation", func() {
+		var err error
+		var c clientv2.Interface
+
+		BeforeEach(func() {
+			c, err = clientv2.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+		})
+
+		It("should prevent the CIDR being changed on an update", func() {
+			By("Creating a pool")
+			pool, err := c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Attempting to change te CIDR")
+			pool.Spec.CIDR = "1.2.4.0/24"
+			_, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool CIDR cannot be modified"))
+		})
+
+		It("should prevent the creation of a pool with an identical or overlapping CIDR", func() {
+			By("Creating a pool")
+			_, err := c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Attempting to create the same pool and checking for the correct error")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorResourceAlreadyExists{}))
+
+			By("Attempting to create a pool with the same CIDR")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool2"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool(ippool2) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
+
+			By("Attempting to create a pool with a larger overlapping CIDR")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool3"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.0.0/16",
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool(ippool3) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
+
+			By("Attempting to create a pool with a smaller overlapping CIDR")
+			_, err = c.IPPools().Create(ctx, &apiv2.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool4"},
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "1.2.3.128/25",
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool(ippool4) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
 		})
 	})
 })
