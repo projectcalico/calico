@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"time"
+	"net"
 
 	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +35,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"k8s.io/client-go/rest"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 var _ = Describe("PolicyController", func() {
@@ -45,6 +48,9 @@ var _ = Describe("PolicyController", func() {
 		k8sClient        *kubernetes.Clientset
 		extensionsClient *rest.RESTClient
 	)
+
+	const kNodeName = "k8snodename"
+	const cNodeName = "caliconodename"
 
 	BeforeEach(func() {
 		// Run etcd.
@@ -79,6 +85,237 @@ var _ = Describe("PolicyController", func() {
 		etcd.Stop()
 		policyController.Stop()
 		apiserver.Stop()
+	})
+
+	Context("nodes", func() {
+		It("should be removed in response to a k8s node delete", func() {
+			kn := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kNodeName,
+				},
+			}
+			_, err := k8sClient.CoreV1().Nodes().Create(kn)
+			Expect(err).NotTo(HaveOccurred())
+
+			cn := &api.Node{
+				Metadata: api.NodeMetadata{
+					Name: cNodeName,
+				},
+				Spec: api.NodeSpec{
+					OrchRefs: []api.OrchRef{
+						{
+							NodeName: kNodeName,
+							Orchestrator: "k8s",
+						},
+					},
+				},
+			}
+			_, err = calicoClient.Nodes().Create(cn)
+			Expect(err).NotTo(HaveOccurred())
+
+			k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+			Eventually(func() *api.Node {
+				node, _ := calicoClient.Nodes().Get(api.NodeMetadata{Name: cNodeName})
+				return node
+			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
+		})
+
+		It("should be removed if they reference a k8sNode that doesn't exist", func() {
+			cn := &api.Node{
+				Metadata: api.NodeMetadata{
+					Name: cNodeName,
+				},
+				Spec: api.NodeSpec{
+					OrchRefs: []api.OrchRef{
+						{
+							NodeName: "k8sfakenode",
+							Orchestrator: "k8s",
+						},
+					},
+				},
+			}
+			_, err := calicoClient.Nodes().Create(cn)
+			Expect(err).NotTo(HaveOccurred())
+
+			k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+			Eventually(func() *api.Node {
+				node, _ := calicoClient.Nodes().Get(api.NodeMetadata{Name: cNodeName})
+				return node
+			}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		})
+
+		It("should not be removed in response to a k8s node delete if another orchestrator owns it", func() {
+			kn := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kNodeName,
+				},
+			}
+			_, err := k8sClient.CoreV1().Nodes().Create(kn)
+			Expect(err).NotTo(HaveOccurred())
+
+			cn := &api.Node{
+				Metadata: api.NodeMetadata{
+					Name: cNodeName,
+				},
+				Spec: api.NodeSpec{
+					OrchRefs: []api.OrchRef{
+						{
+							NodeName: kNodeName,
+							Orchestrator: "mesos",
+						},
+					},
+
+				},
+			}
+			_, err = calicoClient.Nodes().Create(cn)
+			Expect(err).NotTo(HaveOccurred())
+
+			k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+			Consistently(func() *api.Node {
+				node, _ := calicoClient.Nodes().Get(api.NodeMetadata{Name: cNodeName})
+				return node
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
+
+			node, _ := calicoClient.Nodes().Get(api.NodeMetadata{Name: cNodeName})
+			Expect(len(node.Spec.OrchRefs)).Should(Equal(1))
+			Expect(node.Spec.OrchRefs[0].Orchestrator).Should(Equal("mesos"))
+		})
+
+		It("should not be removed if orchrefs are nil.", func() {
+			cn := &api.Node{
+				Metadata: api.NodeMetadata{
+					Name: cNodeName,
+				},
+				Spec: api.NodeSpec{},
+			}
+			_, err := calicoClient.Nodes().Create(cn)
+			Expect(err).NotTo(HaveOccurred())
+
+			Consistently(func() *api.Node {
+				node, _ := calicoClient.Nodes().Get(api.NodeMetadata{Name: cNodeName})
+				return node
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
+		})
+
+		It("should clean up weps, IPAM allocations, etc. when deleting a node", func() {
+			// Create a calico pool
+			pool := api.IPPool{
+				Metadata: api.IPPoolMetadata{
+					CIDR: cnet.IPNet{
+						IPNet: net.IPNet{
+							IP: net.IP{192, 168, 0, 0},
+							Mask: net.IPMask{255, 255, 0, 0},
+						},
+					},
+				},
+			}
+
+			affBlock := cnet.IPNet{
+				IPNet: net.IPNet{
+					IP: net.IP{192, 168, 0, 0},
+					Mask: net.IPMask{255, 255, 255, 0},
+				},
+			}
+
+			wepIp := net.IP{192, 168, 0, 1}
+
+			_, err := calicoClient.IPPools().Create(&pool)
+			Expect(err).NotTo(HaveOccurred())
+			
+			kn := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kNodeName,
+				},
+			}
+			_, err = k8sClient.CoreV1().Nodes().Create(kn)
+			Expect(err).NotTo(HaveOccurred())
+
+			cn := &api.Node{
+				Metadata: api.NodeMetadata{
+					Name: cNodeName,
+				},
+				Spec: api.NodeSpec{
+					OrchRefs: []api.OrchRef{
+						api.OrchRef{
+							NodeName: kNodeName,
+							Orchestrator: "k8s",
+						},
+					},
+				},
+			}
+			_, err = calicoClient.Nodes().Create(cn)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, _, err = calicoClient.IPAM().ClaimAffinity(affBlock, cNodeName)
+			Expect(err).NotTo(HaveOccurred())
+
+			handle := "myhandle"
+			err = calicoClient.IPAM().AssignIP(client.AssignIPArgs{
+				IP: cnet.IP{wepIp},
+				Hostname: cNodeName,
+				HandleID: &handle,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			wep := api.WorkloadEndpoint{
+				Metadata: api.WorkloadEndpointMetadata{
+					Name:             "eth0",
+					Node:             cNodeName,
+					Orchestrator:     "k8s",
+					Workload:         "default.fakepod",
+					ActiveInstanceID: "aii1",
+					Labels: map[string]string{
+						"foo": "label1",
+					},
+				},
+				Spec: api.WorkloadEndpointSpec{
+					InterfaceName: "eth0",
+					IPNetworks: []cnet.IPNet{
+						{
+							IPNet: net.IPNet{
+								IP:   wepIp,
+								Mask: net.IPMask{255, 255, 255, 255},
+							},
+						},
+					},
+				},
+			}
+			_, err = calicoClient.WorkloadEndpoints().Create(&wep)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that the node is removed from Calico
+			Eventually(func() *api.Node {
+				node, _ := calicoClient.Nodes().Get(api.NodeMetadata{Name: cNodeName})
+				return node
+			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
+
+			// Check that all other node-specific data was also removed
+			// starting with the wep.
+			_, err = calicoClient.WorkloadEndpoints().Get(api.WorkloadEndpointMetadata{
+				Name: "eth0",
+				Node: cNodeName,
+				Orchestrator: "k8s",
+				Workload: "default.fakepod",
+			})
+
+			_, ok := err.(cerrors.ErrorResourceDoesNotExist)
+			Expect(ok).Should(BeTrue(), fmt.Sprintf("Got error: %v", err))
+
+			// Check that the wep's IP was released
+			ips, err := calicoClient.IPAM().IPsByHandle(handle)
+			_, ok = err.(cerrors.ErrorResourceDoesNotExist)
+			Expect(ok).Should(BeTrue(), fmt.Sprintf("Got error: %v", err))
+			Expect(ips).Should(BeEmpty())
+
+			// Check that the host affinity pool was released. Since there's no method to do this directly,
+			// just try to claim the same pool
+			_, _, err = calicoClient.IPAM().ClaimAffinity(affBlock, cNodeName)
+			Expect(err).NotTo(HaveOccurred())
+
+		})
 	})
 
 	Context("profiles", func() {

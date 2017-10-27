@@ -32,6 +32,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 )
 
 // VERSION is filled out during the build process (using git describe output)
@@ -91,6 +92,9 @@ func main() {
 		case "policy":
 			policyController := networkpolicy.NewPolicyController(extensionsClient, calicoClient)
 			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
+		case "node":
+			nodeController := node.NewNodeController(k8sClientset, calicoClient)
+			go nodeController.Run(config.NodeWorkers, config.ReconcilerPeriod, stop)
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
 		}
