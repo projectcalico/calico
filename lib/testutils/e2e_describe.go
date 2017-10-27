@@ -45,7 +45,7 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 			func() {
 				body(apiconfig.CalicoAPIConfig{
 					Spec: apiconfig.CalicoAPIConfigSpec{
-						DatastoreType: apiconfig.EtcdV2,
+						DatastoreType: apiconfig.EtcdV3,
 						EtcdConfig: apiconfig.EtcdConfig{
 							EtcdEndpoints: "http://127.0.0.1:2379",
 						},
