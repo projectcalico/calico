@@ -81,10 +81,10 @@ class DockerNetwork(object):
             pass
 
         # Create the network,
-        cmd = "docker network create %s %s %s %s" % \
-              (driver_option, ipam_option, subnet_option, name)
-        docker_net_create = partial(host.execute, cmd)
-        self.uuid = retry_until_success(docker_net_create)
+        #cmd = "docker network create %s %s %s %s" % \
+        #      (driver_option, ipam_option, subnet_option, name)
+        #docker_net_create = partial(host.execute, cmd)
+        #self.uuid = retry_until_success(docker_net_create)
 
     def delete(self, host=None):
         """
@@ -95,7 +95,7 @@ class DockerNetwork(object):
         """
         if not self.deleted:
             host = host or self.init_host
-            host.execute("docker network rm " + self.name)
+        #    host.execute("docker network rm " + self.name)
             self.deleted = True
 
     def disconnect(self, host, container):
@@ -103,8 +103,8 @@ class DockerNetwork(object):
         Disconnect container from network.
         :return: Nothing
         """
-        host.execute("docker network disconnect %s %s" %
-                     (self.name, str(container)))
+        #host.execute("docker network disconnect %s %s" %
+        #             (self.name, str(container)))
 
     def __str__(self):
         return self.name

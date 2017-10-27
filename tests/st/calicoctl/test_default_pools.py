@@ -59,12 +59,12 @@ class TestDefaultPools(TestBase):
         (False, "CALICO_IPV6POOL_CIDR", "fd00::/123", 0, None, False, "Too small"),
         (False, "CALICO_IPV6POOL_CIDR", "fd00::/128", 0, None, False, "Too small, but legal CIDR"),
         (False, "CALICO_IPV6POOL_CIDR", "fd00::/129", 0, None, False, "Impossible CIDR"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "cross-subnet", True,"Typ. non-def pool, IPIP"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "always", True,"Typ. non-default pool, IPIP"),
-        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "off", True, "Typical pool, explicitly no IPIP"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "always", False, "IPv6 - IPIP not permitted"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "cross-subnet", False, "IPv6 - IPIP not allowed"),
-        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "off", False, "IPv6, IPIP explicitly off"),
+        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "CrossSubnet", True,"Typ. non-def pool, IPIP"),
+        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "Always", True,"Typ. non-default pool, IPIP"),
+        (True, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 2, "Never", True, "Typical pool, explicitly no IPIP"),
+        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "Always", False, "IPv6 - IPIP not permitted"),
+        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "CrossSubnet", False, "IPv6 - IPIP not allowed"),
+        (True, "CALICO_IPV6POOL_CIDR", "fd00::/122", 2, "Never", False, "IPv6, IPIP explicitly off"),
         (False, "CALICO_IPV6POOL_CIDR", "fd00::/122", 0, "junk", False, "Invalid IPIP value"),
         (False, "CALICO_IPV4POOL_CIDR", "10.0.0.0/24", 0, "reboot", True, "Invalid IPIP value"),
         (False, "CALICO_IPV4POOL_CIDR", "0.0.0.0/0", 0, None, True, "Invalid, link local address"),
@@ -103,8 +103,8 @@ class TestDefaultPools(TestBase):
         self.wait_for_node_log("Calico node started successfully")
         # check the expected pool is present
         pools_output = self.host.calicoctl("get ippool -o yaml")
-        pools_dict = yaml.safe_load(pools_output)
-        cidrs = [pool['metadata']['cidr'] for pool in pools_dict]
+        pools_dict = yaml.safe_load(pools_output)['items']
+        cidrs = [pool['spec']['cidr'] for pool in pools_dict]
         # Convert to canonical form
         value = str(netaddr.IPNetwork(value))
         assert value in cidrs, "Didn't find %s in %s" % (value, cidrs)
@@ -124,26 +124,23 @@ class TestDefaultPools(TestBase):
             pools_dict.remove(pool)
             other_pool = pools_dict[0]
         # Check IPIP setting if we're doing IPv4
-        if ipip in ["cross-subnet", "always"] and param == "CALICO_IPV4POOL_CIDR":
-            assert pool['spec']['ipip']['enabled'] is True, \
-                "Didn't find ipip enabled in pool %s" % pool
-            assert pool['spec']['ipip']['mode'] == ipip, \
+        if ipip in ["CrossSubnet", "Always", "Never"] and param == "CALICO_IPV4POOL_CIDR":
+            assert pool['spec']['ipipMode'] == ipip, \
                 "Didn't find ipip mode in pool %s" % pool
-        if ipip in [None, "off"] or param == "CALICO_IPV6POOL_CIDR":
-            assert 'ipip' not in pool['spec']
-        if ipip in ["cross-subnet", "always"] and param == "CALICO_IPV6POOL_CIDR":
-            assert other_pool['spec']['ipip']['enabled'] is True, \
-                "Didn't find ipip enabled in pool %s" % pool
-            assert other_pool['spec']['ipip']['mode'] == ipip, \
+        if ipip in [None] or param == "CALICO_IPV6POOL_CIDR":
+            assert pool['spec']['ipipMode'] == "Never", \
+                "Didn't find ipip mode in pool %s" % pool
+        if ipip in ["CrossSubnet", "Always", "Never"] and param == "CALICO_IPV6POOL_CIDR":
+            assert other_pool['spec']['ipipMode'] == ipip, \
                 "Didn't find ipip mode in pool %s" % pool
 
         # Check NAT setting
-        if 'nat-outgoing' in pool['spec']:
-          assert pool['spec']['nat-outgoing'] is nat_outgoing, \
-            "Wrong NAT default in pool %s, expected nat-outgoing to be %s" % (pool, nat_outgoing)
+        if 'natOutgoing' in pool['spec']:
+          assert pool['spec']['natOutgoing'] is nat_outgoing, \
+            "Wrong NAT default in pool %s, expected natOutgoing to be %s" % (pool, nat_outgoing)
         else:
           assert nat_outgoing is False, \
-            "Wrong NAT default in pool %s, expecting nat-outgoing to be disabled" % pool
+            "Wrong NAT default in pool %s, expecting natOutgoing to be disabled" % pool
 
     def test_no_default_pools(self):
         """
@@ -155,7 +152,7 @@ class TestDefaultPools(TestBase):
         self.wait_for_node_log("Calico node started successfully")
         # check the expected pool is present
         pools_output = self.host.calicoctl("get ippool -o yaml")
-        pools_dict = yaml.safe_load(pools_output)
+        pools_dict = yaml.safe_load(pools_output)['items']
         assert pools_dict == [], "Pools not empty: %s" % pools_dict
 
     def assert_calico_node_log_contains(self, expected_string):

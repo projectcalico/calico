@@ -15,6 +15,7 @@ import logging
 import json
 import os
 import re
+import tempfile
 import uuid
 import yaml
 from functools import partial
@@ -47,6 +48,7 @@ if ETCD_SCHEME == "https":
 else:
     CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
                                 get_ip()
+
 
 class DockerHost(object):
     """
@@ -186,9 +188,12 @@ class DockerHost(object):
         Pass a command into a host container.
 
         Raises a CommandExecError() if the command returns a non-zero
-        return code.
+        return code if raise_exception_on_failure=True.
 
         :param command:  The command to execute.
+        :param raise_exception_on_failure:  Raises an exception if the command exits with
+        non-zero return code.
+
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
@@ -259,12 +264,11 @@ class DockerHost(object):
         # use of | or ;
         #
         # Pass in all etcd params, the values will be empty if not set anyway
-        calicoctl = "export ETCD_AUTHORITY=%s; " \
-                    "export ETCD_SCHEME=%s; " \
+        calicoctl = "export ETCD_ENDPOINTS=%s://%s; " \
                     "export ETCD_CA_CERT_FILE=%s; " \
                     "export ETCD_CERT_FILE=%s; " \
                     "export ETCD_KEY_FILE=%s; %s" % \
-                    (etcd_auth, ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY,
+                    (ETCD_SCHEME, etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY,
                      calicoctl)
         # If the hostname is being overriden, then export the HOSTNAME
         # environment.
@@ -318,8 +322,9 @@ class DockerHost(object):
             # CALICO_IPV4POOL_CIDR setting.
             modified_cmd = (
                 prefix +
-                " -e CALICO_IPV4POOL_CIDR=%s -e " % DEFAULT_IPV4_POOL_CIDR +
-                suffix
+                (" -e CALICO_IPV4POOL_CIDR=%s " % DEFAULT_IPV4_POOL_CIDR) +
+                " -e DISABLE_NODE_IP_CHECK=true -e FELIX_IPINIPENABLED=true " +
+                " -e " + suffix
             )
 
             # Now run that.
@@ -333,12 +338,14 @@ class DockerHost(object):
     def set_ipip_enabled(self, enabled):
         pools_output = self.calicoctl("get ippool -o yaml")
         pools_dict = yaml.safe_load(pools_output)
-        for pool in pools_dict:
+        for pool in pools_dict['items']:
             print "Pool is %s" % pool
-            if ':' not in pool['metadata']['cidr']:
-                pool['spec']['ipip'] = {'mode': 'always', 'enabled': enabled}
-            self.writefile("ippools.yaml", pools_dict)
-            self.calicoctl("apply -f ippools.yaml")
+            if ':' not in pool['spec']['cidr']:
+                pool['spec']['ipipMode'] = 'Always' if enabled else 'Never'
+            if 'creationTimestamp' in pool['metadata']:
+                del pool['metadata']['creationTimestamp']
+        self.writefile("ippools.yaml", yaml.dump(pools_dict))
+        self.calicoctl("apply -f ippools.yaml")
 
     def attach_log_analyzer(self):
         self.log_analyzer = LogAnalyzer(self,
@@ -374,10 +381,10 @@ class DockerHost(object):
                      "--name=calico-node "
                      "%s "
                      "-e IP=%s "
-                     "-e ETCD_AUTHORITY=%s -e ETCD_SCHEME=%s %s "
+                     "-e ETCD_ENDPOINTS=%s://%s %s "
                      "-v /var/log/calico:/var/log/calico "
                      "-v /var/run/calico:/var/run/calico "
-                     "%s" % (hostname_args, self.ip, etcd_auth, ETCD_SCHEME,
+                     "%s" % (hostname_args, self.ip, ETCD_SCHEME, etcd_auth,
                              ssl_args, NODE_CONTAINER_NAME)
                      )
 
@@ -520,11 +527,14 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network="bridge", ip=None, labels=[]):
+    def create_workload(self, name,
+                        image="busybox", network="bridge",
+                        ip=None, labels=[], namespace=None):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, image=image, network=network, ip=ip, labels=labels)
+        workload = Workload(self, name, image=image, network=network,
+                            ip=ip, labels=labels, namespace=namespace)
         self.workloads.add(workload)
         return workload
 
@@ -597,7 +607,16 @@ class DockerHost(object):
         :param data: string, the data to put inthe file
         :return: Return code of execute operation.
         """
-        return self.execute("cat << EOF > %s\n%s" % (filename, data))
+        if self.dind:
+            with tempfile.NamedTemporaryFile() as tmp:
+                tmp.write(data)
+                tmp.flush()
+                log_and_run("docker cp %s %s:%s" % (tmp.name, self.name, filename))
+        else:
+            with open(filename, 'w') as f:
+                f.write(data)
+
+        self.execute("cat %s" % filename)
 
     def writejson(self, filename, data):
         """
@@ -648,3 +667,5 @@ class DockerHost(object):
         self.execute("iptables-save", raise_exception_on_failure=False)
         self.execute("ip6tables-save", raise_exception_on_failure=False)
         self.execute("ipset save", raise_exception_on_failure=False)
+        self.execute("ps", raise_exception_on_failure=False)
+        self.execute("cat /etc/bird/bird.conf", raise_exception_on_failure=False)
