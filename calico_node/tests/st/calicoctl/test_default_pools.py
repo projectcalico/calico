@@ -103,8 +103,8 @@ class TestDefaultPools(TestBase):
         self.wait_for_node_log("Calico node started successfully")
         # check the expected pool is present
         pools_output = self.host.calicoctl("get ippool -o yaml")
-        pools_dict = yaml.safe_load(pools_output)
-        cidrs = [pool['metadata']['cidr'] for pool in pools_dict['items']]
+        pools_dict = yaml.safe_load(pools_output)['items']
+        cidrs = [pool['spec']['cidr'] for pool in pools_dict]
         # Convert to canonical form
         value = str(netaddr.IPNetwork(value))
         assert value in cidrs, "Didn't find %s in %s" % (value, cidrs)
@@ -124,22 +124,21 @@ class TestDefaultPools(TestBase):
             pools_dict.remove(pool)
             other_pool = pools_dict[0]
         # Check IPIP setting if we're doing IPv4
-        if ipip in ["cross-subnet", "always"] and param == "CALICO_IPV4POOL_CIDR":
-            assert pool['spec']['ipip']['enabled'] is True, \
+        if ipip in ["CrossSubnet", "Always"] and param == "CALICO_IPV4POOL_CIDR":
+            assert pool['spec']['ipipMode'] in ["CrossSubnet", "Always"], \
                 "Didn't find ipip enabled in pool %s" % pool
-            assert pool['spec']['ipip']['mode'] == ipip, \
-                "Didn't find ipip mode in pool %s" % pool
         if ipip in [None, "off"] or param == "CALICO_IPV6POOL_CIDR":
-            assert 'ipip' not in pool['spec']
-        if ipip in ["cross-subnet", "always"] and param == "CALICO_IPV6POOL_CIDR":
-            assert other_pool['spec']['ipip']['enabled'] is True, \
+            assert pool['spec']['ipipMode'] in [None, "Never"], \
+                "Expected %s to be Never" % pool['spec']['ipipMode']
+        if ipip in ["CrossSubnet", "Always"] and param == "CALICO_IPV6POOL_CIDR":
+            assert other_pool['spec']['ipipMode'] in ["CrossSubnet", "Always"], \
                 "Didn't find ipip enabled in pool %s" % pool
-            assert other_pool['spec']['ipip']['mode'] == ipip, \
+            assert other_pool['spec']['ipipMode'] == ipip, \
                 "Didn't find ipip mode in pool %s" % pool
 
         # Check NAT setting
-        if 'nat-outgoing' in pool['spec']:
-          assert pool['spec']['nat-outgoing'] is nat_outgoing, \
+        if 'natOutgoing' in pool['spec']:
+          assert pool['spec']['natOutgoing'] is nat_outgoing, \
             "Wrong NAT default in pool %s, expected nat-outgoing to be %s" % (pool, nat_outgoing)
         else:
           assert nat_outgoing is False, \
