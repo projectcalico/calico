@@ -113,7 +113,7 @@ class TestIPIP(TestBase):
             # IPIP tunnel is being used.
             self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Always")
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
-                                     False)
+                                     True)
 
             # Turn off IPIP and check IPIP tunnel is not being used.
             self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never")
