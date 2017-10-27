@@ -80,28 +80,29 @@ type ErroredField struct {
 	Reason string
 }
 
+func (e ErroredField) String() string {
+	var fieldString string
+	if e.Value == nil {
+		fieldString = e.Name
+	} else {
+		fieldString = fmt.Sprintf("%s = '%v'", e.Name, e.Value)
+	}
+	if e.Reason != "" {
+		fieldString = fmt.Sprintf("%s (%s)", fieldString, e.Reason)
+	}
+	return fieldString
+}
+
 func (e ErrorValidation) Error() string {
 	if len(e.ErroredFields) == 0 {
 		return "unknown validation error"
 	} else if len(e.ErroredFields) == 1 {
 		f := e.ErroredFields[0]
-		if f.Reason == "" {
-			return fmt.Sprintf("error with field %s = '%v'",
-				f.Name, f.Value)
-		} else {
-			return fmt.Sprintf("error with field %s = '%v' (%s)",
-				f.Name, f.Value, f.Reason)
-		}
+		return fmt.Sprintf("error with field %s", f)
 	} else {
 		s := "error with the following fields:\n"
 		for _, f := range e.ErroredFields {
-			if f.Reason == "" {
-				s = s + fmt.Sprintf("-  %s = '%v'\n",
-					f.Name, f.Value)
-			} else {
-				s = s + fmt.Sprintf("-  %s = '%v' (%s)\n",
-					f.Name, f.Value, f.Reason)
-			}
+			s = s + fmt.Sprintf("-  %s\n", f)
 		}
 		return s
 	}

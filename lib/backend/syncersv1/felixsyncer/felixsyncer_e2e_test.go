@@ -182,7 +182,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				Revision: pool.ResourceVersion,
 			})
 			syncTester.ExpectData(model.KVPair{
-				Key: model.GlobalConfigKey{"IpInIpEnabled"},
+				Key:   model.GlobalConfigKey{"IpInIpEnabled"},
 				Value: "true",
 			})
 
