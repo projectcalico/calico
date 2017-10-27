@@ -11,21 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import yaml
 
-def create_bgp_peer(host, scope, ip, asNum):
+
+def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     assert scope in ('node', 'global')
-    node = host.get_hostname() if scope == 'node' else ""
     testdata = {
-        'apiVersion': 'v1',
-        'kind': 'bgpPeer',
+        'apiVersion': 'projectcalico.org/v2',
+        'kind': 'BGPPeer',
         'metadata': {
-            'scope': scope,
-            'node': node,
-            'peerIP': ip,
+            'name': host.name,
         },
         'spec': {
-            'asNumber': asNum
+            'peerIP': ip,
+            'asNumber': asNum,
         }
     }
-    host.writefile("testfile.yaml", testdata)
+    # Add optional params
+    # If node is not specified, scope is global.
+    if scope == "node":
+        testdata['spec']['node'] = host.get_hostname()
+    if metadata is not None:
+        testdata['metadata'] = metadata
+
+    host.writefile("testfile.yaml", yaml.dump(testdata))
     host.calicoctl("create -f testfile.yaml")
+
+def clear_bgp_peers(host):
+    peers = yaml.load(host.calicoctl("get bgpPeer --output=yaml"))
+    if len(peers['items']) == 0:
+        return
+    host.writefile("bgppeers.yaml", yaml.dump(peers))
+    host.calicoctl("delete -f bgppeers.yaml")

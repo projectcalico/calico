@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from nose.plugins.attrib import attr
+from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.route_reflector import RouteReflectorCluster
+from tests.st.utils.utils import update_bgp_config
 
 from .peer import create_bgp_peer
 
+@skip("Disabled until routereflector is updated for libcalico-go v2")
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
@@ -41,8 +44,7 @@ class TestSingleRouteReflector(TestBase):
 
             # Set the default AS number - as this is used by the RR mesh, and
             # turn off the node-to-node mesh (do this from any host).
-            host1.calicoctl("config set asNumber 64514")
-            host1.calicoctl("config set nodeToNodeMesh off")
+            update_bgp_config(host1, asNum=12345, nodeMesh=False)
 
             # Create a workload on each host in the same network.
             network1 = host1.create_network("subnet1")
@@ -73,8 +75,9 @@ class TestSingleRouteReflector(TestBase):
     def test_bird_single_route_reflector(self):
         self._test_single_route_reflector(backend='bird')
 
+    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
     @attr('slow')
-    def test_gobgp_single_route_reflector(self):
+    def _test_gobgp_single_route_reflector(self):
         self._test_single_route_reflector(backend='gobgp')
 
 TestSingleRouteReflector.batchnumber = 1  # Adds a batch number for parallel testing
