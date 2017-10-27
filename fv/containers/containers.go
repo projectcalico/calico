@@ -153,7 +153,7 @@ func (c *Container) WaitUntilRunning() {
 		if strings.Contains(string(out), c.Name) {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
@@ -176,6 +176,7 @@ func (c *Container) WaitNotRunning(timeout time.Duration) {
 		if time.Since(start) > timeout {
 			log.Panic("Timed out waiting for container not to be listed.")
 		}
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
