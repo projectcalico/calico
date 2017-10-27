@@ -51,8 +51,13 @@ func NewNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		resource:        NetworkPolicyResourceName,
 		description:     "Calico Network Policies",
 		k8sResourceType: reflect.TypeOf(apiv2.NetworkPolicy{}),
-		k8sListType:     reflect.TypeOf(apiv2.NetworkPolicyList{}),
-		namespaced:      true,
+		k8sResourceTypeMeta: metav1.TypeMeta{
+			Kind:       apiv2.KindNetworkPolicy,
+			APIVersion: apiv2.GroupVersionCurrent,
+		},
+		k8sListType:  reflect.TypeOf(apiv2.NetworkPolicyList{}),
+		resourceKind: apiv2.KindNetworkPolicy,
+		namespaced:   true,
 	}
 	return &networkPolicyClient{
 		clientSet: c,
