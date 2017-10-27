@@ -1,5 +1,5 @@
-hash: f6d2ccb6b9352eedb5a5d6180f160b916460b6ecf725938c16394ae3af7bca59
-updated: 2017-10-25T17:55:16.033836579-07:00
+hash: 57c26af2d28b80040a21b38eea37bd4b70e946dc839f2137d5390657af4614bd
+updated: 2017-10-27T14:16:32.890007-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -114,7 +114,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 6aaa77241a27753459e859122e8c529ff1ea7212
+  version: c38f46a4cd6c03b03be039910444bd784788d4ac
   subpackages:
   - client/v2
   - models
@@ -165,7 +165,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
+  version: dcabb60a477c2b6f456df65037cb6708210fbb02
   subpackages:
   - format
   - internal/assertion
@@ -192,7 +192,7 @@ imports:
   - table
   - zebra
 - name: github.com/pelletier/go-toml
-  version: 2009e44b6f182e34d8ce081ac2767622937ea3d4
+  version: 4e9e0ee19b60b13eb79915933f44d8ed5f268bdd
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -204,7 +204,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: efe4c982e79f82950179e8122bf95701ea7c6373
+  version: dae320cd652b66d908eb5d59209717e3c3514c26
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -243,7 +243,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/afero
-  version: e67d870304c4bca21331b02f414f970df13aa694
+  version: 5660eeed305fe5f69c8fc6cf899132a459a97064
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -257,11 +257,11 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: b2de5d10e38ecce8607e6b438b6d174f389a004e
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
@@ -319,7 +319,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
   subpackages:
   - internal
   - internal/app_identity

@@ -315,18 +315,46 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_empty_list("WorkloadEndpoint")
 
     @parameterized.expand([
-        (ippool_name1_rev1_v4, False),
-        (profile_name1_rev1, False),
-        (globalnetworkpolicy_name1_rev1, False),
-        (networkpolicy_name1_rev1, True),
-        (hostendpoint_name1_rev1, False),
-        (bgppeer_name1_rev1_v4, False),
-        (workloadendpoint_name1_rev1, True),
-        (node_name1_rev1, False),
+        (ippool_name1_rev1_v4,),
+        (profile_name1_rev1,),
+        (globalnetworkpolicy_name1_rev1,),
+        (hostendpoint_name1_rev1,),
+        (bgppeer_name1_rev1_v4,),
+        (node_name1_rev1,),
     ])
-    def test_namespace(self, data, namespaced):
+    def test_non_namespaced(self, data):
         """
-        Test namespace is handled as expected for each resource type.
+        Test namespace is handled as expected for each non-namespaced resource type.
+        """
+        # Clone the data so that we can modify the metadata parms.
+        data1 = copy.deepcopy(data)
+        kind = data['kind']
+
+        rc = calicoctl("create", data=data1)
+        rc.assert_no_error()
+
+        # Get the resource with name1 and namespace2.
+        # For non-namespaced resources this will error.
+        rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))
+        rc.assert_error(NOT_NAMESPACED)
+
+        # Get the resource type for all namespaces.
+        # For non-namespaced resources this will error.
+        rc = calicoctl("get %s --all-namespaces -o yaml" % kind)
+        rc.assert_error(NOT_NAMESPACED)
+
+        # Delete the resource
+        rc = calicoctl("delete", data=data1)
+        rc.assert_no_error()
+
+
+    @parameterized.expand([
+        (networkpolicy_name1_rev1,),
+        (workloadendpoint_name1_rev1,),
+    ])
+    def test_namespaced(self, data):
+        """
+        Tests namespace is handled as expected for each namespaced resource type.
         """
         # Clone the data so that we can modify the metadata parms.
         data1 = copy.deepcopy(data)
@@ -334,8 +362,8 @@ class TestCalicoctlCommands(TestBase):
 
         kind = data['kind']
 
-        # Create resource with name1 and with name2.  If the resource is
-        # namespaced, leave the first namespace blank and the second set to
+        # Create resource with name1 and with name2.
+        # Leave the first namespace blank and the second set to
         # namespace2 for the actual create request.
         if kind == "WorkloadEndpoint":
             # The validation in libcalico-go WorkloadEndpoint checks the
@@ -354,61 +382,45 @@ class TestCalicoctlCommands(TestBase):
             data1['metadata']['name'] = "name1"
             data2['metadata']['name'] = "name2"
 
-        if namespaced:
-            data1['metadata']['namespace'] = ""
-            data2['metadata']['namespace'] = "namespace2"
+        data1['metadata']['namespace'] = ""
+        data2['metadata']['namespace'] = "namespace2"
 
         rc = calicoctl("create", data=data1)
         rc.assert_no_error()
         rc = calicoctl("create", data=data2)
         rc.assert_no_error()
 
-        # If namespaced we expect the namespace to be defaulted to "default"
+        # We expect the namespace to be defaulted to "default"
         # if not specified.  Tweak the namespace in data1 to be default so that
         # we can use it to compare against the calicoctl get output.
-        if namespaced:
-            data1['metadata']['namespace'] = "default"
-
+        data1['metadata']['namespace'] = "default"
 
         if kind == "WorkloadEndpoint":
             data1['metadata']['labels']['projectcalico.org/namespace'] = 'default'
 
         # Get the resource with name1 and namespace2.  For a namespaced
         # resource this should match the modified data to default the
-        # namespace.  For non-namespaced resources this will error.
+        # namespace.
         rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))
-        if namespaced:
-            rc.assert_data(data1)
-        else:
-            rc.assert_error(NOT_NAMESPACED)
+        rc.assert_data(data1)
 
         if kind == "WorkloadEndpoint":
             data2['metadata']['labels']['projectcalico.org/namespace'] = 'namespace2'
 
         # Get the resource type for all namespaces.  For a namespaced resource
-        # this will return everything.  For non-namespaced resources this will
-        # error.
+        # this will return everything.
         rc = calicoctl("get %s --all-namespaces -o yaml" % kind)
-        if namespaced:
-            rc.assert_list(kind, [data1, data2])
-        else:
-            rc.assert_error(NOT_NAMESPACED)
+        rc.assert_list(kind, [data1, data2])
 
         # For namespaced resources, if you do a list without specifying the
         # namespace we'll just get the default namespace.
         rc = calicoctl("get %s -o yaml" % kind)
-        if namespaced:
-            rc.assert_list(kind, [data1])
-        else:
-            rc.assert_list(kind, [data1, data2])
+        rc.assert_list(kind, [data1])
 
         # For namespaced resources, if you do a list specifying a namespace
         # we'll get results for that namespace.
         rc = calicoctl("get %s -o yaml -n namespace2" % kind)
-        if namespaced:
-            rc.assert_list(kind, [data2])
-        else:
-            rc.assert_error(NOT_NAMESPACED)
+        rc.assert_list(kind, [data2])
 
         # Doing a get by file will use the namespace in the file.
         rc = calicoctl("get -o yaml", data1)
@@ -418,32 +430,28 @@ class TestCalicoctlCommands(TestBase):
 
         # Doing a get by file will use the default namespace if not specified
         # in the file or through the CLI args.
-        if namespaced:
-            data1_no_ns = copy.deepcopy(data1)
-            del (data1_no_ns['metadata']['namespace'])
-            rc = calicoctl("get -o yaml", data1_no_ns)
-            rc.assert_data(data1)
-            rc = calicoctl("get -o yaml -n namespace2", data1_no_ns)
-            rc.assert_error(NOT_FOUND)
+        data1_no_ns = copy.deepcopy(data1)
+        del (data1_no_ns['metadata']['namespace'])
+        rc = calicoctl("get -o yaml", data1_no_ns)
+        rc.assert_data(data1)
+        rc = calicoctl("get -o yaml -n namespace2", data1_no_ns)
+        rc.assert_error(NOT_FOUND)
 
-            data2_no_ns = copy.deepcopy(data2)
-            del(data2_no_ns['metadata']['namespace'])
-            rc = calicoctl("get -o yaml -n namespace2", data2_no_ns)
-            rc.assert_data(data2)
-            rc = calicoctl("get -o yaml", data2_no_ns)
-            rc.assert_error(NOT_FOUND)
+        data2_no_ns = copy.deepcopy(data2)
+        del(data2_no_ns['metadata']['namespace'])
+        rc = calicoctl("get -o yaml -n namespace2", data2_no_ns)
+        rc.assert_data(data2)
+        rc = calicoctl("get -o yaml", data2_no_ns)
+        rc.assert_error(NOT_FOUND)
 
         # Deleting without a namespace will delete the default.
         rc = calicoctl("delete %s %s" % (kind, data1['metadata']['name']))
         rc.assert_no_error()
 
         rc = calicoctl("delete %s %s" % (kind, data2['metadata']['name']))
-        if namespaced:
-            rc.assert_error(NOT_FOUND)
-            rc = calicoctl("delete", data2)
-            rc.assert_no_error()
-        else:
-            rc.assert_no_error()
+        rc.assert_error(NOT_FOUND)
+        rc = calicoctl("delete", data2)
+        rc.assert_no_error()
 
     def test_bgpconfig(self):
         """
