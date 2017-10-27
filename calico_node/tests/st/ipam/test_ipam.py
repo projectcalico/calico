@@ -17,7 +17,6 @@ import random
 import netaddr
 import time
 import yaml
-from unittest import skip
 from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
@@ -31,7 +30,6 @@ logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-@skip("Disabled until https://github.com/projectcalico/libcalico-go/pull/633 is in libcalico-go and calicoctl")
 class MultiHostIpam(TestBase):
     @classmethod
     def setUpClass(cls):
