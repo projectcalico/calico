@@ -38,7 +38,7 @@ def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     host.calicoctl("create -f testfile.yaml")
 
 def clear_bgp_peers(host):
-    peers = yaml.loads(host.calicoctl("get bgpPeer --output=yaml"))
+    peers = yaml.load(host.calicoctl("get bgpPeer --output=yaml"))
     if len(peers['items']) == 0:
         return
     host.writefile("bgppeers.yaml", yaml.dump(peers))

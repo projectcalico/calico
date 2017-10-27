@@ -14,6 +14,7 @@
 import json
 import re
 import subprocess
+import yaml
 
 from netaddr import IPAddress, IPNetwork
 from nose_parameterized import parameterized
@@ -21,8 +22,10 @@ from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.route_reflector import RouteReflectorCluster
-from tests.st.utils.utils import check_bird_status, retry_until_success
+from tests.st.utils.utils import check_bird_status, retry_until_success, \
+        update_bgp_config
 from time import sleep
+from unittest import skip
 
 from .peer import create_bgp_peer, clear_bgp_peers
 
@@ -108,7 +111,7 @@ class TestIPIP(TestBase):
 
             # Turn on IPIP, default mode (which is always use IPIP), and check
             # IPIP tunnel is being used.
-            self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode=None)
+            self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Always")
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
                                      False)
 
@@ -141,7 +144,7 @@ class TestIPIP(TestBase):
         with DockerHost('host', dind=False, start_calico=False) as host:
             # Set up first pool before Node is started, to ensure we get tunl IP on boot
             ipv4_pool = IPNetwork("10.0.1.0/24")
-            self.pool_action(host, "create", ipv4_pool, ipip_mode=None)
+            self.pool_action(host, "create", ipv4_pool, ipip_mode="Always")
             host.start_calico_node()
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
@@ -154,31 +157,32 @@ class TestIPIP(TestBase):
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
             # Test that removing pool removes the tunl IP.
-            self.pool_action(host, "delete", ipv4_pool, ipip_mode=None)
+            self.pool_action(host, "delete", ipv4_pool, ipip_mode="Always")
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
 
             # Test that re-adding the pool triggers the confd watch and we get an IP
-            self.pool_action(host, "create", ipv4_pool, ipip_mode=None)
+            self.pool_action(host, "create", ipv4_pool, ipip_mode="Always")
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
             # Test that by adding another pool, then deleting the first,
             # we remove the original IP, and allocate a new one from the new pool
             new_ipv4_pool = IPNetwork("192.168.0.0/16")
-            self.pool_action(host, "create", new_ipv4_pool, ipip_mode=None)
+            self.pool_action(host, "create", new_ipv4_pool, ipip_mode="Always", pool_name="pool-b")
             self.pool_action(host, "delete", ipv4_pool)
             self.assert_tunl_ip(host, new_ipv4_pool)
 
     @staticmethod
     def pool_action(host, action, cidr,
-                    disabled=False, ipip_mode=None, calicoctl_version=None, nat_outgoing=None):
+                    disabled=False, ipip_mode=None, calicoctl_version=None, nat_outgoing=None, pool_name=None):
         """
         Perform an ipPool action.
         """
+        pool_name = "test.ippool" if pool_name is None else pool_name
         testdata = {
             'apiVersion': 'projectcalico.org/v2',
             'kind': 'IPPool',
             'metadata': {
-                'name': 'test.ippool',
+                'name': pool_name,
             },
             'spec': {
                 'cidr': str(cidr),
@@ -193,7 +197,7 @@ class TestIPIP(TestBase):
         # nat_outgoing could be True, False or not specified (defaults to False)
         if nat_outgoing is not None:
             testdata['spec']['natOutgoing'] = nat_outgoing
-        host.writefile("testfile.yaml", testdata)
+        host.writefile("testfile.yaml", yaml.dump(testdata))
         host.calicoctl("%s -f testfile.yaml" % action, version=calicoctl_version)
 
     def assert_tunl_ip(self, host, ip_network, expect=True):
@@ -339,10 +343,11 @@ class TestIPIP(TestBase):
 
             self._test_gce_int(with_ipip, backend, host1, host2, False)
 
-    @parameterized.expand([
-        (False,),
-        (True,),
-    ])
+    #@parameterized.expand([
+    #    (False,),
+    #    (True,),
+    #])
+    @skip("Skipping until route reflector is updated with libcalico-go v2 support")
     def test_gce_rr(self, with_ipip):
         """As test_gce except with a route reflector instead of mesh config."""
         with DockerHost('host1',
