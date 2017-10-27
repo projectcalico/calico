@@ -23,7 +23,6 @@ import (
 type DatastoreType string
 
 const (
-	EtcdV2              DatastoreType = "etcdv2"
 	EtcdV3              DatastoreType = "etcdv3"
 	Kubernetes          DatastoreType = "kubernetes"
 	KindCalicoAPIConfig               = "CalicoAPIConfig"
