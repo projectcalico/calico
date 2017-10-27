@@ -365,6 +365,50 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
 	})
 
+	It("should parse a default-deny egress NetworkPolicy", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+			},
+		}
+
+		pol, err := c.K8sNetworkPolicyToCalico(&np)
+		By("parsing the policy", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("generating the correct name and namespace", func() {
+			Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.testPolicy"))
+			Expect(pol.Key.(model.ResourceKey).Namespace).To(Equal("default"))
+		})
+
+		By("generating the correct selector", func() {
+			Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
+		})
+
+		By("generating the correct order", func() {
+			Expect(int(*pol.Value.(*apiv2.NetworkPolicy).Spec.Order)).To(Equal(1000))
+		})
+
+		By("generating no outbound rules", func() {
+			Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
+		})
+
+		By("generating no inbound rules", func() {
+			Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
+		})
+
+		By("generating the correct policy types", func() {
+			Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.Types)).To(Equal(1))
+			Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeEgress))
+		})
+	})
+
 	It("should parse a NetworkPolicy with multiple peers", func() {
 		np := extensions.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
