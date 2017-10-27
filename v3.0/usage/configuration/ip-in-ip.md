@@ -36,7 +36,7 @@ metadata:
 spec:
   cidr: 192.168.0.0/16
   ipipMode: Always
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
 
@@ -68,7 +68,7 @@ metadata:
 spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
 
