@@ -344,7 +344,7 @@ class DockerHost(object):
                 pool['spec']['ipipMode'] = 'Always' if enabled else 'Never'
             if 'creationTimestamp' in pool['metadata']:
                 del pool['metadata']['creationTimestamp']
-        self.writefile("ippools.yaml", pools_dict)
+        self.writefile("ippools.yaml", yaml.dump(pools_dict))
         self.calicoctl("apply -f ippools.yaml")
 
     def attach_log_analyzer(self):
