@@ -387,8 +387,9 @@ policy, Calico has a failsafe mechanism that keeps various pinholes open
 in the firewall.
 
 By default, Calico keeps port 22 inbound open on *all* host endpoints,
-which allows access to ssh; as well as outbound communication to ports
-2379, 2380, 4001 and 7001, which allows access to etcd's default ports.
+which allows access to ssh; as well as inbound and outbound communications to
+ports 2379, 2380 (etcd's default ports), and to ports 6666, 6667 (etcd's ports
+as deployed by Calico's self-hosted Kubernetes manifests).
 
 The lists of failsafe ports can be configured via the configuration parameters
 described in [Configuring
