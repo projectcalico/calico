@@ -36,7 +36,8 @@ class Workload(object):
     software.
     """
 
-    def __init__(self, host, name, image="busybox", network="bridge", ip=None, labels=[]):
+    def __init__(self, host, name, image="busybox", network="bridge",
+                 ip=None, labels=[], namespace=None):
         """
         Create the workload and detect its IPs.
 
@@ -51,11 +52,15 @@ class Workload(object):
         :param network: The name of the network to connect to.
         :param ip: The ip address to assign to the container.
         :param labels: List of labels '<var>=<value>' to add to workload.
+        :param namespace: The namespace this pod should be in.  'None' is valid and will cause
+        CNI to be called without the namespace being set (useful for checking that it
+        defaults correctly)
         """
         self.host = host
         self.name = name
         self.network = network
         assert self.network is not None
+        self.namespace = namespace
 
         lbl_args = ""
         for label in labels:
@@ -105,9 +110,13 @@ class Workload(object):
                    'CNI_CONTAINERID=%s ' % container_id +
                    'CNI_NETNS=/proc/%s/ns/net ' % workload_pid +
                    'CNI_IFNAME=eth0 ' +
-                   'CNI_PATH=/code/dist ' +
-                   ip_args +
-                   '/code/dist/calico-cni-plugin')
+                   'CNI_PATH=/code/dist ')
+        # Optionally add namespace (we want to be able to call CNI without specifying a
+        # namespace to check CNI defaults correctly).
+        if self.namespace:
+            command = command + 'K8S_POD_NAMESPACE=%s ' % self.namespace
+
+        command = command + ip_args + '/code/dist/calico-cni-plugin'
         output = self.host.execute(command)
 
         if adding:

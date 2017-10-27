@@ -20,7 +20,7 @@ from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.network import NETWORKING_CNI, NETWORKING_LIBNETWORK
-from tests.st.utils.utils import assert_network, assert_profile, \
+from tests.st.utils.utils import assert_profile, \
     assert_number_endpoints, get_profile_name
 
 POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
@@ -60,7 +60,7 @@ class MultiHostMainline(TestBase):
 
         # Get the original profiles:
         output = host1.calicoctl("get profile -o yaml")
-        self.original_profiles = yaml.safe_load(output)
+        self.original_profiles = yaml.safe_load(output)['items']
         # Make a copy of the profiles to mess about with.
         self.new_profiles = copy.deepcopy(self.original_profiles)
 
@@ -79,7 +79,7 @@ class MultiHostMainline(TestBase):
 
             super(MultiHostMainline, self).tearDown()
 
-    def test_tags(self):
+    def _test_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
         # Make a new profiles dict where the two networks have each
@@ -92,7 +92,7 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
 
-    def test_rules_tags(self):
+    def _test_rules_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
         rule0 = {'action': 'allow',
@@ -107,7 +107,7 @@ class MultiHostMainline(TestBase):
         # Check everything can contact everything else now
         self.assert_connectivity(retries=3,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 2
+    _test_rules_tags.batchnumber = 2
 
     def test_rules_protocol_icmp(self):
         rule = {'action': 'allow',
@@ -129,13 +129,13 @@ class MultiHostMainline(TestBase):
             ip = workload.ip
             rule = {'action': 'allow',
                     'source':
-                        {'net': '%s/32' % ip}}
+                        {'nets': ['%s/32' % ip]}}
             prof_n2['spec']['ingress'].append(rule)
         for workload in self.n2_workloads:
             ip = workload.ip
             rule = {'action': 'allow',
                     'source':
-                        {'net': '%s/32' % ip}}
+                        {'nets': ['%s/32' % ip]}}
             prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
@@ -149,11 +149,11 @@ class MultiHostMainline(TestBase):
         n2_subnet = netaddr.spanning_cidr(n2_ips)
         rule = {'action': 'allow',
                 'source':
-                    {'net': str(n1_subnet)}}
+                    {'nets': [str(n1_subnet)]}}
         prof_n2['spec']['ingress'].append(rule)
         rule = {'action': 'allow',
                 'source':
-                    {'net': str(n2_subnet)}}
+                    {'nets': [str(n2_subnet)]}}
         prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
@@ -247,8 +247,8 @@ class MultiHostMainline(TestBase):
                                  fail_list=self.n1_workloads[2:])
 
     def test_rules_selector(self):
-        self.new_profiles[0]['metadata']['labels'] = {'net': 'n1'}
-        self.new_profiles[1]['metadata']['labels'] = {'net': 'n2'}
+        self.new_profiles[0]['spec']['labels']['net'] = 'n1'
+        self.new_profiles[1]['spec']['labels']['net'] = 'n2'
         rule = {'action': 'allow',
                 'source':
                     {'selector': 'net=="n2"'}}
@@ -318,10 +318,23 @@ class MultiHostMainline(TestBase):
         return prof_n1, prof_n2
 
     @staticmethod
-    def _apply_new_profile(new_profile, host):
+    def _apply_new_profile(new_profiles, host):
+        # Get profiles now, so we have up to date resource versions.
+        output = host.calicoctl("get profile -o yaml")
+        profiles_now = yaml.safe_load(output)['items']
+        resource_version_map = {
+            p['metadata']['name']: p['metadata']['resourceVersion']
+            for p in profiles_now
+        }
+        _log.info("resource_version_map = %r", resource_version_map)
+
+        # Set current resource versions in the profiles we are about to apply.
+        for p in new_profiles:
+            p['metadata']['resourceVersion'] = resource_version_map[p['metadata']['name']]
+
         # Apply new profiles
         host.writefile("new_profiles",
-                       yaml.dump(new_profile, default_flow_style=False))
+                       yaml.dump(new_profiles, default_flow_style=False))
         host.calicoctl("apply -f new_profiles")
 
     def _setup_workloads(self, host1, host2):
@@ -331,10 +344,6 @@ class MultiHostMainline(TestBase):
         network1 = host1.create_network("testnet1")
         network2 = host1.create_network("testnet2")
         networks = [network1, network2]
-
-        # Assert that the networks can be seen on host2
-        assert_network(host2, network2)
-        assert_network(host2, network1)
 
         n1_workloads = []
         n2_workloads = []
@@ -373,7 +382,13 @@ class MultiHostMainline(TestBase):
         assert_number_endpoints(host1, 4)
         assert_number_endpoints(host2, 2)
 
-        self._check_original_connectivity(n1_workloads, n2_workloads)
+        try:
+            self._check_original_connectivity(n1_workloads, n2_workloads)
+        except Exception as e:
+            _log.exception(e)
+            host1.log_extra_diags()
+            host2.log_extra_diags()
+            raise
 
         # Test deleting the network. It will fail if there are any
         # endpoints connected still.

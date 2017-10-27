@@ -63,7 +63,6 @@ class TestUpdateIPAddress(TestBase):
         """
         noder = json.loads(host.calicoctl(
             "get node %s --output=json" % host.get_hostname()))
-        assert len(noder) == 1
-        noder[0]["spec"]["bgp"]["ipv4Address"] = str(host.ip)
+        noder["spec"]["bgp"]["ipv4Address"] = str(host.ip)
         host.writejson("new_data", noder)
         host.calicoctl("apply -f new_data")

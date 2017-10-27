@@ -1,0 +1,20 @@
+
+Need dist/calicoctl built from libcalico-go including
+
+    a37dd2a0bb24b877a529555cb34fb8a4fdf6e355
+    Author:     Neil Jerram <neil@tigera.io>
+    AuthorDate: Wed Oct 25 20:20:50 2017 +0100
+    Commit:     Neil Jerram <neil@tigera.io>
+    CommitDate: Wed Oct 25 20:20:50 2017 +0100
+
+    Specify APIVersion for HostEndpointList
+
+Need dist/calico-cni-plugin built from cni-plugin including
+
+    c3126244ab89ce8523d190ceb0629a981ddfde7a
+    Author:     Neil Jerram <neil@tigera.io>
+    AuthorDate: Wed Oct 25 21:32:59 2017 +0100
+    Commit:     Neil Jerram <neil@tigera.io>
+    CommitDate: Wed Oct 25 21:32:59 2017 +0100
+
+    Set LabelsToApply on the CNI-created Profile

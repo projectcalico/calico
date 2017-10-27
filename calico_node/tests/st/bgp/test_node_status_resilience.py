@@ -20,12 +20,15 @@ from tests.st.test_base import TestBase
 from tests.st.utils.constants import (LARGE_AS_NUM)
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.utils import check_bird_status, \
-    retry_until_success
+        retry_until_success, update_bgp_config
+from unittest import skip
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
 
+# TODO: Add back when gobgp is updated to work with libcalico-go v2 api
+@skip("Disabled until gobgp is updated with libcalico-go v2")
 class TestNodeStatusResilience(TestBase):
     @parameterized.expand([
         (2, 'bird'),
@@ -52,7 +55,7 @@ class TestNodeStatusResilience(TestBase):
                            start_calico=True) as host3:
 
             # Set the default AS number.
-            host1.calicoctl("config set asNumber %s" % LARGE_AS_NUM)
+            update_bgp_config(host1, asNum=LARGE_AS_NUM)
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).  These hosts use the gobgp backend, whereas
