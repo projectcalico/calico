@@ -223,6 +223,42 @@ def check_bird_status(host, expected):
                   "Output: \n%s" % (ipaddr, peertype, state, output)
             raise AssertionError(msg)
 
+@debug_failures
+def update_bgp_config(host, nodeMesh=None, asNum=None):
+    response = host.calicoctl("get BGPConfiguration -o yaml")
+    bgpcfg = yaml.safe_load(response)
+
+    if len(bgpcfg['items']) == 0:
+        bgpcfg = {
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'BGPConfigurationList',
+            'items': [ {
+                    'apiVersion': 'projectcalico.org/v2',
+                    'kind': 'BGPConfiguration',
+                    'metadata': { 'name': 'default', },
+                    'spec': {}
+                }
+            ]
+        }
+
+    if 'creationTimestamp' in bgpcfg['items'][0]['metadata']:
+        del bgpcfg['items'][0]['metadata']['creationTimestamp']
+
+    if nodeMesh is not None:
+        bgpcfg['items'][0]['spec']['nodeToNodeMeshEnabled'] = nodeMesh
+
+    if asNum is not None:
+        bgpcfg['items'][0]['spec']['asNumber'] = asNum
+
+    host.writefile("bgpconfig.yaml", yaml.dump(bgpcfg))
+    host.calicoctl("apply -f bgpconfig.yaml")
+
+@debug_failures
+def get_bgp_spec(host):
+    response = host.calicoctl("get BGPConfiguration -o yaml")
+    bgpcfg = yaml.safe_load(response)
+
+    return bgpcfg['items'][0]['spec']
 
 @debug_failures
 def assert_number_endpoints(host, expected):
@@ -240,8 +276,8 @@ def assert_number_endpoints(host, expected):
     out = host.calicoctl("get workloadEndpoint -o yaml")
     output = yaml.safe_load(out)
     actual = 0
-    for endpoint in output:
-        if endpoint['metadata']['node'] == hostname:
+    for endpoint in output['items']:
+        if endpoint['spec']['node'] == hostname:
             actual += 1
 
     if int(actual) != int(expected):
@@ -264,7 +300,7 @@ def assert_profile(host, profile_name):
     out = host.calicoctl("get -o yaml profile")
     output = yaml.safe_load(out)
     found = False
-    for profile in output:
+    for profile in output['items']:
         if profile['metadata']['name'] == profile_name:
             found = True
             break
@@ -289,22 +325,6 @@ def get_profile_name(host, network):
     # Network inspect returns a list of dicts for each network being inspected.
     # We are only inspecting 1, so use the first entry.
     return info[0]["Id"]
-
-
-@debug_failures
-def assert_network(host, network):
-    """
-    Checks that the given network is in Docker
-    Raises an exception if the network is not found
-
-    :param host: DockerHost object
-    :param network: Network object
-    :return: None
-    """
-    try:
-        host.execute("docker network inspect %s" % network.name)
-    except CommandExecError:
-        raise AssertionError("Docker network %s not found" % network.name)
 
 
 @debug_failures
@@ -385,3 +405,16 @@ def wipe_etcd(ip):
     # We want to avoid polluting analytics data with unit test noise
     curl_etcd("calico/v1/config/UsageReportingEnabled",
                    options=["-XPUT -d value=False"], ip=ip)
+
+    etcd_container_name = "calico-etcd"
+    tls_vars = ""
+    if ETCD_SCHEME == "https":
+        # Etcd is running with SSL/TLS, require key/certificates
+        etcd_container_name = "calico-etcd-ssl"
+        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+
+    check_output("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
+                 "ETCDCTL_API=3 etcdctl del --prefix /calico" +
+                 "'", shell=True)
