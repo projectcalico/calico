@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import yaml
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
@@ -19,6 +20,8 @@ from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
 from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.utils import check_bird_status
+from tests.st.utils.utils import update_bgp_config
+from tests.st.utils.utils import get_bgp_spec
 
 class TestBGP(TestBase):
 
@@ -27,21 +30,33 @@ class TestBGP(TestBase):
         Test default BGP configuration commands.
         """
         with DockerHost('host', start_calico=False, dind=False) as host:
+            # TODO: Re-enable or remove after decsision is made on the defaults
             # Check default AS command
-            self.assertEquals(host.calicoctl("config get asNumber"), "64512")
-            host.calicoctl("config set asNumber 12345")
-            self.assertEquals(host.calicoctl("config get asNumber"), "12345")
+            #response = host.calicoctl("get BGPConfiguration -o yaml")
+            #bgpcfg = yaml.safe_load(response)
+            #self.assertEquals(bgpcfg['items'][0]['spec']['asNumber'], 64512)
+
+            # Set the default AS number.
+            update_bgp_config(host, asNum=12345)
+
+            self.assertEquals(get_bgp_spec(host)['asNumber'], 12345)
+
             with self.assertRaises(CommandExecError):
-                host.calicoctl("config set asNumber 99999999999999999999999")
+                update_bgp_config(host, asNum=99999999999999999999999)
             with self.assertRaises(CommandExecError):
-                host.calicoctl("config set asNumber abcde")
+                update_bgp_config(host, asNum='abcde')
 
             # Check BGP mesh command
-            self.assertEquals(host.calicoctl("config get nodeToNodeMesh"), "on")
-            host.calicoctl("config set nodeToNodeMesh off")
-            self.assertEquals(host.calicoctl("config get nodeToNodeMesh"), "off")
-            host.calicoctl("config set nodeToNodeMesh on")
-            self.assertEquals(host.calicoctl("config get nodeToNodeMesh"), "on")
+            if 'nodeToNodeMeshEnabled' in get_bgp_spec(host):
+                self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
+
+            update_bgp_config(host, nodeMesh=False)
+
+            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], False)
+
+            update_bgp_config(host, nodeMesh=True)
+
+            self.assertEquals(get_bgp_spec(host)['nodeToNodeMeshEnabled'], True)
 
     @attr('slow')
     def _test_as_num(self, backend='bird'):
@@ -58,7 +73,7 @@ class TestBGP(TestBase):
                         start_calico=False) as host2:
 
             # Set the default AS number.
-            host1.calicoctl("config set asNumber %s" % LARGE_AS_NUM)
+            update_bgp_config(host1, asNum=LARGE_AS_NUM)
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).
@@ -87,6 +102,7 @@ class TestBGP(TestBase):
     def test_bird_as_num(self):
         self._test_as_num(backend='bird')
 
+    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
     @attr('slow')
-    def test_gobgp_as_num(self):
+    def _test_gobgp_as_num(self):
         self._test_as_num(backend='gobgp')
