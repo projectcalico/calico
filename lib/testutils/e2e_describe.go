@@ -24,8 +24,7 @@ import (
 type DatastoreType int
 
 const (
-	DatastoreEtcdV2 DatastoreType = 1 << iota
-	DatastoreEtcdV3
+	DatastoreEtcdV3 DatastoreType = 1 << iota
 	DatastoreK8s
 
 	DatastoreAll = DatastoreEtcdV3 | DatastoreK8s
