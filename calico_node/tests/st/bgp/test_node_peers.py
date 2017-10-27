@@ -78,9 +78,9 @@ class TestNodePeers(TestBase):
         self._test_node_peers(backend='bird')
 
     # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
-    #@attr('slow')
+    @attr('slow')
     @skip("Disabled until gobgp is updated with libcalico-go v2")
-    def _test_gobgp_node_peers(self):
+    def test_gobgp_node_peers(self):
         self._test_node_peers(backend='gobgp')
 
 TestNodePeers.batchnumber = 1  # Adds a batch number for parallel testing

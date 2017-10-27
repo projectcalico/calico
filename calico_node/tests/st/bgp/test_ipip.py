@@ -18,21 +18,21 @@ import yaml
 
 from netaddr import IPAddress, IPNetwork
 from nose_parameterized import parameterized
+from time import sleep
+from unittest import skip
+
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.route_reflector import RouteReflectorCluster
 from tests.st.utils.utils import check_bird_status, retry_until_success, \
         update_bgp_config
-from time import sleep
-from unittest import skip
 
-from .peer import create_bgp_peer, clear_bgp_peers
+from .peer import create_bgp_peer
 
 """
 Test calico IPIP behaviour.
 """
-
 
 class TestIPIP(TestBase):
     def tearDown(self):
@@ -63,7 +63,7 @@ class TestIPIP(TestBase):
             # is introduced - by testing with an older pool version validates
             # the IPAM BIRD templates function correctly without the mode field.
             self.pool_action(host1, "create", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never",)
-                             # comment this out for now because we don't support upgrading data yet
+                             # TODO: Re-enable this when we support upgrading data
                              # calicoctl_version="v1.0.2")
 
             # Autodetect the IP addresses - this should ensure the subnet is
@@ -97,7 +97,7 @@ class TestIPIP(TestBase):
             # Turn on IPIP with a v1.0.2 calicoctl and check that the
             # IPIP tunnel is being used.
             self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Always",)
-                             # comment this out for now because we don't support upgrading data yet
+                             # TODO: Re-enable this when we support upgrading data
                              # calicoctl_version="v1.0.2")
             self.assert_ipip_routing(host1, workload_host1, workload_host2,
                                      True)
@@ -197,8 +197,8 @@ class TestIPIP(TestBase):
         # nat_outgoing could be True, False or not specified (defaults to False)
         if nat_outgoing is not None:
             testdata['spec']['natOutgoing'] = nat_outgoing
-        host.writefile("testfile.yaml", yaml.dump(testdata))
-        host.calicoctl("%s -f testfile.yaml" % action, version=calicoctl_version)
+        host.writejson("testfile", testdata)
+        host.calicoctl("%s -f testfile" % action, version=calicoctl_version)
 
     def assert_tunl_ip(self, host, ip_network, expect=True):
         """
@@ -307,6 +307,7 @@ class TestIPIP(TestBase):
         return int(match.group(1))
 
     #@parameterized.expand([
+    #    TODO: Re-enable tests after the ip monitor failures are figured out
     #    (False,),
     #    (True,),
     #    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
@@ -364,8 +365,6 @@ class TestIPIP(TestBase):
             self._test_gce_int(with_ipip, 'bird', host1, host2, rrc)
 
     def _test_gce_int(self, with_ipip, backend, host1, host2, rrc):
-
-        clear_bgp_peers(host1)
 
         host1.start_calico_node("--backend={0}".format(backend))
         host2.start_calico_node("--backend={0}".format(backend))

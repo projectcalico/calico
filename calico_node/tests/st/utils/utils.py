@@ -20,6 +20,7 @@ import socket
 import sys
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
+import tempfile
 from time import sleep
 
 import termios
@@ -250,8 +251,9 @@ def update_bgp_config(host, nodeMesh=None, asNum=None):
     if asNum is not None:
         bgpcfg['items'][0]['spec']['asNumber'] = asNum
 
-    host.writefile("bgpconfig.yaml", yaml.dump(bgpcfg))
-    host.calicoctl("apply -f bgpconfig.yaml")
+    host.writejson("bgpconfig", bgpcfg)
+    host.calicoctl("apply -f bgpconfig")
+    host.execute("rm -f bgpconfig")
 
 @debug_failures
 def get_bgp_spec(host):

@@ -556,8 +556,25 @@ class DockerHost(object):
         :param subnet: The subnet IP pool to assign IPs from.
         :return: A DockerNetwork object.
         """
-        nw = DockerNetwork(self, name, driver=driver, ipam_driver=ipam_driver,
-                           subnet=subnet)
+        class DummyNetwork(object):
+            def __init__(self, name):
+                self.name = name 
+                self.network = name
+                self.deleted = False
+            def delete(self, host=None):
+                pass
+            def disconnect(self, host, container):
+                host.execute("docker network disconnect %s %s" %
+                     (self.name, str(container)))
+            def __str__(self):
+                return self.name
+
+        nw = DummyNetwork(name)
+
+        if self.networking == NETWORKING_LIBNETWORK:
+            nw = DockerNetwork(self, name, driver=driver,
+                               ipam_driver=ipam_driver,
+                               subnet=subnet)
 
         # Store the network so that we can attempt to remove it when this host
         # or another host exits.
