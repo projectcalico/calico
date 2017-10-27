@@ -40,20 +40,6 @@ const (
 // The *datastores* parameter is a bit-wise OR of the required datastore drivers
 // that will be tested.
 func E2eDatastoreDescribe(description string, datastores DatastoreType, body func(config apiconfig.CalicoAPIConfig)) bool {
-	if datastores&DatastoreEtcdV2 != 0 {
-		Describe(fmt.Sprintf("%s (etcdv2 backend)", description),
-			func() {
-				body(apiconfig.CalicoAPIConfig{
-					Spec: apiconfig.CalicoAPIConfigSpec{
-						DatastoreType: apiconfig.EtcdV3,
-						EtcdConfig: apiconfig.EtcdConfig{
-							EtcdEndpoints: "http://127.0.0.1:2379",
-						},
-					},
-				})
-			})
-	}
-
 	if datastores&DatastoreEtcdV3 != 0 {
 		Describe(fmt.Sprintf("%s (etcdv3 backend)", description),
 			func() {
