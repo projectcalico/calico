@@ -12,20 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def create_bgp_peer(host, scope, ip, asNum):
+
+def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     assert scope in ('node', 'global')
-    node = host.get_hostname() if scope == 'node' else ""
     testdata = {
-        'apiVersion': 'v1',
-        'kind': 'bgpPeer',
-        'metadata': {
-            'scope': scope,
-            'node': node,
-            'peerIP': ip,
-        },
+        'apiVersion': 'projectcalico.org/v2',
+        'kind': 'BGPPeer',
         'spec': {
-            'asNumber': asNum
+            'peerIP': ip,
+            'asNumber': asNum,
         }
     }
+    # Add optional params
+    # If node is not specified, scope is global.
+    if scope == "node":
+        testdata['spec']['node'] = host.get_hostname()
+    if metadata is not None:
+        testdata['metadata'] = metadata
+
     host.writefile("testfile.yaml", testdata)
     host.calicoctl("create -f testfile.yaml")
