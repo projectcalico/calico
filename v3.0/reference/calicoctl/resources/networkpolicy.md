@@ -7,7 +7,9 @@ A network policy resource (`NetworkPolicy`) represents an ordered set of rules w
 to a collection of endpoints that match a [label selector](#selector).
 
 NetworkPolicy is a namespaced resource. NetworkPolicy in a specific namespace
-only applies to [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) in that namespace.
+only applies to [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
+in that namespace. Two resources are in the same namespace if the namespace
+value is set the same on both.
 See [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) for non-namespaced Network Policy.
 
 NetworkPolicy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and

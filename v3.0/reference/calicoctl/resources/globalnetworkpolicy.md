@@ -7,6 +7,9 @@ A global network policy resource (`GlobalNetworkPolicy`) represents an ordered s
 to a collection of endpoints that match a [label selector](#selector).
 
 GlobalNetworkPolicy is not a namespaced resource. GlobalNetworkPolicy applies to [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) in all namespaces, and to [HostEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
+Select a namespace in a GlobalNetworkPolicy in the standard selector by using
+`projectcalico.org/namespace` as the label name and a namespace name as the
+value to compare against, e.g., `projectcalico.org/namespace == "default"`.
 See [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for namespaced Network Policy.
 
 GlobalNetworkPolicy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
