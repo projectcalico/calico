@@ -33,7 +33,7 @@ release is announced.
         - title: v2.X.0-rc1
           ... etc ...
      ```
-1. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
+1. Add a section in `_config.yml` so that `page.version` will be set correctly in the new subdirectory:
     ```
        -
          scope:

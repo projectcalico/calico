@@ -15,5 +15,4 @@ a number of cloud services.
   - [Calico with DC/OS](mesos/installation/dc-os)
 - [Calico with Docker](docker)
 - [Calico with OpenStack](openstack)
-- [Calico with rkt](rkt)
 - [Host protection](bare-metal/bare-metal)

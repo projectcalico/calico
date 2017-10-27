@@ -205,9 +205,11 @@ class TestFelixOnGateway(TestBase):
         # Add allow policy for host, make sure it applies to forward and has order lower than
         # empty forward.
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'host-out'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'host-out',
+            },
             'spec': {
                 'order': 100,
                 'selector': 'nodeEth == "host"',
@@ -244,9 +246,11 @@ class TestFelixOnGateway(TestBase):
 
         # Add empty policy forward, but only to host endpoint.
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'empty-forward'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'empty-forward',
+            },
             'spec': {
                 'order': 500,
                 'selector': 'has(nodeEth)',
@@ -496,9 +500,11 @@ class TestFelixOnGateway(TestBase):
 
     def add_workload_ingress(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'workload-ingress'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'workload-ingress',
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -517,9 +523,11 @@ class TestFelixOnGateway(TestBase):
 
     def add_workload_egress(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'workload-egress'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'workload-egress',
+            },
             'spec': {
                 'order': order,
                 'ingress': [],
@@ -528,7 +536,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'destination': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -539,9 +547,11 @@ class TestFelixOnGateway(TestBase):
 
     def add_prednat_ingress(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'prednat'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'prednat',
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -561,13 +571,15 @@ class TestFelixOnGateway(TestBase):
         })
 
     def del_prednat_ingress(self):
-        self.delete_all("pol prednat")
+        self.delete_all("globalnetworkpolicy prednat")
 
     def add_untrack_gw_int(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'untrack-ingress'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'untrack-ingress',
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -595,13 +607,15 @@ class TestFelixOnGateway(TestBase):
         })
 
     def del_untrack_gw_int(self):
-        self.delete_all("pol untrack-ingress")
+        self.delete_all("globalnetworkpolicy untrack-ingress")
 
     def add_untrack_gw_ext(self, order, action):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'untrack-egress'},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'untrack-egress',
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -609,7 +623,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'source': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -619,7 +633,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'destination': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -631,13 +645,15 @@ class TestFelixOnGateway(TestBase):
         })
 
     def del_untrack_gw_ext(self):
-        self.delete_all("pol untrack-egress")
+        self.delete_all("globalnetworkpolicy untrack-egress")
 
     def add_ingress_policy(self, order, action, forward):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'port80-int-%s' % str(forward)},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'port80-int-%s' % str(forward),
+            },
             'spec': {
                 'order': order,
                 'ingress': [
@@ -657,9 +673,11 @@ class TestFelixOnGateway(TestBase):
 
     def add_egress_policy(self, order, action, forward):
         self.add_policy({
-            'apiVersion': 'v1',
-            'kind': 'policy',
-            'metadata': {'name': 'port80-ext-%s' % str(forward)},
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {
+                'name': 'port80-ext-%s' % str(forward),
+             },
             'spec': {
                 'order': order,
                 'ingress': [],
@@ -668,7 +686,7 @@ class TestFelixOnGateway(TestBase):
                         'protocol': 'tcp',
                         'destination': {
                             'ports': [80],
-                            'net': self.ext_server_ip + "/32",
+                            'nets': [self.ext_server_ip + "/32"],
                         },
                         'action': action
                     },
@@ -683,14 +701,14 @@ class TestFelixOnGateway(TestBase):
 
     def add_gateway_internal_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'v1',
-            'kind': 'hostEndpoint',
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'gw-int',
-                'node': self.gateway_hostname,
                 'labels': {'nodeEth': 'gateway-int'}
             },
             'spec': {
+                'node': self.gateway_hostname,
                 'interfaceName': 'eth0'
             }
         }
@@ -698,14 +716,14 @@ class TestFelixOnGateway(TestBase):
 
     def add_gateway_external_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'v1',
-            'kind': 'hostEndpoint',
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'gw-ext',
-                'node': self.gateway_hostname,
                 'labels': {'nodeEth': 'gateway-ext'}
             },
             'spec': {
+                'node': self.gateway_hostname,
                 'interfaceName': 'eth1'
             }
         }
@@ -713,14 +731,14 @@ class TestFelixOnGateway(TestBase):
 
     def add_host_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'v1',
-            'kind': 'hostEndpoint',
+            'apiVersion': 'projectcalico.org/v2',
+            'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'host-int',
-                'node': self.host_hostname,
                 'labels': {'nodeEth': 'host'}
             },
             'spec': {
+                'node': self.host_hostname,
                 'interfaceName': 'eth0',
                 'expectedIPs': [str(self.host.ip)],
             }
@@ -812,7 +830,7 @@ class TestFelixOnGateway(TestBase):
             self.fail("Internal host can curl external server IP: %s" % self.ext_server_ip)
 
     def remove_pol_and_endpoints(self):
-        self.delete_all("pol")
+        self.delete_all("globalnetworkpolicy")
         self.delete_all("hostEndpoint")
         # Wait for felix to remove the policy and allow traffic through the gateway.
         retry_until_success(self.assert_host_can_curl_ext)
@@ -822,7 +840,11 @@ class TestFelixOnGateway(TestBase):
         objects = yaml.load(self.hosts[0].calicoctl("get %s -o yaml" % resource))
         # and delete them (if there are any)
         if len(objects) > 0:
-            self._delete_data(objects, self.hosts[0])
+            _log.info("objects: %s", objects)
+            if 'items' in objects and len(objects['items']) == 0:
+                pass
+            else:
+                self._delete_data(objects, self.hosts[0])
 
     def _delete_data(self, data, host):
         _log.debug("Deleting data with calicoctl: %s", data)

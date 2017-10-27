@@ -8,6 +8,12 @@ connecting a Calico networked container or VM to its host.
 Each endpoint may specify a set of labels and list of profiles that Calico will use
 to apply policy to the interface.
 
+A workload endpoint is a namespaced resource, that means a
+[NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
+in a specific namespace only applies to the WorkloadEndpoint in that namespace.
+Two resources are in the same namespace if the namespace value is set the same
+on both.
+
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
 

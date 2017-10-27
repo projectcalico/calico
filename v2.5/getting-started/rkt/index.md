@@ -1,5 +1,6 @@
 ---
 title: Calico with rkt
+no-canonical: true
 ---
 
 Calico supports networking and network policy in a pure rkt container environment.
