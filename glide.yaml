@@ -29,7 +29,7 @@ import:
   - tools/cache
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: master
+  version: v2.0.0-alpha1
 - package: github.com/projectcalico/felix
   subpackages:
   - fv
