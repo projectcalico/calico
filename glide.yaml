@@ -26,7 +26,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 3265689af5de15e20427ff12c5dd4a9d1d311e16
+  version: dae320cd652b66d908eb5d59209717e3c3514c26
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -44,7 +44,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 0776289a88221cbecdb29f89ca1aa19fd326f9fd
+  version: 07780931f7de3af4f94666965871e8b001df6a45
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
