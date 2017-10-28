@@ -247,8 +247,8 @@ class MultiHostMainline(TestBase):
                                  fail_list=self.n1_workloads[2:])
 
     def test_rules_selector(self):
-        self.new_profiles[0]['spec']['labels']['net'] = 'n1'
-        self.new_profiles[1]['spec']['labels']['net'] = 'n2'
+        self.new_profiles[0]['spec']['labelsToApply']['net'] = 'n1'
+        self.new_profiles[1]['spec']['labelsToApply']['net'] = 'n2'
         rule = {'action': 'allow',
                 'source':
                     {'selector': 'net=="n2"'}}
