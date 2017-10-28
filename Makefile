@@ -66,6 +66,9 @@ vendor vendor/.up-to-date: glide.lock
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
+container: bin/confd
+	docker build -t calico/confd .
+
 bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
 	$(DOCKER_GO_BUILD) \
