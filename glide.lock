@@ -1,5 +1,5 @@
-hash: 7dad9ea8f8f1377cbfb44a9e4ce6aae564bd1afdc8abec5cb06dc0d6b838d67d
-updated: 2017-10-24T18:11:10.621788095-07:00
+hash: 38d109d677773ec8075751a302de0933fd6ac882943383fd9f21dc42ea29d2d4
+updated: 2017-10-28T12:48:21.359520943Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -43,11 +43,11 @@ imports:
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
 - name: github.com/gavv/monotime
-  version: 47d58efa69556a936a3c15eb2ed42706d968ab01
+  version: 6f8212e8d10df7383609d3c377ca08884d8f3ec0
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 5b3e00af70a9484542169a976dcab8d03e601a17
+  version: f280b3ba517bf5fc98922624f21fb0e7a92adaec
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 3265689af5de15e20427ff12c5dd4a9d1d311e16
+  version: dae320cd652b66d908eb5d59209717e3c3514c26
   subpackages:
   - lib
   - lib/apiconfig
@@ -231,7 +231,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/Workiva/go-datastructures
-  version: e740680cc77dafd9615b25918b39f4a0ef5ab955
+  version: e47d01bc9eaf75e75e0f250e221dcb7533c7a1b8
   subpackages:
   - list
   - trie/ctrie
@@ -292,7 +292,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: a2e0dc829727a4f957a7428b1f322805cfc1f362
   subpackages:
   - internal
   - internal/app_identity
@@ -324,7 +324,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 6c6dac0277229b9e9578c5ca3f74a4345d35cdc2
+  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
