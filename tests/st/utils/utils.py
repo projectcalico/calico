@@ -456,3 +456,18 @@ def handle_failure(fn):
             raise
 
     return wrapped
+
+
+def dump_etcdv3():
+    etcd_container_name = "calico-etcd"
+    tls_vars = ""
+    if ETCD_SCHEME == "https":
+        # Etcd is running with SSL/TLS, require key/certificates
+        etcd_container_name = "calico-etcd-ssl"
+        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+
+    log_and_run("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
+                 "ETCDCTL_API=3 etcdctl get --prefix /calico" +
+                 "'")
