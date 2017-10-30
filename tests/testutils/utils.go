@@ -30,6 +30,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 
+	"github.com/projectcalico/libcalico-go/lib/backend"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -77,6 +79,16 @@ func GetCalicoClient(etcdIP string) client.Interface {
 
 	Expect(err).NotTo(HaveOccurred())
 	return client
+}
+
+func GetBackendClient(etcdIP string) api.Client {
+	cfg := apiconfig.NewCalicoAPIConfig()
+	cfg.Spec.DatastoreType = apiconfig.EtcdV3
+	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
+	be, err := backend.NewClient(*cfg)
+
+	Expect(err).NotTo(HaveOccurred())
+	return be
 }
 
 // GetK8sClient gets a kubernetes client.
