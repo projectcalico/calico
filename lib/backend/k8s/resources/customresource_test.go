@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("BGP Peer conversion methods", func() {
+var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", func() {
 	// Create an empty client since we are only testing conversion functions.
 	client := NewBGPPeerClient(nil, nil).(*customK8sResourceClient)
 
@@ -55,6 +55,7 @@ var _ = Describe("BGP Peer conversion methods", func() {
 	// Compatible set of KVPair and Kubernetes Resource.
 	value1 := apiv2.NewBGPPeer()
 	value1.ObjectMeta.Name = name1
+	value1.ObjectMeta.ResourceVersion = "rv"
 	value1.Spec = apiv2.BGPPeerSpec{
 		PeerIP:   peerIP1.String(),
 		ASNumber: 1212,
@@ -107,14 +108,27 @@ var _ = Describe("BGP Peer conversion methods", func() {
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
 		Expect(r).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
 		Expect(r.(*apiv2.BGPPeer).Spec).To(Equal(res1.Spec))
+
+		// Make sure to clean up the annotations on the resource
+		err = ConvertK8sResourceToCalicoResource(r)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
+		// Make sure it returns the same resource if a resource is given without Calico metadata annotations.
 		kvp, err := client.convertResourceToKVPair(res1)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvp.Value).To(Equal(res1))
+
+		// Convert the values into the annotations.
+		resConverted, err := ConvertCalicoResourceToK8sResource(res1)
+		Expect(err).NotTo(HaveOccurred())
+
+		kvp, err = client.convertResourceToKVPair(resConverted)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value.(*apiv2.BGPPeer)).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
+		Expect(kvp.Value).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
 	})
 })

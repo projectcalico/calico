@@ -85,6 +85,7 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err

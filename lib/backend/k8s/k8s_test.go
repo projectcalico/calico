@@ -1271,8 +1271,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			updFC, err = c.Create(ctx, fc)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
+			// Set the ResourceVersion (since it is auto populated by the Kubernetes datastore) to make it easier to compare objects.
+			Expect(fc.Value.(*capiv2.FelixConfiguration).GetObjectMeta().GetResourceVersion()).To(Equal(""))
+			fc.Value.(*capiv2.FelixConfiguration).GetObjectMeta().SetResourceVersion(updFC.Value.(*capiv2.FelixConfiguration).GetObjectMeta().GetResourceVersion())
 			Expect(updFC.Value.(*capiv2.FelixConfiguration)).To(Equal(fc.Value.(*capiv2.FelixConfiguration)))
 			Expect(updFC.Revision).NotTo(BeNil())
+			// Unset the ResourceVersion for the original resource since we modified it just for the sake of comparing in the tests.
+			fc.Value.(*capiv2.FelixConfiguration).GetObjectMeta().SetResourceVersion("")
 		})
 
 		By("getting an existing object", func() {

@@ -103,15 +103,15 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 			By("Updating the WorkloadEndpoint before it is created")
 			_, outError := c.WorkloadEndpoints().Update(ctx, &apiv2.WorkloadEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-workload-endpoint"},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
 
-			By("Attempting to creating a new WorkloadEndpoint with name1/spec1_1 and a non-empty ResourceVersion")
+			By("Attempting to create a new WorkloadEndpoint with name1/spec1_1 and a non-empty ResourceVersion")
 			_, outError = c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345", CreationTimestamp: metav1.Now(), UID: "test-fail-workload-endpoint"},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -193,6 +193,24 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			testutils.ExpectResource(res1, apiv2.KindWorkloadEndpoint, namespace1, name1, spec1_2)
 			Expect(res1.Labels[apiv2.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
 			Expect(res1.Labels[apiv2.LabelNamespace]).To(Equal(res1.Namespace))
+
+			By("Attempting to update the WorkloadEndpoint without a Creation Timestamp")
+			res, outError = c.WorkloadEndpoints().Update(ctx, &apiv2.WorkloadEndpoint{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", UID: "test-fail-workload-endpoint"},
+				Spec:       spec1_1,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(res).To(BeNil())
+			Expect(outError.Error()).To(Equal("error with field Metadata.CreationTimestamp = '0001-01-01 00:00:00 +0000 UTC' (field must be set for an Update request)"))
+
+			By("Attempting to update the WorkloadEndpoint without a UID")
+			res, outError = c.WorkloadEndpoints().Update(ctx, &apiv2.WorkloadEndpoint{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now()},
+				Spec:       spec1_1,
+			}, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(res).To(BeNil())
+			Expect(outError.Error()).To(Equal("error with field Metadata.UID = '' (field must be set for an Update request)"))
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
@@ -289,8 +307,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
 		},
 
-		// Test 1: Pass two fully populated PolicySpecs and expect the series of operations to succeed.
-		Entry("Two fully populated PolicySpecs",
+		// Test 1: Pass two fully populated WorkloadEndpointSpecs and expect the series of operations to succeed.
+		Entry("Two fully populated WorkloadEndpointSpecs",
 			namespace1, namespace2,
 			name1, name2,
 			spec1_1, spec1_2, spec2_1,

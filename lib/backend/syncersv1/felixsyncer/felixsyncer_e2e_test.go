@@ -116,6 +116,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					IPv6Address: "aa:bb::cc/120",
 				}
 				node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
 			} else {
 				// For non-Kubernetes, add a new node with valid BGP configuration.
 				By("Creating a node with an IP address")

@@ -27,6 +27,7 @@ import (
 const (
 	labelsAnnotation      = "projectcalico.org/labels"
 	annotationsAnnotation = "projectcalico.org/annotations"
+	metadataAnnotation    = "projectcalico.org/metadata"
 )
 
 // Interface that all Kubernetes and Calico resources implement.
@@ -78,6 +79,7 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 	kom := k8sRes.GetObjectMeta()
 	com.SetResourceVersion(kom.GetResourceVersion())
 	com.SetCreationTimestamp(kom.GetCreationTimestamp())
+	com.SetUID(kom.GetUID())
 	a := kom.GetAnnotations()
 	if a == nil {
 		return
@@ -99,4 +101,88 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 			com.SetAnnotations(annotations)
 		}
 	}
+}
+
+// Store Calico Metadata in the in the k8s resource annotations for CRD backed resources.
+// This should store all Metadata except for those stored in Annotations and Labels and
+// store them in annotations.
+func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
+	rom := resIn.GetObjectMeta()
+
+	// Make sure to remove data that is passed to Kubernetes so it is not duplicated in
+	// the annotations.
+	romCopy := &metav1.ObjectMeta{}
+	rom.(*metav1.ObjectMeta).DeepCopyInto(romCopy)
+	romCopy.Name = ""
+	romCopy.Namespace = ""
+	romCopy.ResourceVersion = ""
+	romCopy.Labels = nil
+	romCopy.Annotations = nil
+
+	// Marshal the data and store the json representation in the annotations.
+	metadataBytes, err := json.Marshal(romCopy)
+	if err != nil {
+		return nil, err
+	}
+	annotations := rom.GetAnnotations()
+	if len(annotations) == 0 {
+		annotations = make(map[string]string)
+	}
+	annotations[metadataAnnotation] = string(metadataBytes)
+
+	// Make sure to clear out all of the Calico Metadata out of the ObjectMeta except for
+	// Name, Namespace, ResourceVersion, Labels, and Annotations. Annotations is already
+	// copied so it can be set separately.
+	meta := &metav1.ObjectMeta{}
+	meta.Name = rom.GetName()
+	meta.Namespace = rom.GetNamespace()
+	meta.ResourceVersion = rom.GetResourceVersion()
+	meta.Labels = rom.GetLabels()
+
+	resOut := resIn.DeepCopyObject().(Resource)
+	romOut := resOut.GetObjectMeta()
+	meta.DeepCopyInto(romOut.(*metav1.ObjectMeta))
+	romOut.SetAnnotations(annotations)
+
+	return resOut, nil
+}
+
+// Retrieve all of the Calico Metadata from the k8s resource annotations for CRD backed
+// resources. This should remove the relevant Calico Metadata annotation when it has finished.
+func ConvertK8sResourceToCalicoResource(res Resource) error {
+	rom := res.GetObjectMeta()
+	annotations := rom.GetAnnotations()
+	if len(annotations) == 0 {
+		// Make no changes if there are no annotations to read Calico Metadata out of.
+		return nil
+	}
+	if _, ok := annotations[metadataAnnotation]; !ok {
+		// No changes if there are no annotations stored on the Resource.
+		return nil
+	}
+
+	meta := &metav1.ObjectMeta{}
+	err := json.Unmarshal([]byte(annotations[metadataAnnotation]), meta)
+	if err != nil {
+		return err
+	}
+
+	// Clear out the annotations
+	delete(annotations, metadataAnnotation)
+	if len(annotations) == 0 {
+		annotations = nil
+	}
+
+	// Manually write in the data not stored in the annotations: Name, Namespace, ResourceVersion,
+	// Labels, and Annotations so that they do not get overwritten.
+	meta.Name = rom.GetName()
+	meta.Namespace = rom.GetNamespace()
+	meta.ResourceVersion = rom.GetResourceVersion()
+	meta.Labels = rom.GetLabels()
+	meta.Annotations = annotations
+
+	// Overwrite the K8s metadata with the Calico metadata.
+	meta.DeepCopyInto(rom.(*metav1.ObjectMeta))
+
+	return nil
 }

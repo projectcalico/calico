@@ -16,6 +16,7 @@ package clientv2
 
 import (
 	"context"
+	"strings"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -41,10 +42,19 @@ type globalnetworkpolicies struct {
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
 	defaultPolicyTypesField(&res.Spec)
+
+	// Properly prefix the name
+	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
+
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
+
+	// Remove the prefix out of the returned policy name.
+	res.GetObjectMeta().SetName(convertPolicyNameFromStorage(res.GetObjectMeta().GetName()))
 	return nil, err
 }
 
@@ -52,17 +62,28 @@ func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetw
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
 	defaultPolicyTypesField(&res.Spec)
+
+	// Properly prefix the name
+	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
+
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
+
+	// Remove the prefix out of the returned policy name.
+	res.GetObjectMeta().SetName(convertPolicyNameFromStorage(res.GetObjectMeta().GetName()))
 	return nil, err
 }
 
 // Delete takes name of the GlobalNetworkPolicy and deletes it. Returns an error if one occurs.
 func (r globalnetworkpolicies) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, name)
+	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, convertPolicyNameForStorage(name))
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
 	return nil, err
@@ -71,8 +92,10 @@ func (r globalnetworkpolicies) Delete(ctx context.Context, name string, opts opt
 // Get takes name of the GlobalNetworkPolicy, and returns the corresponding GlobalNetworkPolicy object,
 // and an error if there is any.
 func (r globalnetworkpolicies) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	out, err := r.client.resources.Get(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, name)
+	out, err := r.client.resources.Get(ctx, opts, apiv2.KindGlobalNetworkPolicy, noNamespace, convertPolicyNameForStorage(name))
 	if out != nil {
+		// Remove the prefix out of the returned policy name.
+		out.GetObjectMeta().SetName(convertPolicyNameFromStorage(out.GetObjectMeta().GetName()))
 		return out.(*apiv2.GlobalNetworkPolicy), err
 	}
 	return nil, err
@@ -84,6 +107,13 @@ func (r globalnetworkpolicies) List(ctx context.Context, opts options.ListOption
 	if err := r.client.resources.List(ctx, opts, apiv2.KindGlobalNetworkPolicy, apiv2.KindGlobalNetworkPolicyList, res); err != nil {
 		return nil, err
 	}
+
+	// Remove the prefix off of each policy name
+	for i, _ := range res.Items {
+		name := res.Items[i].GetObjectMeta().GetName()
+		res.Items[i].GetObjectMeta().SetName(convertPolicyNameFromStorage(name))
+	}
+
 	return res, nil
 }
 
@@ -112,4 +142,21 @@ func defaultPolicyTypesField(spec *apiv2.PolicySpec) {
 			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
 		}
 	}
+}
+
+func convertPolicyNameForStorage(name string) string {
+	// Do nothing on names prefixed with "knp."
+	if strings.HasPrefix(name, "knp.") {
+		return name
+	}
+	return "default." + name
+}
+
+func convertPolicyNameFromStorage(name string) string {
+	// Do nothing on names prefixed with "knp."
+	if strings.HasPrefix(name, "knp.") {
+		return name
+	}
+	parts := strings.SplitN(name, ".", 2)
+	return parts[len(parts)-1]
 }

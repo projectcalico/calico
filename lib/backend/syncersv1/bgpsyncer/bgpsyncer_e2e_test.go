@@ -135,6 +135,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 					IPv6Address: "aa:bb::cc/120",
 				}
 				node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
 
 				// This will add two network entries, and the existing two IP entries will be
 				// updated.

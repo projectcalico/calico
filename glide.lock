@@ -142,7 +142,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: dcabb60a477c2b6f456df65037cb6708210fbb02
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -155,6 +155,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -198,7 +200,7 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -226,7 +228,6 @@ imports:
   version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -351,6 +352,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait
