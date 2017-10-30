@@ -517,8 +517,7 @@ semaphore:
 	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
 	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
 
-release: clean
-	@make -s print-versions
+release: clean print-versions
 	@echo ""
 	@echo "Hit Return to go ahead and create the tag, or Ctrl-C to cancel."
 	@bash -c read
