@@ -174,7 +174,7 @@ equipped with Calico.
 
 **[Secure a simple two-tier application using the Kubernetes `NetworkPolicy` API](tutorials/simple-policy)**
 
-**[Create a policy using more advanced Calico policy features](tutorials/advanced-policy)**
+**[Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](tutorials/advanced-policy)**
 
 **[Create a user interface that shows blocked and allowed connections in real time](tutorials/stars-policy/)**
 
