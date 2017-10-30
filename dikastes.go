@@ -59,16 +59,18 @@ func main() {
 }
 
 func runServer(arguments map[string]interface{}) {
-	lis, err := net.Listen("unix", arguments["--listen"].(string))
+	filePath := arguments["--listen"].(string)
+	lis, err := net.Listen("unix", filePath)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"listen": arguments["--listen"],
+			"listen": filePath,
 			"err":    err,
 		}).Fatal("Unable to listen.")
 	}
 	defer lis.Close()
+	err = os.Chmod(filePath, 0777) // Anyone on system can connect.
 	if err != nil {
-		log.Fatalf("Unable to listen on %v", arguments["--listen"])
+		log.Fatal("Unable to set write permission on socket.")
 	}
 	gs := grpc.NewServer(grpc.Creds(spireauth.NewCredentials()))
 	ds, err := server.NewServer(getConfig(arguments), getNodeName())
