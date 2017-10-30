@@ -42,11 +42,31 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 		BGP: &apiv2.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		},
+		OrchRefs: []apiv2.OrchRef{
+			{
+				Orchestrator: "k8s",
+				NodeName:     "node1",
+			},
+			{
+				Orchestrator: "mesos",
+				NodeName:     "node1",
+			},
+		},
 	}
 	spec2 := apiv2.NodeSpec{
 		BGP: &apiv2.NodeBGPSpec{
 			IPv4Address: "10.20.30.40",
 			IPv6Address: "aa:bb:cc::ff",
+		},
+		OrchRefs: []apiv2.OrchRef{
+			{
+				Orchestrator: "k8s",
+				NodeName:     "node2",
+			},
+			{
+				Orchestrator: "mesos",
+				NodeName:     "node2",
+			},
 		},
 	}
 
