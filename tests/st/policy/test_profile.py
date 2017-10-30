@@ -80,7 +80,7 @@ class MultiHostMainline(TestBase):
 
             super(MultiHostMainline, self).tearDown()
 
-    @skip("Tags are deprecated")
+    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
     def test_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
@@ -94,7 +94,7 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
 
-    @skip("Tags are deprecated")
+    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
     def test_rules_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]

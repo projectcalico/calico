@@ -20,7 +20,6 @@ import socket
 import sys
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
-import tempfile
 from time import sleep
 
 import termios
