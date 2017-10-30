@@ -41,11 +41,10 @@ type globalnetworkpolicies struct {
 // Create takes the representation of a GlobalNetworkPolicy and creates it.  Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	defaultPolicyTypesField(&res.Spec)
+	defaultPolicyTypesField(&res.Spec.PolicySpec)
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
-
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		// Remove the prefix out of the returned policy name.
@@ -61,11 +60,10 @@ func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetw
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	defaultPolicyTypesField(&res.Spec)
+	defaultPolicyTypesField(&res.Spec.PolicySpec)
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
-
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		// Remove the prefix out of the returned policy name.

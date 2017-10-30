@@ -49,7 +49,22 @@ type GlobalNetworkPolicy struct {
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Specification of the Policy.
-	Spec PolicySpec `json:"spec,omitempty"`
+	Spec GlobalNetworkPolicySpec `json:"spec,omitempty"`
+}
+
+type GlobalNetworkPolicySpec struct {
+	// PolicySpec contains the definitions that are common to namespaced policies and global ones.
+	PolicySpec `json:",inline" validation:"dive"`
+
+	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
+	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
+	// this policy are applied before any data plane connection tracking, and packets allowed by
+	// this policy are marked as not to be tracked.
+	DoNotTrack bool `json:"doNotTrack,omitempty"`
+	// PreDNAT indicates to apply the rules in this policy before any DNAT.
+	PreDNAT bool `json:"preDNAT,omitempty"`
+	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
+	ApplyOnForward bool `json:"applyOnForward,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

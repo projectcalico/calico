@@ -58,15 +58,6 @@ type PolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector" validate:"selector"`
-	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
-	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
-	// this policy are applied before any data plane connection tracking, and packets allowed by
-	// this policy are marked as not to be tracked.
-	DoNotTrack bool `json:"doNotTrack,omitempty"`
-	// PreDNAT indicates to apply the rules in this policy before any DNAT.
-	PreDNAT bool `json:"preDNAT,omitempty"`
-	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
-	ApplyOnForward bool `json:"applyOnForward,omitempty"`
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what IngressRules and EgressRules are present in the policy.  The

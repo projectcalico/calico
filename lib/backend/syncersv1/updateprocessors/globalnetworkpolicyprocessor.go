@@ -43,5 +43,16 @@ func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error)
 	if !ok {
 		return nil, errors.New("Value is not a valid GlobalNetworkPolicy resource value")
 	}
-	return convertPolicyV2ToV1Spec(v2res.Spec, "")
+	return convertGlobalPolicyV2ToV1Spec(v2res.Spec)
+}
+
+func convertGlobalPolicyV2ToV1Spec(spec apiv2.GlobalNetworkPolicySpec) (*model.Policy, error) {
+	v1value, err := convertPolicyV2ToV1Spec(&spec.PolicySpec, "")
+	if err != nil {
+		return nil, err
+	}
+	v1value.DoNotTrack = spec.DoNotTrack
+	v1value.PreDNAT = spec.PreDNAT
+	v1value.ApplyOnForward = spec.ApplyOnForward
+	return v1value, nil
 }

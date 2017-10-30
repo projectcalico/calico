@@ -296,12 +296,14 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 		CreationTimestamp: np.CreationTimestamp,
 		UID:               np.UID,
 	}
-	policy.Spec = apiv2.PolicySpec{
-		Order:        &order,
-		Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
-		IngressRules: ingressRules,
-		EgressRules:  egressRules,
-		Types:        types,
+	policy.Spec = apiv2.NetworkPolicySpec{
+		PolicySpec: apiv2.PolicySpec{
+			Order:        &order,
+			Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
+			IngressRules: ingressRules,
+			EgressRules:  egressRules,
+			Types:        types,
+		},
 	}
 
 	// Build and return the KVPair.

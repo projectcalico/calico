@@ -211,7 +211,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 			ErroredFields: []cerrors.ErroredField{{
 				Name:   "IPPool.Spec.CIDR",
 				Reason: "IPPool CIDR must be a valid subnet",
-				Value: new.Spec.CIDR,
+				Value:  new.Spec.CIDR,
 			}},
 		}
 	}
@@ -226,7 +226,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR cannot be modified",
-			Value: new.Spec.CIDR,
+			Value:  new.Spec.CIDR,
 		})
 	}
 
@@ -253,7 +253,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 				errFields = append(errFields, cerrors.ErroredField{
 					Name:   "IPPool.Spec.CIDR",
 					Reason: fmt.Sprintf("IPPool(%s) CIDR overlaps with IPPool(%s) CIDR %s", new.Name, otherPool.Name, otherPool.Spec.CIDR),
-					Value: new.Spec.CIDR,
+					Value:  new.Spec.CIDR,
 				})
 			}
 		}
@@ -269,7 +269,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.IPIPMode",
 			Reason: "IPIP is not supported on an IPv6 IP pool",
-			Value: new.Spec.IPIPMode,
+			Value:  new.Spec.IPIPMode,
 		})
 	}
 
@@ -283,13 +283,13 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 				errFields = append(errFields, cerrors.ErroredField{
 					Name:   "IPPool.Spec.CIDR",
 					Reason: "IPv4 pool size is too small (min /26) for use with Calico IPAM",
-					Value: new.Spec.CIDR,
+					Value:  new.Spec.CIDR,
 				})
 			} else {
 				errFields = append(errFields, cerrors.ErroredField{
 					Name:   "IPPool.Spec.CIDR",
 					Reason: "IPv6 pool size is too small (min /122) for use with Calico IPAM",
-					Value: new.Spec.CIDR,
+					Value:  new.Spec.CIDR,
 				})
 			}
 		}
@@ -301,7 +301,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR is not strictly masked",
-			Value: new.Spec.CIDR,
+			Value:  new.Spec.CIDR,
 		})
 	}
 
@@ -321,7 +321,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR overlaps with IPv4 Link Local range 169.254.0.0/16",
-			Value: new.Spec.CIDR,
+			Value:  new.Spec.CIDR,
 		})
 	}
 
@@ -329,7 +329,7 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv2.IPP
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR overlaps with IPv6 Link Local range fe80::/10",
-			Value: new.Spec.CIDR,
+			Value:  new.Spec.CIDR,
 		})
 	}
 

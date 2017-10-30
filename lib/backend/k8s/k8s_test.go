@@ -539,7 +539,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp1Name,
 				},
-				Spec: calicoAllowPolicyModelSpec,
+				Spec: capiv2.GlobalNetworkPolicySpec{
+					PolicySpec: calicoAllowPolicyModelSpec,
+				},
 			},
 		}
 
@@ -553,7 +555,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp1Name,
 				},
-				Spec: calicoDisallowPolicyModelSpec,
+				Spec: capiv2.GlobalNetworkPolicySpec{
+					PolicySpec: calicoDisallowPolicyModelSpec,
+				},
 			},
 		}
 
@@ -569,7 +573,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp2Name,
 				},
-				Spec: calicoAllowPolicyModelSpec,
+				Spec: capiv2.GlobalNetworkPolicySpec{
+					PolicySpec: calicoAllowPolicyModelSpec,
+				},
 			},
 		}
 
@@ -583,7 +589,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp2Name,
 				},
-				Spec: calicoDisallowPolicyModelSpec,
+				Spec: capiv2.GlobalNetworkPolicySpec{
+					PolicySpec: calicoDisallowPolicyModelSpec,
+				},
 			},
 		}
 

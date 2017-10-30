@@ -30,7 +30,11 @@ type NetworkPolicy struct {
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Specification of the Policy.
-	Spec PolicySpec `json:"spec,omitempty"`
+	Spec NetworkPolicySpec `json:"spec,omitempty"`
+}
+
+type NetworkPolicySpec struct {
+	PolicySpec `json:",inline" validation:"dive"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
