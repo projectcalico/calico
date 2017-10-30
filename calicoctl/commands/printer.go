@@ -88,6 +88,10 @@ type resourcePrinterTable struct {
 	// Wide format.  When headings have not been explicitly specified, this is used to
 	// determine whether to the resource-specific default wide or narrow headings.
 	wide bool
+
+	// Namespace included. When a resource being printed is namespaced, this is used
+	// to determine if the namespace column should be printed or not.
+	printNamespace bool
 }
 
 func (r resourcePrinterTable) print(client client.Interface, resources []runtime.Object) error {
@@ -104,7 +108,7 @@ func (r resourcePrinterTable) print(client client.Interface, resources []runtime
 		}
 
 		// Look up the template string for the specific resource type.
-		tpls, err := rm.GetTableTemplate(headings)
+		tpls, err := rm.GetTableTemplate(headings, r.printNamespace)
 		if err != nil {
 			return err
 		}
