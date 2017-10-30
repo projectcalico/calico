@@ -1,5 +1,5 @@
-hash: ac7d1c7fd94de58edd7555482dbcceeef8ccff99e071d167738c6ab6b9d4eb4c
-updated: 2017-10-25T17:45:06.388382999-07:00
+hash: 395c008935d703953d44877159466a01a92b2404b9aaa35d82ffd55154449472
+updated: 2017-10-28T16:34:15.012157554-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -150,7 +150,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: efe4c982e79f82950179e8122bf95701ea7c6373
+  version: dae320cd652b66d908eb5d59209717e3c3514c26
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -278,7 +278,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 6c6dac0277229b9e9578c5ca3f74a4345d35cdc2
+  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
