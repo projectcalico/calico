@@ -56,12 +56,22 @@ endif
 	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION)
 	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):latest
 
-	@echo "Now push the tag and images. Then create a release on Github and attach the dist/calico and dist/calico-ipam binaries"
-	@echo "git push origin $(VERSION)"
-	@echo "docker push calico/cni:$(VERSION)"
-	@echo "docker push quay.io/calico/cni:$(VERSION)"
-	@echo "docker push calico/cni:latest"
-	@echo "docker push quay.io/calico/cni:latest"
+	@echo ""
+	@echo "Push the git tag."
+	@echo ""
+	@echo "  git push origin $(VERSION)"
+	@echo ""
+	@echo "Then create a release on Github and attach the dist/calico and dist/calico-ipam binaries"
+	@echo ""
+	@echo "Push the versioned release images."
+	@echo ""
+	@echo "  docker push calico/cni:$(VERSION)"
+	@echo "  docker push quay.io/calico/cni:$(VERSION)"
+	@echo ""
+	@echo "If this is a stable release, push the latest images as well."
+	@echo ""
+	@echo "  docker push calico/cni:latest"
+	@echo "  docker push quay.io/calico/cni:latest"
 
 
 # To update upstream dependencies, delete the glide.lock file first.
