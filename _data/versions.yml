@@ -1461,9 +1461,6 @@ v3.0:
     calico/kube-controllers:
       version: v2.0.0-alpha1-rc1
       url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0-alpha1-rc1
-    confd:
-      version: v1.0.0-alpha1-rc4
-      url: https://github.com/projectcalico/confd/releases/tag/v1.0.0-alpha1-rc4
     calico-bird:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
