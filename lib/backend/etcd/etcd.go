@@ -22,7 +22,7 @@ import (
 
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -46,7 +46,7 @@ type EtcdClient struct {
 	etcdKeysAPI etcd.KeysAPI
 }
 
-func NewEtcdClient(config *apiconfig.EtcdConfig) (*EtcdClient, error) {
+func NewEtcdClient(config *v1.EtcdConfig) (*EtcdClient, error) {
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
 	etcdLocation := []string{}
