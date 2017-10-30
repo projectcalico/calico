@@ -22,7 +22,8 @@ from functools import partial
 from subprocess import CalledProcessError, Popen, PIPE
 
 from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
-from network import DockerNetwork, global_setting, NETWORKING_CNI, NETWORKING_LIBNETWORK
+from network import DockerNetwork, DummyNetwork, global_setting, \
+        NETWORKING_CNI, NETWORKING_LIBNETWORK
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.exceptions import CommandExecError
 from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
@@ -556,18 +557,6 @@ class DockerHost(object):
         :param subnet: The subnet IP pool to assign IPs from.
         :return: A DockerNetwork object.
         """
-        class DummyNetwork(object):
-            def __init__(self, name):
-                self.name = name 
-                self.network = name
-                self.deleted = False
-            def delete(self, host=None):
-                pass
-            def disconnect(self, host, container):
-                host.execute("docker network disconnect %s %s" %
-                     (self.name, str(container)))
-            def __str__(self):
-                return self.name
 
         nw = DummyNetwork(name)
 

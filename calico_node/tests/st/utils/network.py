@@ -35,6 +35,19 @@ def global_setting():
     return global_networking
 
 
+class DummyNetwork(object):
+    def __init__(self, name):
+        self.name = name 
+        self.network = name
+        self.deleted = False
+    def delete(self, host=None):
+        pass
+    def disconnect(self, host, container):
+        pass
+    def __str__(self):
+        return self.name
+
+
 class DockerNetwork(object):
     """
     A Docker network created by libnetwork.
