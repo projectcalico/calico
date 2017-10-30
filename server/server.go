@@ -10,10 +10,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type (
@@ -32,11 +33,7 @@ func NewServer(config api.CalicoAPIConfig, nodeName string) (*auth_server, error
 	}
 
 	// Temporary hack for direct access to K8s API.
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-	clientset, err := kubernetes.NewForConfig(cfg)
+	clientset, err := NewKubeClient(config)
 	if err != nil {
 		return nil, err
 	}
@@ -113,4 +110,56 @@ func policyActive(labels map[string]string, policy *api.Policy) bool {
 	}
 	log.Debugf("Parsed selector %v", sel)
 	return sel.Evaluate(labels)
+}
+
+// Modified from libcalico-go/lib/backend/k8s/k8s.go to return bare clientset.
+func NewKubeClient(calCfg api.CalicoAPIConfig) (*kubernetes.Clientset, error) {
+	kc := &calCfg.Spec.KubeConfig
+	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
+	log.Debugf("Building client for config: %+v", kc)
+	configOverrides := &clientcmd.ConfigOverrides{}
+	var overridesMap = []struct {
+		variable *string
+		value    string
+	}{
+		{&configOverrides.ClusterInfo.Server, kc.K8sAPIEndpoint},
+		{&configOverrides.AuthInfo.ClientCertificate, kc.K8sCertFile},
+		{&configOverrides.AuthInfo.ClientKey, kc.K8sKeyFile},
+		{&configOverrides.ClusterInfo.CertificateAuthority, kc.K8sCAFile},
+		{&configOverrides.AuthInfo.Token, kc.K8sAPIToken},
+	}
+
+	// Set an explicit path to the kubeconfig if one
+	// was provided.
+	loadingRules := clientcmd.ClientConfigLoadingRules{}
+	if kc.Kubeconfig != "" {
+		loadingRules.ExplicitPath = kc.Kubeconfig
+	}
+
+	// Using the override map above, populate any non-empty values.
+	for _, override := range overridesMap {
+		if override.value != "" {
+			*override.variable = override.value
+		}
+	}
+	if kc.K8sInsecureSkipTLSVerify {
+		configOverrides.ClusterInfo.InsecureSkipTLSVerify = true
+	}
+	log.Debugf("Config overrides: %+v", configOverrides)
+
+	// A kubeconfig file was provided.  Use it to load a config, passing through
+	// any overrides.
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&loadingRules, configOverrides).ClientConfig()
+	if err != nil {
+		return nil, resources.K8sErrorToCalico(err, nil)
+	}
+
+	// Create the clientset
+	cs, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, resources.K8sErrorToCalico(err, nil)
+	}
+	log.Debugf("Created k8s clientSet: %+v", cs)
+	return cs, nil
 }
