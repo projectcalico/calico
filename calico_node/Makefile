@@ -666,10 +666,10 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 
 #.PHONY: print-versions
 print-versions: print-RELEASE_STREAM print-BIRD_VER print-CALICOCTL_VER \
-				print-CALICO_GIT_VER print-CALICO_VER print-CNI_VER     \
-				print-CONFD_VER print-FELIX_VER print-GOBGPD_VER        \
-				print-KUBE_CONTROLLERS_VER print-LIBNETWORK_PLUGIN_VER  \
-				print-TYPHA_VER
+                print-CALICO_GIT_VER print-CALICO_VER print-CNI_VER     \
+                print-CONFD_VER print-FELIX_VER print-GOBGPD_VER        \
+                print-KUBE_CONTROLLERS_VER print-LIBNETWORK_PLUGIN_VER  \
+                print-TYPHA_VER
 	@
 
 ## Print the value of a specific variable
