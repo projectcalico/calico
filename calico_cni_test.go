@@ -505,4 +505,48 @@ var _ = Describe("CalicoCni", func() {
 			})
 		})
 	})
+
+	Describe("SetupRoutes works fine when the route is already programmed", func() {
+		Context("container route already exists on the host", func() {
+			netconf := fmt.Sprintf(`
+			{
+			  "cniVersion": "%s",
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "datastore_type": "%s",
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  },
+			  "log_level":"debug"
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+			It("route setup should be resilient to existing route", func() {
+				By("creating a CNI networked container, which should also install the container route in the host namespace")
+				containerID, session, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "meep1337")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
+				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
+				hostVeth, err := netlink.LinkByName(hostVethName)
+				Expect(err).ToNot(HaveOccurred())
+
+				result, err := testutils.GetResultForCurrent(session, cniVersion)
+				if err != nil {
+					log.Fatalf("Error getting result from the session: %v\n", err)
+				}
+
+				log.Printf("Unmarshalled result: %v\n", result)
+
+				By("setting up the same route CNI plugin installed in the initial run for the hostVeth")
+				err = utils.SetupRoutes(hostVeth, result)
+				Expect(err).NotTo(HaveOccurred())
+
+				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
+	})
 })
