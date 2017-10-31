@@ -14,6 +14,7 @@
 import re
 
 from nose.plugins.attrib import attr
+from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -81,7 +82,8 @@ class TestGlobalPeers(TestBase):
 
     # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
     @attr('slow')
-    def _test_gobgp_node_peers(self):
+    @skip("Disabled until gobgp is updated with libcalico-go v2")
+    def test_gobgp_node_peers(self):
         self._test_global_peers(backend='gobgp')
 
 TestGlobalPeers.batchnumber = 1  # Adds a batch number for parallel testing

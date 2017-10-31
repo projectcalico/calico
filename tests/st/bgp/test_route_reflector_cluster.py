@@ -18,9 +18,10 @@ from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.route_reflector import RouteReflectorCluster
 
-from .peer import create_bgp_peer, clear_bgp_peers
+from .peer import create_bgp_peer
 from tests.st.utils.utils import update_bgp_config
 
+# TODO: Re-enable
 @skip("Disabled until routereflector is updated for libcalico-go v2")
 class TestRouteReflectorCluster(TestBase):
 
@@ -39,8 +40,6 @@ class TestRouteReflectorCluster(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=False) as host3, \
              RouteReflectorCluster(2, 2) as rrc:
-
-            clear_bgp_peers(host1)
 
             # Start both hosts using specific backends.
             host1.start_calico_node("--backend=%s" % backend)
@@ -86,7 +85,7 @@ class TestRouteReflectorCluster(TestBase):
         self._test_route_reflector_cluster(backend='bird')
 
     # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
-    #@attr('slow')
+    @attr('slow')
     @skip("Disabled until gobgp is updated with libcalico-go v2")
     def test_gobgp_route_reflector_cluster(self):
         self._test_route_reflector_cluster(backend='gobgp')

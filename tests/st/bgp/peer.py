@@ -13,7 +13,6 @@
 # limitations under the License.
 import yaml
 
-
 def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     assert scope in ('node', 'global')
     testdata = {
@@ -34,12 +33,5 @@ def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     if metadata is not None:
         testdata['metadata'] = metadata
 
-    host.writefile("testfile.yaml", yaml.dump(testdata))
-    host.calicoctl("create -f testfile.yaml")
-
-def clear_bgp_peers(host):
-    peers = yaml.load(host.calicoctl("get bgpPeer --output=yaml"))
-    if len(peers['items']) == 0:
-        return
-    host.writefile("bgppeers.yaml", yaml.dump(peers))
-    host.calicoctl("delete -f bgppeers.yaml")
+    host.writejson("testfile.json", testdata)
+    host.calicoctl("create -f testfile.json")
