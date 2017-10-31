@@ -319,14 +319,10 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
 // equivalent.
 func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
-	// All selectors should be limited in scope to Kubernetes pods.
-	selectors := []string{fmt.Sprintf("%s == 'k8s'", apiv2.LabelOrchestrator)}
-
-	// If this is a namespace selector, the labels need to be prefixed with the profile namespace
-	// prefix.
-	var prefix string
-	if selectorType == SelectorNamespace {
-		prefix = NamespaceLabelPrefix
+	// Only prefix pod selectors - this won't work for namespace selectors.
+	selectors := []string{}
+	if selectorType == SelectorPod {
+		selectors = append(selectors, fmt.Sprintf("%s == 'k8s'", apiv2.LabelOrchestrator))
 	}
 
 	// matchLabels is a map key => value, it means match if (label[key] ==
@@ -338,7 +334,7 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType sel
 	sort.Strings(keys)
 	for _, k := range keys {
 		v := s.MatchLabels[k]
-		selectors = append(selectors, fmt.Sprintf("%s%s == '%s'", prefix, k, v))
+		selectors = append(selectors, fmt.Sprintf("%s == '%s'", k, v))
 	}
 
 	// matchExpressions is a list of in/notin/exists/doesnotexist tests.
@@ -348,13 +344,13 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType sel
 		// Each selector is formatted differently based on the operator.
 		switch e.Operator {
 		case metav1.LabelSelectorOpIn:
-			selectors = append(selectors, fmt.Sprintf("%s%s in { '%s' }", prefix, e.Key, valueList))
+			selectors = append(selectors, fmt.Sprintf("%s in { '%s' }", e.Key, valueList))
 		case metav1.LabelSelectorOpNotIn:
-			selectors = append(selectors, fmt.Sprintf("%s%s not in { '%s' }", prefix, e.Key, valueList))
+			selectors = append(selectors, fmt.Sprintf("%s not in { '%s' }", e.Key, valueList))
 		case metav1.LabelSelectorOpExists:
-			selectors = append(selectors, fmt.Sprintf("has(%s%s)", prefix, e.Key))
+			selectors = append(selectors, fmt.Sprintf("has(%s)", e.Key))
 		case metav1.LabelSelectorOpDoesNotExist:
-			selectors = append(selectors, fmt.Sprintf("! has(%s%s)", prefix, e.Key))
+			selectors = append(selectors, fmt.Sprintf("! has(%s%s)", e.Key))
 		}
 	}
 
@@ -410,16 +406,17 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 	for _, port := range ports {
 		for _, peer := range peers {
 			protocol, calicoPorts := c.k8sPortToCalicoFields(port)
-			selector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
+			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
 			if ingress {
 				// Build inbound rule and append to list.
 				rules = append(rules, apiv2.Rule{
 					Action:   "allow",
 					Protocol: protocol,
 					Source: apiv2.EntityRule{
-						Selector: selector,
-						Nets:     nets,
-						NotNets:  notNets,
+						Selector:          selector,
+						NamespaceSelector: nsSelector,
+						Nets:              nets,
+						NotNets:           notNets,
 					},
 					Destination: apiv2.EntityRule{
 						Ports: calicoPorts,
@@ -431,10 +428,11 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 					Action:   "allow",
 					Protocol: protocol,
 					Destination: apiv2.EntityRule{
-						Ports:    calicoPorts,
-						Selector: selector,
-						Nets:     nets,
-						NotNets:  notNets,
+						Ports:             calicoPorts,
+						Selector:          selector,
+						NamespaceSelector: nsSelector,
+						Nets:              nets,
+						NotNets:           notNets,
 					},
 				})
 			}
@@ -462,7 +460,7 @@ func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.P
 	return nil
 }
 
-func (c Converter) k8sPeerToCalicoFields(peer *extensions.NetworkPolicyPeer, ns string) (selector string, nets []string, notNets []string) {
+func (c Converter) k8sPeerToCalicoFields(peer *extensions.NetworkPolicyPeer, ns string) (selector, nsSelector string, nets []string, notNets []string) {
 	// If no peer, return zero values for all fields (selector, nets and !nets).
 	if peer == nil {
 		return
@@ -475,7 +473,8 @@ func (c Converter) k8sPeerToCalicoFields(peer *extensions.NetworkPolicyPeer, ns 
 		return
 	}
 	if peer.NamespaceSelector != nil {
-		selector = c.k8sSelectorToCalico(peer.NamespaceSelector, SelectorNamespace)
+		nsSelector = c.k8sSelectorToCalico(peer.NamespaceSelector, SelectorNamespace)
+		selector = fmt.Sprintf("%s == 'k8s'", apiv2.LabelOrchestrator)
 		return
 	}
 	if peer.IPBlock != nil {
