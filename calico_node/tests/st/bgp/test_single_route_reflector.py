@@ -21,6 +21,7 @@ from tests.st.utils.utils import update_bgp_config
 
 from .peer import create_bgp_peer
 
+# TODO: Re-enable
 @skip("Disabled until routereflector is updated for libcalico-go v2")
 class TestSingleRouteReflector(TestBase):
 
@@ -77,7 +78,8 @@ class TestSingleRouteReflector(TestBase):
 
     # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
     @attr('slow')
-    def _test_gobgp_single_route_reflector(self):
+    @skip("Disabled until gobgp is updated with libcalico-go v2")
+    def test_gobgp_single_route_reflector(self):
         self._test_single_route_reflector(backend='gobgp')
 
 TestSingleRouteReflector.batchnumber = 1  # Adds a batch number for parallel testing
