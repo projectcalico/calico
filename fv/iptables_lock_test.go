@@ -74,9 +74,10 @@ var _ = Describe("with running container", func() {
 			if strings.Contains(string(out), containerName) {
 				break
 			}
-			if time.Since(start) > 10*time.Second {
+			if time.Since(start) > 60*time.Second {
 				log.Panic("Timed out waiting for container to be listed.")
 			}
+			time.Sleep(1000 * time.Millisecond)
 		}
 	})
 	AfterEach(func() {
