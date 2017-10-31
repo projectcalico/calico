@@ -22,7 +22,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -233,7 +232,7 @@ func (r *RouteTable) closeNetlinkHandle() {
 
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
-		listStartTime := monotime.Now()
+		listStartTime := time.Now()
 
 		nl, err := r.getNetlinkHandle()
 		if err != nil {
@@ -279,7 +278,7 @@ func (r *RouteTable) Apply() error {
 		}
 		r.inSync = true
 
-		listIfaceTime.Observe(monotime.Since(listStartTime).Seconds())
+		listIfaceTime.Observe(time.Since(listStartTime).Seconds())
 	}
 
 	graceIfaces := 0
@@ -331,9 +330,9 @@ func (r *RouteTable) Apply() error {
 }
 
 func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
-	startTime := monotime.Now()
+	startTime := time.Now()
 	defer func() {
-		perIfaceSyncTime.Observe(monotime.Since(startTime).Seconds())
+		perIfaceSyncTime.Observe(time.Since(startTime).Seconds())
 	}()
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	logCxt.Debug("Syncing interface routes")
