@@ -43,7 +43,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -59,13 +58,6 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
-
-type EnvConfig struct {
-	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"v0.5.1-27-g49eaa9b"`
-}
-
-var config EnvConfig
 
 var etcdContainer *containers.Container
 var apiServerContainer *containers.Container
@@ -99,9 +91,7 @@ var (
 
 var _ = BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
-	err := envconfig.Process("k8sfv", &config)
-	Expect(err).NotTo(HaveOccurred())
-	log.WithField("config", config).Info("Loaded config")
+	var err error
 
 	// Start etcd, which will back the k8s API server.
 	etcdContainer = containers.RunEtcd()
@@ -118,7 +108,7 @@ var _ = BeforeSuite(func() {
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
 	apiServerContainer = containers.Run("apiserver",
-		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
+		"gcr.io/google_containers/hyperkube-amd64:v"+utils.Config.K8sVersion,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
 		"--service-cluster-ip-range=10.101.0.0/16",
@@ -331,7 +321,7 @@ var _ = Describe("health tests", func() {
 			"-e", "K8S_API_ENDPOINT="+endpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-v", k8sCertFilename+":/tmp/apiserver.crt",
-			"calico/typha:"+config.TyphaVersion,
+			"calico/typha:"+utils.Config.TyphaVersion,
 			"calico-typha")
 		Expect(typhaContainer).NotTo(BeNil())
 		typhaReady = getHealthStatus(typhaContainer.IP, "9098", "readiness")
