@@ -32,7 +32,7 @@ help:
 all: bin/calico-typha calico/typha bin/typha-client
 test: ut
 
-GO_BUILD_CONTAINER?=calico/go-build:v0.6
+GO_BUILD_CONTAINER?=calico/go-build:v0.8
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
