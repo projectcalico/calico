@@ -10,22 +10,11 @@ package log
 import (
 	"fmt"
 	"os"
-	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 )
-
-type ConfdFormatter struct {
-}
-
-func (c *ConfdFormatter) Format(entry *log.Entry) ([]byte, error) {
-	timestamp := time.Now().Format(time.RFC3339)
-	hostname, _ := os.Hostname()
-	return []byte(fmt.Sprintf("%s %s %s[%d]: %s %s\n", timestamp, hostname, tag, os.Getpid(), strings.ToUpper(entry.Level.String()), entry.Message)), nil
-}
 
 // tag represents the application name generating the log message. The tag
 // string will appear in all log entires.
@@ -46,7 +35,9 @@ func SetTag(t string) {
 func SetLevel(level string) {
 	lvl, err := log.ParseLevel(level)
 	if err != nil {
-		Fatal(fmt.Sprintf(`not a valid level: "%s"`, level))
+		log.SetLevel(log.InfoLevel)
+		log.WithError(err).WithField("level", level).Warning("Failed to parse log level, defaulting to INFO")
+		return
 	}
 	log.SetLevel(lvl)
 }

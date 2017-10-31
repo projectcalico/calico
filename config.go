@@ -36,13 +36,13 @@ var (
 
 // A Config structure is used to configure confd.
 type Config struct {
-	ConfDir      string   `toml:"confdir"`
-	Interval     int      `toml:"interval"`
-	Noop         bool     `toml:"noop"`
-	Prefix       string   `toml:"prefix"`
-	SyncOnly     bool     `toml:"sync-only"`
-	LogLevel     string   `toml:"log-level"`
-	CalicoConfig string   `toml:"calicoconfig"`
+	ConfDir      string `toml:"confdir"`
+	Interval     int    `toml:"interval"`
+	Noop         bool   `toml:"noop"`
+	Prefix       string `toml:"prefix"`
+	SyncOnly     bool   `toml:"sync-only"`
+	LogLevel     string `toml:"log-level"`
+	CalicoConfig string `toml:"calicoconfig"`
 }
 
 func init() {
@@ -95,7 +95,11 @@ func initConfig() error {
 	processFlags()
 
 	if config.LogLevel != "" {
+		// If specified, use the provided log level.
 		log.SetLevel(config.LogLevel)
+	} else {
+		// Default to info level logs.
+		log.SetLevel("info")
 	}
 
 	backendsConfig = backends.Config{

@@ -2,6 +2,7 @@ package calico
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -13,8 +14,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
-	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 const (
@@ -91,6 +92,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	// callback) then we terminate confd - the calico/node init process will restart the
 	// confd process.
 	nodeName := os.Getenv("NODENAME")
+	c.nodeLogKey = fmt.Sprintf("calico/bgp/v1/host/%s/loglevel", nodeName)
 	c.syncer = bgpsyncer.New(c.client, c, nodeName, nodeMeshEnabled)
 	c.syncer.Start()
 
@@ -127,6 +129,9 @@ type client struct {
 
 	// Whether the ndoe to node mesh is enabled or not.
 	nodeMeshEnabled bool
+
+	// This node's log level key.
+	nodeLogKey string
 }
 
 // SetPrefixes is called from confd to nofity this client of the full set of prefixes that will
@@ -342,6 +347,24 @@ func (c *client) keyUpdated(key string) {
 		if rev != c.cacheRevision && strings.HasPrefix(key, prefix) {
 			log.Debug("Updating prefix to rev %d", c.cacheRevision)
 			c.revisionsByPrefix[prefix] = c.cacheRevision
+
+			// If this is a change to either the global log level, or the per-node
+			// log level, then configure confd's log level to match.
+			if strings.HasSuffix(key, "loglevel") {
+				c.updateLogLevel()
+			}
 		}
+	}
+}
+
+func (c *client) updateLogLevel() {
+	if envLevel := os.Getenv("BGP_LOGSEVERITYSCREEN"); envLevel != "" {
+		log.SetLevel(envLevel)
+	} else if nodeLevel := c.cache[c.nodeLogKey]; nodeLevel != "" {
+		log.SetLevel(nodeLevel)
+	} else if globalLogLevel := c.cache[globalLogging]; globalLogLevel != "" {
+		log.SetLevel(globalLogLevel)
+	} else {
+		log.SetLevel("info")
 	}
 }
