@@ -68,6 +68,20 @@ type resources struct {
 
 // Create creates a resource in the backend datastore.
 func (c *resources) Create(ctx context.Context, opts options.SetOptions, kind string, in resource) (resource, error) {
+	// Resource must have a Name.  Currently we do not support GenerateName.
+	if len(in.GetObjectMeta().GetName()) == 0 {
+		var generateNameMessage string
+		if len(in.GetObjectMeta().GetGenerateName()) != 0 {
+			generateNameMessage = " (GenerateName is not supported)"
+		}
+		return nil, cerrors.ErrorValidation{
+			ErroredFields: []cerrors.ErroredField{{
+				Name:   "Metadata.Name",
+				Reason: "field must be set for a Create request" + generateNameMessage,
+				Value:  in.GetObjectMeta().GetName(),
+			}},
+		}
+	}
 	// A ResourceVersion should never be specified on a Create.
 	if len(in.GetObjectMeta().GetResourceVersion()) != 0 {
 		logWithResource(in).Info("Rejecting Create request with non-empty resource version")

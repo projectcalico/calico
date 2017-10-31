@@ -58,6 +58,19 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		IPIPMode: apiv2.IPIPModeNever,
 	}
 
+	It("should error when creating an IPPool with no name", func() {
+		c, err := clientv2.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		pool := apiv2.IPPool{
+			Spec: apiv2.IPPoolSpec{
+				CIDR: "192.168.0.0/16",
+			},
+		}
+		_, err = c.IPPools().Create(ctx, &pool, options.SetOptions{})
+		Expect(err).To(HaveOccurred())
+	})
+
 	DescribeTable("IPPool e2e CRUD tests",
 		func(name1, name2 string, spec1, spec1_2, spec2 apiv2.IPPoolSpec) {
 			c, err := clientv2.New(config)
