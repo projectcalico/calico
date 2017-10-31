@@ -2,9 +2,26 @@
 title: Installing Calico on OpenShift
 ---
 
-Installation of Calico in OpenShift is integrated in openshift-ansible v3.6.
+Calico has been integrated with both OpenShift Origin and Red Hat OpenShift Container Platform, and is deployed using the standard OpenShift-ansible installation process (which includes roles to deploy and configure Calico).
+
+Calico replaces openshift-sdn and the network policy implementation for openshift-sdn, but functions with other standard OpenShift artifacts including kube-proxy, OpenShift router (HAProxy), Registry, and DNS. 
+
+Deployment of Calico with OpenShift is done using the standard openshift-ansible deployment process, but with the appropriate Calico variables set in the host inventory file for openshift-ansible as described below. Please ensure that all OpenShift prerequisites are met and host preparation steps are performed prior to starting the OpenShift install, as described in [OpenShift Container Platform documentation](https://access.redhat.com/documentation/en-us/openshift_container_platform/3.6/html-single/installation_and_configuration/#install-config-install-prerequisites) or [OpenShift Origin documentation](https://docs.openshift.org/latest/install_config/install/prerequisites.html).
+
+Calico deployment roles have been integrated with openshift-ansible since v3.6.
 The information below explains the variables which must be set during
-during the standard [Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables).
+during the standard [OpenShift Origin Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables) or [OpenShift Container Platform Advanced Installation](https://access.redhat.com/documentation/en-us/openshift_container_platform/3.6/html-single/installation_and_configuration/#install-config-install-advanced-install).
+
+## Etcd Backend for Calico
+There are two alternative options for the Datastore backend for Calico within OpenShift deployments:
+
+- Shared Etcd with OpenShift
+This is suitable for non-production deployments of OpenShift, and involves Calico using the same Etcd server instances as are used by OpenShift (Calico uses a different part of the Etcd namespace than OpenShift). 
+
+- Dedicated Etcd for Calico (Bring-your-own Etcd)
+Alternatively, a separate set of Etcd server instances can be dedicated for Calico independent of OpenShift's Etcd instances. This is recommended for production deployments, and enables tuning of the Calico Etcd instances independently from OpenShift Etcd instances. This option requires that the Etcd server instances be deployed and configured prior to commencing the OpenShift install via openshift-ansible. Please reach out to the Calico team via slack for assistance or guidance if required.
+
+OpenShift does not support Kubernetes Custom Resource Definitions (CRD's) so the Kubernetes Datastore Driver (KDD) backend is not enabled for Calico with OpenShift.
 
 ## Shared etcd
 
@@ -89,3 +106,11 @@ node1
 [etcd]
 etcd1
 ```
+
+
+## Notes
+
+- Upgrades from existing OpenShift deployments (running openshift-sdn, or the OpenShift build of flannel) to Calico have not been tested.
+
+- These instructions outline deployment on standard RHEL7 or CentOS7 hosts. For deployment on other platforms, please reach out to the Calico team via the [Calico-Users slack channel](https://www.projectcalico.org/community#slack).
+
