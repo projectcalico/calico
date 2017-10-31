@@ -1,5 +1,5 @@
-hash: 41cd02d255565f9dbba3850f5920f54103250ac18b5a0c159938f0b775b61567
-updated: 2017-09-24T17:06:51.838407757-07:00
+hash: 75c4773d69b229427767a6d90111abbef27e55064fa22af7d22d768c7aa94b38
+updated: 2017-10-31T11:52:33.23430979Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,7 +11,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
+  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
   subpackages:
   - client
   - pkg/pathutil
@@ -55,11 +55,11 @@ imports:
   - log
   - swagger
 - name: github.com/gavv/monotime
-  version: 47d58efa69556a936a3c15eb2ed42706d968ab01
+  version: 6f8212e8d10df7383609d3c377ca08884d8f3ec0
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 20b96f641a5ea98f2f8619ff4f3e061cff4833bd
+  version: f280b3ba517bf5fc98922624f21fb0e7a92adaec
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -69,14 +69,14 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 100ba4e885062801d56799d78530b73b178a78f3
+  version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 1643683e1b54a9e88ad26d98f81400c8c9d9f4f9
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -135,7 +135,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5cabf71a9999834727d83036e986836084e0a13a
+  version: febb01a4b32897dd1ab2064958c54a1cf84ea652
   subpackages:
   - lib
   - lib/api
@@ -199,7 +199,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: e740680cc77dafd9615b25918b39f4a0ef5ab955
+  version: e47d01bc9eaf75e75e0f250e221dcb7533c7a1b8
   subpackages:
   - list
   - trie/ctrie
@@ -228,7 +228,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 95c6576299259db960f6c5b9b69ea52422860fce
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -269,7 +269,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
@@ -411,7 +411,7 @@ imports:
   - util/jsonpath
 testImports:
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
   subpackages:
   - format
   - internal/assertion
