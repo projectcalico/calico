@@ -5,7 +5,7 @@ title: Calico Kubernetes Hosted Install
 Calico can be installed on a Kubernetes cluster with a single command.
 
 ```
-kubectl apply -f calico.yaml
+kubectl apply -f https://github.com/projectcalico/calico/blob/master/v3.0/getting-started/kubernetes/installation/hosted/calico.yaml
 ```
 
 We maintain several manifests.  Which one you use depends on the specific
