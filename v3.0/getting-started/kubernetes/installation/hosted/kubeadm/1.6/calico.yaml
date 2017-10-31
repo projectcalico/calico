@@ -69,6 +69,11 @@ spec:
     spec:
       # Only run this pod on the master.
       tolerations:
+      # this taint is set by all kubelets running `--cloud-provider=external`
+      # so we should tolerate it to schedule the calico pods
+      - key: node.cloudprovider.kubernetes.io/uninitialized
+        value: "true"
+        effect: NoSchedule
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
       # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
@@ -145,6 +150,11 @@ spec:
     spec:
       hostNetwork: true
       tolerations:
+      # this taint is set by all kubelets running `--cloud-provider=external`
+      # so we should tolerate it to schedule the calico pods
+      - key: node.cloudprovider.kubernetes.io/uninitialized
+        value: "true"
+        effect: NoSchedule
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
       # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
@@ -300,6 +310,11 @@ spec:
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
       tolerations:
+      # this taint is set by all kubelets running `--cloud-provider=external`
+      # so we should tolerate it to schedule the calico pods
+      - key: node.cloudprovider.kubernetes.io/uninitialized
+        value: "true"
+        effect: NoSchedule
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
       # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
