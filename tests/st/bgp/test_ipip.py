@@ -306,15 +306,13 @@ class TestIPIP(TestBase):
                           output)
         return int(match.group(1))
 
-    #@parameterized.expand([
-    #    TODO: Re-enable tests after the ip monitor failures are figured out
-    #    (False,),
-    #    (True,),
-    #    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
-    #    #(False, 'gobgp',),
-    #    #(True, 'gobgp',),
-    #])
-    @skip("Disabled until we understand the tunl0 recreation here")
+    @parameterized.expand([
+        (False,),
+        (True,),
+        # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
+        #(False, 'gobgp',),
+        #(True, 'gobgp',),
+    ])
     def test_gce(self, with_ipip, backend='bird'):
         """Test with and without IP-in-IP routing on simulated GCE instances.
 

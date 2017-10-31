@@ -144,7 +144,7 @@ class TestFelixOnGateway(TestBase):
         # Get the IP of the external server.
         ext_ip = cls.get_container_ip("cali-st-ext-nginx")
         cls.ext_server_ip = ext_ip
-        _log.info("External workload IP: %s", cls.ext_server_ip)
+        _log.info("External server IP: %s", cls.ext_server_ip)
 
         # Configure the internal host to use the gateway for the external IP.
         cls.host.execute("ip route add %s via %s" %
