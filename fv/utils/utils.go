@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -29,6 +30,22 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
+
+type EnvConfig struct {
+	EtcdImage    string `default:"quay.io/coreos/etcd"`
+	K8sVersion   string `default:"1.7.5"`
+	TyphaVersion string `default:"v0.5.1-27-g49eaa9b"`
+}
+
+var Config EnvConfig
+
+func init() {
+	err := envconfig.Process("fv", &Config)
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("config", Config).Info("Loaded config")
+}
 
 var Ctx = context.Background()
 
