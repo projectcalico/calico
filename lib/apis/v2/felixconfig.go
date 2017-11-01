@@ -105,7 +105,7 @@ type FelixConfigurationSpec struct {
 	// Calico’s rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains
 	// signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed.
 	// [Default: insert]
-	ChainInsertMode string `json:"chainInstertMode,omitempty"`
+	ChainInsertMode string `json:"chainInsertMode,omitempty"`
 	// DefaultEndpointToHostAction controls what happens to traffic that goes from a workload endpoint to the host
 	// itself (after the traffic hits the endpoint egress policy). By default Calico blocks traffic from workload
 	// endpoints to the host itself with an iptables “DROP” action. If you want to allow some or all traffic from
