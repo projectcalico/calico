@@ -1,0 +1,24 @@
+FROM ubuntu:xenial
+RUN apt-get update && \
+    apt-get install -y \
+    curl \
+    iptables \
+    iproute2 \
+    iputils-ping \
+    dnsutils \
+    netcat \
+    tcpdump \
+    net-tools \
+    libc6-dbg gdb valgrind \
+    vim \
+    wrk \
+    lsof \
+    busybox \
+    sudo 
+
+ADD nodeagent.sh /usr/local/bin/
+ADD nodeagent /usr/local/bin/
+
+RUN chmod +x /usr/local/bin/nodeagent.sh
+
+ENTRYPOINT ["/usr/local/bin/nodeagent.sh"]

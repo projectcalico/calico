@@ -1,0 +1,30 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: nodeagent
+spec:
+  template:
+    metadata:
+      labels:
+        app: nodeagent
+        version: v1
+    spec:
+      containers:
+      - name: nodeagent
+        image: quay.io/saurabh/nodeagent:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /tmp/udsuspver
+          name: test-mgmt
+        - mountPath: /tmp/nodeagent
+          name: test-workload
+      volumes:
+        - name: test-mgmt
+          hostPath:
+            # directory location on host for the mgmt api
+            path: /tmp/udsuspver
+            # this field is optional
+            # type: Socket 
+        - name: test-workload
+          hostPath:
+            path: /tmp/nodeagent
