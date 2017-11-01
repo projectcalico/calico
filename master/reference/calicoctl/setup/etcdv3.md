@@ -20,7 +20,7 @@ The config file is a yaml or json document in the following format:
 
 ```
 apiVersion: projectcalico.org/v2
-kind: CalicoApiConfig
+kind: CalicoAPIConfig
 metadata:
 spec:
   datastoreType: "etcdv3"
