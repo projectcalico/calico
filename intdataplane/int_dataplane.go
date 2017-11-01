@@ -696,7 +696,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 				// Record stats.
 				applyTime := time.Since(applyStart)
-				summaryApplyTime.Observe(time.Since(applyStart).Seconds())
+				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
