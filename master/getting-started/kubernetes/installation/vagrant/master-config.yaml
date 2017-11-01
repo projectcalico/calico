@@ -10,8 +10,8 @@ coreos:
         - name: 10-etcd.conf
           content: |
             [Service]
-            Environment="ETCD_OPTS=--name \"etcdserver\" --listen-client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://$private_ipv4:2379 --initial-cluster=etcdserver=http://$private_ipv4:2380 --initial-advertise-peer-urls=http://$private_ipv4:2380 --listen-client-urls=http://0.0.0.0:2379,http://0.0.0.0:4001 --listen-peer-urls=http://0.0.0.0:2380"
-            Environment="ETCD_IMAGE_TAG=v3.0.12"
+            Environment="ETCD_OPTS=--name \"etcdserver\" --listen-client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://$private_ipv4:2379 --listen-client-urls=http://0.0.0.0:2379,http://0.0.0.0:4001 --listen-peer-urls=http://0.0.0.0:2380"
+            Environment="ETCD_IMAGE_TAG=v3.2.9"
 
     - name: kube-apiserver.service
       command: start

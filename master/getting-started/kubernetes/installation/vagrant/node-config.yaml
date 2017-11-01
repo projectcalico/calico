@@ -31,8 +31,8 @@ coreos:
         - name: 10-etcd-member_proxy.conf
           content: |
             [Service]
-            Environment="ETCD_OPTS=--proxy on --listen-client-urls http://127.0.0.1:2379 --initial-cluster=etcdserver=http://172.18.18.101:2380"
-            Environment="ETCD_IMAGE_TAG=v3.0.12"
+            Environment="ETCD_OPTS=grpc-proxy start --listen-addr=127.0.0.1:2379 --endpoints=172.18.18.101:2379"
+            Environment="ETCD_IMAGE_TAG=v3.2.9"
     - name: kubelet.service
       runtime: true
       command: start
