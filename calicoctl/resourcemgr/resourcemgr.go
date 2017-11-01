@@ -44,7 +44,7 @@ import (
 //	-  Commands to manage resource instances through an un-typed interface.
 type ResourceManager interface {
 	GetTableDefaultHeadings(wide bool) []string
-	GetTableTemplate(columns []string) (string, error)
+	GetTableTemplate(columns []string, printNamespace bool) (string, error)
 	GetObjectType() reflect.Type
 	IsNamespaced() bool
 	Apply(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error)
@@ -467,7 +467,10 @@ func (rh resourceHelper) GetTableDefaultHeadings(wide bool) []string {
 // GetTableTemplate constructs the go-lang template string from the supplied set of headings.
 // The template separates columns using tabs so that a tabwriter can be used to pretty-print
 // the table.
-func (rh resourceHelper) GetTableTemplate(headings []string) (string, error) {
+func (rh resourceHelper) GetTableTemplate(headings []string, printNamespace bool) (string, error) {
+	if _, ok := rh.headingsMap["NAMESPACE"]; printNamespace && ok {
+		headings = append([]string{"NAMESPACE"}, headings...)
+	}
 	// Write the headings line.
 	buf := new(bytes.Buffer)
 	for _, heading := range headings {
