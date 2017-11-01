@@ -32,7 +32,7 @@ func Parse(selector string) (sel Selector, err error) {
 		return
 	}
 	if tokens[0].Kind == tokenizer.TokEOF {
-		return selectorRoot{root: AllNode{}}, nil
+		return &selectorRoot{root: &AllNode{}}, nil
 	}
 	log.Debugf("Tokens %v", tokens)
 	// The "||" operator has the lowest precedence so we start with that.
@@ -44,7 +44,7 @@ func Parse(selector string) (sel Selector, err error) {
 		err = errors.New(fmt.Sprint("unexpected content at end of selector ", remTokens))
 		return
 	}
-	sel = selectorRoot{root: node}
+	sel = &selectorRoot{root: node}
 	return
 }
 
@@ -75,7 +75,7 @@ func parseOrExpression(tokens []tokenizer.Token) (sel node, remTokens []tokenize
 			if len(andNodes) == 1 {
 				sel = andNodes[0]
 			} else {
-				sel = OrNode{andNodes}
+				sel = &OrNode{andNodes}
 			}
 			return
 		}
@@ -109,7 +109,7 @@ func parseAndExpression(tokens []tokenizer.Token) (sel node, remTokens []tokeniz
 			if len(opNodes) == 1 {
 				sel = opNodes[0]
 			} else {
-				sel = AndNode{opNodes}
+				sel = &AndNode{opNodes}
 			}
 			return
 		}
@@ -141,10 +141,10 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 	// Then, look for the various types of operator.
 	switch tokens[0].Kind {
 	case tokenizer.TokHas:
-		sel = HasNode{tokens[0].Value.(string)}
+		sel = &HasNode{tokens[0].Value.(string)}
 		remTokens = tokens[1:]
 	case tokenizer.TokAll:
-		sel = AllNode{}
+		sel = &AllNode{}
 		remTokens = tokens[1:]
 	case tokenizer.TokLabel:
 		// should have an operator and a literal.
@@ -155,14 +155,14 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 		switch tokens[1].Kind {
 		case tokenizer.TokEq:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = LabelEqValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				sel = &LabelEqValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
 				remTokens = tokens[3:]
 			} else {
 				err = errors.New("Expected string")
 			}
 		case tokenizer.TokNe:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = LabelNeValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				sel = &LabelNeValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
 				remTokens = tokens[3:]
 			} else {
 				err = errors.New("Expected string")
@@ -194,9 +194,9 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 					labelName := tokens[0].Value.(string)
 					set := ConvertToStringSetInPlace(values) // Mutates values.
 					if tokens[1].Kind == tokenizer.TokIn {
-						sel = LabelInSetNode{labelName, set}
+						sel = &LabelInSetNode{labelName, set}
 					} else {
-						sel = LabelNotInSetNode{labelName, set}
+						sel = &LabelNotInSetNode{labelName, set}
 					}
 				}
 			} else {
@@ -224,7 +224,7 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 		return
 	}
 	if negated && err == nil {
-		sel = NotNode{sel}
+		sel = &NotNode{sel}
 	}
 	return
 }
