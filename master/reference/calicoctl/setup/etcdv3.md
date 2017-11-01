@@ -41,17 +41,12 @@ will check a particular set of environment variables.
 
 See the table below for details on the etcdv3 specific environment variables.
 
-> **Note**: If neither file nor environment variables are set, calicoctl defaults to
-> using etcdv3 with a single endpoint of http://127.0.0.1:2379.
-{: .alert .alert-info}
-
-
 ## Complete list of etcdv3 connection configuration
 
 | Setting (Environment variable)     | Description                                                                            | Schema
 | ---------------------------------- | -------------------------------------------------------------------------------------- | ------
 | datastoreType (DATASTORE_TYPE)     | Indicates the datastore to use [Default: `etcdv3`] (optional)                          | kubernetes, etcdv3
-| etcdEndpoints (ETCD_ENDPOINTS)     | A comma separated list of etcd endpoints [Default: `http://127.0.0.1:2379`] (optional) | string
+| etcdEndpoints (ETCD_ENDPOINTS)     | A comma separated list of etcd endpoints, e.g. `http://127.0.0.1:2379`                 | string
 | etcdUsername (ETCD_USERNAME)       | Username for RBAC, e.g. `user` (optional)                                              | string
 | etcdPassword (ETCD_PASSWORD)       | Password for the given username, e.g. `password` (optional)                            | string
 | etcdKeyFile (ETCD_KEY_FILE)        | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)                       | string
