@@ -39,6 +39,8 @@ if CHECKOUT_DIR == "":
 
 NODE_CONTAINER_NAME = os.getenv("NODE_CONTAINER_NAME", "calico/node:latest")
 
+FELIX_LOGLEVEL = os.getenv("ST_FELIX_LOGLEVEL", "")
+
 if ETCD_SCHEME == "https":
     CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " \
                                 "--cluster-store-opt kv.cacertfile=%s " \
@@ -319,11 +321,16 @@ class DockerHost(object):
             # Break the line at the first occurrence of " -e ".
             prefix, _, suffix = line.rstrip().partition(" -e ")
 
+            felix_logsetting = ""
+            if FELIX_LOGLEVEL != "":
+                felix_logsetting = " -e FELIX_LOGSEVERITYSCREEN=" + FELIX_LOGLEVEL
+
             # Construct the calicoctl command that we want, including the
             # CALICO_IPV4POOL_CIDR setting.
             modified_cmd = (
                 prefix +
                 (" -e CALICO_IPV4POOL_CIDR=%s " % DEFAULT_IPV4_POOL_CIDR) +
+                felix_logsetting +
                 " -e DISABLE_NODE_IP_CHECK=true -e FELIX_IPINIPENABLED=true " +
                 " -e " + suffix
             )
