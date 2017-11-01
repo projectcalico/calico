@@ -393,7 +393,7 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	-docker tag calico/felix$(ARCHTAG) calico/felix
 	for t in $(FV_TESTS); do \
 	    cd $(TOPDIR)/`dirname $$t` && \
-	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 40 -p ./`basename $$t` || exit; \
+	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)
