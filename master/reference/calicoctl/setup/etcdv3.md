@@ -6,17 +6,18 @@ no_canonical: true
 This document covers the configuration options for calicoctl when using an etcdv3 datastore.
 
 There are two ways to configure calicoctl with your etcdv3 cluster details:
-configuration file or environment variables.
+- [Configuration file](#configuration-file)
+- [Environment variables](#environment-variables)
 
 
-## Configuration File
+## Configuration file
 
 By default `calicoctl` looks for a configuration file at `/etc/calico/calicoctl.cfg`.
 
 The file location may be overridden using the `--config` option on commands that required
 datastore access.
 
-The config file is a yaml or json document in the following format:
+You can use either YAML or JSON for the configuration file. A YAML example follows.
 
 ```
 apiVersion: projectcalico.org/v2
@@ -28,35 +29,33 @@ spec:
   ...
 ```
 
-See table below for details on the etcdv3 specific fields that may be included in
-the spec section.
+See [Complete list of etcdv3 configuration options](#complete-list-of-etcdv3-configuration-options) 
+for details on the etcdv3 configuration options that may be included in
+the `spec` section of the configuration file.
 
 If the file exists, then it must be valid and readable by calicoctl.  If the file
-does not exist, calicoctl will read access details from the environment variables.
+does not exist, calicoctl will read etcdv3 configuration options from the environment variables.
 
 ## Environment variables
 
-If you are not using a config file to specify your access information, calicoctl
+If you are not using a configuration file to specify your etcdv3 access information, calicoctl
 will check a particular set of environment variables.
 
-See the table below for details on the etcdv3 specific environment variables.
-
-> **Note**: If neither file nor environment variables are set, calicoctl defaults to
-> using etcdv3 with a single endpoint of http://127.0.0.1:2379.
-{: .alert .alert-info}
+See [Complete list of etcdv3 configuration options](#complete-list-of-etcdv3-configuration-options) 
+for the list of supported environment variables.
 
 
-## Complete list of etcdv3 connection configuration
+## Complete list of etcdv3 configuration options
 
-| Setting (Environment variable)     | Description                                                                            | Schema
-| ---------------------------------- | -------------------------------------------------------------------------------------- | ------
-| datastoreType (DATASTORE_TYPE)     | Indicates the datastore to use [Default: `etcdv3`] (optional)                          | kubernetes, etcdv3
-| etcdEndpoints (ETCD_ENDPOINTS)     | A comma separated list of etcd endpoints [Default: `http://127.0.0.1:2379`] (optional) | string
-| etcdUsername (ETCD_USERNAME)       | Username for RBAC, e.g. `user` (optional)                                              | string
-| etcdPassword (ETCD_PASSWORD)       | Password for the given username, e.g. `password` (optional)                            | string
-| etcdKeyFile (ETCD_KEY_FILE)        | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)                       | string
-| etcdCertFile (ETCD_CERT_FILE)      | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)                   | string
-| etcdCACertFile (ETCD_CA_CERT_FILE) | Path to the etcd CA file, e.g. `/etc/calico/ca.pem` (optional)                         | string
+| Configuration file option  | Environment variable | Description                                                                           | Schema
+| ---------------------------| -------------------- | ------------------------------------------------------------------------------------- | ------
+| `datastoreType`            | `DATASTORE_TYPE`     | Indicates the datastore to use. If unspecified, defaults to `etcdv3`. (optional)      | `kubernetes`, `etcdv3`
+| `etcdEndpoints`            | `ETCD_ENDPOINTS`     | A comma separated list of etcd endpoints. Example: `http://127.0.0.1:2379` (required) | string
+| `etcdUsername`             | `ETCD_USERNAME`      | User name for RBAC. Example: `user` (optional)                                        | string
+| `etcdPassword`             | `ETCD_PASSWORD`      | Password for the given user name. Example: `password` (optional)                      | string
+| `etcdKeyFile`              | `ETCD_KEY_FILE`      | Path to the etcd key file. Example: `/etc/calico/key.pem` (optional)                  | string
+| `etcdCertFile`             | `ETCD_CERT_FILE`     | Path to the etcd client certificate, Example: `/etc/calico/cert.pem` (optional)       | string
+| `etcdCACertFile`           | `ETCD_CA_CERT_FILE`  | Path to the etcd Certificate Authority file. Example: `/etc/calico/ca.pem` (optional) | string
 
 > **Note**:
 > - If you are running with TLS enabled, ensure your endpoint addresses use HTTPS.
@@ -68,7 +67,7 @@ See the table below for details on the etcdv3 specific environment variables.
 >   variables defined on your system
 > - Previous versions of `calicoctl` supported `ETCD_SCHEME` and `ETC_AUTHORITY` environment
 >   variables as a mechanism for specifying the etcd endpoints. These variables are
->   deprecated in favor of the `ETCD_ENDPOINTS` list.
+>   no longer supported. Use `ETCD_ENDPOINTS` instead.
 {: .alert .alert-info}
 
 
