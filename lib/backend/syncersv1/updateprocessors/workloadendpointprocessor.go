@@ -17,8 +17,10 @@ package updateprocessors
 import (
 	"errors"
 	"net"
+	"strings"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/libcalico-go/lib/names"
@@ -114,6 +116,16 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		})
 	}
 
+	// Make sure there are no "namespace" labels on the wep
+	// we pass to felix. This prevents a wep from pretending it is
+	// in another namespace.
+	labels := map[string]string{}
+	for k, v := range v2res.GetLabels() {
+		if !strings.HasPrefix(k, conversion.NamespaceLabelPrefix) {
+			labels[k] = v
+		}
+	}
+
 	v1value := &model.WorkloadEndpoint{
 		State:       "active",
 		Name:        v2res.Spec.InterfaceName,
@@ -123,7 +135,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		IPv6Nets:    ipv6Nets,
 		IPv4NAT:     ipv4NAT,
 		IPv6NAT:     ipv6NAT,
-		Labels:      v2res.GetLabels(),
+		Labels:      labels,
 		IPv4Gateway: ipv4Gateway,
 		IPv6Gateway: ipv6Gateway,
 		Ports:       ports,
