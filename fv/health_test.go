@@ -107,8 +107,7 @@ var _ = BeforeSuite(func() {
 	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
-	apiServerContainer = containers.Run("apiserver",
-		"gcr.io/google_containers/hyperkube-amd64:v"+utils.Config.K8sVersion,
+	apiServerContainer = containers.Run("apiserver", utils.Config.K8sImage,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
 		"--service-cluster-ip-range=10.101.0.0/16",
@@ -321,7 +320,7 @@ var _ = Describe("health tests", func() {
 			"-e", "K8S_API_ENDPOINT="+endpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-v", k8sCertFilename+":/tmp/apiserver.crt",
-			"calico/typha:"+utils.Config.TyphaVersion,
+			utils.Config.TyphaImage,
 			"calico-typha")
 		Expect(typhaContainer).NotTo(BeNil())
 		typhaReady = getHealthStatus(typhaContainer.IP, "9098", "readiness")
