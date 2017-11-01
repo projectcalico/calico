@@ -400,21 +400,51 @@ class TestIPIP(TestBase):
                                             ip_pass_list=[workload_host1.ip,
                                                           workload_host2.ip])
 
-                # Check that we are using IP-in-IP for some routes.
-                assert "tunl0" in host1.execute("ip r")
-                assert "tunl0" in host2.execute("ip r")
-
-                # Check that routes are not flapping: the following shell
-                # script checks that there is no output for 10s from 'ip
-                # monitor', on either host.  The "-le 1" is to allow for
-                # something (either 'timeout' or 'ip monitor', not sure) saying
-                # 'Terminated' when the 10s are up.  (Note that all commands
-                # here are Busybox variants; I tried 'grep -v' to eliminate the
-                # Terminated line, but for some reason it didn't work.)
                 for host in [host1, host2]:
-                    host.execute("changes=`timeout -t 10 ip -t monitor 2>&1`; " +
-                                 "echo \"$changes\"; " +
-                                 "test `echo \"$changes\" | wc -l` -le 1")
+
+                    # Check that we are using IP-in-IP for some routes.
+                    assert "tunl0" in host.execute("ip r")
+
+                    # Get current links and addresses, as a baseline for the
+                    # following changes test.
+                    host.execute("ip l")
+                    host.execute("ip a")
+
+                    # Check that routes are not flapping, on either host, by
+                    # running 'ip monitor' for 10s and checking that it does
+                    # not indicate any changes other than those associated with
+                    # an IP address being added to the tunl0 device.
+                    ip_changes = host.execute("timeout -t 10 ip -t monitor 2>&1 || true")
+                    lines = ip_changes.split("\n")
+                    assert len(lines) >= 1, "No output from ip monitor"
+                    expected_lines_following = 0
+                    for line in lines:
+                        if expected_lines_following > 0:
+                            expected_lines_following -= 1
+                        elif "Terminated" in line:
+                            # "Terminated"
+                            pass
+                        elif "Timestamp" in line:
+                            # e.g. "Timestamp: Wed Nov  1 18:02:38 2017 689895 usec"
+                            pass
+                        elif ": tunl0" in line:
+                            # e.g. "2: tunl0    inet 192.168.128.1/32 scope global tunl0"
+                            #      "       valid_lft forever preferred_lft forever"
+                            # Indicates IP address being added to the tunl0 device.
+                            expected_lines_following = 1
+                        elif line.startswith("local") and "dev tunl0" in line:
+                            # e.g. "local 192.168.128.1 dev tunl0 table local ..."
+                            # Local routing table entry associated with tunl0
+                            # device IP address.
+                            pass
+                        elif "172.17.0.1 dev eth0 lladdr" in line:
+                            # Ex: "172.17.0.1 dev eth0 lladdr 02:03:04:05:06:07 REACHABLE"
+                            # Indicates that the host just learned the MAC
+                            # address of its default gateway.
+                            pass
+                        else:
+                            assert False, "Unexpected ip monitor line: %r" % line
+
             else:
                 # Expect non-connectivity between workloads on different hosts.
                 self.assert_false(
