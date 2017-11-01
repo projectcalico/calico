@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
 import json
 import logging
 import os
@@ -97,7 +98,7 @@ def log_and_run(command, raise_exception_on_failure=True):
             logger.info("  # %s", line.rstrip())
 
     try:
-        logger.info("%s", command)
+        logger.info("[%s] %s", datetime.datetime.now(), command)
         try:
             results = check_output(command, shell=True, stderr=STDOUT).rstrip()
         finally:
