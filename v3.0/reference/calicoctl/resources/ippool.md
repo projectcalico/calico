@@ -18,7 +18,7 @@ metadata:
 spec:
   cidr: 10.1.0.0/16
   ipipMode: CrossSubnet
-  nat-outgoing: true
+  natOutgoing: true
   disabled: false
 ```
 
@@ -36,7 +36,7 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. | string | |
 | ipipMode | The IPIP mode defining when IPIP will be used. | Always, CrossSubnet, Never | string| `Never` |
-| nat-outgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
+| natOutgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
 | disabled | When set to true, Calico IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
 
 Routing of packets using IP-in-IP will be used when the destination IP address
@@ -48,8 +48,8 @@ determined when running the calico/node service).
 For details on configuring IP-in-IP on your deployment, please read the
 [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip).
 
-> **Note**: Setting `nat-outgoing` is recommended on any IP Pool with `ipip` enabled.
-When `ipip` is enabled without `nat-outgoing` routing between Workloads and
+> **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
+When `ipip` is enabled without `natOutgoing` routing between Workloads and
 Hosts running Calico is asymmetric and may cause traffic to be filtered due to
 [RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
 {: .alert .alert-info}
