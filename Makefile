@@ -10,6 +10,7 @@ endif
 
 ifeq ($(ARCH),ppc64le)
         ARCHTAG:=-ppc64le
+	GO_BUILD_VER:=latest
 endif
 
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
