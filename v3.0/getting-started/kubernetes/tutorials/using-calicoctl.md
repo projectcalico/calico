@@ -53,8 +53,8 @@ You can then run `calicoctl` commands through the Pod using `kubectl`:
 ```
 $ kubectl exec -ti -n kube-system calicoctl -- /calicoctl get profiles -o wide
 NAME                 TAGS
-k8s_ns.default       k8s_ns.default
-k8s_ns.kube-system   k8s_ns.kube-system
+kns.default          kns.default
+kns.kube-system      kns.kube-system
 ```
 
 See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for more information.
