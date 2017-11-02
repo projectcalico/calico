@@ -29,7 +29,7 @@ cat << EOF | calicoctl apply -f -
     name: ippool-ext-1
   spec:
     cidr: 192.168.0.0/16
-    nat-outgoing: true
+    natOutgoing: true
 EOF
 ```
 

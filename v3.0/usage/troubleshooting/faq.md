@@ -52,9 +52,9 @@ to the interface.
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
 
 Yes! The Kubernetes [`NetworkPolicy`](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
-API added support for egress policies in v1.8. You can also use `calicoctl` 
-to configure egress policy to prevent Kubernetes pods from initiating outgoing 
-connections based on the full set of supported Calico policy primitives 
+API added support for egress policies in v1.8. You can also use `calicoctl`
+to configure egress policy to prevent Kubernetes pods from initiating outgoing
+connections based on the full set of supported Calico policy primitives
 including labels, Kubernetes namespaces, CIDRs, and ports.
 
 ## I've heard Calico uses proxy ARP, doesn't proxy ARP cause a lot of problems?
@@ -84,10 +84,10 @@ documents *mandates* the use of VLANs.
 
 2. Modify IP Pool config
 
-   Modify the pool's spec to enable IP-IP and nat-outgoing. (See 
+   Modify the pool's spec to enable IP-IP and natOutgoing. (See
    [IP Pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
    for other settings that can be edited.)
-   
+
    ```shell
    - apiVersion: projectcalico.org/v2
      kind: IPPool
@@ -96,7 +96,7 @@ documents *mandates* the use of VLANs.
      spec:
        cidr: 192.168.0.0/16
        ipipMode: Always
-       nat-outgoing: true
+       natOutgoing: true
    ```
 
 3. Load the modified file.
@@ -265,7 +265,7 @@ metadata:
   name: ippool-1
 spec:
   cidr: <CIDR>
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
 
@@ -295,15 +295,15 @@ iptables -t nat -N expose-ports
 iptables -t nat -A OUTPUT -j expose-ports
 iptables -t nat -A PREROUTING -j expose-ports
 
-# Then, for each port you want to expose, add a rule to the 
+# Then, for each port you want to expose, add a rule to the
 # expose-ports chain, replacing <PUBLIC_IP> with the host IP that you
 # want to use to expose the port and <PUBLIC_PORT> with the host port.
 iptables -t nat -A expose-ports -p tcp --destination <PUBLIC_IP> --dport <PUBLIC_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
 ```
 
-For example, you have a container to which you've assigned the CALICO_IP 
-of 192.168.7.4, and you have NGINX running on port 8080 inside the container. 
-If you want to expose this service on port 80 and your host has IP 192.0.2.1, 
+For example, you have a container to which you've assigned the CALICO_IP
+of 192.168.7.4, and you have NGINX running on port 8080 inside the container.
+If you want to expose this service on port 80 and your host has IP 192.0.2.1,
 then you could run the following commands:
 
 ```
@@ -332,7 +332,7 @@ metadata:
 spec:
   cidr: <CIDR>
   ipipMode: Always
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
 
@@ -350,6 +350,6 @@ metadata:
   name: ippool-2
 spec:
   cidr: <CIDR>
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
