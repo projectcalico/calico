@@ -38,7 +38,6 @@ import:
 - package: github.com/gogo/protobuf
   version: ^0.3.0
 - package: github.com/vishvananda/netlink
-- package: github.com/gavv/monotime
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: k8s.io/client-go

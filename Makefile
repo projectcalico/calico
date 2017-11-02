@@ -52,7 +52,7 @@ ARCH?=amd64
 ARCHTAG?=
 
 ifeq ($(ARCH),amd64)
-GO_BUILD_VER:=v0.6
+GO_BUILD_VER:=v0.9
 endif
 
 ifeq ($(ARCH),ppc64le)

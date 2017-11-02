@@ -1,5 +1,5 @@
-hash: 2cd48b39b637a8d6deb9c44283cd299569591535faffee1b341aa199a5a3a2cc
-updated: 2017-10-28T15:10:47.147703453Z
+hash: e882063c2e773906795ce0e3b27f012f7b6f313872f8720b108c3ffcb8b99fd9
+updated: 2017-10-31T14:44:39.887813554Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -47,8 +47,6 @@ imports:
   - log
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
-- name: github.com/gavv/monotime
-  version: 6f8212e8d10df7383609d3c377ca08884d8f3ec0
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini

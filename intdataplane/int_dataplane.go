@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -76,7 +75,7 @@ var (
 			"values indicate we're doing more batching to try to keep up.",
 	})
 
-	processStartTime time.Duration
+	processStartTime time.Time
 )
 
 func init() {
@@ -86,7 +85,7 @@ func init() {
 	prometheus.MustRegister(summaryBatchSize)
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
-	processStartTime = monotime.Now()
+	processStartTime = time.Now()
 }
 
 type Config struct {
@@ -580,7 +579,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}
 		switch msg.(type) {
 		case *proto.InSync:
-			log.WithField("timeSinceStart", monotime.Since(processStartTime)).Info(
+			log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 				"Datastore in sync, flushing the dataplane for the first time...")
 			datastoreInSync = true
 		}
@@ -690,13 +689,13 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					beingThrottled = false
 				}
 				log.Info("Applying dataplane updates")
-				applyStart := monotime.Now()
+				applyStart := time.Now()
 
 				// Actually apply the changes to the dataplane.
 				d.apply()
 
 				// Record stats.
-				applyTime := monotime.Since(applyStart)
+				applyTime := time.Since(applyStart)
 				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
@@ -708,7 +707,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 				if !d.doneFirstApply {
 					log.WithField(
-						"secsSinceStart", monotime.Since(processStartTime).Seconds(),
+						"secsSinceStart", time.Since(processStartTime).Seconds(),
 					).Info("Completed first update to dataplane.")
 					d.doneFirstApply = true
 					if d.config.PostInSyncCallback != nil {
@@ -927,7 +926,7 @@ func (d *InternalDataplane) loopReportingStatus() {
 	// Wait before first report so that we don't check in if we're in a tight cyclic restart.
 	time.Sleep(10 * time.Second)
 	for {
-		uptimeSecs := monotime.Since(processStartTime).Seconds()
+		uptimeSecs := time.Since(processStartTime).Seconds()
 		d.fromDataplane <- &proto.ProcessStatusUpdate{
 			IsoTimestamp: time.Now().UTC().Format(time.RFC3339),
 			Uptime:       uptimeSecs,
