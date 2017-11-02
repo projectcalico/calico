@@ -41,11 +41,10 @@ type globalnetworkpolicies struct {
 // Create takes the representation of a GlobalNetworkPolicy and creates it.  Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	defaultPolicyTypesField(&res.Spec)
+	defaultPolicyTypesField(res.Spec.IngressRules, res.Spec.EgressRules, &res.Spec.Types)
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
-
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		// Remove the prefix out of the returned policy name.
@@ -61,11 +60,10 @@ func (r globalnetworkpolicies) Create(ctx context.Context, res *apiv2.GlobalNetw
 // Update takes the representation of a GlobalNetworkPolicy and updates it. Returns the stored
 // representation of the GlobalNetworkPolicy, and an error, if there is any.
 func (r globalnetworkpolicies) Update(ctx context.Context, res *apiv2.GlobalNetworkPolicy, opts options.SetOptions) (*apiv2.GlobalNetworkPolicy, error) {
-	defaultPolicyTypesField(&res.Spec)
+	defaultPolicyTypesField(res.Spec.IngressRules, res.Spec.EgressRules, &res.Spec.Types)
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
-
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindGlobalNetworkPolicy, res)
 	if out != nil {
 		// Remove the prefix out of the returned policy name.
@@ -123,23 +121,23 @@ func (r globalnetworkpolicies) Watch(ctx context.Context, opts options.ListOptio
 	return r.client.resources.Watch(ctx, opts, apiv2.KindGlobalNetworkPolicy)
 }
 
-func defaultPolicyTypesField(spec *apiv2.PolicySpec) {
-	if len(spec.Types) == 0 {
+func defaultPolicyTypesField(ingressRules, egressRules []apiv2.Rule, types *[]apiv2.PolicyType) {
+	if len(*types) == 0 {
 		// Default the Types field according to what inbound and outbound rules are present
 		// in the policy.
-		if len(spec.EgressRules) == 0 {
+		if len(egressRules) == 0 {
 			// Policy has no egress rules, so apply this policy to ingress only.  (Note:
 			// intentionally including the case where the policy also has no ingress
 			// rules.)
-			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
-		} else if len(spec.IngressRules) == 0 {
+			*types = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
+		} else if len(ingressRules) == 0 {
 			// Policy has egress rules but no ingress rules, so apply this policy to
 			// egress only.
-			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeEgress}
+			*types = []apiv2.PolicyType{apiv2.PolicyTypeEgress}
 		} else {
 			// Policy has both ingress and egress rules, so apply this policy to both
 			// ingress and egress.
-			spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
+			*types = []apiv2.PolicyType{apiv2.PolicyTypeIngress, apiv2.PolicyTypeEgress}
 		}
 	}
 }

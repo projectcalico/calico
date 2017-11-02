@@ -296,7 +296,7 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 		CreationTimestamp: np.CreationTimestamp,
 		UID:               np.UID,
 	}
-	policy.Spec = apiv2.PolicySpec{
+	policy.Spec = apiv2.NetworkPolicySpec{
 		Order:        &order,
 		Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
 		IngressRules: ingressRules,

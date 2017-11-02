@@ -40,11 +40,10 @@ type networkPolicies struct {
 // Create takes the representation of a NetworkPolicy and creates it.  Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Create(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
-	defaultPolicyTypesField(&res.Spec)
+	defaultPolicyTypesField(res.Spec.IngressRules, res.Spec.EgressRules, &res.Spec.Types)
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
-
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindNetworkPolicy, res)
 	if out != nil {
 		// Remove the prefix out of the returned policy name.
@@ -60,11 +59,10 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv2.NetworkPolicy, o
 // Update takes the representation of a NetworkPolicy and updates it. Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Update(ctx context.Context, res *apiv2.NetworkPolicy, opts options.SetOptions) (*apiv2.NetworkPolicy, error) {
-	defaultPolicyTypesField(&res.Spec)
+	defaultPolicyTypesField(res.Spec.IngressRules, res.Spec.EgressRules, &res.Spec.Types)
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
-
 	out, err := r.client.resources.Update(ctx, opts, apiv2.KindNetworkPolicy, res)
 	if out != nil {
 		// Remove the prefix out of the returned policy name.

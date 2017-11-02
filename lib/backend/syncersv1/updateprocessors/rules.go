@@ -27,8 +27,8 @@ import (
 )
 
 func RulesAPIV2ToBackend(ars []apiv2.Rule, ns string) []model.Rule {
-	if ars == nil {
-		return []model.Rule{}
+	if len(ars) == 0 {
+		return nil
 	}
 
 	brs := make([]model.Rule, len(ars))

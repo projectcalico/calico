@@ -60,8 +60,6 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		res := apiv2.NewNetworkPolicy()
 		res.Name = name1
 		res.Namespace = ns1
-		res.Spec.PreDNAT = true
-		res.Spec.ApplyOnForward = true
 
 		kvps, err := up.Process(&model.KVPair{
 			Key:      v2NetworkPolicyKey1,
@@ -74,7 +72,6 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			Key: v1NetworkPolicyKey1,
 			Value: &model.Policy{
 				Selector:       "projectcalico.org/namespace == 'namespace1'",
-				PreDNAT:        true,
 				ApplyOnForward: true,
 			},
 			Revision: "abcde",
@@ -168,9 +165,6 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		res.Spec.IngressRules = []apiv2.Rule{irule}
 		res.Spec.EgressRules = []apiv2.Rule{erule}
 		res.Spec.Selector = selector
-		res.Spec.DoNotTrack = true
-		res.Spec.PreDNAT = false
-		res.Spec.ApplyOnForward = true
 		res.Spec.Types = []apiv2.PolicyType{apiv2.PolicyTypeIngress}
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v2NetworkPolicyKey2,
@@ -190,8 +184,6 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 					InboundRules:   []model.Rule{v1irule},
 					OutboundRules:  []model.Rule{v1erule},
 					Selector:       namespacedSelector,
-					DoNotTrack:     true,
-					PreDNAT:        false,
 					ApplyOnForward: true,
 					Types:          []string{"ingress"},
 				},

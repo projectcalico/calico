@@ -39,7 +39,7 @@ import (
 
 var (
 	zeroOrder                  = float64(0.0)
-	calicoAllowPolicyModelSpec = capiv2.PolicySpec{
+	calicoAllowPolicyModelSpec = capiv2.GlobalNetworkPolicySpec{
 		Order: &zeroOrder,
 		IngressRules: []capiv2.Rule{
 			{
@@ -52,7 +52,7 @@ var (
 			},
 		},
 	}
-	calicoDisallowPolicyModelSpec = capiv2.PolicySpec{
+	calicoDisallowPolicyModelSpec = capiv2.GlobalNetworkPolicySpec{
 		Order: &zeroOrder,
 		IngressRules: []capiv2.Rule{
 			{

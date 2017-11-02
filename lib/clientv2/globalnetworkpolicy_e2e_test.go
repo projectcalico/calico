@@ -46,13 +46,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 	order2 := 22.222
 	name1 := "globalnetworkp-1"
 	name2 := "globalnetworkp-2"
-	spec1 := apiv2.PolicySpec{
+	spec1 := apiv2.GlobalNetworkPolicySpec{
 		Order:        &order1,
 		IngressRules: []apiv2.Rule{testutils.InRule1, testutils.InRule2},
 		EgressRules:  []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
 		Selector:     "thing == 'value'",
 	}
-	spec2 := apiv2.PolicySpec{
+	spec2 := apiv2.GlobalNetworkPolicySpec{
 		Order:          &order2,
 		IngressRules:   []apiv2.Rule{testutils.InRule2, testutils.InRule1},
 		EgressRules:    []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
@@ -72,7 +72,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 	egressTypesSpec2.Types = egress
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 apiv2.PolicySpec, types1, types2 []apiv2.PolicyType) {
+		func(name1, name2 string, spec1, spec2 apiv2.GlobalNetworkPolicySpec, types1, types2 []apiv2.PolicyType) {
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
