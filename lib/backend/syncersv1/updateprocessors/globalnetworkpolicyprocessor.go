@@ -47,12 +47,16 @@ func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error)
 }
 
 func convertGlobalPolicyV2ToV1Spec(spec apiv2.GlobalNetworkPolicySpec) (*model.Policy, error) {
-	v1value, err := convertPolicyV2ToV1Spec(&spec.PolicySpec, "")
-	if err != nil {
-		return nil, err
+	v1value := &model.Policy{
+		Order:          spec.Order,
+		InboundRules:   RulesAPIV2ToBackend(spec.IngressRules, ""),
+		OutboundRules:  RulesAPIV2ToBackend(spec.EgressRules, ""),
+		Selector:       spec.Selector,
+		Types:          policyTypesAPIV2ToBackend(spec.Types),
+		DoNotTrack:     spec.DoNotTrack,
+		PreDNAT:        spec.PreDNAT,
+		ApplyOnForward: spec.ApplyOnForward,
 	}
-	v1value.DoNotTrack = spec.DoNotTrack
-	v1value.PreDNAT = spec.PreDNAT
-	v1value.ApplyOnForward = spec.ApplyOnForward
+
 	return v1value, nil
 }

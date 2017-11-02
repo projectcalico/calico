@@ -47,20 +47,16 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 	name1 := "globalnetworkp-1"
 	name2 := "globalnetworkp-2"
 	spec1 := apiv2.GlobalNetworkPolicySpec{
-		PolicySpec: apiv2.PolicySpec{
-			Order:        &order1,
-			IngressRules: []apiv2.Rule{testutils.InRule1, testutils.InRule2},
-			EgressRules:  []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
-			Selector:     "thing == 'value'",
-		},
+		Order:        &order1,
+		IngressRules: []apiv2.Rule{testutils.InRule1, testutils.InRule2},
+		EgressRules:  []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
+		Selector:     "thing == 'value'",
 	}
 	spec2 := apiv2.GlobalNetworkPolicySpec{
-		PolicySpec: apiv2.PolicySpec{
-			Order:        &order2,
-			IngressRules: []apiv2.Rule{testutils.InRule2, testutils.InRule1},
-			EgressRules:  []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
-			Selector:     "thing2 == 'value2'",
-		},
+		Order:          &order2,
+		IngressRules:   []apiv2.Rule{testutils.InRule2, testutils.InRule1},
+		EgressRules:    []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
+		Selector:       "thing2 == 'value2'",
 		DoNotTrack:     true,
 		ApplyOnForward: true,
 	}

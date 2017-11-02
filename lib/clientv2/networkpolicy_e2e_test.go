@@ -43,20 +43,18 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 	name1 := "networkp-1"
 	name2 := "networkp-2"
 	spec1 := apiv2.NetworkPolicySpec{
-		PolicySpec: apiv2.PolicySpec{
-			Order:        &order1,
-			IngressRules: []apiv2.Rule{testutils.InRule1, testutils.InRule2},
-			EgressRules:  []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
-			Selector:     "thing == 'value'",
-		},
+
+		Order:        &order1,
+		IngressRules: []apiv2.Rule{testutils.InRule1, testutils.InRule2},
+		EgressRules:  []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
+		Selector:     "thing == 'value'",
 	}
 	spec2 := apiv2.NetworkPolicySpec{
-		PolicySpec: apiv2.PolicySpec{
-			Order:        &order2,
-			IngressRules: []apiv2.Rule{testutils.InRule2, testutils.InRule1},
-			EgressRules:  []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
-			Selector:     "thing2 == 'value2'",
-		},
+
+		Order:        &order2,
+		IngressRules: []apiv2.Rule{testutils.InRule2, testutils.InRule1},
+		EgressRules:  []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
+		Selector:     "thing2 == 'value2'",
 	}
 	// Specs with only ingress or egress rules, without Types set.
 	ingressSpec1 := spec1

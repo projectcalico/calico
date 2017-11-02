@@ -45,31 +45,12 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")
 	}
-	v1model, err := convertPolicyV2ToV1Spec(&v2res.Spec.PolicySpec, v2res.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	// Namespaced policy applies to workloads only due to the selectors so we implicitly have
-	// ApplyOnForward = true.
-	v1model.ApplyOnForward = true
-	return v1model, nil
-}
-
-func convertPolicyV2ToV1Spec(spec *apiv2.PolicySpec, ns string) (*model.Policy, error) {
-	var irules []model.Rule
-	for _, irule := range spec.IngressRules {
-		irules = append(irules, RuleAPIV2ToBackend(irule, ns))
-	}
-
-	var erules []model.Rule
-	for _, erule := range spec.EgressRules {
-		erules = append(erules, RuleAPIV2ToBackend(erule, ns))
-	}
 
 	// If this policy is namespaced, then add a namespace selector.
+	spec := v2res.Spec
 	selector := spec.Selector
-	if ns != "" {
-		nsSelector := fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
+	if v2res.Namespace != "" {
+		nsSelector := fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, v2res.Namespace)
 		if selector == "" {
 			selector = nsSelector
 		} else {
@@ -78,11 +59,12 @@ func convertPolicyV2ToV1Spec(spec *apiv2.PolicySpec, ns string) (*model.Policy, 
 	}
 
 	v1value := &model.Policy{
-		Order:         spec.Order,
-		InboundRules:  irules,
-		OutboundRules: erules,
-		Selector:      selector,
-		Types:         policyTypesAPIV2ToBackend(spec.Types),
+		Order:          spec.Order,
+		InboundRules:   RulesAPIV2ToBackend(spec.IngressRules, v2res.Namespace),
+		OutboundRules:  RulesAPIV2ToBackend(spec.EgressRules, v2res.Namespace),
+		Selector:       selector,
+		Types:          policyTypesAPIV2ToBackend(spec.Types),
+		ApplyOnForward: true,
 	}
 
 	return v1value, nil
