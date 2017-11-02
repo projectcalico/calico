@@ -130,7 +130,7 @@ var _ = DescribeTable("WorkloadEndpoint name construction, name prefix",
 		Node:     "node-1",
 		Pod:      "pod-name",
 		Endpoint: "eth0",
-	}, "", "orchestrator"),
+	}, "node--1-", ""),
 )
 
 var _ = DescribeTable("WorkloadEndpoint name matching",
@@ -154,7 +154,7 @@ var _ = DescribeTable("WorkloadEndpoint name matching",
 		Node:     "node-1",
 		Pod:      "pod-name",
 		Endpoint: "eth0",
-	}, "", false, "orchestrator"),
+	}, "", false, ""),
 	Entry("Valid k8s endpoint and matching name", names.WorkloadEndpointIdentifiers{
 		Node:         "node-1",
 		Orchestrator: "k8s",

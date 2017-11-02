@@ -16,6 +16,7 @@ package clientv2_test
 
 import (
 	"time"
+	"net"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -31,6 +32,10 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/watch"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"fmt"
 )
 
 var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
@@ -69,6 +74,153 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			},
 		},
 	}
+	Describe("nodes", func () {
+		It("should clean up weps, IPAM allocations, etc. when deleted", func() {
+			c, err := clientv2.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+
+			// Create a node.
+			_, err = c.Nodes().Create(ctx, &apiv2.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: name1},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create objects associated with this node.
+			pool := apiv2.IPPool{
+				Spec: apiv2.IPPoolSpec{
+					CIDR: "192.168.0.0/16",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "mypool",
+				},
+			}
+			_, err = c.IPPools().Create(ctx, &pool, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			swepIp := "192.168.0.1"
+			wepIp := net.IP{192, 168, 0, 1}
+
+			affBlock := cnet.IPNet{
+				IPNet: net.IPNet{
+					IP: net.IP{192, 168, 0, 0},
+					Mask: net.IPMask{255, 255, 255, 0},
+				},
+			}
+			_, _, err = c.IPAM().ClaimAffinity(ctx, affBlock, name1)
+			Expect(err).NotTo(HaveOccurred())
+
+			handle := "myhandle"
+			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				IP: cnet.IP{wepIp},
+				Hostname: name1,
+				HandleID: &handle,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			wep := apiv2.WorkloadEndpoint{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:             "node--1-k8s-mypod-mywep",
+					Namespace: "default",
+				},
+				Spec: apiv2.WorkloadEndpointSpec{
+					InterfaceName: "eth0",
+					Pod: "mypod",
+					Endpoint: "mywep",
+					IPNetworks: []string{
+						swepIp,
+					},
+					Node: name1,
+					Orchestrator:     "k8s",
+					Workload:         "default.fakepod",
+				},
+			}
+			_, err = c.WorkloadEndpoints().Create(ctx, &wep, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			bgppeer := apiv2.BGPPeer{
+				Spec: apiv2.BGPPeerSpec{
+					Node: name1,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "bgppeer1",
+				},
+			}
+			_, err = c.BGPPeers().Create(ctx, &bgppeer, options.SetOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			nodeConfigName := fmt.Sprintf("node.%s", name1)
+			pTrue := true
+			felixConf := apiv2.FelixConfiguration{
+				Spec: apiv2.FelixConfigurationSpec{
+					IgnoreLooseRPF: &pTrue,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeConfigName,
+				},
+			}
+			_, err = c.FelixConfigurations().Create(ctx, &felixConf, options.SetOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			bgpConf := apiv2.BGPConfiguration{
+				Spec: apiv2.BGPConfigurationSpec{
+					LogSeverityScreen: "idk",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nodeConfigName,
+				},
+			}
+			_, err = c.BGPConfigurations().Create(ctx, &bgpConf, options.SetOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// Delete the node.
+			_, err = c.Nodes().Delete(ctx, name1, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check that the node is removed from Calico.
+			node, err := c.Nodes().Get(ctx, name1, options.GetOptions{})
+			Expect(node).Should(BeNil())
+
+			// Check that all other node-specific data was also removed
+			// starting with the wep.
+			w, err := c.WorkloadEndpoints().Get(ctx, "default", "node--1-k8s-mypod-mywep", options.GetOptions{})
+			Expect(w).To(BeNil())
+
+			// Check that the wep's IP was released
+			ips, err := c.IPAM().IPsByHandle(ctx, handle)
+			Expect(ips).Should(BeNil())
+
+			// Check that the host affinity pool was released.
+			err = c.IPAM().ReleaseAffinity(ctx, affBlock, name1)
+			Expect(err).NotTo(HaveOccurred())
+
+			list, err := be.List(
+				context.Background(),
+				model.BlockAffinityListOptions{
+					Host: name1,
+				},
+				"",
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(list.KVPairs).To(HaveLen(0))
+
+			// Check that the bgppeer was deleted
+			peer, err := c.BGPPeers().Get(ctx, "bgppeer1", options.GetOptions{})
+			Expect(peer).Should(BeNil())
+
+			// Check that the felix config was deleted
+			fconfig, err := c.FelixConfigurations().Get(ctx, nodeConfigName, options.GetOptions{})
+			Expect(fconfig).Should(BeNil())
+
+			// Check that the bgp config was deleted
+			bconfig, err := c.BGPConfigurations().Get(ctx, nodeConfigName, options.GetOptions{})
+			Expect(bconfig).Should(BeNil())
+		})
+	})
 
 	DescribeTable("Node e2e CRUD tests",
 		func(name1, name2 string, spec1, spec2 apiv2.NodeSpec) {

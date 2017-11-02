@@ -18,8 +18,12 @@ import (
 	"context"
 
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	"fmt"
 )
 
 // NodeInterface has methods to work with Node resources.
@@ -59,6 +63,97 @@ func (r nodes) Update(ctx context.Context, res *apiv2.Node, opts options.SetOpti
 
 // Delete takes name of the Node and deletes it. Returns an error if one occurs.
 func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv2.Node, error) {
+	pname, err := names.WorkloadEndpointIdentifiers{Node: name}.CalculateWorkloadEndpointName(true)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all weps belonging to the node
+	weps, err := r.client.WorkloadEndpoints().List(ctx, options.ListOptions{
+		Prefix: true,
+		Name: pname,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Collate all IPs across all endpoints, and then release those IPs.
+	ips := []net.IP{}
+	for _, wep := range weps.Items {
+		// The prefix match is unfortunately not a perfect match on the Node (since it is theoretically possible for
+		// another node to match the prefix (e.g. a node name of the format <thisnode>-foobar would also match a prefix
+		// search of the node <thisnode>). Therefore, we will also need to check that the Spec.Node field matches the Node.
+		if wep.Spec.Node != name {
+			continue
+		}
+		for _, ip := range wep.Spec.IPNetworks {
+			ips = append(ips, *net.ParseIP(ip))
+		}
+	}
+	_, err = r.client.IPAM().ReleaseIPs(context.Background(), ips)
+	switch err.(type) {
+	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+	default:
+		return nil, err
+	}
+
+	// Delete the weps.
+	for _, wep := range weps.Items {
+		if wep.Spec.Node != name {
+			continue
+		}
+
+		_, err = r.client.WorkloadEndpoints().Delete(ctx, wep.Namespace, wep.Name, options.DeleteOptions{})
+		switch err.(type) {
+		case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+		default:
+			return nil, err
+		}
+	}
+
+	// Remove the node from the IPAM data if it exists.
+	err = r.client.IPAM().RemoveIPAMHost(ctx, name)
+	switch err.(type) {
+	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+	default:
+		return nil, err
+	}
+
+	// Remove BGPPeers.
+	bgpPeers, err := r.client.BGPPeers().List(ctx, options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for _, peer := range bgpPeers.Items {
+		if peer.Spec.Node != name {
+			continue
+		}
+		_, err = r.client.BGPPeers().Delete(ctx, peer.Name, options.DeleteOptions{})
+		switch err.(type) {
+		case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+		default:
+			return nil, err
+		}
+	}
+
+	// Delete felix configuration
+	nodeConfName := fmt.Sprintf("node.%s", name)
+	_, err = r.client.FelixConfigurations().Delete(ctx, nodeConfName, options.DeleteOptions{})
+	switch err.(type) {
+	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+	default:
+		return nil, err
+	}
+
+	// Delete bgp configuration
+	_, err = r.client.BGPConfigurations().Delete(ctx, nodeConfName, options.DeleteOptions{})
+	switch err.(type) {
+	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
+	default:
+		return nil, err
+	}
+
+	// Delete the node.
 	out, err := r.client.resources.Delete(ctx, opts, apiv2.KindNode, noNamespace, name)
 	if out != nil {
 		return out.(*apiv2.Node), err

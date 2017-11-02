@@ -135,18 +135,11 @@ func (ids WorkloadEndpointIdentifiers) getSegments() ([]segment, error) {
 	endp := segment{value: ids.Endpoint, field: "endpoint", structField: "Endpoint"}
 	workl := segment{value: ids.Workload, field: "workload", structField: "Workload"}
 
-	// Node and Orchestrator are *always* required.
+	// Node is *always* required.
 	if len(node.value) == 0 {
 		return nil, cerrors.ErrorValidation{
 			ErroredFields: []cerrors.ErroredField{
 				{Name: node.field, Reason: "field should be assigned"},
-			},
-		}
-	}
-	if len(orch.value) == 0 {
-		return nil, cerrors.ErrorValidation{
-			ErroredFields: []cerrors.ErroredField{
-				{Name: orch.field, Reason: "field should be assigned"},
 			},
 		}
 	}
