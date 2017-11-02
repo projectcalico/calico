@@ -24,7 +24,7 @@ from deepdiff import DeepDiff
 
 from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
                                   ETCD_KEY, debug_failures, ETCD_HOSTNAME_SSL,
-                                  wipe_etcd)
+                                  wipe_etcd, clear_on_failures)
 
 HOST_IPV6 = get_ip(v6=True)
 HOST_IPV4 = get_ip()
@@ -58,6 +58,8 @@ class TestBase(TestCase):
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
+
+        clear_on_failures()
 
     @staticmethod
     def _conn_checker(args):
