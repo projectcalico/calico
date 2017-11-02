@@ -188,7 +188,8 @@ func (rh resourceHelper) Apply(ctx context.Context, client client.Interface, res
 // through to the resource helper specific Create method which will map the untyped call to
 // the typed interface on the client.
 func (rh resourceHelper) Create(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-	return rh.create(ctx, client, resource)
+	resourceCopy := prepareMetadataForCreate(resource)
+	return rh.create(ctx, client, resourceCopy)
 }
 
 // Update is an un-typed method to update an existing resource. This calls the resource
@@ -201,8 +202,18 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	// Check to see if the resourceVersion is specified in the resource object.
 	rv := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
 
-	// If the resourceVersion is specified then we don't try to Get it or retry.
+	// If the resourceVersion is specified then we use it to try and update the resource.
+	// Do not attempt to retry if the resource version is specified.
 	if rv != "" {
+		// Validate the metadata is not changed for the the resource.
+		ro, err := rh.get(ctx, client, resource)
+		if err != nil {
+			return ro, err
+		}
+		// Set the specific resource version we are attempting to update.
+		ro.GetObjectMeta().SetResourceVersion(rv)
+		resource = mergeMetadataForUpdate(ro, resource)
+
 		return rh.update(ctx, client, resource)
 	}
 
@@ -216,8 +227,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 			return ro, err
 		}
 
-		// Set the resource-to-be-updated's resourceVersion to the one we got from the Get call.
-		resource.(ResourceObject).GetObjectMeta().SetResourceVersion(ro.GetObjectMeta().GetResourceVersion())
+		resource = mergeMetadataForUpdate(ro, resource)
 
 		// Try to update with the resource with the updated resourceVersion.
 		ru, err := rh.update(ctx, client, resource)
@@ -507,4 +517,44 @@ func (rh resourceHelper) GetTableTemplate(headings []string, printNamespace bool
 	}
 
 	return buf.String(), nil
+}
+
+// mergeMetadataForUpdate merges the Metadata for a stored ResourceObject and a potentail
+// update. All metadata in the potential update will be overwritten by the stored object
+// except for Labels and Annotations. This prevents accidental modifications to the metadata
+// fields by forcing updates to those fields to be handled by internal or more involved
+// processes.
+func mergeMetadataForUpdate(old, new ResourceObject) ResourceObject {
+	sm := old.GetObjectMeta()
+	cm := new.GetObjectMeta()
+
+	// Set the fields that are allowed to be overwritten (Labels and Annotations)
+	// so that they will not be overwritten.
+	sm.SetAnnotations(cm.GetAnnotations())
+	sm.SetLabels(cm.GetLabels())
+
+	sm.(*v1.ObjectMeta).DeepCopyInto(cm.(*v1.ObjectMeta))
+	return new
+}
+
+// prepareMetadataForCreate removes the metadata fields that should not be set from
+// calicoctl. Only the metadata fields Name, Namespace, ResourceVersion, Labels,
+// and Annotations will be kept. All other fields will be set elsewhere if required.
+// This prevents accidental modifications to the metadata fields by forcing updates
+// to those fields to be handled by internal or more involved processes.
+func prepareMetadataForCreate(r ResourceObject) ResourceObject {
+	rom := r.GetObjectMeta()
+	meta := &v1.ObjectMeta{}
+
+	// Save the important fields in the meta before everything gets wiped out.
+	meta.Name = rom.GetName()
+	meta.Namespace = rom.GetNamespace()
+	meta.ResourceVersion = rom.GetResourceVersion()
+	meta.Labels = rom.GetLabels()
+	meta.Annotations = rom.GetAnnotations()
+
+	// Make a copy of the resource so the input does not get modified
+	resOut := r.DeepCopyObject().(ResourceObject)
+	meta.DeepCopyInto(resOut.GetObjectMeta().(*v1.ObjectMeta))
+	return resOut
 }

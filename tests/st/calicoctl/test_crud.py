@@ -378,6 +378,10 @@ class TestCalicoctlCommands(TestBase):
             data2['metadata']['name'] = data1['metadata']['name'][:len(data1['metadata']['name'])-1] + "1"
             # Change endpoint to eth1 so the validation works on the WEP
             data2['spec']['endpoint'] = "eth1"
+        elif kind == "IPPool":
+            data1['metadata']['name'] = "name1"
+            data2['metadata']['name'] = "name2"
+            data2['spec']['cidr'] = "10.10.1.0/24"
         else:
             data1['metadata']['name'] = "name1"
             data2['metadata']['name'] = "name2"
@@ -477,8 +481,8 @@ class TestCalicoctlCommands(TestBase):
         self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
 
         # Attempt to delete the default resource by name (i.e. without using a resource version).
-        rc = calicoctl("delete bgpconfig %s" % name(rev0))
-        rc.assert_no_error()
+        # rc = calicoctl("delete bgpconfig %s" % name(rev0))
+        # rc.assert_error(DELETE_DEFAULT)
 
         rc = calicoctl("create", data=bgpconfig_name2_rev1)
         rc.assert_no_error()
@@ -565,6 +569,61 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete clusterinfo %s" % name(clusterinfo_name1_rev1))
         rc.assert_error(NOT_SUPPORTED)
 
+    @parameterized.expand([
+        ('create', 'replace'),
+        ('apply', 'apply'),
+    ])
+    def test_metadata_unchanged(self, create_cmd, update_cmd):
+        """
+        Test that the metadata fields other than labels and annotations cannot be changed
+        in create and update operations by applying a resource twice.
+        """
+        # Create a new Host Endpoint and get it to determine the
+        # current resource version (first checking that it doesn't exist).
+        rc = calicoctl(
+            "get hostendpoint %s -o yaml" % name(hostendpoint_name1_rev2))
+        rc.assert_error(text=NOT_FOUND)
+
+        rc = calicoctl(create_cmd, data=hostendpoint_name1_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get hostendpoint %s -o yaml" % name(hostendpoint_name1_rev2))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+        self.assertEqual('uid' in rev0['metadata'], True)
+        self.assertEqual('creationTimestamp' in rev0['metadata'], True)
+
+        # Update the Host Endpoint (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl(update_cmd, data=hostendpoint_name1_rev3)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get hostendpoint %s -o yaml" % name(hostendpoint_name1_rev3))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
+
+        # Validate that only annotations and labels were changed in the metadata
+        self.assertNotIn('selfLink', rev1['metadata'])
+        self.assertNotIn('generation', rev1['metadata'])
+        self.assertNotIn('finalizers', rev1['metadata'])
+        self.assertIn('uid', rev1['metadata'])
+        self.assertIn('creationTimestamp', rev1['metadata'])
+        self.assertNotEqual(rev1['metadata']['uid'], hostendpoint_name1_rev3['metadata']['uid'])
+        self.assertNotEqual(rev1['metadata']['creationTimestamp'], hostendpoint_name1_rev3['metadata']['creationTimestamp'])
+        self.assertEqual(rev1['metadata'].get('name', ''), hostendpoint_name1_rev2['metadata'].get('name', ''))
+        self.assertEqual(rev1['metadata']['labels'], hostendpoint_name1_rev3['metadata']['labels'])
+        self.assertNotEqual(rev1['metadata']['labels'], rev0['metadata']['labels'])
+        self.assertEqual(rev1['metadata']['annotations'], hostendpoint_name1_rev3['metadata']['annotations'])
+        self.assertNotEqual(rev1['metadata']['annotations'], rev0['metadata']['labels'])
+
+        # Validate that creationTimestamp and UID are unchanged from when they were created
+        self.assertEqual(rev1['metadata']['creationTimestamp'], rev0['metadata']['creationTimestamp'])
+        self.assertEqual(rev1['metadata']['uid'], rev0['metadata']['uid'])
+
+        # Delete the resource without using a resource version.
+        rc = calicoctl("delete hostendpoint %s" % name(rev1))
+        rc.assert_no_error()
 #
 #
 # class TestCreateFromFile(TestBase):

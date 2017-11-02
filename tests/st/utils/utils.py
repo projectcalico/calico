@@ -15,6 +15,7 @@ import copy
 import os
 import socket
 import sys
+from datetime import datetime
 from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
 
@@ -241,7 +242,7 @@ def clean_calico_data(data):
             # Remove non-settable fields, and recursively clean each value of
             # the dictionary, removing nil values or values that are empty
             # dicts after cleaning.
-            del_keys = ['creationTimestamp', 'resourceVersion']
+            del_keys = ['creationTimestamp', 'resourceVersion', 'uid']
             for k, v in elem.iteritems():
                 clean_elem(v)
                 if v is None or v == {}:
@@ -256,16 +257,34 @@ def clean_calico_data(data):
 def decode_json_yaml(value):
     try:
         decoded = json.loads(value)
+        # fix the python datetime back into isoformat with empty timezone information
+        decoded = find_and_format_creation_timestamp(decoded)
         return decoded, "json"
     except ValueError:
         pass
     try:
         decoded = yaml.safe_load(value)
+        # fix the python datetime back into isoformat with empty timezone information
+        decoded = find_and_format_creation_timestamp(decoded)
         return decoded, "yaml"
     except yaml.YAMLError:
         pass
     return None, None
 
+def find_and_format_creation_timestamp(decoded):
+    if 'items' in decoded:
+        for i in xrange(len(decoded['items'])):
+            decoded['items'][i] = format_creation_timestamp(decoded['items'][i])
+    else:
+        decoded = format_creation_timestamp(decoded)
+    return decoded
+
+def format_creation_timestamp(decoded):
+    if isinstance(decoded, dict) and 'metadata' in decoded and 'creationTimestamp' in decoded['metadata']:
+        if isinstance(decoded['metadata']['creationTimestamp'], datetime):
+            decoded['metadata']['creationTimestamp'] = decoded.get('metadata', {}). \
+                    get('creationTimestamp', datetime.utcnow()).isoformat() + 'Z'
+    return decoded
 
 def writeyaml(filename, data):
     """
