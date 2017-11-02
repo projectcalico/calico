@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -557,7 +556,7 @@ func configureASNumber(node *api.Node) {
 func getIPv6Pool() string {
 	cidr := autoDetectCIDR(adm, 6)
 	eui := cidr.String()
-	if eui != nil {
+	if eui != "" {
 		date := fmt.Sprint(time.Now().Unix())
 		d := []byte(date)
 		h := sha1.New()
