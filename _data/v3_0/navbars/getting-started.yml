@@ -45,8 +45,6 @@ toc:
       path: /getting-started/kubernetes/tutorials/advanced-policy
   - title: Troubleshooting / FAQ
     path: /getting-started/kubernetes/troubleshooting
-  - title: Upgrade
-    path: /getting-started/kubernetes/upgrade
 
 - title: Host Protection
   section:

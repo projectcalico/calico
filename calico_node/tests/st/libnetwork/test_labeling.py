@@ -41,6 +41,7 @@ else:
     ADDITIONAL_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
                                 get_ip()
 
+# TODO: Re-enable
 @skip("Disabled until libnetwork is updated for libcalico-go v2")
 class TestLibnetworkLabeling(TestBase):
     """
