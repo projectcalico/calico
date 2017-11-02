@@ -20,7 +20,8 @@ import yaml
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.utils import get_ip, log_and_run, retry_until_success, \
-    ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME
+    ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, \
+    handle_failure, clear_on_failures, add_on_failure
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
@@ -168,6 +169,10 @@ class TestFelixOnGateway(TestBase):
             network=cls.calinet,
             labels=["org.projectcalico.label.wep=host"])
 
+        clear_on_failures()
+        add_on_failure(cls.host.log_extra_diags)
+        add_on_failure(cls.gateway.log_extra_diags)
+
     def setUp(self):
         # Override the per-test setUp to avoid wiping etcd; instead only clean up the data we
         # added.
@@ -189,6 +194,9 @@ class TestFelixOnGateway(TestBase):
 
         log_and_run("docker rm -f cali-st-ext-nginx || true")
 
+        clear_on_failures()
+
+    @handle_failure
     def test_can_connect_by_default(self):
         """
         Test if traffic is allowed with no policy setup.
@@ -220,6 +228,7 @@ class TestFelixOnGateway(TestBase):
         })
         retry_until_success(self.assert_host_can_curl_ext, 3)
 
+    @handle_failure
     def test_default_deny_for_local_traffic(self):
         """
         Test default deny for local traffic after host endpoint been created.
@@ -235,6 +244,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_empty_policy_for_forward_traffic(self):
         """
         Test empty policy deny local and forward traffic.
@@ -267,6 +277,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_local_allow_with_forward_empty(self):
         """
         Test local allow does not affect forward traffic with empty policy.
@@ -293,6 +304,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_local_deny_with_lower_forward_allow(self):
         """
         Test local deny with lower order does not affect forward allow policy.
@@ -319,6 +331,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_local_ingress_allow_with_lower_ingress_forward_deny(self):
         """
         Test local ingress allow does not affect forward ingress deny with lower order.
@@ -347,6 +360,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_local_egress_allow_with_lower_egress_forward_deny(self):
         """
         Test local egress allow does not affect forward egress deny with lower order.
@@ -375,6 +389,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_local_forward_opposite_policy_0(self):
         """
         Test local and forward got opposite allow/deny rules.
@@ -396,6 +411,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_local_forward_opposite_policy_1(self):
         """
         Test local and forward got opposite allow/deny rules.
@@ -417,6 +433,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_host_endpoint_combinations(self):
         """
         Test combinations of untracked, preDNAT, normal and forward policies.
