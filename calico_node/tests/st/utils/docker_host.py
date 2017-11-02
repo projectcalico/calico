@@ -677,8 +677,8 @@ class DockerHost(object):
     def log_extra_diags(self):
         # Run a set of commands to trace ip routes, iptables and ipsets.
         self.execute("ip route", raise_exception_on_failure=False)
-        self.execute("iptables-save", raise_exception_on_failure=False)
-        self.execute("ip6tables-save", raise_exception_on_failure=False)
+        self.execute("iptables-save -c", raise_exception_on_failure=False)
+        self.execute("ip6tables-save -c", raise_exception_on_failure=False)
         self.execute("ipset save", raise_exception_on_failure=False)
         self.execute("ps", raise_exception_on_failure=False)
         self.execute("docker logs calico-node", raise_exception_on_failure=False)
