@@ -15,7 +15,7 @@ OS := $(shell uname -s | tr A-Z a-z)
 ARCH := amd64
 ###############################################################################
 # Subcomponent versions:
-GO_BUILD_VER:=latest
+GO_BUILD_VER:=v0.9
 ###############################################################################
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
