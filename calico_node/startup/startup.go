@@ -555,27 +555,9 @@ func configureASNumber(node *api.Node) {
 // getIPv6Pool return a random generated ULA IPv6 prefix generated following rfc4193#section-3.2.2
 // The Pool is generated with a concatenation of Unix timestamps + fe80:: base IPv6 hased with SHA-1
 func getIPv6Pool() string {
-	var eui string
-	ifaces, _ := net.Interfaces()
-IfaceLoop:
-	for _, i := range ifaces {
-		addrs, _ := i.Addrs()
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			eui = fmt.Sprintln(ip)
-			if eui[0:4] == "fe80" && len(eui) == 26 {
-				// We get out the Loop at the first fe80:: IPv6
-				break IfaceLoop
-			}
-		}
-	}
-	if eui[0:4] == "fe80" && len(eui) == 26 {
+	cidr := autoDetectCIDR(adm, 6)
+	eui := cidr.String()
+	if eui != nil {
 		date := fmt.Sprint(time.Now().Unix())
 		d := []byte(date)
 		h := sha1.New()
