@@ -554,6 +554,7 @@ func configureASNumber(node *api.Node) {
 // getIPv6Pool return a random generated ULA IPv6 prefix generated following rfc4193#section-3.2.2
 // The Pool is generated with a concatenation of Unix timestamps + fe80:: base IPv6 hased with SHA-1
 func getIPv6Pool() string {
+	adm := os.Getenv("IP_AUTODETECTION_METHOD")
 	cidr := autoDetectCIDR(adm, 6)
 	eui := cidr.String()
 	if eui != "" {
