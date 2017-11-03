@@ -158,6 +158,14 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 $(NODE_CONTAINER_NAME): $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
+	# Check versions of the Calico binaries that will be in calico-node.tar.
+	docker run --rm $(NODE_CONTAINER_NAME) /bin/sh -c "\
+	  echo calico-felix --version; /bin/calico-felix --version; \
+	  echo bird --version;         /bin/bird --version; \
+	  echo calico-bgp-daemon -v;   /bin/calico-bgp-daemon -v; \
+	  echo confd --version;        /bin/confd --version; \
+	  echo libnetwork-plugin -v;   /bin/libnetwork-plugin -v; \
+	"
 	docker save --output $@ $(NODE_CONTAINER_NAME)
 
 # Build ACI (the APPC image file format) of calico/node.
@@ -167,6 +175,14 @@ calico-node-latest.aci: calico-node.tar
 
 # Build calico/node docker image - explicitly depend on the container binaries.
 $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
+	# Check versions of the binaries that we're going to use to build calico/node.
+	# startup: doesn't support --version or -v
+	# allocate-ipip-addr: doesn't support --version or -v
+	$(NODE_CONTAINER_BIN_DIR)/calico-felix --version
+	$(NODE_CONTAINER_BIN_DIR)/bird --version
+	$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon -v
+	$(NODE_CONTAINER_BIN_DIR)/confd --version
+	$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin -v
 	docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
 	touch $@
 
@@ -349,6 +365,11 @@ st-checks:
 ## Run the STs in a container
 .PHONY: st
 st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
+	# Check versions of Calico binaries that ST execution will use.
+	dist/calicoctl --version
+	dist/calicoctl-v1.0.2 --version
+	dist/calico-cni-plugin -v
+	dist/calico-ipam-plugin -v
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
