@@ -27,6 +27,9 @@ ETCD_VER=v3.2.5
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
+CONFD_VERSION?=$(shell git describe --tags --dirty --always)
+LDFLAGS=-ldflags "-X main.VERSION=$(CONFD_VERSION)"
+
 # Ensure that the bin directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p bin)
 
@@ -71,7 +74,7 @@ container: bin/confd
 bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
 	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -v -i -o $@ "github.com/kelseyhightower/confd" && \
+	    sh -c 'go build -v -i -o $@ $(LDFLAGS) "github.com/kelseyhightower/confd" && \
 		( ldd bin/confd 2>&1 | grep -q -e "Not a valid dynamic program" \
 			-e "not a dynamic executable" || \
 	             ( echo "Error: bin/confd was not statically linked"; false ) )'
