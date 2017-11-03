@@ -90,6 +90,7 @@ var _ = Describe("Poll loop tests", func() {
 	})
 	It("should responds to changes", func() {
 		tickerC <- time.Now()
+		Eventually(server.MaxConns).Should(Equal([]int{31}))
 		k8sAPI.numNodes = 200
 		tickerC <- time.Now()
 		Eventually(server.MaxConns).Should(Equal([]int{31, 61}))
