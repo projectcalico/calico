@@ -64,8 +64,6 @@ MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist)
 
 ###############################################################################
 # URL for Calico binaries
-# confd binary
-CONFD_URL?=https://github.com/projectcalico/confd/releases/download/$(CONFD_VER)/confd
 # bird binaries
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
@@ -85,6 +83,8 @@ NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 FELIX_REPO?=calico/felix
 FELIX_CONTAINER_NAME?=$(FELIX_REPO):$(FELIX_VER)
+CONFD_REPO?=calico/confd
+CONFD_CONTAINER_NAME?=$(CONFD_REPO):$(CONFD_VER)
 LIBNETWORK_PLUGIN_REPO?=calico/libnetwork-plugin
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=$(LIBNETWORK_PLUGIN_REPO):$(LIBNETWORK_PLUGIN_VER)
 CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)
@@ -216,7 +216,18 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:
-	$(CURL) -L $(CONFD_URL) -o $@
+	-docker rm -f calico-confd
+	# Latest confd binaries are stored in automated builds of calico/confd.
+	# To get them, we create (but don't start) a container from that image.
+	docker pull $(CONFD_CONTAINER_NAME)
+	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
+	# Then we copy the files out of the container.  Since docker preserves
+	# mtimes on its copy, check the file really did appear, then touch it
+	# to make sure that downstream targets get rebuilt.
+	docker cp calico-confd:/bin/confd $(NODE_CONTAINER_BIN_DIR) && \
+	  test -e $(NODE_CONTAINER_BIN_DIR)/confd && \
+	  touch $(NODE_CONTAINER_BIN_DIR)/confd
+	-docker rm -f calico-confd
 	chmod +x $@
 
 # Get the calico-bgp-daemon binary
