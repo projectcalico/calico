@@ -61,7 +61,7 @@ func NewConfigUpdateProcessor(
 	allowAnnotations bool,
 	nodeConfigKeyFn NodeConfigKeyFn,
 	globalConfigKeyFn GlobalConfigKeyFn,
-	stringifiers map[string]ValueToStringFn,
+	valueConverters map[string]ConfigFieldValueToV1ModelValue,
 ) watchersyncer.SyncerUpdateProcessor {
 	names := make(map[string]struct{}, specType.NumField())
 	for i := 0; i < specType.NumField(); i++ {
@@ -74,7 +74,7 @@ func NewConfigUpdateProcessor(
 		globalConfigKeyFn: globalConfigKeyFn,
 		names:             names,
 		additionalNames:   map[string]struct{}{},
-		stringifiers:      stringifiers,
+		valueConverters:   valueConverters,
 	}
 }
 
@@ -84,8 +84,8 @@ type NodeConfigKeyFn func(node, name string) model.Key
 // Convert the config name to the corresponding global config key
 type GlobalConfigKeyFn func(name string) model.Key
 
-// Convert an arbitrary value to the string value used in the config.
-type ValueToStringFn func(value interface{}) string
+// Convert an arbitrary value to the value used in the v1 model.
+type ConfigFieldValueToV1ModelValue func(value interface{}) interface{}
 
 var (
 	globalConfigName        = "default"
@@ -119,7 +119,7 @@ type configUpdateProcessor struct {
 	globalConfigKeyFn GlobalConfigKeyFn
 	names             map[string]struct{}
 	additionalNames   map[string]struct{}
-	stringifiers      map[string]ValueToStringFn
+	valueConverters   map[string]ConfigFieldValueToV1ModelValue
 }
 
 func (c *configUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
@@ -181,19 +181,24 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 	}
 
 	// Create a KVP for each field in the Spec struct.
-	kvps := make([]*model.KVPair, len(c.names))
+	var kvps []*model.KVPair
 	numFields := len(c.names)
 	for i := 0; i < numFields; i++ {
 		fieldInfo := c.specType.Field(i)
 		name := getConfigName(fieldInfo)
 
+		key := c.createV1Key(node, name)
+		if key == nil {
+			log.WithField("name", name).Debug("No associated v1 key, skipping field")
+			continue
+		}
 		// If we have an override, handle explicitly and then skip to the next field.
 		if v, ok := overrides[name]; ok {
-			kvps[i] = &model.KVPair{
-				Key:      c.createV1Key(node, name),
+			kvps = append(kvps, &model.KVPair{
+				Key:      key,
 				Value:    v,
 				Revision: kvp.Revision,
-			}
+			})
 
 			// Delete from the overrides list to indicate it's handled.
 			delete(overrides, name)
@@ -215,30 +220,28 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 			}
 		}
 
-		// Check if the field has a conversion function and invoke it if it does.
 		if value != nil {
-			if s, ok := c.stringifiers[name]; ok {
+			if s, ok := c.valueConverters[name]; ok {
+				// Field has a special-case conversion function, invoke it.
 				value = s(value)
-			}
-		}
-
-		// Stringify the value according to its type.  An empty string is returned as
-		// nil (i.e. delete entry).
-		if value != nil {
-			switch vt := value.(type) {
-			case string:
-				value = vt
-			default:
-				value = fmt.Sprintf("%v", vt)
+			} else {
+				// Stringify the value according to its type.  An empty string is returned as
+				// nil (i.e. delete entry).
+				switch vt := value.(type) {
+				case string:
+					value = vt
+				default:
+					value = fmt.Sprintf("%v", vt)
+				}
 			}
 		}
 
 		// Add this value to the set to return.
-		kvps[i] = &model.KVPair{
-			Key:      c.createV1Key(node, name),
+		kvps = append(kvps, &model.KVPair{
+			Key:      key,
 			Value:    value,
 			Revision: kvp.Revision,
-		}
+		})
 	}
 
 	// Now handle the additional fields that may have been added through annotations

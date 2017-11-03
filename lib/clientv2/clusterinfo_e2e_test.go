@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -35,10 +36,12 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 
 	ctx := context.Background()
 	name := "default"
+	readyTrue := true
 	spec1 := apiv2.ClusterInformationSpec{
-		ClusterGUID:   "test-cluster-guid1",
-		ClusterType:   "test-cluster-type1",
-		CalicoVersion: "test-version1",
+		ClusterGUID:    "test-cluster-guid1",
+		ClusterType:    "test-cluster-type1",
+		CalicoVersion:  "test-version1",
+		DatastoreReady: &readyTrue,
 	}
 	spec2 := apiv2.ClusterInformationSpec{
 		ClusterGUID:   "test-cluster-guid2",
@@ -46,15 +49,174 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 		CalicoVersion: "test-version2",
 	}
 
+	var c clientv2.Interface
+	var be bapi.Client
+
+	BeforeEach(func() {
+		var err error
+		c, err = clientv2.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		be, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+	})
+
+	Describe("after running EnsureInitialized", func() {
+		var kddTypePart string
+
+		BeforeEach(func() {
+			err := c.EnsureInitialized(ctx, "v0.0.0", "test")
+			Expect(err).NotTo(HaveOccurred())
+			if config.Spec.DatastoreType == "kubernetes" {
+				kddTypePart = ",kdd"
+			} else {
+				kddTypePart = ""
+			}
+		})
+
+		It("should create the ClusterInformation", func() {
+			res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Spec.ClusterGUID).To(MatchRegexp("^[a-f0-9]{32}$"))
+			testutils.ExpectResource(
+				res,
+				apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name,
+				apiv2.ClusterInformationSpec{
+					ClusterGUID:    res.Spec.ClusterGUID,
+					ClusterType:    "test" + kddTypePart,
+					CalicoVersion:  "v0.0.0",
+					DatastoreReady: &readyTrue,
+				})
+		})
+
+		It("should be idempotent", func() {
+			res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			guid := res.Spec.ClusterGUID
+
+			err = c.EnsureInitialized(ctx, "v0.0.0", "test")
+			Expect(err).NotTo(HaveOccurred())
+
+			res, err = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			testutils.ExpectResource(
+				res,
+				apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name,
+				apiv2.ClusterInformationSpec{
+					ClusterGUID:    guid,
+					ClusterType:    "test" + kddTypePart,
+					CalicoVersion:  "v0.0.0",
+					DatastoreReady: &readyTrue,
+				})
+		})
+
+		It("should merge cluster types", func() {
+			res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			guid := res.Spec.ClusterGUID
+
+			err = c.EnsureInitialized(ctx, "v0.0.0", "test2")
+			Expect(err).NotTo(HaveOccurred())
+
+			res, err = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			spec := apiv2.ClusterInformationSpec{
+				ClusterGUID:    guid,
+				ClusterType:    "test" + kddTypePart + ",test2",
+				CalicoVersion:  "v0.0.0",
+				DatastoreReady: &readyTrue,
+			}
+			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name, spec)
+
+			By("ignoring idempotent update 'test'")
+			err = c.EnsureInitialized(ctx, "v0.0.0", "test")
+			Expect(err).NotTo(HaveOccurred())
+			res, err = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name, spec)
+
+			By("ignoring idempotent update 'test2'")
+			err = c.EnsureInitialized(ctx, "v0.0.0", "test2")
+			Expect(err).NotTo(HaveOccurred())
+			res, err = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name, spec)
+
+			By("ignoring idempotent update ''")
+			err = c.EnsureInitialized(ctx, "", "")
+			Expect(err).NotTo(HaveOccurred())
+			res, err = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name, spec)
+		})
+
+		It("should overwrite version", func() {
+			res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			guid := res.Spec.ClusterGUID
+
+			err = c.EnsureInitialized(ctx, "v0.0.1", "test")
+			Expect(err).NotTo(HaveOccurred())
+
+			res, err = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			spec := apiv2.ClusterInformationSpec{
+				ClusterGUID:    guid,
+				ClusterType:    "test" + kddTypePart,
+				CalicoVersion:  "v0.0.1",
+				DatastoreReady: &readyTrue,
+			}
+			testutils.ExpectResource(res, apiv2.KindClusterInformation, testutils.ExpectNoNamespace,
+				name, spec)
+		})
+
+		Describe("after disabling ready flag", func() {
+			BeforeEach(func() {
+				res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				readyFalse := false
+				res.Spec.DatastoreReady = &readyFalse
+				_, err = c.ClusterInformation().Update(ctx, res, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should not set it back to true", func() {
+				err := c.EnsureInitialized(ctx, "v0.0.0", "test")
+				Expect(err).NotTo(HaveOccurred())
+				res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*res.Spec.DatastoreReady).To(BeFalse())
+			})
+		})
+
+		Describe("after nilling-out ready flag", func() {
+			BeforeEach(func() {
+				res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				res.Spec.DatastoreReady = nil
+				_, err = c.ClusterInformation().Update(ctx, res, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should set it back to true", func() {
+				err := c.EnsureInitialized(ctx, "v0.0.0", "test")
+				Expect(err).NotTo(HaveOccurred())
+				res, err := c.ClusterInformation().Get(ctx, name, options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*res.Spec.DatastoreReady).To(BeTrue())
+			})
+		})
+	})
+
 	DescribeTable("ClusterInformation e2e CRUD tests",
 		func(name string, spec1, spec2 apiv2.ClusterInformationSpec) {
-			c, err := clientv2.New(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			be, err := backend.NewClient(config)
-			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
-
 			By("Updating the ClusterInformation before it is created")
 			_, outError := c.ClusterInformation().Update(ctx, &apiv2.ClusterInformation{
 				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-clusterinfo"},
@@ -209,13 +371,6 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 
 	Describe("ClusterInformation watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			c, err := clientv2.New(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			be, err := backend.NewClient(config)
-			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
-
 			By("Listing ClusterInformation with the latest resource version and checking for one result with name/spec2")
 			outList, outError := c.ClusterInformation().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())

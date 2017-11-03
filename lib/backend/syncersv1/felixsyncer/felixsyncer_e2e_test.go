@@ -135,12 +135,22 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					options.SetOptions{},
 				)
 				Expect(err).NotTo(HaveOccurred())
+
+				// Creating the node initialises the ClusterInformation as a side effect.
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.ReadyFlagKey{},
+					Value: true,
+				})
+				syncTester.ExpectValueMatches(
+					model.GlobalConfigKey{Name: "ClusterGUID"},
+					MatchRegexp("[a-f0-9]{32}"),
+				)
+				expectedCacheSize += 2
 			}
 
 			// The HostIP will be added for the IPv4 address
 			expectedCacheSize += 2
 			ip := net.MustParseIP("1.2.3.4")
-			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectData(model.KVPair{
 				Key:   model.HostIPKey{Hostname: "127.0.0.1"},
 				Value: &ip,
@@ -149,6 +159,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 				Value: "10.10.10.1",
 			})
+			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Creating an IPPool")
 			poolCIDR := "192.124.0.0/21"

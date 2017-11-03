@@ -14,7 +14,10 @@
 
 package clientv2
 
-import "github.com/projectcalico/libcalico-go/lib/ipam"
+import (
+	"context"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
+)
 
 type Interface interface {
 	// Nodes returns an interface for managing node resources.
@@ -47,5 +50,5 @@ type Interface interface {
 	// Most Calico deployment scenarios will automatically implicitly invoke this
 	// method and so a general consumer of this API can assume that the datastore
 	// is already initialized.
-	EnsureInitialized() error
+	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
 }

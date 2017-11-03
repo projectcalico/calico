@@ -43,6 +43,9 @@ type ClusterInformationSpec struct {
 	ClusterType string `json:"clusterType,omitempty" validate:"omitempty"`
 	// CalicoVersion is the version of Calico that the cluster is running
 	CalicoVersion string `json:"calicoVersion,omitempty" validate:"omitempty"`
+	// DatastoreReady is used during significant datastore migrations to signal to components
+	// such as Felix that it should wait before accessing the datastore.
+	DatastoreReady *bool `json:"datastoreReady"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

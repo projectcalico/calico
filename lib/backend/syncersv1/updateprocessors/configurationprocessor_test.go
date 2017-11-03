@@ -69,7 +69,8 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		Name: "node.bgpnode1",
 	}
 	numFelixConfigs := 46
-	numClusterConfigs := 3
+	numClusterConfigs := 4
+	numNodeClusterConfigs := 3
 	numBgpConfigs := 3
 	felixMappedNames := map[string]interface{}{
 		"RouteRefreshInterval":    nil,
@@ -232,6 +233,50 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		expected := map[string]interface{}{
 			"ClusterGUID": "abcedfg",
 			"ClusterType": "Mesos,K8s",
+		}
+		kvps, err := cc.Process(&model.KVPair{
+			Key:   globalClusterKey,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isGlobalFelixConfig,
+			numClusterConfigs,
+			expected,
+		)
+	})
+
+	It("should handle cluster config ready flag field", func() {
+		cc := updateprocessors.NewClusterInfoUpdateProcessor()
+		By("converting a global cluster info KVPair with values assigned")
+		res := apiv2.NewClusterInformation()
+		ready := true
+		res.Spec.DatastoreReady = &ready
+		expected := map[string]interface{}{
+			"ready-flag": true,
+		}
+		kvps, err := cc.Process(&model.KVPair{
+			Key:   globalClusterKey,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isGlobalFelixConfig,
+			numClusterConfigs,
+			expected,
+		)
+	})
+
+	It("should handle cluster config ready flag field (false)", func() {
+		cc := updateprocessors.NewClusterInfoUpdateProcessor()
+		By("converting a global cluster info KVPair with values assigned")
+		res := apiv2.NewClusterInformation()
+		ready := false
+		res.Spec.DatastoreReady = &ready
+		expected := map[string]interface{}{
+			"ready-flag": false,
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   globalClusterKey,
@@ -527,7 +572,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		checkExpectedConfigs(
 			kvps,
 			isNodeFelixConfig,
-			numClusterConfigs,
+			numNodeClusterConfigs,
 			nil,
 		)
 
@@ -544,7 +589,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		checkExpectedConfigs(
 			kvps,
 			isNodeFelixConfig,
-			numClusterConfigs,
+			numNodeClusterConfigs,
 			nil,
 		)
 	})
@@ -574,8 +619,13 @@ func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, e
 		var name string
 		switch dataType {
 		case isGlobalFelixConfig:
-			Expect(kvp.Key).To(BeAssignableToTypeOf(model.GlobalConfigKey{}))
-			name = kvp.Key.(model.GlobalConfigKey).Name
+			switch kvp.Key.(type) {
+			case model.ReadyFlagKey:
+				name = "ready-flag"
+			default:
+				Expect(kvp.Key).To(BeAssignableToTypeOf(model.GlobalConfigKey{}))
+				name = kvp.Key.(model.GlobalConfigKey).Name
+			}
 		case isNodeFelixConfig:
 			switch kt := kvp.Key.(type) {
 			case model.HostConfigKey:

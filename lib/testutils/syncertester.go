@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	gomegatypes "github.com/onsi/gomega/types"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
@@ -190,18 +191,13 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 		return st.statusChanged
 	}
 	Eventually(sc, 6*time.Second, 500*time.Millisecond).Should(BeFalse())
-	Consistently(sc).Should(BeFalse())
+	Consistently(sc).Should(BeFalse(), "Status changed unexpectedly")
 }
 
 // ExpectCacheSize verifies that the cache size is as expected.
 func (st *SyncerTester) ExpectCacheSize(size int) {
-	sfn := func() int {
-		st.lock.Lock()
-		defer st.lock.Unlock()
-		return len(st.cache)
-	}
-	Eventually(sfn, 6*time.Second, 500*time.Millisecond).Should(Equal(size))
-	Consistently(sfn).Should(Equal(size))
+	Eventually(st.CacheSnapshot, 6*time.Second, 500*time.Millisecond).Should(HaveLen(size))
+	Consistently(st.CacheSnapshot).Should(HaveLen(size), "Cache size incorrect")
 }
 
 // ExpectData verifies that a KVPair is in the cache.  If a Revision is not supplied, then
@@ -212,36 +208,65 @@ func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 	Expect(err).NotTo(HaveOccurred())
 
 	if kvp.Revision == "" {
-		efn := func() interface{} {
-			st.lock.Lock()
-			defer st.lock.Unlock()
-			return st.cache[key].Value
+		value := func() interface{} {
+			return st.GetCacheValue(key)
 		}
-		Eventually(efn, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp.Value))
-		Consistently(efn).Should(Equal(kvp.Value))
+		Eventually(value, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp.Value))
+		Consistently(value).Should(Equal(kvp.Value), "KVPair data was incorrect")
 	} else {
-		efn := func() model.KVPair {
-			st.lock.Lock()
-			defer st.lock.Unlock()
-			return st.cache[key]
+		kv := func() interface{} {
+			return st.GetCacheKVPair(key)
 		}
-		Eventually(efn, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp))
-		Consistently(efn).Should(Equal(kvp))
+		Eventually(kv, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp))
+		Consistently(kv).Should(Equal(kvp), "KVPair data (or revision) was incorrect")
 	}
+}
+
+// ExpectDataMatch verifies that the KV in the cache exists and matches the GomegaMatcher.
+func (st *SyncerTester) ExpectValueMatches(k model.Key, match gomegatypes.GomegaMatcher) {
+	key, err := model.KeyToDefaultPath(k)
+	Expect(err).NotTo(HaveOccurred())
+
+	value := func() interface{} {
+		return st.GetCacheValue(key)
+	}
+
+	Eventually(value, 6*time.Second, 500*time.Millisecond).Should(match)
+	Consistently(value).Should(match)
 }
 
 // ExpectNoData verifies that a Key is not in the cache.
 func (st *SyncerTester) ExpectNoData(k model.Key) {
 	key, err := model.KeyToDefaultPath(k)
 	Expect(err).NotTo(HaveOccurred())
-	efn := func() bool {
-		st.lock.Lock()
-		defer st.lock.Unlock()
-		_, ok := st.cache[key]
-		return ok
+
+	Eventually(st.CacheSnapshot).ShouldNot(HaveKey(key), fmt.Sprintf("Found key %s in cache - not expected", key))
+	Consistently(st.CacheSnapshot).ShouldNot(HaveKey(key), fmt.Sprintf("Found key %s in cache - not expected", key))
+}
+
+// GetCacheValue returns the value of the KVPair from the cache.
+func (st *SyncerTester) GetCacheKVPair(k string) interface{} {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+	return st.cache[k]
+}
+
+// GetCacheValue returns the value of the KVPair from the cache or nil if not present.
+func (st *SyncerTester) GetCacheValue(k string) interface{} {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+	return st.cache[k].Value
+}
+
+// CacheSnapshot returns a copy of the cache.  The copy is made with the lock held.
+func (st *SyncerTester) CacheSnapshot() map[string]model.KVPair {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+	cacheCopy := map[string]model.KVPair{}
+	for k, v := range st.cache {
+		cacheCopy[k] = v
 	}
-	Eventually(efn).Should(BeFalse(), fmt.Sprintf("Found key %s in cache - not expected", key))
-	Consistently(efn).Should(BeFalse(), fmt.Sprintf("Found key %s in cache - not expected", key))
+	return cacheCopy
 }
 
 // GetCacheEntries returns a slice of the current cache entries.

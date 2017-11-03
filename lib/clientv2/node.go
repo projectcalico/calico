@@ -40,6 +40,13 @@ type nodes struct {
 // Create takes the representation of a Node and creates it.  Returns the stored
 // representation of the Node, and an error, if there is any.
 func (r nodes) Create(ctx context.Context, res *apiv2.Node, opts options.SetOptions) (*apiv2.Node, error) {
+	// For host-protection only clusters, we instruct the user to create a Node as the first
+	// operation.  Piggy-back the datastore initialisation on that to ensure the Ready flag gets
+	// set.  Since we're likely being called from calicoctl, we don't know the Calico version.
+	err := r.client.EnsureInitialized(ctx, "", "")
+	if err != nil {
+		return nil, err
+	}
 	out, err := r.client.resources.Create(ctx, opts, apiv2.KindNode, res)
 	if out != nil {
 		return out.(*apiv2.Node), err
