@@ -336,7 +336,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 				Name:      policyName,
 				Namespace: policyNS,
 			},
-			Spec: api.PolicySpec{},
+			Spec: api.NetworkPolicySpec{},
 		}
 
 		// Get key
