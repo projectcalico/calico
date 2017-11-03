@@ -132,7 +132,7 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) *api.WatchEven
 			}
 		}
 		if kvp == nil {
-			crw.logCxt.Info("Event converted to a no-op")
+			crw.logCxt.Debug("Event converted to a no-op")
 			return nil
 		}
 	}

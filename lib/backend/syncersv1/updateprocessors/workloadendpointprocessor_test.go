@@ -85,6 +85,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		res.Spec.Workload = wid1
 		res.Spec.Endpoint = eid1
 		res.Spec.InterfaceName = iface1
+		res.Spec.IPNetworks = []string{"10.100.10.1"}
 
 		kvps, err := up.Process(&model.KVPair{
 			Key:      v2WorkloadEndpointKey1,
@@ -93,6 +94,9 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(HaveLen(1))
+		_, ipn, err := cnet.ParseCIDROrIP("10.100.10.1")
+		Expect(err).NotTo(HaveOccurred())
+		expectedIPv4Net := *(ipn.Network())
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1WorkloadEndpointKey1,
 			Value: &model.WorkloadEndpoint{
@@ -103,6 +107,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
 				},
+				IPv4Nets:   []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
 		}))
@@ -124,9 +129,9 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		res.Spec.MAC = "01:23:45:67:89:ab"
 		res.Spec.Profiles = []string{"testProfile"}
 		res.Spec.IPNetworks = []string{"10.100.10.1"}
-		_, ipn, err := cnet.ParseCIDROrIP("10.100.10.1")
+		_, ipn, err = cnet.ParseCIDROrIP("10.100.10.1")
 		Expect(err).NotTo(HaveOccurred())
-		expectedIPv4Net := *(ipn.Network())
+		expectedIPv4Net = *(ipn.Network())
 		res.Spec.IPNATs = []apiv2.IPNAT{
 			apiv2.IPNAT{
 				InternalIP: "10.100.1.1",
@@ -241,5 +246,33 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 			Revision: "abcde",
 		})
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("should filter out a WEP with no IPNetworks", func() {
+		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+		By("converting a WorkloadEndpoint with no IPNetworks")
+		res := apiv2.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
+		res.Spec.InterfaceName = iface1
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v2WorkloadEndpointKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(HaveLen(1))
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key: v1WorkloadEndpointKey1,
+		}))
 	})
 })
