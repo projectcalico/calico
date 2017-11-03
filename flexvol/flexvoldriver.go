@@ -260,10 +260,31 @@ func doMount(dstDir string, ninputs *pb.WorkloadInfo) error {
 		return err
 	}
 
+	// Not really needed but attempt to workaround:
+	// https://github.com/kubernetes/kubernetes/blob/61ac9d46382884a8bd9e228da22bca5817f6d226/pkg/util/mount/mount_linux.go
+	cmdMount := exec.Command("/bin/mount", "-t", "tmpfs", "-o", "size=8K", "tmpfs", dstDir)
+	err = cmdMount.Run()
+	if err != nil {
+		os.RemoveAll(newDir)
+		return err
+	}
+
+	newDstDir := dstDir + "/nodeagent"
+	err = os.MkdirAll(newDstDir, 0777)
+	if err != nil {
+		cmd := exec.Command("/bin/unmount", dstDir)
+		cmd.Run()
+		os.RemoveAll(newDir)
+		return err
+	}
+
 	// Do a bind mount
-	cmd := exec.Command("/bin/mount", "--bind", newDir, dstDir)
+	cmd := exec.Command("/bin/mount", "--bind", newDir, newDstDir)
 	err = cmd.Run()
 	if err != nil {
+		cmd = exec.Command("/bin/umount", dstDir)
+		cmd.Run()
+		os.RemoveAll(newDir)
 		return err
 	}
 
@@ -302,11 +323,6 @@ func Mount(dir, opts string) error {
 }
 
 func Unmount(dir string) error {
-	// TBD: https://github.com/kubernetes/kubernetes/blob/61ac9d46382884a8bd9e228da22bca5817f6d226/pkg/util/mount/mount_linux.go
-	// This is a bug and therefore unmount is not called.
-	doUnmount(dir)
-
-	// Does not matter what happened at doUnmount.
 	// Stop the listener.
 	// /var/lib/kubelet/pods/20154c76-bf4e-11e7-8a7e-080027631ab3/volumes/nodeagent~uds/test-volume/
 	comps := strings.Split(dir, "/")
@@ -315,11 +331,17 @@ func Unmount(dir string) error {
 		return Failure("unmount", dir, sErr)
 	}
 
-	naInp := &pb.WorkloadInfo{Uid: comps[4]}
+	uid := comps[4]
+	naInp := &pb.WorkloadInfo{Uid: uid}
 	if err := DelListener(naInp); err != nil {
 		sErr := "Failure to notify nodeagent: " + err.Error()
 		return Failure("unmount", dir, sErr)
 	}
+
+	// unmount the bind mount
+	doUnmount(dir + "/nodeagent")
+	// unmount the tmpfs
+	doUnmount(dir)
 
 	return genericSucc("unmount", dir, "Unmount ok.")
 }
