@@ -1,5 +1,5 @@
-hash: 5af5cfe1cce2bd44a3fefc3e06f3a67940ce502dee0fee6239ed6da7cd48120d
-updated: 2017-10-28T16:05:24.644525838-07:00
+hash: 71bb2f17b856a91dbd7fda24781c90e61738650412f2a254afe9546cd2a97a1b
+updated: 2017-11-02T17:57:09.215414323-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -148,6 +148,8 @@ imports:
   - types
 - name: github.com/patrickmn/go-cache
   version: a3647f8e31d79543b2d0f0ae2fe5c379d72cedc0
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
@@ -166,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dae320cd652b66d908eb5d59209717e3c3514c26
+  version: 88a4db12f216de433ee33d3e7d71e60c46fcd09a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -184,6 +186,7 @@ imports:
   - lib/backend/watchersyncer
   - lib/clientv2
   - lib/errors
+  - lib/hash
   - lib/ipam
   - lib/ipip
   - lib/logutils
@@ -193,6 +196,8 @@ imports:
   - lib/numorstring
   - lib/options
   - lib/scope
+  - lib/selector/parser
+  - lib/selector/tokenizer
   - lib/set
   - lib/testutils
   - lib/watch
@@ -223,7 +228,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -248,10 +253,9 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -386,6 +390,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait

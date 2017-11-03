@@ -138,9 +138,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 	Describe("NetworkPolicy FV tests", func() {
 		var (
-			policyName      string
-			genPolicyName   string
-			policyNamespace string
+			policyName        string
+			genPolicyName     string
+			policyNamespace   string
+			policyLabels      map[string]string
+			policyAnnotations map[string]string
 		)
 
 		BeforeEach(func() {
@@ -148,10 +150,19 @@ var _ = Describe("kube-controllers FV tests", func() {
 			policyName = "jelly"
 			genPolicyName = "knp.default." + policyName
 			policyNamespace = "default"
+			policyAnnotations = map[string]string{
+				"annotK": "annotV",
+			}
+			policyLabels = map[string]string{
+				"labelK": "labelV",
+			}
+
 			np := &v1beta1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      policyName,
-					Namespace: policyNamespace,
+					Name:        policyName,
+					Namespace:   policyNamespace,
+					Annotations: policyAnnotations,
+					Labels:      policyLabels,
 				},
 				Spec: v1beta1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
