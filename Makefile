@@ -288,18 +288,24 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # our glide.yaml.  If there area any changes, this updates glide.lock
 # as a side effect.  Unless you're adding/updating a dependency, you probably
 # want to use the vendor target to install the versions from glide.lock.
+VENDOR_REMADE := false
 .PHONY: update-vendor
-update-vendor:
+update-vendor glide.lock:
 	mkdir -p $$HOME/.glide
 	$(DOCKER_GO_BUILD) glide up --strip-vendor
 	touch vendor/.up-to-date
+	# Optimization: since glide up does the job of glide install, flag to the
+	# vendor target that it doesn't need to do anything.
+	$(eval VENDOR_REMADE := true)
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
-	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
-	touch vendor/.up-to-date
+	if ! $(VENDOR_REMADE); then \
+	  mkdir -p $$HOME/.glide && \
+	  $(DOCKER_GO_BUILD) glide install --strip-vendor && \
+	  touch vendor/.up-to-date; \
+	fi
 
 # Linker flags for building Felix.
 #
