@@ -19,6 +19,8 @@ import (
 	"net"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -52,6 +54,16 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 	if !ok {
 		return nil, errors.New("Value is not a valid WorkloadEndpoint resource value")
 	}
+
+	// If the WEP has no IPNetworks assigned then filter out since we can't yet render the rules.
+	if len(v2res.Spec.IPNetworks) == 0 {
+		log.WithFields(log.Fields{
+			"name": v2res.Name,
+			"namespace": v2res.Namespace,
+		}).Debug("Filtering out WEP with no IPNetworks")
+		return nil, nil
+	}
+
 	var ipv4Nets []cnet.IPNet
 	var ipv6Nets []cnet.IPNet
 	for _, ipnString := range v2res.Spec.IPNetworks {

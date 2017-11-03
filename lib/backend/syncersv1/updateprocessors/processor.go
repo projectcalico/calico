@@ -33,7 +33,13 @@ import (
 // resource key. The simple update processor is for converting objects that can create
 // the v1 key using only the information available in the resource key.
 
+// Function signature to convert a v2 model.ResourceKey to a v1 model.Key type
 type ConvertV2ToV1Key func(v2Key model.ResourceKey) (model.Key, error)
+
+// Function to convert a v2 resource to the v1 value.  The converter may filter out
+// results by returning nil.  The generic watchersyncer will handle filtered out events
+// by either sending no event or sending delete events depending on whether the entry
+// is currently in the cache.
 type ConvertV2ToV1Value func(interface{}) (interface{}, error)
 
 func NewSimpleUpdateProcessor(v2Kind string, kConverter ConvertV2ToV1Key, vConverter ConvertV2ToV1Value) watchersyncer.SyncerUpdateProcessor {
@@ -74,16 +80,17 @@ func (sup *simpleUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, e
 		if err != nil {
 			// Currently treat any values that fail to convert properly as a deletion event.
 			log.WithField("Resource", kvp.Key).Warn("Unable to process resource data - treating as deleted")
-			return []*model.KVPair{
-				&model.KVPair{
-					Key: v1key,
-				},
-			}, nil
+			return []*model.KVPair{{Key: v1key}}, nil
+		}
+		if v1value == nil {
+			// If the value is filtered out by the processor, treat as a delete.
+			log.WithField("Resource", kvp.Key).Debug("Filtering out resource - treating as deleted")
+			return []*model.KVPair{{Key: v1key}}, nil
 		}
 	}
 
 	return []*model.KVPair{
-		&model.KVPair{
+		{
 			Key:      v1key,
 			Value:    v1value,
 			Revision: kvp.Revision,
