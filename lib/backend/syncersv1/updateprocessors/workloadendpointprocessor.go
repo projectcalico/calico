@@ -58,7 +58,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 	// If the WEP has no IPNetworks assigned then filter out since we can't yet render the rules.
 	if len(v2res.Spec.IPNetworks) == 0 {
 		log.WithFields(log.Fields{
-			"name": v2res.Name,
+			"name":      v2res.Name,
 			"namespace": v2res.Namespace,
 		}).Debug("Filtering out WEP with no IPNetworks")
 		return nil, nil

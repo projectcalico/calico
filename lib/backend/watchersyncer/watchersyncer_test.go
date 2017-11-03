@@ -71,6 +71,7 @@ var (
 	emptyList = &model.KVPairList{
 		Revision: "abcdef12345",
 	}
+	notSupported = cerrors.ErrorOperationNotSupported{}
 	genError = errors.New("Generic error")
 )
 
@@ -112,16 +113,16 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 		//
 		// For resource 1, the client responses should be:
 		// - list succeeds
-		// - watch fails (watch interval)
+		// - watch fails gen error (immediate retry)
 		// - list fails (list interval)
 		// - list succeeds
 		// - watch succeeds ...
 		//
 		// For resource 2, the client responses should be:
 		// - list succeeds
-		// - watch fails (watch interval)
+		// - watch fails with not supported (watch interval)
 		// - list succeeds
-		// - watch fails (watch interval)
+		// - watch fails with not supported (watch interval)
 		// - list succeeds
 		// - watch succeeds ...
 		//
@@ -138,9 +139,9 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 		rs.clientListResponse(r1, emptyList)
 		rs.clientWatchResponse(r1, nil)
 		rs.clientListResponse(r2, emptyList)
-		rs.clientWatchResponse(r2, genError)
+		rs.clientWatchResponse(r2, notSupported)
 		rs.clientListResponse(r2, emptyList)
-		rs.clientWatchResponse(r2, genError)
+		rs.clientWatchResponse(r2, notSupported)
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, nil)
 		By("Expecting the time for all events to be handled is within a sensible window")
@@ -159,7 +160,7 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 
 		// Sim. for resource 3.  We send in these client responses:
 		// - list succeeds
-		// - watch fails (watch interval)
+		// - watch fails with not supported (watch interval)
 		// - list fails (list interval)
 		// - list succeeds
 		// - watch succeeds ... total 6s
@@ -169,7 +170,7 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 		maxDuration = 130 * expectedDuration / 100
 		rs.clientListResponse(r3, emptyList)
 		rs.ExpectStatusUpdate(api.InSync)
-		rs.clientWatchResponse(r3, genError)
+		rs.clientWatchResponse(r3, notSupported)
 		rs.clientListResponse(r3, genError)
 		rs.clientListResponse(r3, emptyList)
 		rs.clientWatchResponse(r3, nil)
