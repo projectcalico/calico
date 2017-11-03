@@ -817,8 +817,12 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 			newFelixConf.Spec.LogSeverityScreen = defaultLogSeverity
 			_, err = c.FelixConfigurations().Create(ctx, newFelixConf, options.SetOptions{})
 			if err != nil {
-				log.WithError(err).WithField("FelixConfig", newFelixConf).Errorf("Error creating Felix global config")
-				return err
+				if conflict, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+					log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
+				} else {
+					log.WithError(err).WithField("FelixConfig", newFelixConf).Errorf("Error creating Felix global config")
+					return err
+				}
 			}
 		} else {
 			log.WithError(err).WithField("FelixConfig", globalFelixConfigName).Errorf("Error getting Felix global config")
@@ -843,9 +847,13 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 
 		if updateNeeded {
 			_, err = c.FelixConfigurations().Update(ctx, felixConf, options.SetOptions{})
-			if err = checkConflictError(err); err != nil {
-				log.WithError(err).WithField("FelixConfig", felixConf).Errorf("Error updating Felix global config")
-				return err
+			if err != nil {
+				if conflict, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+					log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
+				} else {
+					log.WithError(err).WithField("FelixConfig", felixConf).Errorf("Error updating Felix global config")
+					return err
+				}
 			}
 		}
 	}
@@ -866,8 +874,12 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 				newFelixNodeCfg.Spec.DefaultEndpointToHostAction = "RETURN"
 				_, err = c.FelixConfigurations().Create(ctx, newFelixNodeCfg, options.SetOptions{})
 				if err != nil {
-					log.WithError(err).WithField("FelixConfig", newFelixNodeCfg).Errorf("Error creating Felix node config")
-					return err
+					if exists, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+						log.Infof("Ignoring resource exists error when setting value %s", exists.Identifier)
+					} else {
+						log.WithError(err).WithField("FelixConfig", newFelixNodeCfg).Errorf("Error creating Felix node config")
+						return err
+					}
 				}
 			} else {
 				log.WithError(err).WithField("FelixConfig", felixNodeConfigNamePrefix).Errorf("Error getting Felix node config")
@@ -877,9 +889,13 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 			if felixNodeCfg.Spec.DefaultEndpointToHostAction == "" {
 				felixNodeCfg.Spec.DefaultEndpointToHostAction = "RETURN"
 				_, err = c.FelixConfigurations().Update(ctx, felixNodeCfg, options.SetOptions{})
-				if err = checkConflictError(err); err != nil {
-					log.WithError(err).WithField("FelixConfig", felixNodeCfg).Errorf("Error updating Felix node config")
-					return err
+				if err != nil {
+					if conflict, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+						log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
+					} else {
+						log.WithError(err).WithField("FelixConfig", felixNodeCfg).Errorf("Error updating Felix node config")
+						return err
+					}
 				}
 			} else {
 				log.WithField("DefaultEndpointToHostAction", felixNodeCfg.Spec.DefaultEndpointToHostAction).Debug("Host Felix value already assigned")
@@ -888,17 +904,6 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	}
 
 	return nil
-}
-
-// checkConflictError checks to see if the given error is of the type ErrorResourceUpdateConflict
-// and ignore it if so. This is to allow our global configs to ignore conflict from multiple Nodes
-// trying to set the same value at the same time.
-func checkConflictError(err error) error {
-	if conflict, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-		log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
-		return nil
-	}
-	return err
 }
 
 // terminate prints a terminate message and exists with status 1.
