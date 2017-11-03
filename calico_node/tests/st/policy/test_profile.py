@@ -334,6 +334,8 @@ class MultiHostMainline(TestBase):
         # Set current resource versions in the profiles we are about to apply.
         for p in new_profiles:
             p['metadata']['resourceVersion'] = resource_version_map[p['metadata']['name']]
+            if 'creationTimestamp' in p['metadata']:
+                del p['metadata']['creationTimestamp']
 
         # Apply new profiles
         host.writefile("new_profiles",
