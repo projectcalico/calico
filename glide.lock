@@ -1,5 +1,5 @@
-hash: e882063c2e773906795ce0e3b27f012f7b6f313872f8720b108c3ffcb8b99fd9
-updated: 2017-10-31T14:44:39.887813554Z
+hash: a02b46883f2259c8d9c007263c334994f200f448e7368c0f30babc729de89184
+updated: 2017-11-02T19:06:21.919594986-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -176,6 +176,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -187,7 +189,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dae320cd652b66d908eb5d59209717e3c3514c26
+  version: 88a4db12f216de433ee33d3e7d71e60c46fcd09a
   subpackages:
   - lib
   - lib/apiconfig
@@ -240,13 +242,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -268,7 +270,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 2509b142fb2b797aa7587dad548f113b2c0f20ce
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -293,10 +295,9 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
@@ -323,7 +324,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: a2e0dc829727a4f957a7428b1f322805cfc1f362
+  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
   subpackages:
   - internal
   - internal/app_identity
@@ -417,6 +418,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait
