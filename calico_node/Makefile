@@ -133,6 +133,7 @@ dist/calicoctl-v1.0.2:
 # variables.  These are used for the STs.
 dist/calicoctl:
 	-docker rm -f calicoctl
+	docker pull $(CTL_CONTAINER_NAME)
 	docker create --name calicoctl $(CTL_CONTAINER_NAME)
 	docker cp calicoctl:calicoctl dist/calicoctl && \
 	  test -e dist/calicoctl && \
@@ -140,6 +141,7 @@ dist/calicoctl:
 	-docker rm -f calicoctl
 dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
+	docker pull calico/cni:$(CNI_VER)
 	docker create --name calico-cni calico/cni:$(CNI_VER)
 	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
 	  test -e dist/calico-cni-plugin && \
@@ -192,6 +194,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	-docker rm -f calico-felix
 	# Latest felix binaries are stored in automated builds of calico/felix.
 	# To get them, we create (but don't start) a container from that image.
+	docker pull $(FELIX_CONTAINER_NAME)
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
@@ -206,6 +209,7 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 	-docker rm -f calico-$(@F)
 	# Latest libnetwork-plugin binaries are stored in automated builds of calico/libnetwork-plugin.
 	# To get them, we pull that image, then copy the binaries out to our host
+	docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker create --name calico-$(@F) $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker cp calico-$(@F):/$(@F) $(@D)
 	-docker rm -f calico-$(@F)
