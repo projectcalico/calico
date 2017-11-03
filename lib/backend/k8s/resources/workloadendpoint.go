@@ -133,7 +133,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 	}
 
 	// Decide if this pod should be displayed.
-	if !c.converter.IsReadyCalicoPod(pod) {
+	if !c.converter.IsValidCalicoWorkloadEndpoint(pod) {
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 	return c.converter.PodToWorkloadEndpoint(pod)
@@ -179,8 +179,8 @@ func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterf
 	// For each Pod, return a workload endpoint.
 	ret := []*model.KVPair{}
 	for _, pod := range pods.Items {
-		// Decide if this pod should be displayed.
-		if !c.converter.IsReadyCalicoPod(&pod) {
+		// Decide if this pod should be included.
+		if !c.converter.IsValidCalicoWorkloadEndpoint(&pod) {
 			continue
 		}
 
@@ -214,6 +214,11 @@ func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInter
 		k8sPod, ok := r.(*kapiv1.Pod)
 		if !ok {
 			return nil, errors.New("Pod conversion with incorrect k8s resource type")
+		}
+		if !c.converter.IsValidCalicoWorkloadEndpoint(k8sPod) {
+			// If this is not a valid Calico workload endpoint then don't return in the watch.
+			// Returning a nil KVP and a nil error swallows the event.
+			return nil, nil
 		}
 		return c.converter.PodToWorkloadEndpoint(k8sPod)
 	}

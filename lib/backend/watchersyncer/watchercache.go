@@ -79,7 +79,14 @@ func (wc *watcherCache) run() {
 	for {
 		rc := wc.watch.ResultChan()
 		wc.logger.WithField("RC", rc).Debug("Reading event from results channel")
-		event := <-rc
+		event, ok := <-rc
+		if !ok {
+			// If the channel is closed then resync/recreate the watch.
+			wc.logger.Info("Watch channel closed by remote - recreate watcher")
+			wc.resyncAndCreateWatcher()
+		}
+
+		// Handle the specific event type.
 		switch event.Type {
 		case api.WatchAdded, api.WatchModified:
 			kvp := event.New
@@ -99,7 +106,7 @@ func (wc *watcherCache) run() {
 			}
 		default:
 			// Unknown event type - not much we can do other than log.
-			wc.logger.WithField("EventType", event.Type).Info("Unknown event type received from the datastore")
+			wc.logger.WithField("EventType", event.Type).Fatal("Unknown event type received from the datastore")
 		}
 	}
 }

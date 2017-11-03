@@ -103,17 +103,27 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	return &kvp, nil
 }
 
-// IsReadyCalicoPod returns true if the pod should be shown as a workloadEndpoint
-// in the Calico API and false otherwise.
-func (c Converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
+// IsValidCalicoWorkloadEndpoint returns true if the pod should be shown as a workloadEndpoint
+// in the Calico API and false otherwise.  A Pod suitable for Calico should not be host
+// networked and should have been scheduled to a Node.
+func (c Converter) IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool {
 	if c.IsHostNetworked(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is host networked.")
 		return false
-	} else if !c.HasIPAddress(pod) {
-		log.WithField("pod", pod.Name).Debug("Pod does not have an IP address.")
-		return false
 	} else if !c.IsScheduled(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is not scheduled.")
+		return false
+	}
+	return true
+}
+
+// IsReadyCalicoPod returns true if the pod is a valid Calico WorkloadEndpoint and has
+// an IP address assigned (i.e. it's ready for Calico networking).
+func (c Converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
+	if !c.IsValidCalicoWorkloadEndpoint(pod) {
+		return false
+	} else if !c.HasIPAddress(pod) {
+		log.WithField("pod", pod.Name).Debug("Pod does not have an IP address.")
 		return false
 	}
 	return true
@@ -149,8 +159,8 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		return nil, err
 	}
 
-	// We do, in some circumstances, want to parse Pods without an IP address.  For example,
-	// a DELETE update will not include an IP.
+	// An IP address may not yet be assigned (or may have been removed for a Pod deletion), so
+	// handle a missing IP gracefully.
 	ipNets := []string{}
 	if c.HasIPAddress(pod) {
 		_, ipNet, err := cnet.ParseCIDROrIP(pod.Status.PodIP)
