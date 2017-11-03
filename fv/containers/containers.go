@@ -54,7 +54,7 @@ func (c *Container) Stop() {
 	} else {
 		log.WithField("container", c).Info("Stop")
 		c.runCmd.Process.Signal(os.Interrupt)
-		c.WaitNotRunning(10 * time.Second)
+		c.WaitNotRunning(60 * time.Second)
 	}
 }
 
