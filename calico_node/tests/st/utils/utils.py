@@ -453,6 +453,7 @@ def handle_failure(fn):
             for handler in on_failure_fns:
                 logger.info("Calling failure fn %r", handler)
                 handler()
+            sleep(3600)
             raise
 
     return wrapped
