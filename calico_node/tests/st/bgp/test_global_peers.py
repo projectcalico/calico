@@ -70,10 +70,10 @@ class TestGlobalPeers(TestBase):
 
             # Check the BGP status on each host.  Connections from a node to
             # itself will be idle since this is invalid BGP configuration.
-            check_bird_status(host1, [("global", host1.ip, ["Idle", "Active"]),
+            check_bird_status(host1, [("global", host1.ip, ["Idle", "Connect", "OpenSent", "OpenConfirm", "Active"]),
                                        ("global", host2.ip, "Established")])
             check_bird_status(host2, [("global", host1.ip, "Established"),
-                                       ("global", host2.ip, ["Idle", "Active"])])
+                                       ("global", host2.ip, ["Idle", "Connect", "OpenSent", "OpenConfirm", "Active"])])
 
     @attr('slow')
     def test_bird_node_peers(self):
