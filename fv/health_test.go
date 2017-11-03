@@ -58,11 +58,12 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"context"
 )
 
 type EnvConfig struct {
 	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"v0.5.1-27-g49eaa9b"`
+	TyphaVersion string `default:"latest"`
 }
 
 var config EnvConfig
@@ -190,7 +191,16 @@ var _ = BeforeSuite(func() {
 		})
 		if err != nil {
 			log.WithError(err).Warn("Waiting to create Calico client")
+			return
 		}
+
+		ctx, _ := context.WithTimeout(context.Background(), 10 * time.Second)
+		err = calicoClient.EnsureInitialized(
+			ctx,
+			"test-version",
+			"felix-fv",
+		)
+
 		return
 	}, "60s", "2s").ShouldNot(HaveOccurred())
 

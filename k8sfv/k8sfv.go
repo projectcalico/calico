@@ -27,6 +27,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"context"
+	"time"
 )
 
 // Global config - these are set by arguments on the ginkgo command line.
@@ -148,6 +152,31 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 		panic(err)
 	}
 
+	Eventually(func() (err error) {
+		calicoClient, err := client.New(apiconfig.CalicoAPIConfig{
+			Spec: apiconfig.CalicoAPIConfigSpec{
+				DatastoreType: apiconfig.Kubernetes,
+				KubeConfig: apiconfig.KubeConfig{
+					K8sAPIEndpoint:           k8sServerEndpoint,
+					K8sInsecureSkipTLSVerify: true,
+				},
+			},
+		})
+		if err != nil {
+			log.WithError(err).Warn("Waiting to create Calico client")
+			return
+		}
+
+		ctx, _ := context.WithTimeout(context.Background(), 10 * time.Second)
+		err = calicoClient.EnsureInitialized(
+			ctx,
+			"test-version",
+			"felix-fv",
+		)
+
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
+
 	return
 }
 
@@ -172,10 +201,10 @@ func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 	return nil
 }
 
-func cleanupAll(clientset *kubernetes.Clientset, nsPrefix string) {
+func cleanupAll(clientset *	kubernetes.Clientset, nsPrefix string) {
+	defer cleanupAllNamespaces(clientset, nsPrefix)
+	defer cleanupAllNodes(clientset)
 	cleanupAllPods(clientset, nsPrefix)
-	cleanupAllNodes(clientset)
-	cleanupAllNamespaces(clientset, nsPrefix)
 }
 
 func panicIfError(err error) {

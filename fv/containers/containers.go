@@ -32,6 +32,7 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/set"
+	"context"
 )
 
 type Container struct {
@@ -280,6 +281,15 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 
 	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
+	Eventually(func() error {
+		ctx, _ := context.WithTimeout(context.Background(), 10 * time.Second)
+		return client.EnsureInitialized(
+			ctx,
+			"test-version",
+			"felix-fv",
+		)
+	}).ShouldNot(HaveOccurred())
+
 
 	// Then start Felix and create a node for it.
 	felix = RunFelix(etcd.IP)
