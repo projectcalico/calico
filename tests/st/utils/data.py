@@ -151,6 +151,7 @@ networkpolicy_name1_rev1 = {
                     'nets': ['10.0.0.0/16'],
                     'ports': [1234, '10:1024'],
                     'selector': "type=='application'",
+                    'namespaceSelector': 'has(role)',
                 }
             }
         ],
@@ -167,7 +168,6 @@ networkpolicy_name1_rev2 = {
     'spec': {
         'order': 100000,
         'selector': "type=='sql'",
-        'doNotTrack': True,
         'types': ['ingress', 'egress'],
         'egress': [
             {
@@ -226,6 +226,7 @@ globalnetworkpolicy_name1_rev1 = {
                     'nets': ['10.0.0.0/16'],
                     'ports': [1234, '10:1024'],
                     'selector': "type=='application'",
+                    'namespaceSelector': 'has(role)',
                 }
             }
         ],
