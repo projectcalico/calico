@@ -6,8 +6,7 @@ Creating a new release creates the following artifact
 
 ## Preparing for a release
 Ensure that the branch you want to release from (typically master) is in a good state.
-e.g. Update any pins in glide.yaml, update `vendor.go` with the new version, create PR,
-and ensure tests pass and merge.
+e.g. Update any pins in glide.yaml
 
 You should have no local changes and tests should be passing.
 

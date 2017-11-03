@@ -12,10 +12,12 @@ import (
 	"github.com/kelseyhightower/confd/resource/template"
 )
 
+var VERSION string
+
 func main() {
 	flag.Parse()
 	if printVersion {
-		fmt.Printf("confd %s\n", Version)
+		fmt.Printf("confd %s\n", VERSION)
 		os.Exit(0)
 	}
 	if err := initConfig(); err != nil {
