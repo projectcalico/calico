@@ -20,11 +20,14 @@ import "github.com/projectcalico/libcalico-go/lib/selector/parser"
 type Selector interface {
 	// Evaluate evaluates the selector against the given labels expressed as a concrete map.
 	Evaluate(labels map[string]string) bool
+
 	// EvaluateLabels evaluates the selector against the given labels expressed as an interface.
 	// This allows for labels that are calculated on the fly.
 	EvaluateLabels(labels parser.Labels) bool
+
 	// String returns a string that represents this selector.
 	String() string
+
 	// UniqueID returns the unique ID that represents this selector.
 	UniqueID() string
 }

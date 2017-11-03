@@ -79,6 +79,7 @@ type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
+
 	// Selector is an optional field that contains a selector expression (see Policy for
 	// sample syntax).  Only traffic that originates from (terminates at) endpoints matching
 	// the selector will be matched.
@@ -96,6 +97,19 @@ type EntityRule struct {
 	// The effect is that the latter will accept packets from non-Calico sources whereas the
 	// former is limited to packets from Calico-controlled endpoints.
 	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
+
+	// NamespaceSelector is an optional field that contains a selector expression. Only traffic
+	// that originates from (or terminates at) endpoints within the selected namespaces will be
+	// matched. When both NamespaceSelector and Selector are defined on the same rule, then only
+	// workload endpoints that are matched by both selectors will be selected by the rule.
+	//
+	// For NetworkPolicy, an empty NamespaceSelector implies that the Selector is limited to selecting
+	// only workload endpoints in the same namespace as the NetworkPolicy.
+	//
+	// For GlobalNetworkPolicy, an empty NamespaceSelector implies the Selector applies to workload
+	// endpoints across all namespaces.
+	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
+
 	// Ports is an optional field that restricts the rule to only apply to traffic that has a
 	// source (destination) port that matches one of these ranges/values. This value is a
 	// list of integers or strings that represent ranges of ports.
@@ -103,11 +117,14 @@ type EntityRule struct {
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "tcp" or "udp".
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
-	// NotTag is the negated version of the Tag field.
+
+	// NotNets is the negated version of the Nets field.
 	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,cidr"`
+
 	// NotSelector is the negated version of the Selector field.  See Selector field for
 	// subtleties with negated selectors.
 	NotSelector string `json:"notSelector,omitempty" validate:"omitempty,selector"`
+
 	// NotPorts is the negated version of the Ports field.
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "tcp" or "udp".

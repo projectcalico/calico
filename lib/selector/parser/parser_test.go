@@ -19,7 +19,10 @@ import (
 
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
@@ -264,4 +267,39 @@ var _ = Describe("Parser", func() {
 				"inconsistent UID for "+test.input)
 		})
 	}
+})
+
+var _ = Describe("Visitor", func() {
+
+	testVisitor := parser.PrefixVisitor{Prefix: "visited/"}
+
+	DescribeTable("Visitor tests",
+		func(inSelector, outSelector string, visitor parser.Visitor) {
+			s, err := parser.Parse(inSelector)
+			By(fmt.Sprintf("parsing the selector %s", inSelector), func() {
+				Expect(err).To(BeNil())
+			})
+
+			// Run the visitor against the selector.
+			s.AcceptVisitor(visitor)
+
+			By("generating the correct output selector", func() {
+				log.Infof("[test] out: %s", s.String())
+				Expect(s.String()).To(Equal(outSelector))
+			})
+		},
+
+		Entry("should visit a LabelEqValueNode", "k == 'v'", "visited/k == \"v\"", testVisitor),
+		Entry("should visit a LabelNeValueNode", "k != 'v'", "visited/k != \"v\"", testVisitor),
+		Entry("should visit an AndNode", "k == 'v' && x == 'y'", "(visited/k == \"v\" && visited/x == \"y\")", testVisitor),
+		Entry("should visit an OrNode", "k == 'v' || has(x)", "(visited/k == \"v\" || has(visited/x))", testVisitor),
+		Entry("should visit a NotNode", "!(k == 'v')", "!visited/k == \"v\"", testVisitor),
+		Entry("should visit a LabelInSetNode", "k in {'v'}", "visited/k in {\"v\"}", testVisitor),
+		Entry("should visit a LabelNotInSetNode", "k not in {'v'}", "visited/k not in {\"v\"}", testVisitor),
+		Entry("should visit a big complex selector",
+			"!(!(k == 'v' && has(t) || all()) && (a in {'b', 'c'}))",
+			"!(!((visited/k == \"v\" && has(visited/t)) || all()) && visited/a in {\"b\", \"c\"})",
+			testVisitor,
+		),
+	)
 })

@@ -64,7 +64,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotICMPType).To(Equal(&intype))
 
 		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.SrcSelector).To(Equal("(mylabel = value1) && projectcalico.org/namespace == 'namespace2'"))
+		Expect(rulev1.SrcSelector).To(Equal("(projectcalico.org/namespace == 'namespace2') && (mylabel = value1)"))
 		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port80}))
 		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
 		Expect(rulev1.DstSelector).To(Equal("projectcalico.org/namespace == 'namespace2'"))
@@ -97,20 +97,20 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				Code: &encode,
 			},
 			Source: apiv2.EntityRule{
-				Nets:        []string{"10.100.1.1"},
-				Selector:    "pcns.namespacelabel1 == 'value1'",
-				Ports:       []numorstring.Port{port443},
-				NotNets:     []string{"192.168.80.1"},
-				NotSelector: "has(label2)",
-				NotPorts:    []numorstring.Port{port80},
+				Nets:              []string{"10.100.1.1"},
+				NamespaceSelector: "namespacelabel1 == 'value1'",
+				Ports:             []numorstring.Port{port443},
+				NotNets:           []string{"192.168.80.1"},
+				NotSelector:       "has(label2)",
+				NotPorts:          []numorstring.Port{port80},
 			},
 			Destination: apiv2.EntityRule{
-				Nets:        []string{"10.100.10.1"},
-				Selector:    "pcns.namespacelabel2 == 'value2'",
-				Ports:       []numorstring.Port{port80},
-				NotNets:     []string{"192.168.40.1"},
-				NotSelector: "has(label1)",
-				NotPorts:    []numorstring.Port{port443},
+				Nets:              []string{"10.100.10.1"},
+				NamespaceSelector: "namespacelabel2 == 'value2'",
+				Ports:             []numorstring.Port{port80},
+				NotNets:           []string{"192.168.40.1"},
+				NotSelector:       "has(label1)",
+				NotPorts:          []numorstring.Port{port443},
 			},
 		}
 		// Correct outbound rule
@@ -124,10 +124,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotICMPType).To(Equal(&entype))
 
 		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
-		Expect(rulev1.SrcSelector).To(Equal("pcns.namespacelabel1 == 'value1'"))
+		Expect(rulev1.SrcSelector).To(Equal("pcns.namespacelabel1 == \"value1\""))
 		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port443}))
 		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.DstSelector).To(Equal("pcns.namespacelabel2 == 'value2'"))
+		Expect(rulev1.DstSelector).To(Equal("pcns.namespacelabel2 == \"value2\""))
 		Expect(rulev1.DstPorts).To(Equal([]numorstring.Port{port80}))
 
 		Expect(rulev1.NotSrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.80.1/32")}))
@@ -150,7 +150,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotICMPType).To(Equal(&intype))
 
 		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.SrcSelector).To(Equal("(mylabel = value1) && projectcalico.org/namespace == 'namespace1'"))
+		Expect(rulev1.SrcSelector).To(Equal("(projectcalico.org/namespace == 'namespace1') && (mylabel = value1)"))
 		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port80}))
 		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
 		Expect(rulev1.DstSelector).To(Equal("projectcalico.org/namespace == 'namespace1'"))
@@ -174,10 +174,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 
 		Expect(rulev1.SrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.1.1/32")}))
 		// Make sure that the pcns prefix prevented the namespace from making it into the selector.
-		Expect(rulev1.SrcSelector).To(Equal("pcns.namespacelabel1 == 'value1'"))
+		Expect(rulev1.SrcSelector).To(Equal("pcns.namespacelabel1 == \"value1\""))
 		Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port443}))
 		Expect(rulev1.DstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("10.100.10.1/32")}))
-		Expect(rulev1.DstSelector).To(Equal("pcns.namespacelabel2 == 'value2'"))
+		Expect(rulev1.DstSelector).To(Equal("pcns.namespacelabel2 == \"value2\""))
 		Expect(rulev1.DstPorts).To(Equal([]numorstring.Port{port80}))
 
 		Expect(rulev1.NotSrcNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.80.1/32")}))
@@ -187,4 +187,57 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstSelector).To(Equal("has(label1)"))
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port443}))
 	})
+
+	It("should parse a rule with both a selector and namespace selector", func() {
+		r := apiv2.Rule{
+			Action: apiv2.Allow,
+			Source: apiv2.EntityRule{
+				Selector:          "projectcalico.org/orchestrator == 'k8s'",
+				NamespaceSelector: "key == 'value'",
+			},
+			Destination: apiv2.EntityRule{
+				Selector:          "projectcalico.org/orchestrator == 'k8s'",
+				NamespaceSelector: "key == 'value'",
+			},
+		}
+
+		// Process the rule and get the corresponding v1 representation.
+		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
+
+		expected := "(pcns.key == \"value\") && (projectcalico.org/orchestrator == 'k8s')"
+		By("generating the correct source selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(expected))
+		})
+
+		By("generating the correct destination selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(expected))
+		})
+	})
+
+	It("should parse a complex namespace selector", func() {
+		s := "!has(key) || (has(key) && !key in {'value'})"
+		e := "(!has(pcns.key) || (has(pcns.key) && !pcns.key in {\"value\"}))"
+
+		r := apiv2.Rule{
+			Action: apiv2.Allow,
+			Source: apiv2.EntityRule{
+				NamespaceSelector: s,
+			},
+			Destination: apiv2.EntityRule{
+				NamespaceSelector: s,
+			},
+		}
+
+		// Process the rule and get the corresponding v1 representation.
+		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
+
+		By("generating the correct source selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(e))
+		})
+
+		By("generating the correct destination selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(e))
+		})
+	})
+
 })

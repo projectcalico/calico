@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/selector/parser"
 )
 
 func RulesAPIV2ToBackend(ars []apiv2.Rule, ns string) []model.Rule {
@@ -51,45 +52,61 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 		notICMPType = ar.NotICMP.Type
 	}
 
-	// If we have any selector specified, then we may need to add the namespace selector.
-	// We do this if this policy is namespaced AND if the Selector does not have any other
-	// k8s namespace (profile label) selector in it.
-	// TODO this is TEMPORARY CODE:  We currently do a simple regex to search for pcns. in the
-	// selector to see if we are performing k8s namespace queries.
-	nsSelector := fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
-	if ns != "" && (ar.Source.Selector != "" || ar.Source.NotSelector != "") {
-		logCxt := log.WithFields(log.Fields{
-			"Namespace":   ns,
-			"Selector":    ar.Source.Selector,
-			"NotSelector": ar.Source.NotSelector,
-		})
-		logCxt.Debug("Maybe update source Selector to include namespace")
-		if !strings.Contains(ar.Source.Selector, conversion.NamespaceLabelPrefix) {
-			logCxt.Debug("Updating source selector")
-			if ar.Source.Selector == "" {
-				ar.Source.Selector = nsSelector
-			} else {
-				ar.Source.Selector = fmt.Sprintf("(%s) && %s", ar.Source.Selector, nsSelector)
-			}
-		}
+	// Determine which namespaces are impacted by this rule.
+	var sourceNSSelector string
+	if ar.Source.NamespaceSelector != "" {
+		// A namespace selector was given - the rule applies to all namespaces
+		// which match this selector.
+		sourceNSSelector = parseNamespaceSelector(ar.Source.NamespaceSelector)
+	} else if ns != "" {
+		// No namespace selector was given and this is a namespaced network policy,
+		// so the rule applies only to its own namespace.
+		sourceNSSelector = fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
 	}
-	if ns != "" && (ar.Destination.Selector != "" || ar.Destination.NotSelector != "") {
+
+	var destNSSelector string
+	if ar.Destination.NamespaceSelector != "" {
+		// A namespace selector was given - the rule applies to all namespaces
+		// which match this selector.
+		destNSSelector = parseNamespaceSelector(ar.Destination.NamespaceSelector)
+	} else if ns != "" {
+		// No namespace selector was given and this is a namespaced network policy,
+		// so the rule applies only to its own namespace.
+		destNSSelector = fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
+	}
+
+	var srcSelector, dstSelector string
+	if sourceNSSelector != "" {
+		// We need to namespace the rule's selector when converting to a v1 object.
 		logCxt := log.WithFields(log.Fields{
-			"Namespace":   ns,
-			"Selector":    ar.Destination.Selector,
-			"NotSelector": ar.Destination.NotSelector,
+			"Namespace":         ns,
+			"Selector":          ar.Source.Selector,
+			"NamespaceSelector": ar.Source.NamespaceSelector,
+			"NotSelector":       ar.Source.NotSelector,
 		})
-		logCxt.Debug("Maybe update Destination Selector to include namespace")
-		if !strings.Contains(ar.Destination.Selector, conversion.NamespaceLabelPrefix) {
-			logCxt.Debug("Updating Destination selector")
-			if ar.Destination.Selector == "" {
-				ar.Destination.Selector = nsSelector
-			} else {
-				ar.Destination.Selector = fmt.Sprintf("(%s) && %s", ar.Destination.Selector, nsSelector)
-			}
+		logCxt.Debug("Update source Selector to include namespace")
+		if ar.Source.Selector != "" {
+			srcSelector = fmt.Sprintf("(%s) && (%s)", sourceNSSelector, ar.Source.Selector)
+		} else {
+			srcSelector = sourceNSSelector
 		}
 	}
 
+	if destNSSelector != "" {
+		// We need to namespace the rule's selector when converting to a v1 object.
+		logCxt := log.WithFields(log.Fields{
+			"Namespace":         ns,
+			"Selector":          ar.Destination.Selector,
+			"NamespaceSelector": ar.Destination.NamespaceSelector,
+			"NotSelector":       ar.Destination.NotSelector,
+		})
+		logCxt.Debug("Update Destination Selector to include namespace")
+		if ar.Destination.Selector != "" {
+			dstSelector = fmt.Sprintf("(%s) && (%s)", destNSSelector, ar.Destination.Selector)
+		} else {
+			dstSelector = destNSSelector
+		}
+	}
 	return model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
@@ -101,10 +118,10 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 		NotICMPType: notICMPType,
 
 		SrcNets:     convertStringsToNets(ar.Source.Nets),
-		SrcSelector: ar.Source.Selector,
+		SrcSelector: srcSelector,
 		SrcPorts:    ar.Source.Ports,
 		DstNets:     normalizeIPNets(ar.Destination.Nets),
-		DstSelector: ar.Destination.Selector,
+		DstSelector: dstSelector,
 		DstPorts:    ar.Destination.Ports,
 
 		NotSrcNets:     convertStringsToNets(ar.Source.NotNets),
@@ -114,6 +131,20 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 		NotDstSelector: ar.Destination.NotSelector,
 		NotDstPorts:    ar.Destination.NotPorts,
 	}
+}
+
+// parseNamespaceSelector takes a v2 namespace selector and returns the appropriate v1 representation
+// by prefixing the keys with the `pcns.` prefix. For example, `k == 'v'` becomes `pcns.k == 'v'`.
+func parseNamespaceSelector(s string) string {
+	parsedSelector, err := parser.Parse(s)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to parse namespace selector: %s", s)
+		return ""
+	}
+	parsedSelector.AcceptVisitor(parser.PrefixVisitor{Prefix: conversion.NamespaceLabelPrefix})
+	updated := parsedSelector.String()
+	log.WithFields(log.Fields{"original": s, "updated": updated}).Debug("Updated namespace selector")
+	return updated
 }
 
 // normalizeIPNet converts an IPNet to a network by ensuring the IP address is correctly masked.
