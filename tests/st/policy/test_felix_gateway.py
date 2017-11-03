@@ -874,7 +874,15 @@ class TestFelixOnGateway(TestBase):
 
     @staticmethod
     def _exec_calicoctl(action, data, host):
-        # use calicoctl with data
+        # Delete creationTimestamp fields from the data that we're going to
+        # write.
+        for obj in data.get('items', []):
+            if 'creationTimestamp' in obj['metadata']:
+                del obj['metadata']['creationTimestamp']
+        if 'metadata' in data and 'creationTimestamp' in data['metadata']:
+            del data['metadata']['creationTimestamp']
+
+        # Use calicoctl with the modified data.
         host.writefile("new_data",
                        yaml.dump(data, default_flow_style=False))
         host.calicoctl("%s -f new_data" % action)
