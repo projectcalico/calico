@@ -31,10 +31,13 @@ type Rule struct {
 	Protocol    *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
 	NotProtocol *numorstring.Protocol `json:"!protocol,omitempty" validate:"omitempty"`
 
-	ICMPType    *int `json:"icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
-	ICMPCode    *int `json:"icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
-	NotICMPType *int `json:"!icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
-	NotICMPCode *int `json:"!icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
+	// ICMP validation notes: 0 is a valid (common) ICMP type and code.  Type = 255 is not assigned
+	// to any protocol and the Linux kernel doesn't support matching on it so we validate against
+	// it.
+	ICMPType    *int `json:"icmp_type,omitempty" validate:"omitempty,gte=0,lt=255"`
+	ICMPCode    *int `json:"icmp_code,omitempty" validate:"omitempty,gte=0,lte=255"`
+	NotICMPType *int `json:"!icmp_type,omitempty" validate:"omitempty,gte=0,lt=255"`
+	NotICMPCode *int `json:"!icmp_code,omitempty" validate:"omitempty,gte=0,lte=255"`
 
 	SrcTag      string             `json:"src_tag,omitempty" validate:"omitempty,tag"`
 	SrcNet      *net.IPNet         `json:"src_net,omitempty" validate:"omitempty"`
