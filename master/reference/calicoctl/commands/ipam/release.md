@@ -49,4 +49,4 @@ $ calicoctl ipam release --ip=192.168.1.2
 ## See also
 
 -  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) for details on configuring `calicoctl` to access
-   the Calico datastore.
+   the {{site.prodname}} datastore.

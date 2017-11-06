@@ -5,24 +5,24 @@ title: Calico over an Ethernet interconnect fabric
 
 
 This is the first of a few *tech notes* that I will be authoring that
-will discuss some of the various interconnect fabric options in a Calico
+will discuss some of the various interconnect fabric options in a {{site.prodname}}
 network.
 
 Any technology that is capable of transporting IP packets can be used as
-the interconnect fabric in a Calico network (the first person to test
+the interconnect fabric in a {{site.prodname}} network (the first person to test
 and publish the results of using [IP over Avian
-Carrier](http://tools.ietf.org/html/rfc1149) as a transport for Calico
-will earn a very nice dinner on or with the core Calico team). This
+Carrier](http://tools.ietf.org/html/rfc1149) as a transport for {{site.prodname}}
+will earn a very nice dinner on or with the core {{site.prodname}} team). This
 means that the standard tools used to transport IP, such as MPLS and
-Ethernet can be used in a Calico network.
+Ethernet can be used in a {{site.prodname}} network.
 
 In this note, I'm going to focus on Ethernet as the interconnect
 network. Talking to most at-scale cloud operators, they have converted
 to IP fabrics, and as will cover in the next blog post that
-infrastructure will work for Calico as well. However, the concerns that
+infrastructure will work for {{site.prodname}} as well. However, the concerns that
 drove most of those operators to IP as the interconnection network in
 their pods are largely ameliorated by Project Calico, allowing Ethernet
-to be viably considered as a Calico interconnect, even in large-scale
+to be viably considered as a {{site.prodname}} interconnect, even in large-scale
 deployments.
 
 ## Concerns over Ethernet at scale
@@ -72,20 +72,20 @@ before this, I bet you are now. Before you do, however, let's look at
 how Project Calico can mitigate these issues, even in very large
 deployments.
 
-## How does Calico tame the Ethernet daemons?
+## How does {{site.prodname}} tame the Ethernet daemons?
 
-First, let's look at how Calico uses an Ethernet interconnect fabric.
+First, let's look at how {{site.prodname}} uses an Ethernet interconnect fabric.
 It's important to remember that an Ethernet network *sees* nothing on
 the other side of an attached IP router, the Ethernet network just
 *sees* the router itself. This is why Ethernet switches can be used at
 Internet peering points, where large fractions of Internet traffic is
 exchanged. The switches only see the routers from the various ISPs, not
-those ISPs' customers' nodes. We leverage the same effect in Calico.
+those ISPs' customers' nodes. We leverage the same effect in {{site.prodname}}.
 
-To take the issues outlined above, let's revisit them in a Calico
+To take the issues outlined above, let's revisit them in a {{site.prodname}}
 context.
 
-1.  Large numbers of end points. In a Calico network, the Ethernet
+1.  Large numbers of end points. In a {{site.prodname}} network, the Ethernet
     interconnect fabric only sees the routers/compute servers, not the
     end point. In a standard cloud model, where there is tens of VMs per
     server (or hundreds of containers), this reduces the number of nodes
@@ -99,9 +99,9 @@ context.
     destroyed, or moved. In a large data center, with hundreds of
     thousands of endpoints, this *churn* could run into tens of events
     per second, every second of the day, with peaks easily in the
-    hundreds or thousands of events per second. In a Calico network,
+    hundreds or thousands of events per second. In a {{site.prodname}} network,
     however, the *churn* is very low. The only event that would lead to
-    *churn* in a Calico network's Ethernet fabric would be the addition
+    *churn* in a {{site.prodname}} network's Ethernet fabric would be the addition
     or loss of a compute server, switch, or physical connection. In a
     twenty thousand server pod, even with a 5% daily failure rate (a few
     orders of magnitude more than what is normally experienced), there
@@ -109,7 +109,7 @@ context.
     not handle that volume of change in the network should not be used
     for any application.
 3.  High volume of broadcast traffic. Since the first (and last) hop for
-    any traffic in a Calico network is an IP hop, and IP hops terminate
+    any traffic in a {{site.prodname}} network is an IP hop, and IP hops terminate
     broadcast traffic, there is no endpoint broadcast network in the
     Ethernet fabric, period. In fact, the only broadcast traffic that
     should be seen in the Ethernet fabric is the ARPs of the compute
@@ -124,33 +124,33 @@ context.
     should be able to handle the load without stress.
 
 With these considerations in mind, it should be evident that an Ethernet
-connection fabric in Calico is not only possible, it is practical and
-should be seriously considered as the interconnect fabric for a Calico
+connection fabric in {{site.prodname}} is not only possible, it is practical and
+should be seriously considered as the interconnect fabric for a {{site.prodname}}
 network.
 
 As mentioned in the IP fabric post, an IP fabric is also quite feasible
-for Calico, but there are more considerations that must be taken into
+for {{site.prodname}}, but there are more considerations that must be taken into
 account. The Ethernet fabric option has fewer architectural
 considerations in its design.
 
 ## A brief note about Ethernet topology
 
-As mentioned elsewhere in the Calico documentation, since Calico can use
+As mentioned elsewhere in the {{site.prodname}} documentation, since {{site.prodname}} can use
 most of the standard IP tooling, some interesting options regarding
 fabric topology become possible.
 
-We assume that an Ethernet fabric for Calico would most likely be
+We assume that an Ethernet fabric for {{site.prodname}} would most likely be
 constructed as a *leaf/spine* architecture. Other options are possible,
 but the *leaf/spine* is the predominant architectural model in use in
 scale-out infrastructure today.
 
-Since Calico is an IP routed fabric, a Calico network can use
+Since {{site.prodname}} is an IP routed fabric, a {{site.prodname}} network can use
 [ECMP](https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing) to
 distribute traffic across multiple links (instead of using Ethernet
 techniques such as MLAG). By leveraging ECMP load balancing on the
-Calico compute servers, it is possible to build the fabric out of
+{{site.prodname}} compute servers, it is possible to build the fabric out of
 multiple *independent* leaf/spine planes using no technologies other
-than IP routing in the Calico nodes, and basic Ethernet switching in the
+than IP routing in the {{site.prodname}} nodes, and basic Ethernet switching in the
 interconnect fabric. These planes would operate completely independently
 and could be designed such that they would not share a fault domain.
 This would allow for the catastrophic failure of one (or more) plane(s)
@@ -215,7 +215,7 @@ virtual route reflectors connected to the necessary logical leaf
 switches (blue, green, orange, and red). That may be a route reflector
 running on a compute server and connected directly to the correct plane
 link, and not routed through the vRouter, to avoid the chicken and egg
-problem that would occur if the route reflector were "behind" the Calico
+problem that would occur if the route reflector were "behind" the {{site.prodname}}
 network.
 
 Other physical and logical configurations and counts are, of course,
@@ -229,10 +229,10 @@ the load across all planes.
 If a plane were to fail (say due to a spanning tree failure), then only
 that one plane would fail. The remaining planes would stay running.
 
-[^1]: In this document (and in all Calico documents) we tend to use the
+[^1]: In this document (and in all {{site.prodname}} documents) we tend to use the
     terms *end point* to refer to a virtual machine, container,
     appliance, bare metal server, or any other entity that is connected
-    to a Calico network. If we are referring to a specific type of end
+    to a {{site.prodname}} network. If we are referring to a specific type of end
     point, we will call that out (such as referring to the behavior of
     VMs as distinct from containers).
 

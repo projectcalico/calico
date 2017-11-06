@@ -12,7 +12,7 @@ Select a namespace in a GlobalNetworkPolicy in the standard selector by using
 value to compare against, e.g., `projectcalico.org/namespace == "default"`.
 See [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for namespaced Network Policy.
 
-GlobalNetworkPolicy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
+GlobalNetworkPolicy resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
 take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following

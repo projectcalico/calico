@@ -11,9 +11,9 @@ segmenting access to the data in your etcd datastore.
 
 - You want to restrict the operations that support staff are able to perform
   to minimize accidental corruption or deletion of etcd data.
-- You want to use a single etcd cluster for Calico and Kubernetes (rather than
-  having an etcd cluster for Calico and a separate etcd cluster for Kubernetes.
-- You want to restrict the read/write access of the various Calico components
+- You want to use a single etcd cluster for {{site.prodname}} and Kubernetes (rather than
+  having an etcd cluster for {{site.prodname}} and a separate etcd cluster for Kubernetes.
+- You want to restrict the read/write access of the various {{site.prodname}} components
   as an additional safety measure.
 
 ## Configuration Concept
@@ -21,7 +21,7 @@ segmenting access to the data in your etcd datastore.
 The central piece that will link the components together is the Certificate
 Authority(CA). It will be used to
 generate certificates and keys that the etcd members (and proxies) and components
-(like Calico and Kubernetes) will need to authenticate with the etcd cluster.
+(like {{site.prodname}} and Kubernetes) will need to authenticate with the etcd cluster.
 Because all the certificates will be generated from the same CA and all the
 components will have the CA certificate, those connections can be mutually
 authenticated.
@@ -34,7 +34,7 @@ that allow access to the appropriate data in etcd.
 
 ## Requirements
 
-- If using only the v2 API with etcd, as Calico does, then the minimum etcd
+- If using only the v2 API with etcd, as {{site.prodname}} does, then the minimum etcd
   version required is 3.0.12.
 - If using the v3 API with etcd, as Kubernetes can, then the minimum etcd
   version required is 3.2. (Note: The 3.x version of etcd supports both the v2
@@ -49,5 +49,5 @@ that allow access to the appropriate data in etcd.
    for help configuing etcd.
 3. [Create Users and Roles in etcd](users-and-roles).
 4. Configure components. For example:
-   - [Setting up Kubernetes with Calico utilizing etcd RBAC](kubernetes).
+   - [Setting up Kubernetes with {{site.prodname}} utilizing etcd RBAC](kubernetes).
    - [Advanced Kubernetes set ups utilizing etcd RBAC](kubernetes-advanced).

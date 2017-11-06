@@ -2,10 +2,10 @@
 title: How Calico Interprets Neutron API Calls
 ---
 
-When running in an OpenStack deployment, Calico receives and interprets
+When running in an OpenStack deployment, {{site.prodname}} receives and interprets
 certain Neutron API actions, in order to program those actions down into
-the network. However, because Calico is substantially simpler than much
-of what Neutron generally allows (see [External Connectivity]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity)) and because it's a purely layer 3 model (see [The Calico Datapath]({{site.baseurl}}/{{page.version}}/reference/architecture/data-path), not all Neutron API calls will have the same effect as they would with other backends.
+the network. However, because {{site.prodname}} is substantially simpler than much
+of what Neutron generally allows (see [External Connectivity]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity)) and because it's a purely layer 3 model (see [The {{site.prodname}} Datapath]({{site.baseurl}}/{{page.version}}/reference/architecture/data-path), not all Neutron API calls will have the same effect as they would with other backends.
 
 This document will go into detail on the full range of Neutron API
 calls, and will discuss the effect they have on the network. It uses the
@@ -33,25 +33,25 @@ that map to the underlay physical network directly for providing
 floating IPs: other tenants will create their own private Neutron
 networks as necessary.
 
-In Calico, because all traffic is L3 and routed, the role of Neutron
-network as L2 connectivity domain is not helpful. Therefore, in Calico,
+In {{site.prodname}}, because all traffic is L3 and routed, the role of Neutron
+network as L2 connectivity domain is not helpful. Therefore, in {{site.prodname}},
 Neutron networks are simply containers for subnets. Best practices for
-operators configuring Neutron networks in Calico deployments can be
+operators configuring Neutron networks in {{site.prodname}} deployments can be
 found in [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#opens-external-conn-setup).
 
 It is not useful for non-administrator tenants to create their own
-Neutron networks. Although Calico will allow non-administrator tenants
+Neutron networks. Although {{site.prodname}} will allow non-administrator tenants
 to create Neutron networks, generally speaking administrators should use
 Neutron quotas to prevent non-administrator tenants from doing this.
 
-Network creation events on the API are no-op events in Calico: a
+Network creation events on the API are no-op events in {{site.prodname}}: a
 positive (2XX) response will be sent but no programming will actually
 occur.
 
 Extended Attributes: Provider Networks
 --------------------------------------
 
-Neutron Provider networks are not used in Calico deployments. Setting
+Neutron Provider networks are not used in {{site.prodname}} deployments. Setting
 provider network extended attributes will have no effect. See
 [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity) to understand why Neutron provider networks are not
 needed.
@@ -65,10 +65,10 @@ Neutron network. A single Neutron network may have multiple Neutron
 subnets associated with it. Each Neutron subnet represents either an
 IPv4 or IPv6 block of addresses.
 
-Best practices for configuring Neutron subnets in Calico deployments can
+Best practices for configuring Neutron subnets in {{site.prodname}} deployments can
 be found [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#opens-external-conn-setup).
 
-In Calico, these roles for the Neutron subnet are preserved in their
+In {{site.prodname}}, these roles for the Neutron subnet are preserved in their
 entirety. All properties associated with these Neutron subnets are
 preserved and remain meaningful except for:
 
@@ -81,8 +81,8 @@ preserved and remain meaningful except for:
 
 In vanilla Neutron, a port represents a connection from a VM to a single
 layer 2 Neutron network. Obviously, the meaning of this object changes
-in a Calico deployment: instead, a port is a connection from a VM to the
-shared layer 3 network that Calico builds in Neutron.
+in a {{site.prodname}} deployment: instead, a port is a connection from a VM to the
+shared layer 3 network that {{site.prodname}} builds in Neutron.
 
 All properties on a port work as normal, except for the following:
 
@@ -101,12 +101,12 @@ apply to the other attributes:
 
 `binding:profile`
 
-:   This is unused in Calico.
+:   This is unused in {{site.prodname}}.
 
 `binding:vnic_type`
 
 :   This field, if used, **must** be set to `normal`. If set to any
-    other value, Calico will not correctly function!
+    other value, {{site.prodname}} will not correctly function!
 
 ## Quotas
 
@@ -121,30 +121,30 @@ Security groups in vanilla OpenStack provide packet filtering processing
 to individual ports. They can be used to limit the traffic a port may
 issue.
 
-In Calico, security groups have all the same function. Additionally,
+In {{site.prodname}}, security groups have all the same function. Additionally,
 they serve to provide the connectivity-limiting function that in vanilla
 OpenStack is provided by Neutron networks.
 
-All the attributes of security groups remain unchanged in Calico.
+All the attributes of security groups remain unchanged in {{site.prodname}}.
 
 {: id="routers"}
 
 ## Layer 3 Routing: Routers and Floating IPs
 
 Layer 3 routing objects are divided into two categories: routers and
-floating IPs. Neither of these objects are supported by Calico: they
+floating IPs. Neither of these objects are supported by {{site.prodname}}: they
 simply aren't required. For more information, see [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity).
 
-Any attempt to create these objects will fail, as Calico does not set up
+Any attempt to create these objects will fail, as {{site.prodname}} does not set up
 any Neutron L3 Agents.
 
 ## LBaaS (Load Balancer as a Service)
 
-Load Balancer as a Service does not function in a Calico network. Any
+Load Balancer as a Service does not function in a {{site.prodname}} network. Any
 attempt to create one will fail.
 
 
-> **Note**: It is possible that in a future version of Calico LBaaS may be
+> **Note**: It is possible that in a future version of {{site.prodname}} LBaaS may be
 > functional. Watch this space.
 {: .alert .alert-info}
 
@@ -201,4 +201,4 @@ network setup, this panel may be used to make changes. See
 #### Tab: System Panel -&gt; Routers
 
 Administrators should not create routers, as they serve no purpose in a
-Calico network. See [Layer 3 Routing](#routers) for more.
+{{site.prodname}} network. See [Layer 3 Routing](#routers) for more.

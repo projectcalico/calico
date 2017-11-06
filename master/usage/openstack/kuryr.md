@@ -2,10 +2,10 @@
 title: Kuryr
 ---
 
-networking-calico works with Kuryr; this means using Neutron, with the Calico
+networking-calico works with Kuryr; this means using Neutron, with the {{site.prodname}}
 ML2 driver, to provide networking for container workloads.
 
-You can use DevStack to install a single node Calico/Kuryr system, with a
+You can use DevStack to install a single node {{site.prodname}}/Kuryr system, with a
 `local.conf` file like this:
 
     [[local|localrc]]
@@ -26,12 +26,12 @@ You can use DevStack to install a single node Calico/Kuryr system, with a
 
 Please follow general Kuryr instructions for creating a Docker network that
 uses Kuryr as its backend, and for launching containers on that network.  Then
-if you look at the IP routing table and iptables, you will see Calico routes to
+if you look at the IP routing table and iptables, you will see {{site.prodname}} routes to
 the containers.
 
-Calico for containers without Kuryr
+{{site.prodname}} for containers without Kuryr
 -----------------------------------
 
-The Calico project also provides networking for containers more directly,
+The {{site.prodname}} project also provides networking for containers more directly,
 without Neutron and Kuryr as intermediaries.  Please see [Getting
 Started]({{site.baseurl}}/{{page.version}}/getting-started) for details.

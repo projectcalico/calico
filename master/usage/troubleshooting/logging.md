@@ -35,7 +35,7 @@ each calico-node component.
 
 ### Bird/Bird6
 
-Bird and Bird6 are used for distributing IPv4 and IPv6 routes between Calico
+Bird and Bird6 are used for distributing IPv4 and IPv6 routes between {{site.prodname}}
 enabled hosts.  The logs are output in the `bird` and `bird6` sub-directories
 of the calico/node logging directory.
 
@@ -48,7 +48,7 @@ $ calicoctl get bgpconfig -o yaml > bgp.yaml
 
 # Modify logSeverityScreen to none, debug, info, etc.
 #   Global change: set name to "default"
-#   Node-specific change: set name to the node name, e.g. "Calico-Node-1"
+#   Node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
 $ vim bgp.yaml
 
 # Replace the current bgpconfig settings
@@ -57,7 +57,7 @@ $ calicoctl replace -f bgp.yaml
 
 ### Felix
 
-Felix is the primary Calico agent that runs on each machine that hosts
+Felix is the primary {{site.prodname}} agent that runs on each machine that hosts
 endpoints.  Felix is responsible for the programming of iptables rules on the
 host.  The logs are output in the `felix` sub-directory of the calico/node
 logging directory.
@@ -68,7 +68,7 @@ $ calicoctl get felixconfig -o yaml > felix.yaml
 
 # Modify logSeverityScreen to none, debug, info, etc.
 #   Global change: set name to "default"
-#   Node-specific change: set name to the node name, e.g. "Calico-Node-1"
+#   Node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
 $ vim felix.yaml
 
 # Replace the current felixconfig settings
@@ -89,6 +89,6 @@ For more information on the allowed levels, see the
 
 ## Docker network and IPAM driver
 
-When running Calico as a Docker network plugin, the Calico network driver runs
+When running {{site.prodname}} as a Docker network plugin, the {{site.prodname}} network driver runs
 inside the calico/node container.  The logs are output in the `libnetwork` sub-directory
 of the calico/node logging directory.

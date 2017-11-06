@@ -4,13 +4,13 @@ title: Connectivity in OpenStack
 
 An OpenStack deployment is of limited use if its VMs cannot reach and be
 reached by the outside world. This document will explain how to
-configure your Calico-based OpenStack deployment to ensure that you have
+configure your {{site.prodname}}-based OpenStack deployment to ensure that you have
 the desired connectivity with the outside world.
 
 ## Major Differences from Standard OpenStack
 
 If you've deployed OpenStack before you'll be thinking in terms of
-routers, floating IPs, and external networks. Calico's focus on
+routers, floating IPs, and external networks. {{site.prodname}}'s focus on
 simplicity means that it doesn't use any of these concepts. This section
 is mostly a warning: even if you think you know what you're doing,
 please read the rest of this article. You might be surprised!
@@ -20,7 +20,7 @@ please read the rest of this article. You might be surprised!
 Part 0: Deciding your address ranges
 ------------------------------------
 
-For Calico, it's best to pick up to three address ranges you're going to
+For {{site.prodname}}, it's best to pick up to three address ranges you're going to
 use from the following three options. If it's possible, use all three.
 
 The first option is an IPv6 address range, assuming you want your VMs to
@@ -45,7 +45,7 @@ The minimum requirement is one of those address ranges.
 Part 1: Configuring the Fabric
 ------------------------------
 
-Your Calico deployment will require a gateway router. In most
+Your {{site.prodname}} deployment will require a gateway router. In most
 non-trivial cases this will be a heavy-duty router, but if you're
 deploying a smaller network (maybe for testing purposes) and don't have
 access to one you can use a Linux server in the role.
@@ -58,13 +58,13 @@ setup such as a multi-tier L3 topology the next hop may need to be
 slightly shorter, for example to a top-of-rack router, which will in
 turn need to route towards the gateway router.
 
-Then, the gateway router needs to be a BGP peer of the Calico network.
+Then, the gateway router needs to be a BGP peer of the {{site.prodname}} network.
 This could be a peer of one or more route reflectors, or in smaller
 topologies directly peering with the compute hosts. This is to ensure it
 knows the routes to all the VMs, so that it knows which way to route
 traffic destined for them. Instructions for configuring your gateway
 (and potentially BGP route reflectors) are beyond the scope of this
-document. If you don't know how to do this or want to know how Calico
+document. If you don't know how to do this or want to know how {{site.prodname}}
 fits into your existing deployment, please get in touch on our mailing
 list: it is difficult to add a generic solution to this problem to this
 article.
@@ -96,7 +96,7 @@ Additionally, add one IPv6 subnet containing half your IPv6 range, again
 with a gateway IP and DHCP enabled. Make sure this network has a name
 that makes it clear that it's for your 'externally accessible' VMs.
 Maybe even mark it an 'external' network, though that has no effect on
-what Calico does.
+what {{site.prodname}} does.
 
 For the second network, add one IPv4 subnet containing the 'private'
 IPv4 range and one IPv6 subnet containing the other half of your IPv6

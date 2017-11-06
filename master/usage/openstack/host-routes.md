@@ -11,12 +11,12 @@ comprising
 When an instance is launched and gets an IP from that subnet, Neutron arranges,
 via DHCP, that the instance's routing table gets those routes.
 
-With Calico, a host route's next hop IP should be the local host
+With {{site.prodname}}, a host route's next hop IP should be the local host
 ----------------------------------------------------------------
 
 networking-calico supports host routes, but it's important to note that a host
-route is only consistent with Calico when its next hop IP represents the local
-hypervisor.  This is because the local hypervisor, in a Calico setup, *always*
+route is only consistent with {{site.prodname}} when its next hop IP represents the local
+hypervisor.  This is because the local hypervisor, in a {{site.prodname}} setup, *always*
 routes all data from an instance and so is always the next hop IP for data to
 any destination.  If the instance's routing table has a route with some other
 next hop IP, that next hop IP address will effectively be ignored, and the data
@@ -44,10 +44,10 @@ routed there.
 {: .alert .alert-info}
 
 
-When are host routes useful with Calico?
+When are host routes useful with {{site.prodname}}?
 ----------------------------------------
 
-Host routes are useful with Calico when an instance has multiple NICs and you
+Host routes are useful with {{site.prodname}} when an instance has multiple NICs and you
 want to specify which NIC should be used for data to particular prefixes.
 
 When an instance has multiple NICs, it should have a default route through only

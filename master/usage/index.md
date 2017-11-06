@@ -2,4 +2,4 @@
 title: Using Calico
 ---
 
-This section contains information on using Calico.
+This section contains information on using {{site.prodname}}.

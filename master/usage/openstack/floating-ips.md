@@ -3,7 +3,7 @@ title: Floating IPs
 ---
 
 networking-calico includes beta support for floating IPs.  Currently this
-requires running Calico as a Neutron core plugin (i.e. `core_plugin =
+requires running {{site.prodname}} as a Neutron core plugin (i.e. `core_plugin =
 calico`) instead of as an ML2 mechanism driver.
 
 > **Note**: We would like it to work as an ML2 mechanism driver too—patches
@@ -49,7 +49,7 @@ For example:
     neutron floatingip-create public
     neutron floatingip-associate <floatingip-id> <target-VM-port-id>
 
-Then the Calico agents will arrange that the floating IP is routed to the
+Then the {{site.prodname}} agents will arrange that the floating IP is routed to the
 instance's compute host, and then DNAT'd to the instance's fixed IP address:
 
     core@compute-node01:~$ ip r

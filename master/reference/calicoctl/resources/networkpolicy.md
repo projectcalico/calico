@@ -12,7 +12,7 @@ in that namespace. Two resources are in the same namespace if the namespace
 value is set the same on both.
 See [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) for non-namespaced Network Policy.
 
-NetworkPolicy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
+NetworkPolicy resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
 take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following

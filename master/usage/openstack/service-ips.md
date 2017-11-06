@@ -2,16 +2,16 @@
 title: Service IPs
 ---
 
-Calico supports two approaches for assigning a service IP to a Calico-networked
-VM:
+{{site.prodname}} supports two approaches for assigning a service IP to a 
+{{site.prodname}}-networked VM:
 
 - using a floating IP
 
 - using an additional fixed IP on the relevant Neutron port.
 
 Both of these are standard Neutron practice - in other words, operations that
-have long been supported on the Neutron API.  They are not Calico-specific,
-except insofar as the Calico driver needs to implement some of the low-level
+have long been supported on the Neutron API.  They are not {{site.prodname}}-specific,
+except insofar as the {{site.prodname}} driver needs to implement some of the low-level
 operations that are needed to make the expected semantics work.
 
 The key semantic difference between those approaches is that:
@@ -26,13 +26,13 @@ The key semantic difference between those approaches is that:
   target VM without any DNAT.
 
 The use of floating IPs is already well known, so we won't labour how to use
-those here.  For some additional information on how Calico supports floating
+those here.  For some additional information on how {{site.prodname}} supports floating
 IPs, see [Floating
 IPs]({{site.baseurl}}/{{page.version}}/usage/openstack/floating-ips).
 
 The use and maintainance of additional fixed IPs, however, is not so well
 known, so in the following transcripts we demonstrate this approach for
-assigning a service IP to a Calico-networked VM.
+assigning a service IP to a {{site.prodname}}-networked VM.
 
 We begin by creating a test VM that will be the target of the service IP.
 
@@ -189,7 +189,7 @@ Now look at local IP routes, and we see that we have a route to `10.28.0.23`:
 
 Note that, on the machine where we're running these commands:
 
-- BIRD is running, peered with the BIRDs that Calico runs on each compute node.
+- BIRD is running, peered with the BIRDs that {{site.prodname}} runs on each compute node.
   That is what causes VM routes (including `10.28.0.23`) to appear here.
 
 - 192.168.8.3 is the IP of the compute node that is hosting `testvm1`.

@@ -4,9 +4,9 @@ title: Using etcd RBAC to segment Kubernetes and Calico
 
 When using etcd with RBAC, all components that access etcd must be configured
 with the proper certificates. This document describes the users and roles
-needed to segment etcd so that Kubernetes and Calico can only read and write
+needed to segment etcd so that Kubernetes and {{site.prodname}} can only read and write
 within their respected subtrees/prefixes. To configure more compartmentalized
-configurations of the Calico components, see this addon:
+configurations of the {{site.prodname}} components, see this addon:
 [guide](kubernetes-advanced).
 
 This guide assumes you are following the general
@@ -15,8 +15,8 @@ for setting up certificates and etcd cluster, users, and roles.
 
 ## Why you might be interested in this guide
 
-You are using Kubernetes and Calico that share an etcd datastore and you wish
-to ensure that Calico and Kubernetes are unable to access each others' etcd
+You are using Kubernetes and {{site.prodname}} that share an etcd datastore and you wish
+to ensure that {{site.prodname}} and Kubernetes are unable to access each others' etcd
 data.
 
 ## Needed etcd Roles
@@ -33,9 +33,9 @@ prefixes or paths listed below.
   - The etcd user needs to be given the root role to perform compaction when
     using the etcd v3 API (this also means that Kubernetes will have
     full read and write access to v3 data).
-- Calico
+- {{site.prodname}}
   - Read and write access to `/calico`.
-  - Calico uses the etcd v2 API so the user and roles must be created there
+  - {{site.prodname}} uses the etcd v2 API so the user and roles must be created there
     too.
 
 All certificate/key pairs that are referenced below are assumed to have been
@@ -52,9 +52,9 @@ accessing an etcd cluster are:
 Setting these will depend on the method used to deploy Kubernetes so refer
 to your integrator's documentation for help setting these flags.
 
-## Updating a hosted Calico manifest
+## Updating a hosted {{site.prodname}} manifest
 
-To deploy hosted Calico with the CA and Calico-specific certificate/key pair,
+To deploy hosted {{site.prodname}} with the CA and {{site.prodname}}-specific certificate/key pair,
 use [this manifest template]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml)
 with the modifications described below. The same information could be added to
 or updated in other manifests but the linked one is the most straight forward

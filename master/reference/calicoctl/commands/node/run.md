@@ -125,7 +125,7 @@ Description:
 
 ### Kubernetes as the datastore
 
-When Calico is configured to use the Kubernetes API as the datastore, BGP routing is *currently*
+When {{site.prodname}} is configured to use the Kubernetes API as the datastore, BGP routing is *currently*
 not supported.  Many of the command line options related to BGP routing will
 have no effect.  These include:
 -  `--ip`, `--ip6`, `--ip-autodetection-method`, `--ip6-autodetection-method`
@@ -135,7 +135,7 @@ have no effect.  These include:
 ### Examples
 
 ```
-# Start the Calico node with a pre-configured IPv4 address for BGP.
+# Start the {{site.prodname}} node with a pre-configured IPv4 address for BGP.
 $ sudo calicoctl node run
 Running command to load modules: modprobe -a xt_set ip6_tables
 Enabling IPv4 forwarding
@@ -354,6 +354,6 @@ terminating `,` character does not need to be specified for those cases.
 
 -  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
    and schema
--  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for details on the Calico selector-based policy model
+-  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model
 -  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) for details on configuring `calicoctl` to access
-   the Calico datastore.
+   the {{site.prodname}} datastore.

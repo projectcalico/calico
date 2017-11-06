@@ -2,8 +2,8 @@
 title: Integration with Fuel
 ---
 
-Calico plugins are available for Fuel 6.1 and 7.0, and work is in progress for
-Fuel 9.  Fuel plugin code for Calico is at
+{{site.prodname}} plugins are available for Fuel 6.1 and 7.0, and work is in progress for
+Fuel 9.  Fuel plugin code for {{site.prodname}} is at
 [http://git.openstack.org/cgit/openstack/fuel-plugin-calico](http://git.openstack.org/cgit/openstack/fuel-plugin-calico).
 
 
@@ -20,13 +20,13 @@ its documentation in pending changes on review.openstack.org:
 
 ## Fuel 6.1
 
-The rest of this document describes our integration of Calico with
+The rest of this document describes our integration of {{site.prodname}} with
 Mirantis Fuel 6.1. It is presented in sections covering the following
 aspects of our integration work.
 
 -   Objective: The system that we are aiming to deploy.
 -   Cluster Deployment: The procedure to follow to deploy such a system.
--   Calico Demonstration: What we recommend for demonstrating Calico
+-  {{site.prodname}} Demonstration: What we recommend for demonstrating {{site.prodname}}
     networking function.
 -   Detailed Observations: Some further detailed observations about the
     elements of the deployed system.
@@ -34,25 +34,25 @@ aspects of our integration work.
 ### Objective
 
 We will deploy an OpenStack cluster with a controller node and *n*
-compute nodes, with Calico providing the network connectivity between
+compute nodes, with {{site.prodname}} providing the network connectivity between
 VMs that are launched on the compute nodes.
 
 The key components on the controller node will be:
 
 -   the standard OpenStack components for a controller, including the
     Neutron service
--   the Calico/OpenStack Plugin, as a Neutron/ML2 mechanism driver
+-   the {{site.prodname}}/OpenStack Plugin, as a Neutron/ML2 mechanism driver
 -   a BIRD instance, acting as BGP route reflector for the
     compute nodes.
 
 The key components on each compute node will be:
 
 -   the standard OpenStack components for a compute node
--   the Calico Felix agent
+-   the {{site.prodname}} Felix agent
 -   a BIRD instance, running BGP for that compute node.
 
 IP connectivity between VMs that are launched within the cluster will be
-established by the Calico components, according to the security groups
+established by the {{site.prodname}} components, according to the security groups
 and rules that are configured for those VMs through OpenStack.
 
 Cluster Deployment
@@ -62,7 +62,7 @@ The procedure for deploying such a cluster consists of the following
 steps.
 
 -   Prepare a Fuel master (aka admin) node in the usual way.
--   Install the Calico plugin for Fuel on the master node.
+-   Install the {{site.prodname}} plugin for Fuel on the master node.
 -   Deploy an OpenStack cluster in the usual way, using the Fuel web UI.
 
 The following subsections flesh out these steps.
@@ -74,15 +74,15 @@ the [Fuel 6.1 User Guide](https://docs.mirantis.com/openstack/fuel/fuel-6.1/user
 You will need to download a Fuel 6.1 ISO image from the [Mirantis
 website](https://www.mirantis.com/products/mirantis-openstack-software/).
 
-### Install the Calico plugin for Fuel on the master node
+### Install the {{site.prodname}} plugin for Fuel on the master node
 
-The Calico plugin has been certified by Mirantis and is available for
+The {{site.prodname}} plugin has been certified by Mirantis and is available for
 download from the [Fuel Plugin Catalog](https://www.mirantis.com/products/openstack-drivers-and-plugins/fuel-plugins/).
 Alternatively, you can build a copy of the plugin yourself, following
 the instructions on the plugin's
 [GitHub](https://github.com/openstack/fuel-plugin-calico) page.
 
-However you obtain a copy of the Calico plugin, you will need to copy it
+However you obtain a copy of the {{site.prodname}} plugin, you will need to copy it
 onto the master node and install it with:
 
     fuel plugins --install calico-fuel-plugin-<version>.noarch.rpm
@@ -146,7 +146,7 @@ address.
 By default, Fuel associates the management IP address with the first NIC
 (i.e. `eth0`) on each node.
 
-With Calico networking, in addition:
+With {{site.prodname}} networking, in addition:
 
 -   BGP sessions are established, between BIRD instances on the compute
     nodes and on the route reflector, using these management IP
@@ -166,18 +166,18 @@ are assigned, but are not used in practice.
 
 ### Neutron L2 Configuration
 
-Neutron L2 Configuration is not needed in a Calico system, but we have
+Neutron L2 Configuration is not needed in a {{site.prodname}} system, but we have
 left the following settings as shown, as we have not yet had time to
-simplify the web UI for Calico networking.
+simplify the web UI for {{site.prodname}} networking.
 
 -   VLAN ID range: 1000 - 1030
 -   Base MAC address: fa:16:3e:00:00:00
 
 ### Neutron L3 Configuration
 
-Neutron L3 Configuration is not needed in a Calico system, but we have
+Neutron L3 Configuration is not needed in a {{site.prodname}} system, but we have
 left the following settings as shown, as we have not yet had time to
-simplify the web UI for Calico networking.
+simplify the web UI for {{site.prodname}} networking.
 
 -   Internal network CIDR: 192.168.111.0/24
 -   Internal network gateway: 192.168.111.1
@@ -195,10 +195,10 @@ To do this, log onto the controller node and run:
     birdc
     show protocols all
 
-Calico Demonstration
+{{site.prodname}} Demonstration
 --------------------
 
-To demonstrate Calico networking, please run through the following
+To demonstrate {{site.prodname}} networking, please run through the following
 steps.
 
 In the OpenStack web UI, under Project, Network, Networks, create a
@@ -276,13 +276,13 @@ This section records some more detailed notes about the state of the
 cluster that results from following the above procedure.
 
 Reading this section should not be required in order to demonstrate or
-understand OpenStack and Calico function, but it may be useful as a
+understand OpenStack and {{site.prodname}} function, but it may be useful as a
 reference if a newly deployed system does not appear to be behaving
 correctly.
 
-### Elements required for Calico function
+### Elements required for {{site.prodname}} function
 
-This subsection records elements that *are* required for Calico
+This subsection records elements that *are* required for {{site.prodname}}
 function, and that we have observed to be configured and operating
 correctly in the cluster.
 
@@ -290,33 +290,33 @@ On the controller:
 
 -   The BIRD BGP route reflector has established sessions to all the
     compute nodes.
--   The Neutron service is running and has initialized the Calico ML2
+-   The Neutron service is running and has initialized the {{site.prodname}} ML2
     mechanism driver.
 
 On each compute node:
 
--   The Calico Felix agent is correctly configured, and running.
+-   The {{site.prodname}} Felix agent is correctly configured, and running.
 -   There is an established BGP session to the route reflector on
     the controller.
 
-### Elements not required for Calico function, but benign
+### Elements not required for {{site.prodname}} function, but benign
 
-This subsection records elements that are *not* required for Calico
+This subsection records elements that are *not* required for {{site.prodname}}
 function, but that we have observed to be operating in the cluster.
 These all result from the fact that the procedure first deploys a
 traditional Neutron/ML2/OVS cluster, and then modifies that to use
-Calico instead of OVS, but does not clean up all of the OVS-related
+{{site.prodname}} instead of OVS, but does not clean up all of the OVS-related
 elements.
 
 We believe that all of these elements are benign, in that they don't
-obstruct or fundamentally change the Calico networking behavior. However
+obstruct or fundamentally change the {{site.prodname}} networking behavior. However
 it would be better to remove them so as to clarify the overall picture,
 and maybe to improve networking performance. We plan to continue working
 on this.
 
 On the controller:
 
--   Various Neutron agents are running that Calico does not require.
+-   Various Neutron agents are running that {{site.prodname}} does not require.
     -   neutron-metadata-agent
     -   neutron-dhcp-agent
     -   neutron-openvswitch-agent
@@ -324,8 +324,8 @@ On the controller:
 
 On each compute node:
 
--   Two Neutron agents are running that Calico does not require.
+-   Two Neutron agents are running that {{site.prodname}} does not require.
     -   neutron-metadata-agent
     -   neutron-openvswitch-agent
--   There is a complex set of OVS bridges present, that Calico does
+-   There is a complex set of OVS bridges present, that {{site.prodname}} does
     not require.

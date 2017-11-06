@@ -2,12 +2,12 @@
 title: Host Endpoint Resource (HostEndpoint)
 ---
 
-A host endpoint resource (`HostEndpoint`) represents an interface attached to a host that is running Calico.
+A host endpoint resource (`HostEndpoint`) represents an interface attached to a host that is running {{site.prodname}}.
 
-Each host endpoint may include a set of labels and list of profiles that Calico
+Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
 will use to apply
 [policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
-to the interface.  If no profiles or labels are applied, Calico will not apply
+to the interface.  If no profiles or labels are applied, {{site.prodname}} will not apply
 any policy.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following

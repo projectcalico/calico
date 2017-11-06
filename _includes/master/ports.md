@@ -1,4 +1,4 @@
-Calico supports the following syntaxes for expressing ports.
+{{site.prodname}} supports the following syntaxes for expressing ports.
 
 | Syntax     | Example    | Description |
 |------------|------------|-------------|
@@ -22,7 +22,7 @@ port on port 80 and others on port 8080. In each workload, you could create a na
 `http-port` that maps to the correct local port.  Then, in a rule, you could refer to the name 
 `http-port` instead of writing a different rule for each type of server.
 
-> **NOTE**: Since each named port may refer to many endpoints (and Calico has to expand a named port into
+> **NOTE**: Since each named port may refer to many endpoints (and {{site.prodname}} has to expand a named port into
 > a set of endpoint/port combinations), using a named port is considerably more expensive in terms 
 > of CPU than using a simple numeric port.  We recommend that they are used sparingly, only where 
 > the extra indirection is required.

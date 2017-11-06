@@ -3,14 +3,14 @@ title: Verifying your Calico on OpenStack deployment
 ---
 
 This document takes you through the steps you can perform to verify that
-a Calico-based OpenStack deployment is running correctly.
+a {{site.prodname}}-based OpenStack deployment is running correctly.
 
 ## Prerequisites
 
 This document requires you have the following things:
 
--   SSH access to the nodes in your Calico-based OpenStack deployment.
--   Access to an administrator account on your Calico-based
+-   SSH access to the nodes in your {{site.prodname}}-based OpenStack deployment.
+-   Access to an administrator account on your {{site.prodname}}-based
     OpenStack deployment.
 
 ## Procedure
@@ -27,12 +27,12 @@ across your hypervisors. On your control node, run:
 ```
 
 Confirm that there is an even spread across your compute nodes. If there
-isn't, it's likely that an error has happened in either nova or Calico
+isn't, it's likely that an error has happened in either nova or {{site.prodname}}
 on the affected compute nodes. Check the logs on those nodes for more
 logging, and report your difficulty on the mailing list.
 
 Now, SSH into one of your compute nodes. We're going to verify that the
-FIB on the compute node has been correctly populated by Calico. To do
+FIB on the compute node has been correctly populated by {{site.prodname}}. To do
 that, run the `route` command. You'll get output something like this:
 
 ```
@@ -70,7 +70,7 @@ confident is routable and that will respond to pings). Additionally,
 confirm it has internal connectivity by pinging the other instances
 you've created (by IP).
 
-If all of these tests behave correctly, your Calico-based OpenStack
+If all of these tests behave correctly, your {{site.prodname}}-based OpenStack
 deployment is in good shape.
 
 ## Troubleshooting
@@ -114,7 +114,7 @@ may be set to `DENY`. To change it, run `iptables -P <chain> ACCEPT`,
 replacing `<chain>` with either `INPUT` or `FORWARD`.
 
 Note that doing this may be considered a security risk in some networks.
-A future Calico enhancement will remove the requirement to perform this
+A future {{site.prodname}} enhancement will remove the requirement to perform this
 step.
 
 ### Routes are missing in the FIB.
@@ -124,14 +124,14 @@ that your BGP sessions are not functioning correctly. Your BGP daemon
 should have either an interactive console or a log. Open the relevant
 one and check that all of your BGP sessions have come up appropriately
 and are replicating routes. If you're using a full mesh configuration,
-confirm that you have configured BGP sessions with *all* other Calico
+confirm that you have configured BGP sessions with *all* other {{site.prodname}}
 nodes.
 
 ### VMs Cannot Ping Non-VM IPs
 
 Assuming all the routes are present in the FIB (see above), this most
 commonly happens because the gateway is not configured with routes to
-the VM IP addresses. To get full Calico functionality the gateway should
+the VM IP addresses. To get full {{site.prodname}} functionality the gateway should
 also be a BGP peer of the compute nodes (or the route reflector).
 
 Confirm that your gateway has routes to the VMs. Assuming it does, make

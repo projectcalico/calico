@@ -20,17 +20,17 @@ or you can set environment variables for `sudo` commands like this:
 
 Also be aware that connection information can be specified as a config
 file rather than using environment variables.  See the
-[Calicoctl Configuration Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
+[calicoctl Configuration Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
 guide for details.
 
 ## Ubuntu (or GNOME) NetworkManager
 
 Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
-attempting to use Calico networking.
+attempting to use {{site.prodname}} networking.
 
 NetworkManager manipulates the routing table for interfaces in the default network
-namespace where Calico veth pairs are anchored for connections to containers.
-This can interfere with the Calico agent's ability to route correctly.
+namespace where {{site.prodname}} veth pairs are anchored for connections to containers.
+This can interfere with the {{site.prodname}} agent's ability to route correctly.
 
 You can configure interfaces in the `/etc/network/interfaces` file if the
 NetworkManager removes your host's interfaces. See the Debian
@@ -69,7 +69,7 @@ If you do not see this, please check the following.
 - Can your hosts ping each other?  There must be IP connectivity between the
   hosts.
 
-- Your hosts' names must be different.  Calico uses hostname as a key in the
+- Your hosts' names must be different. {{site.prodname}} uses hostname as a key in the
   etcd data, and the etcd data is used to autogenerate the correct BIRD
   config - so a duplicate hostname will prevent correct BIRD setup.
 

@@ -3,8 +3,8 @@ title: DevStack plugin for Calico
 ---
 
 The networking-calico project provides a DevStack plugin.  The following
-instructions explain how to set up a single or multiple node DevStack/Calico
-system, and then how to see Calico connectivity in action.
+instructions explain how to set up a single or multiple node DevStack/{{site.prodname}}
+system, and then how to see {{site.prodname}} connectivity in action.
 
 > **Note**: networking-calico includes a 
 > [shell script](https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh) 
@@ -18,7 +18,7 @@ system, and then how to see Calico connectivity in action.
 Single (or first) node setup
 ----------------------------
 
-To prepare a single node DevStack/Calico system, that is with all controller
+To prepare a single node DevStack/{{site.prodname}} system, that is with all controller
 and compute functions running on the same node:
 
 1. Download DevStack as usual.
@@ -61,17 +61,17 @@ additional compute node:
       export SERVICE_HOST=calico-vm18
 
 - follow the steps above, except for the network and subnet creations, to
-  install and set up DevStack with Calico on that node.
+  install and set up DevStack with {{site.prodname}} on that node.
 
 
-Demonstrating Calico connectivity
+Demonstrating {{site.prodname}} connectivity
 ---------------------------------
 
-Then, to see Calico connectivity in action:
+Then, to see {{site.prodname}} connectivity in action:
 
 1. Launch instances attached to the 'calico' network.
 
-2. Use ``ip route`` to observe per-instance routes created by the Calico agent.
+2. Use ``ip route`` to observe per-instance routes created by the {{site.prodname}} agent.
 
 3. Log into each instance (e.g. through Horizon console) and verify that it can
    ping the others.

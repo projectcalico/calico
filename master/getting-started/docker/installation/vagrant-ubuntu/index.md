@@ -3,7 +3,7 @@ title: Running the Calico tutorials on Ubuntu using Vagrant and VirtualBox
 ---
 
 These instructions allow you to set up an Ubuntu cluster ready to network Docker containers with
-Calico using Vagrant.
+{{site.prodname}} using Vagrant.
 
 ## 1. Streamlined setup of the VMs
 
@@ -20,7 +20,7 @@ Calico using Vagrant.
 
 ### 1.3 Startup and SSH
 
-For Calico as a Docker network plugin
+For {{site.prodname}} as a Docker network plugin
 
     vagrant up
 
@@ -34,7 +34,7 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have two Ubuntu servers, with Etcd running on the first server.
+You should now have two Ubuntu servers, with etcd running on the first server.
 
 At this point, it's worth checking that your servers can ping each other.
 
@@ -58,7 +58,7 @@ And finally check that Docker is running on both hosts by running
 
     docker ps
 
-## 2. Install Calico
+## 2. Install {{site.prodname}}
 
 With your VMs running, and connectivity between them established,
 it is time to launch `calico/node`.
@@ -68,7 +68,7 @@ The Vagrant machines already have `calicoctl` installed. Use it to launch `calic
     sudo ETCD_ENDPOINTS=http://172.17.8.101:2379 calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
 
 Append the `--use-docker-networking-container-labels` flag to the `calicoctl node run` command if you're combining
-[Docker Labels and Calico Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy).
+[Docker Labels and {{site.prodname}} Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy).
 
 Check that the `calico/node` container is running on this host:
 
@@ -83,7 +83,7 @@ You should see output like this on each node
 ## Next Steps
 
 Now that you have a basic two node Ubuntu cluster setup, see
-[Security using Calico Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles)
+[Security using {{site.prodname}} Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles)
 
 [libnetwork]: https://github.com/docker/libnetwork
 [experimental-channel]: https://github.com/docker/docker/tree/master/experimental
