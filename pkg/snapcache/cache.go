@@ -358,7 +358,12 @@ func (c *Cache) publishBreadcrumb() {
 				counterUpdatesSkipped.Inc()
 				continue
 			}
-			c.kvs.Insert(keyAsBytes, newUpd)
+			// Since the purpose of the snapshot is to hold the initial set of updates to send to Felix at start-of-day,
+			// all the updates that it stores should have type UpdateTypeKVNew since they're all new to Felix. Copy
+			// the KV and adjust it before storing it in the snapshot.
+			updToStore := newUpd
+			updToStore.UpdateType = api.UpdateTypeKVNew
+			c.kvs.Insert(keyAsBytes, updToStore)
 		}
 
 		// Record the update in the new Breadcrumb so that clients following the chain of

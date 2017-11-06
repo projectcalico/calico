@@ -1,5 +1,5 @@
-hash: 75c4773d69b229427767a6d90111abbef27e55064fa22af7d22d768c7aa94b38
-updated: 2017-10-31T11:52:33.23430979Z
+hash: 585e3889a5d85c43b7ad7e6b11d7c3c6f9a9b3cda6ca595b5bf4110b644c1d9d
+updated: 2017-11-07T18:49:44.298411325Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -199,7 +199,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: e47d01bc9eaf75e75e0f250e221dcb7533c7a1b8
+  version: af7475fb23e7561c87e7c1d17c12f46d732379bb
   subpackages:
   - list
   - trie/ctrie
@@ -228,7 +228,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 95c6576299259db960f6c5b9b69ea52422860fce
+  version: 75813c647272dd855bda156405bf844a5414f5bf
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -411,7 +411,7 @@ imports:
   - util/jsonpath
 testImports:
 - name: github.com/onsi/gomega
-  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
+  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
   subpackages:
   - format
   - internal/assertion
