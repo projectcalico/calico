@@ -79,6 +79,20 @@ func init() {
 		// Empty rule is valid, it means "allow all".
 		Entry("empty rule (m)", model.Rule{}, true),
 
+		// (Backend model) ICMP.
+		Entry("should accept ICMP 0/any (m)", model.Rule{ICMPType: &V0}, true),
+		Entry("should accept ICMP 0/0 (m)", model.Rule{ICMPType: &V0, ICMPCode: &V0}, true),
+		Entry("should accept ICMP 128/0 (m)", model.Rule{ICMPType: &V128, ICMPCode: &V0}, true),
+		Entry("should accept ICMP 254/255 (m)", model.Rule{ICMPType: &V254, ICMPCode: &V255}, true),
+		Entry("should reject ICMP 255/255 (m)", model.Rule{ICMPType: &V255, ICMPCode: &V255}, false),
+		Entry("should reject ICMP 128/256 (m)", model.Rule{ICMPType: &V128, ICMPCode: &V256}, false),
+		Entry("should accept not ICMP 0/any (m)", model.Rule{NotICMPType: &V0}, true),
+		Entry("should accept not ICMP 0/0 (m)", model.Rule{NotICMPType: &V0, NotICMPCode: &V0}, true),
+		Entry("should accept not ICMP 128/0 (m)", model.Rule{NotICMPType: &V128, NotICMPCode: &V0}, true),
+		Entry("should accept not ICMP 254/255 (m)", model.Rule{NotICMPType: &V254, NotICMPCode: &V255}, true),
+		Entry("should reject not ICMP 255/255 (m)", model.Rule{NotICMPType: &V255, NotICMPCode: &V255}, false),
+		Entry("should reject not ICMP 128/256 (m)", model.Rule{NotICMPType: &V128, NotICMPCode: &V256}, false),
+
 		// (Backend model) Actions.
 		Entry("should accept allow action (m)", model.Rule{Action: "allow"}, true),
 		Entry("should accept deny action (m)", model.Rule{Action: "deny"}, true),

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ var icmpProto = numorstring.ProtocolFromString("icmp")
 var intProto = numorstring.ProtocolFromInt(123)
 var icmpType = 10
 var icmpCode = 6
+var icmpTypeZero = 0
+var icmpCodeZero = 0
 var portRange, _ = numorstring.PortFromRange(10, 20)
 var ports = []numorstring.Port{
 	numorstring.SinglePort(1234),
@@ -59,6 +61,10 @@ var ruleStringTests = []ruleTest{
 		"deny icmp type 10"},
 	{model.Rule{Protocol: &icmpProto, ICMPType: &icmpType, ICMPCode: &icmpCode},
 		"allow icmp type 10 code 6"},
+	{model.Rule{Action: "deny", Protocol: &icmpProto, ICMPType: &icmpTypeZero},
+		"deny icmp type 0"},
+	{model.Rule{Protocol: &icmpProto, ICMPType: &icmpTypeZero, ICMPCode: &icmpCodeZero},
+		"allow icmp type 0 code 0"},
 	// And negations of packet-wide matches.
 	{model.Rule{Action: "allow", NotProtocol: &tcpProto}, "allow !tcp"},
 	{model.Rule{Action: "deny", Protocol: &icmpProto, NotICMPType: &icmpType},
