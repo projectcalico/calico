@@ -5,7 +5,7 @@ title: Profile Resource (Profile)
 A profile resource (`Profile`) represents a set of rules which are applied 
 to the individual endpoints to which this profile has been assigned.
 
-Each Calico endpoint or host endpoint can be assigned to zero or more profiles.
+Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles.
 
 Also see the [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) and [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) which provide an alternate way to select what policy is applied to an endpoint.
 
@@ -82,4 +82,4 @@ spec:
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
 | etcdv3                | Yes           | Yes    | Yes      |
-| Kubernetes API server | No            | No     | Yes      | Calico profiles are pre-assigned for each Namespace.
+| Kubernetes API server | No            | No     | Yes      | {{site.prodname}} profiles are pre-assigned for each Namespace.

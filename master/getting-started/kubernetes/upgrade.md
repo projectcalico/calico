@@ -2,10 +2,10 @@
 title: Upgrading Calico for Kubernetes
 ---
 
-This document covers upgrading the Calico components in a Kubernetes deployment.  This
-upgrade procedure is supported for Calico v1.6+.
+This document covers upgrading the {{site.prodname}} components in a Kubernetes deployment.  This
+upgrade procedure is supported for {{site.prodname}} v1.6+.
 
-It is possible to upgrade the Calico components on a single node without affecting connectivity or
+It is possible to upgrade the {{site.prodname}} components on a single node without affecting connectivity or
 network policy for any existing pods.  However, it is recommended that you do not deploy
 new pods to a node that is being upgraded.
 
@@ -17,11 +17,11 @@ complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/v
 > **Note**: When upgrading to etcd v3, as long as the cluster is migrated with the
 `etcdctl migrate` command, the v2 data will remain untouched and the etcd v3
 server will continue to speak the v2 protocol so the upgrade should have no
-impact on Calico.
+impact on {{site.prodname}}.
 {: .alert .alert-info}
 
-> **Note**: When upgrading Calico using the Kubernetes datastore driver from a version < v2.3.0
-> to a version >= v2.3.0, or when upgrading Calico using the etcd datastore from a version < v2.4.0
+> **Note**: When upgrading {{site.prodname}} using the Kubernetes datastore driver from a version < v2.3.0
+> to a version >= v2.3.0, or when upgrading {{site.prodname}} using the etcd datastore from a version < v2.4.0
 > to a version >= v2.4.0, you should follow the steps for
 > [upgrading to v1 NetworkPolicy semantics](#upgrading-to-v1-networkpolicy-semantics)
 {: .alert .alert-info}
@@ -35,14 +35,14 @@ impact on Calico.
 
 ## Upgrading a Hosted Installation of Calico
 
-This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted) Calico installation.
+This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted) {{site.prodname}} installation.
 
-Note that while a self-hosted installation of Calico is typically done all at once (via calico.yaml), it is
+Note that while a self-hosted installation of {{site.prodname}} is typically done all at once (via calico.yaml), it is
 recommended to perform upgrades one component at a time.
 
-#### Upgrading the Calico Kubernetes controllers
+#### Upgrading the {{site.prodname}} Kubernetes controllers
 
-In a self-hosted Calico installation, the calico/kube-controllers container is run as a deployment.  As such,
+In a self-hosted {{site.prodname}} installation, the calico/kube-controllers container is run as a deployment.  As such,
 it can be upgraded via the standard [deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment).
 
 To upgrade the controllers, simply apply changes to the deployment specification and Kubernetes will
@@ -57,7 +57,7 @@ kubectl apply -f new-controllers.yaml
 {: .alert .alert-info}
 
 
-#### Upgrading the Calico DaemonSet
+#### Upgrading the {{site.prodname}} DaemonSet
 
 Upgrading the CNI plugin or calico/node image is done through a DaemonSet.  DaemonSets do not
 currently support an update operation, and as such must be updated manually.
@@ -105,13 +105,13 @@ kubectl uncordon node-01
 {: .alert .alert-info}
 
 
-#### Updating the Calico ConfigMap
+#### Updating the {{site.prodname}} ConfigMap
 
-Most self-hosted Calico deployments use a ConfigMap for configuration of the Calico
+Most self-hosted {{site.prodname}} deployments use a ConfigMap for configuration of the {{site.prodname}}
 components.
 
 To update the ConfigMap, make any desired changes and apply the new ConfigMap using
-kubectl.  You will need to restart the Calico Kubernetes controllers and each calico/node instance
+kubectl.  You will need to restart the {{site.prodname}} Kubernetes controllers and each calico/node instance
 as described above before new config is reflected.
 
 ## Upgrading Components Individually
@@ -130,9 +130,9 @@ To upgrade the calico/node container:
 - Update the image in your process management to reference the new version.
 - Stop the running calico/node container, and start it with the newly pulled version.
 
-#### Upgrading the Calico CNI plugins
+#### Upgrading the {{site.prodname}} CNI plugins
 
-The Calico CNI plugins (calico and calico-ipam) are typically installed in /opt/cni/bin, though
+The {{site.prodname}} CNI plugins (calico and calico-ipam) are typically installed in /opt/cni/bin, though
 this can vary based on deployment.
 
 To upgrade the plugins, simply remove the existing binaries and replace them with the desired version.
@@ -141,7 +141,7 @@ To upgrade the CNI config (typically located in /etc/cni/net.d) simply make the 
 config file.  It will be picked up by the kubelet automatically for Kubernetes v1.4.0+.  For older versions
 of Kubernetes you must restart the kubelet for changes to be applied.
 
-#### Upgrading the Calico Kubernetes controllers
+#### Upgrading the {{site.prodname}} Kubernetes controllers
 
 The calico/kube-controllers pod can be stopped and restarted without affecting connectivity or
 policy on existing pods.  New pods in existing Namespaces will correctly have
@@ -172,7 +172,7 @@ Calico v2.3.0 (when using the Kubernetes datastore driver) and Calico v2.4.0 (wh
 interpret the Kubernetes `NetworkPolicy` differently than previous releases, as specified
 in [upstream Kubernetes](https://github.com/kubernetes/kubernetes/pull/39164#issue-197243974).
 
-To maintain behavior when upgrading, you should follow these steps prior to upgrading Calico to ensure your configured policy is
+To maintain behavior when upgrading, you should follow these steps prior to upgrading {{site.prodname}} to ensure your configured policy is
 enforced consistently throughout the upgrade process.
 
 - In any Namespace that previously did _not_ have a "DefaultDeny" annotation:

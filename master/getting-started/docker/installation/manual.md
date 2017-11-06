@@ -2,7 +2,7 @@
 title: Installing Calico for Docker
 ---
 
-Calico runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
+{{site.prodname}} runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
 
 > **Important**: Before following the steps here ensure that you have satisfied these
 [requirements]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/requirements).
@@ -42,11 +42,11 @@ sudo calicoctl node status
 
 ## Using "docker run"
 
-For more control over the Calico startup process, and to simplify binding
+For more control over the {{site.prodname}} startup process, and to simplify binding
 startup to an init system, `calicoctl` can print the command it uses
 to launch `calico/node`.
 
-To print the command `calicoctl node run` uses to launch Calico on this host,
+To print the command `calicoctl node run` uses to launch {{site.prodname}} on this host,
 run the command with the `--init-system` and `--dry-run` flags:
 
 ```
@@ -61,7 +61,7 @@ docker stop calico-node
 
 ```
 
-Pair the printed command with your favorite init system to ensure Calico is
+Pair the printed command with your favorite init system to ensure {{site.prodname}} is
 always running on each host.
 
 See [additional information on binding to an init system
@@ -69,5 +69,5 @@ See [additional information on binding to an init system
 
 ## Next Steps
 
-With `calico/node` running, you are ready to start using Calico by following
-[Security using Calico Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles).
+With `calico/node` running, you are ready to start using {{site.prodname}} by following
+[Security using {{site.prodname}} Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles).

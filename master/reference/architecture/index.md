@@ -2,20 +2,20 @@
 title: Calico Architecture
 ---
 
-This document discusses the various pieces of the Calico's architecture, 
+This document discusses the various pieces of {{site.prodname}}'s architecture, 
 with a focus on what specific role each component plays in
-the Calico network. 
+the {{site.prodname}} network. 
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 
 # Components
 
-Calico is made up of the following interdependent components:
+{{site.prodname}} is made up of the following interdependent components:
 
--   [Felix](#felix), the primary Calico agent that runs on each
+-   [Felix](#felix), the primary {{site.prodname}} agent that runs on each
     machine that hosts endpoints.
 -   The [Orchestrator plugin](#orchestrator-plugin),
-    orchestrator-specific code that tightly integrates Calico into
+    orchestrator-specific code that tightly integrates {{site.prodname}} into
     that orchestrator.
 -   [etcd](#etcd), the data store.
 -   [BIRD](#bgp-client-bird), a BGP client that
@@ -60,7 +60,7 @@ endpoints that arrive on at the host are forwarded accordingly.
 Felix is also responsible for programming ACLs into the Linux kernel.
 These ACLs are used to ensure that only valid traffic can be sent
 between endpoints, and ensure that endpoints are not capable of
-circumventing Calico's security measures.
+circumventing {{site.prodname}}'s security measures.
 
 #### State Reporting
 
@@ -74,14 +74,14 @@ and operators of the network.
 
 Unlike Felix there is no single 'orchestrator plugin': instead, there
 are separate plugins for each major cloud orchestration platform (e.g.
-OpenStack, Kubernetes). The purpose of these plugins is to bind Calico
-more tightly into the orchestrator, allowing users to manage the Calico
+OpenStack, Kubernetes). The purpose of these plugins is to bind {{site.prodname}}
+more tightly into the orchestrator, allowing users to manage the {{site.prodname}}
 network just as they'd manage network tools that were built into the
 orchestrator.
 
-A good example of an orchestrator plugin is the Calico Neutron ML2
+A good example of an orchestrator plugin is the {{site.prodname}} Neutron ML2
 mechanism driver. This component integrates with Neutron's ML2 plugin,
-and allows users to configure the Calico network by making Neutron API
+and allows users to configure the {{site.prodname}} network by making Neutron API
 calls. This provides seamless integration with Neutron.
 
 The orchestrator plugin is responsible for the following tasks:
@@ -90,17 +90,18 @@ The orchestrator plugin is responsible for the following tasks:
 
 The orchestrator will inevitably have its own set of APIs for managing
 networks. The orchestrator plugin's primary job is to translate those
-APIs into Calico's data-model and then store it in Calico's datastore.
+APIs into {{site.prodname}}'s data-model and then store it in 
+{{site.prodname}}'s datastore.
 
 Some of this translation will be very simple, other bits may be more
 complex in order to render a single complex operation (e.g. live
-migration) into the series of simpler operations the rest of the Calico
-network expects.
+migration) into the series of simpler operations the rest of the 
+{{site.prodname}} network expects.
 
 #### Feedback
 
 If necessary, the orchestrator plugin will provide feedback from the
-Calico network into the orchestrator. Examples include: providing
+{{site.prodname}} network into the orchestrator. Examples include: providing
 information about Felix liveness; marking certain endpoints as failed if
 network setup failed.
 
@@ -109,15 +110,15 @@ network setup failed.
 ## etcd
 
 etcd is a distributed key-value store that has a focus on consistency.
-Calico uses etcd to provide the communication between components and as
-a consistent data store, which ensures Calico can always build an
+{{site.prodname}} uses etcd to provide the communication between components and as
+a consistent data store, which ensures {{site.prodname}} can always build an
 accurate network.
 
 Depending on the orchestrator plugin, etcd may either be the master data
 store or a lightweight mirror of a separate data store. For example, in
 an OpenStack deployment, the OpenStack database is considered the
 "source of truth" and etcd is used to mirror information about the
-network to the other Calico components.
+network to the other {{site.prodname}} components.
 
 The etcd component is distributed across the entire deployment. It is
 divided into two groups of machines: the core cluster, and the proxies.
@@ -142,13 +143,13 @@ etcd is responsible for performing the following tasks:
 
 #### Data Storage
 
-etcd stores the data for the Calico network in a distributed,
+etcd stores the data for the {{site.prodname}} network in a distributed,
 consistent, fault-tolerant manner (for cluster sizes of at least three
-etcd nodes). This set of properties ensures that the Calico network is
+etcd nodes). This set of properties ensures that the {{site.prodname}} network is
 always in a known-good state, while allowing for some number of the
 machines hosting etcd to fail or become unreachable.
 
-This distributed storage of Calico data also improves the ability of the
+This distributed storage of {{site.prodname}} data also improves the ability of the
 Calico components to read from the database (which is their most common
 operation), as they can distribute their reads around the cluster.
 
@@ -165,7 +166,7 @@ into the network.
 
 ## BGP Client (BIRD)
 
-Calico deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
+{{site.prodname}} deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
 distribute it around the data center.
 
 In Calico, this BGP component is most commonly

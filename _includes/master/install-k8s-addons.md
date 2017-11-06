@@ -1,13 +1,13 @@
-### Install Calico
-Calico can be installed on Kubernetes using Kubernetes resources (DaemonSets, etc).
+### Install {{site.prodname}}
+{{site.prodname}} can be installed on Kubernetes using Kubernetes resources (DaemonSets, etc).
 
-The Calico self-hosted installation consists of three objects in the `kube-system` Namespace:
+The {{site.prodname}} self-hosted installation consists of three objects in the `kube-system` Namespace:
 
-- A `ConfigMap` which contains the Calico configuration.
+- A `ConfigMap` which contains the {{site.prodname}} configuration.
 - A `DaemonSet` which installs the `calico/node` pod and CNI plugin.
 - A `ReplicaSet` which installs the `calico/kube-policy-controller` pod.
 
-Install the Calico manifest:
+Install the {{site.prodname}} manifest:
 
 ```shell
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml

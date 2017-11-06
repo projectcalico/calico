@@ -24,7 +24,7 @@ existing metrics.
 | `felix_calc_graph_update_time_seconds` | Seconds to update calculation graph for each datastore OnUpdate call. |
 | `felix_calc_graph_updates_processed` | Number of datastore updates processed by the calculation graph. |
 | `felix_cluster_num_host_endpoints` | Total number of host endpoints cluster-wide. |
-| `felix_cluster_num_hosts` | Total number of calico hosts in the cluster. |
+| `felix_cluster_num_hosts` | Total number of {{site.prodname}} hosts in the cluster. |
 | `felix_cluster_num_workload_endpoints` | Total number of workload endpoints cluster-wide. |
 | `felix_exec_time_micros` | Summary of time taken to fork/exec child processes |
 | `felix_int_dataplane_addr_msg_batch_size` | Number of interface address messages processed in each batch. Higher values indicate we're doing more batching to try to keep up. |
@@ -36,7 +36,7 @@ existing metrics.
 | `felix_ipset_calls` | Number of ipset commands executed. |
 | `felix_ipset_errors` | Number of ipset command failures. |
 | `felix_ipset_lines_executed` | Number of ipset operations executed. |
-| `felix_ipsets_calico` | Number of active Calico IP sets. |
+| `felix_ipsets_calico` | Number of active {{site.prodname}} IP sets. |
 | `felix_ipsets_total` | Total number of active IP sets. |
 | `felix_iptables_chains` | Number of active iptables chains. |
 | `felix_iptables_lines_executed` | Number of iptables rule updates executed. |

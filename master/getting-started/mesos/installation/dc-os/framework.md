@@ -2,8 +2,8 @@
 title: Calico DC/OS Installation Guide
 ---
 
-The following guide walks through installing Calico for DC/OS using the Universe
-package repostiory.
+The following guide walks through installing {{site.prodname}} for DC/OS using the Universe
+package repository.
 
 #### Installing etcd
 
@@ -13,46 +13,46 @@ To get started, first install etcd from Universe:
 
 #### Installing Calico
 
-Then install Calico from Universe.
+Then install {{site.prodname}} from Universe.
 
-![Installing Calico from Universe]({{site.baseurl}}/images/dcos-install-calico.gif)
+![Installing {{site.prodname}} from Universe]({{site.baseurl}}/images/dcos-install-calico.gif)
 
-It will take a few minutes for Calico to finish
+It will take a few minutes for {{site.prodname}} to finish
 installing on your cluster. You can check the status of the installation by
-visiting Calico's web status interface:
+visiting {{site.prodname}}'s web status interface:
 
  - Go to the **Services** tab
  - Select "calico-install-framework" in the list of running services
-   (note that it may take a few minutes for Calico
+   (note that it may take a few minutes for {{site.prodname}}
     to appear).
- - Once the Calico service is `Healthy`,
+ - Once the {{site.prodname}} service is `Healthy`,
    Select the "calico-install-framework" task.
- - Click the Endpoint URL to open the Calico status page in a new tab.
+ - Click the Endpoint URL to open the {{site.prodname}} status page in a new tab.
 
 ![sample demonstrating how to locate the framework service page]({{site.baseurl}}/images/dcos-calico-status.gif)
 
 ## Further Reading
 
-This concludes the installation of Calico for DC/OS! Before you start
-launching IP-per-container applications with Calico policy,
+This concludes the installation of {{site.prodname}} for DC/OS! Before you start
+launching IP-per-container applications with {{site.prodname}} policy,
 review the following information which may apply to your deployment.
 
 #### AWS
 
 DC/OS users on Amazon Web Services should view
-[Calico's AWS reference]({{site.baseurl}}/{{page.version}}/reference/public-cloud/aws)
-for information on how to configure AWS networking for use with Calico.
+[{{site.prodname}}'s AWS reference]({{site.baseurl}}/{{page.version}}/reference/public-cloud/aws)
+for information on how to configure AWS networking for use with {{site.prodname}}.
 
 #### Note on Cluster Impact
 
-The Installation method detailed above will affect availability of all Agents
+The Installation method detailed above will affect availability of all agents
 in the cluster in order to work around two limitations in DC/OS 1.8:
 
 1. [Mesos-Agents require a restart to detect newly added CNI networks](https://issues.apache.org/jira/browse/MESOS-6567).
 2. [DC/OS does not configure Docker with a Cluster-Store](https://dcosjira.atlassian.net/browse/DCOS-155)
 a [requirement for Multi-host docker networking](https://docs.docker.com/engine/userguide/networking/get-started-overlay/#/overlay-networking-with-an-external-key-value-store).
 
-Because of these two limitations, Calico-DC/OS will restart each agent process
+Because of these two limitations, {{site.prodname}}-DC/OS will restart each agent process
 and restart each docker daemon. Learn how to handle this installation steps manually
 and prevent cluster availability impact by viewing the [Custom Install Guide](custom).
 

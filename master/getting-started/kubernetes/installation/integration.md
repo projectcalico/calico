@@ -3,7 +3,7 @@ title: Integration Guide
 ---
 
 
-This document explains the components necessary to install Calico on Kubernetes for integrating
+This document explains the components necessary to install {{site.prodname}} on Kubernetes for integrating
 with custom configuration management.
 
 The [self-hosted installation method](hosted/) will perform these steps automatically for you and is *strongly* recommended
@@ -17,30 +17,30 @@ installation method.
 
 - An existing Kubernetes cluster running Kubernetes >= v1.1.  To use network policy, Kubernetes >= v1.3.0 is required.
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
-  - Calico can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up.
+  - {{site.prodname}} can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up.
     A number of production users do share the etcd cluster between the two, but separating them gives better performance at high scale.
 
-> **Note**: Calico can also be installed
+> **Note**: {{site.prodname}} can also be installed
 > [without a dependency on etcd](hosted/kubernetes-datastore/),
 > but that is not covered in this document.
 {: .alert .alert-info}
 
 
-## About the Calico Components
+## About the {{site.prodname}} Components
 
-There are three components of a Calico / Kubernetes integration.
+There are three components of a {{site.prodname}} / Kubernetes integration.
 
-- The Calico per-node docker container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
+- The {{site.prodname}} per-node docker container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
 - The [cni-plugin](https://github.com/projectcalico/cni-plugin) network plugin binaries.
   - This is the combination of two binary executables and a configuration file.
-- When using Kubernetes network policy, you must also deploy the Calico Kubernetes controllers.
+- When using Kubernetes network policy, you must also deploy the {{site.prodname}} Kubernetes controllers.
 
 The `calico/node` docker container must be run on the Kubernetes master and each
-Kubernetes node in your cluster.  It contains the BGP agent necessary for Calico routing to occur,
+Kubernetes node in your cluster.  It contains the BGP agent necessary for {{site.prodname}} routing to occur,
 and the Felix agent which programs network policy rules.
 
 The `cni-plugin` plugin integrates directly with the Kubernetes `kubelet` process
-on each node to discover which pods have been created, and adds them to Calico networking.
+on each node to discover which pods have been created, and adds them to {{site.prodname}} networking.
 
 The `calico/kube-controllers` container runs as a pod on top of Kubernetes and implements
 the `NetworkPolicy` API.
@@ -113,11 +113,11 @@ Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 {: .alert .alert-info}
 
 
-## Installing the Calico CNI plugins
+## Installing the {{site.prodname}} CNI plugins
 
 The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ipam` plugins.
 
-### Install the Calico plugins
+### Install the {{site.prodname}} plugins
 
 Download the binaries and make sure they're executable
 
@@ -127,7 +127,7 @@ wget -N -P /opt/cni/bin {{site.data.versions[page.version].first.components["cal
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 
-The Calico CNI plugins require a standard CNI config file.  The `policy` section is only required when
+The {{site.prodname}} CNI plugins require a standard CNI config file.  The `policy` section is only required when
 running the `calico/kube-controllers` container .
 
 ```bash
@@ -155,13 +155,13 @@ EOF
 Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 Replace `</PATH/TO/KUBECONFIG>` with your kubeconfig file. See [kubernetes kubeconfig](http://kubernetes.io/docs/user-guide/kubeconfig-file/) for more information about kubeconfig.
 
-For more information on configuring the Calico CNI plugins, see the [configuration guide]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
+For more information on configuring the {{site.prodname}} CNI plugins, see the [configuration guide]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
 
 ### Install standard CNI lo plugin
 
 In addition to the CNI plugin specified by the CNI config file, Kubernetes requires the standard CNI loopback plugin.
 
-Download the file `loopback` and cp it to CNI binary dir.
+Download the file `loopback` and copy it to CNI binary dir.
 
 ```bash
 wget https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
@@ -169,10 +169,10 @@ tar -zxvf cni-v0.3.0.tgz
 sudo cp loopback /opt/cni/bin/
 ```
 
-## Installing the Calico Kubernetes controllers
+## Installing the {{site.prodname}} Kubernetes controllers
 
 The `calico/kube-controllers` container implements the Kubernetes `NetworkPolicy` API by watching the
-Kubernetes API for `Pod`, `Namespace`, and `NetworkPolicy` events and configuring Calico in response. It runs as
+Kubernetes API for `Pod`, `Namespace`, and `NetworkPolicy` events and configuring {{site.prodname}} in response. It runs as
 a single pod managed by a Deployment.
 
 To install the controllers:
@@ -198,14 +198,14 @@ see the [configuration guide]({{site.baseur}}/{{page.version}}/reference/kube-co
 
 ## Role-based access control (RBAC)
 
-When installing Calico on Kubernetes clusters with RBAC enabled, it is necessary to provide Calico access to some Kubernetes
-APIs.  To do this, subjects and roles must be configured in the Kubernetes API and Calico components must be provided with the appropriate
+When installing {{site.prodname}} on Kubernetes clusters with RBAC enabled, it is necessary to provide {{site.prodname}} access to some Kubernetes
+APIs.  To do this, subjects and roles must be configured in the Kubernetes API and {{site.prodname}} components must be provided with the appropriate
 tokens or certificates to presnt which identify it as the configured API user.
 
 Detailed instructions for configuring Kubernetes RBAC are outside the scope of this document.  For more information,
 please see the [upstream Kubernetes documentation](https://kubernetes.io/docs/admin/authorization/rbac/) on the topic.
 
-The following yaml file defines the necessary API permissions required by Calico
+The following yaml file defines the necessary API permissions required by {{site.prodname}}
 when using the etcd datastore.
 
 ```
@@ -218,9 +218,9 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 ### Configuring the Kubelet
 
-The Kubelet needs to be configured to use the Calico network plugin when starting pods.
+The Kubelet needs to be configured to use the {{site.prodname}} network plugin when starting pods.
 
-The `kubelet` can be configured to use Calico by starting it with the following options
+The `kubelet` can be configured to use {{site.prodname}} by starting it with the following options
 
 - `--network-plugin=cni`
 - `--cni-conf-dir=/etc/cni/net.d`
@@ -234,7 +234,7 @@ for more details.
 
 ### Configuring the kube-proxy
 
-In order to use Calico policy with Kubernetes, the `kube-proxy` component must
+In order to use {{site.prodname}} policy with Kubernetes, the `kube-proxy` component must
 be configured to leave the source address of service bound traffic intact.
 This feature is first officially supported in Kubernetes v1.1.0 and is the default mode starting
 in Kubernetes v1.2.0.

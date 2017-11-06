@@ -1,8 +1,8 @@
 ---
-title: 'Upgrade Procedure (OpenStack)'
+title: Upgrade Procedure (OpenStack)
 ---
 
-This document details the procedure for upgrading a Calico-based
+This document details the procedure for upgrading a {{site.prodname}}-based
 OpenStack system. It contains the full steps for upgrading all
 components and the order in which that upgrade should be performed. Most
 releases do not concurrently upgrade all of these components: if a
@@ -37,7 +37,7 @@ the order shown.
 ### 1: Upgrade etcd
 
 This step should be run on every machine in your deployment that runs
-any Calico code, and also on the machine running the etcd cluster.
+any {{site.prodname}} code, and also on the machine running the etcd cluster.
 
 #### Ubuntu
 
@@ -66,7 +66,7 @@ Now, restart etcd:
 2: Upgrade compute software
 ---------------------------
 
-On each machine running the Calico compute software (the component
+On each machine running the {{site.prodname}} compute software (the component
 called Felix), run the following upgrade steps.
 
 #### Uninstall pip-installed networking-calico
@@ -81,15 +81,15 @@ instead.)
 #### Ubuntu
 
 First, use `apt-get` to install the updated packages. On each compute
-host upgrade the Calico packages, as follows:
+host upgrade the {{site.prodname}} packages, as follows:
 
     apt-get update
     apt-get install calico-compute calico-felix calico-common python-etcd \
                     networking-calico
 
-> **Important**: Running `apt-get upgrade` is not sufficient to upgrade Calico
+> **Important**: Running `apt-get upgrade` is not sufficient to upgrade {{site.prodname}}
 > due to new dependent packages added in version 1.3. If you want to
-> upgrade Calico as part of a system-wide update, you must use
+> upgrade {{site.prodname}} as part of a system-wide update, you must use
 > `apt-get dist-upgrade`.
 {: .alert .alert-danger}
 
@@ -103,15 +103,15 @@ process when the binary has been updated since it started running:
 
     pkill dnsmasq
 
-For OpenStack Liberty or later, install the new Calico DHCP agent and
-disable the Neutron-provided one. The Calico DHCP agent is backed by
+For OpenStack Liberty or later, install the new {{site.prodname}} DHCP agent and
+disable the Neutron-provided one. The {{site.prodname}} DHCP agent is backed by
 etcd, allowing it to scale to higher numbers of hosts:
 
     service neutron-dhcp-agent stop
     echo manual > /etc/init/neutron-dhcp-agent.override
     apt-get install calico-dhcp-agent
 
-Check that only the Calico DHCP agent is now running:
+Check that only the {{site.prodname}} DHCP agent is now running:
 
     # status calico-dhcp-agent
     calico-dhcp-agent start/running, process <PID>
@@ -137,7 +137,7 @@ Then, update packaged components:
     yum update
 
 We recommend upgrading the whole distribution as shown here. In case you
-prefer to upgrade particular packages only, those needed for a Calico
+prefer to upgrade particular packages only, those needed for a {{site.prodname}}
 compute node are the following.
 
     calico-common
@@ -166,15 +166,15 @@ is uncommented and set as follows:
     # a lock path must be set.
     lock_path = $state_path/lock
 
-For OpenStack Liberty or later, install the new Calico DHCP agent and
-disable the Neutron-provided one. The Calico DHCP agent is backed by
+For OpenStack Liberty or later, install the new {{site.prodname}} DHCP agent and
+disable the Neutron-provided one. The {{site.prodname}} DHCP agent is backed by
 etcd, allowing it to scale to higher numbers of hosts:
 
     systemctl stop neutron-dhcp-agent
     systemctl disable neutron-dhcp-agent
     yum install calico-dhcp-agent
 
-Check that (only) the Calico DHCP agent is started:
+Check that (only) the {{site.prodname}} DHCP agent is started:
 
     # systemctl status calico-dhcp-agent
     ...
@@ -192,20 +192,20 @@ Or if you are using an earlier OpenStack release:
 3: Upgrade control software
 ---------------------------
 
-On each machine running the Calico control software (every machine
+On each machine running the {{site.prodname}} control software (every machine
 running neutron-server), run the following upgrade steps.
 
 #### Ubuntu
 
 First, use `apt-get` to install the updated packages. On each control
-host you can upgrade only the Calico packages, as follows:
+host you can upgrade only the {{site.prodname}} packages, as follows:
 
     apt-get update
     apt-get install calico-control calico-common python-etcd networking-calico
     
-> **Important**: Running `apt-get upgrade` is not sufficient to upgrade Calico
+> **Important**: Running `apt-get upgrade` is not sufficient to upgrade {{site.prodname}}
 > due to new dependent packages added in version 1.3. If you want to
-> upgrade Calico as part of a system-wide update, you must use
+> upgrade {{site.prodname}} as part of a system-wide update, you must use
 > `apt-get dist-upgrade`.
 {: .alert .alert-danger}
 
@@ -227,7 +227,7 @@ Then, update packaged components:
     yum update
 
 We recommend upgrading the whole distribution as shown here. In case you
-prefer to upgrade particular packages only, those needed for a Calico
+prefer to upgrade particular packages only, those needed for a {{site.prodname}}
 control node are the following.
 
     calico-common
