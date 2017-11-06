@@ -5,10 +5,12 @@
 ARCH?=amd64
 ifeq ($(ARCH),amd64)
         ARCHTAG?=
+	GO_BUILD_VER?=v0.9
 endif
 
 ifeq ($(ARCH),ppc64le)
         ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
 endif
 
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.8.0-beta.1
@@ -20,7 +22,6 @@ default: help
 # Makefile configuration options 
 CONTAINER_NAME=calico/kube-controllers$(ARCHTAG)
 PACKAGE_NAME?=github.com/projectcalico/kube-controllers
-GO_BUILD_VER:=v0.9
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
