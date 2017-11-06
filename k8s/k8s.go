@@ -58,7 +58,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	logger.Info("Extracted identifiers for CmdAddK8s")
 
-	if endpoint != nil {
+	if endpoint != nil && len(endpoint.Spec.IPNetworks) != 0 {
 		// This happens when Docker or the node restarts. K8s calls CNI with the same parameters as before.
 		// Do the networking (since the network namespace was destroyed and recreated).
 		// There's an existing endpoint - no need to create another. Find the IP address from the endpoint
@@ -71,6 +71,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		// If any labels changed whilst the container was being restarted, they will be picked up by the policy
 		// controller so there's no need to update the labels here.
 	} else {
+		// Either the endpoint has not been created, or the pod has not been assigned an IP.  In this case
+		// allocate the IP and update/create the endpoint.
 		client, err := newK8sClient(conf, logger)
 		if err != nil {
 			return nil, err
@@ -233,15 +235,18 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			logger.Debugf("IPAM result set to: %+v", result)
 		}
 
-		// Create the endpoint object and configure it.
-		endpoint = api.NewWorkloadEndpoint()
+		// Configure the endpoint (creating if required).
+		if endpoint == nil {
+			logger.Debug("Initializing new WorkloadEndpoint resource")
+			endpoint = api.NewWorkloadEndpoint()
+		}
 		endpoint.Name = epIDs.WEPName
 		endpoint.Namespace = epIDs.Namespace
-		endpoint.Labels = labels
 		endpoint.Spec.Endpoint = epIDs.Endpoint
 		endpoint.Spec.Node = epIDs.Node
 		endpoint.Spec.Orchestrator = epIDs.Orchestrator
 		endpoint.Spec.Pod = epIDs.Pod
+		endpoint.Labels = labels
 		endpoint.Spec.Ports = ports
 
 		// Set the profileID according to whether Kubernetes policy is required.

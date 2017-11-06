@@ -1,5 +1,5 @@
-hash: ed281d6fdea87d0c3a3d2c50a843bf0b77ad77d3aab65b995b3b4e7571ec3730
-updated: 2017-10-28T12:14:19.26195878Z
+hash: fe93f83c4f7bf1643db2438a7274dca9b09b7a9be38a62c28fae210610d1c021
+updated: 2017-11-03T22:39:36.9668475Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -168,6 +168,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
@@ -186,7 +188,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dae320cd652b66d908eb5d59209717e3c3514c26
+  version: fd037e85cc3def188a606af36adec86d783aaf92
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -202,6 +204,7 @@ imports:
   - lib/backend/watchersyncer
   - lib/clientv2
   - lib/errors
+  - lib/hash
   - lib/ipam
   - lib/ipip
   - lib/logutils
@@ -210,6 +213,8 @@ imports:
   - lib/net
   - lib/numorstring
   - lib/options
+  - lib/selector/parser
+  - lib/selector/tokenizer
   - lib/set
   - lib/watch
 - name: github.com/prometheus/client_golang
@@ -245,7 +250,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -274,7 +279,6 @@ imports:
   version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -301,7 +305,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
   subpackages:
   - internal
   - internal/app_identity
@@ -393,6 +397,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait
