@@ -69,18 +69,6 @@ func makeNode(ipv4 string, ipv6 string) *api.Node {
 
 var _ = Describe("Non-etcd related tests", func() {
 
-	Describe("Logging tests", func() {
-		Context("Test message", func() {
-			message("Test message %d, %s", 4, "END")
-		})
-		Context("Test warning", func() {
-			warning("Test message %d, %s", 4, "END")
-		})
-		Context("Test fatal", func() {
-			fatal("Test message %d, %s", 4, "END")
-		})
-	})
-
 	Describe("Termination tests", func() {
 		exitCode = 0
 		Context("Test termination", func() {
