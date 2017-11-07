@@ -219,7 +219,7 @@ within that list.
 Example
 {% raw %}
 ```
-$ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.Metadata.Name}},{{end}}{{end}}"
+$ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.ObjectMeta.Name}},{{end}}{{end}}"
 endpoint1,eth0,
 ```
 {% endraw %}
