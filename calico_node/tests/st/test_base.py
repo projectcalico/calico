@@ -24,7 +24,7 @@ from deepdiff import DeepDiff
 
 from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
                                   ETCD_KEY, debug_failures, ETCD_HOSTNAME_SSL,
-                                  wipe_etcd)
+                                  wipe_etcd, clear_on_failures)
 
 HOST_IPV6 = get_ip(v6=True)
 HOST_IPV4 = get_ip()
@@ -47,17 +47,19 @@ class TestBase(TestCase):
     def setUpClass(cls):
         wipe_etcd(HOST_IPV4)
 
-    def setUp(self, wipe_etcd=True):
+    def setUp(self, clear_etcd=True):
         """
         Clean up before every test.
         """
         self.ip = HOST_IPV4
 
-        if wipe_etcd:
-            self.wipe_etcd()
+        if clear_etcd:
+            wipe_etcd(self.ip)
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
+
+        clear_on_failures()
 
     @staticmethod
     def _conn_checker(args):
@@ -213,19 +215,6 @@ class TestBase(TestCase):
 
         assert False not in results, ("Connectivity check error!\r\n"
                                       "Results:\r\n %s\r\n" % diagstring)
-
-    def wipe_etcd(self):
-        wipe_etcd(self.ip)
-
-    def curl_etcd(self, path, options=None, recursive=True):
-        """
-        Perform a curl to etcd, returning JSON decoded response.
-        :param path:  The key path to query
-        :param options:  Additional options to include in the curl
-        :param recursive:  Whether we want recursive query or not
-        :return:  The JSON decoded response.
-        """
-        curl_etcd(path, options, recursive, self.ip)
 
     def check_data_in_datastore(self, host, data, resource, yaml_format=True):
         if yaml_format:

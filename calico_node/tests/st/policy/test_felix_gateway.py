@@ -17,10 +17,11 @@ import logging
 import subprocess
 
 import yaml
-from tests.st.test_base import TestBase
+from tests.st.test_base import TestBase, HOST_IPV4
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.utils import get_ip, log_and_run, retry_until_success, \
-    ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME
+    ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, \
+    handle_failure, clear_on_failures, add_on_failure, wipe_etcd
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
@@ -46,7 +47,8 @@ class TestFelixOnGateway(TestBase):
     @classmethod
     def setUpClass(cls):
         # Wipe etcd once before any test in this class runs.
-        wipe_etcd()
+        _log.debug("Wiping etcd")
+        wipe_etcd(HOST_IPV4)
 
         # We set up an additional docker network to act as the external
         # network.  The Gateway container is connected to both networks.
@@ -168,6 +170,10 @@ class TestFelixOnGateway(TestBase):
             network=cls.calinet,
             labels=["org.projectcalico.label.wep=host"])
 
+        clear_on_failures()
+        add_on_failure(cls.host.log_extra_diags)
+        add_on_failure(cls.gateway.log_extra_diags)
+
     def setUp(self):
         # Override the per-test setUp to avoid wiping etcd; instead only clean up the data we
         # added.
@@ -189,6 +195,9 @@ class TestFelixOnGateway(TestBase):
 
         log_and_run("docker rm -f cali-st-ext-nginx || true")
 
+        clear_on_failures()
+
+    @handle_failure
     def test_can_connect_by_default(self):
         """
         Test if traffic is allowed with no policy setup.
@@ -220,6 +229,7 @@ class TestFelixOnGateway(TestBase):
         })
         retry_until_success(self.assert_host_can_curl_ext, 3)
 
+    @handle_failure
     def test_default_deny_for_local_traffic(self):
         """
         Test default deny for local traffic after host endpoint been created.
@@ -235,6 +245,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_empty_policy_for_forward_traffic(self):
         """
         Test empty policy deny local and forward traffic.
@@ -267,6 +278,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_local_allow_with_forward_empty(self):
         """
         Test local allow does not affect forward traffic with empty policy.
@@ -293,6 +305,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_local_deny_with_lower_forward_allow(self):
         """
         Test local deny with lower order does not affect forward allow policy.
@@ -319,6 +332,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_local_ingress_allow_with_lower_ingress_forward_deny(self):
         """
         Test local ingress allow does not affect forward ingress deny with lower order.
@@ -347,6 +361,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_local_egress_allow_with_lower_egress_forward_deny(self):
         """
         Test local egress allow does not affect forward egress deny with lower order.
@@ -375,6 +390,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_local_forward_opposite_policy_0(self):
         """
         Test local and forward got opposite allow/deny rules.
@@ -396,6 +412,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
+    @handle_failure
     def test_local_forward_opposite_policy_1(self):
         """
         Test local and forward got opposite allow/deny rules.
@@ -417,6 +434,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
+    @handle_failure
     def test_host_endpoint_combinations(self):
         """
         Test combinations of untracked, preDNAT, normal and forward policies.
@@ -856,7 +874,15 @@ class TestFelixOnGateway(TestBase):
 
     @staticmethod
     def _exec_calicoctl(action, data, host):
-        # use calicoctl with data
+        # Delete creationTimestamp fields from the data that we're going to
+        # write.
+        for obj in data.get('items', []):
+            if 'creationTimestamp' in obj['metadata']:
+                del obj['metadata']['creationTimestamp']
+        if 'metadata' in data and 'creationTimestamp' in data['metadata']:
+            del data['metadata']['creationTimestamp']
+
+        # Use calicoctl with the modified data.
         host.writefile("new_data",
                        yaml.dump(data, default_flow_style=False))
         host.calicoctl("%s -f new_data" % action)
@@ -878,44 +904,3 @@ class TestFelixOnGateway(TestBase):
                     "ip netns exec %s ip route del default; "
                     "ip netns exec %s ip route add default via %s" %
                     (pid, pid, pid, pid, cls.gateway_ext_ip))
-
-
-def wipe_etcd():
-    _log.debug("Wiping etcd")
-    # Delete /calico if it exists. This ensures each test has an empty data
-    # store at start of day.
-    curl_etcd(get_ip(), "calico", options=["-XDELETE"])
-
-    # Disable Usage Reporting to usage.projectcalico.org
-    # We want to avoid polluting analytics data with unit test noise
-    curl_etcd(get_ip(),
-              "calico/v1/config/UsageReportingEnabled",
-              options=["-XPUT -d value=False"])
-    curl_etcd(get_ip(),
-              "calico/v1/config/LogSeverityScreen",
-              options=["-XPUT -d value=debug"])
-
-
-def curl_etcd(ip, path, options=None, recursive=True):
-    """
-    Perform a curl to etcd, returning JSON decoded response.
-    :param ip: IP address of etcd server
-    :param path:  The key path to query
-    :param options:  Additional options to include in the curl
-    :param recursive:  Whether we want recursive query or not
-    :return:  The JSON decoded response.
-    """
-    if options is None:
-        options = []
-    if ETCD_SCHEME == "https":
-        # Etcd is running with SSL/TLS, require key/certificates
-        command = "curl --cacert %s --cert %s --key %s " \
-                  "-sL https://%s:2379/v2/keys/%s?recursive=%s %s" % \
-                  (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL, path,
-                   str(recursive).lower(), " ".join(options))
-    else:
-        command = "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s" % \
-                  (ip, path, str(recursive).lower(), " ".join(options))
-    _log.debug("Running: %s", command)
-    rc = subprocess.check_output(command, shell=True)
-    return json.loads(rc.strip())
