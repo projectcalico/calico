@@ -50,8 +50,6 @@ var _ = Describe("kube-controllers FV tests", func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(etcd.IP)
-		err := calicoClient.EnsureInitialized()
-		Expect(err).NotTo(HaveOccurred())
 
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
@@ -79,6 +77,18 @@ var _ = Describe("kube-controllers FV tests", func() {
 		etcd.Stop()
 		policyController.Stop()
 		apiserver.Stop()
+	})
+
+	It("should initialize the datastore at start-of-day", func() {
+		var info *api.ClusterInformation
+		Eventually(func() *api.ClusterInformation {
+			info, _ = calicoClient.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
+			return info
+		}).ShouldNot(BeNil())
+
+		Expect(info.Spec.ClusterGUID).To(MatchRegexp("^[a-f0-9]{32}$"))
+		Expect(info.Spec.ClusterType).To(Equal("k8s"))
+		Expect(*info.Spec.DatastoreReady).To(BeTrue())
 	})
 
 	Context("Profile FV tests", func() {

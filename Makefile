@@ -120,7 +120,7 @@ tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
 	$(DOCKER_GO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
 		
 .PHONY: fv
-fv: tests/fv/fv.test
+fv: tests/fv/fv.test docker-image
 	@echo Running Go FVs.
 	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME) ./fv.test -ginkgo.slowSpecThreshold 30
 
