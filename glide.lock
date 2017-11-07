@@ -1,5 +1,5 @@
-hash: fe292b9ccc75233ea95a76a813bfb6978f49685d091427386a59d78ffa918ffd
-updated: 2017-11-03T09:36:52.771622198Z
+hash: f207112a5697ada0771bc8db9fdaad86c9dbba0d1cfd44a67e9ea235c2f9bc23
+updated: 2017-11-06T16:51:03.134373892-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -189,7 +189,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 88a4db12f216de433ee33d3e7d71e60c46fcd09a
+  version: e8d93a6ef128b79fddc09e5f673386c46cab6d10
   subpackages:
   - lib
   - lib/apiconfig
@@ -227,7 +227,7 @@ imports:
   - lib/validator
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 04ddedbf8b00ce51507363a11cf733b9a9033dea
+  version: 5f55c67174e0c1855b85dec3d541e8954e5db38c
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -242,13 +242,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 1bab55dd05dbff384524a6a1c99006d9eb5f139b
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -270,7 +270,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: bd6f299fb381e4c3393d1c4b1f0b94f5e77650c8
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -295,10 +295,9 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
@@ -325,7 +324,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
+  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
   subpackages:
   - internal
   - internal/app_identity
