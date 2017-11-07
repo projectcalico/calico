@@ -7,7 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kelseyhightower/confd/log"
+	logutils "github.com/kelseyhightower/confd/log"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -35,7 +36,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	// has not been specified.
 	config, err := apiconfig.LoadClientConfig(configfile)
 	if err != nil {
-		log.Error("Failed to load Calico client configuration: %v", err)
+		log.Errorf("Failed to load Calico client configuration: %v", err)
 		return nil, err
 	}
 
@@ -45,7 +46,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	// when restarted it will start watching the correct resources).
 	cc, err := clientv2.New(*config)
 	if err != nil {
-		log.Error("Failed to create main Calico client: %v", err)
+		log.Errorf("Failed to create main Calico client: %v", err)
 		return nil, err
 	}
 	cfg, err := cc.BGPConfigurations().Get(
@@ -56,7 +57,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	if _, ok := err.(errors.ErrorResourceDoesNotExist); err != nil && !ok {
 		// Failed to get the BGP configuration (and not because it doesn't exist).
 		// Exit.
-		log.Error("Failed to query current BGP settings: %v", err)
+		log.Errorf("Failed to query current BGP settings: %v", err)
 		return nil, err
 	}
 	nodeMeshEnabled := true
@@ -92,7 +93,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	// callback) then we terminate confd - the calico/node init process will restart the
 	// confd process.
 	nodeName := os.Getenv("NODENAME")
-	c.nodeLogKey = fmt.Sprintf("calico/bgp/v1/host/%s/loglevel", nodeName)
+	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", nodeName)
 	c.syncer = bgpsyncer.New(c.client, c, nodeName, nodeMeshEnabled)
 	c.syncer.Start()
 
@@ -139,7 +140,7 @@ type client struct {
 // This client uses this information to initialize the revision map used to keep track of the
 // revision number of each prefix that the template is monitoring.
 func (c *client) SetPrefixes(keys []string) error {
-	log.Debug("Set prefixes called with: %v", keys)
+	log.Debugf("Set prefixes called with: %v", keys)
 	for _, k := range keys {
 		// Initialise the revision that we are watching for this prefix.  This will be updated
 		// if we receive any syncer events for keys with this prefix.  The Watcher function will
@@ -162,7 +163,11 @@ func (c *client) OnStatusUpdated(status api.SyncStatus) {
 		defer c.cacheLock.Unlock()
 		c.synced = true
 		c.waitForSync.Done()
-		log.Debug("Data is now syncd, can start rendering templates")
+		log.Debugf("Data is now syncd, can start rendering templates")
+
+		// Now that we're in-sync, check if we should update our log level
+		// based on the datastore config.
+		c.updateLogLevel()
 	}
 }
 
@@ -182,7 +187,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 	// cache revision.
 	if c.synced {
 		c.cacheRevision++
-		log.Debug("Processing new updates, revision is now: %d", c.cacheRevision)
+		log.Debugf("Processing new updates, revision is now: %d", c.cacheRevision)
 	}
 
 	// Update our cache from each of the individual updates, and keep track of
@@ -191,7 +196,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 		// Update our cache of current entries.
 		k, err := model.KeyToDefaultPath(u.Key)
 		if err != nil {
-			log.Error("Ignoring update: unable to create path from Key %v: %v", u.Key, err)
+			log.Errorf("Ignoring update: unable to create path from Key %v: %v", u.Key, err)
 			continue
 		}
 
@@ -201,13 +206,13 @@ func (c *client) OnUpdates(updates []api.Update) {
 		case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
 			value, err := model.SerializeValue(&u.KVPair)
 			if err != nil {
-				log.Error("Ignoring update: unable to serialize value %v: %v", u.KVPair.Value, err)
+				log.Errorf("Ignoring update: unable to serialize value %v: %v", u.KVPair.Value, err)
 				continue
 			}
 			c.cache[k] = string(value)
 		}
 
-		log.Debug("Cache entry updated from event type %d: %s=%s", u.UpdateType, k, c.cache[k])
+		log.Debugf("Cache entry updated from event type %d: %s=%s", u.UpdateType, k, c.cache[k])
 		if c.synced {
 			c.keyUpdated(k)
 		}
@@ -236,7 +241,7 @@ func (c *client) OnUpdates(updates []api.Update) {
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
 // We use this purely for logging.
 func (c *client) ParseFailed(rawKey string, rawValue string) {
-	log.Error("Unable to parse datastore entry Key=%s; Value=%s", rawKey, rawValue)
+	log.Errorf("Unable to parse datastore entry Key=%s; Value=%s", rawKey, rawValue)
 }
 
 // GetValues is called from confd to obtain the cached data for the required set of prefixes.
@@ -247,7 +252,7 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 	// only have a partial snapshot and we should never write out partial config.
 	c.waitForSync.Wait()
 
-	log.Debug("Requesting values for keys: %v", keys)
+	log.Debugf("Requesting values for keys: %v", keys)
 
 	// For simplicity always populate the results with the common set of default values
 	// (event if we haven't been asked for them).
@@ -276,7 +281,7 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 		}
 	}
 
-	log.Debug("Returning %d results", len(values))
+	log.Debugf("Returning %d results", len(values))
 
 	return values, nil
 }
@@ -302,13 +307,13 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 	for {
 		// Loop through each key, if the revision associated with the key is higher than the lastRevision
 		// then exit with the current cacheRevision and render with the current data.
-		log.Debug("Checking for updated key revisions, watching from rev %d", lastRevision)
+		log.Debugf("Checking for updated key revisions, watching from rev %d", lastRevision)
 		for _, key := range keys {
 			rev, ok := c.revisionsByPrefix[key]
 			if !ok {
-				log.Fatal("Watch prefix check for unknown prefix: ", key)
+				log.Fatalf("Watch prefix check for unknown prefix: ", key)
 			}
-			log.Debug("Found key prefix %s at rev %d", key, rev)
+			log.Debugf("Found key prefix %s at rev %d", key, rev)
 			if rev > lastRevision {
 				log.Debug("Exiting to render template")
 				return nil
@@ -343,14 +348,15 @@ func (c *client) matchesPrefix(key string, prefixes []string) bool {
 // The caller should be holding the cacheLock.
 func (c *client) keyUpdated(key string) {
 	for prefix, rev := range c.revisionsByPrefix {
-		log.Debug("Prefix %s has rev %d", prefix, rev)
+		log.Debugf("Prefix %s has rev %d", prefix, rev)
 		if rev != c.cacheRevision && strings.HasPrefix(key, prefix) {
-			log.Debug("Updating prefix to rev %d", c.cacheRevision)
+			log.Debugf("Updating prefix to rev %d", c.cacheRevision)
 			c.revisionsByPrefix[prefix] = c.cacheRevision
 
 			// If this is a change to either the global log level, or the per-node
 			// log level, then configure confd's log level to match.
 			if strings.HasSuffix(key, "loglevel") {
+				log.WithField("key", key).Info("Potential log level configuration change on key")
 				c.updateLogLevel()
 			}
 		}
@@ -359,12 +365,12 @@ func (c *client) keyUpdated(key string) {
 
 func (c *client) updateLogLevel() {
 	if envLevel := os.Getenv("BGP_LOGSEVERITYSCREEN"); envLevel != "" {
-		log.SetLevel(envLevel)
+		logutils.SetLevel(envLevel)
 	} else if nodeLevel := c.cache[c.nodeLogKey]; nodeLevel != "" {
-		log.SetLevel(nodeLevel)
+		logutils.SetLevel(nodeLevel)
 	} else if globalLogLevel := c.cache[globalLogging]; globalLogLevel != "" {
-		log.SetLevel(globalLogLevel)
+		logutils.SetLevel(globalLogLevel)
 	} else {
-		log.SetLevel("info")
+		logutils.SetLevel("info")
 	}
 }

@@ -5,12 +5,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kelseyhightower/confd/log"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
 	initialProcessRetryInterval = 250 * time.Millisecond
-	maxProcessRetryInterval = 5 * time.Second
+	maxProcessRetryInterval     = 5 * time.Second
 )
 
 type Processor interface {
@@ -125,7 +125,7 @@ func (p *watchProcessor) monitorPrefix(t *TemplateResource) {
 			// check function for this template is dependent on the other templates being rendered.
 			// Rather than blocking on WatchPrefix, sleep for a short period and retry - we'll start
 			// with short retry intervals and increase up to 5s.
-			log.Debug("Will retry processing the template in %s", retryInterval)
+			log.Debugf("Will retry processing the template in %s", retryInterval)
 			p.errChan <- err
 			time.Sleep(retryInterval)
 			retryInterval *= 2

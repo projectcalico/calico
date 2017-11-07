@@ -43,7 +43,7 @@ execute_test_suite() {
 execute_tests_daemon() {
     # Run confd as a background process.
     echo "Running confd as background process"
-    confd -confdir=/etc/calico/confd -log-level=debug >$LOGPATH/logd1 2>&1 &
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
     CONFD_PID=$!
     echo "Running with PID " $CONFD_PID
 
@@ -61,7 +61,7 @@ execute_tests_daemon() {
 
     # Re-start a background confd.
     echo "Restarting confd"
-    confd -confdir=/etc/calico/confd -log-level=debug >$LOGPATH/logd2 2>&1 &
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd2 2>&1 &
     CONFD_PID=$!
     ps
 
@@ -148,7 +148,7 @@ run_individual_test_oneshot() {
     calicoctl apply -f /tests/mock_data/calicoctl/${testdir}/input.yaml
 
     # Run confd in oneshot mode.
-    confd -confdir=/etc/calico/confd -onetime -log-level=debug >$LOGPATH/logss 2>&1 || true
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd -onetime >$LOGPATH/logss 2>&1 || true
 
     # Check the confd templates are updated.
     test_confd_templates $testdir

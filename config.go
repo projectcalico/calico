@@ -12,8 +12,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/kelseyhightower/confd/backends"
-	"github.com/kelseyhightower/confd/log"
+	logutils "github.com/kelseyhightower/confd/log"
 	"github.com/kelseyhightower/confd/resource/template"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -23,7 +24,6 @@ var (
 	config            Config // holds the global confd config.
 	interval          int
 	keepStageFile     bool
-	logLevel          string
 	noop              bool
 	onetime           bool
 	prefix            string
@@ -41,7 +41,6 @@ type Config struct {
 	Noop         bool   `toml:"noop"`
 	Prefix       string `toml:"prefix"`
 	SyncOnly     bool   `toml:"sync-only"`
-	LogLevel     string `toml:"log-level"`
 	CalicoConfig string `toml:"calicoconfig"`
 }
 
@@ -50,7 +49,6 @@ func init() {
 	flag.StringVar(&configFile, "config-file", "", "the confd config file")
 	flag.IntVar(&interval, "interval", 600, "backend polling interval")
 	flag.BoolVar(&keepStageFile, "keep-stage-file", false, "keep staged files")
-	flag.StringVar(&logLevel, "log-level", "", "level which confd should log messages")
 	flag.BoolVar(&noop, "noop", false, "only show pending changes")
 	flag.BoolVar(&onetime, "onetime", false, "run once and exit")
 	flag.StringVar(&prefix, "prefix", "", "key path prefix")
@@ -94,12 +92,12 @@ func initConfig() error {
 	// Update config from commandline flags.
 	processFlags()
 
-	if config.LogLevel != "" {
+	if level := os.Getenv("BGP_LOGSEVERITYSCREEN"); level != "" {
 		// If specified, use the provided log level.
-		log.SetLevel(config.LogLevel)
+		logutils.SetLevel(level)
 	} else {
 		// Default to info level logs.
-		log.SetLevel("info")
+		logutils.SetLevel("info")
 	}
 
 	backendsConfig = backends.Config{
@@ -152,8 +150,6 @@ func setConfigFromFlag(f *flag.Flag) {
 		config.Prefix = prefix
 	case "sync-only":
 		config.SyncOnly = syncOnly
-	case "log-level":
-		config.LogLevel = logLevel
 	case "calicoconfig":
 		config.CalicoConfig = calicoconfig
 	}
