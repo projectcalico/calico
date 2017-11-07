@@ -149,8 +149,6 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
 
 > **Note**: Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration. The `ETCD_ENDPOINTS`
 > environment may contain a comma separated list of endpoints of your etcd cluster.
-> If the environment is omitted, Calico defaults to a single etcd
-> endpoint at http://127.0.0.1:2379.
 {: .alert .alert-info}
 
 You can check that it's running using `sudo rkt list`.
