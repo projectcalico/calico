@@ -45,21 +45,22 @@
 # The build architecture is select by setting the ARCH variable.
 # For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
 # When ARCH is undefined it defaults to amd64.
-ifdef ARCH
-	ARCHTAG:=-$(ARCH)
-endif
 ARCH?=amd64
-ARCHTAG?=
-
 ifeq ($(ARCH),amd64)
-GO_BUILD_VER:=v0.9
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.9
+	FV_TYPHAIMAGE?=calico/typha:v0.5.1-27-g49eaa9b
 endif
 
 ifeq ($(ARCH),ppc64le)
-GO_BUILD_VER:=latest
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 
 help:
 	@echo "Felix Makefile"
@@ -399,6 +400,9 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	-docker tag calico/felix$(ARCHTAG) calico/felix
 	for t in $(FV_TESTS); do \
 	    cd $(TOPDIR)/`dirname $$t` && \
+	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
+	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
