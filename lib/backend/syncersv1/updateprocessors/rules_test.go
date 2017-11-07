@@ -188,6 +188,30 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port443}))
 	})
 
+	It("should parse a profile rule with no namespace", func() {
+		r := apiv2.Rule{
+			Action: apiv2.Allow,
+			Source: apiv2.EntityRule{
+				Selector: "has(foo)",
+			},
+			Destination: apiv2.EntityRule{
+				Selector: "has(foo)",
+			},
+		}
+
+		// Process the rule and get the corresponding v1 representation.
+		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+
+		expected := "has(foo)"
+		By("generating the correct source selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(expected))
+		})
+
+		By("generating the correct destination selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(expected))
+		})
+	})
+
 	It("should parse a rule with both a selector and namespace selector", func() {
 		r := apiv2.Rule{
 			Action: apiv2.Allow,

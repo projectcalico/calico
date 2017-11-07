@@ -75,7 +75,7 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 		destNSSelector = fmt.Sprintf("%s == '%s'", apiv2.LabelNamespace, ns)
 	}
 
-	var srcSelector, dstSelector string
+	srcSelector := ar.Source.Selector
 	if sourceNSSelector != "" {
 		// We need to namespace the rule's selector when converting to a v1 object.
 		logCxt := log.WithFields(log.Fields{
@@ -92,6 +92,7 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 		}
 	}
 
+	dstSelector := ar.Destination.Selector
 	if destNSSelector != "" {
 		// We need to namespace the rule's selector when converting to a v1 object.
 		logCxt := log.WithFields(log.Fields{
@@ -107,6 +108,7 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 			dstSelector = destNSSelector
 		}
 	}
+
 	return model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
