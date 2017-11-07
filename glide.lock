@@ -1,5 +1,5 @@
 hash: 37cea44c66cb698f295346c5bd4380f2e331288ab536f951b0ea7a92ca4d3ce7
-updated: 2017-11-07T19:15:30.027814773Z
+updated: 2017-11-07T19:53:46.101739021Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -155,6 +155,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -184,14 +186,17 @@ imports:
   - lib/backend/syncersv1/felixsyncer
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
+  - lib/clientv2
   - lib/errors
   - lib/hash
   - lib/health
+  - lib/ipam
   - lib/ipip
   - lib/names
   - lib/namespace
   - lib/net
   - lib/numorstring
+  - lib/options
   - lib/scope
   - lib/selector
   - lib/selector/parser
@@ -385,6 +390,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait
