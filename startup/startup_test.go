@@ -74,18 +74,6 @@ func makeNode(ipv4 string, ipv6 string) *api.Node {
 
 var _ = Describe("Non-etcd related tests", func() {
 
-	Describe("Logging tests", func() {
-		Context("Test message", func() {
-			message("Test message %d, %s", 4, "END")
-		})
-		Context("Test warning", func() {
-			warning("Test message %d, %s", 4, "END")
-		})
-		Context("Test fatal", func() {
-			fatal("Test message %d, %s", 4, "END")
-		})
-	})
-
 	Describe("Termination tests", func() {
 		exitCode = 0
 		Context("Test termination", func() {
@@ -163,15 +151,14 @@ var _ = Describe("FV tests against a real etcd", func() {
 				if _, cidr, _ := net.ParseCIDR(pool.Spec.CIDR); cidr.Version() == 6 {
 					// Expect IPIP on IPv6 to be disabled
 
-						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
-
+					Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
 
 					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV6NATOutgoing), "Expected IPv6 to be %t but was %t", expectedIPV6NATOutgoing, pool.Spec.NATOutgoing)
 
 				} else {
 					// off is not a real mode value but use it instead of empty string
 					if expectIpv4IpipMode == "Off" {
-							Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
+						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPModeNever))
 					} else {
 						Expect(pool.Spec.IPIPMode).To(Equal(api.IPIPMode(expectIpv4IpipMode)))
 					}
