@@ -241,7 +241,11 @@ var _ = Describe("health tests", func() {
 					PodIP: "10.0.0.1",
 				},
 			}
-			_, err := k8sClient.CoreV1().Pods("default").Create(pod)
+			var err error
+			pod, err = k8sClient.CoreV1().Pods("default").Create(pod)
+			Expect(err).NotTo(HaveOccurred())
+			pod.Status.PodIP = "10.0.0.1"
+			_, err = k8sClient.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 			podsToCleanUp = append(podsToCleanUp, testPodName)
 		}
