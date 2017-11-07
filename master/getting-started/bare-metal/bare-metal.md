@@ -272,12 +272,12 @@ cat << EOF | calicoctl create -f -
   kind: HostEndpoint
   metadata:
     name: <name of endpoint>
-    node: <node name or hostname>
     labels:
       role: webserver
       environment: production
   spec:
     interfaceName: eth0
+    node: <node name or hostname>
     profiles: [<list of profile IDs>]
     expectedIPs: ["10.0.0.1"]
 EOF
@@ -318,11 +318,11 @@ cat << EOF | calicoctl create -f -
   kind: HostEndpoint
   metadata:
     name: <name of endpoint>
-    node: <node name or hostname>
     labels:
       role: webserver
       environment: production
   spec:
+    node: <node name or hostname>
     profiles: [<list of profile IDs>]
     expectedIPs: ["10.0.0.1"]
 EOF
@@ -753,11 +753,11 @@ calicoctl apply -f - <<EOF
   kind: HostEndpoint
   metadata:
     name: node1-eth0
-    node: node1
     labels:
       host-endpoint: ingress
   spec:
     interfaceName: eth0
+    node: node1
 EOF
 ```
 
