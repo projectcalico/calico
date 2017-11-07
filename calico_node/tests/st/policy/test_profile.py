@@ -52,7 +52,7 @@ class MultiHostMainline(TestBase):
         super(MultiHostMainline, cls).tearDownClass()
 
     def setUp(self):
-        super(MultiHostMainline, self).setUp(wipe_etcd=False)
+        super(MultiHostMainline, self).setUp(clear_etcd=False)
         host1 = self.host1
         host2 = self.host2
 
