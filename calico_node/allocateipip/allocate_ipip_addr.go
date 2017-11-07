@@ -11,6 +11,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
@@ -22,6 +23,12 @@ import (
 // that is configured.
 
 func main() {
+	// Set log formatting.
+	log.SetFormatter(&logutils.Formatter{})
+
+	// Install a hook that adds file and line number information.
+	log.AddHook(&logutils.ContextHook{})
+
 	// Load the client config from environment.
 	cfg, c := calicoclient.CreateClient()
 
