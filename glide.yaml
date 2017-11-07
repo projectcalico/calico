@@ -36,11 +36,10 @@ import:
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
   version: ^0.9.0-pre1
-- package: github.com/gavv/monotime
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: github.com/Workiva/go-datastructures
-  version: ^1.0.39
+  version: af7475fb23e7561c87e7c1d17c12f46d732379bb
   subpackages:
   - trie/ctrie
 - package: golang.org/x/text

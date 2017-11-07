@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
@@ -72,6 +73,16 @@ func (r *healthRecorder) LastReport() (rep health.HealthReport) {
 	return
 }
 
+func crumbToSnapshotUpdates(crumb *snapcache.Breadcrumb) []api.Update {
+	var snapshotUpdates []api.Update
+	for entry := range crumb.KVs.Iterator(nil) {
+		upd, err := entry.Value.(syncproto.SerializedUpdate).ToUpdate()
+		Expect(err).NotTo(HaveOccurred())
+		snapshotUpdates = append(snapshotUpdates, upd)
+	}
+	return snapshotUpdates
+}
+
 var _ = Describe("Snapshot cache FV tests", func() {
 	var cacheConfig snapcache.Config
 	var cache *snapcache.Cache
@@ -97,112 +108,129 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		cancel()
 	})
 
-	It("should coalesce idempotent updates", func() {
-		kv := model.KVPair{
-			Key:      model.GlobalConfigKey{Name: "foo"},
-			Value:    "bar",
-			Revision: "10",
-			TTL:      0,
-		}
-		updateFoo1 := api.Update{
-			KVPair:     kv,
-			UpdateType: api.UpdateTypeKVNew,
-		}
-		cache.OnUpdates([]api.Update{updateFoo1})
-
-		// Wait for the update to flow through...
+	Describe("after sending GlobalConfigKey{foo}=bar @ rev 10", func() {
+		var kvFooBarRev10 model.KVPair
 		var crumb *snapcache.Breadcrumb
-		Eventually(func() bool {
-			crumb = cache.CurrentBreadcrumb()
-			return crumb.KVs.Size() > 0
-		}).Should(BeTrue())
+		var updateFooBarRev10 api.Update
 
-		// Then send in another update with same value, and another value to make sure we generate another
-		// crumb.
-		kv.Revision = "11"
-		updateFoo2 := api.Update{
-			KVPair:     kv,
-			UpdateType: api.UpdateTypeKVUpdated,
-		}
+		BeforeEach(func() {
+			kvFooBarRev10 = model.KVPair{
+				Key:      model.GlobalConfigKey{Name: "foo"},
+				Value:    "bar",
+				Revision: "10",
+			}
+			updateFooBarRev10 = api.Update{
+				KVPair:     kvFooBarRev10,
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			cache.OnUpdates([]api.Update{updateFooBarRev10})
 
-		kv2 := model.KVPair{
-			Key:      model.GlobalConfigKey{Name: "biff"},
-			Value:    "baz",
-			Revision: "12",
-			TTL:      0,
-		}
-		updateBiff := api.Update{
-			KVPair:     kv2,
-			UpdateType: api.UpdateTypeKVNew,
-		}
-		cache.OnUpdates([]api.Update{updateFoo2, updateBiff})
+			// Wait for the update to flow through...
+			Eventually(func() bool {
+				crumb = cache.CurrentBreadcrumb()
+				crumbSize := crumb.KVs.Size()
+				// Check snapshot is read-only.
+				Expect(func() {
+					crumb.KVs.Insert([]byte("abcd"), "unused")
+				}).To(Panic())
+				log.WithField("crumb", crumb).WithField("size", crumbSize).Info("Current crumb now...")
+				Consistently(func() uint { return crumb.KVs.Size() }).Should(Equal(crumbSize))
+				return crumbSize > 0
+			}).Should(BeTrue())
+			log.WithField("crumb", crumb).Info("Got initial crumb")
 
-		// Make sure we don't block forever waiting on the next crumb...
-		go func() {
-			time.Sleep(10 * time.Second)
-			cancel()
-		}()
+			// Put a time limit on how long these tests wait.
+			go func() {
+				time.Sleep(10 * time.Second)
+				cancel()
+			}()
+		})
 
-		// Wait for the next crumb...
-		crumb, err := crumb.Next(cxt)
-		Expect(err).NotTo(HaveOccurred())
+		It("should coalesce idempotent updates", func() {
+			// Then send in another update with same value, and another value to make sure we generate another
+			// crumb.
+			kvFooBarRev11 := kvFooBarRev10
+			kvFooBarRev11.Revision = "11"
+			updateFoo2 := api.Update{
+				KVPair:     kvFooBarRev11,
+				UpdateType: api.UpdateTypeKVUpdated,
+			}
 
-		// Its snapshot should contain both items...
-		snapshotUpdates := []api.Update{}
-		for entry := range crumb.KVs.Iterator(nil) {
-			upd, err := entry.Value.(syncproto.SerializedUpdate).ToUpdate()
+			updateBiff := api.Update{
+				KVPair: model.KVPair{
+					Key:      model.GlobalConfigKey{Name: "biff"},
+					Value:    "baz",
+					Revision: "12",
+					TTL:      0,
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			cache.OnUpdates([]api.Update{updateFoo2, updateBiff})
+
+			// Wait for the next crumb...
+			crumb, err := crumb.Next(cxt)
 			Expect(err).NotTo(HaveOccurred())
-			snapshotUpdates = append(snapshotUpdates, upd)
-		}
-		Expect(snapshotUpdates).To(ConsistOf(updateFoo1, updateBiff))
 
-		// Deltas should only contain the new update.
-		Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(updateBiff))
-	})
+			// Its snapshot should contain both items...
+			snapshotUpdates := crumbToSnapshotUpdates(crumb)
+			Expect(snapshotUpdates).To(ConsistOf(updateFooBarRev10, updateBiff))
 
-	It("should handle a delete", func() {
-		kv := model.KVPair{
-			Key:      model.GlobalConfigKey{Name: "foo"},
-			Value:    "bar",
-			Revision: "10",
-			TTL:      0,
-		}
-		updateFoo1 := api.Update{
-			KVPair:     kv,
-			UpdateType: api.UpdateTypeKVNew,
-		}
-		cache.OnUpdates([]api.Update{updateFoo1})
+			// Deltas should only contain the new update.
+			Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(updateBiff))
+		})
 
-		// Wait for the update to flow through...
-		var crumb *snapcache.Breadcrumb
-		Eventually(func() bool {
-			crumb = cache.CurrentBreadcrumb()
-			return crumb.KVs.Size() > 0
-		}).Should(BeTrue())
+		It("should coalesce the update types of non-idempotent updates", func() {
+			// Then send in another update with a new value.
+			kvFooUpdatedRev11 := model.KVPair{
+				Key:      model.GlobalConfigKey{Name: "foo"},
+				Value:    "updated",
+				Revision: "11",
+				TTL:      0,
+			}
+			updateFooUpdatedRev11 := api.Update{
+				KVPair:     kvFooUpdatedRev11,
+				UpdateType: api.UpdateTypeKVUpdated,
+			}
 
-		// Then send in another update with same value, and another value to make sure we generate another
-		// crumb.
-		kv.Revision = "11"
-		kv.Value = nil
-		deletionUpdate := api.Update{
-			KVPair:     kv,
-			UpdateType: api.UpdateTypeKVDeleted,
-		}
-		cache.OnUpdates([]api.Update{deletionUpdate})
+			cache.OnUpdates([]api.Update{updateFooUpdatedRev11})
 
-		// Make sure we don't block forever waiting on the next crumb...
-		go func() {
-			time.Sleep(10 * time.Second)
-			cancel()
-		}()
+			// Wait for the next crumb...
+			crumb, err := crumb.Next(cxt)
+			Expect(err).NotTo(HaveOccurred())
 
-		// Wait for the next crumb...
-		crumb, err := crumb.Next(cxt)
-		Expect(err).NotTo(HaveOccurred())
+			// Its snapshot should contain the updated KV but with KV type new...
+			snapshotUpdates := crumbToSnapshotUpdates(crumb)
+			mergedUpdate := api.Update{
+				KVPair:     kvFooUpdatedRev11,
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			Expect(snapshotUpdates).To(ConsistOf(mergedUpdate))
 
-		// Its snapshot should be empty.
-		Expect(crumb.KVs.Size()).To(BeZero())
-		Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(deletionUpdate))
+			// Deltas should contain the update, not the merged version.
+			Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(updateFooUpdatedRev11))
+		})
+
+		It("should handle a delete", func() {
+			// Then send in another update with a deletion for the original value.
+			deletionUpdate := api.Update{
+				KVPair: model.KVPair{
+					Key:      model.GlobalConfigKey{Name: "foo"},
+					Revision: "11",
+				},
+				UpdateType: api.UpdateTypeKVDeleted,
+			}
+			cache.OnUpdates([]api.Update{deletionUpdate})
+
+			// Wait for the next crumb...
+			crumb, err := crumb.Next(cxt)
+			Expect(err).NotTo(HaveOccurred())
+			log.WithField("crumb", crumb).Info("Got crumb that should contain the deletion")
+
+			// Its snapshot should be empty.
+			snapshotUpdates := crumbToSnapshotUpdates(crumb)
+			Expect(snapshotUpdates).To(BeEmpty(), fmt.Sprintf("Deltas were: %#v", crumb.Deltas))
+			Expect(deserialiseUpdates(crumb.Deltas)).To(ConsistOf(deletionUpdate))
+		})
 	})
 
 	It("should report health eagerly", func() {
@@ -229,11 +257,18 @@ var _ = Describe("Snapshot cache FV tests", func() {
 
 	generateUpdates := func(num int) []api.Update {
 		var updates []api.Update
+		var seenKeys = set.New()
 		for i := 0; i < num; i++ {
 			configIdx := i % 100
 			value := fmt.Sprintf("config%v", i%55)
+			name := fmt.Sprintf("config%v", configIdx)
+			updateType := api.UpdateTypeKVNew
+			if seenKeys.Contains(name) {
+				updateType = api.UpdateTypeKVUpdated
+			}
+			seenKeys.Add(name)
 			key := model.GlobalConfigKey{
-				Name: fmt.Sprintf("config%v", configIdx),
+				Name: name,
 			}
 			upd := api.Update{
 				KVPair: model.KVPair{
@@ -242,7 +277,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 					Revision: strconv.Itoa(i),
 					TTL:      0,
 				},
-				UpdateType: api.UpdateTypeKVNew,
+				UpdateType: updateType,
 			}
 			updates = append(updates, upd)
 		}
@@ -254,6 +289,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 		updates := generateUpdates(num)
 		expectedEndResult := map[model.Key]api.Update{}
 		for _, upd := range updates {
+			upd.UpdateType = api.UpdateTypeKVUnknown
 			expectedEndResult[upd.Key] = upd
 		}
 		for i := 0; i < len(updates); i += blockSize {
@@ -313,6 +349,7 @@ var _ = Describe("Snapshot cache FV tests", func() {
 				Expect(f.StateAsUpdates()).To(Equal(expectedEndResult),
 					fmt.Sprintf("Follower %s had incorrect state", f.name))
 				Expect(f.inSyncAt).To(Equal(maxRev))
+				Expect(f.problems).To(BeEmpty())
 			}
 		}
 
@@ -399,10 +436,13 @@ type follower struct {
 	targetLatency time.Duration
 
 	state    map[string]syncproto.SerializedUpdate
+	problems []string
 	inSyncAt int
 
 	loopStarted  bool
 	loopStartedC chan struct{}
+
+	maxRev int
 
 	wg *sync.WaitGroup
 }
@@ -413,9 +453,28 @@ func (f *follower) StateAsUpdates() map[model.Key]api.Update {
 		Expect(k).To(Equal(v.Key))
 		upd, err := v.ToUpdate()
 		Expect(err).NotTo(HaveOccurred())
+		// Followers won't agree on update types. If a follower joins after the final update of a KV then it'll see
+		// the KV as new where a follower that joined earlier should have got a UpdateTypeKVNew and then a
+		// UpdateTypeKVUpdate.
+		upd.UpdateType = api.UpdateTypeKVUnknown
 		actualState[upd.Key] = upd
 	}
 	return actualState
+}
+
+func (f *follower) storeKV(upd syncproto.SerializedUpdate) {
+	if _, ok := f.state[upd.Key]; !ok {
+		if upd.UpdateType != api.UpdateTypeKVNew {
+			f.problems = append(f.problems, fmt.Sprintf(
+				"First time we've seen this KV but update says it's an update: %#v", upd))
+		}
+	}
+	f.state[upd.Key] = upd
+	newRev, err := strconv.Atoi(upd.Revision.(string))
+	Expect(err).NotTo(HaveOccurred())
+	if newRev > f.maxRev {
+		f.maxRev = newRev
+	}
 }
 
 func (f *follower) Loop(cxt context.Context) {
@@ -425,17 +484,11 @@ func (f *follower) Loop(cxt context.Context) {
 	crumb := f.cache.CurrentBreadcrumb()
 	logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got first crumb")
 	done := false
-	maxRev := 0
 	for item := range crumb.KVs.Iterator(cxt.Done()) {
 		upd := item.Value.(syncproto.SerializedUpdate)
-		f.state[upd.Key] = upd
-		newRev, err := strconv.Atoi(upd.Revision.(string))
-		Expect(err).NotTo(HaveOccurred())
-		if newRev > maxRev {
-			maxRev = newRev
-		}
+		f.storeKV(upd)
 		if crumb.SyncStatus == api.InSync {
-			f.inSyncAt = maxRev
+			f.inSyncAt = f.maxRev
 			done = true
 		}
 	}
@@ -453,15 +506,10 @@ func (f *follower) Loop(cxt context.Context) {
 		crumb = newCrumb
 		//logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got next crumb")
 		for _, upd := range crumb.Deltas {
-			f.state[upd.Key] = upd
-			newRev, err := strconv.Atoi(upd.Revision.(string))
-			Expect(err).NotTo(HaveOccurred())
-			if newRev > maxRev {
-				maxRev = newRev
-			}
+			f.storeKV(upd)
 		}
 		if crumb.SyncStatus == api.InSync {
-			f.inSyncAt = maxRev
+			f.inSyncAt = f.maxRev
 			done = true
 			logCxt.WithField("crumb", crumb.SequenceNumber).Info("Got final crumb")
 		}
