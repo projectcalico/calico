@@ -844,6 +844,18 @@ class TestFelixOnGateway(TestBase):
             if 'items' in objects and len(objects['items']) == 0:
                 pass
             else:
+                # Since python loads the creationTimestamp as a datetime object which will be without
+                # the timezone information, instead of passing a timestamp without the sufficient amount
+                # of information to be unmarshaled in go, remove the timestamp entirely. Calicoctl should
+                # handle any issues regarding a missing creationTimestamp.
+                if 'items' in objects:
+                    for obj in objects['items']:
+                        if 'metadata' in obj and isinstance(obj['metadata'], dict):
+                            _log.info("removing creationTimestamp from %s", obj['metadata'])
+                            obj['metadata'].pop('creationTimestamp')
+                elif 'metadata' in objects and isinstance(objects['metadata'], dict):
+                        _log.info("removing creationTimestamp from %s", objects['metadata'])
+                        objects['metadata'].pop('creationTimestamp')
                 self._delete_data(objects, self.hosts[0])
 
     def _delete_data(self, data, host):
