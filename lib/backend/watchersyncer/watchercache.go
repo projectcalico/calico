@@ -35,14 +35,15 @@ import (
 // -  An api.Update
 // -  A api.SyncStatus (only for the very first InSync notification)
 type watcherCache struct {
-	logger       *logrus.Entry
-	client       api.Client
-	watch        api.WatchInterface
-	resources    map[string]cacheEntry
-	oldResources map[string]cacheEntry
-	results      chan<- interface{}
-	hasSynced    bool
-	resourceType ResourceType
+	logger               *logrus.Entry
+	client               api.Client
+	watch                api.WatchInterface
+	resources            map[string]cacheEntry
+	oldResources         map[string]cacheEntry
+	results              chan<- interface{}
+	hasSynced            bool
+	resourceType         ResourceType
+	currentWatchRevision string
 }
 
 var (
@@ -100,8 +101,15 @@ func (wc *watcherCache) run() {
 			// Handle a WatchError.  First determine if the error type indicates that the
 			// watch has closed, and if so we'll need to resync and create a new watcher.
 			wc.results <- event.Error
-			if _, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
-				wc.logger.Info("Received watch terminated error - recreate watcher")
+			if e, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
+				wc.logger.Debug("Received watch terminated error - recreate watcher")
+				if !e.ClosedByRemote {
+					// If the watcher was not closed by remote, reset the currentWatchRevision.  This will
+					// trigger a full resync rather than simply trying to watch from the last event
+					// revision.
+					wc.logger.Debug("Watch was not closed by remote - full resync required")
+					wc.currentWatchRevision = ""
+				}
 				wc.resyncAndCreateWatcher()
 			}
 		default:
@@ -122,53 +130,71 @@ func (wc *watcherCache) resyncAndCreateWatcher() {
 		wc.watch = nil
 	}
 
+	// If we don't have a currentWatchRevision then we need to perform a full resync.
+	performFullResync := wc.currentWatchRevision == ""
+
 	for {
 		// Start the resync.  This processing loops until we create the watcher.  If the
 		// watcher continuously fails then this loop effectively becomes a polling based
 		// syncer.
 		wc.logger.Debug("Starting main resync loop")
 
-		// Notify the converter that we are resyncing.
-		if wc.resourceType.UpdateProcessor != nil {
-			wc.logger.Debug("Trigger converter resync notification")
-			wc.resourceType.UpdateProcessor.OnSyncerStarting()
+		if performFullResync {
+			wc.logger.Debug("Full resync is required")
+
+			// Notify the converter that we are resyncing.
+			if wc.resourceType.UpdateProcessor != nil {
+				wc.logger.Debug("Trigger converter resync notification")
+				wc.resourceType.UpdateProcessor.OnSyncerStarting()
+			}
+
+			// Start the sync by Listing the current resources.
+			l, err := wc.client.List(context.Background(), wc.resourceType.ListInterface, "")
+			if err != nil {
+				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
+				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
+				time.Sleep(ListRetryInterval)
+				continue
+			}
+
+			// Move the current resources over to the oldResources
+			wc.oldResources = wc.resources
+			wc.resources = make(map[string]cacheEntry, 0)
+
+			// Send updates for each of the resources we listed - this will revalidate entries in
+			// the oldResources map.
+			for _, kvp := range l.KVPairs {
+				wc.handleWatchListEvent(kvp)
+			}
+
+			// We've listed the current settings.  Complete the sync by notifying the main WatcherSyncer
+			// go routine (if we haven't already) and by sending deletes for the old resources that were
+			// not acknowledged by the List.  The oldResources will be empty after this call.
+			wc.finishResync()
+
+			// Store the current watch revision.  This gets updated on any new add/modified event.
+			wc.currentWatchRevision = l.Revision
 		}
 
-		// Start the sync by Listing the current resources.
-		l, err := wc.client.List(context.Background(), wc.resourceType.ListInterface, "")
+		// And now start watching from the revision returned by the List, or from a previous watch event
+		// (depending on whether we were performing a full resync).
+		w, err := wc.client.Watch(context.Background(), wc.resourceType.ListInterface, wc.currentWatchRevision)
 		if err != nil {
-			// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
-			wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
-			time.Sleep(ListRetryInterval)
-			continue
-		}
+			// Failed to create the watcher - we'll need to retry.
+			if _, ok := err.(cerrors.ErrorOperationNotSupported); ok {
+				// Watch is not supported on this resource type, so pause for the watch poll interval.
+				// This loop effectively becomes a poll loop for this resource type.
+				wc.logger.Debug("Watch operation not supported")
+				time.Sleep(WatchPollInterval)
+				continue
+			}
 
-		// Move the current resources over to the oldResources
-		wc.oldResources = wc.resources
-		wc.resources = make(map[string]cacheEntry, 0)
-
-		// Send updates for each of the resources we listed - this will revalidate entries in
-		// the oldResources map.
-		for _, kvp := range l.KVPairs {
-			wc.handleWatchListEvent(kvp)
-		}
-
-		// We've listed the current settings.  Complete the sync by notifying the main WatcherSyncer
-		// go routine (if we haven't already) and by sending deletes for the old resources that were
-		// not acknowledged by the List.  The oldResources will be empty after this call.
-		wc.finishResync()
-
-		// And now start watching from the revision returned by the List.
-		w, err := wc.client.Watch(context.Background(), wc.resourceType.ListInterface, l.Revision)
-		if err != nil {
-			// Failed to create the watcher - we'll need to retry.  Sleep so that we don't
-			// tight loop.  Since we have just performed a list, we need a slightly longer
-			// delay to avoid overloading the datastore.  If the watcher keeps failing then
-			// we are effectively operating in a polling mode, so the interval should be a
-			// sensible polling interval.  Some resource types cannot be watched, so receiving
-			// an error here is not necessarily an error condition.
-			wc.logger.WithError(err).Debug("Failed to create watcher")
-			time.Sleep(WatchPollInterval)
+			// We hit an error creating the Watch.  Trigger a full resync.
+			// TODO We should be able to improve this by handling specific error cases with another
+			//      watch retry.  This would require some care to ensure the correct errors are captured
+			//      for the different datastore drivers.
+			wc.logger.WithError(err).WithField("performFullResync", performFullResync).Info("Failed to create watcher")
+			performFullResync = true
 			continue
 		}
 
@@ -217,6 +243,9 @@ func (wc *watcherCache) finishResync() {
 // handleWatchListEvent handles a watch event converting it if required and passing to
 // handleConvertedWatchEvent to send the appropriate update types.
 func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
+	// Track the resource version from this watch/list event.
+	wc.currentWatchRevision = kvp.Revision
+
 	if wc.resourceType.UpdateProcessor == nil {
 		// No update processor - handle immediately.
 		wc.handleConvertedWatchEvent(kvp)

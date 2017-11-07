@@ -17,10 +17,11 @@ package v2_test
 import (
 	. "github.com/projectcalico/libcalico-go/lib/apis/v2"
 
+	"reflect"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/set"
-	"reflect"
 )
 
 var (

@@ -107,7 +107,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
 				},
-				IPv4Nets:   []cnet.IPNet{expectedIPv4Net},
+				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
 		}))
