@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -77,8 +78,16 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			be.Clean()
 
 			By("Updating the NetworkPolicy before it is created")
+			var rv string
+			if config.Spec.DatastoreType != apiconfig.Kubernetes {
+				rv = "1234"
+			} else {
+				// Resource version for KDD is a combination of both the CRD and K8s NP backed
+				// resources separated by a slash.
+				rv = conversion.Converter{}.JoinNetworkPolicyRevisions("1234", "5678")
+			}
 			_, outError := c.NetworkPolicies().Update(ctx, &apiv2.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-networkpolicy"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: rv, CreationTimestamp: metav1.Now(), UID: "test-fail-networkpolicy"},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -86,11 +95,11 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 			By("Attempting to creating a new NetworkPolicy with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: rv},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
+			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '" + rv + "' (field must not be set for a Create request)"))
 
 			By("Creating a new NetworkPolicy with namespace1/name1/spec1")
 			res1, outError := c.NetworkPolicies().Create(ctx, &apiv2.NetworkPolicy{
@@ -165,7 +174,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 			By("Attempting to update the NetworkPolicy without a Creation Timestamp")
 			res, outError = c.NetworkPolicies().Update(ctx, &apiv2.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", UID: "test-fail-networkpolicy"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: rv, UID: "test-fail-networkpolicy"},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -174,7 +183,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 			By("Attempting to update the NetworkPolicy without a UID")
 			res, outError = c.NetworkPolicies().Update(ctx, &apiv2.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now()},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: rv, CreationTimestamp: metav1.Now()},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())

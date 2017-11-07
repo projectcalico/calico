@@ -15,8 +15,8 @@
 package clientv2_test
 
 import (
-	"time"
 	"net"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -25,17 +25,18 @@ import (
 
 	"context"
 
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/watch"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"fmt"
 )
 
 var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
@@ -74,7 +75,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			},
 		},
 	}
-	Describe("nodes", func () {
+	Describe("nodes", func() {
 		It("should clean up weps, IPAM allocations, etc. when deleted", func() {
 			c, err := clientv2.New(config)
 			Expect(err).NotTo(HaveOccurred())
@@ -107,7 +108,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 
 			affBlock := cnet.IPNet{
 				IPNet: net.IPNet{
-					IP: net.IP{192, 168, 0, 0},
+					IP:   net.IP{192, 168, 0, 0},
 					Mask: net.IPMask{255, 255, 255, 0},
 				},
 			}
@@ -116,7 +117,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 
 			handle := "myhandle"
 			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
-				IP: cnet.IP{wepIp},
+				IP:       cnet.IP{wepIp},
 				Hostname: name1,
 				HandleID: &handle,
 			})
@@ -124,19 +125,19 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 
 			wep := apiv2.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:             "node--1-k8s-mypod-mywep",
+					Name:      "node--1-k8s-mypod-mywep",
 					Namespace: "default",
 				},
 				Spec: apiv2.WorkloadEndpointSpec{
 					InterfaceName: "eth0",
-					Pod: "mypod",
-					Endpoint: "mywep",
+					Pod:           "mypod",
+					Endpoint:      "mywep",
 					IPNetworks: []string{
 						swepIp,
 					},
-					Node: name1,
-					Orchestrator:     "k8s",
-					Workload:         "default.fakepod",
+					Node:         name1,
+					Orchestrator: "k8s",
+					Workload:     "default.fakepod",
 				},
 			}
 			_, err = c.WorkloadEndpoints().Create(ctx, &wep, options.SetOptions{})
