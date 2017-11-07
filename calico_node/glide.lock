@@ -1,5 +1,5 @@
-hash: 395c008935d703953d44877159466a01a92b2404b9aaa35d82ffd55154449472
-updated: 2017-10-28T16:34:15.012157554-07:00
+hash: 152493f9a2a19d4b4de0640b858f3333ca42e36b94b6dbd954f8ee3d10afa3d0
+updated: 2017-11-07T12:45:27.55097665Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -139,6 +139,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -150,7 +152,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dae320cd652b66d908eb5d59209717e3c3514c26
+  version: e8d93a6ef128b79fddc09e5f673386c46cab6d10
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -171,6 +173,7 @@ imports:
   - lib/client
   - lib/clientv2
   - lib/errors
+  - lib/hash
   - lib/ipam
   - lib/ipip
   - lib/names
@@ -179,6 +182,8 @@ imports:
   - lib/numorstring
   - lib/options
   - lib/scope
+  - lib/selector/parser
+  - lib/selector/tokenizer
   - lib/testutils
   - lib/watch
 - name: github.com/PuerkitoBio/purell
@@ -278,7 +283,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
+  version: 6c6dac0277229b9e9578c5ca3f74a4345d35cdc2
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -340,6 +345,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait
