@@ -548,12 +548,10 @@ class TestCalicoctlCommands(TestBase):
         """
         Test CRUD commands behave as expected on the cluster information resource:
         """
-        # Create a new default BGPConfiguration and get it to determine the current
-        # resource version.
+        # Try to create a cluster info, should be rejected.
         rc = calicoctl("create", data=clusterinfo_name1_rev1)
         rc.assert_error(NOT_SUPPORTED)
-        rc = calicoctl(
-            "get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
+        rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
         rc.assert_error(NOT_FOUND)
 
         # Replace the cluster information (with no resource version) - assert not supported.
@@ -565,9 +563,30 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=clusterinfo_name1_rev2)
         rc.assert_error(NOT_FOUND)
 
-        # Delete the resource by name (i.e. without using a resource version) - assert not supported.
+        # Delete the resource by name (i.e. without using a resource version) - assert not
+        # supported.
         rc = calicoctl("delete clusterinfo %s" % name(clusterinfo_name1_rev1))
         rc.assert_error(NOT_SUPPORTED)
+
+        # Create a node, this should trigger auto-creation of a cluster info.
+        rc = calicoctl("create", data=node_name2_rev1)
+        rc.assert_no_error()
+
+        rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
+        rc.assert_no_error()
+        # Check the GUID is populated.
+        self.assertRegexpMatches(rc.decoded["spec"]["clusterGUID"], "^[a-f0-9]{32}$")
+        # The GUID is unpredictable so tweak our test data to match it.
+        ci = copy.deepcopy(clusterinfo_name1_rev1)
+        ci["spec"]["clusterGUID"] = rc.decoded["spec"]["clusterGUID"]
+        rc.assert_data(ci)
+
+        # Create a second node, this should keep the existing cluster info.
+        rc = calicoctl("create", data=node_name3_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
+        rc.assert_no_error()
+        rc.assert_data(ci)  # Implicitly checks the GUID is still the same.
 
     @parameterized.expand([
         ('create', 'replace'),
