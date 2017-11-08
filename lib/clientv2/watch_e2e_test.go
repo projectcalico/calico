@@ -39,8 +39,8 @@ import (
 var _ = testutils.E2eDatastoreDescribe("Additional watch tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
-	numEvents := 10000
-	numWatchers := 1000
+	numEvents := 5000
+	numWatchers := 100
 
 	Describe("Test prefix deletion of the datastore", func() {
 		It("should receive watch events for each of the deleted keys", func() {
