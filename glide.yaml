@@ -40,7 +40,7 @@ import:
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: github.com/Workiva/go-datastructures
-  version: ^1.0.39
+  version: v1.0.42
   subpackages:
   - trie/ctrie
 - package: golang.org/x/text
