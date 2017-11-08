@@ -16,9 +16,13 @@ package testutils
 import (
 	"github.com/onsi/ginkgo"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 )
 
 func HookLogrusForGinkgo() {
+	logrus.AddHook(logutils.ContextHook{})
+	logrus.SetFormatter(&logutils.Formatter{})
 	logrus.SetOutput(ginkgo.GinkgoWriter)
 	logrus.SetLevel(logrus.DebugLevel)
 }

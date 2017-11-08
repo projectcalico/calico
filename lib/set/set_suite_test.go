@@ -25,11 +25,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func init() {
-	testutils.HookLogrusForGinkgo()
-}
-
 func TestSet(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Set Suite", []Reporter{junitReporter})

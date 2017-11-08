@@ -23,11 +23,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func init() {
-	testutils.HookLogrusForGinkgo()
-}
-
 func TestSet(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Health Suite")
 }

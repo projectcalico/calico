@@ -19,9 +19,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
+
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func TestModel(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "K8s resources Suite")
 }

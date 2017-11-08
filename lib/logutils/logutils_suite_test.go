@@ -15,25 +15,18 @@
 package logutils_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"testing"
-
 	"github.com/onsi/ginkgo/reporters"
-	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func init() {
-	testutils.HookLogrusForGinkgo()
-	logrus.AddHook(&logutils.ContextHook{})
-	logrus.SetFormatter(&logutils.Formatter{})
-}
-
 func TestLogutils(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Logutils Suite", []Reporter{junitReporter})

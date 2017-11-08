@@ -19,9 +19,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func TestClient(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Felix syncer test suite")
 }
