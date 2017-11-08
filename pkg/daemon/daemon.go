@@ -63,8 +63,7 @@ Options:
 type TyphaDaemon struct {
 	BuildInfoLogCxt *log.Entry
 	ConfigFilePath  string
-	ClientV2        ClientV2
-	BackendClient   BackendClient
+	DatastoreClient DatastoreClient
 	ConfigParams    *config.Config
 
 	// The components of the server, created in CreateServer() below.
@@ -76,7 +75,7 @@ type TyphaDaemon struct {
 	Server            *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
-	NewClientV2           func(config apiconfig.CalicoAPIConfig) (ClientV2, error)
+	NewClientV2           func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error)
 	ConfigureEarlyLogging func()
 	ConfigureLogging      func(configParams *config.Config)
 
@@ -86,7 +85,7 @@ type TyphaDaemon struct {
 
 func New() *TyphaDaemon {
 	return &TyphaDaemon{
-		NewClientV2: func(config apiconfig.CalicoAPIConfig) (ClientV2, error) {
+		NewClientV2: func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error) {
 			client, err := clientv2.New(config)
 			if err == nil {
 				return ClientV2Shim{client.(RealClientV2)}, nil
@@ -181,13 +180,12 @@ configRetry:
 		// We should now have enough config to connect to the datastore.
 		datastoreConfig := configParams.DatastoreConfig()
 
-		t.ClientV2, err = t.NewClientV2(datastoreConfig)
+		t.DatastoreClient, err = t.NewClientV2(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to datastore")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		t.BackendClient = t.ClientV2.Backend()
 
 		err = configParams.Validate()
 		if err != nil {
@@ -224,7 +222,7 @@ configRetry:
 			func() { // Closure to avoid leaking the defer.
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
-				err = t.ClientV2.EnsureInitialized(ctx, "", "typha")
+				err = t.DatastoreClient.EnsureInitialized(ctx, "", "typha")
 			}()
 			if err != nil {
 				log.WithError(err).Error("Failed to ensure datastore was initialized")
@@ -247,7 +245,7 @@ func (t *TyphaDaemon) CreateServer() {
 
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
 	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
-	t.Syncer = t.BackendClient.Syncer(t.SyncerToValidator)
+	t.Syncer = t.DatastoreClient.Syncer(t.SyncerToValidator)
 	log.Debugf("Created Syncer: %#v", t.Syncer)
 
 	// Create the validator, which sits between the syncer and the cache.
@@ -328,7 +326,7 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 	}
 }
 
-// ClientV2Shim adapts the real v2 client interface to our mock interface.
+// ClientV2Shim adapts the real v2 client interface to our mockable interface.
 type ClientV2Shim struct {
 	C RealClientV2
 }
@@ -337,27 +335,20 @@ func (s ClientV2Shim) EnsureInitialized(ctx context.Context, calicoVersion, clus
 	return s.C.EnsureInitialized(ctx, calicoVersion, clusterType)
 }
 
-func (s ClientV2Shim) Backend() BackendClient {
-	return s.C.Backend()
+func (s ClientV2Shim) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	return s.C.Backend().Syncer(callbacks)
 }
 
+// DatastoreClient is our interface to the datastore, used for mocking in the UTs.
+type DatastoreClient interface {
+	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
+	Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer
+}
+
+// RealClientV2 is the subset of the clientv2.Interface that we care about.
 type RealClientV2 interface {
 	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
 	Backend() bapi.Client
-}
-
-type ClientV2 interface {
-	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
-	Backend() BackendClient
-}
-
-// BackendClient captures the sub-interface of the backend client that we actually use.
-type BackendClient interface {
-	// Syncer creates an object that generates a series of KVPair updates,
-	// which paint an eventually-consistent picture of the full state of
-	// the datastore and then generates subsequent KVPair updates for
-	// changes to the datastore.
-	Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
 // TODO Typha: Share with Felix.

@@ -51,7 +51,7 @@ var _ = Describe("Daemon", func() {
 	BeforeEach(func() {
 		d = New()
 		datastore = &mockDatastore{}
-		d.NewClientV2 = func(config apiconfig.CalicoAPIConfig) (c ClientV2, err error) {
+		d.NewClientV2 = func(config apiconfig.CalicoAPIConfig) (c DatastoreClient, err error) {
 			return datastore, newClientErr
 		}
 		earlyLoggingConfigured = false
@@ -221,10 +221,6 @@ func (b *mockDatastore) EnsureInitialized(ctx context.Context, version, clusterT
 		return errors.New("Failure simulated by test code")
 	}
 	return nil
-}
-
-func (b *mockDatastore) Backend() BackendClient {
-	return b
 }
 
 func (b *mockDatastore) getNumInitCalls() int {
