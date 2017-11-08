@@ -1,14 +1,45 @@
+felix (3.0.0~alpha1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.0.0-alpha1 (from Git commit 2af37a9).
+    [Changes recorded in 3.0.0-alpha1 tag]
+    [Changes recorded in 3.0.0-alpha1-rc1 tag]
+    - Added support for ApplyOnForward flag.
+    - Implement named ports index and rule conversion.
+    - Implement IP set rendering for IP, port.
+    - Implement named port rule rendering.
+    - Minor fixes to named port calculations.
+    - Combine selectors in more cases, add UT and clean-ups.
+    - Bring calc graph diagram up to date.
+    - Move calc graph test models to own file.
+    - Add named port calc graph FV tests.
+    - Add more named ports calc graph FVs.
+    - Add calc graph FVs for named port label inheritance.
+    - Add UT for named ports on host endpoints.
+    - Add some named ports tests with negated ports and selectors.
+    - Start adding tests for named port rule rendering.
+    - More rule rendering UTs.
+    - Add support for selecting source port in FV framework.
+    - Add named ports source port tests.
+    - Support workload ingress policy for kube-proxy running in ipvs mode.
+    - Make topology set-up common across FV tests.
+    - Add test that confuses TCP and UDP named ports.
+    - Move UDP conntrack clear into Port.CanConnectTo().
+    - Rev libcalico-go to pick up resync loop fix.
+    - DatastoreType etcdv2 -> etcdv3
+
+ -- Neil Jerram <neil@tigera.io>  Tue, 07 Nov 2017 19:01:37 +0000
+
 felix (2.6.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.6.0 (from Git commit 64caa62).
     [Changes recorded in 2.6.0 tag]
     By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
     v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
-    
+
     In addition, libcalico-go now supports a new `Types` field which
     specifies whether a rule should apply to `ingress`, `egress` or
     both types of traffic.
-    
+
     - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
     - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
     - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)

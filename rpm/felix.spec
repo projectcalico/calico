@@ -2,8 +2,8 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.6.0
-Release:        1%{?dist}
+Version:        3.0.0
+Release:        0.1.alpha1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,34 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Nov 07 2017 Neil Jerram <neil@tigera.io> 3.0.0-0.1.alpha1
+  - Felix 3.0.0-alpha1 (from Git commit 2af37a9).
+    [Changes recorded in 3.0.0-alpha1 tag]
+    [Changes recorded in 3.0.0-alpha1-rc1 tag]
+    - Added support for ApplyOnForward flag.
+    - Implement named ports index and rule conversion.
+    - Implement IP set rendering for IP, port.
+    - Implement named port rule rendering.
+    - Minor fixes to named port calculations.
+    - Combine selectors in more cases, add UT and clean-ups.
+    - Bring calc graph diagram up to date.
+    - Move calc graph test models to own file.
+    - Add named port calc graph FV tests.
+    - Add more named ports calc graph FVs.
+    - Add calc graph FVs for named port label inheritance.
+    - Add UT for named ports on host endpoints.
+    - Add some named ports tests with negated ports and selectors.
+    - Start adding tests for named port rule rendering.
+    - More rule rendering UTs.
+    - Add support for selecting source port in FV framework.
+    - Add named ports source port tests.
+    - Support workload ingress policy for kube-proxy running in ipvs mode.
+    - Make topology set-up common across FV tests.
+    - Add test that confuses TCP and UDP named ports.
+    - Move UDP conntrack clear into Port.CanConnectTo().
+    - Rev libcalico-go to pick up resync loop fix.
+    - DatastoreType etcdv2 -> etcdv3
+
 * Tue Sep 26 2017 Brendan Creane <brendan@tigera.io> 2.6.0-1
   - Felix 2.6.0 (from Git commit 64caa62).
     [Changes recorded in 2.6.0 tag]
