@@ -268,6 +268,7 @@ func RunFelix(etcdIP string) *Container {
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
 func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interface) {
+	log.Info("Starting a single-node etcd topology.")
 	success := false
 	defer func() {
 		if !success {
@@ -283,12 +284,15 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
 	Eventually(func() error {
+		log.Info("Initializing the datastore...")
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		return client.EnsureInitialized(
+		err := client.EnsureInitialized(
 			ctx,
 			"test-version",
 			"felix-fv",
 		)
+		log.WithError(err).Info("EnsureInitialized result")
+		return err
 	}).ShouldNot(HaveOccurred())
 
 	// Then start Felix and create a node for it.

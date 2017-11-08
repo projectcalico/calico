@@ -756,7 +756,7 @@ func getAndMergeConfig(
 	for _, v1KV := range v1kvs {
 		if _, ok := v1KV.Key.(model.ReadyFlagKey); ok {
 			logCxt.WithField("ready", v1KV.Value).Info("Loaded ready flag")
-			if v1KV.Value == "true" {
+			if v1KV.Value == true {
 				*ready = true
 			}
 		} else if v1KV.Value != nil {
@@ -904,14 +904,14 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				log.Warn("Felix configuration changed. Need to restart.")
 				for kNew, vNew := range msg.Config {
 					if vOld, prs := config[kNew]; !prs {
-						log.WithFields(log.Fields{"key": kNew, "value": vNew}).Warn("Key added")
+						log.WithFields(log.Fields{"key": kNew, "value": vNew}).Warn("Felix configuration changed: Key added")
 					} else if vNew != vOld {
-						log.WithFields(log.Fields{"key": kNew, "old": vOld, "new": vNew}).Warn("Key changed")
+						log.WithFields(log.Fields{"key": kNew, "old": vOld, "new": vNew}).Warn("Felix configuration changed: Key changed")
 					}
 				}
 				for kOld, vOld := range config {
 					if _, prs := config[kOld]; !prs {
-						log.WithFields(log.Fields{"key": kOld, "value": vOld}).Warn("Key deleted")
+						log.WithFields(log.Fields{"key": kOld, "value": vOld}).Warn("Felix configuration changed: Key deleted")
 					}
 				}
 				fc.shutDownProcess("config changed")

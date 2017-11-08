@@ -77,7 +77,7 @@ func (cb *ConfigBatcher) OnUpdate(update api.Update) (filterOut bool) {
 			cb.configDirty = true
 		}
 	case model.ReadyFlagKey:
-		if update.Value != "true" {
+		if update.Value != true {
 			log.WithField("value", update.Value).Warn("Ready flag updated/deleted")
 			cb.datastoreReady = false
 			cb.configDirty = true

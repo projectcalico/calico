@@ -403,7 +403,7 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
-	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
+	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)
