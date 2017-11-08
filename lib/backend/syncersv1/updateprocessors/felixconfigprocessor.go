@@ -32,15 +32,15 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 		AllowAnnotations,
 		func(node, name string) model.Key { return model.HostConfigKey{Hostname: node, Name: name} },
 		func(name string) model.Key { return model.GlobalConfigKey{Name: name} },
-		map[string]ValueToStringFn{
-			"FailsafeInboundHostPorts":  protoPortStringifier,
-			"FailsafeOutboundHostPorts": protoPortStringifier,
+		map[string]ConfigFieldValueToV1ModelValue{
+			"FailsafeInboundHostPorts":  protoPortSliceToString,
+			"FailsafeOutboundHostPorts": protoPortSliceToString,
 		},
 	)
 }
 
 // Convert a slice of ProtoPorts to the string representation required by Felix.
-var protoPortStringifier = func(value interface{}) string {
+var protoPortSliceToString = func(value interface{}) interface{} {
 	pps := value.([]apiv2.ProtoPort)
 	parts := make([]string, len(pps))
 	for i, pp := range pps {

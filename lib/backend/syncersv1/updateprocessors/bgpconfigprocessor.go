@@ -33,16 +33,16 @@ func NewBGPConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 		AllowAnnotations,
 		func(node, name string) model.Key { return model.NodeBGPConfigKey{Nodename: node, Name: name} },
 		func(name string) model.Key { return model.GlobalBGPConfigKey{Name: name} },
-		map[string]ValueToStringFn{
-			"loglevel":  logLevelStringifier,
-			"node_mesh": nodeMeshStringifier,
+		map[string]ConfigFieldValueToV1ModelValue{
+			"loglevel":  logLevelToBirdLogLevel,
+			"node_mesh": nodeMeshToString,
 		},
 	)
 }
 
 // Bird log level currently only supports granularity of none, debug and info.  Debug/Info are
 // left unchanged, all others treated as none.
-var logLevelStringifier = func(value interface{}) string {
+var logLevelToBirdLogLevel = func(value interface{}) interface{} {
 	l := strings.ToLower(value.(string))
 	switch l {
 	case "", "debug", "info":
@@ -54,7 +54,7 @@ var logLevelStringifier = func(value interface{}) string {
 
 // In v1, the node mesh enabled field was wrapped up in some JSON - wrap up the value to
 // return via the syncer.
-var nodeMeshStringifier = func(value interface{}) string {
+var nodeMeshToString = func(value interface{}) interface{} {
 	enabled := value.(bool)
 	d, err := json.Marshal(nodeToNodeMesh{Enabled: enabled})
 	cerrors.FatalIfErrored(err)

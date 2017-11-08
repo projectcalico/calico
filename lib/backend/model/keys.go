@@ -131,6 +131,10 @@ func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
 }
 
+func KeyToValueType(key Key) reflect.Type {
+	return key.valueType()
+}
+
 // KeyToDefaultDeleteParentPaths returns a slice of '/'-delimited
 // paths which are used to delete parent entries that may be auto-created
 // by directory-based KV stores (e.g. etcd v2).  These paths should also be

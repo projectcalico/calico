@@ -19,16 +19,28 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/apis/v2"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/satori/go.uuid"
 )
 
 // client implements the client.Interface.
 type client struct {
+	// The config we were created with.
+	config apiconfig.CalicoAPIConfig
+
 	// The backend client.
 	backend bapi.Client
 
@@ -44,6 +56,7 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 		return nil, err
 	}
 	return client{
+		config:    config,
 		backend:   be,
 		resources: &resources{backend: be},
 	}, nil
@@ -153,10 +166,138 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]net.IPNet, error) {
 // Most Calico deployment scenarios will automatically implicitly invoke this
 // method and so a general consumer of this API can assume that the datastore
 // is already initialized.
-func (c client) EnsureInitialized() error {
+func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	// Perform datastore specific initialization first.
 	if err := c.backend.EnsureInitialized(); err != nil {
 		return err
+	}
+
+	if err := c.ensureClusterInformation(ctx, calicoVersion, clusterType); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+const globalClusterInfoName = "default"
+
+// ensureClusterInformation ensures that the ClusterInformation fields i.e. ClusterType,
+// CalicoVersion and ClusterGUID are set.  It creates/updates the ClusterInformation as needed.
+func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clusterType string) error {
+	// Append "kdd" last if the datastoreType is 'kubernetes'.
+	if c.config.Spec.DatastoreType == apiconfig.Kubernetes {
+		// If clusterType is already set then append ",kdd" at the end.
+		if clusterType != "" {
+			// Trim the trailing ",", if any.
+			clusterType = strings.TrimSuffix(clusterType, ",")
+			// Append "kdd" very last thing in the list.
+			clusterType = fmt.Sprintf("%s,%s", clusterType, "kdd")
+		} else {
+			clusterType = "kdd"
+		}
+	}
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		clusterInfo, err := c.ClusterInformation().Get(ctx, globalClusterInfoName, options.GetOptions{})
+		if err != nil {
+			// Create the default config if it doesn't already exist.
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				newClusterInfo := v2.NewClusterInformation()
+				newClusterInfo.Name = globalClusterInfoName
+				newClusterInfo.Spec.CalicoVersion = calicoVersion
+				newClusterInfo.Spec.ClusterType = clusterType
+				newClusterInfo.Spec.ClusterGUID = fmt.Sprintf("%s", hex.EncodeToString(uuid.NewV4().Bytes()))
+				datastoreReady := true
+				newClusterInfo.Spec.DatastoreReady = &datastoreReady
+				_, err = c.ClusterInformation().Create(ctx, newClusterInfo, options.SetOptions{})
+				if err != nil {
+					if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+						log.Info("Failed to create global ClusterInformation; another node got there first.")
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					log.WithError(err).WithField("ClusterInformation", newClusterInfo).Errorf("Error creating cluster information config")
+					return err
+				}
+			} else {
+				log.WithError(err).WithField("ClusterInformation", globalClusterInfoName).Errorf("Error getting cluster information config")
+				return err
+			}
+			break
+		}
+
+		updateNeeded := false
+		if calicoVersion != "" {
+			// Only update the version if it's different from what we have.
+			if clusterInfo.Spec.CalicoVersion != calicoVersion {
+				clusterInfo.Spec.CalicoVersion = calicoVersion
+				updateNeeded = true
+			} else {
+				log.WithField("CalicoVersion", clusterInfo.Spec.CalicoVersion).Debug("Calico version value already assigned")
+			}
+		}
+
+		if clusterInfo.Spec.ClusterGUID == "" {
+			clusterInfo.Spec.ClusterGUID = fmt.Sprintf("%s", hex.EncodeToString(uuid.NewV4().Bytes()))
+			updateNeeded = true
+		} else {
+			log.WithField("ClusterGUID", clusterInfo.Spec.ClusterGUID).Debug("Cluster GUID value already set")
+		}
+
+		if clusterInfo.Spec.DatastoreReady == nil {
+			// If the ready flag is nil, default it to true (but if it's explicitly false, leave
+			// it as-is).
+			datastoreReady := true
+			clusterInfo.Spec.DatastoreReady = &datastoreReady
+			updateNeeded = true
+		} else {
+			log.WithField("DatastoreReady", clusterInfo.Spec.DatastoreReady).Debug("DatastoreReady value already set")
+		}
+
+		if clusterType != "" {
+			if clusterInfo.Spec.ClusterType == "" {
+				clusterInfo.Spec.ClusterType = clusterType
+				updateNeeded = true
+
+			} else {
+				allClusterTypes := strings.Split(clusterInfo.Spec.ClusterType, ",")
+				existingClusterTypes := set.FromArray(allClusterTypes)
+				localClusterTypes := strings.Split(clusterType, ",")
+
+				clusterTypeUpdateNeeded := false
+				for _, lct := range localClusterTypes {
+					if existingClusterTypes.Contains(lct) {
+						continue
+					}
+					clusterTypeUpdateNeeded = true
+					allClusterTypes = append(allClusterTypes, lct)
+				}
+
+				if clusterTypeUpdateNeeded {
+					clusterInfo.Spec.ClusterType = strings.Join(allClusterTypes, ",")
+					updateNeeded = true
+				}
+			}
+		}
+
+		if updateNeeded {
+			_, err = c.ClusterInformation().Update(ctx, clusterInfo, options.SetOptions{})
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				log.WithError(err).WithField("ClusterInformation", clusterInfo).Warning(
+					"Conflict while updating cluster information, may retry")
+				time.Sleep(1 * time.Second)
+				continue
+			} else if err != nil {
+				log.WithError(err).WithField("ClusterInformation", clusterInfo).Errorf(
+					"Error updating cluster information")
+				return err
+			}
+		}
+		break
 	}
 
 	return nil
