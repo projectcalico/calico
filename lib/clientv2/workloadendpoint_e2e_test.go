@@ -109,6 +109,11 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
 
+			By("Attempting to get a WorkloadEndpoint before it is created")
+			_, outError = c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
+
 			By("Attempting to create a new WorkloadEndpoint with name1/spec1_1 and a non-empty ResourceVersion")
 			_, outError = c.WorkloadEndpoints().Create(ctx, &apiv2.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345", CreationTimestamp: metav1.Now(), UID: "test-fail-workload-endpoint"},
