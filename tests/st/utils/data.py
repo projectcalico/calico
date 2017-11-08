@@ -444,6 +444,34 @@ node_name1_rev1 = {
     }
 }
 
+node_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'Node',
+    'metadata': {
+        'name': 'node2',
+    },
+    'spec': {
+        'bgp': {
+            'ipv4Address': '1.2.3.5/24',
+            'ipv6Address': 'aa:bb:cc::ee/120',
+        }
+    }
+}
+
+node_name3_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'Node',
+    'metadata': {
+        'name': 'node3',
+    },
+    'spec': {
+        'bgp': {
+            'ipv4Address': '1.2.3.6/24',
+            'ipv6Address': 'aa:bb:cc::dd/120',
+        }
+    }
+}
+
 #
 # BGPConfigs
 #
@@ -581,8 +609,7 @@ clusterinfo_name1_rev1 = {
     },
     'spec': {
         'clusterGUID': 'cluster-guid1',
-        'clusterType': 'cluster-type1',
-        'calicoVersion': 'calico-version1',
+        'datastoreReady': True,
     }
 }
 
