@@ -1,5 +1,5 @@
-hash: b872a54837a16f842b2ef9f89bbfaaf99a1138933ccf3bb87621444d05814239
-updated: 2017-11-08T17:17:26.454401115Z
+hash: 41463eebeeca123f55b03e87a1ce5628a0d5a837938faf629d3123b6c4a8624b
+updated: 2017-11-08T14:18:46.388030519-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -118,7 +118,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 5650ac7320cd8e1b0d4dc2dc98739acdbe6e7f6b
+  version: c38f46a4cd6c03b03be039910444bd784788d4ac
   subpackages:
   - client/v2
   - models
@@ -173,7 +173,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -202,7 +202,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/pelletier/go-toml
-  version: 2009e44b6f182e34d8ce081ac2767622937ea3d4
+  version: 4e9e0ee19b60b13eb79915933f44d8ed5f268bdd
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -214,7 +214,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e3c93b6cfca59e83e4f861c86dc2a1f57a9de36f
+  version: c5fb7608b28e20b9b6156d3a3a032cdf0f5f57cc
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -276,7 +276,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/afero
-  version: e67d870304c4bca21331b02f414f970df13aa694
+  version: 5660eeed305fe5f69c8fc6cf899132a459a97064
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -286,7 +286,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/spf13/viper
-  version: d9cca5ef33035202efb1586825bdbb15ff9ec3ba
+  version: 8ef37cbca71638bf32f3d5e194117d4cb46da163
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
