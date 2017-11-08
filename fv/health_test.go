@@ -188,7 +188,7 @@ var _ = BeforeSuite(func() {
 		err = calicoClient.EnsureInitialized(
 			ctx,
 			"test-version",
-			"felix-fv",
+			"felix-fv,typha", // Including typha in clusterType to prevent config churn
 		)
 
 		return
