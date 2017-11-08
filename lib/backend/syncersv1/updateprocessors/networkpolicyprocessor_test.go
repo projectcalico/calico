@@ -16,9 +16,16 @@ package updateprocessors_test
 
 import (
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	kapiv1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -250,4 +257,79 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		})
 		Expect(err).To(HaveOccurred())
 	})
+})
+
+// Define network policies and the corresponding expected v1 KVPairs.
+//
+// np1 is a NetworkPolicy with a single Egress rule, which contains ports only,
+// and no selectors.
+var protocol = kapiv1.ProtocolTCP
+var port = intstr.FromInt(80)
+var np1 = v1beta1.NetworkPolicy{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test.policy",
+		Namespace: "default",
+	},
+	Spec: v1beta1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		Egress: []v1beta1.NetworkPolicyEgressRule{
+			v1beta1.NetworkPolicyEgressRule{
+				Ports: []v1beta1.NetworkPolicyPort{
+					v1beta1.NetworkPolicyPort{
+						Protocol: &protocol,
+						Port:     &port,
+					},
+				},
+			},
+		},
+		PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeEgress},
+	},
+}
+
+// expected1 is the expected v1 KVPair representation of np1 from above.
+var tcp = numorstring.ProtocolFromString("tcp")
+var port80 = numorstring.SinglePort(uint16(80))
+var order float64 = 1000.0
+var expected1 = []*model.KVPair{
+	&model.KVPair{
+		Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
+		Value: &model.Policy{
+			Order:          &order,
+			Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",
+			Types:          []string{"egress"},
+			ApplyOnForward: true,
+			OutboundRules: []model.Rule{
+				{
+					Action:      "allow",
+					Protocol:    &tcp,
+					SrcSelector: "",
+					DstSelector: "",
+					DstPorts:    []numorstring.Port{port80},
+				},
+			},
+		},
+	},
+}
+
+var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
+	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
+
+	DescribeTable("NetworkPolicy update processor + conversion tests",
+		func(np v1beta1.NetworkPolicy, expected []*model.KVPair) {
+			// First, convert the NetworkPolicy using the k8s conversion logic.
+			c := conversion.Converter{}
+			kvp, err := c.K8sNetworkPolicyToCalico(&np)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Next, run the policy through the update processor.
+			out, err := up.Process(kvp)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Finally, assert the expected result.
+			Expect(out).To(Equal(expected))
+		},
+
+		Entry("should handle a NetworkPolicy with no rule selectors", np1, expected1),
+	)
+
 })

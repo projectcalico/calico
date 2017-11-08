@@ -76,8 +76,10 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 	}
 
 	srcSelector := ar.Source.Selector
-	if sourceNSSelector != "" {
+	if sourceNSSelector != "" && (ar.Source.Selector != "" || ar.Source.NotSelector != "" || ar.Source.NamespaceSelector != "") {
 		// We need to namespace the rule's selector when converting to a v1 object.
+		// This occurs when a Selector, NotSelector, or NamespaceSelector is provided and either this is a
+		// namespaced NetworkPolicy object, or a NamespaceSelector was defined.
 		logCxt := log.WithFields(log.Fields{
 			"Namespace":         ns,
 			"Selector":          ar.Source.Selector,
@@ -93,8 +95,10 @@ func RuleAPIV2ToBackend(ar apiv2.Rule, ns string) model.Rule {
 	}
 
 	dstSelector := ar.Destination.Selector
-	if destNSSelector != "" {
+	if destNSSelector != "" && (ar.Destination.Selector != "" || ar.Destination.NotSelector != "" || ar.Destination.NamespaceSelector != "") {
 		// We need to namespace the rule's selector when converting to a v1 object.
+		// This occurs when a Selector, NotSelector, or NamespaceSelector is provided and either this is a
+		// namespaced NetworkPolicy object, or a NamespaceSelector was defined.
 		logCxt := log.WithFields(log.Fields{
 			"Namespace":         ns,
 			"Selector":          ar.Destination.Selector,

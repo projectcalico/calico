@@ -246,7 +246,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	// Use a single instance of the Converter for these tests.
 	c := Converter{}
 
-	It("should parse a basic NetworkPolicy to a Policy", func() {
+	It("should parse a basic k8s NetworkPolicy to a NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
 		portFoo := intstr.FromString("foo")
 		np := extensions.NetworkPolicy{
@@ -781,6 +781,53 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// Check that Types field exists and has only 'ingress'
 		Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.Types)).To(Equal(1))
 		Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeIngress))
+	})
+
+	It("should parse a NetworkPolicy with Ports only (egress)", func() {
+		protocol := kapiv1.ProtocolTCP
+		port := intstr.FromInt(80)
+		np := extensions.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test.policy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{},
+				Egress: []extensions.NetworkPolicyEgressRule{
+					extensions.NetworkPolicyEgressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{
+								Protocol: &protocol,
+								Port:     &port,
+							},
+						},
+					},
+				},
+				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.K8sNetworkPolicyToCalico(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.test.policy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*apiv2.NetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
+		Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.EgressRules)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.EgressRules[0].Protocol.String()).To(Equal("tcp"))
+		Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.EgressRules[0].Destination.Ports)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.EgressRules[0].Destination.Ports[0].String()).To(Equal("80"))
+
+		// There should be no IngressRules
+		Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
+
+		// Check that Types field exists and has only 'egress'
+		Expect(len(pol.Value.(*apiv2.NetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv2.NetworkPolicy).Spec.Types[0]).To(Equal(apiv2.PolicyTypeEgress))
 	})
 
 	It("should parse a NetworkPolicy with an Ingress rule with an IPBlock Peer", func() {
