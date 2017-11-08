@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
@@ -80,6 +81,14 @@ func main() {
 
 	// Create the context.
 	ctx := context.Background()
+
+	log.Info("Ensuring Calico datastore is initialized")
+	initCtx, cancelInit := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelInit()
+	err = calicoClient.EnsureInitialized(initCtx, "", "k8s")
+	if err != nil {
+		log.WithError(err).Fatal("Failed to initialize Calico datastore")
+	}
 
 	for _, controllerType := range strings.Split(config.EnabledControllers, ",") {
 		switch controllerType {

@@ -1,5 +1,5 @@
-hash: 71bb2f17b856a91dbd7fda24781c90e61738650412f2a254afe9546cd2a97a1b
-updated: 2017-11-02T17:57:09.215414323-07:00
+hash: 25438723f5858ee486cee5d4f6525c18b434a339af26fb35adaeb867bfd16654
+updated: 2017-11-08T17:29:56.684740154Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 88a4db12f216de433ee33d3e7d71e60c46fcd09a
+  version: e3c93b6cfca59e83e4f861c86dc2a1f57a9de36f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -223,12 +223,14 @@ imports:
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
+- name: github.com/satori/go.uuid
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -253,9 +255,10 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: e48874b42435b4347fc52bdee0424a52abc974d7
+  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -282,7 +285,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity
