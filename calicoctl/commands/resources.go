@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 
+	"context"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
@@ -27,8 +28,8 @@ import (
 	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"context"
 )
 
 type action int
@@ -182,12 +183,31 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 
 	// Now execute the command on each resource in order, exiting as soon as we hit an
 	// error.
+	export := argutils.ArgBoolOrFalse(args, "--export")
+	nameSpecified := argutils.ArgStringOrBlank(args, "<NAME>")
 	for _, r := range resources {
 		res, err := executeResourceAction(args, client, r, action)
 		if err != nil {
 			results.err = err
 			break
 		}
+
+		// Remove the cluster specific metadata if the "--export" flag is specified
+		// Skip removing cluster specific metadata if this is is called as a "list"
+		// operation (no specific name is specified).
+		if export && nameSpecified != "" {
+			for i, _ := range res {
+				rom := res[i].(v1.ObjectMetaAccessor).GetObjectMeta()
+				rom.SetNamespace("")
+				rom.SetUID("")
+				rom.SetResourceVersion("")
+				rom.SetCreationTimestamp(v1.Time{})
+				rom.SetDeletionTimestamp(nil)
+				rom.SetDeletionGracePeriodSeconds(nil)
+				rom.SetClusterName("")
+			}
+		}
+
 		results.resources = append(results.resources, res...)
 		results.numHandled = results.numHandled + len(res)
 	}

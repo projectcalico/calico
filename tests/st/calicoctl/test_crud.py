@@ -20,7 +20,7 @@ from nose_parameterized import parameterized
 from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
-    SET_DEFAULT, NOT_SUPPORTED
+    SET_DEFAULT, NOT_SUPPORTED, writeyaml
 from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -590,8 +590,8 @@ class TestCalicoctlCommands(TestBase):
             "get hostendpoint %s -o yaml" % name(hostendpoint_name1_rev2))
         rc.assert_no_error()
         rev0 = rc.decoded
-        self.assertEqual('uid' in rev0['metadata'], True)
-        self.assertEqual('creationTimestamp' in rev0['metadata'], True)
+        self.assertIn('uid', rev0['metadata'])
+        self.assertIn('creationTimestamp', rev0['metadata'])
 
         # Update the Host Endpoint (with no resource version) and get it to
         # assert the resource version is not the same.
@@ -623,6 +623,68 @@ class TestCalicoctlCommands(TestBase):
 
         # Delete the resource without using a resource version.
         rc = calicoctl("delete hostendpoint %s" % name(rev1))
+        rc.assert_no_error()
+
+    def test_export_flag(self):
+        """
+        Test that the cluster-specific information gets stripped
+        out of a "get" request.
+        """
+        # Create a new Network Policy with all metadata specified
+        rc = calicoctl('create', data=networkpolicy_name2_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get networkpolicy %s -o yaml" % name(networkpolicy_name2_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+        self.assertIn('uid', rev0['metadata'])
+        self.assertIn('creationTimestamp', rev0['metadata'])
+        self.assertEqual(rev0['metadata']['name'], networkpolicy_name2_rev1['metadata']['name'])
+        self.assertEqual(rev0['metadata']['namespace'], networkpolicy_name2_rev1['metadata']['namespace'])
+        self.assertIn('resourceVersion', rev0['metadata'])
+
+        # Retrieve the Network Policy with the export flag and
+        # Verify that cluster-specific information is not present
+        rc = calicoctl(
+            "get networkpolicy %s -o yaml --export" % name(networkpolicy_name2_rev1))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotIn('uid', rev1['metadata'])
+        self.assertIsNone(rev1['metadata']['creationTimestamp'])
+        self.assertNotIn('namespace', rev1['metadata'])
+        self.assertNotIn('resourceVersion', rev1['metadata'])
+        self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
+
+        # Write the output to yaml so that it can be applied later
+        rev1['spec']['order'] = 100
+        writeyaml('/tmp/export_data.yaml', rev1)
+
+        # Verify that the cluster-specific information IS present if
+        # the export flag is used without specifying a specific resource.
+        rc = calicoctl(
+            "get networkpolicy -o yaml --export")
+        rc.assert_no_error()
+        rev2 = rc.decoded
+        self.assertEqual(len(rev2['items']), 1)
+        self.assertIn('uid', rev2['items'][0]['metadata'])
+        self.assertIsNotNone(rev2['items'][0]['metadata']['creationTimestamp'])
+        self.assertIn('namespace', rev2['items'][0]['metadata'])
+        self.assertIn('resourceVersion', rev2['items'][0]['metadata'])
+        self.assertEqual(rev2['items'][0]['metadata']['name'], rev0['metadata']['name'])
+
+        # Apply the output and verify that it did not error out
+        rc = calicoctl(
+            "apply -f %s" % '/tmp/export_data.yaml')
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get networkpolicy %s -o yaml" % name(networkpolicy_name2_rev1))
+        rc.assert_no_error()
+        rev3 = rc.decoded
+        self.assertEqual(rev3['metadata']['name'], rev1['metadata']['name'])
+        self.assertEqual(rev3['spec']['order'], 100)
+
+        # Delete the resource without using a resource version.
+        rc = calicoctl("delete networkpolicy %s" % name(rev3))
         rc.assert_no_error()
 #
 #
