@@ -1,5 +1,5 @@
-hash: 20ff5a3f7c60ed99e3ebbaccde0d12df06eb955724b8eefcd2e47e2277b91786
-updated: 2017-11-07T15:45:58.953782657Z
+hash: 3013284a477dad6f415dd31392546fe685c4345fe8a7d52aa5401cab82c8f190
+updated: 2017-11-08T16:27:32.651914328Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -155,6 +155,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pborman/uuid
+  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -166,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e8d93a6ef128b79fddc09e5f673386c46cab6d10
+  version: e3c93b6cfca59e83e4f861c86dc2a1f57a9de36f
   subpackages:
   - lib
   - lib/apiconfig
@@ -183,14 +185,18 @@ imports:
   - lib/backend/syncersv1/felixsyncer
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
+  - lib/clientv2
   - lib/errors
   - lib/hash
   - lib/health
+  - lib/ipam
   - lib/ipip
+  - lib/logutils
   - lib/names
   - lib/namespace
   - lib/net
   - lib/numorstring
+  - lib/options
   - lib/scope
   - lib/selector
   - lib/selector/parser
@@ -234,7 +240,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 687d4b818545e443c8ba223cbef20b1721afd4db
+  version: 6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -384,6 +390,7 @@ imports:
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
+  - pkg/util/uuid
   - pkg/util/validation
   - pkg/util/validation/field
   - pkg/util/wait

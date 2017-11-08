@@ -34,8 +34,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
@@ -63,7 +63,7 @@ Options:
 type TyphaDaemon struct {
 	BuildInfoLogCxt *log.Entry
 	ConfigFilePath  string
-	DatastoreClient BackendClient
+	DatastoreClient DatastoreClient
 	ConfigParams    *config.Config
 
 	// The components of the server, created in CreateServer() below.
@@ -75,7 +75,7 @@ type TyphaDaemon struct {
 	Server            *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
-	NewBackendClient      func(config apiconfig.CalicoAPIConfig) (BackendClient, error)
+	NewClientV2           func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error)
 	ConfigureEarlyLogging func()
 	ConfigureLogging      func(configParams *config.Config)
 
@@ -85,8 +85,12 @@ type TyphaDaemon struct {
 
 func New() *TyphaDaemon {
 	return &TyphaDaemon{
-		NewBackendClient: func(config apiconfig.CalicoAPIConfig) (BackendClient, error) {
-			return backend.NewClient(config)
+		NewClientV2: func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error) {
+			client, err := clientv2.New(config)
+			if err == nil {
+				return ClientV2Shim{client.(RealClientV2)}, nil
+			}
+			return nil, err
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
@@ -173,10 +177,10 @@ configRetry:
 			continue configRetry
 		}
 
-		// We should now have enough config to connect to the datastore
-		// so we can load the remainder of the config.
+		// We should now have enough config to connect to the datastore.
 		datastoreConfig := configParams.DatastoreConfig()
-		t.DatastoreClient, err = t.NewBackendClient(datastoreConfig)
+
+		t.DatastoreClient, err = t.NewClientV2(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to datastore")
 			time.Sleep(1 * time.Second)
@@ -201,6 +205,34 @@ configRetry:
 	t.BuildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
+	// Ensure that, as soon as we are able to connect to the datastore at all, it is
+	// initialized; otherwise the Syncer may spin, looking for non-existent resources.
+	//
+	// But, do this in a background goroutine so as not to block Typha overall; specifically, we
+	// want Typha to report itself as live even if there is an initial problem connecting to the
+	// datastore.
+	//
+	// Note that Typha should cope with intermittent loss of connectivity to the datastore,
+	// because - apart from this EnsureInitialized call here - all of its interaction with the
+	// datastore is via a Syncer, and the Syncer is designed to handle HTTP request errors by
+	// reconnecting.
+	go func() {
+		for {
+			var err error
+			func() { // Closure to avoid leaking the defer.
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				err = t.DatastoreClient.EnsureInitialized(ctx, "", "typha")
+			}()
+			if err != nil {
+				log.WithError(err).Error("Failed to ensure datastore was initialized")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			break
+		}
+	}()
 	t.ConfigParams = configParams
 }
 
@@ -294,17 +326,29 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 	}
 }
 
-// BackendClient captures the sub-interface of the backend client that we actually use.
-type BackendClient interface {
-	// Syncer creates an object that generates a series of KVPair updates,
-	// which paint an eventually-consistent picture of the full state of
-	// the datastore and then generates subsequent KVPair updates for
-	// changes to the datastore.
-	Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer
+// ClientV2Shim adapts the real v2 client interface to our mockable interface.
+type ClientV2Shim struct {
+	C RealClientV2
+}
 
-	// EnsureInitialized ensures that the backend is initialized
-	// any ready to be used.
-	EnsureInitialized() error
+func (s ClientV2Shim) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
+	return s.C.EnsureInitialized(ctx, calicoVersion, clusterType)
+}
+
+func (s ClientV2Shim) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	return s.C.Backend().Syncer(callbacks)
+}
+
+// DatastoreClient is our interface to the datastore, used for mocking in the UTs.
+type DatastoreClient interface {
+	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
+	Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer
+}
+
+// RealClientV2 is the subset of the clientv2.Interface that we care about.
+type RealClientV2 interface {
+	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
+	Backend() bapi.Client
 }
 
 // TODO Typha: Share with Felix.

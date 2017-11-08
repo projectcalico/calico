@@ -16,7 +16,9 @@ package daemon_test
 
 import (
 	"errors"
+	"strconv"
 	"sync"
+	"time"
 
 	. "github.com/projectcalico/typha/pkg/daemon"
 
@@ -42,15 +44,15 @@ LogFilePath=none
 
 var _ = Describe("Daemon", func() {
 	var d *TyphaDaemon
-	var backend *mockBackend
+	var datastore *mockDatastore
 	var newClientErr error
 	var earlyLoggingConfigured, loggingConfigured bool
 
 	BeforeEach(func() {
 		d = New()
-		backend = &mockBackend{}
-		d.NewBackendClient = func(config apiconfig.CalicoAPIConfig) (c BackendClient, err error) {
-			return backend, newClientErr
+		datastore = &mockDatastore{}
+		d.NewClientV2 = func(config apiconfig.CalicoAPIConfig) (c DatastoreClient, err error) {
+			return datastore, newClientErr
 		}
 		earlyLoggingConfigured = false
 		loggingConfigured = false
@@ -107,6 +109,48 @@ var _ = Describe("Daemon", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		const (
+			downSecs  = 2
+			checkTime = "2s"
+		)
+		downSecsStr := strconv.Itoa(downSecs)
+
+		It("should load the configuration and connect to the datastore", func() {
+			Eventually(datastore.getNumInitCalls).Should(Equal(1))
+			Consistently(datastore.getNumInitCalls, checkTime, "1s").Should(Equal(1))
+		})
+
+		Describe("with datastore down for "+downSecsStr+"s", func() {
+			BeforeEach(func() {
+				datastore.mutex.Lock()
+				defer datastore.mutex.Unlock()
+				datastore.failInit = true
+			})
+			JustBeforeEach(func() {
+				time.Sleep(downSecs * time.Second)
+			})
+
+			It("should try >="+downSecsStr+" times to initialize the datastore", func() {
+				Eventually(datastore.getNumInitCalls).Should(BeNumerically(">=", downSecs))
+			})
+
+			Describe("with datastore now available", func() {
+				var numFailedInitCalls int
+
+				JustBeforeEach(func() {
+					datastore.mutex.Lock()
+					defer datastore.mutex.Unlock()
+					datastore.failInit = false
+					numFailedInitCalls = datastore.initCalled
+				})
+
+				It("should initialize the datastore", func() {
+					Eventually(datastore.getNumInitCalls).Should(Equal(numFailedInitCalls + 1))
+					Consistently(datastore.getNumInitCalls, checkTime, "1s").Should(Equal(numFailedInitCalls + 1))
+				})
+			})
+		})
+
 		It("should create the server components", func() {
 			d.CreateServer()
 			Expect(d.SyncerToValidator).ToNot(BeNil())
@@ -155,21 +199,21 @@ var _ = Describe("Daemon", func() {
 	})
 })
 
-type mockBackend struct {
+type mockDatastore struct {
 	mutex        sync.Mutex
 	syncerCalled bool
 	initCalled   int
 	failInit     bool
 }
 
-func (b *mockBackend) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+func (b *mockDatastore) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.syncerCalled = true
 	return &dummySyncer{}
 }
 
-func (b *mockBackend) EnsureInitialized() error {
+func (b *mockDatastore) EnsureInitialized(ctx context.Context, version, clusterType string) error {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.initCalled++
@@ -179,7 +223,7 @@ func (b *mockBackend) EnsureInitialized() error {
 	return nil
 }
 
-func (b *mockBackend) getNumInitCalls() int {
+func (b *mockDatastore) getNumInitCalls() int {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	return b.initCalled

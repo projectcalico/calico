@@ -27,7 +27,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: e8d93a6ef128b79fddc09e5f673386c46cab6d10
+  version: e3c93b6cfca59e83e4f861c86dc2a1f57a9de36f
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -39,7 +39,7 @@ import:
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: github.com/Workiva/go-datastructures
-  version: af7475fb23e7561c87e7c1d17c12f46d732379bb
+  version: v1.0.42
   subpackages:
   - trie/ctrie
 - package: golang.org/x/text
