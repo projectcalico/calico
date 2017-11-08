@@ -568,7 +568,7 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 
 	if m.PreDNAT && len(m.EgressRules) > 0 {
 		structLevel.ReportError(reflect.ValueOf(m.EgressRules),
-			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"))
+			"PolicySpec.Egress", "", reason("PreDNAT PolicySpec cannot have any Egress"))
 	}
 
 	if m.PreDNAT && len(m.Types) > 0 {

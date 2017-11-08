@@ -365,16 +365,16 @@ func (c ipPools) maybeEnableIPIP(ctx context.Context, pool *apiv2.IPPool) error 
 			log.Debug("Global FelixConfiguration does not exist - creating")
 			res = apiv2.NewFelixConfiguration()
 			res.Name = "default"
-		} else if res.Spec.IpInIpEnabled != nil {
+		} else if res.Spec.IPIPEnabled != nil {
 			// A value for the default config is set so leave unchanged.  It may be set to false,
 			// so log the actual value - but we shouldn't update it if someone has explicitly
 			// disabled it globally.
-			log.WithField("IpInIpEnabled", res.Spec.IpInIpEnabled).Debug("Global IpInIpEnabled setting is already configured")
+			log.WithField("IPIPEnabled", res.Spec.IPIPEnabled).Debug("Global IPIPEnabled setting is already configured")
 			return nil
 		}
 
 		// Enable IpInIp and do the Create or Update.
-		res.Spec.IpInIpEnabled = &ipEnabled
+		res.Spec.IPIPEnabled = &ipEnabled
 		if res.ResourceVersion == "" {
 			res, err = c.client.FelixConfigurations().Create(ctx, res, options.SetOptions{})
 			if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {

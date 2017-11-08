@@ -86,8 +86,8 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		UID:               ns.UID,
 	}
 	profile.Spec = apiv2.ProfileSpec{
-		IngressRules:  []apiv2.Rule{{Action: apiv2.Allow}},
-		EgressRules:   []apiv2.Rule{{Action: apiv2.Allow}},
+		Ingress:       []apiv2.Rule{{Action: apiv2.Allow}},
+		Egress:        []apiv2.Rule{{Action: apiv2.Allow}},
 		LabelsToApply: labels,
 	}
 
@@ -307,11 +307,11 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 		UID:               np.UID,
 	}
 	policy.Spec = apiv2.NetworkPolicySpec{
-		Order:        &order,
-		Selector:     c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
-		IngressRules: ingressRules,
-		EgressRules:  egressRules,
-		Types:        types,
+		Order:    &order,
+		Selector: c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
+		Ingress:  ingressRules,
+		Egress:   egressRules,
+		Types:    types,
 	}
 
 	// Build and return the KVPair.

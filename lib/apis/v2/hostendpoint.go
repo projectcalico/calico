@@ -49,7 +49,7 @@ type HostEndpointSpec struct {
 	// If "InterfaceName" is not present, Calico will look for an interface matching any
 	// of the IPs in the list and apply policy to that.
 	// Note:
-	// 	When using the selector|tag match criteria in an ingress or egress security Policy
+	// 	When using the selector match criteria in an ingress or egress security Policy
 	// 	or Profile, Calico converts the selector into a set of IP addresses. For host
 	// 	endpoints, the ExpectedIPs field is used for that purpose. (If only the interface
 	// 	name is specified, Calico does not learn the IPs of the interface for use in match

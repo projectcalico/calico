@@ -49,8 +49,8 @@ func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error)
 func convertGlobalPolicyV2ToV1Spec(spec apiv2.GlobalNetworkPolicySpec) (*model.Policy, error) {
 	v1value := &model.Policy{
 		Order:          spec.Order,
-		InboundRules:   RulesAPIV2ToBackend(spec.IngressRules, ""),
-		OutboundRules:  RulesAPIV2ToBackend(spec.EgressRules, ""),
+		InboundRules:   RulesAPIV2ToBackend(spec.Ingress, ""),
+		OutboundRules:  RulesAPIV2ToBackend(spec.Egress, ""),
 		Selector:       spec.Selector,
 		Types:          policyTypesAPIV2ToBackend(spec.Types),
 		DoNotTrack:     spec.DoNotTrack,

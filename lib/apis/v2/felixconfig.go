@@ -43,7 +43,7 @@ type FelixConfigurationSpec struct {
 	UseInternalDataplaneDriver *bool  `json:"useInternalDataplaneDriver,omitempty"`
 	DataplaneDriver            string `json:"dataplaneDriver,omitempty"`
 
-	Ipv6Support    *bool `json:"ipv6Support,omitempty"`
+	IPv6Support    *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
 	IgnoreLooseRPF *bool `json:"ignoreLooseRPF,omitempty"`
 
 	// RouterefreshInterval is the period, in seconds, at which Felix re-checks the routes
@@ -130,9 +130,9 @@ type FelixConfigurationSpec struct {
 	// [Default: INFO]
 	LogSeveritySys string `json:"logSeveritySys,omitempty"`
 
-	IpInIpEnabled *bool `json:"ipInIpEnabled,omitempty"`
-	// IpInIpMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
-	IpInIpMtu *int `json:"ipInIpMtu,omitempty"`
+	IPIPEnabled *bool `json:"ipipEnabled,omitempty" confignamev1:"IpInIpEnabled"`
+	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
+	IPIPMTU *int `json:"ipipMTU,omitempty" confignamev1:"IpInIpMtu"`
 
 	// ReportingIntervalSecs is the interval at which Felix reports its status into the datastore or 0 to disable.
 	// Must be non-zero in OpenStack deployments. [Default: 30]
@@ -186,9 +186,10 @@ type FelixConfigurationSpec struct {
 	DebugSimulateDataplaneHangAfterSecs *int   `json:"debugSimulateDataplaneHangAfterSecs,omitempty" confignamev1:"DebugSimualteDataplaneHangAfter"`
 }
 
+// ProtoPort is combination of protocol and port, both must be specified.
 type ProtoPort struct {
-	Protocol string
-	Port     uint16
+	Protocol string `json:"protocol"`
+	Port     uint16 `json:"port"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
