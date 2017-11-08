@@ -34,7 +34,7 @@ import (
 type EnvConfig struct {
 	EtcdImage  string `default:"quay.io/coreos/etcd"`
 	K8sImage   string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
-	TyphaImage string `default:"calico/typha:v0.5.1-27-g49eaa9b"`
+	TyphaImage string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
 }
 
 var Config EnvConfig

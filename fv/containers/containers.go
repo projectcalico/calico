@@ -28,6 +28,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"context"
+
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
@@ -266,6 +268,7 @@ func RunFelix(etcdIP string) *Container {
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
 func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interface) {
+	log.Info("Starting a single-node etcd topology.")
 	success := false
 	defer func() {
 		if !success {
@@ -280,6 +283,17 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 
 	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
+	Eventually(func() error {
+		log.Info("Initializing the datastore...")
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		err := client.EnsureInitialized(
+			ctx,
+			"test-version",
+			"felix-fv",
+		)
+		log.WithError(err).Info("EnsureInitialized result")
+		return err
+	}).ShouldNot(HaveOccurred())
 
 	// Then start Felix and create a node for it.
 	felix = RunFelix(etcd.IP)

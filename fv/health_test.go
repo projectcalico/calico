@@ -52,6 +52,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"context"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -179,7 +181,16 @@ var _ = BeforeSuite(func() {
 		})
 		if err != nil {
 			log.WithError(err).Warn("Waiting to create Calico client")
+			return
 		}
+
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		err = calicoClient.EnsureInitialized(
+			ctx,
+			"test-version",
+			"felix-fv,typha", // Including typha in clusterType to prevent config churn
+		)
+
 		return
 	}, "60s", "2s").ShouldNot(HaveOccurred())
 

@@ -49,13 +49,15 @@ ARCH?=amd64
 ifeq ($(ARCH),amd64)
 	ARCHTAG?=
 	GO_BUILD_VER?=v0.9
-	FV_TYPHAIMAGE?=calico/typha:v0.5.1-27-g49eaa9b
+	TYPHA_VERSION?=v0.6.0-alpha1-17-gc6c5726
+	FV_TYPHAIMAGE?=calico/typha:$(TYPHA_VERSION)
 endif
 
 ifeq ($(ARCH),ppc64le)
 	ARCHTAG:=-ppc64le
 	GO_BUILD_VER?=latest
-	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
+	TYPHA_VERSION?=latest
+	FV_TYPHAIMAGE?=calico/typha-ppc64le:$(TYPHA_VERSION)
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
@@ -190,7 +192,7 @@ k8sfv-test: calico/felix k8sfv-test-existing-felix
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
 k8sfv-test-existing-felix: bin/k8sfv.test
-	k8sfv/run-test
+	TYPHA_VERSION=$(TYPHA_VERSION) k8sfv/run-test
 
 PROMETHEUS_DATA_DIR := $$HOME/prometheus-data
 K8SFV_PROMETHEUS_DATA_DIR := $(PROMETHEUS_DATA_DIR)/k8sfv
@@ -403,7 +405,7 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
-	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
+	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)

@@ -78,8 +78,7 @@ func (cb *ConfigBatcher) OnUpdate(update api.Update) (filterOut bool) {
 		}
 	case model.ReadyFlagKey:
 		if update.Value != true {
-			log.WithField("value", update.Value).Warn(
-				"Ready flag updated/deleted")
+			log.WithField("value", update.Value).Warn("Ready flag updated/deleted")
 			cb.datastoreReady = false
 			cb.configDirty = true
 		} else {
@@ -114,8 +113,8 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 	for k, v := range cb.hostConfig {
 		hostConfigCopy[k] = v
 	}
-	//if !cb.datastoreReady {
-	//	cb.callbacks.OnDatastoreNotReady()
-	//}
+	if !cb.datastoreReady {
+		cb.callbacks.OnDatastoreNotReady()
+	}
 	cb.callbacks.OnConfigUpdate(globalConfigCopy, hostConfigCopy)
 }
