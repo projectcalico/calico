@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -33,8 +32,6 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -68,7 +65,6 @@ var (
 	// Default values, names for different configs.
 	defaultLogSeverity        = "info"
 	globalFelixConfigName     = "default"
-	globalClusterInfoName     = "default"
 	felixNodeConfigNamePrefix = "node."
 )
 
@@ -799,6 +795,11 @@ func ensureFilesystemAsExpected() {
 // ensureDefaultConfig ensures all of the required default settings are
 // configured.
 func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node) error {
+	// Ensure the ClusterInformation is populated.
+	// Get the ClusterType from ENV var. This is set from the manifest.
+	clusterType := os.Getenv("CLUSTER_TYPE")
+	c.EnsureInitialized(ctx, VERSION, clusterType)
+
 	// By default we set the global reporting interval to 0 - this is
 	// different from the defaults defined in Felix.
 	//
@@ -882,108 +883,6 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 				}
 			} else {
 				log.WithField("DefaultEndpointToHostAction", felixNodeCfg.Spec.DefaultEndpointToHostAction).Debug("Host Felix value already assigned")
-			}
-		}
-	}
-
-	// Make sure Cluster information is populated in the datastore
-	// and populate the values if they're not already there in the datastore
-	// we populate the ClusterType with the type in CLUSTER_TYPE, Calico version
-	// and cluster GUID here.
-	if err := ensureClusterInformation(ctx, c, cfg); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ensureClusterInformation ensures that the ClusterInformation fields i.e. ClusterType, CalicoVersion and ClusterGUID
-// is assigned, and create/update it with appropriate values if it's not.
-// In case of ClusterType, we merge the values if it's already assigned and is different from what it's suppose to be.
-func ensureClusterInformation(ctx context.Context, c client.Interface, cfg *apiconfig.CalicoAPIConfig) error {
-	// Get the ClusterType from ENV var. This is set from the manifest.
-	clusterType := os.Getenv("CLUSTER_TYPE")
-
-	// Append "kdd" last if the datastoreType is 'kubernetes'.
-	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
-		// If clusterType is already set then append ",kdd" at the end.
-		if clusterType != "" {
-			// Trim the trailing ",", if any.
-			clusterType = strings.TrimSuffix(clusterType, ",")
-			// Append "kdd" very last thing in the list.
-			clusterType = fmt.Sprintf("%s,%s", clusterType, "kdd")
-		} else {
-			clusterType = "kdd"
-		}
-	}
-
-	// Store the Calico Version as a global felix config setting.
-	clusterInfo, err := c.ClusterInformation().Get(ctx, globalClusterInfoName, options.GetOptions{})
-	if err != nil {
-		// Create the default config if it doesn't already exist.
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			newClusterInfo := api.NewClusterInformation()
-			newClusterInfo.Name = globalClusterInfoName
-			newClusterInfo.Spec.CalicoVersion = VERSION
-			newClusterInfo.Spec.ClusterType = clusterType
-			newClusterInfo.Spec.ClusterGUID = fmt.Sprintf("%s", hex.EncodeToString(uuid.NewV4().Bytes()))
-			_, err = c.ClusterInformation().Create(ctx, newClusterInfo, options.SetOptions{})
-			if err != nil {
-				log.WithError(err).WithField("ClusterInformation", newClusterInfo).Errorf("Error creating cluster information config")
-				return err
-			}
-		} else {
-			log.WithError(err).WithField("ClusterInformation", globalClusterInfoName).Errorf("Error getting cluster information config")
-			return err
-		}
-	} else {
-		updateNeeded := false
-		// Only update the version if it's different from what we have.
-		if clusterInfo.Spec.CalicoVersion != VERSION {
-			clusterInfo.Spec.CalicoVersion = VERSION
-			updateNeeded = true
-		} else {
-			log.WithField("CalicoVersion", clusterInfo.Spec.CalicoVersion).Debug("Calico version value already assigned")
-		}
-
-		if clusterInfo.Spec.ClusterGUID == "" {
-			clusterInfo.Spec.ClusterGUID = fmt.Sprintf("%s", hex.EncodeToString(uuid.NewV4().Bytes()))
-			updateNeeded = true
-		} else {
-			log.WithField("ClusterGUID", clusterInfo.Spec.ClusterGUID).Debug("Cluster GUID value already set")
-		}
-
-		if clusterInfo.Spec.ClusterType == "" {
-			clusterInfo.Spec.ClusterType = clusterType
-			updateNeeded = true
-		} else {
-			datastoreClusterTypeSlice := strings.Split(clusterInfo.Spec.ClusterType, ",")
-			localClusterTypeSlice := strings.Split(clusterType, ",")
-
-			for _, lct := range localClusterTypeSlice {
-				found := false
-				for _, x := range datastoreClusterTypeSlice {
-					if lct == x {
-						found = true
-						break
-					}
-				}
-				if !found {
-					datastoreClusterTypeSlice = append(datastoreClusterTypeSlice, lct)
-					updateNeeded = true
-				}
-			}
-
-			if updateNeeded {
-				clusterInfo.Spec.ClusterType = strings.Join(datastoreClusterTypeSlice, ",")
-			}
-		}
-
-		if updateNeeded {
-			_, err = c.ClusterInformation().Update(ctx, clusterInfo, options.SetOptions{})
-			if err = checkConflictError(err); err != nil {
-				log.WithError(err).WithField("ClusterInformation", clusterInfo).Errorf("Error updating cluster information config")
-				return err
 			}
 		}
 	}
