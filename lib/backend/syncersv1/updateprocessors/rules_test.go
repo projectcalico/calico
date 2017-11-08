@@ -212,6 +212,42 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		})
 	})
 
+	It("should parse a rule with ports but no selectors", func() {
+		tcp := numorstring.ProtocolFromString("tcp")
+		port80 := numorstring.SinglePort(uint16(80))
+
+		r := apiv2.Rule{
+			Action:   apiv2.Allow,
+			Protocol: &tcp,
+			Source: apiv2.EntityRule{
+				Ports: []numorstring.Port{port80},
+			},
+			Destination: apiv2.EntityRule{
+				Ports: []numorstring.Port{port80},
+			},
+		}
+
+		// Process the rule and get the corresponding v1 representation.
+		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "")
+
+		By("generating an empty source selector", func() {
+			Expect(rulev1.SrcSelector).To(Equal(""))
+		})
+
+		By("generating the correct ingress ports", func() {
+			Expect(rulev1.SrcPorts).To(Equal([]numorstring.Port{port80}))
+		})
+
+		By("generating an empty destination selector", func() {
+			Expect(rulev1.DstSelector).To(Equal(""))
+		})
+
+		By("generating the correct egress ports", func() {
+			Expect(rulev1.DstPorts).To(Equal([]numorstring.Port{port80}))
+		})
+
+	})
+
 	It("should parse a rule with both a selector and namespace selector", func() {
 		r := apiv2.Rule{
 			Action: apiv2.Allow,
@@ -234,7 +270,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		})
 
 		By("generating the correct destination selector", func() {
-			Expect(rulev1.SrcSelector).To(Equal(expected))
+			Expect(rulev1.DstSelector).To(Equal(expected))
 		})
 	})
 
@@ -263,5 +299,4 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 			Expect(rulev1.SrcSelector).To(Equal(e))
 		})
 	})
-
 })
