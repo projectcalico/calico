@@ -15,10 +15,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
-
-	"context"
 	"time"
 
 	"github.com/golang/protobuf/proto"
