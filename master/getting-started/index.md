@@ -11,6 +11,7 @@ your own servers, a quick set-up in a virtualized environment using Vagrant and
 a number of cloud services.
 
 - [{{site.prodname}} with Kubernetes](kubernetes)
+- [{{site.prodname}} with OpenShift](openshift/installation)
 - [{{site.prodname}} with Mesos](mesos)
   - [{{site.prodname}} with DC/OS](mesos/installation/dc-os)
 - [{{site.prodname}} with Docker](docker)
