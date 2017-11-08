@@ -72,7 +72,7 @@ var (
 		Revision: "abcdef12345",
 	}
 	notSupported = cerrors.ErrorOperationNotSupported{}
-	genError = errors.New("Generic error")
+	genError     = errors.New("Generic error")
 )
 
 var _ = Describe("Test the backend datstore multi-watch syncer", func() {
