@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/kelseyhightower/confd/backends"
-	"github.com/kelseyhightower/confd/log"
 	"github.com/kelseyhightower/confd/resource/template"
+	log "github.com/sirupsen/logrus"
 )
 
 var VERSION string
