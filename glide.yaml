@@ -1,4 +1,4 @@
 package: github.com/kelseyhightower/confd
 import:
 - package: github.com/projectcalico/libcalico-go
-  version: v2.0.0-alpha1
+  version: c5fb7608b28e20b9b6156d3a3a032cdf0f5f57cc
