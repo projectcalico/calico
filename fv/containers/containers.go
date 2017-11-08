@@ -28,11 +28,12 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"context"
+
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/set"
-	"context"
 )
 
 type Container struct {
@@ -55,7 +56,7 @@ func (c *Container) Stop() {
 	} else {
 		log.WithField("container", c).Info("Stop")
 		c.runCmd.Process.Signal(os.Interrupt)
-		c.WaitNotRunning(10 * time.Second)
+		c.WaitNotRunning(60 * time.Second)
 	}
 }
 
@@ -245,7 +246,7 @@ func RunEtcd() *Container {
 		"--privileged", // So that we can add routes inside the etcd container,
 		// when using the etcd container to model an external client connecting
 		// into the cluster.
-		"quay.io/coreos/etcd",
+		utils.Config.EtcdImage,
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379")
@@ -282,14 +283,13 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
 	Eventually(func() error {
-		ctx, _ := context.WithTimeout(context.Background(), 10 * time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		return client.EnsureInitialized(
 			ctx,
 			"test-version",
 			"felix-fv",
 		)
 	}).ShouldNot(HaveOccurred())
-
 
 	// Then start Felix and create a node for it.
 	felix = RunFelix(etcd.IP)

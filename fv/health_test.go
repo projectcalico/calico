@@ -43,7 +43,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -53,20 +52,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"context"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/health"
-	"context"
 )
-
-type EnvConfig struct {
-	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"latest"`
-}
-
-var config EnvConfig
 
 var etcdContainer *containers.Container
 var apiServerContainer *containers.Container
@@ -100,9 +93,7 @@ var (
 
 var _ = BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
-	err := envconfig.Process("k8sfv", &config)
-	Expect(err).NotTo(HaveOccurred())
-	log.WithField("config", config).Info("Loaded config")
+	var err error
 
 	// Start etcd, which will back the k8s API server.
 	etcdContainer = containers.RunEtcd()
@@ -118,8 +109,7 @@ var _ = BeforeSuite(func() {
 	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
-	apiServerContainer = containers.Run("apiserver",
-		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
+	apiServerContainer = containers.Run("apiserver", utils.Config.K8sImage,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
 		"--service-cluster-ip-range=10.101.0.0/16",
@@ -194,7 +184,7 @@ var _ = BeforeSuite(func() {
 			return
 		}
 
-		ctx, _ := context.WithTimeout(context.Background(), 10 * time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		err = calicoClient.EnsureInitialized(
 			ctx,
 			"test-version",
@@ -262,7 +252,11 @@ var _ = Describe("health tests", func() {
 					PodIP: "10.0.0.1",
 				},
 			}
-			_, err := k8sClient.CoreV1().Pods("default").Create(pod)
+			var err error
+			pod, err = k8sClient.CoreV1().Pods("default").Create(pod)
+			Expect(err).NotTo(HaveOccurred())
+			pod.Status.PodIP = "10.0.0.1"
+			_, err = k8sClient.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 			podsToCleanUp = append(podsToCleanUp, testPodName)
 		}
@@ -341,7 +335,7 @@ var _ = Describe("health tests", func() {
 			"-e", "K8S_API_ENDPOINT="+endpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-v", k8sCertFilename+":/tmp/apiserver.crt",
-			"calico/typha:"+config.TyphaVersion,
+			utils.Config.TyphaImage,
 			"calico-typha")
 		Expect(typhaContainer).NotTo(BeNil())
 		typhaReady = getHealthStatus(typhaContainer.IP, "9098", "readiness")

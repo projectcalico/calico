@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"strings"
 
+	"context"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -27,10 +30,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-	"context"
-	"time"
 )
 
 // Global config - these are set by arguments on the ginkgo command line.
@@ -167,7 +169,7 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 			return
 		}
 
-		ctx, _ := context.WithTimeout(context.Background(), 10 * time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		err = calicoClient.EnsureInitialized(
 			ctx,
 			"test-version",
@@ -201,7 +203,7 @@ func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 	return nil
 }
 
-func cleanupAll(clientset *	kubernetes.Clientset, nsPrefix string) {
+func cleanupAll(clientset *kubernetes.Clientset, nsPrefix string) {
 	defer cleanupAllNamespaces(clientset, nsPrefix)
 	defer cleanupAllNodes(clientset)
 	cleanupAllPods(clientset, nsPrefix)

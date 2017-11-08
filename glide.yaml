@@ -39,13 +39,12 @@ import:
 - package: github.com/gogo/protobuf
   version: ^0.3.0
 - package: github.com/vishvananda/netlink
-- package: github.com/gavv/monotime
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 07780931f7de3af4f94666965871e8b001df6a45
+  version: 5f55c67174e0c1855b85dec3d541e8954e5db38c
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful

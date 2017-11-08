@@ -45,21 +45,22 @@
 # The build architecture is select by setting the ARCH variable.
 # For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
 # When ARCH is undefined it defaults to amd64.
-ifdef ARCH
-	ARCHTAG:=-$(ARCH)
-endif
 ARCH?=amd64
-ARCHTAG?=
-
 ifeq ($(ARCH),amd64)
-GO_BUILD_VER:=v0.6
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.9
+	FV_TYPHAIMAGE?=calico/typha:v0.5.1-27-g49eaa9b
 endif
 
 ifeq ($(ARCH),ppc64le)
-GO_BUILD_VER:=latest
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 
 help:
 	@echo "Felix Makefile"
@@ -288,18 +289,24 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # our glide.yaml.  If there area any changes, this updates glide.lock
 # as a side effect.  Unless you're adding/updating a dependency, you probably
 # want to use the vendor target to install the versions from glide.lock.
+VENDOR_REMADE := false
 .PHONY: update-vendor
-update-vendor:
+update-vendor glide.lock:
 	mkdir -p $$HOME/.glide
 	$(DOCKER_GO_BUILD) glide up --strip-vendor
 	touch vendor/.up-to-date
+	# Optimization: since glide up does the job of glide install, flag to the
+	# vendor target that it doesn't need to do anything.
+	$(eval VENDOR_REMADE := true)
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
-	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
-	touch vendor/.up-to-date
+	if ! $(VENDOR_REMADE); then \
+	  mkdir -p $$HOME/.glide && \
+	  $(DOCKER_GO_BUILD) glide install --strip-vendor && \
+	  touch vendor/.up-to-date; \
+	fi
 
 # Linker flags for building Felix.
 #
@@ -393,7 +400,10 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	-docker tag calico/felix$(ARCHTAG) calico/felix
 	for t in $(FV_TESTS); do \
 	    cd $(TOPDIR)/`dirname $$t` && \
-	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 40 -p ./`basename $$t` || exit; \
+	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
+	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)
