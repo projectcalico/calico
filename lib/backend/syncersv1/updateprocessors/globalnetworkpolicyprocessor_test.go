@@ -151,8 +151,8 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 		selector := "calico/k8s_ns == selectme"
 
 		res.Spec.Order = &order
-		res.Spec.IngressRules = []apiv2.Rule{irule}
-		res.Spec.EgressRules = []apiv2.Rule{erule}
+		res.Spec.Ingress = []apiv2.Rule{irule}
+		res.Spec.Egress = []apiv2.Rule{erule}
 		res.Spec.Selector = selector
 		res.Spec.DoNotTrack = true
 		res.Spec.PreDNAT = false

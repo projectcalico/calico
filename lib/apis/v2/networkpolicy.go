@@ -42,10 +42,10 @@ type NetworkPolicySpec struct {
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
-	IngressRules []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
-	EgressRules []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// The selector is an expression used to pick pick out the endpoints that the policy should
 	// be applied to.
 	//
@@ -74,15 +74,15 @@ type NetworkPolicySpec struct {
 	Selector string `json:"selector" validate:"selector"`
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
-	// Types according to what IngressRules and EgressRules are present in the policy.  The
+	// Types according to what Ingress and Egress are present in the policy.  The
 	// default is:
 	//
-	// - [ PolicyTypeIngress ], if there are no EgressRules (including the case where there are
-	//   also no IngressRules)
+	// - [ PolicyTypeIngress ], if there are no Egress rules (including the case where there are
+	//   also no Ingress rules)
 	//
-	// - [ PolicyTypeEgress ], if there are EgressRules but no IngressRules
+	// - [ PolicyTypeEgress ], if there are Egress rules but no Ingress rules
 	//
-	// - [ PolicyTypeIngress, PolicyTypeEgress ], if there are both IngressRules and EgressRules.
+	// - [ PolicyTypeIngress, PolicyTypeEgress ], if there are both Ingress and Egress rules.
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.

@@ -41,12 +41,12 @@ var (
 	zeroOrder                  = float64(0.0)
 	calicoAllowPolicyModelSpec = capiv2.GlobalNetworkPolicySpec{
 		Order: &zeroOrder,
-		IngressRules: []capiv2.Rule{
+		Ingress: []capiv2.Rule{
 			{
 				Action: "allow",
 			},
 		},
-		EgressRules: []capiv2.Rule{
+		Egress: []capiv2.Rule{
 			{
 				Action: "allow",
 			},
@@ -54,12 +54,12 @@ var (
 	}
 	calicoDisallowPolicyModelSpec = capiv2.GlobalNetworkPolicySpec{
 		Order: &zeroOrder,
-		IngressRules: []capiv2.Rule{
+		Ingress: []capiv2.Rule{
 			{
 				Action: "deny",
 			},
 		},
-		EgressRules: []capiv2.Rule{
+		Egress: []capiv2.Rule{
 			{
 				Action: "deny",
 			},

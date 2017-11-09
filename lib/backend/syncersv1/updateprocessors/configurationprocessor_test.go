@@ -76,6 +76,8 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		"RouteRefreshInterval":    nil,
 		"IptablesRefreshInterval": nil,
 		"IpsetsRefreshInterval":   nil,
+		"IpInIpEnabled":           nil,
+		"IpInIpMtu":               nil,
 	}
 
 	It("should handle conversion of node-specific delete with no additional configs", func() {
@@ -186,7 +188,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		uint1 := uint32(1313)
 		res.Spec.RouteRefreshIntervalSecs = &int1
 		res.Spec.InterfacePrefix = "califoobar"
-		res.Spec.IpInIpEnabled = &bool1
+		res.Spec.IPIPEnabled = &bool1
 		res.Spec.IptablesMarkMask = &uint1
 		res.Spec.FailsafeInboundHostPorts = &[]apiv2.ProtoPort{}
 		res.Spec.FailsafeOutboundHostPorts = &[]apiv2.ProtoPort{
@@ -208,7 +210,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"InterfacePrefix":           "califoobar",
 			"IpInIpEnabled":             "false",
 			"IptablesMarkMask":          "1313",
-			"FailsafeInboundHostPorts":  "",
+			"FailsafeInboundHostPorts":  "none",
 			"FailsafeOutboundHostPorts": "tcp:1234,udp:22,tcp:65535",
 		}
 		kvps, err := cc.Process(&model.KVPair{

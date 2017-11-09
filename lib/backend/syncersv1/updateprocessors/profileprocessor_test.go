@@ -151,8 +151,8 @@ var _ = Describe("Test the Profile update processor", func() {
 			},
 		}
 
-		res.Spec.IngressRules = []apiv2.Rule{irule}
-		res.Spec.EgressRules = []apiv2.Rule{erule}
+		res.Spec.Ingress = []apiv2.Rule{irule}
+		res.Spec.Egress = []apiv2.Rule{erule}
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v2ProfileKey2,
 			Value:    res,

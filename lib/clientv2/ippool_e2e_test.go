@@ -486,7 +486,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			if err != nil {
 				return nil, err
 			}
-			return cfg.Spec.IpInIpEnabled, nil
+			return cfg.Spec.IPIPEnabled, nil
 		}
 
 		It("should enable IPIP globally on an IPPool Create (IPIPModeAlways) if the global setting is not configured", func() {
@@ -589,7 +589,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			_, err = c.FelixConfigurations().Create(ctx, &apiv2.FelixConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
 				Spec: apiv2.FelixConfigurationSpec{
-					IpInIpEnabled: &ipipEnabled,
+					IPIPEnabled: &ipipEnabled,
 				},
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())

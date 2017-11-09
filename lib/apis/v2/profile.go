@@ -41,10 +41,10 @@ type Profile struct {
 type ProfileSpec struct {
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
-	IngressRules []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
-	EgressRules []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 	// An option set of labels to apply to each endpoint (in addition to their own labels)
 	// referencing this profile.  If labels configured on the endpoint have keys matching those
 	// labels inherited from the profile, the endpoint label values take precedence.

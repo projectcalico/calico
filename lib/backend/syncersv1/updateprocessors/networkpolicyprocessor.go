@@ -60,8 +60,8 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 
 	v1value := &model.Policy{
 		Order:          spec.Order,
-		InboundRules:   RulesAPIV2ToBackend(spec.IngressRules, v2res.Namespace),
-		OutboundRules:  RulesAPIV2ToBackend(spec.EgressRules, v2res.Namespace),
+		InboundRules:   RulesAPIV2ToBackend(spec.Ingress, v2res.Namespace),
+		OutboundRules:  RulesAPIV2ToBackend(spec.Egress, v2res.Namespace),
 		Selector:       selector,
 		Types:          policyTypesAPIV2ToBackend(spec.Types),
 		ApplyOnForward: true,

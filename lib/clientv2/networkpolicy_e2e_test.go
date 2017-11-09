@@ -44,23 +44,23 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 	name2 := "networkp-2"
 	spec1 := apiv2.NetworkPolicySpec{
 
-		Order:        &order1,
-		IngressRules: []apiv2.Rule{testutils.InRule1, testutils.InRule2},
-		EgressRules:  []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
-		Selector:     "thing == 'value'",
+		Order:    &order1,
+		Ingress:  []apiv2.Rule{testutils.InRule1, testutils.InRule2},
+		Egress:   []apiv2.Rule{testutils.EgressRule1, testutils.EgressRule2},
+		Selector: "thing == 'value'",
 	}
 	spec2 := apiv2.NetworkPolicySpec{
 
-		Order:        &order2,
-		IngressRules: []apiv2.Rule{testutils.InRule2, testutils.InRule1},
-		EgressRules:  []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
-		Selector:     "thing2 == 'value2'",
+		Order:    &order2,
+		Ingress:  []apiv2.Rule{testutils.InRule2, testutils.InRule1},
+		Egress:   []apiv2.Rule{testutils.EgressRule2, testutils.EgressRule1},
+		Selector: "thing2 == 'value2'",
 	}
 	// Specs with only ingress or egress rules, without Types set.
 	ingressSpec1 := spec1
-	ingressSpec1.EgressRules = nil
+	ingressSpec1.Egress = nil
 	egressSpec2 := spec2
-	egressSpec2.IngressRules = nil
+	egressSpec2.Ingress = nil
 	// Specs with ingress and egress rules, with Types set to just ingress or egress.
 	ingressTypesSpec1 := spec1
 	ingressTypesSpec1.Types = ingress
