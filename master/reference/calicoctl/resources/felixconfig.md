@@ -29,7 +29,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | Unique name to describe this resource instance. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | Unique name to describe this resource instance. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 - {{site.prodname}} automatically creates a resource named `default` containing the global default configuration settings for Felix. You can use [calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) to view and edit these settings
 - The resources with the name `node.<nodename>` contain the node-specific overrides, and will be applied to the node `<nodename>`. When deleting a node the FelixConfiguration resource associated with the node will also be deleted.
@@ -43,6 +43,7 @@ spec:
 | logSeveritySys | The log severity above which logs are sent to the syslog. Set to `NONE` for no logging to syslog. | DEBUG, INFO, WARNING, ERROR, CRITICAL, or NONE (case-insensitive) | string | `INFO` |
 | logSeverityFile| The log severity above which logs are sent to the log file. | Same as `logSeveritySys` | string | `INFO` |
 | logSeverityScreen | The log severity above which logs are sent to the stdout. | Same as LogSeveritySys | string | `INFO` |
+| ignoreLooseRPF\* | Set to `true` to allow Felix to run on systems with loose reverse path forwarding (RPF). | boolean | boolean | `false` |
 | prometheusMetricsEnabled | Set to `true` to enable the experimental Prometheus metrics server in Felix. | boolean | boolean | `false` |
 | prometheusMetricsPort | Experimental: TCP port that the Prometheus metrics server should bind to. | int | int | `9091` |
 | prometheusGoMetricsEnabled | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. | boolean | boolean | `true` |
@@ -70,6 +71,9 @@ spec:
 | metadataAddr | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none`  (case insensitive) means that Felix should not set up any NAT rule for the metadata path.  | IPv4, hostname, none | string | `127.0.0.1` |
 | metadataPort | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed. | int | int | `8775` |
 | interfacePrefix | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. | string | string | `cali` |
+
+
+\* Setting `ignoreLooseRPF` to `true` will allow containers on the same host to see each other's IP addresses.
 
 ### Supported operations
 

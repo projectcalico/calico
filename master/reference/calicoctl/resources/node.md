@@ -36,7 +36,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
 

@@ -56,7 +56,7 @@ The following resources are supported:
 ### Resource name requirements
 
 Every resource must have the `name` field specified.
-A valid resource name can have alphanumeric characters with optional `.`, `_`, `-`, or `/` of up to 128 characters total.
+A valid resource name can have alphanumeric characters with optional `.`, `_`, or `-`. of up to 128 characters total.
 
 ### Multiple resources in a single file
 

@@ -51,7 +51,7 @@ spec:
 
 | Field | Description  | Accepted Values   | Schema | Default |
 |-------|--------------|-------------------|--------|---------|
-| name | The name of the network policy. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |         |
+| name | The name of the network policy. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |         |
 
 #### Spec
 
