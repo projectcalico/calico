@@ -106,6 +106,10 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 			} else {
 				// We have a valid event, so convert it.
 				e = crw.convertEvent(event)
+				if e == nil {
+					crw.logCxt.Debug("Event converted to a no-op")
+					continue
+				}
 			}
 
 			select {
@@ -148,7 +152,6 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) *api.WatchEven
 			}
 		}
 		if kvp == nil {
-			crw.logCxt.Debug("Event converted to a no-op")
 			return nil
 		}
 	}
