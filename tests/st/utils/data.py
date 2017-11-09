@@ -184,6 +184,59 @@ networkpolicy_name1_rev2 = {
     }
 }
 
+networkpolicy_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'NetworkPolicy',
+    'metadata': {
+        'name': 'policy-mypolicy2',
+        'namespace': 'default',
+        'generateName': 'test-policy-',
+        'deletionTimestamp': '2006-01-02T15:04:07Z',
+        'deletionGracePeriodSeconds': 30,
+        'ownerReferences': [{
+            'apiVersion': 'extensions/v1beta1',
+            'blockOwnerDeletion': True,
+            'controller': True,
+            'kind': 'DaemonSet',
+            'name': 'endpoint1',
+            'uid': 'test-uid-change',
+        }],
+        'initializers': {
+            'pending': [{
+                'name': 'initializer1',
+            }],
+            'result': {
+                'status': 'test-status',
+            },
+        },
+        'clusterName': 'cluster1',
+        'labels': {'label1': 'l1', 'label2': 'l2'},
+        'annotations': {'key': 'value'},
+        'selfLink': 'test-self-link',
+        'uid': 'test-uid-change',
+        'generation': 3,
+        'finalizers': ['finalizer1', 'finalizer2'],
+        'creationTimestamp': '2006-01-02T15:04:05Z',
+    },
+    'spec': {
+        'order': 100000,
+        'selector': "type=='sql'",
+        'types': ['ingress', 'egress'],
+        'egress': [
+            {
+                'action': 'deny',
+                'protocol': 'tcp',
+            },
+        ],
+        'ingress': [
+            {
+                'action': 'allow',
+                'protocol': 'udp',
+            },
+        ],
+    }
+}
+
 #
 # Global Network Policy
 #
