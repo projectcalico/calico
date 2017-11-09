@@ -85,6 +85,12 @@ type NetConf struct {
 	EtcdCaCertFile string     `json:"etcd_ca_cert_file"`
 }
 
+// CNITestArgs is the CNI_ARGS used for test purpose.
+type CNITestArgs struct {
+	types.CommonArgs
+	CNI_TEST_NAMESPACE types.UnmarshallableString
+}
+
 // K8sArgs is the valid CNI_ARGS used for Kubernetes
 type K8sArgs struct {
 	types.CommonArgs
