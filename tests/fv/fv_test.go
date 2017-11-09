@@ -320,7 +320,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 
 			By("checking the policy's egress rule is correct", func() {
-				Expect(len(p.Spec.EgressRules)).Should(Equal(1))
+				Expect(len(p.Spec.Egress)).Should(Equal(1))
 			})
 
 			By("checking the policy has type 'Egress'", func() {
@@ -328,7 +328,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 
 			By("checking the policy has no ingress rule", func() {
-				Expect(len(p.Spec.IngressRules)).Should(Equal(0))
+				Expect(len(p.Spec.Ingress)).Should(Equal(0))
 			})
 		})
 	})

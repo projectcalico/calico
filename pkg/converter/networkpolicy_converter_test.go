@@ -92,7 +92,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		protoTCP := numorstring.ProtocolFromString("tcp")
 		By("returning a calico policy with correct ingress rules", func() {
-			Expect(pol.(api.NetworkPolicy).Spec.IngressRules).To(ConsistOf(api.Rule{
+			Expect(pol.(api.NetworkPolicy).Spec.Ingress).To(ConsistOf(api.Rule{
 				Action:      "allow",
 				Protocol:    &protoTCP, // Defaulted to TCP.
 				Source:      api.EntityRule{Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'"},
@@ -102,7 +102,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// There should be no egress rules.
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Egress)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'ingress'
@@ -150,12 +150,12 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// There should be no egress rules.
 		By("returning a calico policy with no ingress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Ingress)).To(Equal(0))
 		})
 
 		// There should be no egress rules.
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Egress)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'ingress'
@@ -200,12 +200,12 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// There should be no ingress rules.
 		By("returning a calico policy with no ingress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Ingress)).To(Equal(0))
 		})
 
 		// There should be no egress rules.
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Egress)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'ingress'
@@ -264,13 +264,13 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// Assert ingress rules
 		By("returning a calico policy with ingress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(1))
-			Expect(pol.(api.NetworkPolicy).Spec.IngressRules[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Ingress)).To(Equal(1))
+			Expect(pol.(api.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		})
 
 		// There should be no egress rules.
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Egress)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'ingress'
@@ -411,7 +411,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		protoTCP := numorstring.ProtocolFromString("tcp")
 		By("returning a calico policy with correct egress rules", func() {
-			Expect(pol.(api.NetworkPolicy).Spec.EgressRules).To(ConsistOf(api.Rule{
+			Expect(pol.(api.NetworkPolicy).Spec.Egress).To(ConsistOf(api.Rule{
 				Action:   "allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Destination: api.EntityRule{Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
@@ -421,7 +421,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 		// There should be no InboundRules
 		By("returning a calico policy with no egress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Ingress)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'egress'
@@ -489,12 +489,12 @@ var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
 
 		// There should be one inbound rule.
 		By("returning a policy with a single ingress rule", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.IngressRules)).To(Equal(1))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Ingress)).To(Equal(1))
 		})
 
 		// There should be no egress rules.
 		By("returning a policy with no egress rules", func() {
-			Expect(len(pol.(api.NetworkPolicy).Spec.EgressRules)).To(Equal(0))
+			Expect(len(pol.(api.NetworkPolicy).Spec.Egress)).To(Equal(0))
 		})
 
 		// Check that Types field exists and has only 'ingress'

@@ -54,8 +54,8 @@ var _ = Describe("Namespace conversion tests", func() {
 			Expect(actualName).Should(Equal(expectedName))
 		})
 
-		inboundRules := p.(api.Profile).Spec.IngressRules
-		outboundRules := p.(api.Profile).Spec.EgressRules
+		inboundRules := p.(api.Profile).Spec.Ingress
+		outboundRules := p.(api.Profile).Spec.Egress
 		By("returning a Calico profile with the correct number of rules", func() {
 			Expect(len(inboundRules)).To(Equal(1))
 			Expect(len(outboundRules)).To(Equal(1))
@@ -94,8 +94,8 @@ var _ = Describe("Namespace conversion tests", func() {
 		})
 
 		// Ensure rules are correct for profile.
-		inboundRules := p.(api.Profile).Spec.IngressRules
-		outboundRules := p.(api.Profile).Spec.EgressRules
+		inboundRules := p.(api.Profile).Spec.Ingress
+		outboundRules := p.(api.Profile).Spec.Egress
 		By("returning a Calico profile with the correct rules", func() {
 			Expect(len(inboundRules)).To(Equal(1))
 			Expect(len(outboundRules)).To(Equal(1))
