@@ -87,8 +87,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "default"
 		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{
 			Action: api.Allow,
 			Source: api.EntityRule{Selector: "default == ''"},
 		}}
@@ -247,16 +247,16 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			if applyRulesAt == applyAtW0 {
 				pol.Spec.Selector = w[0].NameSelector()
 				if testSourcePorts {
-					pol.Spec.EgressRules = rules
+					pol.Spec.Egress = rules
 				} else {
-					pol.Spec.IngressRules = rules
+					pol.Spec.Ingress = rules
 				}
 			} else {
 				pol.Spec.Selector = fmt.Sprintf("!(%s)", w[0].NameSelector())
 				if testSourcePorts {
-					pol.Spec.IngressRules = rules
+					pol.Spec.Ingress = rules
 				} else {
-					pol.Spec.EgressRules = rules
+					pol.Spec.Egress = rules
 				}
 			}
 
@@ -409,7 +409,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			} else {
 				apiRule.Destination = entityRule
 			}
-			policy.Spec.IngressRules = []api.Rule{
+			policy.Spec.Ingress = []api.Rule{
 				apiRule,
 			}
 			policy.Spec.Selector = "all()"
@@ -446,9 +446,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Source.NotSelector = w[2].NameSelector()
 				} else {
-					policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Destination.NotSelector = w[2].NameSelector()
 				}
 			})
 
@@ -474,11 +474,11 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with only a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.Selector = ""
-					policy.Spec.IngressRules[0].Source.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Source.Selector = ""
+					policy.Spec.Ingress[0].Source.NotSelector = w[2].NameSelector()
 				} else {
-					policy.Spec.IngressRules[0].Destination.Selector = ""
-					policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Destination.Selector = ""
+					policy.Spec.Ingress[0].Destination.NotSelector = w[2].NameSelector()
 				}
 			})
 
@@ -529,9 +529,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					NotSelector: w[2].NameSelector(),
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 
@@ -547,9 +547,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					},
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 
@@ -565,9 +565,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					},
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 
@@ -587,9 +587,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					},
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 			It("should have expected connectivity", expectW2AndW3Blocked)
@@ -603,11 +603,11 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					w[2].IPNet(),
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.Selector = ""
-					policy.Spec.IngressRules[0].Source.Nets = nets
+					policy.Spec.Ingress[0].Source.Selector = ""
+					policy.Spec.Ingress[0].Source.Nets = nets
 				} else {
-					policy.Spec.IngressRules[0].Destination.Selector = ""
-					policy.Spec.IngressRules[0].Destination.Nets = nets
+					policy.Spec.Ingress[0].Destination.Selector = ""
+					policy.Spec.Ingress[0].Destination.Nets = nets
 				}
 			})
 
@@ -620,9 +620,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 						w[3].IPNet(),
 					}
 					if testSourcePorts {
-						policy.Spec.IngressRules[0].Source.NotNets = nets
+						policy.Spec.Ingress[0].Source.NotNets = nets
 					} else {
-						policy.Spec.IngressRules[0].Destination.NotNets = nets
+						policy.Spec.Ingress[0].Destination.NotNets = nets
 					}
 				})
 
@@ -657,9 +657,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					numorstring.SinglePort(4000),
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.NotPorts = ports
+					policy.Spec.Ingress[0].Source.NotPorts = ports
 				} else {
-					policy.Spec.IngressRules[0].Destination.NotPorts = ports
+					policy.Spec.Ingress[0].Destination.NotPorts = ports
 				}
 			})
 
@@ -704,8 +704,8 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "kns.test"
 		defaultProfile.Labels = map[string]string{"name": "test"}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -768,7 +768,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 				},
 			},
 		}
-		allowHTTPPolicy.Spec.IngressRules = []api.Rule{
+		allowHTTPPolicy.Spec.Ingress = []api.Rule{
 			apiRule,
 		}
 		allowHTTPPolicy.Spec.Order = &thousand
@@ -842,8 +842,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		// Create a profile that opens up traffic by default.
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "open"
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -898,7 +898,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		allowConfusedProtocolPolicy.Name = "knp.default.confused"
 		protoUDPStruct := numorstring.ProtocolFromString("udp")
 		protoTCPStruct := numorstring.ProtocolFromString("tcp")
-		allowConfusedProtocolPolicy.Spec.IngressRules = []api.Rule{
+		allowConfusedProtocolPolicy.Spec.Ingress = []api.Rule{
 			{
 				Action:   api.Allow,
 				Protocol: &protoTCPStruct,
