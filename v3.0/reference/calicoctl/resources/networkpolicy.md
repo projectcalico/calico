@@ -6,14 +6,14 @@ no_canonical: true
 A network policy resource (`NetworkPolicy`) represents an ordered set of rules which are applied
 to a collection of endpoints that match a [label selector](#selector).
 
-NetworkPolicy is a namespaced resource. NetworkPolicy in a specific namespace
-only applies to [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
+`NetworkPolicy` is a namespaced resource. `NetworkPolicy` in a specific namespace
+only applies to [workload endpoint resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
 in that namespace. Two resources are in the same namespace if the namespace
 value is set the same on both.
-See [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) for non-namespaced Network Policy.
+See [global network policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) for non-namespaced network policy.
 
-NetworkPolicy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
-take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
+`NetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
+take precedence over [profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols`.
@@ -58,7 +58,23 @@ spec:
 
 #### Spec
 
-{% include {{page.version}}/policyspec.md %}
+| Field          | Description                                                                                                                                           | Accepted Values | Schema                | Default |
+|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
+| order          | Controls the order of precedence. {{site.prodname}} applies the policy with the lowest value first.                                                              |                 | float                 |         |
+| selector       | Selects the endpoints to which this policy applies.                                                                                                   |                 | [selector](#selector) | all()   |
+| types          | Applies the policy based on the direction of the traffic. To apply the policy to inbound traffic, set to `ingress`. To apply the policy to outbound traffic, set to `egress`. To apply the policy to both, set to `ingress, egress`. | `ingress`, `egress` | List of strings | Depends on presence of ingress/egress rules\* |
+| ingress        | Ordered list of ingress rules applied by policy.                                                                                                      |                 | List of [Rule](#rule) |         |
+| egress         | Ordered list of egress rules applied by this policy.                                                                                                  |                 | List of [Rule](#rule) |         |
+
+\* If `types` has no value, {{site.prodname}} defaults as follows.
+
+>| Ingress Rules Present | Egress Rules Present | `Types` value       |
+ |-----------------------|----------------------|---------------------|
+ | No                    | No                   | `ingress`           |
+ | Yes                   | No                   | `ingress`           |
+ | No                    | Yes                  | `egress`            |
+ | Yes                   | Yes                  | `ingress, egress`   |
+
 
 #### Rule
 
@@ -83,7 +99,7 @@ spec:
 
 ### Supported operations
 
-| Datastore type        | Create/Delete | Update | Get/List | Notes
-|-----------------------|---------------|--------|----------|------
-| etcdv3                | Yes           | Yes    | Yes      |
-| Kubernetes API server | No            | No     | Yes      | NetworkPolicy is determined from Kubernetes NetworkPolicy resources.
+| Datastore type           | Create/Delete | Update | Get/List | Notes
+|--------------------------|---------------|--------|----------|------
+| etcdv3                   | Yes           | Yes    | Yes      |
+| Kubernetes API datastore | No            | No     | Yes      | `NetworkPolicy` is determined from Kubernetes `NetworkPolicy` resources.
