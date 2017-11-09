@@ -1,5 +1,5 @@
-hash: 46cd36b08ef26a5bebf87cb766cea85165ae8c3bfe8af7b8b27b1deb596ca1b9
-updated: 2017-11-10T21:03:30.582935-08:00
+hash: 611a4f303497f56d6c7a751fd76da506366622b6d2909cd39ad5d140ac138e57
+updated: 2017-11-08T17:59:12.690440413-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -129,9 +129,11 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a21bd104b2d077c89737a5b897e3ac817c79957a
+  version: 7deea570fb19dfe5be419115182f7a9502d59681
   subpackages:
   - lib/apiconfig
+  - lib/apis/v1
+  - lib/apis/v1/unversioned
   - lib/apis/v3
   - lib/backend
   - lib/backend/api
@@ -155,9 +157,12 @@ imports:
   - lib/net
   - lib/numorstring
   - lib/options
+  - lib/scope
+  - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
   - lib/set
+  - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
   version: 967789050ba94deca04a5e84cce8ad472ce313c1
@@ -168,13 +173,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -188,7 +193,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -213,7 +218,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
   - windows
@@ -257,6 +262,8 @@ imports:
   - stats
   - tap
   - transport
+- name: gopkg.in/go-playground/validator.v8
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/yaml.v2
