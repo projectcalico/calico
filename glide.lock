@@ -1,5 +1,5 @@
-hash: 2a4c2f6956660b1aea9cd765c877054175cb3aa8574dc043a1c9629ef33bf414
-updated: 2017-11-08T18:31:24.461005163-08:00
+hash: f52eb1abc7cae7417d8199bff058995d0bf101a9f9550117a702e7b01188ea25
+updated: 2017-11-09T10:48:47.578602-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -188,7 +188,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 1a464499d9667625434e2b711ea515eb64e499c5
+  version: 21e11c82e338eaceccf3e123a4dcef1b4e1309a1
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -252,7 +252,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -281,7 +281,6 @@ imports:
   version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -308,7 +307,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
   subpackages:
   - internal
   - internal/app_identity
