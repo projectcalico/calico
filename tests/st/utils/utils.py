@@ -38,7 +38,7 @@ ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
 ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
 ETCD_HOSTNAME_SSL = "etcd-authority-ssl"
 
-API_VERSION = 'projectcalico.org/v2'
+API_VERSION = 'projectcalico.org/v3'
 ERROR_CONFLICT = "update conflict"
 NOT_FOUND = "resource does not exist"
 NOT_NAMESPACED = "is not namespaced"

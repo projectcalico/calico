@@ -22,21 +22,20 @@ import (
 	"os"
 	"reflect"
 	"strings"
-
 	"time"
-
 	"context"
 
-	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
-	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
-	"github.com/projectcalico/go-yaml-wrapper"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
+	"github.com/projectcalico/go-yaml-wrapper"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 // The ResourceManager interface provides useful function for each resource type.  This includes:
