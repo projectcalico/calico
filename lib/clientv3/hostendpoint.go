@@ -19,6 +19,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -40,6 +41,10 @@ type hostEndpoints struct {
 // Create takes the representation of a HostEndpoint and creates it.  Returns the stored
 // representation of the HostEndpoint, and an error, if there is any.
 func (r hostEndpoints) Create(ctx context.Context, res *apiv3.HostEndpoint, opts options.SetOptions) (*apiv3.HostEndpoint, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindHostEndpoint, res)
 	if out != nil {
 		return out.(*apiv3.HostEndpoint), err
@@ -50,6 +55,10 @@ func (r hostEndpoints) Create(ctx context.Context, res *apiv3.HostEndpoint, opts
 // Update takes the representation of a HostEndpoint and updates it. Returns the stored
 // representation of the HostEndpoint, and an error, if there is any.
 func (r hostEndpoints) Update(ctx context.Context, res *apiv3.HostEndpoint, opts options.SetOptions) (*apiv3.HostEndpoint, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindHostEndpoint, res)
 	if out != nil {
 		return out.(*apiv3.HostEndpoint), err

@@ -46,7 +46,7 @@ type ProfileMetadata struct {
 	unversioned.ObjectMetadata
 
 	// The name of the endpoint.
-	Name string `json:"name,omitempty" validate:"omitempty,namespacedname"`
+	Name string `json:"name,omitempty" validate:"omitempty,namespacedName"`
 
 	// A list of tags that are applied to each endpoint that references this profile.
 	Tags []string `json:"tags,omitempty" validate:"omitempty,dive,tag"`

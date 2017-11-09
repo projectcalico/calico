@@ -177,7 +177,7 @@ func ruleBackendToAPI(br model.Rule) api.Rule {
 // ruleActionAPIToBackend converts the rule action field value from the API
 // value to the equivalent backend value.
 func ruleActionAPIToBackend(action string) string {
-	if action == "pass" {
+	if action == "Pass" {
 		return "next-tier"
 	}
 	return action

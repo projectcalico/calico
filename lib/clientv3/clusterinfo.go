@@ -20,6 +20,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -42,6 +43,10 @@ type clusterInformation struct {
 // Returns the stored representation of the ClusterInformation, and an error
 // if there is any.
 func (r clusterInformation) Create(ctx context.Context, res *apiv3.ClusterInformation, opts options.SetOptions) (*apiv3.ClusterInformation, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	if res.ObjectMeta.GetName() != "default" {
 		return nil, errors.New("Cannot create a Cluster Information resource with a name other than \"default\"")
 	}
@@ -56,6 +61,10 @@ func (r clusterInformation) Create(ctx context.Context, res *apiv3.ClusterInform
 // Returns the stored representation of the ClusterInformation, and an error
 // if there is any.
 func (r clusterInformation) Update(ctx context.Context, res *apiv3.ClusterInformation, opts options.SetOptions) (*apiv3.ClusterInformation, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindClusterInformation, res)
 	if out != nil {
 		return out.(*apiv3.ClusterInformation), err

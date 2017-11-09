@@ -30,8 +30,8 @@ type ruleTest struct {
 	expectedOutput string
 }
 
-var tcpProto = numorstring.ProtocolFromString("tcp")
-var icmpProto = numorstring.ProtocolFromString("icmp")
+var tcpProto = numorstring.ProtocolFromString("TCP")
+var icmpProto = numorstring.ProtocolFromString("ICMP")
 var intProto = numorstring.ProtocolFromInt(123)
 var icmpType = 10
 var icmpCode = 6
@@ -49,48 +49,48 @@ var _, cidr, _ = net.ParseCIDR("10.0.0.0/16")
 
 var ruleStringTests = []ruleTest{
 	// Empty
-	{model.Rule{}, "allow"},
+	{model.Rule{}, "Allow"},
 
 	// Int/string handling.
-	{model.Rule{Protocol: &intProto}, "allow 123"},
-	{model.Rule{Protocol: &tcpProto}, "allow tcp"},
+	{model.Rule{Protocol: &intProto}, "Allow 123"},
+	{model.Rule{Protocol: &tcpProto}, "Allow TCP"},
 
 	// Explicit actions, packet-wide matches.
-	{model.Rule{Action: "allow", Protocol: &tcpProto}, "allow tcp"},
-	{model.Rule{Action: "deny", Protocol: &icmpProto, ICMPType: &icmpType},
-		"deny icmp type 10"},
+	{model.Rule{Action: "Allow", Protocol: &tcpProto}, "Allow TCP"},
+	{model.Rule{Action: "Deny", Protocol: &icmpProto, ICMPType: &icmpType},
+		"Deny ICMP type 10"},
 	{model.Rule{Protocol: &icmpProto, ICMPType: &icmpType, ICMPCode: &icmpCode},
-		"allow icmp type 10 code 6"},
-	{model.Rule{Action: "deny", Protocol: &icmpProto, ICMPType: &icmpTypeZero},
-		"deny icmp type 0"},
+		"Allow ICMP type 10 code 6"},
+	{model.Rule{Action: "Deny", Protocol: &icmpProto, ICMPType: &icmpTypeZero},
+		"Deny ICMP type 0"},
 	{model.Rule{Protocol: &icmpProto, ICMPType: &icmpTypeZero, ICMPCode: &icmpCodeZero},
-		"allow icmp type 0 code 0"},
+		"Allow ICMP type 0 code 0"},
 	// And negations of packet-wide matches.
-	{model.Rule{Action: "allow", NotProtocol: &tcpProto}, "allow !tcp"},
-	{model.Rule{Action: "deny", Protocol: &icmpProto, NotICMPType: &icmpType},
-		"deny icmp !type 10"},
+	{model.Rule{Action: "Allow", NotProtocol: &tcpProto}, "Allow !TCP"},
+	{model.Rule{Action: "Deny", Protocol: &icmpProto, NotICMPType: &icmpType},
+		"Deny ICMP !type 10"},
 	{model.Rule{Protocol: &icmpProto, NotICMPType: &icmpType, NotICMPCode: &icmpCode},
-		"allow icmp !type 10 !code 6"},
+		"Allow ICMP !type 10 !code 6"},
 
 	// From rules.
-	{model.Rule{SrcPorts: ports}, "allow from ports 1234,10:20"},
-	{model.Rule{SrcTag: "foo"}, "allow from tag foo"},
-	{model.Rule{SrcSelector: "bar"}, "allow from selector \"bar\""},
-	{model.Rule{SrcNet: cidr}, "allow from cidr 10.0.0.0/16"},
-	{model.Rule{NotSrcPorts: ports}, "allow from !ports 1234,10:20"},
-	{model.Rule{NotSrcTag: "foo"}, "allow from !tag foo"},
-	{model.Rule{NotSrcSelector: "bar"}, "allow from !selector \"bar\""},
-	{model.Rule{NotSrcNet: cidr}, "allow from !cidr 10.0.0.0/16"},
+	{model.Rule{SrcPorts: ports}, "Allow from ports 1234,10:20"},
+	{model.Rule{SrcTag: "foo"}, "Allow from tag foo"},
+	{model.Rule{SrcSelector: "bar"}, "Allow from selector \"bar\""},
+	{model.Rule{SrcNet: cidr}, "Allow from cidr 10.0.0.0/16"},
+	{model.Rule{NotSrcPorts: ports}, "Allow from !ports 1234,10:20"},
+	{model.Rule{NotSrcTag: "foo"}, "Allow from !tag foo"},
+	{model.Rule{NotSrcSelector: "bar"}, "Allow from !selector \"bar\""},
+	{model.Rule{NotSrcNet: cidr}, "Allow from !cidr 10.0.0.0/16"},
 
 	// To rules.
-	{model.Rule{DstPorts: ports}, "allow to ports 1234,10:20"},
-	{model.Rule{DstTag: "foo"}, "allow to tag foo"},
-	{model.Rule{DstSelector: "bar"}, "allow to selector \"bar\""},
-	{model.Rule{DstNet: cidr}, "allow to cidr 10.0.0.0/16"},
-	{model.Rule{NotDstPorts: ports}, "allow to !ports 1234,10:20"},
-	{model.Rule{NotDstTag: "foo"}, "allow to !tag foo"},
-	{model.Rule{NotDstSelector: "bar"}, "allow to !selector \"bar\""},
-	{model.Rule{NotDstNet: cidr}, "allow to !cidr 10.0.0.0/16"},
+	{model.Rule{DstPorts: ports}, "Allow to ports 1234,10:20"},
+	{model.Rule{DstTag: "foo"}, "Allow to tag foo"},
+	{model.Rule{DstSelector: "bar"}, "Allow to selector \"bar\""},
+	{model.Rule{DstNet: cidr}, "Allow to cidr 10.0.0.0/16"},
+	{model.Rule{NotDstPorts: ports}, "Allow to !ports 1234,10:20"},
+	{model.Rule{NotDstTag: "foo"}, "Allow to !tag foo"},
+	{model.Rule{NotDstSelector: "bar"}, "Allow to !selector \"bar\""},
+	{model.Rule{NotDstNet: cidr}, "Allow to !cidr 10.0.0.0/16"},
 
 	// Complex rule.
 	{model.Rule{Protocol: &tcpProto,
@@ -102,7 +102,7 @@ var ruleStringTests = []ruleTest{
 		NotSrcTag:      "notSrc",
 		NotSrcSelector: "foo",
 	},
-		`allow tcp from ports 1234,10:20 tag srcTag !tag notSrc ` +
+		`Allow TCP from ports 1234,10:20 tag srcTag !tag notSrc ` +
 			`!selector "foo" to tag dstTag cidr 10.0.0.0/16 !ports 4567`,
 	},
 }

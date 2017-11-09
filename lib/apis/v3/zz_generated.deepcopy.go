@@ -19,10 +19,11 @@
 package v3
 
 import (
+	reflect "reflect"
+
 	numorstring "github.com/projectcalico/libcalico-go/lib/numorstring"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
-	reflect "reflect"
 )
 
 func init() {

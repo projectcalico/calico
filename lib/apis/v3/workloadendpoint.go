@@ -37,9 +37,9 @@ type WorkloadEndpoint struct {
 // WorkloadEndpointMetadata contains the specification for a WorkloadEndpoint resource.
 type WorkloadEndpointSpec struct {
 	// The name of the orchestrator.
-	Orchestrator string `json:"orchestrator,omitempty" validate:"omitempty,namespacedname"`
+	Orchestrator string `json:"orchestrator,omitempty" validate:"omitempty,name"`
 	// The name of the workload.
-	Workload string `json:"workload,omitempty" validate:"omitempty,namespacedname"`
+	Workload string `json:"workload,omitempty" validate:"omitempty,name"`
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
 	// The container ID.
@@ -51,7 +51,7 @@ type WorkloadEndpointSpec struct {
 	// IPNetworks is a list of subnets allocated to this endpoint. IP packets will only be
 	// allowed to leave this interface if they come from an address in one of these subnets.
 	// Currently only /32 for IPv4 and /128 for IPv6 networks are supported.
-	IPNetworks []string `json:"ipNetworks,omitempty" validate:"omitempty,dive,cidr"`
+	IPNetworks []string `json:"ipNetworks,omitempty" validate:"omitempty,dive,net"`
 	// IPNATs is a list of 1:1 NAT mappings to apply to the endpoint. Inbound connections
 	// to the external IP will be forwarded to the internal IP. Connections initiated from the
 	// internal IP will not have their source address changed, except when an endpoint attempts
@@ -65,7 +65,7 @@ type WorkloadEndpointSpec struct {
 	// A list of security Profile resources that apply to this endpoint. Each profile is
 	// applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
-	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,namespacedname"`
+	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 	// InterfaceName the name of the Linux interface on the host: for example, tap80.
 	InterfaceName string `json:"interfaceName,omitempty" validate:"interface"`
 	// MAC is the MAC address of the endpoint interface.

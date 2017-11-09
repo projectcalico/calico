@@ -53,12 +53,12 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			{
 				Port:     1234,
 				Name:     "foobar",
-				Protocol: numorstring.ProtocolFromString("tcp"),
+				Protocol: numorstring.ProtocolFromString("TCP"),
 			},
 			{
 				Port:     5432,
 				Name:     "bop",
-				Protocol: numorstring.ProtocolFromString("tcp"),
+				Protocol: numorstring.ProtocolFromString("TCP"),
 			},
 		},
 	}
@@ -73,7 +73,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			{
 				Port:     5678,
 				Name:     "bazzbiff",
-				Protocol: numorstring.ProtocolFromString("udp"),
+				Protocol: numorstring.ProtocolFromString("UDP"),
 			},
 		},
 	}

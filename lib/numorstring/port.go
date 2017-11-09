@@ -31,7 +31,7 @@ import (
 type Port struct {
 	MinPort  uint16
 	MaxPort  uint16
-	PortName string
+	PortName string `validate:"omitempty,portName"`
 }
 
 // SinglePort creates a Port struct representing a single port.

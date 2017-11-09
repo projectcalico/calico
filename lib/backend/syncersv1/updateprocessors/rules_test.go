@@ -18,8 +18,8 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		intype := 3
 		icode := 4
 		incode := 6
-		iproto := numorstring.ProtocolFromString("tcp")
-		inproto := numorstring.ProtocolFromString("udp")
+		iproto := numorstring.ProtocolFromString("TCP")
+		inproto := numorstring.ProtocolFromString("UDP")
 		port80 := numorstring.SinglePort(uint16(80))
 		port443 := numorstring.SinglePort(uint16(443))
 		irule := apiv3.Rule{
@@ -36,30 +36,30 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				Code: &incode,
 			},
 			Source: apiv3.EntityRule{
-				Nets:        []string{"10.100.10.1"},
+				Nets:        []string{"10.100.10.1/32"},
 				Selector:    "mylabel = value1",
 				Ports:       []numorstring.Port{port80},
-				NotNets:     []string{"192.168.40.1"},
+				NotNets:     []string{"192.168.40.1/32"},
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
 			},
 			Destination: apiv3.EntityRule{
-				Nets:        []string{"10.100.1.1"},
+				Nets:        []string{"10.100.1.1/32"},
 				Selector:    "",
 				Ports:       []numorstring.Port{port443},
-				NotNets:     []string{"192.168.80.1"},
+				NotNets:     []string{"192.168.80.1/32"},
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
 			},
 		}
 		// Correct inbound rule
 		rulev1 := updateprocessors.RuleAPIV2ToBackend(irule, "namespace2")
-		Expect(rulev1.Action).To(Equal("allow"))
+		Expect(rulev1.Action).To(Equal("Allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
-		Expect(rulev1.Protocol).To(Equal(&iproto))
+		Expect(rulev1.Protocol.StrVal).To(Equal("tcp"))
 		Expect(rulev1.ICMPCode).To(Equal(&icode))
 		Expect(rulev1.ICMPType).To(Equal(&itype))
-		Expect(rulev1.NotProtocol).To(Equal(&inproto))
+		Expect(rulev1.NotProtocol.StrVal).To(Equal("udp"))
 		Expect(rulev1.NotICMPCode).To(Equal(&incode))
 		Expect(rulev1.NotICMPType).To(Equal(&intype))
 
@@ -140,12 +140,12 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
 		rulev1 = rulesv1[0]
-		Expect(rulev1.Action).To(Equal("allow"))
+		Expect(rulev1.Action).To(Equal("Allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
-		Expect(rulev1.Protocol).To(Equal(&iproto))
+		Expect(rulev1.Protocol.StrVal).To(Equal("tcp"))
 		Expect(rulev1.ICMPCode).To(Equal(&icode))
 		Expect(rulev1.ICMPType).To(Equal(&itype))
-		Expect(rulev1.NotProtocol).To(Equal(&inproto))
+		Expect(rulev1.NotProtocol.StrVal).To(Equal("udp"))
 		Expect(rulev1.NotICMPCode).To(Equal(&incode))
 		Expect(rulev1.NotICMPType).To(Equal(&intype))
 
@@ -213,7 +213,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 	})
 
 	It("should parse a rule with ports but no selectors", func() {
-		tcp := numorstring.ProtocolFromString("tcp")
+		tcp := numorstring.ProtocolFromString("TCP")
 		port80 := numorstring.SinglePort(uint16(80))
 
 		r := apiv3.Rule{

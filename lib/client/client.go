@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/validator"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -58,6 +58,6 @@ func (p Protocol) SupportsPorts() bool {
 	if err == nil {
 		return num == 6 || num == 17
 	} else {
-		return p.StrVal == "tcp" || p.StrVal == "udp"
+		return p.StrVal == "TCP" || p.StrVal == "UDP" || p.StrVal == "tcp" || p.StrVal == "udp"
 	}
 }

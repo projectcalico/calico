@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package validator_test
+package v1_test
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/validator"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

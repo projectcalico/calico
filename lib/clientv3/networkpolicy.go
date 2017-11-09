@@ -19,6 +19,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -42,6 +43,10 @@ type networkPolicies struct {
 func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, opts options.SetOptions) (*apiv3.NetworkPolicy, error) {
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindNetworkPolicy, res)
@@ -60,6 +65,10 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, opts options.SetOptions) (*apiv3.NetworkPolicy, error) {
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
+
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
 
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package validator
+package v1
 
 import (
 	"net"
@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/selector/tokenizer"
 	log "github.com/sirupsen/logrus"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"gopkg.in/go-playground/validator.v8"
@@ -92,16 +93,17 @@ func init() {
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
 	registerFieldValidator("interface", validateInterface)
-	registerFieldValidator("backendaction", validateBackendAction)
+	registerFieldValidator("backendAction", validateBackendAction)
 	registerFieldValidator("name", validateName)
-	registerFieldValidator("namespacedname", validateNamespacedName)
+	registerFieldValidator("namespacedName", validateNamespacedName)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("tag", validateTag)
 	registerFieldValidator("labels", validateLabels)
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
-	registerFieldValidator("ipversion", validateIPVersion)
-	registerFieldValidator("ipipmode", validateIPIPMode)
-	registerFieldValidator("policytype", validatePolicyType)
+	registerFieldValidator("ipVersion", validateIPVersion)
+	registerFieldValidator("ipIpMode", validateIPIPMode)
+	registerFieldValidator("policyType", validatePolicyType)
+	registerFieldValidator("portName", validatePortName)
 
 	// Register struct validators.
 	// Shared types.
@@ -175,7 +177,7 @@ func validateName(v *validator.Validate, topStruct reflect.Value, currentStructO
 
 func validateNamespacedName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	log.Debugf("Validate namespacedname: %s", s)
+	log.Debugf("Validate namespacedName: %s", s)
 	return namespacedNameRegex.MatchString(s)
 }
 
@@ -189,6 +191,12 @@ func validateIPIPMode(v *validator.Validate, topStruct reflect.Value, currentStr
 	s := field.String()
 	log.Debugf("Validate name: %s", s)
 	return ipipModeRegex.MatchString(s)
+}
+
+func validatePortName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate port name: %s", s)
+	return len(s) != 0 && len(k8svalidation.IsValidPortName(s)) == 0
 }
 
 func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
@@ -568,7 +576,7 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 
 	if m.PreDNAT && len(m.EgressRules) > 0 {
 		structLevel.ReportError(reflect.ValueOf(m.EgressRules),
-			"PolicySpec.Egress", "", reason("PreDNAT PolicySpec cannot have any Egress"))
+			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"))
 	}
 
 	if m.PreDNAT && len(m.Types) > 0 {

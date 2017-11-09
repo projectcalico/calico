@@ -37,17 +37,17 @@ type Rule struct {
 	Action Action `json:"action" validate:"action"`
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.
-	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipversion"`
+	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipVersion"`
 	// Protocol is an optional field that restricts the rule to only apply to traffic of
 	// a specific IP protocol. Required if any of the EntityRules contain Ports
 	// (because ports only apply to certain protocols).
 	//
-	// Must be one of these string values: "tcp", "udp", "icmp", "icmpv6", "sctp", "udplite"
+	// Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite"
 	// or an integer in the range 1-255.
 	Protocol *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
 	// ICMP is an optional field that restricts the rule to apply to a specific type and
 	// code of ICMP traffic.  This should only be specified if the Protocol field is set to
-	// "icmp" or "icmpv6".
+	// "ICMP" or "ICMPv6".
 	ICMP *ICMPFields `json:"icmp,omitempty" validate:"omitempty"`
 	// NotProtocol is the negated version of the Protocol field.
 	NotProtocol *numorstring.Protocol `json:"notProtocol,omitempty" validate:"omitempty"`
@@ -78,7 +78,7 @@ type ICMPFields struct {
 type EntityRule struct {
 	// Nets is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in any of the given subnets.
-	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
+	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
 
 	// Selector is an optional field that contains a selector expression (see Policy for
 	// sample syntax).  Only traffic that originates from (terminates at) endpoints matching
@@ -115,11 +115,11 @@ type EntityRule struct {
 	// list of integers or strings that represent ranges of ports.
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
-	// Protocol match in the Rule to be set to "tcp" or "udp".
+	// Protocol match in the Rule to be set to "TCP" or "UDP".
 	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
 
 	// NotNets is the negated version of the Nets field.
-	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,cidr"`
+	NotNets []string `json:"notNets,omitempty" validate:"omitempty,dive,net"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
 	// subtleties with negated selectors.
@@ -127,7 +127,7 @@ type EntityRule struct {
 
 	// NotPorts is the negated version of the Ports field.
 	// Since only some protocols have ports, if any ports are specified it requires the
-	// Protocol match in the Rule to be set to "tcp" or "udp".
+	// Protocol match in the Rule to be set to "TCP" or "UDP".
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`
 }
 

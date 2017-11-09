@@ -286,7 +286,7 @@ func (c Converter) K8sNetworkPolicyToCalico(np *extensions.NetworkPolicy) (*mode
 		types = append(types, apiv3.PolicyTypeEgress)
 	} else if len(egressRules) > 0 {
 		// Egress was introduced at the same time as policyTypes.  It shouldn't be possible to
-		// receive a NetworkPolicy with an egress rule but without "egress" specified in its types,
+		// receive a NetworkPolicy with an egress rule but without "Egress" specified in its types,
 		// but we'll warn about it anyway.
 		log.Warn("K8s PolicyTypes don't include 'egress', but NetworkPolicy has egress rules.")
 	}
@@ -420,7 +420,7 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 			if ingress {
 				// Build inbound rule and append to list.
 				rules = append(rules, apiv3.Rule{
-					Action:   "allow",
+					Action:   "Allow",
 					Protocol: protocol,
 					Source: apiv3.EntityRule{
 						Selector:          selector,
@@ -435,7 +435,7 @@ func (c Converter) k8sRuleToCalico(rPeers []extensions.NetworkPolicyPeer, rPorts
 			} else {
 				// Build outbound rule and append to list.
 				rules = append(rules, apiv3.Rule{
-					Action:   "allow",
+					Action:   "Allow",
 					Protocol: protocol,
 					Destination: apiv3.EntityRule{
 						Ports:             calicoPorts,
@@ -464,7 +464,7 @@ func (c Converter) k8sPortToCalicoFields(port *extensions.NetworkPolicyPort) (pr
 
 func (c Converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	if protocol != nil {
-		p := numorstring.ProtocolFromString(strings.ToLower(string(*protocol)))
+		p := numorstring.ProtocolFromString(string(*protocol))
 		return &p
 	}
 	return nil

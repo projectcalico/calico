@@ -86,7 +86,7 @@ type NetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policytype"`
+	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

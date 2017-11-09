@@ -20,6 +20,7 @@ import (
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -42,6 +43,10 @@ type bgpConfigurations struct {
 // Returns the stored representation of the BGPConfiguration, and an error
 // if there is any.
 func (r bgpConfigurations) Create(ctx context.Context, res *apiv3.BGPConfiguration, opts options.SetOptions) (*apiv3.BGPConfiguration, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	if err := r.ValidateDefaultOnlyFields(res); err != nil {
 		return nil, err
 	}
@@ -57,6 +62,10 @@ func (r bgpConfigurations) Create(ctx context.Context, res *apiv3.BGPConfigurati
 // Returns the stored representation of the BGPConfiguration, and an error
 // if there is any.
 func (r bgpConfigurations) Update(ctx context.Context, res *apiv3.BGPConfiguration, opts options.SetOptions) (*apiv3.BGPConfiguration, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	// Check that NodeToNodeMeshEnabled and ASNumber are set. Can only be set on "default".
 	if err := r.ValidateDefaultOnlyFields(res); err != nil {
 		return nil, err
