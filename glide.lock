@@ -1,5 +1,5 @@
-hash: 2bb2fe4d8fa2047904de832e18a1bc7030ca9425c91ff47ae95c2303fa62f721
-updated: 2017-11-08T14:16:35.925675028-08:00
+hash: 2a4c2f6956660b1aea9cd765c877054175cb3aa8574dc043a1c9629ef33bf414
+updated: 2017-11-08T18:31:24.461005163-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -188,7 +188,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: c5fb7608b28e20b9b6156d3a3a032cdf0f5f57cc
+  version: 1a464499d9667625434e2b711ea515eb64e499c5
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -252,7 +252,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -338,7 +338,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
+  version: 6c6dac0277229b9e9578c5ca3f74a4345d35cdc2
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1

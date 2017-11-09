@@ -131,7 +131,7 @@ var _ = Describe("CalicoCni", func() {
 				wrkload, err := ids.CalculateWorkloadEndpointName(false)
 				Expect(err).NotTo(HaveOccurred())
 
-				interfaceName := k8sconversion.VethNameForWorkload(wrkload)
+				interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, wrkload)
 
 				// The endpoint is created
 				endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -289,7 +289,7 @@ var _ = Describe("CalicoCni", func() {
 					}
 
 					wrkload, err := ids.CalculateWorkloadEndpointName(false)
-					interfaceName := k8sconversion.VethNameForWorkload(wrkload)
+					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, wrkload)
 					Expect(err).NotTo(HaveOccurred())
 
 					// The endpoint is created
@@ -368,7 +368,7 @@ var _ = Describe("CalicoCni", func() {
 					})
 					Expect(err).NotTo(HaveOccurred())
 
-					if err := testutils.CreateHostVeth("", name, testutils.K8S_TEST_NS); err != nil {
+					if err := testutils.CreateHostVeth("", name, testutils.K8S_TEST_NS, hostname); err != nil {
 						panic(err)
 					}
 					_, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
@@ -513,7 +513,7 @@ var _ = Describe("CalicoCni", func() {
 					wrkload, err := ids.CalculateWorkloadEndpointName(false)
 					Expect(err).NotTo(HaveOccurred())
 
-					interfaceName := k8sconversion.VethNameForWorkload(wrkload)
+					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, wrkload)
 
 					// The endpoint is created
 					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -623,7 +623,7 @@ var _ = Describe("CalicoCni", func() {
 					wrkload, err := ids.CalculateWorkloadEndpointName(false)
 					Expect(err).NotTo(HaveOccurred())
 
-					interfaceName := k8sconversion.VethNameForWorkload(wrkload)
+					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, wrkload)
 
 					// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
 					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -731,7 +731,7 @@ var _ = Describe("CalicoCni", func() {
 					wrkload, err := ids.CalculateWorkloadEndpointName(false)
 					Expect(err).NotTo(HaveOccurred())
 
-					interfaceName := k8sconversion.VethNameForWorkload(wrkload)
+					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, wrkload)
 
 					// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
 					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
