@@ -535,3 +535,27 @@ func (c Converter) ProfileNameToNamespace(profileName string) (string, error) {
 
 	return strings.TrimPrefix(profileName, NamespaceProfileNamePrefix), nil
 }
+
+// JoinNetworkPolicyRevisions constructs the revision from the individual CRD and K8s NetworkPolicy
+// revisions.
+func (c Converter) JoinNetworkPolicyRevisions(crdNPRev, k8sNPRev string) string {
+	return crdNPRev + "/" + k8sNPRev
+}
+
+// SplitNetworkPolicyRevision extracts the CRD and K8s NetworkPolicy revisions from the combined
+// revision returned on the KDD NetworkPolicy client.
+func (c Converter) SplitNetworkPolicyRevision(rev string) (crdNPRev string, k8sNPRev string, err error) {
+	if rev == "" {
+		return
+	}
+
+	revs := strings.Split(rev, "/")
+	if len(revs) != 2 {
+		err = fmt.Errorf("ResourceVersion is not valid: %s", rev)
+		return
+	}
+
+	crdNPRev = revs[0]
+	k8sNPRev = revs[1]
+	return
+}

@@ -17,13 +17,14 @@ package clientv2
 import (
 	"context"
 
+	"fmt"
+
 	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/errors"
-	"fmt"
 )
 
 // NodeInterface has methods to work with Node resources.
@@ -78,7 +79,7 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 	// Get all weps belonging to the node
 	weps, err := r.client.WorkloadEndpoints().List(ctx, options.ListOptions{
 		Prefix: true,
-		Name: pname,
+		Name:   pname,
 	})
 	if err != nil {
 		return nil, err
