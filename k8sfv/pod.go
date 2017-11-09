@@ -104,7 +104,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	if host.isLocal {
 		// Create the cali interface, so that Felix does dataplane programming for the local
 		// endpoint.
-		interfaceName := conversion.VethNameForWorkload(nsName + "." + name)
+		interfaceName := conversion.VethNameForWorkload(nsName, name)
 		log.WithField("interfaceName", interfaceName).Info("Prepare interface")
 
 		// Create a namespace.

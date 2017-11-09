@@ -134,7 +134,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 						Ports: []numorstring.Port{numorstring.SinglePort(uint16(metrics.Port))},
 					},
 				}
-				policy.Spec.IngressRules = []api.Rule{allowMetricsPortRule}
+				policy.Spec.Ingress = []api.Rule{allowMetricsPortRule}
 				policy.Spec.Selector = "host-endpoint=='true'"
 				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())

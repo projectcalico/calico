@@ -56,8 +56,8 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		defaultProfile := api.NewProfile()
 		defaultProfile.Name = "default"
 		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: api.Allow}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -128,7 +128,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 				policy.Spec.Order = &order
 				policy.Spec.PreDNAT = true
 				policy.Spec.ApplyOnForward = true
-				policy.Spec.IngressRules = []api.Rule{{Action: api.Deny}}
+				policy.Spec.Ingress = []api.Rule{{Action: api.Deny}}
 				policy.Spec.Selector = "has(host-endpoint)"
 				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
@@ -162,7 +162,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					policy.Spec.ApplyOnForward = true
 					protocol := numorstring.ProtocolFromString("tcp")
 					ports := numorstring.SinglePort(32010)
-					policy.Spec.IngressRules = []api.Rule{{
+					policy.Spec.Ingress = []api.Rule{{
 						Action:   api.Allow,
 						Protocol: &protocol,
 						Destination: api.EntityRule{Ports: []numorstring.Port{
@@ -195,7 +195,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					policy.Spec.ApplyOnForward = true
 					protocol := numorstring.ProtocolFromString("tcp")
 					ports := numorstring.SinglePort(8055)
-					policy.Spec.IngressRules = []api.Rule{{
+					policy.Spec.Ingress = []api.Rule{{
 						Action:   api.Allow,
 						Protocol: &protocol,
 						Destination: api.EntityRule{Ports: []numorstring.Port{
