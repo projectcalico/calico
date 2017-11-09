@@ -19,7 +19,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	version "github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -334,11 +335,23 @@ func RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerId, ifName 
 }
 
 // Create veth pair on host
-func CreateHostVeth(containerId string, k8sName string, k8sNamespace string) error {
+func CreateHostVeth(containerId, k8sName, k8sNamespace, nodename string) error {
 	hostVethName := "cali" + containerId[:min(11, len(containerId))]
 	if k8sName != "" {
-		workload := fmt.Sprintf("%s.%s", k8sNamespace, k8sName)
-		hostVethName = k8sconversion.VethNameForWorkload(workload)
+		ids := names.WorkloadEndpointIdentifiers{
+			Node:         nodename,
+			Orchestrator: "k8s",
+			Endpoint:     "eth0",
+			Pod:          k8sName,
+			ContainerID:  containerId,
+		}
+
+		workloadName, err := ids.CalculateWorkloadEndpointName(false)
+		if err != nil {
+			return err
+		}
+
+		hostVethName = k8sconversion.VethNameForWorkload(k8sNamespace, workloadName)
 	}
 
 	peerVethName := "calipeer"
