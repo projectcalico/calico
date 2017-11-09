@@ -1,5 +1,5 @@
-hash: 3ba3e2bf5072107b1ed636bc50ebad546c59880d4ecf9000b0c9bacf9cba5ed3
-updated: 2017-11-09T19:24:50.7873518Z
+hash: c7019261c4781726c5374336a66307773f58ee4955ca0953afab6a1ee840faba
+updated: 2017-11-09T13:34:27.726667-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -153,7 +153,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 59dc67deb7d2f1bc5715ac0cffb12b457aee17a5
+  version: b952345987d7282f77d10186fe6f6b15c744395b
   subpackages:
   - fv
   - fv.containers
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 21e11c82e338eaceccf3e123a4dcef1b4e1309a1
+  version: 83fc14937b8584e65bd6c959c0a85256a2d31e28
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -230,7 +230,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -258,6 +258,7 @@ imports:
   version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -284,7 +285,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
+  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
   subpackages:
   - internal
   - internal/app_identity
