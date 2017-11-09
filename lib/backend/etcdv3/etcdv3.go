@@ -33,7 +33,9 @@ import (
 )
 
 var (
-	clientTimeout = 30 * time.Second
+	clientTimeout    = 10 * time.Second
+	keepaliveTime    = 30 * time.Second
+	keepaliveTimeout = 10 * time.Second
 )
 
 type etcdV3Client struct {
@@ -60,10 +62,13 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 	}
 	tls, _ := tlsInfo.ClientConfig()
 
+	// Build the etcdv3 config.
 	cfg := clientv3.Config{
-		Endpoints:   etcdLocation,
-		TLS:         tls,
-		DialTimeout: clientTimeout,
+		Endpoints:            etcdLocation,
+		TLS:                  tls,
+		DialTimeout:          clientTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
 	}
 
 	// Plumb through the username and password if both are configured.

@@ -1,7 +1,7 @@
 package: github.com/projectcalico/libcalico-go
 import:
 - package: github.com/coreos/etcd
-  version: 3.2.7
+  version: ^3.3.0
   subpackages:
   - client
   - clientv3
@@ -30,9 +30,9 @@ import:
   subpackages:
   - patricia
 - package: k8s.io/apimachinery
-  version: release-1.8 
+  version: release-1.8
 - package: k8s.io/api
-  version: release-1.8 
+  version: release-1.8
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: k8s.io/code-generator
