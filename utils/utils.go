@@ -240,6 +240,15 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 		epIDs.Pod = ""
 		// For any non-k8s orchestrator we set the namespace to default.
 		epIDs.Namespace = "default"
+
+		// Warning: CNITestArgs is used for test purpose only and subject to change without prior notice.
+		CNITestArgs := types.CNITestArgs{}
+		if err := cnitypes.LoadArgs(args.Args, &CNITestArgs); err == nil {
+			// Set namespace with the value passed by CNI test args.
+			if string(CNITestArgs.CNI_TEST_NAMESPACE) != "" {
+				epIDs.Namespace = string(CNITestArgs.CNI_TEST_NAMESPACE)
+			}
+		}
 	}
 
 	return &epIDs, nil
