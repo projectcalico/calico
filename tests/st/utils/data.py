@@ -608,7 +608,7 @@ felixconfig_name1_rev1 = {
             {'protocol': 'udp', 'port': 222},
             {'protocol': 'udp', 'port': 422}, ],
         'interfacePrefix': 'humperdink',
-        'ipInIpMtu': 1521,
+        'ipipMTU': 1521,
         'ipsetsRefreshIntervalSecs': 44,
         'iptablesFilterAllowAction': 'rEtUrN',
         'iptablesLockFilePath': '/run/fun',
