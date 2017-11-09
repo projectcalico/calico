@@ -1,5 +1,5 @@
-hash: 103873d9550d4064d2282c2f47a1365103ca28145f375c338e8effadf474465e
-updated: 2017-11-09T12:18:05.525971381Z
+hash: b6bb63ec7ceb4667336b25104d173128df5f8746122393b50a28b75dd21b2d43
+updated: 2017-11-09T15:52:38.091338662Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -270,7 +270,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net

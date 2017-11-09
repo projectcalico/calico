@@ -55,3 +55,7 @@ import:
 - package: github.com/jbenet/go-reuseport
   repo: https://github.com/fasaxc/go-reuseport.git
   version: disable-dial-check
+- package: github.com/jbenet/go-sockaddr
+  version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
+  subpackages:
+  - net
