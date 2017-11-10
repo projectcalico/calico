@@ -17,7 +17,7 @@ package hwm
 
 import (
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/tchap/go-patricia.v3/patricia"
+	"gopkg.in/tchap/go-patricia.v2/patricia"
 )
 
 // HighWatermarkTracker: map that tracks the highest value seen for each key.

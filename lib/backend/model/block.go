@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	matchBlock = regexp.MustCompile("^/?/calico/ipam/v3/assignment/ipv./block/([^/]+)$")
+	matchBlock = regexp.MustCompile("^/?/calico/ipam/v2/assignment/ipv./block/([^/]+)$")
 	typeBlock  = reflect.TypeOf(AllocationBlock{})
 )
 
@@ -39,7 +39,7 @@ func (key BlockKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v3/assignment/ipv%d/block/%s", key.CIDR.Version(), c)
+	e := fmt.Sprintf("/calico/ipam/v2/assignment/ipv%d/block/%s", key.CIDR.Version(), c)
 	return e, nil
 }
 
@@ -64,7 +64,7 @@ type BlockListOptions struct {
 }
 
 func (options BlockListOptions) defaultPathRoot() string {
-	k := "/calico/ipam/v3/assignment/"
+	k := "/calico/ipam/v2/assignment/"
 	if options.IPVersion != 0 {
 		k = k + fmt.Sprintf("ipv%d/", options.IPVersion)
 	}

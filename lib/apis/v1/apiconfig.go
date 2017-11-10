@@ -19,7 +19,7 @@ import "github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 type DatastoreType string
 
 const (
-	EtcdV2     DatastoreType = "etcdv3"
+	EtcdV2     DatastoreType = "etcdv2"
 	Kubernetes DatastoreType = "kubernetes"
 )
 
@@ -37,7 +37,7 @@ type CalicoAPIConfigMetadata struct {
 
 // CalicoAPIConfigSpec contains the specification for a Calico CalicoAPIConfig resource.
 type CalicoAPIConfigSpec struct {
-	DatastoreType DatastoreType `json:"datastoreType" envconfig:"DATASTORE_TYPE" default:"etcdv3"`
+	DatastoreType DatastoreType `json:"datastoreType" envconfig:"DATASTORE_TYPE" default:"etcdv2"`
 
 	// Inline the ectd config fields
 	EtcdConfig

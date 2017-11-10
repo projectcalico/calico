@@ -34,7 +34,7 @@ func (key IPAMHostKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "host"}
 	}
 
-	k := "/calico/ipam/v3/host/" + key.Host
+	k := "/calico/ipam/v2/host/" + key.Host
 	return k, nil
 }
 

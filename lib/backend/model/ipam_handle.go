@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	matchHandle = regexp.MustCompile("^/?/calico/ipam/v3/handle/([^/]+)$")
+	matchHandle = regexp.MustCompile("^/?/calico/ipam/v2/handle/([^/]+)$")
 	typeHandle  = reflect.TypeOf(IPAMHandle{})
 )
 
@@ -36,7 +36,7 @@ func (key IPAMHandleKey) defaultPath() (string, error) {
 	if key.HandleID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
-	e := fmt.Sprintf("/calico/ipam/v3/handle/%s", key.HandleID)
+	e := fmt.Sprintf("/calico/ipam/v2/handle/%s", key.HandleID)
 	return e, nil
 }
 
@@ -61,7 +61,7 @@ type IPAMHandleListOptions struct {
 }
 
 func (options IPAMHandleListOptions) defaultPathRoot() string {
-	k := "/calico/ipam/v3/handle/"
+	k := "/calico/ipam/v2/handle/"
 	// TODO: Allow filtering on individual host?
 	return k
 }

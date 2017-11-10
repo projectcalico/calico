@@ -24,7 +24,7 @@ type IPAMConfigKey struct {
 }
 
 func (key IPAMConfigKey) defaultPath() (string, error) {
-	return "/calico/ipam/v3/config", nil
+	return "/calico/ipam/v2/config", nil
 }
 
 func (key IPAMConfigKey) defaultDeletePath() (string, error) {
