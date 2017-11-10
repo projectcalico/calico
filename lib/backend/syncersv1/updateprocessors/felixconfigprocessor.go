@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"strings"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 )
@@ -28,7 +28,7 @@ import (
 // consumption by Felix.
 func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return NewConfigUpdateProcessor(
-		reflect.TypeOf(apiv2.FelixConfigurationSpec{}),
+		reflect.TypeOf(apiv3.FelixConfigurationSpec{}),
 		AllowAnnotations,
 		func(node, name string) model.Key { return model.HostConfigKey{Hostname: node, Name: name} },
 		func(name string) model.Key { return model.GlobalConfigKey{Name: name} },
@@ -41,7 +41,7 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 
 // Convert a slice of ProtoPorts to the string representation required by Felix.
 var protoPortSliceToString = func(value interface{}) interface{} {
-	pps := value.([]apiv2.ProtoPort)
+	pps := value.([]apiv3.ProtoPort)
 	if len(pps) == 0 {
 		return "none"
 	}

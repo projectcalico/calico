@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	k8sapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,9 +66,9 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Ensure we got the correct values.
-		bgpIpv4Address := n.Value.(*apiv2.Node).Spec.BGP.IPv4Address
-		ipInIpAddr := n.Value.(*apiv2.Node).Spec.BGP.IPv4IPIPTunnelAddr
-		asn := n.Value.(*apiv2.Node).Spec.BGP.ASNumber
+		bgpIpv4Address := n.Value.(*apiv3.Node).Spec.BGP.IPv4Address
+		ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+		asn := n.Value.(*apiv3.Node).Spec.BGP.ASNumber
 
 		ip := net.ParseIP("172.17.17.10")
 
@@ -92,7 +92,7 @@ var _ = Describe("Test Node conversion", func() {
 			Spec: k8sapi.NodeSpec{},
 		}
 
-		calicoNode := apiv2.NewNode()
+		calicoNode := apiv3.NewNode()
 
 		newK8sNode, err := mergeCalicoNodeIntoK8sNode(calicoNode, k8sNode)
 		Expect(err).NotTo(HaveOccurred())
@@ -123,13 +123,13 @@ var _ = Describe("Test Node conversion", func() {
 		asn, _ := numorstring.ASNumberFromString("2456")
 
 		By("Merging calico node config into the k8s node")
-		calicoNode := apiv2.NewNode()
+		calicoNode := apiv3.NewNode()
 		calicoNode.Name = "TestNode"
 		calicoNode.ResourceVersion = "1234"
 		calicoNode.Labels = cl
 		calicoNode.Annotations = ca
-		calicoNode.Spec = apiv2.NodeSpec{
-			BGP: &apiv2.NodeBGPSpec{
+		calicoNode.Spec = apiv3.NodeSpec{
+			BGP: &apiv3.NodeBGPSpec{
 				IPv4Address: "172.17.17.10/24",
 				IPv6Address: "aa:bb:cc::ffff/120",
 				ASNumber:    &asn,

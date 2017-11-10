@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -43,13 +43,13 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 	iface1 := "iface1"
 	iface2 := "iface2"
 
-	v2WorkloadEndpointKey1 := model.ResourceKey{
-		Kind:      apiv2.KindWorkloadEndpoint,
+	v3WorkloadEndpointKey1 := model.ResourceKey{
+		Kind:      apiv3.KindWorkloadEndpoint,
 		Name:      name1,
 		Namespace: ns1,
 	}
-	v2WorkloadEndpointKey2 := model.ResourceKey{
-		Kind:      apiv2.KindWorkloadEndpoint,
+	v3WorkloadEndpointKey2 := model.ResourceKey{
+		Kind:      apiv3.KindWorkloadEndpoint,
 		Name:      name2,
 		Namespace: ns2,
 	}
@@ -74,7 +74,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
 
 		By("converting a WorkloadEndpoint with minimum configuration")
-		res := apiv2.NewWorkloadEndpoint()
+		res := apiv3.NewWorkloadEndpoint()
 		res.Namespace = ns1
 		res.Labels = map[string]string{
 			"projectcalico.org/namespace":    ns1,
@@ -88,7 +88,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		res.Spec.IPNetworks = []string{"10.100.10.1"}
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2WorkloadEndpointKey1,
+			Key:      v3WorkloadEndpointKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -113,7 +113,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		}))
 
 		By("adding another WorkloadEndpoint with a full configuration")
-		res = apiv2.NewWorkloadEndpoint()
+		res = apiv3.NewWorkloadEndpoint()
 		res.Namespace = ns2
 		res.Labels = map[string]string{
 			"testLabel":                      "label",
@@ -132,8 +132,8 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		_, ipn, err = cnet.ParseCIDROrIP("10.100.10.1")
 		Expect(err).NotTo(HaveOccurred())
 		expectedIPv4Net = *(ipn.Network())
-		res.Spec.IPNATs = []apiv2.IPNAT{
-			apiv2.IPNAT{
+		res.Spec.IPNATs = []apiv3.IPNAT{
+			apiv3.IPNAT{
 				InternalIP: "10.100.1.1",
 				ExternalIP: "10.1.10.1",
 			},
@@ -143,8 +143,8 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		expectedIPv4Gateway, _, err := cnet.ParseCIDROrIP("10.10.10.1")
 		res.Spec.IPv6Gateway = "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
 		expectedIPv6Gateway, _, err := cnet.ParseCIDROrIP("2001:0db8:85a3:0000:0000:8a2e:0370:7334")
-		res.Spec.Ports = []apiv2.EndpointPort{
-			apiv2.EndpointPort{
+		res.Spec.Ports = []apiv3.EndpointPort{
+			apiv3.EndpointPort{
 				Name:     "portname",
 				Protocol: numorstring.ProtocolFromInt(uint8(30)),
 				Port:     uint16(8080),
@@ -152,7 +152,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		}
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2WorkloadEndpointKey2,
+			Key:      v3WorkloadEndpointKey2,
 			Value:    res,
 			Revision: "1234",
 		})
@@ -188,7 +188,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 
 		By("deleting the first workload endpoint")
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2WorkloadEndpointKey1,
+			Key:   v3WorkloadEndpointKey1,
 			Value: nil,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -204,7 +204,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
 
 		By("trying to convert with the wrong key type.")
-		res := apiv2.NewWorkloadEndpoint()
+		res := apiv3.NewWorkloadEndpoint()
 		res.Name = name1
 		res.Namespace = ns1
 
@@ -218,10 +218,10 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with the wrong value type and get a valid key with a nil value.")
-		wres := apiv2.NewHostEndpoint()
+		wres := apiv3.NewHostEndpoint()
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2WorkloadEndpointKey1,
+			Key:      v3WorkloadEndpointKey1,
 			Value:    wres,
 			Revision: "abcde",
 		})
@@ -234,14 +234,14 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		}))
 
 		By("trying to convert without enough information to create a v1 key.")
-		eres := apiv2.NewWorkloadEndpoint()
-		v2WorkloadEndpointKey1 := model.ResourceKey{
-			Kind: apiv2.KindWorkloadEndpoint,
+		eres := apiv3.NewWorkloadEndpoint()
+		v3WorkloadEndpointKey1 := model.ResourceKey{
+			Kind: apiv3.KindWorkloadEndpoint,
 			Name: name1,
 		}
 
 		_, err = up.Process(&model.KVPair{
-			Key:      v2WorkloadEndpointKey1,
+			Key:      v3WorkloadEndpointKey1,
 			Value:    eres,
 			Revision: "abcde",
 		})
@@ -252,7 +252,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
 
 		By("converting a WorkloadEndpoint with no IPNetworks")
-		res := apiv2.NewWorkloadEndpoint()
+		res := apiv3.NewWorkloadEndpoint()
 		res.Namespace = ns1
 		res.Labels = map[string]string{
 			"projectcalico.org/namespace":    ns1,
@@ -265,7 +265,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		res.Spec.InterfaceName = iface1
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2WorkloadEndpointKey1,
+			Key:      v3WorkloadEndpointKey1,
 			Value:    res,
 			Revision: "abcde",
 		})

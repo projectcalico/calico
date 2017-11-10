@@ -18,19 +18,19 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Test the BGPPeer update processor", func() {
-	v2PeerKey1 := model.ResourceKey{
-		Kind: apiv2.KindBGPPeer,
+	v3PeerKey1 := model.ResourceKey{
+		Kind: apiv3.KindBGPPeer,
 		Name: "name1",
 	}
-	v2PeerKey2 := model.ResourceKey{
-		Kind: apiv2.KindBGPPeer,
+	v3PeerKey2 := model.ResourceKey{
+		Kind: apiv3.KindBGPPeer,
 		Name: "name2",
 	}
 	ip1str := "1.2.3.0"
@@ -51,13 +51,13 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		up := updateprocessors.NewBGPPeerUpdateProcessor()
 
 		By("converting a global BGPPeer with minimum configuration")
-		res := apiv2.NewBGPPeer()
-		res.Name = v2PeerKey1.Name
+		res := apiv3.NewBGPPeer()
+		res.Name = v3PeerKey1.Name
 		res.Spec.PeerIP = ip1str
 		res.Spec.ASNumber = 11111
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -73,12 +73,12 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		}))
 
 		By("adding/updating/deleting/adding another global BGPPeer with the same PeerIP (but higher alphanumeric name - no update expected")
-		res = apiv2.NewBGPPeer()
-		res.Name = v2PeerKey2.Name
+		res = apiv3.NewBGPPeer()
+		res.Name = v3PeerKey2.Name
 		res.Spec.PeerIP = ip1str
 		res.Spec.ASNumber = 1234
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey2,
+			Key:      v3PeerKey2,
 			Value:    res,
 			Revision: "1234",
 		})
@@ -86,7 +86,7 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		Expect(kvps).To(HaveLen(0))
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey2,
+			Key:      v3PeerKey2,
 			Value:    res,
 			Revision: "1235",
 		})
@@ -94,14 +94,14 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		Expect(kvps).To(HaveLen(0))
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey2,
+			Key:      v3PeerKey2,
 			Revision: "1235",
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(HaveLen(0))
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey2,
+			Key:      v3PeerKey2,
 			Value:    res,
 			Revision: "1239",
 		})
@@ -109,13 +109,13 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		Expect(kvps).To(HaveLen(0))
 
 		By("updating the first BGPPeer to be node specific and with a different IP - expect updates for both BGPPeers")
-		res = apiv2.NewBGPPeer()
-		res.Name = v2PeerKey1.Name
+		res = apiv3.NewBGPPeer()
+		res.Name = v3PeerKey1.Name
 		res.Spec.PeerIP = ip2str
 		res.Spec.ASNumber = 11111
 		res.Spec.Node = node1
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "abcdef",
 		})
@@ -141,7 +141,7 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 
 		By("deleting the first BGPPeer")
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2PeerKey1,
+			Key: v3PeerKey1,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
@@ -152,7 +152,7 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 
 		By("deleting the second BGPPeer")
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2PeerKey2,
+			Key: v3PeerKey2,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
@@ -162,12 +162,12 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		}))
 
 		By("checking global and node peers are treated separately even if they have the same IP")
-		res = apiv2.NewBGPPeer()
-		res.Name = v2PeerKey1.Name
+		res = apiv3.NewBGPPeer()
+		res.Name = v3PeerKey1.Name
 		res.Spec.PeerIP = ip2str
 		res.Spec.ASNumber = 11111
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "00000",
 		})
@@ -182,14 +182,14 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 			Revision: "00000",
 		}))
 
-		res = apiv2.NewBGPPeer()
-		res.Name = v2PeerKey2.Name
+		res = apiv3.NewBGPPeer()
+		res.Name = v3PeerKey2.Name
 		res.Spec.PeerIP = ip2str
 		res.Spec.Node = node1
 		res.Spec.ASNumber = 22222
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey2,
+			Key:      v3PeerKey2,
 			Value:    res,
 			Revision: "00001",
 		})
@@ -207,7 +207,7 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		By("clearing the cache (by starting sync) and failing to delete the second BGPPeer")
 		up.OnSyncerStarting()
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2PeerKey2,
+			Key: v3PeerKey2,
 		})
 		Expect(err).To(HaveOccurred())
 	})
@@ -220,13 +220,13 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: net.MustParseIP("1.2.3.4"),
 			},
-			Value:    apiv2.NewIPPool(),
+			Value:    apiv3.NewIPPool(),
 			Revision: "abcde",
 		})
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with the wrong value type")
-		res := apiv2.NewBGPPeer()
+		res := apiv3.NewBGPPeer()
 		res.Name = "name1"
 		res.Spec.PeerIP = "1.2.3.4"
 		_, err = up.Process(&model.KVPair{
@@ -237,11 +237,11 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert a peer with an invalid IP")
-		res = apiv2.NewBGPPeer()
+		res = apiv3.NewBGPPeer()
 		res.Name = "name1"
 		res.Spec.PeerIP = "1.2.3.x"
 		_, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -252,13 +252,13 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		up := updateprocessors.NewBGPPeerUpdateProcessor()
 
 		By("converting a global BGPPeer with minimum configuration")
-		res := apiv2.NewBGPPeer()
-		res.Name = v2PeerKey1.Name
+		res := apiv3.NewBGPPeer()
+		res.Name = v3PeerKey1.Name
 		res.Spec.PeerIP = ip1str
 		res.Spec.ASNumber = 11111
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -274,13 +274,13 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		}))
 
 		By("setting an invalid PeerIP address and checking for error with delete")
-		res = apiv2.NewBGPPeer()
-		res.Name = v2PeerKey1.Name
+		res = apiv3.NewBGPPeer()
+		res.Name = v3PeerKey1.Name
 		res.Spec.PeerIP = "not a valid IP"
 		res.Spec.ASNumber = 11111
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "abcdeg",
 		})
@@ -291,13 +291,13 @@ var _ = Describe("Test the BGPPeer update processor", func() {
 		}))
 
 		By("setting another invalid PeerIP address and checking for error with no update")
-		res = apiv2.NewBGPPeer()
-		res.Name = v2PeerKey1.Name
+		res = apiv3.NewBGPPeer()
+		res.Name = v3PeerKey1.Name
 		res.Spec.PeerIP = "not a valid IP 2"
 		res.Spec.ASNumber = 11111
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PeerKey1,
+			Key:      v3PeerKey1,
 			Value:    res,
 			Revision: "abcdef",
 		})

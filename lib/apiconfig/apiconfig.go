@@ -17,7 +17,7 @@ package apiconfig
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
 
 type DatastoreType string
@@ -72,7 +72,7 @@ func NewCalicoAPIConfig() *CalicoAPIConfig {
 	return &CalicoAPIConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindCalicoAPIConfig,
-			APIVersion: apiv2.GroupVersionCurrent,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
 }

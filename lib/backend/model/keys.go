@@ -39,17 +39,17 @@ var rawIPType = reflect.TypeOf(rawIP{})
 // Key represents a parsed datastore key.
 type Key interface {
 	// defaultPath() returns a common path representation of the object used by
-	// etcdv2 and other datastores.
+	// etcdv3 and other datastores.
 	defaultPath() (string, error)
 
-	// defaultDeletePath() returns a common path representation used by etcdv2
+	// defaultDeletePath() returns a common path representation used by etcdv3
 	// and other datastores to delete the object.
 	defaultDeletePath() (string, error)
 
 	// defaultDeleteParentPaths() returns an ordered slice of paths that should
 	// be removed after deleting the primary path (given by defaultDeletePath),
 	// provided there are no child entries associated with those paths.  This is
-	// only used by directory based KV stores (such as etcdv2).  With a directory
+	// only used by directory based KV stores (such as etcdv3).  With a directory
 	// based KV store, creation of a resource may also create parent directory entries
 	// that could be shared by multiple resources, and therefore the parent directories
 	// can only be removed when there are no more resources under them.  The list of
@@ -103,13 +103,13 @@ type KVPairList struct {
 // KeyToDefaultPath converts one of the Keys from this package into a unique
 // '/'-delimited path, which is suitable for use as the key when storing the
 // value in a hierarchical (i.e. one with directories and leaves) key/value
-// datastore such as etcd v2.
+// datastore such as etcd v3.
 //
 // Each unique key returns a unique path.
 //
 // Keys with a hierarchical relationship share a common prefix.  However, in
 // order to support datastores that do not support storing data at non-leaf
-// nodes in the hierarchy (such as etcd v2), the path returned for a "parent"
+// nodes in the hierarchy (such as etcd v3), the path returned for a "parent"
 // key, is not a direct ancestor of its children.
 func KeyToDefaultPath(key Key) (string, error) {
 	return key.defaultPath()
@@ -118,7 +118,7 @@ func KeyToDefaultPath(key Key) (string, error) {
 // KeyToDefaultDeletePath converts one of the Keys from this package into a
 // unique '/'-delimited path, which is suitable for use as the key when
 // (recursively) deleting the value from a hierarchical (i.e. one with
-// directories and leaves) key/value datastore such as etcd v2.
+// directories and leaves) key/value datastore such as etcd v3.
 //
 // KeyToDefaultDeletePath returns a different path to KeyToDefaultPath when
 // it is a passed a Key that represents a non-leaf which, for example, has its
@@ -137,7 +137,7 @@ func KeyToValueType(key Key) reflect.Type {
 
 // KeyToDefaultDeleteParentPaths returns a slice of '/'-delimited
 // paths which are used to delete parent entries that may be auto-created
-// by directory-based KV stores (e.g. etcd v2).  These paths should also be
+// by directory-based KV stores (e.g. etcd v3).  These paths should also be
 // removed provided they have no more child entries.
 //
 // The list of parent paths is ordered, and directories should be removed

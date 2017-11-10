@@ -301,7 +301,7 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	resl, ok := list.(model.ResourceListOptions)
 	if !ok {
-		return nil, errors.New("internal error: custom resource watch invoked for non v2 resource type")
+		return nil, errors.New("internal error: custom resource watch invoked for non v3 resource type")
 	}
 	if len(resl.Name) != 0 {
 		return nil, fmt.Errorf("cannot watch specific resource instance: %s", resl.Name)

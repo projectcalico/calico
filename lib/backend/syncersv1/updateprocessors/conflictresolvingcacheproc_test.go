@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -44,9 +44,9 @@ var _ = Describe("Test the conflict resolving cache", func() {
 	// Define a common set of keys and values for our tests.  Note the actual value
 	// types are not important - but make sure we have something non-nil to indicate
 	// a value is present.
-	v2PeerKVP := &model.KVPair{
+	v3PeerKVP := &model.KVPair{
 		Key: model.ResourceKey{
-			Kind: apiv2.KindBGPPeer,
+			Kind: apiv3.KindBGPPeer,
 			Name: "name1",
 		},
 		Value:    "foobar",
@@ -59,7 +59,7 @@ var _ = Describe("Test the conflict resolving cache", func() {
 	converter := &fakeconverter{}
 
 	It("should handle converting the resource, but failing to create the v1 key", func() {
-		c := updateprocessors.NewConflictResolvingCacheUpdateProcessor(apiv2.KindBGPPeer, converter.Convert)
+		c := updateprocessors.NewConflictResolvingCacheUpdateProcessor(apiv3.KindBGPPeer, converter.Convert)
 		converter.res = &model.KVPair{
 			Key:      v1Key1,
 			Value:    "foobarfizz",
@@ -70,7 +70,7 @@ var _ = Describe("Test the conflict resolving cache", func() {
 		By("successfully converting a Peer to populate the cache")
 		// Note that we don't need proper values here since this test doesn't touch the conversion
 		// code and instead uses our "fake" converter.
-		kvp, err := c.Process(v2PeerKVP)
+		kvp, err := c.Process(v3PeerKVP)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp).To(HaveLen(1))
 		Expect(kvp[0]).To(Equal(
@@ -87,7 +87,7 @@ var _ = Describe("Test the conflict resolving cache", func() {
 			Value:    "foobarfoo",
 			Revision: "12346",
 		}
-		kvp, err = c.Process(v2PeerKVP)
+		kvp, err = c.Process(v3PeerKVP)
 		Expect(kvp).To(HaveLen(1))
 		Expect(kvp[0]).To(Equal(
 			&model.KVPair{
@@ -102,7 +102,7 @@ var _ = Describe("Test the conflict resolving cache", func() {
 			Value:    "foobarfoo",
 			Revision: "12346",
 		}
-		kvp, err = c.Process(v2PeerKVP)
+		kvp, err = c.Process(v3PeerKVP)
 		Expect(kvp).To(HaveLen(0))
 		Expect(err).To(HaveOccurred())
 	})

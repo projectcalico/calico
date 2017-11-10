@@ -16,7 +16,7 @@ package felixsyncer
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -31,35 +31,35 @@ func New(client api.Client, callbacks api.SyncerCallbacks, datastoreType apiconf
 	// a common global set.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindClusterInformation},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindClusterInformation},
 			UpdateProcessor: updateprocessors.NewClusterInfoUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindFelixConfiguration},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindFelixConfiguration},
 			UpdateProcessor: updateprocessors.NewFelixConfigUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindGlobalNetworkPolicy},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
 			UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindIPPool},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},
 			UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNode},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNode},
 			UpdateProcessor: updateprocessors.NewFelixNodeUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindProfile},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindProfile},
 			UpdateProcessor: updateprocessors.NewProfileUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindWorkloadEndpoint},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint},
 			UpdateProcessor: updateprocessors.NewWorkloadEndpointUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindNetworkPolicy},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
 			UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
 		},
 	}
@@ -67,7 +67,7 @@ func New(client api.Client, callbacks api.SyncerCallbacks, datastoreType apiconf
 	if datastoreType != apiconfig.Kubernetes {
 		resourceTypes = append(resourceTypes,
 			watchersyncer.ResourceType{
-				ListInterface:   model.ResourceListOptions{Kind: apiv2.KindHostEndpoint},
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
 				UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
 			},
 		)

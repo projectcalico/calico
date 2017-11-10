@@ -24,7 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -50,13 +50,13 @@ func NewNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		name:            NetworkPolicyCRDName,
 		resource:        NetworkPolicyResourceName,
 		description:     "Calico Network Policies",
-		k8sResourceType: reflect.TypeOf(apiv2.NetworkPolicy{}),
+		k8sResourceType: reflect.TypeOf(apiv3.NetworkPolicy{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv2.KindNetworkPolicy,
-			APIVersion: apiv2.GroupVersionCurrent,
+			Kind:       apiv3.KindNetworkPolicy,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv2.NetworkPolicyList{}),
-		resourceKind: apiv2.KindNetworkPolicy,
+		k8sListType:  reflect.TypeOf(apiv3.NetworkPolicyList{}),
+		resourceKind: apiv3.KindNetworkPolicy,
 		namespaced:   true,
 	}
 	return &networkPolicyClient{
@@ -412,7 +412,7 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 					Type: api.WatchError,
 					Error: cerrors.ErrorWatchTerminated{
 						ClosedByRemote: true,
-						Err: errors.New("Calico NP watch channel closed"),
+						Err:            errors.New("Calico NP watch channel closed"),
 					},
 				}
 			}
@@ -428,7 +428,7 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 					Type: api.WatchError,
 					Error: cerrors.ErrorWatchTerminated{
 						ClosedByRemote: true,
-						Err: errors.New("Kubernetes NP watch channel closed"),
+						Err:            errors.New("Kubernetes NP watch channel closed"),
 					},
 				}
 			}

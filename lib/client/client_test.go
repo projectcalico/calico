@@ -81,7 +81,7 @@ spec:
 
 	// Bad data samples.
 	data3 := `
-apiVersion: v2
+apiVersion: v3
 kind: calicoApiConfig
 `
 	data4 := `
@@ -114,7 +114,7 @@ kind: notCalicoApiConfig
 	}
 
 	// Environments to test k8s parameters
-	env2 := map[string]string{
+	env3 := map[string]string{
 		"DATASTORE_TYPE":   string(api.Kubernetes),
 		"KUBECONFIG":       "filename",
 		"K8S_API_ENDPOINT": "bar1",
@@ -190,7 +190,7 @@ kind: notCalicoApiConfig
 
 		Entry("valid etcd configuration", data1, cfg1data, nil),
 		Entry("valid k8s configuration", data2, cfg2data, nil),
-		Entry("invalid version", data3, nil, errors.New("invalid config file: unknown APIVersion 'v2'")),
+		Entry("invalid version", data3, nil, errors.New("invalid config file: unknown APIVersion 'v3'")),
 		Entry("invalid kind", data4, nil, errors.New("invalid config file: expected kind 'calicoApiConfig', got 'notCalicoApiConfig'")),
 	)
 
@@ -219,7 +219,7 @@ kind: notCalicoApiConfig
 		},
 
 		Entry("valid etcd configuration", env1, cfg1env, nil),
-		Entry("valid k8s configuration", env2, cfg2env, nil),
+		Entry("valid k8s configuration", env3, cfg2env, nil),
 		Entry("valid etcd configuration with CALICO_ prefix", env3, cfg3env, nil),
 		Entry("valid k8s configuration (preferential naming)", env4, cfg4env, nil),
 	)

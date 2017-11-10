@@ -4,7 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -22,20 +22,20 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		inproto := numorstring.ProtocolFromString("udp")
 		port80 := numorstring.SinglePort(uint16(80))
 		port443 := numorstring.SinglePort(uint16(443))
-		irule := apiv2.Rule{
-			Action:    apiv2.Allow,
+		irule := apiv3.Rule{
+			Action:    apiv3.Allow,
 			IPVersion: &v4,
 			Protocol:  &iproto,
-			ICMP: &apiv2.ICMPFields{
+			ICMP: &apiv3.ICMPFields{
 				Type: &itype,
 				Code: &icode,
 			},
 			NotProtocol: &inproto,
-			NotICMP: &apiv2.ICMPFields{
+			NotICMP: &apiv3.ICMPFields{
 				Type: &intype,
 				Code: &incode,
 			},
-			Source: apiv2.EntityRule{
+			Source: apiv3.EntityRule{
 				Nets:        []string{"10.100.10.1"},
 				Selector:    "mylabel = value1",
 				Ports:       []numorstring.Port{port80},
@@ -43,7 +43,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Nets:        []string{"10.100.1.1"},
 				Selector:    "",
 				Ports:       []numorstring.Port{port443},
@@ -83,20 +83,20 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		encode := 8
 		eproto := numorstring.ProtocolFromInt(uint8(30))
 		enproto := numorstring.ProtocolFromInt(uint8(62))
-		erule := apiv2.Rule{
-			Action:    apiv2.Allow,
+		erule := apiv3.Rule{
+			Action:    apiv3.Allow,
 			IPVersion: &v4,
 			Protocol:  &eproto,
-			ICMP: &apiv2.ICMPFields{
+			ICMP: &apiv3.ICMPFields{
 				Type: &etype,
 				Code: &ecode,
 			},
 			NotProtocol: &enproto,
-			NotICMP: &apiv2.ICMPFields{
+			NotICMP: &apiv3.ICMPFields{
 				Type: &entype,
 				Code: &encode,
 			},
-			Source: apiv2.EntityRule{
+			Source: apiv3.EntityRule{
 				Nets:              []string{"10.100.1.1"},
 				NamespaceSelector: "namespacelabel1 == 'value1'",
 				Ports:             []numorstring.Port{port443},
@@ -104,7 +104,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotSelector:       "has(label2)",
 				NotPorts:          []numorstring.Port{port80},
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Nets:              []string{"10.100.10.1"},
 				NamespaceSelector: "namespacelabel2 == 'value2'",
 				Ports:             []numorstring.Port{port80},
@@ -138,7 +138,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port443}))
 
 		By("Converting multiple rules")
-		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv2.Rule{irule, erule}, "namespace1")
+		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
 		rulev1 = rulesv1[0]
 		Expect(rulev1.Action).To(Equal("allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
@@ -189,12 +189,12 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 	})
 
 	It("should parse a profile rule with no namespace", func() {
-		r := apiv2.Rule{
-			Action: apiv2.Allow,
-			Source: apiv2.EntityRule{
+		r := apiv3.Rule{
+			Action: apiv3.Allow,
+			Source: apiv3.EntityRule{
 				Selector: "has(foo)",
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Selector: "has(foo)",
 			},
 		}
@@ -216,13 +216,13 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		tcp := numorstring.ProtocolFromString("tcp")
 		port80 := numorstring.SinglePort(uint16(80))
 
-		r := apiv2.Rule{
-			Action:   apiv2.Allow,
+		r := apiv3.Rule{
+			Action:   apiv3.Allow,
 			Protocol: &tcp,
-			Source: apiv2.EntityRule{
+			Source: apiv3.EntityRule{
 				Ports: []numorstring.Port{port80},
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Ports: []numorstring.Port{port80},
 			},
 		}
@@ -249,13 +249,13 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 	})
 
 	It("should parse a rule with both a selector and namespace selector", func() {
-		r := apiv2.Rule{
-			Action: apiv2.Allow,
-			Source: apiv2.EntityRule{
+		r := apiv3.Rule{
+			Action: apiv3.Allow,
+			Source: apiv3.EntityRule{
 				Selector:          "projectcalico.org/orchestrator == 'k8s'",
 				NamespaceSelector: "key == 'value'",
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Selector:          "projectcalico.org/orchestrator == 'k8s'",
 				NamespaceSelector: "key == 'value'",
 			},
@@ -278,12 +278,12 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		s := "!has(key) || (has(key) && !key in {'value'})"
 		e := "(!has(pcns.key) || (has(pcns.key) && !pcns.key in {\"value\"}))"
 
-		r := apiv2.Rule{
-			Action: apiv2.Allow,
-			Source: apiv2.EntityRule{
+		r := apiv3.Rule{
+			Action: apiv3.Allow,
+			Source: apiv3.EntityRule{
 				NamespaceSelector: s,
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				NamespaceSelector: s,
 			},
 		}

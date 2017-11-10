@@ -17,7 +17,7 @@ package resources
 import (
 	"reflect"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -36,12 +36,12 @@ func NewClusterInfoClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResour
 		name:            ClusterInfoCRDName,
 		resource:        ClusterInfoResourceName,
 		description:     "Calico Cluster Information",
-		k8sResourceType: reflect.TypeOf(apiv2.ClusterInformation{}),
+		k8sResourceType: reflect.TypeOf(apiv3.ClusterInformation{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv2.KindClusterInformation,
-			APIVersion: apiv2.GroupVersionCurrent,
+			Kind:       apiv3.KindClusterInformation,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv2.ClusterInformationList{}),
-		resourceKind: apiv2.KindClusterInformation,
+		k8sListType:  reflect.TypeOf(apiv3.ClusterInformationList{}),
+		resourceKind: apiv3.KindClusterInformation,
 	}
 }

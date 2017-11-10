@@ -17,7 +17,7 @@ package updateprocessors
 import (
 	"errors"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -26,30 +26,30 @@ import (
 // Create a new SyncerUpdateProcessor to sync HostEndpoint data in v1 format for
 // consumption by both Felix and the BGP daemon.
 func NewHostEndpointUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewConflictResolvingCacheUpdateProcessor(apiv2.KindHostEndpoint, convertHostEndpointV2ToV1)
+	return NewConflictResolvingCacheUpdateProcessor(apiv3.KindHostEndpoint, convertHostEndpointV2ToV1)
 }
 
-// Convert v2 KVPair to the equivalent v1 KVPair.
+// Convert v3 KVPair to the equivalent v1 KVPair.
 func convertHostEndpointV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	// Validate against incorrect key/value kinds.  This indicates a code bug rather
 	// than a user error.
-	v2key, ok := kvp.Key.(model.ResourceKey)
-	if !ok || v2key.Kind != apiv2.KindHostEndpoint {
+	v3key, ok := kvp.Key.(model.ResourceKey)
+	if !ok || v3key.Kind != apiv3.KindHostEndpoint {
 		return nil, errors.New("Key is not a valid HostEndpoint resource key")
 	}
-	v2res, ok := kvp.Value.(*apiv2.HostEndpoint)
+	v3res, ok := kvp.Value.(*apiv3.HostEndpoint)
 	if !ok {
 		return nil, errors.New("Value is not a valid HostEndpoint resource key")
 	}
 
 	v1key := model.HostEndpointKey{
-		Hostname:   v2res.Spec.Node,
-		EndpointID: v2res.GetName(),
+		Hostname:   v3res.Spec.Node,
+		EndpointID: v3res.GetName(),
 	}
 
 	var ipv4Addrs []cnet.IP
 	var ipv6Addrs []cnet.IP
-	for _, ipString := range v2res.Spec.ExpectedIPs {
+	for _, ipString := range v3res.Spec.ExpectedIPs {
 		ip := cnet.ParseIP(ipString)
 		if ip != nil {
 			if ip.Version() == 4 {
@@ -62,7 +62,7 @@ func convertHostEndpointV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 
 	// Convert the EndpointPort type from the API pkg to the v1 model equivalent type
 	ports := []model.EndpointPort{}
-	for _, port := range v2res.Spec.Ports {
+	for _, port := range v3res.Spec.Ports {
 		ports = append(ports, model.EndpointPort{
 			Name:     port.Name,
 			Protocol: port.Protocol,
@@ -71,11 +71,11 @@ func convertHostEndpointV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	}
 
 	v1value := &model.HostEndpoint{
-		Name:              v2res.Spec.InterfaceName,
+		Name:              v3res.Spec.InterfaceName,
 		ExpectedIPv4Addrs: ipv4Addrs,
 		ExpectedIPv6Addrs: ipv6Addrs,
-		Labels:            v2res.GetLabels(),
-		ProfileIDs:        v2res.Spec.Profiles,
+		Labels:            v3res.GetLabels(),
+		ProfileIDs:        v3res.Spec.Profiles,
 		Ports:             ports,
 	}
 

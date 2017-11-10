@@ -37,7 +37,7 @@ const (
 
 // NewIPAMClient returns a new ipamClient, which implements Interface.
 // Consumers of the Calico API should not create this directly, but should
-// access IPAM through the main client IPAM accessor (e.g. clientv2.IPAM())
+// access IPAM through the main client IPAM accessor (e.g. clientv3.IPAM())
 func NewIPAMClient(client bapi.Client, pools PoolAccessorInterface) Interface {
 	return &ipamClient{
 		client: client,

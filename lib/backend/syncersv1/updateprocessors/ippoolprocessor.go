@@ -17,7 +17,7 @@ package updateprocessors
 import (
 	"errors"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
@@ -27,24 +27,24 @@ import (
 // Create a new SyncerUpdateProcessor to sync IPPool data in v1 format for
 // consumption by both Felix and the BGP daemon.
 func NewIPPoolUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewConflictResolvingCacheUpdateProcessor(apiv2.KindIPPool, convertIPPoolV2ToV1)
+	return NewConflictResolvingCacheUpdateProcessor(apiv3.KindIPPool, convertIPPoolV2ToV1)
 }
 
-// Convert v2 KVPair to the equivalent v1 KVPair.
+// Convert v3 KVPair to the equivalent v1 KVPair.
 func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	// Validate against incorrect key/value kinds.  This indicates a code bug rather
 	// than a user error.
-	v2key, ok := kvp.Key.(model.ResourceKey)
-	if !ok || v2key.Kind != apiv2.KindIPPool {
+	v3key, ok := kvp.Key.(model.ResourceKey)
+	if !ok || v3key.Kind != apiv3.KindIPPool {
 		return nil, errors.New("Key is not a valid BGPPeer resource key")
 	}
-	v2res, ok := kvp.Value.(*apiv2.IPPool)
+	v3res, ok := kvp.Value.(*apiv3.IPPool)
 	if !ok {
 		return nil, errors.New("Value is not a valid BGPPeer resource key")
 	}
 
 	// Correct data types.  Handle the conversion.
-	_, cidr, err := cnet.ParseCIDR(v2res.Spec.CIDR)
+	_, cidr, err := cnet.ParseCIDR(v3res.Spec.CIDR)
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +53,11 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	}
 	var ipipInterface string
 	var ipipMode ipip.Mode
-	switch v2res.Spec.IPIPMode {
-	case apiv2.IPIPModeAlways:
+	switch v3res.Spec.IPIPMode {
+	case apiv3.IPIPModeAlways:
 		ipipInterface = "tunl0"
 		ipipMode = ipip.Always
-	case apiv2.IPIPModeCrossSubnet:
+	case apiv3.IPIPModeCrossSubnet:
 		ipipInterface = "tunl0"
 		ipipMode = ipip.CrossSubnet
 	default:
@@ -71,9 +71,9 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 			CIDR:          *cidr,
 			IPIPInterface: ipipInterface,
 			IPIPMode:      ipipMode,
-			Masquerade:    v2res.Spec.NATOutgoing,
-			IPAM:          !v2res.Spec.Disabled,
-			Disabled:      v2res.Spec.Disabled,
+			Masquerade:    v3res.Spec.NATOutgoing,
+			IPAM:          !v3res.Spec.Disabled,
+			Disabled:      v3res.Spec.Disabled,
 		},
 		Revision: kvp.Revision,
 	}, nil

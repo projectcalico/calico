@@ -129,8 +129,8 @@ func (c *EtcdClient) EnsureCalicoNodeInitialized(node string) error {
 		"/calico/v1/ipam/v6/pool",
 		"/calico/bgp/v1/global/custom_filters/v4",
 		"/calico/bgp/v1/global/custom_filters/v6",
-		"/calico/ipam/v2/host/" + node + "/ipv4/block",
-		"/calico/ipam/v2/host/" + node + "/ipv6/block",
+		"/calico/ipam/v3/host/" + node + "/ipv4/block",
+		"/calico/ipam/v3/host/" + node + "/ipv6/block",
 	}
 
 	for _, d := range dirs {

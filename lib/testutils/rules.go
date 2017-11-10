@@ -15,7 +15,7 @@
 package testutils
 
 import (
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/sirupsen/logrus"
 )
@@ -46,17 +46,17 @@ var cidr2 = "20.0.0.0/24"
 var cidrv61 = "abcd:5555::/120"
 var cidrv62 = "abcd:2345::/120"
 
-var icmp1 = apiv2.ICMPFields{
+var icmp1 = apiv3.ICMPFields{
 	Type: &icmpType1,
 	Code: &icmpCode1,
 }
 
-var InRule1 = apiv2.Rule{
+var InRule1 = apiv3.Rule{
 	Action:    "allow",
 	IPVersion: &ipv4,
 	Protocol:  &strProtocol1,
 	ICMP:      &icmp1,
-	Source: apiv2.EntityRule{
+	Source: apiv3.EntityRule{
 		Nets:     []string{cidr1},
 		Selector: "label1 == 'value1'",
 		Ports: []numorstring.Port{
@@ -67,34 +67,34 @@ var InRule1 = apiv2.Rule{
 	},
 }
 
-var InRule2 = apiv2.Rule{
+var InRule2 = apiv3.Rule{
 	Action:    "deny",
 	IPVersion: &ipv6,
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
-	Source: apiv2.EntityRule{
+	Source: apiv3.EntityRule{
 		Nets:     []string{cidrv61},
 		Selector: "has(label2)",
 	},
 }
 
-var EgressRule1 = apiv2.Rule{
+var EgressRule1 = apiv3.Rule{
 	Action:    "pass",
 	IPVersion: &ipv4,
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
-	Source: apiv2.EntityRule{
+	Source: apiv3.EntityRule{
 		Nets:     []string{cidr2},
 		Selector: "all()",
 	},
 }
 
-var EgressRule2 = apiv2.Rule{
+var EgressRule2 = apiv3.Rule{
 	Action:    "allow",
 	IPVersion: &ipv6,
 	Protocol:  &strProtocol2,
 	ICMP:      &icmp1,
-	Source: apiv2.EntityRule{
+	Source: apiv3.EntityRule{
 		Nets:     []string{cidrv62},
 		Selector: "label2 == '1234'",
 	},

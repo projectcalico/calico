@@ -17,7 +17,7 @@ package resources
 import (
 	"reflect"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -36,12 +36,12 @@ func NewIPPoolClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceCli
 		name:            IPPoolCRDName,
 		resource:        IPPoolResourceName,
 		description:     "Calico IP Pools",
-		k8sResourceType: reflect.TypeOf(apiv2.IPPool{}),
+		k8sResourceType: reflect.TypeOf(apiv3.IPPool{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv2.KindIPPool,
-			APIVersion: apiv2.GroupVersionCurrent,
+			Kind:       apiv3.KindIPPool,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv2.IPPoolList{}),
-		resourceKind: apiv2.KindIPPool,
+		k8sListType:  reflect.TypeOf(apiv3.IPPoolList{}),
+		resourceKind: apiv3.KindIPPool,
 	}
 }

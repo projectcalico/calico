@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
@@ -26,12 +26,12 @@ import (
 )
 
 var _ = Describe("Test the IPPool update processor", func() {
-	v2PoolKey1 := model.ResourceKey{
-		Kind: apiv2.KindIPPool,
+	v3PoolKey1 := model.ResourceKey{
+		Kind: apiv3.KindIPPool,
 		Name: "name1",
 	}
-	v2PoolKey2 := model.ResourceKey{
-		Kind: apiv2.KindIPPool,
+	v3PoolKey2 := model.ResourceKey{
+		Kind: apiv3.KindIPPool,
 		Name: "name2",
 	}
 	cidr1str := "1.2.3.0/24"
@@ -47,12 +47,12 @@ var _ = Describe("Test the IPPool update processor", func() {
 		up := updateprocessors.NewIPPoolUpdateProcessor()
 
 		By("converting an IP Pool with minimum configuration")
-		res := apiv2.NewIPPool()
-		res.Name = v2PoolKey1.Name
+		res := apiv3.NewIPPool()
+		res.Name = v3PoolKey1.Name
 		res.Spec.CIDR = cidr1str
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2PoolKey1,
+			Key:      v3PoolKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -71,14 +71,14 @@ var _ = Describe("Test the IPPool update processor", func() {
 		}))
 
 		By("adding another IP IPPool with the same CIDR (but higher alphanumeric name - no update expected")
-		res = apiv2.NewIPPool()
-		res.Name = v2PoolKey2.Name
+		res = apiv3.NewIPPool()
+		res.Name = v3PoolKey2.Name
 		res.Spec.CIDR = cidr1str
-		res.Spec.IPIPMode = apiv2.IPIPModeAlways
+		res.Spec.IPIPMode = apiv3.IPIPModeAlways
 		res.Spec.NATOutgoing = true
 		res.Spec.Disabled = true
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PoolKey2,
+			Key:      v3PoolKey2,
 			Value:    res,
 			Revision: "1234",
 		})
@@ -86,11 +86,11 @@ var _ = Describe("Test the IPPool update processor", func() {
 		Expect(kvps).To(HaveLen(0))
 
 		By("updating the first IPPool to have a different CIDR - expect updates for both pools")
-		res = apiv2.NewIPPool()
-		res.Name = v2PoolKey1.Name
+		res = apiv3.NewIPPool()
+		res.Name = v3PoolKey1.Name
 		res.Spec.CIDR = cidr2str
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2PoolKey1,
+			Key:      v3PoolKey1,
 			Value:    res,
 			Revision: "abcdef",
 		})
@@ -124,7 +124,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 
 		By("deleting the first pool")
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2PoolKey1,
+			Key: v3PoolKey1,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
@@ -136,7 +136,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 		By("clearing the cache (by starting sync) and failing to delete the second pool")
 		up.OnSyncerStarting()
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2PoolKey2,
+			Key: v3PoolKey2,
 		})
 		Expect(err).To(HaveOccurred())
 	})
@@ -145,7 +145,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 		up := updateprocessors.NewIPPoolUpdateProcessor()
 
 		By("trying to convert with the wrong key type")
-		res := apiv2.NewIPPool()
+		res := apiv3.NewIPPool()
 		res.Spec.CIDR = cidr1str
 
 		_, err := up.Process(&model.KVPair{
@@ -158,10 +158,10 @@ var _ = Describe("Test the IPPool update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with the wrong value type")
-		wres := apiv2.NewBGPPeer()
+		wres := apiv3.NewBGPPeer()
 
 		_, err = up.Process(&model.KVPair{
-			Key:      v2PoolKey1,
+			Key:      v3PoolKey1,
 			Value:    wres,
 			Revision: "abcde",
 		})
