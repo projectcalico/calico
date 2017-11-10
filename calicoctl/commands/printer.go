@@ -31,6 +31,8 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
+	"context"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 type resourcePrinter interface {
@@ -218,12 +220,11 @@ func config(client client.Interface) func(string) string {
 		switch strings.ToLower(name) {
 		case "asnumber":
 			if asValue == "" {
-				// TODO: fix this once config stuff is available in libcalico-g0
-				//if asn, err := client.Config().GetGlobalASNumber(); err != nil {
-				//	asValue = "unknown"
-				//} else {
-				//	asValue = asn.String()
-				//}
+				if bgpConfig, err := client.BGPConfigurations().Get(context.Background(), "default", options.GetOptions{}); err != nil {
+					asValue = "unknown"
+				} else {
+					asValue = bgpConfig.Spec.ASNumber.String()
+				}
 				asValue = "1234"
 			}
 			return asValue
