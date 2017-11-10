@@ -1,16 +1,12 @@
 package server
 
 import (
-	"sort"
-	"strings"
-
 	authz "tigera.io/dikastes/proto"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/selector"
-
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
+
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"k8s.io/client-go/kubernetes"
@@ -19,9 +15,8 @@ import (
 
 type (
 	auth_server struct {
-		Client     *client.Client
 		NodeName   string
-		kubeClient *kubernetes.Clientset
+		Query CalicoQuery
 	}
 )
 
@@ -37,18 +32,23 @@ func NewServer(config api.CalicoAPIConfig, nodeName string) (*auth_server, error
 	if err != nil {
 		return nil, err
 	}
-	return &auth_server{c, nodeName, clientset}, nil
+	q := calicoQuery{c, clientset}
+	return &auth_server{nodeName, &q}, nil
 }
 
 func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Response, error) {
 	log.Debugf("Check(%v, %v)", ctx, req)
 	resp := authz.Response{Status: &authz.Response_Status{Code: authz.INTERNAL}}
-	labels, err := as.getLabelsFromContext(ctx)
+	cid, err := getContainerFromContext(ctx)
 	if err != nil {
-		log.Errorf("Failed to get workload endpoint. %v", err)
+		log.Errorf("Failed to get container ID. %v", err)
 		return &resp, nil
 	}
-	policies, err := as.getPolicies(labels)
+	wemeta, err := as.Query.GetEndpointFromContainer(cid, as.NodeName)
+	if err != nil {
+		log.Errorf("Failed to get endpoint for container %v. %v", cid, err)
+	}
+	policies, err := as.Query.GetPolicies(wemeta)
 	if err != nil {
 		log.Errorf("Failed to get policies. %v", err)
 		return &resp, nil
@@ -60,56 +60,6 @@ func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Re
 		"Response": resp,
 	}).Info("Check complete")
 	return &resp, nil
-}
-
-// Methods to sort Polices by their ordering.
-type orderedPolicies []api.Policy
-
-func (op orderedPolicies) Len() int      { return len(op) }
-func (op orderedPolicies) Swap(i, j int) { op[i], op[j] = op[j], op[i] }
-func (op orderedPolicies) Less(i, j int) bool {
-	if op[i].Spec.Order != nil && op[j].Spec.Order == nil {
-		return true
-	} else if op[i].Spec.Order == nil && op[j].Spec.Order != nil {
-		return false
-	} else if op[i].Spec.Order != nil && op[j].Spec.Order != nil {
-		return *op[i].Spec.Order < *op[j].Spec.Order
-	} else {
-		return strings.Compare(op[i].Metadata.Name, op[j].Metadata.Name) < 0
-	}
-}
-
-// Return the list of active PolicySpecs for this endpoint.  This list should be sorted in the correct application
-// order.
-func (as *auth_server) getPolicies(labels map[string]string) ([]api.Policy, error) {
-	pi := as.Client.Policies()
-	p_list, err := pi.List(api.PolicyMetadata{})
-	if err != nil {
-		log.Error("Failed to List.")
-		return nil, err
-	}
-
-	p_active := []api.Policy{}
-	log.Debugf("Found %d total policies.", len(p_list.Items))
-	for _, p := range p_list.Items {
-		log.Debugf("Found policy %v", p)
-		if policyActive(labels, &p) {
-			log.Debugf("Active policy %v", p)
-			p_active = append(p_active, p)
-		}
-	}
-	sort.Sort(orderedPolicies(p_active))
-	return p_active, nil
-}
-
-func policyActive(labels map[string]string, policy *api.Policy) bool {
-	sel, err := selector.Parse(policy.Spec.Selector)
-	if err != nil {
-		log.Warnf("Could not parse policy selector %v, %v", policy.Spec.Selector, err)
-		return false
-	}
-	log.Debugf("Parsed selector %v", sel)
-	return sel.Evaluate(labels)
 }
 
 // Modified from libcalico-go/lib/backend/k8s/k8s.go to return bare clientset.

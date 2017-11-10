@@ -11,35 +11,25 @@ import (
 	log "github.com/sirupsen/logrus"
 	spireauth "github.com/spiffe/spire/pkg/agent/auth"
 	"golang.org/x/net/context"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 func getCallerInfo(ctx context.Context) (pid int32, err error) {
 	info, ok := spireauth.CallerFromContext(ctx)
 	if ok == false {
-		return 0, errors.New("Not able to get caller pid")
+		return 0, errors.New("not able to get caller pid")
 	}
 	log.Debugf("Caller context is %v", info)
 	return info.PID, nil
 }
 
 // Given the gRPC context, return the corresponding workload labels for the client.
-func (as *auth_server) getLabelsFromContext(ctx context.Context) (map[string]string, error) {
+func getContainerFromContext(ctx context.Context) (string, error) {
 	// Resolve the caller info
 	pid, err := getCallerInfo(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	cid, err := getContainerId("/host", pid)
-	if err != nil {
-		return nil, err
-	}
-	wep, err := getPodLabels(as.kubeClient, cid, as.NodeName)
-	if err != nil {
-		return nil, err
-	}
-	return wep, nil
+	return getContainerId("/host", pid)
 }
 
 func getContainerId(pathPrefix string, pid int32) (cid string, err error) {
@@ -72,25 +62,4 @@ func getContainerId(pathPrefix string, pid int32) (cid string, err error) {
 	}
 
 	return vals[len(vals)-1], nil
-}
-
-func getPodLabels(cset *kubernetes.Clientset, cid string, nodeName string) (map[string]string, error) {
-	qStr := "spec.nodeName=" + nodeName
-	opts := metav1.ListOptions{}
-	opts.FieldSelector = qStr
-	pods, err := cset.CoreV1().Pods("").List(opts)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("Number of pods on %v %v", qStr, len(pods.Items))
-
-	matchCid := "docker://" + cid
-	for _, pod := range pods.Items {
-		for _, containerStatus := range pod.Status.ContainerStatuses {
-			if containerStatus.ContainerID == matchCid {
-				return pod.GetLabels(), nil
-			}
-		}
-	}
-	return nil, errors.New("Unable to find pod.")
 }
