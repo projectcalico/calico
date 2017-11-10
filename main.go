@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
 	client "github.com/projectcalico/libcalico-go/lib/clientv2"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -101,6 +102,9 @@ func main() {
 		case "policy":
 			policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient)
 			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
+		case "node":
+			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient)
+			go nodeController.Run(config.NodeWorkers, config.ReconcilerPeriod, stop)
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
 		}
