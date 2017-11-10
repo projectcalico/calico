@@ -3,13 +3,12 @@ package scripts_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/fv/containers"
 
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"time"
+	"strings"
 )
 
 var secretFile = "tmp/serviceaccount/token"
@@ -18,14 +17,25 @@ var secretFile = "tmp/serviceaccount/token"
 // TODO: We should be returning an error if the command fails, there currently is
 // not a way to get that from the container package.
 func runCniContainer(extraArgs ...string) error {
+	name := "cni"
+
 	// Get the CWD for mounting directories into container.
 	cwd, err := os.Getwd()
 	if err != nil {
 		Fail("Could not get CWD")
 	}
 
+	// Ensure the install cni container was not left over from another run.
+	out, err := exec.Command("docker", "rm", name).CombinedOutput()
+	if err != nil {
+		if !strings.Contains(string(out), "No such container: "+name) {
+			Fail(fmt.Sprintf("Error running docker command: %s", out))
+		}
+	}
+
 	// Assemble our arguments.
 	args := []string{
+		"run", "--rm", "--name", name,
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
@@ -36,10 +46,10 @@ func runCniContainer(extraArgs ...string) error {
 	args = append(args, extraArgs...)
 	args = append(args, "calico/cni:latest", "/install-cni.sh")
 
-	c := containers.Run("cni", args...)
-	Eventually(func() bool { return c.Stopped() }, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+	out, err = exec.Command("docker", args...).CombinedOutput()
+	GinkgoWriter.Write(out)
 
-	return nil
+	return err
 }
 
 // cleanup uses the calico/cni container to cleanup after itself as it creates
