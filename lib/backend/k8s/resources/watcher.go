@@ -80,9 +80,9 @@ func (crw *k8sWatcherConverter) HasTerminated() bool {
 // Loop to process the events stream from the underlying k8s Watcher and convert them to
 // backend KVPs.
 func (crw *k8sWatcherConverter) processK8sEvents() {
-	crw.logCxt.Info("Watcher process started")
+	crw.logCxt.Info("Kubernetes watcher/converter started")
 	defer func() {
-		crw.logCxt.Info("Watcher process terminated")
+		crw.logCxt.Info("Kubernetes watcher/converter stopped, closing result channel")
 		crw.Stop()
 		close(crw.resultChan)
 		atomic.AddUint32(&crw.terminated, 1)

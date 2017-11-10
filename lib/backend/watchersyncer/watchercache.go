@@ -85,6 +85,7 @@ func (wc *watcherCache) run() {
 			// If the channel is closed then resync/recreate the watch.
 			wc.logger.Info("Watch channel closed by remote - recreate watcher")
 			wc.resyncAndCreateWatcher()
+			continue
 		}
 
 		// Handle the specific event type.
