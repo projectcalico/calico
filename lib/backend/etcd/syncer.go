@@ -193,7 +193,7 @@ func (syn *etcdSyncer) readSnapshotsFromEtcd(
 				if syn.OneShot {
 					// One-shot mode is used to grab a snapshot and then
 					// stop.  We don't want to go into a retry loop.
-					log.Fatal("Failed to read snapshot from etcd: ", err)
+					log.Panic("Failed to read snapshot from etcd: ", err)
 				}
 				log.Warning("Error getting snapshot, retrying...", err)
 				time.Sleep(1 * time.Second)
@@ -392,7 +392,7 @@ func (syn *etcdSyncer) pollClusterID(interval time.Duration) {
 				log.WithFields(log.Fields{
 					"oldID": lastSeenClusterID,
 					"newID": resp.ClusterID,
-				}).Fatal("etcd cluster ID changed; must exit.")
+				}).Panic("etcd cluster ID changed; must exit.")
 			}
 		}
 		// Jitter by 10% of interval.

@@ -77,13 +77,13 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 		// None of the concrete syncers that we are testing expect should have the same
 		// status update repeated, nor should the status decrease.  Log and panic.
 		if status == current {
-			log.WithField("Status", status).Fatal("Duplicate identical status updates from syncer")
+			log.WithField("Status", status).Panic("Duplicate identical status updates from syncer")
 		}
 		if status < current {
 			log.WithFields(log.Fields{
 				"NewStatus": status,
 				"OldStatus": st.status,
-			}).Fatal("Decrementing status updates from syncer")
+			}).Panic("Decrementing status updates from syncer")
 		}
 	}
 

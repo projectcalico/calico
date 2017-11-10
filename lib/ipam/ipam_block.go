@@ -406,7 +406,7 @@ func ipToOrdinal(ip cnet.IP, b allocationBlock) int {
 	ord := big.NewInt(0).Sub(ip_int, base_int).Int64()
 	if ord < 0 || ord >= blockSize {
 		// IP address not in the given block.
-		log.Fatalf("IP %s not in block %s", ip, b.CIDR)
+		log.Panicf("IP %s not in block %s", ip, b.CIDR)
 	}
 	return int(ord)
 }
