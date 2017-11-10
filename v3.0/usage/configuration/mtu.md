@@ -89,14 +89,14 @@ following command to set the global config value.
 # Get the current Felix settings
 $ calicoctl get felixconfig -o yaml > felix.yaml
 
-# Modify ipInIpMtu to the intended integer value
+# Modify ipipMTU to the intended integer value
 $ vim felix.yaml
 
 # Replace the current felixconfig settings
 $ calicoctl replace -f felix.yaml
 ```
 
-> **Note**: Setting the `IpInIpMtu` config option will result in an immediate
+> **Note**: Setting the `ipipMTU` config option will result in an immediate
 > update of the tunnel interface MTU on all of the active nodes in your cluster.
 {: .alert .alert-info}
 
