@@ -121,10 +121,10 @@ networkpolicy_name1_rev1 = {
     'spec': {
         'order': 100,
         'selector': "type=='database'",
-        'types': ['ingress', 'egress'],
+        'types': ['Ingress', 'Egress'],
         'egress': [
             {
-                'action': 'allow',
+                'action': 'Allow',
                 'source': {
                     'selector': "type=='application'"},
             },
@@ -133,7 +133,7 @@ networkpolicy_name1_rev1 = {
             {
                 'notICMP': {'type': 19, 'code': 255},
                 'ipVersion': 4,
-                'action': 'deny',
+                'action': 'Deny',
                 'destination': {
                     'notNets': ['10.3.0.0/16'],
                     'notPorts': ['110:1050'],
@@ -143,7 +143,7 @@ networkpolicy_name1_rev1 = {
                     'selector': "type=='application'",
                 },
                 'icmp': {'type': 10, 'code': 6},
-                'protocol': 'tcp',
+                'protocol': 'TCP',
                 'source': {
                     'notNets': ['10.1.0.0/16'],
                     'notPorts': [1050],
@@ -168,17 +168,17 @@ networkpolicy_name1_rev2 = {
     'spec': {
         'order': 100000,
         'selector': "type=='sql'",
-        'types': ['ingress', 'egress'],
+        'types': ['Ingress', 'Egress'],
         'egress': [
             {
-                'action': 'deny',
-                'protocol': 'tcp',
+                'action': 'Deny',
+                'protocol': 'TCP',
             },
         ],
         'ingress': [
             {
-                'action': 'allow',
-                'protocol': 'udp',
+                'action': 'Allow',
+                'protocol': 'UDP',
             },
         ],
     }
@@ -221,17 +221,17 @@ networkpolicy_name2_rev1 = {
     'spec': {
         'order': 100000,
         'selector': "type=='sql'",
-        'types': ['ingress', 'egress'],
+        'types': ['Ingress', 'Egress'],
         'egress': [
             {
-                'action': 'deny',
-                'protocol': 'tcp',
+                'action': 'Deny',
+                'protocol': 'TCP',
             },
         ],
         'ingress': [
             {
-                'action': 'allow',
-                'protocol': 'udp',
+                'action': 'Allow',
+                'protocol': 'UDP',
             },
         ],
     }
@@ -249,10 +249,10 @@ globalnetworkpolicy_name1_rev1 = {
     'spec': {
         'order': 100,
         'selector': "type=='database'",
-        'types': ['ingress', 'egress'],
+        'types': ['Ingress', 'Egress'],
         'egress': [
             {
-                'action': 'allow',
+                'action': 'Allow',
                 'source': {
                     'selector': "type=='application'"},
             },
@@ -261,7 +261,7 @@ globalnetworkpolicy_name1_rev1 = {
             {
                 'notICMP': {'type': 19, 'code': 255},
                 'ipVersion': 4,
-                'action': 'deny',
+                'action': 'Deny',
                 'destination': {
                     'notNets': ['10.3.0.0/16'],
                     'notPorts': ['110:1050'],
@@ -271,7 +271,7 @@ globalnetworkpolicy_name1_rev1 = {
                     'selector': "type=='application'",
                 },
                 'icmp': {'type': 10, 'code': 6},
-                'protocol': 'tcp',
+                'protocol': 'TCP',
                 'source': {
                     'notNets': ['10.1.0.0/16'],
                     'notPorts': [1050],
@@ -296,17 +296,18 @@ globalnetworkpolicy_name1_rev2 = {
         'order': 100000,
         'selector': "type=='sql'",
         'doNotTrack': True,
-        'types': ['ingress', 'egress'],
+        'applyOnForward': True,
+        'types': ['Ingress', 'Egress'],
         'egress': [
             {
-                'action': 'deny',
-                'protocol': 'tcp',
+                'action': 'Deny',
+                'protocol': 'TCP',
             },
         ],
         'ingress': [
             {
-                'action': 'allow',
-                'protocol': 'udp',
+                'action': 'Allow',
+                'protocol': 'UDP',
             },
         ],
     }
@@ -376,7 +377,7 @@ profile_name1_rev1 = {
     'spec': {
         'egress': [
             {
-                'action': 'allow',
+                'action': 'Allow',
                 'source': {
                       'selector': "type=='application'"
                 }
@@ -386,7 +387,7 @@ profile_name1_rev1 = {
             {
                 'notICMP': {'type': 19, 'code': 255},
                 'ipVersion': 4,
-                'action': 'deny',
+                'action': 'Deny',
                 'destination': {
                    'notNets': ['10.3.0.0/16'],
                    'notPorts': ['110:1050'],
@@ -395,7 +396,7 @@ profile_name1_rev1 = {
                    'ports': ['100:200'],
                    'selector': "type=='application'"},
                 'icmp': {'type': 10, 'code': 6},
-                'protocol': 'tcp',
+                'protocol': 'TCP',
                 'source': {
                    'notNets': ['10.1.0.0/16'],
                    'notPorts': [1050],
@@ -418,13 +419,13 @@ profile_name1_rev2 = {
     'spec': {
         'egress': [
             {
-                'action': 'allow'
+                'action': 'Allow'
             }
         ],
         'ingress': [
             {
                 'ipVersion': 6,
-                'action': 'deny',
+                'action': 'Deny',
             },
         ],
     }
@@ -599,22 +600,22 @@ felixconfig_name1_rev1 = {
     },
     'spec': {
         'chainInsertMode': 'append',
-        'defaultEndpointToHostAction': 'ACCEPT',
+        'defaultEndpointToHostAction': 'Accept',
         'failsafeInboundHostPorts': [
-            {'protocol': 'tcp', 'port': 666},
-            {'protocol': 'udp', 'port': 333}, ],
+            {'protocol': 'TCP', 'port': 666},
+            {'protocol': 'UDP', 'port': 333}, ],
         'failsafeOutboundHostPorts': [
-            {'protocol': 'tcp', 'port': 999},
-            {'protocol': 'udp', 'port': 222},
-            {'protocol': 'udp', 'port': 422}, ],
+            {'protocol': 'TCP', 'port': 999},
+            {'protocol': 'UDP', 'port': 222},
+            {'protocol': 'UDP', 'port': 422}, ],
         'interfacePrefix': 'humperdink',
         'ipipMTU': 1521,
         'ipsetsRefreshIntervalSecs': 44,
-        'iptablesFilterAllowAction': 'rEtUrN',
+        'iptablesFilterAllowAction': 'Return',
         'iptablesLockFilePath': '/run/fun',
         'iptablesLockProbeIntervalMillis': 500,
         'iptablesLockTimeoutSecs': 22,
-        'iptablesMangleAllowAction': 'accept',
+        'iptablesMangleAllowAction': 'Accept',
         'iptablesMarkMask': 0xff0000,
         'iptablesPostWriteCheckIntervalSecs': 12,
         'iptablesRefreshIntervalSecs': 22,

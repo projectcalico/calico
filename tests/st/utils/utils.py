@@ -155,8 +155,8 @@ class CalicoctlOutput:
         if not text:
             return
         assert text in self.output, "Expected text in output; \n" + \
-            "command=" + self.command + "\noutput=" + self.output + \
-            "expected=" + text
+            "command=" + self.command + "\noutput=\n" + self.output + \
+            "\nexpected=\n" + text
 
 
 def calicoctl(command, data=None, load_as_stdin=False, format="yaml"):

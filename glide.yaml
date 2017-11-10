@@ -28,10 +28,10 @@ import:
   - ssh/terminal
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: 9fddc31c42a863604f7c98ab7f899eb9eadae14e
+  version: 69516f55f1dad6071c5bfe4a67cdd11fcee2aff9
   subpackages:
-  - lib/apis/v2
-  - lib/clientv2
+  - lib/apis/v3
+  - lib/clientv3
   - lib/backend
   - lib/backend/api
   - lib/backend/model
@@ -44,3 +44,5 @@ import:
 - package: github.com/termie/go-shutil
 - package: google.golang.org/grpc
   version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
+- package: github.com/coreos/etcd
+  version: v3.2.7
