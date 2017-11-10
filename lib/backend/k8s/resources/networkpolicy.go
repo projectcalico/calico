@@ -398,16 +398,40 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 		atomic.AddUint32(&npw.terminated, 1)
 	}()
 
-	var e api.WatchEvent
-	var isCRDEvent bool
-	var value interface{}
 	for {
+		var ok bool
+		var e api.WatchEvent
+		var isCRDEvent bool
 		select {
-		case e = <-npw.crdNPWatch.ResultChan():
+		case e, ok = <-npw.crdNPWatch.ResultChan():
+			if !ok {
+				// We shouldn't get a closed channel without first getting a terminating error,
+				// so write a warning log and convert to a termination error.
+				log.Warn("Calico NP channel closed")
+				e = api.WatchEvent{
+					Type: api.WatchError,
+					Error: cerrors.ErrorWatchTerminated{
+						ClosedByRemote: true,
+						Err: errors.New("Calico NP watch channel closed"),
+					},
+				}
+			}
 			log.Debug("Processing Calico NP event")
 			isCRDEvent = true
 
-		case e = <-npw.k8sNPWatch.ResultChan():
+		case e, ok = <-npw.k8sNPWatch.ResultChan():
+			if !ok {
+				// We shouldn't get a closed channel without first getting a terminating error,
+				// so write a warning log and convert to a termination error.
+				log.Warn("Kubernetes NP channel closed")
+				e = api.WatchEvent{
+					Type: api.WatchError,
+					Error: cerrors.ErrorWatchTerminated{
+						ClosedByRemote: true,
+						Err: errors.New("Kubernetes NP watch channel closed"),
+					},
+				}
+			}
 			log.Debug("Processing Kubernetes NP event")
 			isCRDEvent = false
 
@@ -418,25 +442,37 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 
 		// Update the resource version of the Object in the watcher.  The version returned on a watch
 		// event needs to able to be passed back into a Watch client so that we can resume watching
-		// when a watch fails.  The watch client is expecting a comma separated list of resource
+		// when a watch fails.  The watch client is expecting a slash separated list of resource
 		// versions in the format <CRD NP Revision>/<k8s NP Revision>.
+		var value interface{}
 		switch e.Type {
 		case api.WatchModified, api.WatchAdded:
 			value = e.New.Value
 		case api.WatchDeleted:
 			value = e.Old.Value
 		}
-		oma, ok := value.(metav1.ObjectMetaAccessor)
-		if !ok {
-			log.Error("Resource returned from watch does not implement the ObjectMetaAccessor interface")
-			return
+
+		if value != nil {
+			oma, ok := value.(metav1.ObjectMetaAccessor)
+			if !ok {
+				log.WithField("event", e).Error(
+					"Resource returned from watch does not implement the ObjectMetaAccessor interface")
+				e = api.WatchEvent{
+					Type: api.WatchError,
+					Error: cerrors.ErrorWatchTerminated{
+						Err: errors.New("Resource returned from watch does not implement the ObjectMetaAccessor interface"),
+					},
+				}
+			}
+			if isCRDEvent {
+				npw.crdNPRev = oma.GetObjectMeta().GetResourceVersion()
+			} else {
+				npw.k8sNPRev = oma.GetObjectMeta().GetResourceVersion()
+			}
+			oma.GetObjectMeta().SetResourceVersion(npw.JoinNetworkPolicyRevisions(npw.crdNPRev, npw.k8sNPRev))
+		} else if e.Error == nil {
+			log.WithField("event", e).Warning("Event had nil error and value")
 		}
-		if isCRDEvent {
-			npw.crdNPRev = oma.GetObjectMeta().GetResourceVersion()
-		} else {
-			npw.k8sNPRev = oma.GetObjectMeta().GetResourceVersion()
-		}
-		oma.GetObjectMeta().SetResourceVersion(npw.JoinNetworkPolicyRevisions(npw.crdNPRev, npw.k8sNPRev))
 
 		// Send the processed event.
 		select {
