@@ -225,7 +225,6 @@ func config(client client.Interface) func(string) string {
 				} else {
 					asValue = bgpConfig.Spec.ASNumber.String()
 				}
-				asValue = "1234"
 			}
 			return asValue
 		}
