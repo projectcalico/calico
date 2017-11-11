@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -30,12 +30,12 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 	name2 := "name2"
 	hn1 := "host1"
 	hn2 := "host2"
-	v2HostEndpointKey1 := model.ResourceKey{
-		Kind: apiv2.KindHostEndpoint,
+	v3HostEndpointKey1 := model.ResourceKey{
+		Kind: apiv3.KindHostEndpoint,
 		Name: name1,
 	}
-	v2HostEndpointKey2 := model.ResourceKey{
-		Kind: apiv2.KindHostEndpoint,
+	v3HostEndpointKey2 := model.ResourceKey{
+		Kind: apiv3.KindHostEndpoint,
 		Name: name2,
 	}
 	v1HostEndpointKey1 := model.HostEndpointKey{
@@ -51,13 +51,13 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		up := updateprocessors.NewHostEndpointUpdateProcessor()
 
 		By("converting a HostEndpoint with minimum configuration")
-		res := apiv2.NewHostEndpoint()
-		res.Name = v2HostEndpointKey1.Name
+		res := apiv3.NewHostEndpoint()
+		res.Name = v3HostEndpointKey1.Name
 		res.Spec.Node = hn1
 		res.Spec.InterfaceName = name1
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2HostEndpointKey1,
+			Key:      v3HostEndpointKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -73,16 +73,16 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		}))
 
 		By("adding another HostEndpoint with a full configuration")
-		res = apiv2.NewHostEndpoint()
-		res.Name = v2HostEndpointKey2.Name
+		res = apiv3.NewHostEndpoint()
+		res.Name = v3HostEndpointKey2.Name
 		res.Labels = map[string]string{"testLabel": "label"}
 		res.Spec.Node = hn2
 		res.Spec.InterfaceName = name2
 		res.Spec.ExpectedIPs = []string{"10.100.10.1"}
 		expectedIpv4 := *net.ParseIP("10.100.10.1")
 		res.Spec.Profiles = []string{"testProfile"}
-		res.Spec.Ports = []apiv2.EndpointPort{
-			apiv2.EndpointPort{
+		res.Spec.Ports = []apiv3.EndpointPort{
+			apiv3.EndpointPort{
 				Name:     "portname",
 				Protocol: numorstring.ProtocolFromInt(uint8(30)),
 				Port:     uint16(8080),
@@ -90,7 +90,7 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		}
 
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2HostEndpointKey2,
+			Key:      v3HostEndpointKey2,
 			Value:    res,
 			Revision: "1234",
 		})
@@ -117,7 +117,7 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 
 		By("deleting the first host endpoint")
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2HostEndpointKey1,
+			Key: v3HostEndpointKey1,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
@@ -129,7 +129,7 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		By("clearing the cache (by starting sync) and failing to delete the second host endpoint")
 		up.OnSyncerStarting()
 		kvps, err = up.Process(&model.KVPair{
-			Key: v2HostEndpointKey2,
+			Key: v3HostEndpointKey2,
 		})
 		Expect(err).To(HaveOccurred())
 	})
@@ -138,7 +138,7 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		up := updateprocessors.NewHostEndpointUpdateProcessor()
 
 		By("trying to convert with the wrong key type")
-		res := apiv2.NewHostEndpoint()
+		res := apiv3.NewHostEndpoint()
 		res.Spec.Node = hn1
 
 		_, err := up.Process(&model.KVPair{
@@ -151,10 +151,10 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with the wrong value type")
-		wres := apiv2.NewIPPool()
+		wres := apiv3.NewIPPool()
 
 		_, err = up.Process(&model.KVPair{
-			Key:      v2HostEndpointKey1,
+			Key:      v3HostEndpointKey1,
 			Value:    wres,
 			Revision: "abcde",
 		})

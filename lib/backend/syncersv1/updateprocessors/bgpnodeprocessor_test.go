@@ -18,15 +18,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var _ = Describe("Test the (BGP) Node update processor", func() {
-	v2NodeKey1 := model.ResourceKey{
-		Kind: apiv2.KindNode,
+	v3NodeKey1 := model.ResourceKey{
+		Kind: apiv3.KindNode,
 		Name: "bgpnode1",
 	}
 	numBgpConfigs := 5
@@ -41,7 +41,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 	// our validation.  Note that it expects a node name of bgpnode1.
 	It("should handle conversion of valid Nodes", func() {
 		By("converting a zero-ed Node")
-		res := apiv2.NewNode()
+		res := apiv3.NewNode()
 		res.Name = "bgpnode1"
 		expected := map[string]interface{}{
 			"ip_addr_v4": "",
@@ -51,7 +51,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"as_num":     nil,
 		}
 		kvps, err := up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -63,11 +63,11 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a zero-ed but non-nil BGPNodeSpec")
-		res = apiv2.NewNode()
+		res = apiv3.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &apiv2.NodeBGPSpec{}
+		res.Spec.BGP = &apiv3.NodeBGPSpec{}
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -80,9 +80,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a Node with an IPv4 (specified without the network) only - expect /32 net")
-		res = apiv2.NewNode()
+		res = apiv3.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &apiv2.NodeBGPSpec{
+		res.Spec.BGP = &apiv3.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		}
 		expected = map[string]interface{}{
@@ -93,7 +93,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"as_num":     nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -105,9 +105,9 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a Node with an IPv6 (specified without the network) only - expect /128 net")
-		res = apiv2.NewNode()
+		res = apiv3.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &apiv2.NodeBGPSpec{
+		res.Spec.BGP = &apiv3.NodeBGPSpec{
 			IPv6Address: "aa:bb:cc::",
 		}
 		expected = map[string]interface{}{
@@ -118,7 +118,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"as_num":     nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -130,10 +130,10 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("converting a Node with IPv4 and IPv6 network and AS number")
-		res = apiv2.NewNode()
+		res = apiv3.NewNode()
 		res.Name = "bgpnode1"
 		asn := numorstring.ASNumber(12345)
-		res.Spec.BGP = &apiv2.NodeBGPSpec{
+		res.Spec.BGP = &apiv3.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/24",
 			IPv6Address: "aa:bb:cc::ffff/120",
 			ASNumber:    &asn,
@@ -146,7 +146,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"as_num":     "12345",
 		}
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -160,7 +160,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 
 	It("should fail to convert an invalid resource", func() {
 		By("trying to convert with the wrong key type")
-		res := apiv2.NewNode()
+		res := apiv3.NewNode()
 
 		_, err := up.Process(&model.KVPair{
 			Key: model.GlobalConfigKey{
@@ -172,25 +172,25 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with the wrong value type")
-		wres := apiv2.NewBGPPeer()
+		wres := apiv3.NewBGPPeer()
 		_, err = up.Process(&model.KVPair{
-			Key:      v2NodeKey1,
+			Key:      v3NodeKey1,
 			Value:    wres,
 			Revision: "abcdef",
 		})
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with an invalid IPv4 address - treat as unassigned")
-		res = apiv2.NewNode()
+		res = apiv3.NewNode()
 		res.Name = "bgpnode1"
 		asn := numorstring.ASNumber(12345)
-		res.Spec.BGP = &apiv2.NodeBGPSpec{
+		res.Spec.BGP = &apiv3.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/240",
 			IPv6Address: "aa:bb:cc::ffff/120",
 			ASNumber:    &asn,
 		}
 		kvps, err := up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		// IPv4 address should be blank, network should be nil (deleted)
@@ -210,14 +210,14 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		)
 
 		By("trying to convert with an invalid IPv6 address - treat as unassigned")
-		res = apiv2.NewNode()
+		res = apiv3.NewNode()
 		res.Name = "bgpnode1"
-		res.Spec.BGP = &apiv2.NodeBGPSpec{
+		res.Spec.BGP = &apiv3.NodeBGPSpec{
 			IPv4Address: "1.2.3.4/24",
 			IPv6Address: "aazz::qq/100",
 		}
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2NodeKey1,
+			Key:   v3NodeKey1,
 			Value: res,
 		})
 		// IPv6 address should be blank, network should be nil (deleted)

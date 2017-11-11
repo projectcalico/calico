@@ -94,7 +94,7 @@ var (
 )
 
 // configUpdateProcessor implements the SyncerUpdateProcessor interface for converting
-// between v2 configuration resources (FelixConfiguration and ClusterInformation) and
+// between v3 configuration resources (FelixConfiguration and ClusterInformation) and
 // individual global or per-node values.
 //
 // This helper class uses the name of the resource to determine whether the

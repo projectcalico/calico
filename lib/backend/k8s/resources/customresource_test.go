@@ -15,7 +15,7 @@
 package resources
 
 import (
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 
@@ -35,7 +35,7 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 	// Compatible set of list, key and name
 	list1 := model.ResourceListOptions{
 		Name: "1-2-3-4",
-		Kind: apiv2.KindBGPPeer,
+		Kind: apiv3.KindBGPPeer,
 	}
 
 	name1 := "1-2-3-4"
@@ -43,20 +43,20 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 
 	key1 := model.ResourceKey{
 		Name: name1,
-		Kind: apiv2.KindBGPPeer,
+		Kind: apiv3.KindBGPPeer,
 	}
 
 	name2 := "11-22"
 	key2 := model.ResourceKey{
 		Name: name2,
-		Kind: apiv2.KindBGPPeer,
+		Kind: apiv3.KindBGPPeer,
 	}
 
 	// Compatible set of KVPair and Kubernetes Resource.
-	value1 := apiv2.NewBGPPeer()
+	value1 := apiv3.NewBGPPeer()
 	value1.ObjectMeta.Name = name1
 	value1.ObjectMeta.ResourceVersion = "rv"
-	value1.Spec = apiv2.BGPPeerSpec{
+	value1.Spec = apiv3.BGPPeerSpec{
 		PeerIP:   peerIP1.String(),
 		ASNumber: 1212,
 	}
@@ -65,16 +65,16 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Value:    value1,
 		Revision: "rv",
 	}
-	res1 := &apiv2.BGPPeer{
+	res1 := &apiv3.BGPPeer{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       apiv2.KindBGPPeer,
-			APIVersion: apiv2.GroupVersionCurrent,
+			Kind:       apiv3.KindBGPPeer,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name1,
 			ResourceVersion: "rv",
 		},
-		Spec: apiv2.BGPPeerSpec{
+		Spec: apiv3.BGPPeerSpec{
 			ASNumber: 1212,
 			PeerIP:   peerIP1.String(),
 			Node:     "",
@@ -106,8 +106,8 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.ObjectMeta.Name))
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.ObjectMeta.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
-		Expect(r.(*apiv2.BGPPeer).Spec).To(Equal(res1.Spec))
+		Expect(r).To(BeAssignableToTypeOf(&apiv3.BGPPeer{}))
+		Expect(r.(*apiv3.BGPPeer).Spec).To(Equal(res1.Spec))
 
 		// Make sure to clean up the annotations on the resource
 		err = ConvertK8sResourceToCalicoResource(r)
@@ -128,7 +128,7 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value).To(BeAssignableToTypeOf(&apiv2.BGPPeer{}))
+		Expect(kvp.Value).To(BeAssignableToTypeOf(&apiv3.BGPPeer{}))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
 	})
 })

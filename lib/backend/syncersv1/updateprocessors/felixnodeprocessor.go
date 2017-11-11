@@ -20,7 +20,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -33,7 +33,7 @@ func NewFelixNodeUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 }
 
 // FelixNodeUpdateProcessor implements the SyncerUpdateProcessor interface.
-// This converts the v2 node configuration into the v1 data types consumed by confd.
+// This converts the v3 node configuration into the v1 data types consumed by confd.
 type FelixNodeUpdateProcessor struct {
 }
 
@@ -50,7 +50,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	// the updates.
 	var ipv4, ipv4Tunl interface{}
 	if kvp.Value != nil {
-		node, ok := kvp.Value.(*apiv2.Node)
+		node, ok := kvp.Value.(*apiv3.Node)
 		if !ok {
 			return nil, errors.New("Incorrect value type - expecting resource of kind Node")
 		}
@@ -113,7 +113,7 @@ func (c *FelixNodeUpdateProcessor) OnSyncerStarting() {
 
 func (c *FelixNodeUpdateProcessor) extractName(k model.Key) (string, error) {
 	rk, ok := k.(model.ResourceKey)
-	if !ok || rk.Kind != apiv2.KindNode {
+	if !ok || rk.Kind != apiv3.KindNode {
 		return "", errors.New("Incorrect key type - expecting resource of kind Node")
 	}
 	return rk.Name, nil

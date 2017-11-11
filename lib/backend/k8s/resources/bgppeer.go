@@ -17,7 +17,7 @@ package resources
 import (
 	"reflect"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -36,12 +36,12 @@ func NewBGPPeerClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceCl
 		name:            BGPPeerCRDName,
 		resource:        BGPPeerResourceName,
 		description:     "Calico BGP Peers",
-		k8sResourceType: reflect.TypeOf(apiv2.BGPPeer{}),
+		k8sResourceType: reflect.TypeOf(apiv3.BGPPeer{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv2.KindBGPPeer,
-			APIVersion: apiv2.GroupVersionCurrent,
+			Kind:       apiv3.KindBGPPeer,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv2.BGPPeerList{}),
-		resourceKind: apiv2.KindBGPPeer,
+		k8sListType:  reflect.TypeOf(apiv3.BGPPeerList{}),
+		resourceKind: apiv3.KindBGPPeer,
 	}
 }

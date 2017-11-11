@@ -17,7 +17,7 @@ package updateprocessors
 import (
 	"errors"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 )
@@ -25,28 +25,28 @@ import (
 // Create a new SyncerUpdateProcessor to sync GlobalNetworkPolicy data in v1 format for
 // consumption by Felix.
 func NewGlobalNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv2.KindGlobalNetworkPolicy, convertGlobalNetworkPolicyV2ToV1Key, convertGlobalNetworkPolicyV2ToV1Value)
+	return NewSimpleUpdateProcessor(apiv3.KindGlobalNetworkPolicy, convertGlobalNetworkPolicyV2ToV1Key, convertGlobalNetworkPolicyV2ToV1Value)
 }
 
-func convertGlobalNetworkPolicyV2ToV1Key(v2key model.ResourceKey) (model.Key, error) {
-	if v2key.Name == "" {
+func convertGlobalNetworkPolicyV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
+	if v3key.Name == "" {
 		return model.PolicyKey{}, errors.New("Missing Name field to create a v1 NetworkPolicy Key")
 	}
 	return model.PolicyKey{
-		Name: v2key.Name,
+		Name: v3key.Name,
 	}, nil
 
 }
 
 func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
-	v2res, ok := val.(*apiv2.GlobalNetworkPolicy)
+	v3res, ok := val.(*apiv3.GlobalNetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid GlobalNetworkPolicy resource value")
 	}
-	return convertGlobalPolicyV2ToV1Spec(v2res.Spec)
+	return convertGlobalPolicyV2ToV1Spec(v3res.Spec)
 }
 
-func convertGlobalPolicyV2ToV1Spec(spec apiv2.GlobalNetworkPolicySpec) (*model.Policy, error) {
+func convertGlobalPolicyV2ToV1Spec(spec apiv3.GlobalNetworkPolicySpec) (*model.Policy, error) {
 	v1value := &model.Policy{
 		Order:          spec.Order,
 		InboundRules:   RulesAPIV2ToBackend(spec.Ingress, ""),

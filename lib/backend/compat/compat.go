@@ -732,7 +732,7 @@ func toDatastoreGlobalBGPConfigKey(key model.GlobalBGPConfigKey) model.GlobalBGP
 }
 
 // toDatastoreGlobalBGPConfigList modifies the Global BGP Config List interface to the one required by
-// the datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// the datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func toDatastoreGlobalBGPConfigList(l model.GlobalBGPConfigListOptions) model.GlobalBGPConfigListOptions {
 	switch l.Name {
 	case "AsNumber":
@@ -746,7 +746,7 @@ func toDatastoreGlobalBGPConfigList(l model.GlobalBGPConfigListOptions) model.Gl
 }
 
 // fromDatastoreGlobalBGPKey modifies the Global BGP Config key from the one required by
-// the datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// the datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func fromDatastoreGlobalBGPKey(key model.GlobalBGPConfigKey) model.GlobalBGPConfigKey {
 	switch key.Name {
 	case "as_num":
@@ -760,7 +760,7 @@ func fromDatastoreGlobalBGPKey(key model.GlobalBGPConfigKey) model.GlobalBGPConf
 }
 
 // toDatastoreGlobalBGPConfig modifies the Global BGP Config KVPair to the format required in the
-// datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func toDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
 	// Copy the KVPair, so we aren't modifying the original.
 	modifiedKey := toDatastoreGlobalBGPConfigKey(d.Key.(model.GlobalBGPConfigKey))
@@ -781,7 +781,7 @@ func toDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
 }
 
 // fromDatastoreGlobalBGPConfig modifies the Global BGP Config KVPair from the format required in the
-// datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+// datastore (for back-compatibility with what is expected in the etcdv2 datastore driver).
 func fromDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
 	modifiedKey := fromDatastoreGlobalBGPKey(d.Key.(model.GlobalBGPConfigKey))
 	d.Key = modifiedKey

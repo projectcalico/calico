@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -41,31 +41,31 @@ const (
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
 	// Define some common values
 	perNodeFelixKey := model.ResourceKey{
-		Kind: apiv2.KindFelixConfiguration,
+		Kind: apiv3.KindFelixConfiguration,
 		Name: "node.mynode",
 	}
 	globalFelixKey := model.ResourceKey{
-		Kind: apiv2.KindFelixConfiguration,
+		Kind: apiv3.KindFelixConfiguration,
 		Name: "default",
 	}
 	invalidFelixKey := model.ResourceKey{
-		Kind: apiv2.KindFelixConfiguration,
+		Kind: apiv3.KindFelixConfiguration,
 		Name: "foobar",
 	}
 	globalClusterKey := model.ResourceKey{
-		Kind: apiv2.KindClusterInformation,
+		Kind: apiv3.KindClusterInformation,
 		Name: "default",
 	}
 	nodeClusterKey := model.ResourceKey{
-		Kind: apiv2.KindClusterInformation,
+		Kind: apiv3.KindClusterInformation,
 		Name: "node.mynode",
 	}
 	globalBgpConfigKey := model.ResourceKey{
-		Kind: apiv2.KindBGPConfiguration,
+		Kind: apiv3.KindBGPConfiguration,
 		Name: "default",
 	}
 	nodeBgpConfigKey := model.ResourceKey{
-		Kind: apiv2.KindBGPConfiguration,
+		Kind: apiv3.KindBGPConfiguration,
 		Name: "node.bgpnode1",
 	}
 	numFelixConfigs := 46
@@ -104,7 +104,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		cc := updateprocessors.NewFelixConfigUpdateProcessor()
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,
-			Value: apiv2.NewFelixConfiguration(),
+			Value: apiv3.NewFelixConfiguration(),
 		})
 		Expect(err).NotTo(HaveOccurred())
 		// Explicitly pass in the "mapped" name values to check to ensure the names are mapped.
@@ -120,7 +120,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		cc := updateprocessors.NewFelixConfigUpdateProcessor()
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   globalFelixKey,
-			Value: apiv2.NewFelixConfiguration(),
+			Value: apiv3.NewFelixConfiguration(),
 		})
 		Expect(err).NotTo(HaveOccurred())
 		// Explicitly pass in the "mapped" name values to check to ensure the names are mapped.
@@ -147,7 +147,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: net.MustParseIP("1.2.3.4"),
 			},
-			Value: apiv2.NewFelixConfiguration(),
+			Value: apiv3.NewFelixConfiguration(),
 		})
 		Expect(err).To(HaveOccurred())
 
@@ -161,14 +161,14 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		By("Testing incorrect resource type value on Process with add/mod")
 		_, err = cc.Process(&model.KVPair{
 			Key:   globalFelixKey,
-			Value: apiv2.NewWorkloadEndpoint(),
+			Value: apiv3.NewWorkloadEndpoint(),
 		})
 		Expect(err).To(HaveOccurred())
 
 		By("Testing incorrect name structure on Process with add/mod")
 		_, err = cc.Process(&model.KVPair{
 			Key:   invalidFelixKey,
-			Value: apiv2.NewFelixConfiguration(),
+			Value: apiv3.NewFelixConfiguration(),
 		})
 		Expect(err).To(HaveOccurred())
 
@@ -182,7 +182,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 	It("should handle different field types being assigned", func() {
 		cc := updateprocessors.NewFelixConfigUpdateProcessor()
 		By("converting a per-node felix KVPair with certain values and checking for the correct number of fields")
-		res := apiv2.NewFelixConfiguration()
+		res := apiv3.NewFelixConfiguration()
 		int1 := int(12345)
 		bool1 := false
 		uint1 := uint32(1313)
@@ -190,8 +190,8 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.InterfacePrefix = "califoobar"
 		res.Spec.IPIPEnabled = &bool1
 		res.Spec.IptablesMarkMask = &uint1
-		res.Spec.FailsafeInboundHostPorts = &[]apiv2.ProtoPort{}
-		res.Spec.FailsafeOutboundHostPorts = &[]apiv2.ProtoPort{
+		res.Spec.FailsafeInboundHostPorts = &[]apiv3.ProtoPort{}
+		res.Spec.FailsafeOutboundHostPorts = &[]apiv3.ProtoPort{
 			{
 				Protocol: "tcp",
 				Port:     1234,
@@ -229,7 +229,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 	It("should handle cluster config string slice field", func() {
 		cc := updateprocessors.NewClusterInfoUpdateProcessor()
 		By("converting a global cluster info KVPair with values assigned")
-		res := apiv2.NewClusterInformation()
+		res := apiv3.NewClusterInformation()
 		res.Spec.ClusterGUID = "abcedfg"
 		res.Spec.ClusterType = "Mesos,K8s"
 		expected := map[string]interface{}{
@@ -252,7 +252,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 	It("should handle cluster config ready flag field", func() {
 		cc := updateprocessors.NewClusterInfoUpdateProcessor()
 		By("converting a global cluster info KVPair with values assigned")
-		res := apiv2.NewClusterInformation()
+		res := apiv3.NewClusterInformation()
 		ready := true
 		res.Spec.DatastoreReady = &ready
 		expected := map[string]interface{}{
@@ -274,7 +274,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 	It("should handle cluster config ready flag field (false)", func() {
 		cc := updateprocessors.NewClusterInfoUpdateProcessor()
 		By("converting a global cluster info KVPair with values assigned")
-		res := apiv2.NewClusterInformation()
+		res := apiv3.NewClusterInformation()
 		ready := false
 		res.Spec.DatastoreReady = &ready
 		expected := map[string]interface{}{
@@ -295,7 +295,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 
 	It("should allow setting of a known field through an annotation to override validation", func() {
 		cc := updateprocessors.NewBGPConfigUpdateProcessor()
-		res := apiv2.NewBGPConfiguration()
+		res := apiv3.NewBGPConfiguration()
 		res.Annotations = map[string]string{
 			"config.projectcalico.org/loglevel": "this is not validated!",
 		}
@@ -317,7 +317,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 
 	It("should override struct value when equivalent annotation is set", func() {
 		cc := updateprocessors.NewBGPConfigUpdateProcessor()
-		res := apiv2.NewBGPConfiguration()
+		res := apiv3.NewBGPConfiguration()
 		res.Annotations = map[string]string{
 			"config.projectcalico.org/loglevel": "this is not validated!",
 			"config.projectcalico.org/as_num":   "asnum foobar",
@@ -344,7 +344,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 
 	It("should handle new config options specified through annotations", func() {
 		cc := updateprocessors.NewBGPConfigUpdateProcessor()
-		res := apiv2.NewBGPConfiguration()
+		res := apiv3.NewBGPConfiguration()
 
 		By("validating that the new values are output in addition to the existing ones")
 		res.Annotations = map[string]string{
@@ -473,7 +473,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 
 	It("should handle BGP configuration correctly", func() {
 		cc := updateprocessors.NewBGPConfigUpdateProcessor()
-		res := apiv2.NewBGPConfiguration()
+		res := apiv3.NewBGPConfiguration()
 
 		By("validating an empty configuration")
 		expected := map[string]interface{}{
@@ -563,7 +563,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 
 	It("should handle node cluster information", func() {
 		cc := updateprocessors.NewClusterInfoUpdateProcessor()
-		res := apiv2.NewClusterInformation()
+		res := apiv3.NewClusterInformation()
 
 		By("validating an empty per node cluster is processed correctly")
 		kvps, err := cc.Process(&model.KVPair{

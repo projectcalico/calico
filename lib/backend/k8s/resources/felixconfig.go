@@ -17,7 +17,7 @@ package resources
 import (
 	"reflect"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -36,12 +36,12 @@ func NewFelixConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResour
 		name:            FelixConfigCRDName,
 		resource:        FelixConfigResourceName,
 		description:     "Calico Felix Configuration",
-		k8sResourceType: reflect.TypeOf(apiv2.FelixConfiguration{}),
+		k8sResourceType: reflect.TypeOf(apiv3.FelixConfiguration{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       apiv2.KindFelixConfiguration,
-			APIVersion: apiv2.GroupVersionCurrent,
+			Kind:       apiv3.KindFelixConfiguration,
+			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv2.FelixConfigurationList{}),
-		resourceKind: apiv2.KindFelixConfiguration,
+		k8sListType:  reflect.TypeOf(apiv3.FelixConfigurationList{}),
+		resourceKind: apiv3.KindFelixConfiguration,
 	}
 }

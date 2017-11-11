@@ -7,7 +7,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,7 +36,7 @@ func LoadClientConfig(filename string) (*CalicoAPIConfig, error) {
 func LoadClientConfigFromBytes(b []byte) (*CalicoAPIConfig, error) {
 	var c CalicoAPIConfig
 
-	// Default the backend type to be etcd v2.  This will be overridden if
+	// Default the backend type to be etcd v3.  This will be overridden if
 	// explicitly specified in the file.
 	log.Debug("Loading config from JSON or YAML data")
 	c = CalicoAPIConfig{
@@ -50,7 +50,7 @@ func LoadClientConfigFromBytes(b []byte) (*CalicoAPIConfig, error) {
 	}
 
 	// Validate the version and kind.
-	if c.APIVersion != apiv2.GroupVersionCurrent {
+	if c.APIVersion != apiv3.GroupVersionCurrent {
 		return nil, errors.New("invalid config file: unknown APIVersion '" + c.APIVersion + "'")
 	}
 	if c.Kind != KindCalicoAPIConfig {

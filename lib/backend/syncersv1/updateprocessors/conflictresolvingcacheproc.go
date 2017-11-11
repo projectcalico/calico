@@ -26,29 +26,29 @@ import (
 )
 
 // ConflictResolvingNameCacheProcessor implements a cached update processor that may be used
-// to handle resources where the indexing has changed between the v2 and v1 models.  In v2
+// to handle resources where the indexing has changed between the v3 and v1 models.  In v3
 // all resources have a single name field which in some cases may be unlinked to the v1 indexes.
-// This means it's potentially possible to have multiple v2 resources that share a common set of
-// indexes when converted to the v1 model - e.g. IPPools in v2 are indexed by arbitrary name, and in
+// This means it's potentially possible to have multiple v3 resources that share a common set of
+// indexes when converted to the v1 model - e.g. IPPools in v3 are indexed by arbitrary name, and in
 // v1 by the Pool CIDR, it would be possible to have multiple pools configured with the same
 // CIDR.
 //
 // This cache may also be used when name conflicts are not an issue, but there is no direct map
-// between the v1 key and the v2 key, for example HostEndpoints have an additional "node" index
-// in the v1 key, so this cache can be used to resolve between the v2 name and the last set of v1
+// between the v1 key and the v3 key, for example HostEndpoints have an additional "node" index
+// in the v1 key, so this cache can be used to resolve between the v3 name and the last set of v1
 // indices to provide the relevant updates.
 //
 // Notes:
-// - this update processor only handles simple 1:1 conversions (i.e. a single v2 model mapping to
+// - this update processor only handles simple 1:1 conversions (i.e. a single v3 model mapping to
 //   a single v1 model).
 // - generally, validation processing would prevent the user from making configuration
 //   changes with conflicting (duplicate) information - but since that operation is not atomic,
 //   we need to handle gracefully these situations whether or not that validation processing is
 //   in place.
-// - since the relationship between the v1 and v2 indexes is not locked, the v1 index
-//   for a given v2 resource may be changed by an update.
+// - since the relationship between the v1 and v3 indexes is not locked, the v1 index
+//   for a given v3 resource may be changed by an update.
 //
-// This cache handles conflicting entries by only syncing the v1 data for the v2 resource with
+// This cache handles conflicting entries by only syncing the v1 data for the v3 resource with
 // the lowest alphanumeric name.  This means:
 // -  Adding a conflicting resource with a higher alphanumeric name will not result in any
 //    syncer update.
@@ -58,9 +58,9 @@ import (
 // -  Modifying an existing resource (that is already in our cache) is more complicated.
 //    It is possible that the modification may alter the v1 key - and in which case we need
 //    to effectively treat as a delete (for the old v1 key) and an add for the new v1 key.
-func NewConflictResolvingCacheUpdateProcessor(v2Kind string, converter ConvertV2ToV1) watchersyncer.SyncerUpdateProcessor {
+func NewConflictResolvingCacheUpdateProcessor(v3Kind string, converter ConvertV2ToV1) watchersyncer.SyncerUpdateProcessor {
 	return &conflictResolvingCache{
-		v2Kind:              v2Kind,
+		v3Kind:              v3Kind,
 		converter:           converter,
 		kvpsByName:          make(map[string]*model.KVPair),
 		orderedNamesByV1Key: make(map[string][]string),
@@ -71,7 +71,7 @@ type ConvertV2ToV1 func(kvp *model.KVPair) (*model.KVPair, error)
 
 // conflictResolvingCache implements the ConflictRecolvingCache interface.
 type conflictResolvingCache struct {
-	v2Kind              string
+	v3Kind              string
 	converter           ConvertV2ToV1
 	kvpsByName          map[string]*model.KVPair
 	orderedNamesByV1Key map[string][]string
@@ -80,8 +80,8 @@ type conflictResolvingCache struct {
 func (c *conflictResolvingCache) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
 	// Extract the name of the resource.
 	rk, ok := kvp.Key.(model.ResourceKey)
-	if !ok || rk.Kind != c.v2Kind {
-		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", c.v2Kind)
+	if !ok || rk.Kind != c.v3Kind {
+		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", c.v3Kind)
 	}
 	name := rk.Name
 
@@ -90,12 +90,12 @@ func (c *conflictResolvingCache) Process(kvp *model.KVPair) ([]*model.KVPair, er
 		return c.delete(name)
 	}
 
-	// Convert the v2 resource to the equivalent v1 resource type.
+	// Convert the v3 resource to the equivalent v1 resource type.
 	kvp, err := c.converter(kvp)
 	if err != nil {
 		// We were unable to convert the resource.  If we have an entry for this resource then we
 		// need to handle this as a delete.  In either case we return the original error.
-		log.Warningf("Unable to convert resource %s(%s) - treating as delete", c.v2Kind, name)
+		log.Warningf("Unable to convert resource %s(%s) - treating as delete", c.v3Kind, name)
 		if kvp := c.kvpsByName[name]; kvp != nil {
 			res, _ := c.delete(name)
 			return res, err
@@ -110,7 +110,7 @@ func (c *conflictResolvingCache) Process(kvp *model.KVPair) ([]*model.KVPair, er
 		// config will result in stale entries being stuck in the syncer.  This should have been
 		// caught by the converter, but handle here just in case.  Always return the original error
 		// along with the results.
-		log.Warningf("Unable to convert resource %s(%s) - treating as delete", c.v2Kind, name)
+		log.Warningf("Unable to convert resource %s(%s) - treating as delete", c.v3Kind, name)
 		if kvp := c.kvpsByName[name]; kvp != nil {
 			res, _ := c.delete(name)
 			return res, err
@@ -172,7 +172,7 @@ func (c *conflictResolvingCache) Process(kvp *model.KVPair) ([]*model.KVPair, er
 	return response, nil
 }
 
-// Deletes an entry in the cache.  The name is the original name of the v2 resource.
+// Deletes an entry in the cache.  The name is the original name of the v3 resource.
 //
 // Returns the effective update(s) to send in the syncer.  A nil value in the KVPair
 // indicates a delete, otherwise it's an add/modify.

@@ -28,7 +28,7 @@ import (
 
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 	"k8s.io/apimachinery/pkg/conversion"
 )
@@ -44,8 +44,8 @@ func ExpectResource(res runtime.Object, kind, namespace, name string, spec inter
 	Expect(ma.GetObjectMeta().GetName()).To(Equal(name), optionalDescription...)
 	Expect(ma.GetObjectMeta().GetResourceVersion()).ToNot(BeEmpty(), optionalDescription...)
 	Expect(res.GetObjectKind().GroupVersionKind().Kind).To(Equal(kind), optionalDescription...)
-	Expect(res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv2.Group), optionalDescription...)
-	Expect(res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv2.VersionCurrent), optionalDescription...)
+	Expect(res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv3.Group), optionalDescription...)
+	Expect(res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv3.VersionCurrent), optionalDescription...)
 	Expect(getSpec(res)).To(Equal(spec), optionalDescription...)
 }
 

@@ -22,12 +22,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
-	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -46,9 +46,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 
 	Describe("BGP syncer functionality", func() {
 		It("should receive the synced after return all current data", func() {
-			// Create a v2 client to drive data changes (luckily because this is the _test module,
+			// Create a v3 client to drive data changes (luckily because this is the _test module,
 			// we don't get circular imports.
-			c, err := clientv2.New(config)
+			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create the backend client to obtain a syncer interface.
@@ -99,9 +99,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			asn := numorstring.ASNumber(12345)
 			bgpCfg, err := c.BGPConfigurations().Create(
 				ctx,
-				&apiv2.BGPConfiguration{
+				&apiv3.BGPConfiguration{
 					ObjectMeta: metav1.ObjectMeta{Name: "default"},
-					Spec: apiv2.BGPConfigurationSpec{
+					Spec: apiv3.BGPConfigurationSpec{
 						NodeToNodeMeshEnabled: &n2n,
 						ASNumber:              &asn,
 					},
@@ -124,13 +124,13 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				Revision: bgpCfg.ResourceVersion,
 			})
 
-			var node *apiv2.Node
+			var node *apiv3.Node
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with BGP configuration")
 				node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				node.Spec.BGP = &apiv2.NodeBGPSpec{
+				node.Spec.BGP = &apiv3.NodeBGPSpec{
 					IPv4Address: "1.2.3.4/24",
 					IPv6Address: "aa:bb::cc/120",
 				}
@@ -145,10 +145,10 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				By("Creating a node with BGP configuration")
 				node, err = c.Nodes().Create(
 					ctx,
-					&apiv2.Node{
+					&apiv3.Node{
 						ObjectMeta: metav1.ObjectMeta{Name: "127.0.0.1"},
-						Spec: apiv2.NodeSpec{
-							BGP: &apiv2.NodeBGPSpec{
+						Spec: apiv3.NodeSpec{
+							BGP: &apiv3.NodeBGPSpec{
 								IPv4Address: "1.2.3.4/24",
 								IPv6Address: "aa:bb::cc/120",
 							},
@@ -193,11 +193,11 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			poolCIDRNet := net.MustParseCIDR(poolCIDR)
 			pool, err := c.IPPools().Create(
 				ctx,
-				&apiv2.IPPool{
+				&apiv3.IPPool{
 					ObjectMeta: metav1.ObjectMeta{Name: "mypool"},
-					Spec: apiv2.IPPoolSpec{
+					Spec: apiv3.IPPoolSpec{
 						CIDR:        poolCIDR,
-						IPIPMode:    apiv2.IPIPModeCrossSubnet,
+						IPIPMode:    apiv3.IPIPModeCrossSubnet,
 						NATOutgoing: true,
 					},
 				},
@@ -224,9 +224,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			By("Creating a BGPPeer")
 			peer1, err := c.BGPPeers().Create(
 				ctx,
-				&apiv2.BGPPeer{
+				&apiv3.BGPPeer{
 					ObjectMeta: metav1.ObjectMeta{Name: "peer1"},
-					Spec: apiv2.BGPPeerSpec{
+					Spec: apiv3.BGPPeerSpec{
 						PeerIP:   "192.124.10.20",
 						ASNumber: numorstring.ASNumber(75758),
 					},
@@ -250,9 +250,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			By("Adding a new BGPPeer with conflicting peer IP (and lower priority than the first one)")
 			peer2, err := c.BGPPeers().Create(
 				ctx,
-				&apiv2.BGPPeer{
+				&apiv3.BGPPeer{
 					ObjectMeta: metav1.ObjectMeta{Name: "peer9-lowerpriority"},
-					Spec: apiv2.BGPPeerSpec{
+					Spec: apiv3.BGPPeerSpec{
 						PeerIP:   "192.124.10.20",
 						ASNumber: numorstring.ASNumber(99999),
 					},

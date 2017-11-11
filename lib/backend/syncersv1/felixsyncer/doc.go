@@ -17,7 +17,7 @@ package felixsyncer
 /*
 felixsyncerv1 implements an api.Syncer for use with Felix.
 
-It consumes the v2 data from the datastore and dynamically converts it to
+It consumes the v3 data from the datastore and dynamically converts it to
 v1 data for consumption by Felix.
 
 This implementation uses the watchersyncer.

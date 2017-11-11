@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -30,12 +30,12 @@ var _ = Describe("Test the Profile update processor", func() {
 	name2 := "name2"
 	nilRules := &model.ProfileRules{}
 
-	v2ProfileKey1 := model.ResourceKey{
-		Kind: apiv2.KindProfile,
+	v3ProfileKey1 := model.ResourceKey{
+		Kind: apiv3.KindProfile,
 		Name: name1,
 	}
-	v2ProfileKey2 := model.ResourceKey{
-		Kind: apiv2.KindProfile,
+	v3ProfileKey2 := model.ResourceKey{
+		Kind: apiv3.KindProfile,
 		Name: name2,
 	}
 	v1ProfileKey1 := model.ProfileKey{
@@ -49,11 +49,11 @@ var _ = Describe("Test the Profile update processor", func() {
 		up := updateprocessors.NewProfileUpdateProcessor()
 
 		By("converting a Profile with minimum configuration")
-		res := apiv2.NewProfile()
+		res := apiv3.NewProfile()
 		res.Spec.LabelsToApply = map[string]string{"testLabel": "label"}
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2ProfileKey1,
+			Key:      v3ProfileKey1,
 			Value:    res,
 			Revision: "abcde",
 		})
@@ -71,7 +71,7 @@ var _ = Describe("Test the Profile update processor", func() {
 		}))
 
 		By("adding another Profile with a full configuration")
-		res = apiv2.NewProfile()
+		res = apiv3.NewProfile()
 		res.Spec.LabelsToApply = map[string]string{"testLabel": "label2"}
 
 		v4 := 4
@@ -83,20 +83,20 @@ var _ = Describe("Test the Profile update processor", func() {
 		inproto := numorstring.ProtocolFromString("udp")
 		port80 := numorstring.SinglePort(uint16(80))
 		port443 := numorstring.SinglePort(uint16(443))
-		irule := apiv2.Rule{
-			Action:    apiv2.Allow,
+		irule := apiv3.Rule{
+			Action:    apiv3.Allow,
 			IPVersion: &v4,
 			Protocol:  &iproto,
-			ICMP: &apiv2.ICMPFields{
+			ICMP: &apiv3.ICMPFields{
 				Type: &itype,
 				Code: &icode,
 			},
 			NotProtocol: &inproto,
-			NotICMP: &apiv2.ICMPFields{
+			NotICMP: &apiv3.ICMPFields{
 				Type: &intype,
 				Code: &incode,
 			},
-			Source: apiv2.EntityRule{
+			Source: apiv3.EntityRule{
 				Nets:        []string{"10.100.10.1"},
 				Selector:    "calico/k8s_ns == selector1",
 				Ports:       []numorstring.Port{port80},
@@ -104,7 +104,7 @@ var _ = Describe("Test the Profile update processor", func() {
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Nets:        []string{"10.100.1.1"},
 				Selector:    "calico/k8s_ns == selector2",
 				Ports:       []numorstring.Port{port443},
@@ -120,20 +120,20 @@ var _ = Describe("Test the Profile update processor", func() {
 		encode := 8
 		eproto := numorstring.ProtocolFromInt(uint8(30))
 		enproto := numorstring.ProtocolFromInt(uint8(62))
-		erule := apiv2.Rule{
-			Action:    apiv2.Allow,
+		erule := apiv3.Rule{
+			Action:    apiv3.Allow,
 			IPVersion: &v4,
 			Protocol:  &eproto,
-			ICMP: &apiv2.ICMPFields{
+			ICMP: &apiv3.ICMPFields{
 				Type: &etype,
 				Code: &ecode,
 			},
 			NotProtocol: &enproto,
-			NotICMP: &apiv2.ICMPFields{
+			NotICMP: &apiv3.ICMPFields{
 				Type: &entype,
 				Code: &encode,
 			},
-			Source: apiv2.EntityRule{
+			Source: apiv3.EntityRule{
 				Nets:        []string{"10.100.1.1"},
 				Selector:    "calico/k8s_ns == selector2",
 				Ports:       []numorstring.Port{port443},
@@ -141,7 +141,7 @@ var _ = Describe("Test the Profile update processor", func() {
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
 			},
-			Destination: apiv2.EntityRule{
+			Destination: apiv3.EntityRule{
 				Nets:        []string{"10.100.10.1"},
 				Selector:    "calico/k8s_ns == selector1",
 				Ports:       []numorstring.Port{port80},
@@ -151,10 +151,10 @@ var _ = Describe("Test the Profile update processor", func() {
 			},
 		}
 
-		res.Spec.Ingress = []apiv2.Rule{irule}
-		res.Spec.Egress = []apiv2.Rule{erule}
+		res.Spec.Ingress = []apiv3.Rule{irule}
+		res.Spec.Egress = []apiv3.Rule{erule}
 		kvps, err = up.Process(&model.KVPair{
-			Key:      v2ProfileKey2,
+			Key:      v3ProfileKey2,
 			Value:    res,
 			Revision: "1234",
 		})
@@ -179,7 +179,7 @@ var _ = Describe("Test the Profile update processor", func() {
 
 		By("deleting the first profile")
 		kvps, err = up.Process(&model.KVPair{
-			Key:   v2ProfileKey1,
+			Key:   v3ProfileKey1,
 			Value: nil,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -199,7 +199,7 @@ var _ = Describe("Test the Profile update processor", func() {
 		up := updateprocessors.NewProfileUpdateProcessor()
 
 		By("trying to convert with the wrong key type")
-		res := apiv2.NewProfile()
+		res := apiv3.NewProfile()
 
 		_, err := up.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
@@ -211,10 +211,10 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).To(HaveOccurred())
 
 		By("trying to convert with the wrong value type")
-		wres := apiv2.NewHostEndpoint()
+		wres := apiv3.NewHostEndpoint()
 
 		kvps, err := up.Process(&model.KVPair{
-			Key:      v2ProfileKey1,
+			Key:      v3ProfileKey1,
 			Value:    wres,
 			Revision: "abcde",
 		})
@@ -231,13 +231,13 @@ var _ = Describe("Test the Profile update processor", func() {
 		}))
 
 		By("trying to convert without enough information to create a v1 key")
-		eres := apiv2.NewProfile()
-		v2ProfileKeyEmpty := model.ResourceKey{
-			Kind: apiv2.KindProfile,
+		eres := apiv3.NewProfile()
+		v3ProfileKeyEmpty := model.ResourceKey{
+			Kind: apiv3.KindProfile,
 		}
 
 		_, err = up.Process(&model.KVPair{
-			Key:      v2ProfileKeyEmpty,
+			Key:      v3ProfileKeyEmpty,
 			Value:    eres,
 			Revision: "abcde",
 		})

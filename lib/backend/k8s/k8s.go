@@ -24,7 +24,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
@@ -65,10 +65,10 @@ type KubeClient struct {
 	// Resource clients keyed off Kind.
 	clientsByResourceKind map[string]resources.K8sResourceClient
 
-	// Non v2 resource clients keyed off Key Type.
+	// Non v3 resource clients keyed off Key Type.
 	clientsByKeyType map[reflect.Type]resources.K8sResourceClient
 
-	// Non v2 resource clients keyed off List Type.
+	// Non v3 resource clients keyed off List Type.
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
@@ -138,61 +138,61 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindIPPool,
+		apiv3.KindIPPool,
 		resources.NewIPPoolClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindGlobalNetworkPolicy,
+		apiv3.KindGlobalNetworkPolicy,
 		resources.NewGlobalNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindNetworkPolicy,
+		apiv3.KindNetworkPolicy,
 		resources.NewNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindBGPPeer,
+		apiv3.KindBGPPeer,
 		resources.NewBGPPeerClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindBGPConfiguration,
+		apiv3.KindBGPConfiguration,
 		resources.NewBGPConfigClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindFelixConfiguration,
+		apiv3.KindFelixConfiguration,
 		resources.NewFelixConfigClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindClusterInformation,
+		apiv3.KindClusterInformation,
 		resources.NewClusterInfoClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindNode,
+		apiv3.KindNode,
 		resources.NewNodeClient(cs),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindProfile,
+		apiv3.KindProfile,
 		resources.NewProfileClient(cs),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		apiv2.KindWorkloadEndpoint,
+		apiv3.KindWorkloadEndpoint,
 		resources.NewWorkloadEndpointClient(cs),
 	)
 	kubeClient.registerResourceClient(
@@ -206,7 +206,7 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 }
 
 // registerResourceClient registers a specific resource client with the associated
-// key and list types (and for v2 resources with the resource kind - since these share
+// key and list types (and for v3 resources with the resource kind - since these share
 // a common key and list type).
 func (c *KubeClient) registerResourceClient(keyType, listType reflect.Type, resourceKind string, client resources.K8sResourceClient) {
 	if keyType == resourceKeyType {
@@ -217,7 +217,7 @@ func (c *KubeClient) registerResourceClient(keyType, listType reflect.Type, reso
 	}
 }
 
-// getResourceClientFromKey returns the appropriate resource client for the v2 resource kind.
+// getResourceClientFromKey returns the appropriate resource client for the v3 resource kind.
 func (c *KubeClient) getResourceClientFromResourceKind(kind string) resources.K8sResourceClient {
 	return c.clientsByResourceKind[kind]
 }
@@ -259,12 +259,12 @@ func (c *KubeClient) EnsureInitialized() error {
 func (c *KubeClient) Clean() error {
 	log.Warning("Cleaning KDD of all Calico-creatable data")
 	kinds := []string{
-		apiv2.KindBGPConfiguration,
-		apiv2.KindBGPPeer,
-		apiv2.KindClusterInformation,
-		apiv2.KindFelixConfiguration,
-		apiv2.KindGlobalNetworkPolicy,
-		apiv2.KindIPPool,
+		apiv3.KindBGPConfiguration,
+		apiv3.KindBGPPeer,
+		apiv3.KindClusterInformation,
+		apiv3.KindFelixConfiguration,
+		apiv3.KindGlobalNetworkPolicy,
+		apiv3.KindIPPool,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
@@ -281,11 +281,11 @@ func (c *KubeClient) Clean() error {
 	}
 
 	// Get a list of Nodes and remove all BGP configuration from the nodes.
-	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv2.KindNode}, ""); err != nil {
+	if nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, ""); err != nil {
 		log.Warning("Failed to list Nodes")
 	} else {
 		for _, nodeKvp := range nodes.KVPairs {
-			node := nodeKvp.Value.(*apiv2.Node)
+			node := nodeKvp.Value.(*apiv3.Node)
 			node.Spec.BGP = nil
 			if _, err := c.Update(ctx, nodeKvp); err != nil {
 				log.WithField("Node", node.Name).Warning("Failed to remove Calico config from node")
@@ -316,20 +316,20 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 		func(scheme *runtime.Scheme) error {
 			scheme.AddKnownTypes(
 				*cfg.GroupVersion,
-				&apiv2.FelixConfiguration{},
-				&apiv2.FelixConfigurationList{},
-				&apiv2.IPPool{},
-				&apiv2.IPPoolList{},
-				&apiv2.BGPPeer{},
-				&apiv2.BGPPeerList{},
-				&apiv2.BGPConfiguration{},
-				&apiv2.BGPConfigurationList{},
-				&apiv2.ClusterInformation{},
-				&apiv2.ClusterInformationList{},
-				&apiv2.GlobalNetworkPolicy{},
-				&apiv2.GlobalNetworkPolicyList{},
-				&apiv2.NetworkPolicy{},
-				&apiv2.NetworkPolicyList{},
+				&apiv3.FelixConfiguration{},
+				&apiv3.FelixConfigurationList{},
+				&apiv3.IPPool{},
+				&apiv3.IPPoolList{},
+				&apiv3.BGPPeer{},
+				&apiv3.BGPPeerList{},
+				&apiv3.BGPConfiguration{},
+				&apiv3.BGPConfigurationList{},
+				&apiv3.ClusterInformation{},
+				&apiv3.ClusterInformationList{},
+				&apiv3.GlobalNetworkPolicy{},
+				&apiv3.GlobalNetworkPolicyList{},
+				&apiv3.NetworkPolicy{},
+				&apiv3.NetworkPolicyList{},
 			)
 			return nil
 		})

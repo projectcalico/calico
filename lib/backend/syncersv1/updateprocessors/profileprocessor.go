@@ -18,7 +18,7 @@ import (
 	"errors"
 	"fmt"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	log "github.com/sirupsen/logrus"
@@ -28,35 +28,35 @@ import (
 // consumption by Felix.
 func NewProfileUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return &profileUpdateProcessor{
-		v2Kind: apiv2.KindProfile,
+		v3Kind: apiv3.KindProfile,
 	}
 }
 
 // Need to create custom logic for Profile since it breaks the values into 3 separate KV Pairs:
 // Tags, Labels, and Rules.
 type profileUpdateProcessor struct {
-	v2Kind string
+	v3Kind string
 }
 
 func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, error) {
-	// Check the v2 resource is the correct type.
+	// Check the v3 resource is the correct type.
 	rk, ok := kvp.Key.(model.ResourceKey)
-	if !ok || rk.Kind != pup.v2Kind {
-		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", pup.v2Kind)
+	if !ok || rk.Kind != pup.v3Kind {
+		return nil, fmt.Errorf("Incorrect key type - expecting resource of kind %s", pup.v3Kind)
 	}
 
-	// Convert the v2 resource to the equivalent v1 resource type.
-	v2key, ok := kvp.Key.(model.ResourceKey)
+	// Convert the v3 resource to the equivalent v1 resource type.
+	v3key, ok := kvp.Key.(model.ResourceKey)
 	if !ok {
 		return nil, errors.New("Key is not a valid V2 resource key")
 	}
 
-	if v2key.Name == "" {
+	if v3key.Name == "" {
 		return nil, errors.New("Missing Name field to create a v1 Profile Key")
 	}
 
 	pk := model.ProfileKey{
-		Name: v2key.Name,
+		Name: v3key.Name,
 	}
 
 	v1labelsKey := model.ProfileLabelsKey{pk}
@@ -97,18 +97,18 @@ func (pup *profileUpdateProcessor) OnSyncerStarting() {
 }
 
 func convertProfileV2ToV1Value(val interface{}) (*model.Profile, error) {
-	v2res, ok := val.(*apiv2.Profile)
+	v3res, ok := val.(*apiv3.Profile)
 	if !ok {
 		return nil, errors.New("Value is not a valid Profile resource value")
 	}
 
 	var irules []model.Rule
-	for _, irule := range v2res.Spec.Ingress {
+	for _, irule := range v3res.Spec.Ingress {
 		irules = append(irules, RuleAPIV2ToBackend(irule, ""))
 	}
 
 	var erules []model.Rule
-	for _, erule := range v2res.Spec.Egress {
+	for _, erule := range v3res.Spec.Egress {
 		erules = append(erules, RuleAPIV2ToBackend(erule, ""))
 	}
 
@@ -119,7 +119,7 @@ func convertProfileV2ToV1Value(val interface{}) (*model.Profile, error) {
 
 	v1value := &model.Profile{
 		Rules:  rules,
-		Labels: v2res.Spec.LabelsToApply,
+		Labels: v3res.Spec.LabelsToApply,
 	}
 
 	return v1value, nil

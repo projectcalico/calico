@@ -14,11 +14,11 @@
 
 package namespace
 
-import apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+import apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 func IsNamespaced(kind string) bool {
 	switch kind {
-	case apiv2.KindWorkloadEndpoint, apiv2.KindNetworkPolicy:
+	case apiv3.KindWorkloadEndpoint, apiv3.KindNetworkPolicy:
 		return true
 	default:
 		return false

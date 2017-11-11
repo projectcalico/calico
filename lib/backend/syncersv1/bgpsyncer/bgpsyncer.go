@@ -15,7 +15,7 @@
 package bgpsyncer
 
 import (
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -39,22 +39,22 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string, watchAll
 	}
 	resourceTypes := []watchersyncer.ResourceType{
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindIPPool},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},
 			UpdateProcessor: updateprocessors.NewIPPoolUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindBGPConfiguration},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindBGPConfiguration},
 			UpdateProcessor: updateprocessors.NewBGPConfigUpdateProcessor(),
 		},
 		{
 			ListInterface: model.ResourceListOptions{
-				Kind: apiv2.KindNode,
+				Kind: apiv3.KindNode,
 				Name: nodeToWatch,
 			},
 			UpdateProcessor: updateprocessors.NewBGPNodeUpdateProcessor(),
 		},
 		{
-			ListInterface:   model.ResourceListOptions{Kind: apiv2.KindBGPPeer},
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
 			UpdateProcessor: updateprocessors.NewBGPPeerUpdateProcessor(),
 		},
 		{

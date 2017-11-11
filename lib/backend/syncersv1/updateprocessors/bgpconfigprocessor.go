@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"strings"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -29,7 +29,7 @@ import (
 // consumption by the BGP daemon.
 func NewBGPConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return NewConfigUpdateProcessor(
-		reflect.TypeOf(apiv2.BGPConfigurationSpec{}),
+		reflect.TypeOf(apiv3.BGPConfigurationSpec{}),
 		AllowAnnotations,
 		func(node, name string) model.Key { return model.NodeBGPConfigKey{Nodename: node, Name: name} },
 		func(name string) model.Key { return model.GlobalBGPConfigKey{Name: name} },

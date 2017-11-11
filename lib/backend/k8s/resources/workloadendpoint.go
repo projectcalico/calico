@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -50,7 +50,7 @@ func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) 
 	// set on the workload endpoint.
 	// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
 	// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
-	ips := kvp.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks
+	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
 	if len(ips) > 0 {
 		log.Debugf("Applying workload with IPs: %+v", ips)
 		wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
@@ -83,7 +83,7 @@ func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) 
 	// set on the workload endpoint.
 	// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
 	// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
-	ips := kvp.Value.(*apiv2.WorkloadEndpoint).Spec.IPNetworks
+	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
 	if len(ips) > 0 {
 		log.Debugf("Applying workload with IPs: %+v", ips)
 		wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)

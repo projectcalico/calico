@@ -26,7 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	capiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -39,27 +39,27 @@ import (
 
 var (
 	zeroOrder                  = float64(0.0)
-	calicoAllowPolicyModelSpec = capiv2.GlobalNetworkPolicySpec{
+	calicoAllowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Order: &zeroOrder,
-		Ingress: []capiv2.Rule{
+		Ingress: []apiv3.Rule{
 			{
 				Action: "allow",
 			},
 		},
-		Egress: []capiv2.Rule{
+		Egress: []apiv3.Rule{
 			{
 				Action: "allow",
 			},
 		},
 	}
-	calicoDisallowPolicyModelSpec = capiv2.GlobalNetworkPolicySpec{
+	calicoDisallowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
 		Order: &zeroOrder,
-		Ingress: []capiv2.Rule{
+		Ingress: []apiv3.Rule{
 			{
 				Action: "deny",
 			},
 		},
-		Egress: []capiv2.Rule{
+		Egress: []apiv3.Rule{
 			{
 				Action: "deny",
 			},
@@ -341,17 +341,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Performing a List of Profiles", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindProfile}, "")
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Performing a List of Policies", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindNetworkPolicy, Namespace: "test-syncer-namespace-default-deny"}, "")
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy, Namespace: "test-syncer-namespace-default-deny"}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Performing a Get on the Profile and ensure no error in the Calico API", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("kns.%s", ns.ObjectMeta.Name), Kind: capiv2.KindProfile}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("kns.%s", ns.ObjectMeta.Name), Kind: apiv3.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -396,18 +396,18 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Perform a List and ensure it shows up in the Calico API.
 		By("listing Profiles", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindProfile}, "")
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("listing Policies", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindNetworkPolicy, Namespace: "test-syncer-namespace-no-default-deny"}, "")
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy, Namespace: "test-syncer-namespace-no-default-deny"}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Perform a Get and ensure no error in the Calico API.
 		By("getting a Profile", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("kns.%s", ns.ObjectMeta.Name), Kind: capiv2.KindProfile}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: fmt.Sprintf("kns.%s", ns.ObjectMeta.Name), Kind: apiv3.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -440,12 +440,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{},
+							{},
 						},
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
@@ -457,7 +457,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		res := c.clientSet.Extensions().RESTClient().
+		res := c.clientSet.ExtensionsV1beta1().RESTClient().
 			Post().
 			Resource("networkpolicies").
 			Namespace("default").
@@ -466,7 +466,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			res := c.clientSet.Extensions().RESTClient().
+			res := c.clientSet.ExtensionsV1beta1().RESTClient().
 				Delete().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -479,14 +479,14 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(res.Error()).NotTo(HaveOccurred())
 
 		// Perform a List and ensure it shows up in the Calico API.
-		_, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindNetworkPolicy}, "")
+		_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Perform a Get and ensure no error in the Calico API.
 		_, err = c.Get(ctx, model.ResourceKey{
 			Name:      fmt.Sprintf("knp.default.%s", np.ObjectMeta.Name),
 			Namespace: "default",
-			Kind:      capiv2.KindNetworkPolicy,
+			Kind:      apiv3.KindNetworkPolicy,
 		}, "")
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -496,7 +496,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		log.Warnf("[TEST] Waiting for policies to tear down")
 		It("should clean up all policies", func() {
 			nps := extensions.NetworkPolicyList{}
-			err := c.clientSet.Extensions().RESTClient().
+			err := c.clientSet.ExtensionsV1beta1().RESTClient().
 				Get().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -510,7 +510,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 					return
 				}
 				nps := extensions.NetworkPolicyList{}
-				err := c.clientSet.Extensions().RESTClient().
+				err := c.clientSet.ExtensionsV1beta1().RESTClient().
 					Get().
 					Resource("networkpolicies").
 					Namespace("default").
@@ -526,15 +526,15 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	It("should handle a CRUD of Global Network Policy", func() {
 		var kvpRes *model.KVPair
 
-		gnpClient := c.getResourceClientFromResourceKind(capiv2.KindGlobalNetworkPolicy)
+		gnpClient := c.getResourceClientFromResourceKind(apiv3.KindGlobalNetworkPolicy)
 		kvp1Name := "my-test-gnp"
 		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name}
 		kvp1a := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp1Name, Kind: capiv2.KindGlobalNetworkPolicy},
-			Value: &capiv2.GlobalNetworkPolicy{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindGlobalNetworkPolicy},
+			Value: &apiv3.GlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindGlobalNetworkPolicy,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp1Name,
@@ -544,11 +544,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 
 		kvp1b := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp1Name, Kind: capiv2.KindGlobalNetworkPolicy},
-			Value: &capiv2.GlobalNetworkPolicy{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindGlobalNetworkPolicy},
+			Value: &apiv3.GlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindGlobalNetworkPolicy,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp1Name,
@@ -560,11 +560,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		kvp2Name := "my-test-gnp2"
 		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name}
 		kvp2a := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp2Name, Kind: capiv2.KindGlobalNetworkPolicy},
-			Value: &capiv2.GlobalNetworkPolicy{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindGlobalNetworkPolicy},
+			Value: &apiv3.GlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindGlobalNetworkPolicy,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp2Name,
@@ -574,11 +574,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 
 		kvp2b := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp2Name, Kind: capiv2.KindGlobalNetworkPolicy},
-			Value: &capiv2.GlobalNetworkPolicy{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindGlobalNetworkPolicy},
+			Value: &apiv3.GlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindGlobalNetworkPolicy,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp2Name,
@@ -662,29 +662,29 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Getting a Global Network Policy that does noe exist", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "my-non-existent-test-gnp", Kind: capiv2.KindGlobalNetworkPolicy}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "my-non-existent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Listing a missing Global Network Policy", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-non-existent-test-gnp", Kind: capiv2.KindGlobalNetworkPolicy}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-non-existent-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(0))
 		})
 
 		By("Getting an existing Global Network Policy", func() {
-			kvp, err := c.Get(ctx, model.ResourceKey{Name: "my-test-gnp", Kind: capiv2.KindGlobalNetworkPolicy}, "")
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: "my-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("my-test-gnp"))
-			Expect(kvp.Value.(*capiv2.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*capiv2.GlobalNetworkPolicy).Spec))
+			Expect(kvp.Value.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.GlobalNetworkPolicy).Spec))
 		})
 
 		By("Listing all Global Network Policies", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindGlobalNetworkPolicy}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("my-test-gnp"))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*capiv2.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*capiv2.GlobalNetworkPolicy).Spec))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.GlobalNetworkPolicy).Spec))
 		})
 
 		By("Deleting an existing Global Network Policy", func() {
@@ -702,17 +702,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		kvp1a := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "10-0-0-1",
-				Kind: capiv2.KindBGPPeer,
+				Kind: apiv3.KindBGPPeer,
 			},
-			Value: &capiv2.BGPPeer{
+			Value: &apiv3.BGPPeer{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindBGPPeer,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindBGPPeer,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "10-0-0-1",
 				},
-				Spec: capiv2.BGPPeerSpec{
+				Spec: apiv3.BGPPeerSpec{
 					PeerIP:   "10.0.0.1",
 					ASNumber: numorstring.ASNumber(6512),
 				},
@@ -722,17 +722,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		kvp1b := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "10-0-0-1",
-				Kind: capiv2.KindBGPPeer,
+				Kind: apiv3.KindBGPPeer,
 			},
-			Value: &capiv2.BGPPeer{
+			Value: &apiv3.BGPPeer{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindBGPPeer,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindBGPPeer,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "10-0-0-1",
 				},
-				Spec: capiv2.BGPPeerSpec{
+				Spec: apiv3.BGPPeerSpec{
 					PeerIP:   "10.0.0.1",
 					ASNumber: numorstring.ASNumber(6513),
 				},
@@ -742,17 +742,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		kvp2a := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "aa-bb-cc",
-				Kind: capiv2.KindBGPPeer,
+				Kind: apiv3.KindBGPPeer,
 			},
-			Value: &capiv2.BGPPeer{
+			Value: &apiv3.BGPPeer{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindBGPPeer,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindBGPPeer,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "aa-bb-cc",
 				},
-				Spec: capiv2.BGPPeerSpec{
+				Spec: apiv3.BGPPeerSpec{
 					PeerIP:   "aa:bb::cc",
 					ASNumber: numorstring.ASNumber(6514),
 				},
@@ -762,17 +762,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		kvp2b := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "aa-bb-cc",
-				Kind: capiv2.KindBGPPeer,
+				Kind: apiv3.KindBGPPeer,
 			},
-			Value: &capiv2.BGPPeer{
+			Value: &apiv3.BGPPeer{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindBGPPeer,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindBGPPeer,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "aa-bb-cc",
 				},
-				Spec: capiv2.BGPPeerSpec{
+				Spec: apiv3.BGPPeerSpec{
 					PeerIP: "aa:bb::cc",
 				},
 			},
@@ -816,39 +816,39 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Getting a missing BGP Peer", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "1-1-1-1", Kind: capiv2.KindBGPPeer}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "1-1-1-1", Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Listing a missing BGP Peer", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "aa-bb-cc-dd-ee", Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "aa-bb-cc-dd-ee", Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(0))
 		})
 
 		By("Listing an explicit BGP Peer", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "10-0-0-1", Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "10-0-0-1", Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
 			Expect(kvps.KVPairs[0].Key).To(Equal(kvp1b.Key))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).ObjectMeta.Name))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).Spec).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).Spec))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).ObjectMeta.Name))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).Spec).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).Spec))
 		})
 
 		By("Listing all BGP Peers (should be 2)", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
 			vals := []interface{}{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
-				vals = append(vals, k.Value.(*capiv2.BGPPeer).Spec)
+				vals = append(vals, k.Value.(*apiv3.BGPPeer).Spec)
 			}
 			Expect(keys).To(ContainElement(kvp1b.Key))
 			Expect(keys).To(ContainElement(kvp2b.Key))
-			Expect(vals).To(ContainElement(kvp1b.Value.(*capiv2.BGPPeer).Spec))
-			Expect(vals).To(ContainElement(kvp2b.Value.(*capiv2.BGPPeer).Spec))
+			Expect(vals).To(ContainElement(kvp1b.Value.(*apiv3.BGPPeer).Spec))
+			Expect(vals).To(ContainElement(kvp2b.Value.(*apiv3.BGPPeer).Spec))
 
 		})
 
@@ -858,12 +858,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Listing all BGP Peers (should now be 1)", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
 			Expect(kvps.KVPairs[0].Key).To(Equal(kvp1b.Key))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).ObjectMeta.Name))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).Spec).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).Spec))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).ObjectMeta.Name))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).Spec).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).Spec))
 		})
 
 		By("Deleting an existing BGP Peer", func() {
@@ -880,7 +880,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// part of our explicit testing below is to delete the resource.
 		defer func() {
 			log.Debug("Deleting Node BGP Peers")
-			if peers, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindBGPPeer}, ""); err == nil {
+			if peers, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, ""); err == nil {
 				log.WithField("Peers", peers).Debug("Deleting resources")
 				for _, peer := range peers.KVPairs {
 					log.WithField("Key", peer.Key).Debug("Deleting resource")
@@ -891,7 +891,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}()
 
 		By("Listing all Nodes to find a suitable Node name", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			// Get the hostname so we can make a Get call
 			kvp := *nodes.KVPairs[0]
@@ -901,17 +901,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvp1a = &model.KVPair{
 				Key: model.ResourceKey{
 					Name: peername1,
-					Kind: capiv2.KindBGPPeer,
+					Kind: apiv3.KindBGPPeer,
 				},
-				Value: &capiv2.BGPPeer{
+				Value: &apiv3.BGPPeer{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       capiv2.KindBGPPeer,
-						APIVersion: capiv2.GroupVersionCurrent,
+						Kind:       apiv3.KindBGPPeer,
+						APIVersion: apiv3.GroupVersionCurrent,
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: peername1,
 					},
-					Spec: capiv2.BGPPeerSpec{
+					Spec: apiv3.BGPPeerSpec{
 						Node:     nodename,
 						PeerIP:   "10.0.0.1",
 						ASNumber: numorstring.ASNumber(6512),
@@ -921,17 +921,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvp1b = &model.KVPair{
 				Key: model.ResourceKey{
 					Name: peername1,
-					Kind: capiv2.KindBGPPeer,
+					Kind: apiv3.KindBGPPeer,
 				},
-				Value: &capiv2.BGPPeer{
+				Value: &apiv3.BGPPeer{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       capiv2.KindBGPPeer,
-						APIVersion: capiv2.GroupVersionCurrent,
+						Kind:       apiv3.KindBGPPeer,
+						APIVersion: apiv3.GroupVersionCurrent,
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: peername1,
 					},
-					Spec: capiv2.BGPPeerSpec{
+					Spec: apiv3.BGPPeerSpec{
 						Node:     nodename,
 						PeerIP:   "10.0.0.1",
 						ASNumber: numorstring.ASNumber(6513),
@@ -941,17 +941,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvp2a = &model.KVPair{
 				Key: model.ResourceKey{
 					Name: peername2,
-					Kind: capiv2.KindBGPPeer,
+					Kind: apiv3.KindBGPPeer,
 				},
-				Value: &capiv2.BGPPeer{
+				Value: &apiv3.BGPPeer{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       capiv2.KindBGPPeer,
-						APIVersion: capiv2.GroupVersionCurrent,
+						Kind:       apiv3.KindBGPPeer,
+						APIVersion: apiv3.GroupVersionCurrent,
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: peername2,
 					},
-					Spec: capiv2.BGPPeerSpec{
+					Spec: apiv3.BGPPeerSpec{
 						Node:     nodename,
 						PeerIP:   "aa:bb::cc",
 						ASNumber: numorstring.ASNumber(6514),
@@ -961,17 +961,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvp2b = &model.KVPair{
 				Key: model.ResourceKey{
 					Name: peername2,
-					Kind: capiv2.KindBGPPeer,
+					Kind: apiv3.KindBGPPeer,
 				},
-				Value: &capiv2.BGPPeer{
+				Value: &apiv3.BGPPeer{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       capiv2.KindBGPPeer,
-						APIVersion: capiv2.GroupVersionCurrent,
+						Kind:       apiv3.KindBGPPeer,
+						APIVersion: apiv3.GroupVersionCurrent,
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: peername2,
 					},
-					Spec: capiv2.BGPPeerSpec{
+					Spec: apiv3.BGPPeerSpec{
 						Node:   nodename,
 						PeerIP: "aa:bb::cc",
 					},
@@ -1011,7 +1011,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		By("Getting a missing Node BGP Peer (wrong name)", func() {
 			_, err := c.Get(ctx, model.ResourceKey{
 				Name: "foobar",
-				Kind: capiv2.KindBGPPeer,
+				Kind: apiv3.KindBGPPeer,
 			}, "")
 			Expect(err).To(HaveOccurred())
 		})
@@ -1019,44 +1019,44 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		By("Listing a missing Node BGP Peer (wrong name)", func() {
 			kvps, err := c.List(ctx, model.ResourceListOptions{
 				Name: "foobar",
-				Kind: capiv2.KindBGPPeer,
+				Kind: apiv3.KindBGPPeer,
 			}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(0))
 		})
 
 		By("Listing Node BGP Peers should contain Node name", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			for _, kvp := range kvps.KVPairs {
-				Expect(kvp.Value.(*capiv2.BGPPeer).Spec.Node).To(Equal(nodename))
+				Expect(kvp.Value.(*apiv3.BGPPeer).Spec.Node).To(Equal(nodename))
 			}
 		})
 
 		By("Listing an explicit Node BGP Peer", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: peername1, Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: peername1, Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
 			Expect(kvps.KVPairs[0].Key).To(Equal(kvp1b.Key))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).ObjectMeta.Name))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).Spec).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).Spec))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).ObjectMeta.Name))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).Spec).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).Spec))
 		})
 
 		By("Listing all Node BGP Peers (should be 2)", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(2))
 			keys := []model.Key{}
 			vals := []interface{}{}
 			for _, k := range kvps.KVPairs {
 				keys = append(keys, k.Key)
-				vals = append(vals, k.Value.(*capiv2.BGPPeer).Spec)
+				vals = append(vals, k.Value.(*apiv3.BGPPeer).Spec)
 			}
 			Expect(keys).To(ContainElement(kvp1b.Key))
 			Expect(keys).To(ContainElement(kvp2b.Key))
-			Expect(vals).To(ContainElement(kvp1b.Value.(*capiv2.BGPPeer).Spec))
-			Expect(vals).To(ContainElement(kvp2b.Value.(*capiv2.BGPPeer).Spec))
+			Expect(vals).To(ContainElement(kvp1b.Value.(*apiv3.BGPPeer).Spec))
+			Expect(vals).To(ContainElement(kvp2b.Value.(*apiv3.BGPPeer).Spec))
 		})
 
 		By("Deleting the Node BGP Peer created by Apply", func() {
@@ -1065,12 +1065,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Listing all Node BGP Peers (should now be 1)", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindBGPPeer}, "")
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
 			Expect(kvps.KVPairs[0].Key).To(Equal(kvp1b.Key))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).ObjectMeta.Name))
-			Expect(kvps.KVPairs[0].Value.(*capiv2.BGPPeer).Spec).To(Equal(kvp1b.Value.(*capiv2.BGPPeer).Spec))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).ObjectMeta.Name).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).ObjectMeta.Name))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.BGPPeer).Spec).To(Equal(kvp1b.Value.(*apiv3.BGPPeer).Spec))
 		})
 
 		By("Deleting an existing Node BGP Peer", func() {
@@ -1093,7 +1093,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Spec: k8sapi.PodSpec{
 				NodeName: "127.0.0.1",
 				Containers: []k8sapi.Container{
-					k8sapi.Container{
+					{
 						Name:    "container1",
 						Image:   "busybox",
 						Command: []string{"sleep", "3600"},
@@ -1141,23 +1141,23 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("Performing a List() operation", func() {
 			// Perform List and ensure it shows up in the Calico API.
-			weps, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
 		})
 
 		By("Performing a List(Name=wepName) operation", func() {
 			// Perform List, including a workload Name
-			weps, err := c.List(ctx, model.ResourceListOptions{Name: wepName, Namespace: "default", Kind: capiv2.KindWorkloadEndpoint}, "")
+			weps, err := c.List(ctx, model.ResourceListOptions{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(weps.KVPairs)).To(Equal(1))
 		})
 
 		By("Performing a Get() operation", func() {
 			// Perform a Get and ensure no error in the Calico API.
-			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: capiv2.KindWorkloadEndpoint}, "")
+			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
-			fmt.Printf("Updating Wep %+v\n", wep.Value.(*capiv2.WorkloadEndpoint).Spec)
+			fmt.Printf("Updating Wep %+v\n", wep.Value.(*apiv3.WorkloadEndpoint).Spec)
 			_, err = c.Update(ctx, wep)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -1227,7 +1227,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	It("should not error on unsupported List() calls", func() {
 		var nodename string
 		By("Listing all Nodes to find a suitable Node name", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			kvp := *nodes.KVPairs[0]
 			nodename = kvp.Key.(model.ResourceKey).Name
@@ -1243,17 +1243,17 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		fc := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "myfelixconfig",
-				Kind: capiv2.KindFelixConfiguration,
+				Kind: apiv3.KindFelixConfiguration,
 			},
-			Value: &capiv2.FelixConfiguration{
+			Value: &apiv3.FelixConfiguration{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindFelixConfiguration,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindFelixConfiguration,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myfelixconfig",
 				},
-				Spec: capiv2.FelixConfigurationSpec{
+				Spec: apiv3.FelixConfigurationSpec{
 					InterfacePrefix: "xali-",
 				},
 			},
@@ -1272,60 +1272,60 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
 			// Set the ResourceVersion (since it is auto populated by the Kubernetes datastore) to make it easier to compare objects.
-			Expect(fc.Value.(*capiv2.FelixConfiguration).GetObjectMeta().GetResourceVersion()).To(Equal(""))
-			fc.Value.(*capiv2.FelixConfiguration).GetObjectMeta().SetResourceVersion(updFC.Value.(*capiv2.FelixConfiguration).GetObjectMeta().GetResourceVersion())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration)).To(Equal(fc.Value.(*capiv2.FelixConfiguration)))
+			Expect(fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion()).To(Equal(""))
+			fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().SetResourceVersion(updFC.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion())
+			Expect(updFC.Value.(*apiv3.FelixConfiguration)).To(Equal(fc.Value.(*apiv3.FelixConfiguration)))
 			Expect(updFC.Revision).NotTo(BeNil())
 			// Unset the ResourceVersion for the original resource since we modified it just for the sake of comparing in the tests.
-			fc.Value.(*capiv2.FelixConfiguration).GetObjectMeta().SetResourceVersion("")
+			fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().SetResourceVersion("")
 		})
 
 		By("getting an existing object", func() {
 			updFC, err = c.Get(ctx, fc.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec).To(Equal(fc.Value.(*capiv2.FelixConfiguration).Spec))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec).To(Equal(fc.Value.(*apiv3.FelixConfiguration).Spec))
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
 			Expect(updFC.Revision).NotTo(BeNil())
 		})
 
 		By("updating an existing object", func() {
-			updFC.Value.(*capiv2.FelixConfiguration).Spec.InterfacePrefix = "someotherprefix-"
+			updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix = "someotherprefix-"
 			updFC, err = c.Update(ctx, updFC)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
 		})
 
 		By("getting the updated object", func() {
 			updFC, err = c.Get(ctx, fc.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
 			Expect(updFC.Revision).NotTo(BeNil())
 		})
 
 		By("applying an existing object", func() {
-			val := &capiv2.FelixConfiguration{
+			val := &apiv3.FelixConfiguration{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       capiv2.KindFelixConfiguration,
-					APIVersion: capiv2.GroupVersionCurrent,
+					Kind:       apiv3.KindFelixConfiguration,
+					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "myfelixconfig",
 				},
-				Spec: capiv2.FelixConfigurationSpec{
+				Spec: apiv3.FelixConfigurationSpec{
 					InterfacePrefix: "somenewprefix-",
 				},
 			}
 			updFC.Value = val
 			updFC, err = c.Apply(updFC)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec.InterfacePrefix).To(Equal("somenewprefix-"))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("somenewprefix-"))
 		})
 
 		By("getting the applied object", func() {
 			updFC, err = c.Get(ctx, fc.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec.InterfacePrefix).To(Equal("somenewprefix-"))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("somenewprefix-"))
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
 			Expect(updFC.Revision).NotTo(BeNil())
 		})
@@ -1351,13 +1351,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			fc.Revision = ""
 			updFC, err = c.Apply(fc)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec).To(Equal(fc.Value.(*capiv2.FelixConfiguration).Spec))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec).To(Equal(fc.Value.(*apiv3.FelixConfiguration).Spec))
 		})
 
 		By("getting the applied object", func() {
 			updFC, err = c.Get(ctx, fc.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updFC.Value.(*capiv2.FelixConfiguration).Spec).To(Equal(fc.Value.(*capiv2.FelixConfiguration).Spec))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec).To(Equal(fc.Value.(*apiv3.FelixConfiguration).Spec))
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
 			Expect(updFC.Revision).NotTo(BeNil())
 		})
@@ -1370,7 +1370,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 	It("should support setting and getting IP Pools", func() {
 		By("listing IP pools when none have been created", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindIPPool}, "")
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1379,19 +1379,19 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			pool := &model.KVPair{
 				Key: model.ResourceKey{
 					Name: "192-16-0-0-16",
-					Kind: capiv2.KindIPPool,
+					Kind: apiv3.KindIPPool,
 				},
-				Value: &capiv2.IPPool{
+				Value: &apiv3.IPPool{
 					TypeMeta: metav1.TypeMeta{
-						Kind:       capiv2.KindIPPool,
-						APIVersion: capiv2.GroupVersionCurrent,
+						Kind:       apiv3.KindIPPool,
+						APIVersion: apiv3.GroupVersionCurrent,
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "192-16-0-0-16",
 					},
-					Spec: capiv2.IPPoolSpec{
+					Spec: apiv3.IPPoolSpec{
 						CIDR:     cidr,
-						IPIPMode: capiv2.IPIPModeCrossSubnet,
+						IPIPMode: apiv3.IPIPModeCrossSubnet,
 						Disabled: true,
 					},
 				},
@@ -1401,15 +1401,15 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 			receivedPool, err := c.Get(ctx, pool.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(receivedPool.Value.(*capiv2.IPPool).Spec.CIDR).To(Equal(cidr))
-			Expect(receivedPool.Value.(*capiv2.IPPool).Spec.IPIPMode).To(BeEquivalentTo(capiv2.IPIPModeCrossSubnet))
-			Expect(receivedPool.Value.(*capiv2.IPPool).Spec.Disabled).To(Equal(true))
+			Expect(receivedPool.Value.(*apiv3.IPPool).Spec.CIDR).To(Equal(cidr))
+			Expect(receivedPool.Value.(*apiv3.IPPool).Spec.IPIPMode).To(BeEquivalentTo(apiv3.IPIPModeCrossSubnet))
+			Expect(receivedPool.Value.(*apiv3.IPPool).Spec.Disabled).To(Equal(true))
 		})
 
 		By("deleting the IP Pool", func() {
 			_, err := c.Delete(ctx, model.ResourceKey{
 				Name: "192-16-0-0-16",
-				Kind: capiv2.KindIPPool,
+				Kind: apiv3.KindIPPool,
 			}, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -1421,7 +1421,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		ip := "192.168.0.101"
 
 		By("Listing all Nodes", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: capiv2.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			// Get the hostname so we can make a Get call
 			kvp = *nodes.KVPairs[0]
@@ -1429,7 +1429,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Listing a specific Node", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Name: nodeHostname, Kind: capiv2.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Name: nodeHostname, Kind: apiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nodes.KVPairs).To(HaveLen(1))
 			Expect(nodes.KVPairs[0].Key).To(Equal(kvp.Key))
@@ -1437,13 +1437,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Listing a specific invalid Node", func() {
-			nodes, err := c.List(ctx, model.ResourceListOptions{Name: "foobarbaz-node", Kind: capiv2.KindNode}, "")
+			nodes, err := c.List(ctx, model.ResourceListOptions{Name: "foobarbaz-node", Kind: apiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(nodes.KVPairs).To(HaveLen(0))
 		})
 
 		By("Getting a specific nodeHostname", func() {
-			n, err := c.Get(ctx, model.ResourceKey{Name: nodeHostname, Kind: capiv2.KindNode}, "")
+			n, err := c.Get(ctx, model.ResourceKey{Name: nodeHostname, Kind: apiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Check to see we have the right Node
@@ -1456,7 +1456,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Getting non-existent Node", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: capiv2.KindNode}, "")
+			_, err := c.Get(ctx, model.ResourceKey{Name: "Fake", Kind: apiv3.KindNode}, "")
 			Expect(err).To(HaveOccurred())
 		})
 
@@ -1471,14 +1471,14 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			testKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: kvp.Key.(model.ResourceKey).Name,
-					Kind: capiv2.KindNode,
+					Kind: apiv3.KindNode,
 				},
-				Value: &capiv2.Node{
+				Value: &apiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: kvp.Key.(model.ResourceKey).Name,
 					},
-					Spec: capiv2.NodeSpec{
-						BGP: &capiv2.NodeBGPSpec{
+					Spec: apiv3.NodeSpec{
+						BGP: &apiv3.NodeBGPSpec{
 							ASNumber:    &newAsn,
 							IPv4Address: ip,
 						},
@@ -1487,20 +1487,20 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			}
 			node, err := c.Update(ctx, &testKvp)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*node.Value.(*capiv2.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
+			Expect(*node.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*getNode.Value.(*capiv2.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
-			Expect(getNode.Value.(*capiv2.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.10.10.1"))
+			Expect(*getNode.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
+			Expect(getNode.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.10.10.1"))
 
 			// We do not support creating Nodes, we should see an error
 			// if the Node does not exist.
 			missingKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: "IDontExist",
-					Kind: capiv2.KindNode,
+					Kind: apiv3.KindNode,
 				},
 			}
 			_, err = c.Create(ctx, &missingKvp)
@@ -1512,14 +1512,14 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			testKvp := model.KVPair{
 				Key: model.ResourceKey{
 					Name: kvp.Key.(model.ResourceKey).Name,
-					Kind: capiv2.KindNode,
+					Kind: apiv3.KindNode,
 				},
-				Value: &capiv2.Node{
+				Value: &apiv3.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: kvp.Key.(model.ResourceKey).Name,
 					},
-					Spec: capiv2.NodeSpec{
-						BGP: &capiv2.NodeBGPSpec{
+					Spec: apiv3.NodeSpec{
+						BGP: &apiv3.NodeBGPSpec{
 							IPv4Address: ip,
 						},
 					},
@@ -1528,12 +1528,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			node, err := c.Update(ctx, &testKvp)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(node.Value.(*capiv2.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(node.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(BeNil())
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(getNode.Value.(*capiv2.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(getNode.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(BeNil())
 		})
 
 		By("Syncing HostIPs over the Syncer", func() {

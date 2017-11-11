@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -64,7 +64,7 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
-	node, err := mergeCalicoNodeIntoK8sNode(kvp.Value.(*apiv2.Node), oldNode)
+	node, err := mergeCalicoNodeIntoK8sNode(kvp.Value.(*apiv3.Node), oldNode)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	if nl.Name != "" {
 		// The node is already fully qualified, so perform a Get instead.
 		// If the entry does not exist then we just return an empty list.
-		kvp, err := c.Get(ctx, model.ResourceKey{Name: nl.Name, Kind: apiv2.KindNode}, revision)
+		kvp, err := c.Get(ctx, model.ResourceKey{Name: nl.Name, Kind: apiv3.KindNode}, revision)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				return nil, err
@@ -180,12 +180,12 @@ func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 // K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.
 func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 	// Create a new CalicoNode resource and copy the settings across from the k8s Node.
-	calicoNode := apiv2.NewNode()
+	calicoNode := apiv3.NewNode()
 	calicoNode.ObjectMeta.Name = k8sNode.Name
 	SetCalicoMetadataFromK8sAnnotations(calicoNode, k8sNode)
 
 	// Extract the BGP configuration stored in the annotations.
-	bgpSpec := &apiv2.NodeBGPSpec{}
+	bgpSpec := &apiv3.NodeBGPSpec{}
 	annotations := k8sNode.ObjectMeta.Annotations
 	bgpSpec.IPv4Address = annotations[nodeBgpIpv4AddrAnnotation]
 	bgpSpec.IPv6Address = annotations[nodeBgpIpv6AddrAnnotation]
@@ -210,7 +210,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: k8sNode.Name,
-			Kind: apiv2.KindNode,
+			Kind: apiv3.KindNode,
 		},
 		Value:    calicoNode,
 		Revision: k8sNode.ObjectMeta.ResourceVersion,
@@ -219,7 +219,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 
 // mergeCalicoNodeIntoK8sNode takes a k8s node and a Calico node and push the values from the Calico
 // node into the k8s node.
-func mergeCalicoNodeIntoK8sNode(calicoNode *apiv2.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
+func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
 	// Set the k8s annotations from the Calico node metadata.  This ensures the k8s annotations
 	// is initialized.
 	SetK8sAnnotationsFromCalicoMetadata(k8sNode, calicoNode)

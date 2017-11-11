@@ -15,6 +15,6 @@
 package updateprocessors
 
 /*
-This package contains the required converters to convert v2 model to the
+This package contains the required converters to convert v3 model to the
 v1 model required by Felix and confd.
 */

@@ -17,7 +17,7 @@ package updateprocessors
 import (
 	"errors"
 
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -26,18 +26,18 @@ import (
 // Create a new SyncerUpdateProcessor to sync IPPool data in v1 format for
 // consumption by both Felix and the BGP daemon.
 func NewBGPPeerUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewConflictResolvingCacheUpdateProcessor(apiv2.KindBGPPeer, convertBGPPeerV2ToV1)
+	return NewConflictResolvingCacheUpdateProcessor(apiv3.KindBGPPeer, convertBGPPeerV2ToV1)
 }
 
-// Convert v2 KVPair to the equivalent v1 KVPair.
+// Convert v3 KVPair to the equivalent v1 KVPair.
 func convertBGPPeerV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	// Validate against incorrect key/value kinds.  This indicates a code bug rather
 	// than a user error.
-	v2key, ok := kvp.Key.(model.ResourceKey)
-	if !ok || v2key.Kind != apiv2.KindBGPPeer {
+	v3key, ok := kvp.Key.(model.ResourceKey)
+	if !ok || v3key.Kind != apiv3.KindBGPPeer {
 		return nil, errors.New("Key is not a valid IPPool resource key")
 	}
-	v2res, ok := kvp.Value.(*apiv2.BGPPeer)
+	v3res, ok := kvp.Value.(*apiv3.BGPPeer)
 	if !ok {
 		return nil, errors.New("Value is not a valid IPPool resource key")
 	}
@@ -45,12 +45,12 @@ func convertBGPPeerV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	// Correct data types.  Handle the conversion.  Start with the v1 key.  The PeerIP and
 	// the Node are now in the Spec - if a Node is not specified then this is a global
 	// peer.
-	ip := cnet.ParseIP(v2res.Spec.PeerIP)
+	ip := cnet.ParseIP(v3res.Spec.PeerIP)
 	if ip == nil {
 		return nil, errors.New("PeerIP is not assigned or is malformed")
 	}
 	var v1key model.Key
-	if node := v2res.Spec.Node; len(node) == 0 {
+	if node := v3res.Spec.Node; len(node) == 0 {
 		v1key = model.GlobalBGPPeerKey{
 			PeerIP: *ip,
 		}
@@ -65,7 +65,7 @@ func convertBGPPeerV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		Key: v1key,
 		Value: &model.BGPPeer{
 			PeerIP: *ip,
-			ASNum:  v2res.Spec.ASNumber,
+			ASNum:  v3res.Spec.ASNumber,
 		},
 		Revision: kvp.Revision,
 	}, nil
