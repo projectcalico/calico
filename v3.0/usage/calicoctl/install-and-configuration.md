@@ -63,7 +63,7 @@ calicoctl get nodes
 
 A correct setup will yield a list of the nodes that have registered.  If an
 empty list is returned you are either pointed at the wrong datastore or no
-nodes have registred.  If an error is returned then attempt to correct the
+nodes have registered.  If an error is returned then attempt to correct the
 issue then try again.
 
 ### Next steps
