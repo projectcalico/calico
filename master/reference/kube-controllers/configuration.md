@@ -2,7 +2,7 @@
 title: Configuring the Calico Kubernetes controllers
 ---
 
-The {{site.prodname}} Kubernetes controllers are primarily configured through environment variables. When running
+The Calico Kubernetes controllers are primarily configured through environment variables. When running
 the controllers as a Kubernetes pod, this is accomplished through the pod manifest `env`
 section.
 
@@ -18,7 +18,7 @@ By default, all three controllers are enabled.
 
 ### Configuring etcd access
 
-The {{site.prodname}} Kubernetes controllers support the following environment variables to configure etcd access:
+The Calico Kubernetes controllers support the following environment variables to configure etcd access:
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |

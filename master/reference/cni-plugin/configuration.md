@@ -2,7 +2,7 @@
 title: Configuring the Calico CNI plugins
 ---
 
-The {{site.prodname}} CNI plugin is configured through the standard CNI 
+The Calico CNI plugin is configured through the standard CNI 
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)
 
 A minimal configuration file that uses {{site.prodname}} for networking 
@@ -42,7 +42,7 @@ The following option allows configuration of the {{site.prodname}} datastore typ
 
 * `datastore_type` (default: etcdv3)
 
-The {{site.prodname}} CNI plugin supports the following datastore types:
+The Calico CNI plugin supports the following datastore types:
 
 * etcdv3 (default)
 * kubernetes
@@ -124,7 +124,7 @@ Any IP pools specified in the CNI config must have already been created. It is a
 
 ## Kubernetes specific
 
-When using the {{site.prodname}} CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
+When using the Calico CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
 
 ```json
 {
@@ -179,7 +179,7 @@ you must also run calico/kube-controllers with the policy, profile, and workload
 }
 ```
 
-When using `type: k8s`, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
+When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
 
 Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calicoctl/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
 
