@@ -1,5 +1,5 @@
-hash: b6cf1b4b9fa15990f4bcea23c0878f94870f5e757002812ff83d592b680cffb1
-updated: 2017-11-10T13:39:04.882478-08:00
+hash: eda8abfef9028cd7e65d8d3d1144dda49055e2284fe81d94eb2a11a1a39ea903
+updated: 2017-11-10T19:56:51.141593-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -142,7 +142,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -168,13 +168,13 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a3f05bbf5b10693a0396f805c73f1dcebf985592
+  version: a21bd104b2d077c89737a5b897e3ac817c79957a
   subpackages:
   - lib
   - lib/apiconfig
   - lib/apis/v1
   - lib/apis/v1/unversioned
-  - lib/apis/v2
+  - lib/apis/v3
   - lib/backend
   - lib/backend/api
   - lib/backend/etcdv3
@@ -185,7 +185,7 @@ imports:
   - lib/backend/syncersv1/felixsyncer
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
-  - lib/clientv2
+  - lib/clientv3
   - lib/errors
   - lib/hash
   - lib/health
@@ -215,13 +215,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -240,7 +240,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net

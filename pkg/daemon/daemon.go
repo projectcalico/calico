@@ -35,7 +35,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
@@ -75,7 +75,7 @@ type TyphaDaemon struct {
 	Server            *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
-	NewClientV2           func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error)
+	NewClientV3           func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error)
 	ConfigureEarlyLogging func()
 	ConfigureLogging      func(configParams *config.Config)
 
@@ -85,10 +85,10 @@ type TyphaDaemon struct {
 
 func New() *TyphaDaemon {
 	return &TyphaDaemon{
-		NewClientV2: func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error) {
-			client, err := clientv2.New(config)
+		NewClientV3: func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error) {
+			client, err := clientv3.New(config)
 			if err == nil {
-				return ClientV2Shim{client.(RealClientV2)}, nil
+				return ClientV3Shim{client.(RealClientV3)}, nil
 			}
 			return nil, err
 		},
@@ -180,7 +180,7 @@ configRetry:
 		// We should now have enough config to connect to the datastore.
 		datastoreConfig := configParams.DatastoreConfig()
 
-		t.DatastoreClient, err = t.NewClientV2(datastoreConfig)
+		t.DatastoreClient, err = t.NewClientV3(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to datastore")
 			time.Sleep(1 * time.Second)
@@ -326,16 +326,16 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 	}
 }
 
-// ClientV2Shim adapts the real v2 client interface to our mockable interface.
-type ClientV2Shim struct {
-	C RealClientV2
+// ClientV3Shim adapts the real v3 client interface to our mockable interface.
+type ClientV3Shim struct {
+	C RealClientV3
 }
 
-func (s ClientV2Shim) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
+func (s ClientV3Shim) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return s.C.EnsureInitialized(ctx, calicoVersion, clusterType)
 }
 
-func (s ClientV2Shim) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+func (s ClientV3Shim) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
 	return s.C.Backend().Syncer(callbacks)
 }
 
@@ -345,8 +345,8 @@ type DatastoreClient interface {
 	Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
-// RealClientV2 is the subset of the clientv2.Interface that we care about.
-type RealClientV2 interface {
+// RealClientV3 is the subset of the clientv3.Interface that we care about.
+type RealClientV3 interface {
 	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
 	Backend() bapi.Client
 }
