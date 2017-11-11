@@ -51,7 +51,7 @@ var _ = Describe("Daemon", func() {
 	BeforeEach(func() {
 		d = New()
 		datastore = &mockDatastore{}
-		d.NewClientV2 = func(config apiconfig.CalicoAPIConfig) (c DatastoreClient, err error) {
+		d.NewClientV3 = func(config apiconfig.CalicoAPIConfig) (c DatastoreClient, err error) {
 			return datastore, newClientErr
 		}
 		earlyLoggingConfigured = false
