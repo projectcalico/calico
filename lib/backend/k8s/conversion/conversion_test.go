@@ -272,7 +272,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k":  "v",
-										"k2": "v3",
+										"k2": "v2",
 									},
 								},
 							},
@@ -305,7 +305,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Action:   "allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
-					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v3'",
+					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{numorstring.SinglePort(80)},
@@ -315,7 +315,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Action:   "allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
-					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v3'",
+					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
@@ -420,22 +420,22 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{},
+							{},
 						},
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
 									},
 								},
 							},
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
-										"k2": "v3",
+										"k2": "v2",
 									},
 								},
 							},
@@ -473,7 +473,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v3'"))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
 		})
 	})
 
@@ -493,29 +493,29 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{
+							{
 								Port:     &ninety,
 								Protocol: &udp,
 							},
-							extensions.NetworkPolicyPort{
+							{
 								Port:     &eighty,
 								Protocol: &tcp,
 							},
 						},
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
 									},
 								},
 							},
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
-										"k2": "v3",
+										"k2": "v2",
 									},
 								},
 							},
@@ -557,13 +557,13 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v3'"))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v3'"))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 		})
 	})
@@ -611,9 +611,9 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"namespaceRole": "dev",
@@ -661,9 +661,9 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
 								},
@@ -705,10 +705,10 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchExpressions: []metav1.LabelSelectorRequirement{
-						metav1.LabelSelectorRequirement{
+						{
 							Key:      "k",
 							Operator: metav1.LabelSelectorOpIn,
-							Values:   []string{"v1", "v3"},
+							Values:   []string{"v1", "v2"},
 						},
 					},
 				},
@@ -725,7 +725,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k in { 'v1', 'v3' }"))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k in { 'v1', 'v2' }"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(0))
 
 		// There should be no Egress rules.
@@ -747,9 +747,9 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{
+							{
 								Protocol: &protocol,
 								Port:     &port,
 							},
@@ -939,13 +939,13 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
 				Egress: []extensions.NetworkPolicyEgressRule{
-					extensions.NetworkPolicyEgressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{
+							{
 								Port:     &ninety,
 								Protocol: &udp,
 							},
-							extensions.NetworkPolicyPort{
+							{
 								Port:     &eighty,
 								Protocol: &tcp,
 							},
@@ -1095,7 +1095,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k":  "v",
-										"k2": "v3",
+										"k2": "v2",
 									},
 								},
 							},
@@ -1122,7 +1122,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			Action:   "allow",
 			Protocol: &protoTCP, // Defaulted to TCP.
 			Source: apiv3.EntityRule{
-				Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v3'",
+				Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 			},
 			Destination: apiv3.EntityRule{
 				Ports: []numorstring.Port{numorstring.SinglePort(80)},
@@ -1181,22 +1181,22 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{},
+							{},
 						},
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
 									},
 								},
 							},
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
-										"k2": "v3",
+										"k2": "v2",
 									},
 								},
 							},
@@ -1233,7 +1233,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v3'"))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
 		})
 	})
 
@@ -1253,29 +1253,29 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{
+							{
 								Port:     &ninety,
 								Protocol: &udp,
 							},
-							extensions.NetworkPolicyPort{
+							{
 								Port:     &eighty,
 								Protocol: &tcp,
 							},
 						},
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
 									},
 								},
 							},
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
-										"k2": "v3",
+										"k2": "v2",
 									},
 								},
 							},
@@ -1316,13 +1316,13 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v3'"))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v3'"))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 		})
 	})
@@ -1369,9 +1369,9 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
 								},
@@ -1412,10 +1412,10 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchExpressions: []metav1.LabelSelectorRequirement{
-						metav1.LabelSelectorRequirement{
+						{
 							Key:      "k",
 							Operator: metav1.LabelSelectorOpIn,
-							Values:   []string{"v1", "v3"},
+							Values:   []string{"v1", "v2"},
 						},
 					},
 				},
@@ -1431,7 +1431,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k in { 'v1', 'v3' }"))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k in { 'v1', 'v2' }"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(0))
 
 		// There should be no Egress rule.
@@ -1453,9 +1453,9 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{
+							{
 								Protocol: &protocol,
 								Port:     &port,
 							},
