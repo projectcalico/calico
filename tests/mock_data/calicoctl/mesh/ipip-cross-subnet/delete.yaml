@@ -1,5 +1,5 @@
 kind: IPPool
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: ippool-1
 spec:

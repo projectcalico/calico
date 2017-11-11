@@ -14,7 +14,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
-	"github.com/projectcalico/libcalico-go/lib/clientv2"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -44,7 +44,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	// not.  If it is we need to monitor all node configuration.  If it is not enabled then we
 	// only need to monitor our own node.  If this setting changes, we terminate confd (so that
 	// when restarted it will start watching the correct resources).
-	cc, err := clientv2.New(*config)
+	cc, err := clientv3.New(*config)
 	if err != nil {
 		log.Errorf("Failed to create main Calico client: %v", err)
 		return nil, err
