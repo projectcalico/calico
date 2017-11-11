@@ -29,8 +29,9 @@ import:
   - tools/cache
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: 83fc14937b8584e65bd6c959c0a85256a2d31e28
+  version: a21bd104b2d077c89737a5b897e3ac817c79957a
 - package: github.com/projectcalico/felix
+  version: 518dbc352494a962e46d50f8bfe72a70c86951bf
   subpackages:
   - fv
   - fv.containers

@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/kube-controllers/pkg/converter"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	k8sapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

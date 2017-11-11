@@ -15,17 +15,11 @@
 package node
 
 import (
+	"context"
+	"fmt"
 	"reflect"
 	"sync"
-
 	"time"
-
-	calicocache "github.com/projectcalico/kube-controllers/pkg/cache"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
-	"github.com/projectcalico/libcalico-go/lib/apis/v2"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-
-	"github.com/projectcalico/libcalico-go/lib/errors"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -34,9 +28,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	corecache "k8s.io/client-go/tools/cache"
 
-	"context"
-	"fmt"
-
+	calicocache "github.com/projectcalico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
@@ -129,7 +125,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
-func getK8sNodeName(calicoNode v2.Node) string {
+func getK8sNodeName(calicoNode api.Node) string {
 	for _, orchRef := range calicoNode.Spec.OrchRefs {
 		if orchRef.Orchestrator == "k8s" {
 			return orchRef.NodeName
