@@ -16,7 +16,7 @@ this feature, Docker requires that you specify the `--subnet` parameter when run
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: IPPool
   metadata:
     name: ippool-1

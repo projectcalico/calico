@@ -11,7 +11,7 @@ aliases are supported (all case insensitive): `ippool`, `ippools`, `ipp`, `ipps`
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
   name: my.ippool-1

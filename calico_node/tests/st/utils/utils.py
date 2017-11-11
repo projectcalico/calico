@@ -232,10 +232,10 @@ def update_bgp_config(host, nodeMesh=None, asNum=None):
 
     if len(bgpcfg['items']) == 0:
         bgpcfg = {
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'BGPConfigurationList',
             'items': [ {
-                    'apiVersion': 'projectcalico.org/v2',
+                    'apiVersion': 'projectcalico.org/v3',
                     'kind': 'BGPConfiguration',
                     'metadata': { 'name': 'default', },
                     'spec': {}

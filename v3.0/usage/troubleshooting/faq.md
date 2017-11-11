@@ -89,7 +89,7 @@ documents *mandates* the use of VLANs.
    for other settings that can be edited.)
 
    ```shell
-   - apiVersion: projectcalico.org/v2
+   - apiVersion: projectcalico.org/v3
      kind: IPPool
      metadata:
       name: ippool-1
@@ -259,7 +259,7 @@ node on which each container is hosted.
 
 ```
 cat << EOF | calicoctl apply -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
   name: ippool-1
@@ -325,7 +325,7 @@ Yes.  If you are running in a public cloud that doesn't allow either L3 peering 
 
 ```shell
 cat << EOF | calicoctl apply -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
   name: ippool-1
@@ -344,7 +344,7 @@ In AWS, you disable `Source/Dest. Check` instead of using IP in IP as long as al
 aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
 
 cat << EOF | calicoctl apply -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
   name: ippool-2

@@ -11,7 +11,7 @@ aliases are supported (all case insensitive): `bgpconfiguration`, `bgpconfig`, `
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
 metadata:
   name: default

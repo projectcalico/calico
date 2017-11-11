@@ -258,7 +258,7 @@ peers with every node in the deployment):
 ```
 calicoctl bgp peer add <IP_RR> as <AS_NUM>
 $ calicoctl create -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-global
@@ -293,7 +293,7 @@ To configure a Route Reflector as a peer of a specific node, run the following
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-2

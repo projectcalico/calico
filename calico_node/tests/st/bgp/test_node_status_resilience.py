@@ -27,8 +27,8 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
 
-# TODO: Add back when gobgp is updated to work with libcalico-go v2 api
-@skip("Disabled until gobgp is updated with libcalico-go v2")
+# TODO: Add back when gobgp is updated to work with libcalico-go v3 api
+@skip("Disabled until gobgp is updated with libcalico-go v3")
 class TestNodeStatusResilience(TestBase):
     @parameterized.expand([
         (2, 'bird'),

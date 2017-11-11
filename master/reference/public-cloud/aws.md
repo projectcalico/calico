@@ -63,7 +63,7 @@ CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet`. Adjust the pool CIDR for your
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
   metadata:
     name: ippool-cs-1
@@ -88,7 +88,7 @@ Adjust the pool CIDR for your deployment.
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
   metadata:
     name: ippool-1

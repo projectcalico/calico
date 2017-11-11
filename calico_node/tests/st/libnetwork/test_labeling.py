@@ -42,7 +42,7 @@ else:
                                 get_ip()
 
 # TODO: Re-enable
-@skip("Disabled until libnetwork is updated for libcalico-go v2")
+@skip("Disabled until libnetwork is updated for libcalico-go v3")
 class TestLibnetworkLabeling(TestBase):
     """
     Tests that labeling is correctly implemented in libnetwork.  Setup

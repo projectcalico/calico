@@ -24,7 +24,7 @@ This sample policy allows TCP traffic from `frontend` endpoints to port 6379 on
 `database` endpoints.
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
   name: allow-tcp-6379

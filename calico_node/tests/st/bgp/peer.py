@@ -16,7 +16,7 @@ import yaml
 def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     assert scope in ('node', 'global')
     testdata = {
-        'apiVersion': 'projectcalico.org/v2',
+        'apiVersion': 'projectcalico.org/v3',
         'kind': 'BGPPeer',
         'metadata': {
             'name': host.name,

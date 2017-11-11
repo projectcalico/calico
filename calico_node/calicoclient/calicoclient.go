@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 // CreateClient loads the client config from environments and creates the

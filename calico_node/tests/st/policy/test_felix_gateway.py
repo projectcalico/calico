@@ -214,7 +214,7 @@ class TestFelixOnGateway(TestBase):
         # Add allow policy for host, make sure it applies to forward and has order lower than
         # empty forward.
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'host-out',
@@ -257,7 +257,7 @@ class TestFelixOnGateway(TestBase):
 
         # Add empty policy forward, but only to host endpoint.
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'empty-forward',
@@ -518,7 +518,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_workload_ingress(self, order, action):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'workload-ingress',
@@ -541,7 +541,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_workload_egress(self, order, action):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'workload-egress',
@@ -565,7 +565,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_prednat_ingress(self, order, action):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'prednat',
@@ -593,7 +593,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_untrack_gw_int(self, order, action):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'untrack-ingress',
@@ -629,7 +629,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_untrack_gw_ext(self, order, action):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'untrack-egress',
@@ -667,7 +667,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_ingress_policy(self, order, action, forward):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'port80-int-%s' % str(forward),
@@ -691,7 +691,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_egress_policy(self, order, action, forward):
         self.add_policy({
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
                 'name': 'port80-ext-%s' % str(forward),
@@ -719,7 +719,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_gateway_internal_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'gw-int',
@@ -734,7 +734,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_gateway_external_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'gw-ext',
@@ -749,7 +749,7 @@ class TestFelixOnGateway(TestBase):
 
     def add_host_iface(self):
         host_endpoint_data = {
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'HostEndpoint',
             'metadata': {
                 'name': 'host-int',
