@@ -30,8 +30,8 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/kube-controllers/tests/testutils"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v2"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 

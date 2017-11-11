@@ -1,5 +1,5 @@
-hash: c7019261c4781726c5374336a66307773f58ee4955ca0953afab6a1ee840faba
-updated: 2017-11-09T13:34:27.726667-08:00
+hash: 47d6b4a70b7e4d1b7be210c82f746545efa1dd49f41c1bb292a491ca498e8b28
+updated: 2017-11-10T21:57:04.909627-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -153,7 +153,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: b952345987d7282f77d10186fe6f6b15c744395b
+  version: 518dbc352494a962e46d50f8bfe72a70c86951bf
   subpackages:
   - fv
   - fv.containers
@@ -168,12 +168,12 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 83fc14937b8584e65bd6c959c0a85256a2d31e28
+  version: a21bd104b2d077c89737a5b897e3ac817c79957a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
   - lib/apis/v1/unversioned
-  - lib/apis/v2
+  - lib/apis/v3
   - lib/backend
   - lib/backend/api
   - lib/backend/etcdv3
@@ -184,7 +184,7 @@ imports:
   - lib/backend/syncersv1/felixsyncer
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
-  - lib/clientv2
+  - lib/clientv3
   - lib/errors
   - lib/hash
   - lib/ipam
@@ -230,7 +230,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
