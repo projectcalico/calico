@@ -88,7 +88,7 @@ class MultiHostIpam(TestBase):
 
         old_pool_workloads = []
         ipv4_subnet = netaddr.IPNetwork("192.168.11.0/24")
-        new_pool = {'apiVersion': 'projectcalico.org/v2',
+        new_pool = {'apiVersion': 'projectcalico.org/v3',
                     'kind': 'IPPool',
                     'metadata': {'name': 'ippool-name-1'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
@@ -118,7 +118,7 @@ class MultiHostIpam(TestBase):
         self.hosts[0].calicoctl("get IPpool -o yaml")
 
         ipv4_subnet = netaddr.IPNetwork("10.0.1.0/24")
-        new_pool = {'apiVersion': 'projectcalico.org/v2',
+        new_pool = {'apiVersion': 'projectcalico.org/v3',
                     'kind': 'IPPool',
                     'metadata': {'name': 'ippool-name-2'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
@@ -151,7 +151,7 @@ class MultiHostIpam(TestBase):
         workload_ips = []
 
         ipv4_subnet = netaddr.IPNetwork("192.168.45.0/25")
-        new_pool = {'apiVersion': 'projectcalico.org/v2',
+        new_pool = {'apiVersion': 'projectcalico.org/v3',
                     'kind': 'IPPool',
                     'metadata': {'name': 'ippool-name-3'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
@@ -189,7 +189,7 @@ class MultiHostIpam(TestBase):
         """
 
         ipv4_subnet = netaddr.IPNetwork("192.168.46.0/25")
-        new_pool = {'apiVersion': 'projectcalico.org/v2',
+        new_pool = {'apiVersion': 'projectcalico.org/v3',
                     'kind': 'IPPool',
                     'metadata': {'name': 'ippool-name-4'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},

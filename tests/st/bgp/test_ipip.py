@@ -40,7 +40,7 @@ class TestIPIP(TestBase):
 
     @parameterized.expand([
         ('bird',),
-        # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
+        # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
         # ('gobgp',),
     ])
     def test_ipip(self, backend):
@@ -179,7 +179,7 @@ class TestIPIP(TestBase):
         """
         pool_name = "test.ippool" if pool_name is None else pool_name
         testdata = {
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'IPPool',
             'metadata': {
                 'name': pool_name,
@@ -309,7 +309,7 @@ class TestIPIP(TestBase):
     @parameterized.expand([
         (False,),
         (True,),
-        # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
+        # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
         #(False, 'gobgp',),
         #(True, 'gobgp',),
     ])
@@ -347,7 +347,7 @@ class TestIPIP(TestBase):
     #    (False,),
     #    (True,),
     #])
-    @skip("Skipping until route reflector is updated with libcalico-go v2 support")
+    @skip("Skipping until route reflector is updated with libcalico-go v3 support")
     def test_gce_rr(self, with_ipip):
         """As test_gce except with a route reflector instead of mesh config."""
         with DockerHost('host1',

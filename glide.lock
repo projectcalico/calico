@@ -1,5 +1,5 @@
-hash: d3a585b68c69a53021aa792febc79d09082ec0d8c24083bce6723126b602a203
-updated: 2017-11-09T12:49:09.928417-08:00
+hash: 3af83fd75cca025221550061db21b41d4c6992b36338b925d4b1b815ffc24af2
+updated: 2017-11-10T21:37:58.908658-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -160,13 +160,13 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 83fc14937b8584e65bd6c959c0a85256a2d31e28
+  version: a21bd104b2d077c89737a5b897e3ac817c79957a
   subpackages:
   - lib/api
   - lib/apiconfig
   - lib/apis/v1
   - lib/apis/v1/unversioned
-  - lib/apis/v2
+  - lib/apis/v3
   - lib/apiv2
   - lib/backend
   - lib/backend/api
@@ -180,6 +180,7 @@ imports:
   - lib/backend/watchersyncer
   - lib/client
   - lib/clientv2
+  - lib/clientv3
   - lib/errors
   - lib/hash
   - lib/ipam
@@ -251,7 +252,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 314a259e304ff91bd6985da2a7149bbf91237993
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
   - windows
