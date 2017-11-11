@@ -53,7 +53,7 @@ import (
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/statusrep"
 	"github.com/projectcalico/felix/usagerep"
-	apiv2 "github.com/projectcalico/libcalico-go/lib/apis/v2"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -661,19 +661,19 @@ func loadConfigFromDatastore(
 ) (globalConfig, hostConfig map[string]string, err error) {
 
 	// The configuration is split over 3 different resource types and 4 different resource
-	// instances in the v2 data model:
+	// instances in the v3 data model:
 	// -  ClusterInformation (global): name "default"
 	// -  FelixConfiguration (global): name "default"
 	// -  FelixConfiguration (per-host): name "node.<hostname>"
 	// -  Node (per-host): name: <hostname>
 	// Get the global values and host specific values separately.  We re-use the updateprocessor
-	// logic to convert the single v2 resource to a set of v1 key/values.
+	// logic to convert the single v3 resource to a set of v1 key/values.
 	hostConfig = make(map[string]string)
 	globalConfig = make(map[string]string)
 	var ready bool
 	err = getAndMergeConfig(
 		ctx, client, globalConfig,
-		apiv2.KindClusterInformation, "default",
+		apiv3.KindClusterInformation, "default",
 		updateprocessors.NewClusterInfoUpdateProcessor(),
 		&ready,
 	)
@@ -687,7 +687,7 @@ func loadConfigFromDatastore(
 	}
 	err = getAndMergeConfig(
 		ctx, client, globalConfig,
-		apiv2.KindFelixConfiguration, "default",
+		apiv3.KindFelixConfiguration, "default",
 		updateprocessors.NewFelixConfigUpdateProcessor(),
 		&ready,
 	)
@@ -696,7 +696,7 @@ func loadConfigFromDatastore(
 	}
 	err = getAndMergeConfig(
 		ctx, client, hostConfig,
-		apiv2.KindFelixConfiguration, "node."+hostname,
+		apiv3.KindFelixConfiguration, "node."+hostname,
 		updateprocessors.NewFelixConfigUpdateProcessor(),
 		&ready,
 	)
@@ -705,7 +705,7 @@ func loadConfigFromDatastore(
 	}
 	err = getAndMergeConfig(
 		ctx, client, hostConfig,
-		apiv2.KindNode, hostname,
+		apiv3.KindNode, hostname,
 		updateprocessors.NewFelixNodeUpdateProcessor(),
 		&ready,
 	)
@@ -716,8 +716,8 @@ func loadConfigFromDatastore(
 	return
 }
 
-// getAndMergeConfig gets the v2 resource configuration extracts the separate config values
-// (where each configuration value is stored in a field of the v2 resource Spec) and merges into
+// getAndMergeConfig gets the v3 resource configuration extracts the separate config values
+// (where each configuration value is stored in a field of the v3 resource Spec) and merges into
 // the supplied map, as required by our v1-style configuration loader.
 func getAndMergeConfig(
 	ctx context.Context, client bapi.Client, config map[string]string,
@@ -743,7 +743,7 @@ func getAndMergeConfig(
 		}
 	}
 
-	// Re-use the update processor logic implemented for the Syncer.  We give it a v2 config
+	// Re-use the update processor logic implemented for the Syncer.  We give it a v3 config
 	// object in a KVPair and it uses the annotations defined on it to split it into v1-style
 	// KV pairs.  Log any errors - but don't fail completely to avoid cyclic restarts.
 	v1kvs, err := configConverter.Process(cfg)
