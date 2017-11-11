@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/testutils"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 var plugin = "calico-ipam"
