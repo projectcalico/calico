@@ -1,5 +1,5 @@
-hash: 43a97174b37306aeae91053aa650d670abc55cad2a01ce24a766ddd79fe7d36d
-updated: 2017-11-09T12:44:32.703463-08:00
+hash: f3c0d07a7e13b46f759a2170c6155b92603d532356eb16700d29e3524d6ec108
+updated: 2017-11-10T18:26:16.033231-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -118,7 +118,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: fe35aee4c40723baa968a2db05857ff0acbe099f
+  version: ef42c367f0b79794b266fb60e49f32e422deb4a7
   subpackages:
   - client/v2
   - models
@@ -173,7 +173,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
   subpackages:
   - format
   - internal/assertion
@@ -214,12 +214,13 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 83fc14937b8584e65bd6c959c0a85256a2d31e28
+  version: a21bd104b2d077c89737a5b897e3ac817c79957a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
   - lib/apis/v1/unversioned
   - lib/apis/v2
+  - lib/apis/v3
   - lib/backend
   - lib/backend/api
   - lib/backend/etcdv3
@@ -232,6 +233,7 @@ imports:
   - lib/backend/watchersyncer
   - lib/client
   - lib/clientv2
+  - lib/clientv3
   - lib/errors
   - lib/hash
   - lib/ipam
@@ -286,15 +288,15 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/spf13/viper
-  version: 8ef37cbca71638bf32f3d5e194117d4cb46da163
+  version: 4dddf7c62e16bce5807744018f5b753bfe21bbd2
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: 63ca7e48f59f463578ae6b6e839bef6906f048e2
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:

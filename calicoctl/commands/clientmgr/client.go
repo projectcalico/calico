@@ -18,10 +18,11 @@ import (
 	"fmt"
 	"os"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-	log "github.com/sirupsen/logrus"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 // NewClient creates a new CalicoClient using connection information in the specified

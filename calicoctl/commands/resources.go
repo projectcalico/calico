@@ -18,18 +18,19 @@ import (
 	"errors"
 	"fmt"
 	"os"
-
 	"context"
-	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
-	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
+
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 type action int

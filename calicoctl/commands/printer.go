@@ -19,20 +19,20 @@ import (
 	"io/ioutil"
 	"reflect"
 	"strings"
-
 	"bytes"
 	"os"
 	"text/tabwriter"
 	"text/template"
+	"context"
+
+	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/go-yaml-wrapper"
-	client "github.com/projectcalico/libcalico-go/lib/clientv2"
-	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/runtime"
-	"context"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 type resourcePrinter interface {
