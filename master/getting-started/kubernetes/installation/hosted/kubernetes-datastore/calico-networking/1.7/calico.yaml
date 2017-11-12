@@ -41,7 +41,7 @@ data:
         },
         {
           "type": "portmap",
-          "snat": "true",
+          "snat": true,
           "capabilities": {"portMappings": true}
         }
       ]

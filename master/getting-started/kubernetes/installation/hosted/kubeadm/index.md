@@ -36,14 +36,14 @@ own etcd.
 
 To install this Calico and a single node etcd on a run the following command:
 
-> **Note**: The following manifest requires Kubernetes 1.6.0 or later.
+> **Note**: The following manifest requires Kubernetes 1.7.0 or later.
 {: .alert .alert-info}
 
 ```shell
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
 ```
 
->[Click here to view the above yaml directly.](1.6/calico.yaml)
+>[Click here to view the above yaml directly.](1.7/calico.yaml)
 
 ### Kubernetes datastore
 
@@ -70,8 +70,7 @@ See [using calicoctl with Kubernetes](../../../tutorials/using-calicoctl#b-runni
 
 * This install assumes no other pod network configurations have been installed
   in /etc/cni/net.d (or equivilent directory).
-* The CIDR(s) specified with the kubeadm flag `--cluster-cidr` (pre 1.6) or
-  `--pod-network-cidr` (1.6+) must match the Calico IP Pools to have Network
+* The CIDR(s) specified with the kubeadm flag `--pod-network-cidr` must match the Calico IP Pools to have Network
   Policy function correctly. The default is `192.168.0.0/16`.
 * The CIDR specified with the kubeadm flag `--service-cidr` should not overlap with the Calico IP Pool.
   * The default CIDR for `--service-cidr` is `10.96.0.0/12`.
