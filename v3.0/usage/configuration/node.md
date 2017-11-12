@@ -96,7 +96,7 @@ For example:
 ```
 # Start by querying the current node configuration
 $ calicoctl get node node2 -o yaml
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
     name: node2
@@ -108,7 +108,7 @@ $ calicoctl get node node2 -o yaml
 # Now reconfigure the node with updated ipv4Address to include the correct
 # subnet.
 $ calicoctl apply -f - << EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
     name: node2

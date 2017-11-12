@@ -16,7 +16,7 @@ aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
   name: some.name

@@ -20,7 +20,7 @@ datastore access.
 You can use either YAML or JSON for the configuration file. A YAML example follows.
 
 ```
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: CalicoAPIConfig
 metadata:
 spec:
@@ -76,7 +76,7 @@ for the list of supported environment variables.
 #### Example configuration file
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: CalicoApiConfig
 metadata:
 spec:

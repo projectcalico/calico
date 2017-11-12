@@ -23,7 +23,7 @@ calicoctl get ipPool
 # For each pool that needs connectivity:
 ```
 cat << EOF | calicoctl apply -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: IPPool
   metadata:
     name: ippool-ext-1

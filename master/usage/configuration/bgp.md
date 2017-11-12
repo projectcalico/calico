@@ -133,7 +133,7 @@ the following command on any node:
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-global-3040
@@ -178,7 +178,7 @@ peering with {{site.prodname}} node "node1", run the following command on any no
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-node-aabbff

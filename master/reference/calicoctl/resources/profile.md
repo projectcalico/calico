@@ -19,7 +19,7 @@ have the profile label set to `profile1` (i.e. endpoints that reference this pro
 except that *all* traffic from 10.0.20.0/24 is denied.
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: Profile
 metadata:
   name: profile1

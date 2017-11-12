@@ -81,7 +81,7 @@ Run the following command to block incoming requests in the default Profile:
 
 ```yaml
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Profile
   metadata:
     name: calico
@@ -118,7 +118,7 @@ We can use `calicoctl create` to create two new policies for this:
 
 ```yaml
 calicoctl create -f -<<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: webserver
@@ -140,7 +140,7 @@ calicoctl create -f -<<EOF
     - action: allow
       destination:
         selector: role == 'webserver'
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: client

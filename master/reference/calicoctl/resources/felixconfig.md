@@ -13,7 +13,7 @@ See [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/config
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: FelixConfiguration
 metadata:
   name: default

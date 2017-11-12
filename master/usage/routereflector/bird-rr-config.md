@@ -180,7 +180,7 @@ To create a global peer for the route reflector:
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-global-1

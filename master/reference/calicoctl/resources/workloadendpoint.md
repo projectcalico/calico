@@ -29,7 +29,7 @@ insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: WorkloadEndpoint
 metadata:
   name: node1-k8s-frontend--5gs43-eth0

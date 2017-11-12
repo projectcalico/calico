@@ -14,7 +14,7 @@ aliases are supported (all case insensitive): `bgppeer`, `bgppeers`, `bgpp`, `bg
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: some.name

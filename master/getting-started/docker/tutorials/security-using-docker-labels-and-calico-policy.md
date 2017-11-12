@@ -89,7 +89,7 @@ We can use `calicoctl create` to create two new policies for this:
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: database
@@ -111,7 +111,7 @@ cat << EOF | calicoctl create -f -
     - action: allow
       destination:
         selector: role == 'database'
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: frontend

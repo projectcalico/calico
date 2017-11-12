@@ -22,7 +22,7 @@ from tests.st.utils.utils import update_bgp_config
 from .peer import create_bgp_peer
 
 # TODO: Re-enable
-@skip("Disabled until routereflector is updated for libcalico-go v2")
+@skip("Disabled until routereflector is updated for libcalico-go v3")
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
@@ -76,9 +76,9 @@ class TestSingleRouteReflector(TestBase):
     def test_bird_single_route_reflector(self):
         self._test_single_route_reflector(backend='bird')
 
-    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
+    # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
     @attr('slow')
-    @skip("Disabled until gobgp is updated with libcalico-go v2")
+    @skip("Disabled until gobgp is updated with libcalico-go v3")
     def test_gobgp_single_route_reflector(self):
         self._test_single_route_reflector(backend='gobgp')
 
