@@ -1,5 +1,5 @@
-hash: 1173e6d2c7e74dc5079d33d56e6a5b577b3d28f23c7f71597aedd41b10a68f85
-updated: 2017-11-10T13:42:29.770804-08:00
+hash: 4ad149902316ab15d33ec41f5ec086668918887c292b22a0243f4a375fa8c4ba
+updated: 2017-11-10T20:20:28.690356-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -189,13 +189,13 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a3f05bbf5b10693a0396f805c73f1dcebf985592
+  version: a21bd104b2d077c89737a5b897e3ac817c79957a
   subpackages:
   - lib
   - lib/apiconfig
   - lib/apis/v1
   - lib/apis/v1/unversioned
-  - lib/apis/v2
+  - lib/apis/v3
   - lib/backend
   - lib/backend/api
   - lib/backend/etcdv3
@@ -206,7 +206,7 @@ imports:
   - lib/backend/syncersv1/felixsyncer
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
-  - lib/clientv2
+  - lib/clientv3
   - lib/errors
   - lib/hash
   - lib/health
@@ -227,7 +227,7 @@ imports:
   - lib/validator
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 7081b71137e60b0cf7e46ce352eb0e1df6f5bfa5
+  version: 6b0b491018919759f36aa897c0ef8492bfccd714
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -242,13 +242,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -270,7 +270,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
