@@ -22,7 +22,8 @@ all: clean test
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
-CALICOCTL_VER=v2.0.0-alpha1-rc2
+CALICOCTL_VER=master
+CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)
 K8S_VERSION=v1.8.1
 ETCD_VER=v3.2.5
 BIRD_VER=v0.3.1
@@ -158,8 +159,19 @@ bin/etcdctl:
 	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VER)/etcd-$(ETCD_VER)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VER)-linux-$(ARCH)/etcdctl 
 
 bin/calicoctl:
-	curl -sSf -L --retry 5 https://github.com/projectcalico/calicoctl/releases/download/$(CALICOCTL_VER)/calicoctl -o $@
-	chmod +x $@
+	-docker rm -f calico/ctl
+	# Latest calicoctl binaries are stored in automated builds of calico/ctl.
+	# To get them, we create (but don't start) a container from that image.
+	docker pull $(CALICOCTL_CONTAINER_NAME)
+	docker create --name calico-ctl $(CALICOCTL_CONTAINER_NAME)
+	# Then we copy the files out of the container.  Since docker preserves
+	# mtimes on its copy, check the file really did appear, then touch it
+	# to make sure that downstream targets get rebuilt.
+	docker cp calico-ctl:/calicoctl $@ && \
+	  test -e $@ && \
+	  touch $@
+	-docker rm -f calico-ctl
+
 
 .PHONY: clean
 clean:

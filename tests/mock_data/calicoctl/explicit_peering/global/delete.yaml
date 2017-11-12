@@ -1,5 +1,5 @@
 kind: BGPPeer
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-1
 spec:
@@ -9,7 +9,7 @@ spec:
 ---
 
 kind: BGPPeer
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-2
 spec:
@@ -19,7 +19,7 @@ spec:
 ---
 
 kind: IPPool
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: ippool-1
 spec:

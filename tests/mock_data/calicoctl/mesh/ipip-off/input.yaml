@@ -1,5 +1,5 @@
 kind: BGPConfiguration
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
@@ -8,7 +8,7 @@ spec:
 ---
 
 kind: Node
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: kube-master
 spec:
@@ -18,7 +18,7 @@ spec:
 ---
 
 kind: Node
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: kube-node-1
 spec:
@@ -28,7 +28,7 @@ spec:
 ---
 
 kind: Node
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: kube-node-2
 spec:
@@ -38,7 +38,7 @@ spec:
 ---
 
 kind: IPPool
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: ippool-1
 spec:

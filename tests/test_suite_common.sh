@@ -97,7 +97,7 @@ execute_tests_oneshot() {
 turn_mesh_off() {
     calicoctl apply -f - <<EOF
 kind: BGPConfiguration
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
@@ -109,7 +109,7 @@ EOF
 turn_mesh_on() {
     calicoctl apply -f - <<EOF
 kind: BGPConfiguration
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
