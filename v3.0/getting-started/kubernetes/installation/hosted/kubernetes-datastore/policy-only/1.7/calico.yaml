@@ -27,21 +27,21 @@ data:
           "nodename": "__KUBERNETES_NODE_NAME__",
           "mtu": 1500,
           "ipam": {
-              "type": "host-local",
-              "subnet": "usePodCidr"
+            "type": "host-local",
+            "subnet": "usePodCidr"
           },
           "policy": {
-              "type": "k8s",
-              "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
+            "type": "k8s",
+            "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
           },
           "kubernetes": {
-              "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
-              "kubeconfig": "__KUBECONFIG_FILEPATH__"
+            "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
+            "kubeconfig": "__KUBECONFIG_FILEPATH__"
           }
         },
         {
           "type": "portmap",
-          "snat": "true",
+          "snat": true,
           "capabilities": {"portMappings": true}
         }
       ]
