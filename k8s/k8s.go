@@ -66,7 +66,8 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		"Node":         nodename,
 	}).Info("Extracted identifiers for CmdAddK8s")
 
-	if endpoint != nil {
+	endpointAlreadyExisted := endpoint != nil
+	if endpointAlreadyExisted {
 		// This happens when Docker or the node restarts. K8s calls CNI with the same parameters as before.
 		// Do the networking (since the network namespace was destroyed and recreated).
 		// There's an existing endpoint - no need to create another. Find the IP address from the endpoint
@@ -265,21 +266,32 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 	}
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
+	// maybeReleaseIPAM cleans up any IPAM allocations if we were creating a new endpoint;
+	// it is a no-op if this was a re-network of an existing endpoint.
+	maybeReleaseIPAM := func() {
+		logger.Debug("Checking if we need to clean up IPAM.")
+		logger := logger.WithField("IPs", endpoint.Spec.IPNetworks)
+		if endpointAlreadyExisted {
+			logger.Info("Not cleaning up IPAM allocation; this was a pre-existing endpoint.")
+			return
+		}
+		logger.Info("Releasing IPAM allocation after failure")
+		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+	}
+
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	hostVethName := k8sbackend.VethNameForWorkload(workload)
 	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
 	if err != nil {
-		// Cleanup IP allocation and return the error.
-		logger.Errorf("Error setting up networking: %s", err)
-		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		logger.WithError(err).Error("Error setting up networking")
+		maybeReleaseIPAM()
 		return nil, err
 	}
 
 	mac, err := net.ParseMAC(contVethMac)
 	if err != nil {
-		// Cleanup IP allocation and return the error.
-		logger.Errorf("Error parsing MAC (%s): %s", contVethMac, err)
-		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		logger.WithError(err).WithField("mac", mac).Error("Error parsing container MAC")
+		maybeReleaseIPAM()
 		return nil, err
 	}
 	endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
@@ -289,8 +301,8 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
-		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		logger.WithError(err).Error("Error creating/updating endpoint in datastore.")
+		maybeReleaseIPAM()
 		return nil, err
 	}
 	logger.Info("Wrote updated endpoint to datastore")

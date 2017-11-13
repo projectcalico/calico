@@ -124,7 +124,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Default CNI behavior - use the CNI network name as the Calico profile.
 		profileID := conf.Name
 
-		if endpoint != nil {
+		endpointAlreadyExisted := endpoint != nil
+		if endpointAlreadyExisted {
 			// There is an existing endpoint - no need to create another.
 			// This occurs when adding an existing container to a new CNI network
 			// Find the IP address from the endpoint and use that in the response.
@@ -219,8 +220,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
 		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
-			// Cleanup IP allocation and return the error.
-			ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+			if !endpointAlreadyExisted {
+				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
+				// we'd release the IP that is already attached to the existing endpoint.
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+			}
 			return err
 		}
 
