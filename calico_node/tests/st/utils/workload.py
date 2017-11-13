@@ -61,6 +61,7 @@ class Workload(object):
         self.network = network
         assert self.network is not None
         self.namespace = namespace
+        self.labels = labels
 
         lbl_args = ""
         for label in labels:
@@ -100,21 +101,38 @@ class Workload(object):
                          '"etcd_ca_cert_file":"%s",' % ETCD_CA +
                          '"etcd_cert_file":"%s",' % ETCD_CERT +
                          '"etcd_key_file":"%s",' % ETCD_KEY)
+
+        # Workout the labels_json to pass it to CNI.
+        label_kvs = "["
+        for label in self.labels:
+            kvs = label.split('=')
+            label_kvs += '{"key":"%s", "value":"%s"},' % (kvs[0], kvs[1])
+        if label_kvs.endswith(','):
+            label_kvs = label_kvs[:-1]
+        label_kvs += ']'
+        labels_json = ('"args":{"org.apache.mesos":{"network_info":{"labels":' +
+                       '{"labels":%s}}}},' % label_kvs)
+
+        # For non-k8s cluster, CNI takes namespace args and attaches a default
+        # profile with network name.
+        if self.namespace:
+            cni_args = 'CNI_ARGS=CNI_TEST_NAMESPACE=%s ' % self.namespace
+        else:
+            cni_args = ''
+
         command = ('echo \'{' +
                    '"name":"%s",' % self.network +
                    '"type":"calico-cni-plugin",' +
                    etcd_json +
+                   labels_json +
                    '"ipam":{"type":"calico-ipam-plugin"%s}' % ip_json +
                    '}\' | ' +
                    'CNI_COMMAND=%s ' % add_or_del +
                    'CNI_CONTAINERID=%s ' % container_id +
                    'CNI_NETNS=/proc/%s/ns/net ' % workload_pid +
                    'CNI_IFNAME=eth0 ' +
+                   cni_args +
                    'CNI_PATH=/code/dist ')
-        # Optionally add namespace (we want to be able to call CNI without specifying a
-        # namespace to check CNI defaults correctly).
-        if self.namespace:
-            command = command + 'K8S_POD_NAMESPACE=%s ' % self.namespace
 
         command = command + ip_args + '/code/dist/calico-cni-plugin'
         output = self.host.execute(command)
