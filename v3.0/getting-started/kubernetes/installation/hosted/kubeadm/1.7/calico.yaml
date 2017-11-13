@@ -100,9 +100,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-          command: ["/bin/sh","-c"]
-          args:
+          command:
           - /usr/local/bin/etcd
+          args:
           - --name=calico
           - --data-dir=/var/etcd/calico-data
           - --advertise-client-urls=http://$CALICO_ETCD_IP:6666
