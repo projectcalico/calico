@@ -38,7 +38,7 @@ func NewServer(config api.CalicoAPIConfig, nodeName string) (*auth_server, error
 
 func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Response, error) {
 	log.Debugf("Check(%v, %v)", ctx, req)
-	resp := authz.Response{Status: &authz.Response_Status{Code: authz.INTERNAL}}
+	resp := authz.Response{Status: &authz.Response_Status{Code: authz.Response_Status_INTERNAL}}
 	cid, err := getContainerFromContext(ctx)
 	if err != nil {
 		log.Errorf("Failed to get container ID. %v", err)

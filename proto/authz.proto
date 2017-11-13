@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package authz.v1;
+option go_package = "tigera.io/dikastes/proto";
 
 
 service Authorization {

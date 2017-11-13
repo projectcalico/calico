@@ -20,11 +20,11 @@ const (
 func checkPolicies(policies []api.Policy, req *authz.Request) (status authz.Response_Status_Code) {
 	if len(policies) == 0 {
 		log.Debug("0 active policies, allow request.")
-		status = authz.OK
+		status = authz.Response_Status_OK
 		return
 	}
 	// If there are active policies, the default is deny if no rules match.
-	status = authz.PERMISSION_DENIED
+	status = authz.Response_Status_PERMISSION_DENIED
 	for i, p := range policies {
 		action := checkPolicy(p.Spec, req)
 		log.Debugf("Policy %d returned action %s", i, action)
@@ -32,10 +32,10 @@ func checkPolicies(policies []api.Policy, req *authz.Request) (status authz.Resp
 		case PASS:
 			continue
 		case ALLOW:
-			status = authz.OK
+			status = authz.Response_Status_OK
 			break
 		case LOG, DENY:
-			status = authz.PERMISSION_DENIED
+			status = authz.Response_Status_PERMISSION_DENIED
 			break
 		}
 	}

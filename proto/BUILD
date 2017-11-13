@@ -1,25 +1,13 @@
-load("@org_pubref_rules_protobuf//gogo:rules.bzl", "gogoslick_proto_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_grpc_library")
 
-gogoslick_proto_library(
+go_grpc_library(
     name = "go_default_library",
-    importmap = {
-        "gogoproto/gogo.proto": "github.com/gogo/protobuf/gogoproto",
-    },
-    imports = [
-        "external/com_github_gogo_protobuf",
-        "external/com_github_google_protobuf/src",
-    ],
-    inputs = [
-        "@com_github_google_protobuf//:well_known_protos",
-        "@com_github_gogo_protobuf//gogoproto:go_default_library_protos",
-    ],
-    protos = [
-        "authz.proto",
-    ],
-    verbose = 0,
+    proto = ":authz_proto",
     visibility = ["//visibility:public"],
-    deps = [
-        "@com_github_gogo_protobuf//gogoproto:go_default_library",
-        "@com_github_gogo_protobuf//sortkeys:go_default_library",
-    ],
+    importpath = "tigera.io/dikastes/proto",
+)
+
+proto_library(
+    name = "authz_proto",
+    srcs = ["authz.proto"],
 )

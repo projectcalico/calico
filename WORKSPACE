@@ -1,24 +1,16 @@
 workspace(name = "com_github_tigera_dikastes")
 
-git_repository(
+http_archive(
     name = "io_bazel_rules_go",
-    commit = "eba68677493422112dd25f6a0b4bbdb02387e5a4",  # Aug 1, 2017
-    remote = "https://github.com/bazelbuild/rules_go.git",
+    url = "https://github.com/bazelbuild/rules_go/releases/download/0.7.0/rules_go-0.7.0.tar.gz",
+    sha256 = "91fca9cf860a1476abdc185a5f675b641b60d3acf0596679a27b580af60bf19c",
 )
+load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains", "go_repository")
+go_rules_dependencies()
+go_register_toolchains()
 
-load("@io_bazel_rules_go//go:def.bzl", "go_repositories", "go_repository")
-
-go_repositories()
-
-git_repository(
-    name = "org_pubref_rules_protobuf",
-    commit = "9ede1dbc38f0b89ae6cd8e206a22dd93cc1d5637",  # Mar 31, 2017 (gogo* support)
-    remote = "https://github.com/pubref/rules_protobuf",
-)
-
-load("@org_pubref_rules_protobuf//protobuf:rules.bzl", "proto_repositories")
-
-proto_repositories()
+load("@io_bazel_rules_go//proto:def.bzl", "proto_register_toolchains")
+proto_register_toolchains()
 
 go_repository(
     name = "com_github_gogo_protobuf",
@@ -350,12 +342,18 @@ go_repository(
     name = "io_k8s_apimachinery",
     importpath = "k8s.io/apimachinery",
     commit = "b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215",
+    build_file_generation = "on",
+    build_file_name = "BUILD.bazel",
+    build_file_proto_mode = "legacy",
 )
 
 go_repository(
     name = "io_k8s_client_go",
     importpath = "k8s.io/client-go",
     commit = "4a3ab2f5be5177366f8206fd79ce55ca80e417fa",
+    build_file_generation = "on",
+    build_file_name = "BUILD.bazel",
+    build_file_proto_mode = "legacy",
 )
 
 go_repository(
