@@ -6,10 +6,13 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/cni/pkg/types/current"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -66,11 +69,11 @@ var _ = Describe("CalicoCni", func() {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/8"
 			  },
-				"kubernetes": {
-				  "k8s_api_root": "http://127.0.0.1:8080"
-				},
-				"policy": {"type": "k8s"},
-				"log_level":"info"
+			  "kubernetes": {
+			    "k8s_api_root": "http://127.0.0.1:8080"
+			  },
+			  "policy": {"type": "k8s"},
+			  "log_level":"info"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 			It("successfully networks the namespace", func() {
@@ -159,7 +162,7 @@ var _ = Describe("CalicoCni", func() {
 				}))
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
-				//fmt.Println(Cmd("ip link show")) // Useful for debugging
+				// fmt.Println(Cmd("ip link show")) // Useful for debugging
 				hostVeth, err := netlink.LinkByName(interfaceName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(hostVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
@@ -190,13 +193,14 @@ var _ = Describe("CalicoCni", func() {
 
 				// Assume the first IP is the IPv4 address
 				Expect(contAddresses[0].IP.String()).Should(Equal(ip))
-				Expect(contRoutes).Should(SatisfyAll(ContainElement(netlink.Route{
-					LinkIndex: contVeth.Attrs().Index,
-					Gw:        net.IPv4(169, 254, 1, 1).To4(),
-					Protocol:  syscall.RTPROT_BOOT,
-					Table:     syscall.RT_TABLE_MAIN,
-					Type:      syscall.RTN_UNICAST,
-				}),
+				Expect(contRoutes).Should(SatisfyAll(
+					ContainElement(netlink.Route{
+						LinkIndex: contVeth.Attrs().Index,
+						Gw:        net.IPv4(169, 254, 1, 1).To4(),
+						Protocol:  syscall.RTPROT_BOOT,
+						Table:     syscall.RT_TABLE_MAIN,
+						Type:      syscall.RTN_UNICAST,
+					}),
 					ContainElement(netlink.Route{
 						LinkIndex: contVeth.Attrs().Index,
 						Scope:     netlink.SCOPE_LINK,
@@ -1176,25 +1180,45 @@ var _ = Describe("CalicoCni", func() {
 				})
 			})
 
-			Context("Create a container then send another ADD for the same container", func() {
-				netconf := fmt.Sprintf(`
-				{
-				"cniVersion": "%s",
-				"name": "net8",
-				"type": "calico",
-				"etcd_endpoints": "http://%s:2379",
-				"datastore_type": "%s",
-			    "log_level": "debug",
-			 	"ipam": {
-			    		"type": "calico-ipam"
-			        	},
-				"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-				"policy": {"type": "k8s"}
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+			Context("after creating a pod", func() {
 
-				It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the container", func() {
+				netconf := fmt.Sprintf(
+					`
+							{
+							"cniVersion": "%s",
+							"name": "net8",
+							"type": "calico",
+							"etcd_endpoints": "http://%s:2379",
+							"datastore_type": "%s",
+							"ipam": {
+									"type": "calico-ipam"
+									},
+							"kubernetes": {
+								  "k8s_api_root": "http://127.0.0.1:8080"
+								 },
+							"policy": {"type": "k8s"},
+							"log_level":"debug"
+							}`,
+					cniVersion,
+					os.Getenv("ETCD_IP"),
+					os.Getenv("DATASTORE_TYPE"),
+				)
+
+				var workloadName, containerID, name string
+				var endpointSpec api.WorkloadEndpointSpec
+				var contNs ns.NetNS
+				var result *current.Result
+
+				checkIPAMReservation := func() {
+					// IPAM reservation should still be in place.
+					ipamIPs, err := calicoClient.IPAM().IPsByHandle(context.Background(), workloadName)
+					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+					ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
+						"There should be an IPAM handle for endpoint")
+					ExpectWithOffset(1, ipamIPs[0].String()+"/32").To(Equal(endpointSpec.IPNetworks[0]))
+				}
+
+				BeforeEach(func() {
 					// Create a new ipPool.
 					testutils.MustCreateNewIPPool(calicoClient, "10.0.0.0/24", false, false, true)
 
@@ -1205,7 +1229,7 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					// Now create a K8s pod.
-					name := fmt.Sprintf("run%d", rand.Uint32())
+					name = fmt.Sprintf("run%d", rand.Uint32())
 
 					pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(
 						&v1.Pod{
@@ -1224,12 +1248,12 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					log.Infof("Created POD object: %v", pod)
-
-					containerID, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+					var session *gexec.Session
+					containerID, session, _, _, _, contNs, err = testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
+					Eventually(session).Should(gexec.Exit(0))
 
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
+					result, err = testutils.GetResultForCurrent(session, cniVersion)
 					if err != nil {
 						log.Fatalf("Error getting result from the session: %v\n", err)
 					}
@@ -1249,33 +1273,77 @@ var _ = Describe("CalicoCni", func() {
 						ContainerID:  containerID,
 					}
 
-					wrkload, err := ids.CalculateWorkloadEndpointName(false)
+					workloadName, err = ids.CalculateWorkloadEndpointName(false)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
+					Expect(endpoints.Items[0].Name).Should(Equal(workloadName))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
 						"projectcalico.org/namespace":    "test",
 						"projectcalico.org/orchestrator": "k8s",
 					}))
 
-					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(containerID))
+					endpointSpec = endpoints.Items[0].Spec
+					Expect(endpointSpec.ContainerID).Should(Equal(containerID))
 
-					// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-					session, _, _, _, err = testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth0", contNs)
+					checkIPAMReservation()
+				})
+
+				AfterEach(func() {
+					_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
+				})
+
+				It("a second ADD for the same container should be a no-op", func() {
+					// Try to create the same container (so CNI receives the ADD for the same endpoint again)
+					session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth0", contNs)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
 
 					resultSecondAdd, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
+					Expect(err).NotTo(HaveOccurred())
 
 					log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
 					Expect(resultSecondAdd).Should(Equal(result))
 
-					_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
-					Expect(err).ShouldNot(HaveOccurred())
+					// IPAM reservation should still be in place.
+					checkIPAMReservation()
+				})
+
+				Context("with networking rigged to fail", func() {
+					renameVeth := func(from, to string) {
+						output, err := exec.Command("ip", "link", "set", from, "down").CombinedOutput()
+						Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+						output, err = exec.Command("ip", "link", "set", from, "name", to).CombinedOutput()
+						Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+						output, err = exec.Command("ip", "link", "set", to, "up").CombinedOutput()
+						Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+					}
+
+					var realVethName, tweakedVethName string
+
+					BeforeEach(func() {
+						// To prevent the networking attempt from succeeding, rename the old veth.
+						// This leaves a route and an eth0 in place that the plugin will struggle with.
+						realVethName = endpointSpec.InterfaceName
+						tweakedVethName = strings.Replace(realVethName, "cali", "sali", 1)
+						renameVeth(realVethName, tweakedVethName)
+					})
+
+					It("a second ADD should leave the datastore untouched", func() {
+						// Try to create the same container (so CNI receives the ADD for the same endpoint again)
+						session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth0", contNs)
+						Expect(err).ShouldNot(HaveOccurred())
+						Eventually(session).Should(gexec.Exit(1))
+
+						// IPAM reservation should still be in place.
+						checkIPAMReservation()
+					})
+
+					AfterEach(func() {
+						// So the tear-down succeeds, put the veth back.
+						renameVeth(tweakedVethName, realVethName)
+					})
 				})
 			})
 

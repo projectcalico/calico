@@ -179,15 +179,26 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Default CNI behavior - use the CNI network name as the Calico profile.
 		profileID := conf.Name
 
-		if endpoint != nil {
+		endpointAlreadyExisted := endpoint != nil
+		if endpointAlreadyExisted {
 			// There is an existing endpoint - no need to create another.
 			// This occurs when adding an existing container to a new CNI network
 			// Find the IP address from the endpoint and use that in the response.
 			// Don't create the veth or do any networking.
 			// Just update the profile on the endpoint. The profile will be created if needed during the
 			// profile processing step.
-			logger.Infof("Calico CNI appending profile: %s\n", profileID)
-			endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
+			foundProfile := false
+			for _, p := range endpoint.Spec.Profiles {
+				if p == profileID {
+					logger.Infof("Calico CNI endpoint already has profile: %s\n", profileID)
+					foundProfile = true
+					break
+				}
+			}
+			if !foundProfile {
+				logger.Infof("Calico CNI appending profile: %s\n", profileID)
+				endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
+			}
 			result, err = utils.CreateResultFromEndpoint(endpoint)
 			logger.WithField("result", result).Debug("Created result from endpoint")
 			if err != nil {
@@ -269,8 +280,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
 		if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
-			// Cleanup IP allocation and return the error.
-			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+			if !endpointAlreadyExisted {
+				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
+				// we'd release the IP that is already attached to the existing endpoint.
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+			}
 			return err
 		}
 

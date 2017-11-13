@@ -256,7 +256,21 @@ func CreateContainerWithId(netconf, podName, podNamespace, ip, containerId strin
 
 // RunCNIPluginWithId calls CNI plugin with a containerID and targetNs passed to it.
 // This is for when you want to call CNI for an existing container.
-func RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerId, ifName string, targetNs ns.NetNS) (session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
+func RunCNIPluginWithId(
+	netconf,
+	podName,
+	podNamespace,
+	ip,
+	containerId,
+	ifName string,
+	targetNs ns.NetNS,
+) (
+	session *gexec.Session,
+	contVeth netlink.Link,
+	contAddr []netlink.Addr,
+	contRoutes []netlink.Route,
+	err error,
+) {
 
 	// Set up the env for running the CNI plugin
 	k8sEnv := ""

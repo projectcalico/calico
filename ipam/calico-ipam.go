@@ -168,6 +168,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
+		fmt.Fprintf(os.Stderr, "Calico CNI IPAM handle=%s\n", epIDs.WEPName)
 		assignArgs := ipam.AutoAssignArgs{
 			Num4:      num4,
 			Num6:      num6,
