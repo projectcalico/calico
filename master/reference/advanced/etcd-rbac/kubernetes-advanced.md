@@ -17,14 +17,14 @@ access roles for calicoctl to the etcd datastore.
 The following components need certificates with a Common Name that matches an
 etcd user that has been given appropriate roles allowing access to the key
 prefixes or paths listed or linked below.
-- [cni-plugin](calico-etcdv2-paths#cni-plugin)
-- [{{site.prodname}} Kubernetes controllers](calico-etcdv2-paths#calicokube-controllers)
-- [calico/node](calico-etcdv2-paths#caliconode)
+- [cni-plugin](calico-etcdv3-paths#cni-plugin)
+- [{{site.prodname}} Kubernetes controllers](calico-etcdv3-paths#calicokube-controllers)
+- [calico/node](calico-etcdv3-paths#caliconode)
 - It may also be useful to create a certificate key pair for use with
   calicoctl, even creating specific ones for
-  [read only access](calico-etcdv2-paths#calicoctl-read-only-access),
-  [policy editor access](calico-etcdv2-paths#calicoctl-policy-editor-access),
-  and [full read/write access](calico-etcdv2-paths#calicoctl-full-readwrite-access).
+  [read only access](calico-etcdv3-paths#calicoctl-read-only-access),
+  [policy editor access](calico-etcdv3-paths#calicoctl-policy-editor-access),
+  and [full read/write access](calico-etcdv3-paths#calicoctl-full-readwrite-access).
 
 All certificate/key pairs that are referenced below are assumed to have been
 created for the specific component with the information above.
