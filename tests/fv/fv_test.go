@@ -254,7 +254,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			handle := "myhandle"
 			wepIp := net.IP{192, 168, 0, 1}
-			swepIp := "192.168.0.1"
+			swepIp := "192.168.0.1/32"
 			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 				IP:       cnet.IP{wepIp},
 				Hostname: cNodeName,
@@ -308,7 +308,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			bgpConf := api.BGPConfiguration{
 				Spec: api.BGPConfigurationSpec{
-					LogSeverityScreen: "idk",
+					LogSeverityScreen: "Error",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeConfigName,
@@ -641,12 +641,13 @@ var _ = Describe("kube-controllers FV tests", func() {
 				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}
 			wep.Spec = api.WorkloadEndpointSpec{
-				ContainerID:  "container_id_1",
-				Orchestrator: "k8s",
-				Pod:          podName,
-				Node:         nodeName,
-				Endpoint:     "eth0",
-				IPNetworks:   []string{"192.168.1.1"},
+				ContainerID:   "container_id_1",
+				Orchestrator:  "k8s",
+				Pod:           podName,
+				Node:          nodeName,
+				Endpoint:      "eth0",
+				IPNetworks:    []string{"192.168.1.1/32"},
+				InterfaceName: "testInterface",
 			}
 
 			By("creating a corresponding workload endpoint", func() {
