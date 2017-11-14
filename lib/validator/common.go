@@ -75,7 +75,7 @@ func ValidateMetadataIDsAssigned(rm unversioned.ResourceMetadata) error {
 			return errors.ErrorInsufficientIdentifiers{Name: "name"}
 		}
 	default:
-		log.Fatal(fmt.Errorf("Unexpected resource metadata: %s", metadata))
+		log.Panic(fmt.Errorf("Unexpected resource metadata: %s", metadata))
 	}
 
 	return nil

@@ -16,9 +16,9 @@ package errors
 
 import log "github.com/sirupsen/logrus"
 
-// FatalIfErrored logs and panics if the supplied error is non-nil.
-func FatalIfErrored(err error) {
+// PanicIfErrored logs and panics if the supplied error is non-nil.
+func PanicIfErrored(err error, msgformat string, args ...interface{}) {
 	if err != nil {
-		log.WithError(err).Fatal("Unexpected code error requiring restart")
+		log.WithError(err).Panicf(msgformat, args...)
 	}
 }

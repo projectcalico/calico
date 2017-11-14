@@ -85,7 +85,7 @@ func (c client) NetworkPolicies() NetworkPolicyInterface {
 
 // Policies returns an interface for managing policy resources.
 func (c client) GlobalNetworkPolicies() GlobalNetworkPolicyInterface {
-	return globalnetworkpolicies{client: c}
+	return globalNetworkPolicies{client: c}
 }
 
 // IPPools returns an interface for managing IP pool resources.

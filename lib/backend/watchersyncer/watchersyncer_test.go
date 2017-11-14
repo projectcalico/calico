@@ -998,7 +998,7 @@ func (fw *listWatchSource) list() (*model.KVPairList, error) {
 		log.WithField("Name", fw.name).Info("Returning results from List invocation")
 		return r, nil
 	default:
-		log.WithField("Result", r).Fatal("Unexpected result on list result channel")
+		log.WithField("Result", r).Panic("Unexpected result on list result channel")
 		return nil, nil
 	}
 }
@@ -1015,7 +1015,7 @@ func (fw *listWatchSource) watch() (api.WatchInterface, error) {
 		// results channel.
 		select {
 		case r := <-fw.results:
-			log.Fatalf("Test harness for %s expects results chan to be empty during watch creation: %v", fw.name, r)
+			log.Panicf("Test harness for %s expects results chan to be empty during watch creation: %v", fw.name, r)
 		default:
 		}
 
@@ -1073,7 +1073,7 @@ func (w *watcher) ResultChan() <-chan api.WatchEvent {
 
 func (w *watcher) HasTerminated() bool {
 	// Never invoked by the syncer code, so no need to return anything sensible.
-	log.WithField("Name", w.name).Fatalf("HasTerminated called on watcher - not expected")
+	log.WithField("Name", w.name).Panicf("HasTerminated called on watcher - not expected")
 	return false
 }
 

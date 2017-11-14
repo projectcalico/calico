@@ -130,14 +130,14 @@ func (c *conflictResolvingCache) Process(kvp *model.KVPair) ([]*model.KVPair, er
 		// Get the old key, we know this succeeds because we had to get the default path to put it
 		// in the cache.
 		oldV1Key, err := model.KeyToDefaultPath(existing.Key)
-		cerrors.FatalIfErrored(err)
+		cerrors.PanicIfErrored(err, "Unable to convert key to path (for key that has already been converted): name=%s, key=%v", name, existing.Key)
 
 		// If the key has changed, first handle this as a delete.  This may result in a
 		// delete response that we need to include.
 		if oldV1Key != v1Key {
 			logCxt.WithField("Old key", oldV1Key).Info("key modified, handle delete first")
 			response, err = c.delete(name)
-			cerrors.FatalIfErrored(err)
+			cerrors.PanicIfErrored(err, "Key entry is not in cache, but should be: name=%s", name)
 		}
 	}
 
@@ -188,7 +188,7 @@ func (c *conflictResolvingCache) delete(name string) ([]*model.KVPair, error) {
 	// Calculate the key for that resource.  This should succeed because we already called
 	// this to get the entry in the cache.
 	v1Key, err := model.KeyToDefaultPath(kvp.Key)
-	cerrors.FatalIfErrored(err)
+	cerrors.PanicIfErrored(err, "Unable to convert key to path (for key that has already been converted): key=%v", kvp.Key)
 
 	// Get the current set of names that map to this key and use this to determine what
 	// updates to send.

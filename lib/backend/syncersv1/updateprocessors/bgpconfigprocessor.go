@@ -57,7 +57,7 @@ var logLevelToBirdLogLevel = func(value interface{}) interface{} {
 var nodeMeshToString = func(value interface{}) interface{} {
 	enabled := value.(bool)
 	d, err := json.Marshal(nodeToNodeMesh{Enabled: enabled})
-	cerrors.FatalIfErrored(err)
+	cerrors.PanicIfErrored(err, "Unexpected error trying to marshal nodeToNodeMesh structure")
 	return string(d)
 }
 
