@@ -32,8 +32,8 @@ func NewServer(config api.CalicoAPIConfig, nodeName string) (*auth_server, error
 	if err != nil {
 		return nil, err
 	}
-	q := calicoQuery{c, clientset}
-	return &auth_server{nodeName, &q}, nil
+	q := NewCalicoQuery(c, clientset)
+	return &auth_server{nodeName, q}, nil
 }
 
 func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Response, error) {

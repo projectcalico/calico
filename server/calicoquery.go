@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/converter"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -34,8 +37,22 @@ type (
 	calicoQuery struct {
 		Client *client.Client
 		kubeClient *kubernetes.Clientset
+		pLock sync.RWMutex
+		pMap map[string]*api.Policy
+		pConverter converter.PolicyConverter
+		status bapi.SyncStatus
 	}
+
 )
+
+func NewCalicoQuery(client *client.Client, kubeClient *kubernetes.Clientset) (CalicoQuery){
+	q := calicoQuery{
+		client, kubeClient, sync.RWMutex{}, make(map[string]*api.Policy),
+		converter.PolicyConverter{}, bapi.WaitForDatastore}
+	syncer := client.Backend.Syncer(&q)
+	syncer.Start()
+	return &q
+}
 
 func (q *calicoQuery) GetPolicies(metadata api.WorkloadEndpointMetadata) ([]api.Policy, error) {
 	we, err := q.Client.WorkloadEndpoints().Get(metadata)
@@ -65,22 +82,17 @@ func (op orderedPolicies) Less(i, j int) bool {
 // Return the list of active PolicySpecs for this endpoint.  This list should be sorted in the correct application
 // order.
 func (q *calicoQuery) getPoliciesFromLabels(labels map[string]string) ([]api.Policy, error) {
-	pi := q.Client.Policies()
-	p_list, err := pi.List(api.PolicyMetadata{})
-	if err != nil {
-		log.Error("Failed to List.")
-		return nil, err
-	}
-
 	p_active := []api.Policy{}
-	log.Debugf("Found %d total policies.", len(p_list.Items))
-	for _, p := range p_list.Items {
-		log.Debugf("Found policy %v", p)
-		if policyActive(labels, &p) {
-			log.Debugf("Active policy %v", p)
-			p_active = append(p_active, p)
+	q.pLock.RLock()
+	log.Debugf("Found %d total policies.", len(q.pMap))
+	for _, p := range q.pMap {
+		log.Debugf("Found policy %v", *p)
+		if policyActive(labels, p) {
+			log.Debugf("Active policy %v", *p)
+			p_active = append(p_active, *p)
 		}
 	}
+	q.pLock.RUnlock()
 	sort.Sort(orderedPolicies(p_active))
 	return p_active, nil
 }
@@ -124,4 +136,29 @@ func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (api
 	return wemeta, fmt.Errorf("unable to find pod with containerId %v", cid)
 }
 
+
+func (q *calicoQuery) OnUpdates(updates []bapi.Update) {
+	for _, u := range updates {
+		switch key := u.Key.(type) {
+		case model.PolicyKey:
+			if u.Value != nil {
+				log.Debugf("Storing policy for key %v", key)
+				policy, _ := q.pConverter.ConvertKVPairToAPI(&u.KVPair)
+				q.pLock.Lock()
+				q.pMap[key.Name] = policy.(*api.Policy)
+				q.pLock.Unlock()
+			} else {
+				q.pLock.Lock()
+				delete(q.pMap, key.Name)
+				q.pLock.Unlock()
+			}
+		default:
+			log.Debugf("Ignoring update for key %v", key)
+		}
+	}
+}
+
+func (q *calicoQuery) OnStatusUpdated(status bapi.SyncStatus) {
+	q.status = status
+}
 
