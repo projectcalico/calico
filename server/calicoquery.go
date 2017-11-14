@@ -129,6 +129,7 @@ func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (api
 				wemeta.Workload = fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 				wemeta.Node = nodeName
 				wemeta.Orchestrator = "k8s"
+				wemeta.Name = "eth0"
 				return wemeta, nil
 			}
 		}
