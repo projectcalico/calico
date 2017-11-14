@@ -31,18 +31,18 @@ metadata:
 spec:
   selector: role == 'database'
   types:
-  - ingress
-  - egress
+  - Ingress
+  - Egress
   ingress:
-  - action: allow
-    protocol: tcp
+  - action: Allow
+    protocol: TCP
     source:
       selector: role == 'frontend'
     destination:
       ports:
       - 6379
   egress:
-  - action: allow
+  - action: Allow
 ```
 
 ### Definition
