@@ -269,7 +269,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
-	hostVethName := k8sconversion.VethNameForWorkload(epIDs.Namespace, epIDs.WEPName)
+	hostVethName := k8sconversion.VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
 	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
