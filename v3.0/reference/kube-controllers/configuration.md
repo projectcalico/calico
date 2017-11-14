@@ -10,11 +10,12 @@ section.
 
 The `calico/kube-controllers` container includes the following controllers:
 
-1. policy controller: watches network policies and programs Calico policies.
-1. profile controller: watches namespaces and programs Calico profiles.
-1. workloadendpoint controller: watches for changes to pod labels and updates Calico workload endpoints.
+- policy controller: watches network policies and programs Calico policies.
+- profile controller: watches namespaces and programs Calico profiles.
+- workloadendpoint controller: watches for changes to pod labels and updates Calico workload endpoints.
+- node controller: watches for the removal of Kubernetes nodes and removes corresponding data from {{site.prodname}}.
 
-By default, all three controllers are enabled.
+By default, all four controllers are enabled.
 
 ### Configuring etcd access
 
@@ -47,7 +48,7 @@ The following environment variables can be used to configure the Calico Kubernet
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
-| `ENABLED_CONTROLLERS` | Which controllers to run | policy, profile, workloadendpoint |
+| `ENABLED_CONTROLLERS` | Which controllers to run | policy, profile, workloadendpoint, node |
 | `LOG_LEVEL`     | Minimum log level to be displayed. | debug, info, warning, error |
 | `KUBECONFIG`    | Path to a kubeconfig file for Kubernetes API access | path |
 
