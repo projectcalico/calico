@@ -77,6 +77,11 @@ do
 			continue
 		fi
 		cp $path $dir/
+		if [ "$?" != "0" ];
+		then
+			echo "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
+			exit 1
+		fi
 	done
 
 	echo "Wrote Calico CNI binaries to $dir"
@@ -143,6 +148,11 @@ if [ "${CNI_CONF_NAME}" != "${CNI_OLD_CONF_NAME}" ]; then
 fi
 # Move the temporary CNI config into place.
 mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME}
+if [ "$?" != "0" ];
+then
+	echo "Failed to mv files. This may be caused by selinux configuration on the host, or something else."
+	exit 1
+fi
 
 echo "Created CNI config ${CNI_CONF_NAME}"
 
