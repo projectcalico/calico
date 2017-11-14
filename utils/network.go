@@ -232,9 +232,11 @@ func setupRoutes(hostVeth netlink.Link, result *current.Result) error {
 						return nil
 					}
 				}
-				return fmt.Errorf("route (Dst: %s, Scope: %s) already exists for an interface other than '%s'", route.Dst.String(), route.Scope, hostVeth.Attrs().Name)
+				return fmt.Errorf("route (Dst: %s, Scope: %v) already exists for an interface other than '%s'",
+					route.Dst.String(), route.Scope, hostVeth.Attrs().Name)
 			default:
-				return fmt.Errorf("failed to add route (Dst: %s, Scope: %s, Iface: %s): %v", route.Dst.String(), route.Scope, hostVeth.Attrs().Name, err)
+				return fmt.Errorf("failed to add route (Dst: %s, Scope: %v, Iface: %s): %v",
+					route.Dst.String(), route.Scope, hostVeth.Attrs().Name, err)
 			}
 		}
 
