@@ -5,10 +5,10 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"syscall"
-	"time"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -943,7 +943,25 @@ var _ = Describe("CalicoCni", func() {
 			})
 
 			Context("after creating a pod", func() {
-				var netconf string
+				netconf := fmt.Sprintf(`
+					{
+					  "cniVersion": "%s",
+					  "name": "net8",
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "ipam": {
+						"type": "calico-ipam"
+					  },
+					  "kubernetes": {
+						"k8s_api_root": "http://127.0.0.1:8080"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"info"
+					}`,
+					cniVersion,
+					os.Getenv("ETCD_IP"),
+				)
+
 				var workloadName, containerID, name string
 				var endpointSpec api.WorkloadEndpointSpec
 				var contNs ns.NetNS
@@ -959,26 +977,6 @@ var _ = Describe("CalicoCni", func() {
 				}
 
 				BeforeEach(func() {
-					netconf = fmt.Sprintf(
-						`
-							{
-							"cniVersion": "%s",
-							"name": "net8",
-							"type": "calico",
-							"etcd_endpoints": "http://%s:2379",
-							"ipam": {
-									"type": "calico-ipam"
-									},
-							"kubernetes": {
-								  "k8s_api_root": "http://127.0.0.1:8080"
-								 },
-							"policy": {"type": "k8s"},
-							"log_level":"info"
-							}`,
-						cniVersion,
-						os.Getenv("ETCD_IP"),
-					)
-
 					// Create a new ipPool.
 					c, _ := client.NewFromEnv()
 					testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
@@ -1041,6 +1039,11 @@ var _ = Describe("CalicoCni", func() {
 					checkIPAMReservation()
 				})
 
+				AfterEach(func() {
+					_, err := DeleteContainer(netconf, contNs.Path(), "")
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+
 				It("a second ADD for the same container should be a no-op", func() {
 					// Try to create the same container (so CNI receives the ADD for the same endpoint again)
 					session, _, _, _, err := RunCNIPluginWithId(netconf, name, "", containerID, contNs)
@@ -1055,9 +1058,6 @@ var _ = Describe("CalicoCni", func() {
 
 					// IPAM reservation should still be in place.
 					checkIPAMReservation()
-
-					_, err = DeleteContainer(netconf, contNs.Path(), "")
-					Expect(err).ShouldNot(HaveOccurred())
 				})
 
 				Context("with networking rigged to fail", func() {
@@ -1082,9 +1082,6 @@ var _ = Describe("CalicoCni", func() {
 
 						// IPAM reservation should still be in place.
 						checkIPAMReservation()
-
-						_, err = DeleteContainer(netconf, contNs.Path(), "")
-						Expect(err).ShouldNot(HaveOccurred())
 					})
 				})
 			})

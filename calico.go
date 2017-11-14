@@ -132,8 +132,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Don't create the veth or do any networking.
 			// Just update the profile on the endpoint. The profile will be created if needed during the
 			// profile processing step.
-			fmt.Fprintf(os.Stderr, "Calico CNI appending profile: %s\n", profileID)
-			endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
+			foundProfile := false
+			for _, p := range endpoint.Spec.Profiles {
+				if p == profileID {
+					fmt.Fprintf(os.Stderr, "Calico CNI endpoint already has profile: %s\n", profileID)
+					foundProfile = true
+					break
+				}
+			}
+			if !foundProfile {
+				fmt.Fprintf(os.Stderr, "Calico CNI appending profile: %s\n", profileID)
+				endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
+			}
 			result, err = CreateResultFromEndpoint(endpoint)
 			logger.WithField("result", result).Debug("Created result from endpoint")
 			if err != nil {

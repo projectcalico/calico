@@ -9,4 +9,5 @@ addstats
 delstats
 *.pyc
 *.created
+*.test
 tmp-cni

@@ -5,9 +5,12 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 
 	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/cni/pkg/types/current"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -16,6 +19,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -330,63 +334,147 @@ var _ = Describe("CalicoCni", func() {
 		})
 	})
 
-	Describe("ADD for an existing endpoint", func() {
-		Context("Create a container then send another ADD for the same container", func() {
-			netconf := fmt.Sprintf(`
-			{
-			  "cniVersion": "%s",
-			  "name": "net1",
-			  "type": "calico",
-			  "etcd_endpoints": "http://%s:2379",
-			  "ipam": {
-			    "type": "host-local",
-			    "subnet": "10.0.0.0/24"
-			  }
-			}`, cniVersion, os.Getenv("ETCD_IP"))
+	Describe("after creating a container", func() {
+		netconf := fmt.Sprintf(`
+		{
+		  "cniVersion": "%s",
+		  "name": "net1",
+		  "type": "calico",
+		  "etcd_endpoints": "http://%s:2379",
+		  "ipam": { "type": "calico-ipam" }
+		}`, cniVersion, os.Getenv("ETCD_IP"))
 
-			It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the pod", func() {
+		var containerID string
+		var endpointSpec api.WorkloadEndpointSpec
+		var contNs ns.NetNS
+		var result *current.Result
 
-				containerID, session, _, _, _, contNs, err := CreateContainer(netconf, "", "")
-				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
+		checkIPAMReservation := func() {
+			// IPAM reservation should still be in place.
+			ipamIPs, err := calicoClient.IPAM().IPsByHandle(containerID)
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
+				"There should be an IPAM handle for endpoint")
+			ExpectWithOffset(1, ipamIPs[0].To16()).To(ConsistOf(endpointSpec.IPNetworks[0].IP.To16()))
+		}
 
-				result, err := GetResultForCurrent(session, cniVersion)
-				if err != nil {
-					log.Fatalf("Error getting result from the session: %v\n", err)
-				}
+		BeforeEach(func() {
+			// Create a new ipPool.
+			c, _ := client.NewFromEnv()
+			testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
 
-				log.Printf("Unmarshalled result from first ADD: %v\n", result)
+			var err error
+			var session *gexec.Session
+			log.WithField("netconf", netconf).Info("netconf")
+			containerID, session, _, _, _, contNs, err = CreateContainer(netconf, "", "")
+			Expect(err).ShouldNot(HaveOccurred())
+			Eventually(session).Should(gexec.Exit())
 
-				// The endpoint is created in etcd
-				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(endpoints.Items).Should(HaveLen(1))
+			result, err = GetResultForCurrent(session, cniVersion)
+			if err != nil {
+				log.Fatalf("Error getting result from the session: %v\n", err)
+			}
 
-				// Set the Revision to nil since we can't assert it's exact value.
-				endpoints.Items[0].Metadata.Revision = nil
-				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
-					Node:             hostname,
-					Name:             "eth0",
-					Workload:         containerID,
-					ActiveInstanceID: "",
-					Orchestrator:     "cni",
-				}))
+			log.Printf("Unmarshalled result from first ADD: %v\n", result)
 
+			// The endpoint is created in etcd
+			endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(1))
+
+			// Set the Revision to nil since we can't assert it's exact value.
+			endpoints.Items[0].Metadata.Revision = nil
+			endpointSpec = endpoints.Items[0].Spec
+			Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+				Node:             hostname,
+				Name:             "eth0",
+				Workload:         containerID,
+				ActiveInstanceID: "",
+				Orchestrator:     "cni",
+			}))
+
+			// IPAM reservation should have been created.
+			checkIPAMReservation()
+		})
+
+		AfterEach(func() {
+			_, err := DeleteContainer(netconf, contNs.Path(), "")
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("a second ADD for the same container should be a no-op", func() {
+			// Try to create the same container (so CNI receives the ADD for the same endpoint again)
+			session, _, _, _, err := RunCNIPluginWithId(netconf, "", "", containerID, contNs)
+			Expect(err).ShouldNot(HaveOccurred())
+			Eventually(session).Should(gexec.Exit(0))
+
+			resultSecondAdd, err := GetResultForCurrent(session, cniVersion)
+			if err != nil {
+				log.Fatalf("Error getting result from the session: %v\n", err)
+			}
+
+			log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
+			Expect(resultSecondAdd).Should(Equal(result))
+
+			// The endpoint is created in etcd
+			endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(1))
+			Expect(endpoints.Items[0].Spec.Profiles).To(ConsistOf("net1"))
+
+			// IPAM reservation should still be in place.
+			checkIPAMReservation()
+		})
+
+		It("a second ADD with new profile ID should append it", func() {
+			// Try to create the same container (so CNI receives the ADD for the same endpoint again)
+			tweaked := strings.Replace(netconf, "net1", "net2", 1)
+			session, _, _, _, err := RunCNIPluginWithId(tweaked, "", "", containerID, contNs)
+			Expect(err).ShouldNot(HaveOccurred())
+			Eventually(session).Should(gexec.Exit(0))
+
+			resultSecondAdd, err := GetResultForCurrent(session, cniVersion)
+			if err != nil {
+				log.Fatalf("Error getting result from the session: %v\n", err)
+			}
+
+			log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
+			Expect(resultSecondAdd).Should(Equal(result))
+
+			// The endpoint is created in etcd
+			endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(1))
+			Expect(endpoints.Items[0].Spec.Profiles).To(ConsistOf("net1", "net2"))
+
+			// IPAM reservation should still be in place.
+			checkIPAMReservation()
+		})
+
+		Context("with networking rigged to fail", func() {
+			BeforeEach(func() {
+				// To prevent the networking atempt from succeeding, rename the old veth.
+				// This leaves a route and an eth0 in place that the plugin will struggle with.
+				log.Info("Breaking networking for the created interface")
+				hostVeth := endpointSpec.InterfaceName
+				newName := strings.Replace(hostVeth, "cali", "sali", 1)
+				output, err := exec.Command("ip", "link", "set", hostVeth, "down").CombinedOutput()
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+				output, err = exec.Command("ip", "link", "set", hostVeth, "name", newName).CombinedOutput()
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+				output, err = exec.Command("ip", "link", "set", newName, "up").CombinedOutput()
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
+			})
+
+			It("a second ADD for the same container should leave the datastore alone", func() {
 				// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-				session, _, _, _, err = RunCNIPluginWithId(netconf, "", "", containerID, contNs)
+				log.Info("Rerunning CNI plugin")
+				session, _, _, _, err := RunCNIPluginWithId(netconf, "", "", containerID, contNs)
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
+				Eventually(session).Should(gexec.Exit(0))
 
-				resultSecondAdd, err := GetResultForCurrent(session, cniVersion)
-				if err != nil {
-					log.Fatalf("Error getting result from the session: %v\n", err)
-				}
-
-				log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
-				Expect(resultSecondAdd).Should(Equal(result))
-
-				_, err = DeleteContainer(netconf, contNs.Path(), "")
-				Expect(err).ShouldNot(HaveOccurred())
+				// IPAM reservation should still be in place.
+				checkIPAMReservation()
 			})
 		})
 	})
