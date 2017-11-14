@@ -2,11 +2,11 @@
 title: Calico with OpenStack
 ---
 
-There are many ways to try out Calico with OpenStack, because OpenStack
+There are many ways to try out {{site.prodname}} with OpenStack, because OpenStack
 is a sufficiently complex system that there is a small industry
 concerned with deploying it correctly and successfully.
 
-You can install Calico via any of the following methods:
+You can install {{site.prodname}} via any of the following methods:
 
 - [Package-based install for Ubuntu 14.04 (Trusty) or 16.04
   (Xenial)]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/ubuntu)
@@ -34,14 +34,14 @@ Mirantis Fuel, a third node to serve as the Fuel master.
 
 ## Target platforms and OpenStack releases
 
-We aim to develop and maintain the Neutron driver for Calico
+We aim to develop and maintain the Neutron driver for {{site.prodname}}
 (networking-calico) so that its master code works with OpenStack master or any
 previous release (back to Icehouse), on any OS platform, and independently of
 the deployment mechanism that is used to install it.
 
 That said, we recommend using OpenStack Liberty or later, on Ubuntu Trusty or
 Xenial, or RHEL/CentOS 7, as those are the platform combinations that are used
-in most of our own testing, and by many third party Calico users.
+in most of our own testing, and by many third party {{site.prodname}} users.
 
 ## Nova patch needed with Mitaka and earlier
 

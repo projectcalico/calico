@@ -63,7 +63,7 @@ proxies or you could create individual cert/key pairs for each proxy too.
 
 ## Configuration for per-user/per-component's etcd certificates
 
-The certificates for Calico, Kubernetes, or any other component can be
+The certificates for {{site.prodname}}, Kubernetes, or any other component can be
 generated with configuration files similar to the one provided below.
 Replace the &lt;etcd_username&gt; placeholder with the username of the etcd user
 that has roles allowing access to the paths/prefix keys required by the
@@ -106,6 +106,6 @@ substituting an appropriate name for &lt;component&gt;.
 
 Once the certificate and key files are generated they will need to be provided
 to the proper component which is beyond the scope of this particular document.
-See [this](kubernetes) for how to provide certificates to Kubernetes and Calico
+See [this](kubernetes) for how to provide certificates to Kubernetes and {{site.prodname}}
 components.
 

@@ -2,7 +2,7 @@
 title: Configuring the Calico Kubernetes controllers
 ---
 
-The Calico Kubernetes controllers are primarily configured through environment variables. When running
+The {{site.prodname}} Kubernetes controllers are primarily configured through environment variables. When running
 the controllers as a Kubernetes pod, this is accomplished through the pod manifest `env`
 section.
 
@@ -10,15 +10,15 @@ section.
 
 The `calico/kube-controllers` container includes the following controllers:
 
-1. policy controller: watches network policies and programs Calico policies.
-1. profile controller: watches namespaces and programs Calico profiles.
-1. workloadendpoint controller: watches for changes to pod labels and updates Calico workload endpoints.
+1. policy controller: watches network policies and programs {{site.prodname}} policies.
+1. profile controller: watches namespaces and programs {{site.prodname}} profiles.
+1. workloadendpoint controller: watches for changes to pod labels and updates {{site.prodname}} workload endpoints.
 
 By default, all three controllers are enabled.
 
 ### Configuring etcd access
 
-The Calico Kubernetes controllers support the following environment variables to configure etcd access:
+The {{site.prodname}} Kubernetes controllers support the following environment variables to configure etcd access:
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
@@ -43,7 +43,7 @@ configure API access if needed.
 
 ### Other configuration
 
-The following environment variables can be used to configure the Calico Kubernetes controllers.
+The following environment variables can be used to configure the {{site.prodname}} Kubernetes controllers.
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |

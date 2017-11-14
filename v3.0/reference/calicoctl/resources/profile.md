@@ -19,7 +19,7 @@ have the profile label set to `profile1` (i.e. endpoints that reference this pro
 except that *all* traffic from 10.0.20.0/24 is denied.
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: Profile
 metadata:
   name: profile1
@@ -44,7 +44,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 | labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
 | tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 

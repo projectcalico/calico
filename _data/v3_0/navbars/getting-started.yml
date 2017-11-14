@@ -45,6 +45,11 @@ toc:
       path: /getting-started/kubernetes/tutorials/advanced-policy
   - title: Troubleshooting / FAQ
     path: /getting-started/kubernetes/troubleshooting
+    
+- title: OpenShift
+  section:
+    - title: Installation
+      path: /getting-started/openshift/installation
 
 - title: Host Protection
   section:

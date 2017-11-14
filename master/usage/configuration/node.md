@@ -2,14 +2,14 @@
 title: Configuring a Node IP Address and Subnet
 ---
 
-By default, Calico automatically detects each Node's IP address and subnet.  In most cases,
-this auto-detection is enough and you will not need to change the value picked by Calico.
+By default, {{site.prodname}} automatically detects each Node's IP address and subnet.  In most cases,
+this auto-detection is enough and you will not need to change the value picked by {{site.prodname}}.
 However, there are some scenarios where the default autodetection may not choose the right
 address.  For example:
 
 -  Your host has multiple external interfaces.
 -  Your host may have multiple IP addresses assigned to each interface.
--  You want to change the subnet configuration of each Node to use Calico's
+-  You want to change the subnet configuration of each Node to use {{site.prodname}}'s
    [CrossSubnet IPIP]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip) feature.
 -  You have changed the IP of your host.
 
@@ -96,7 +96,7 @@ For example:
 ```
 # Start by querying the current node configuration
 $ calicoctl get node node2 -o yaml
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
     name: node2
@@ -108,7 +108,7 @@ $ calicoctl get node node2 -o yaml
 # Now reconfigure the node with updated ipv4Address to include the correct
 # subnet.
 $ calicoctl apply -f - << EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
     name: node2

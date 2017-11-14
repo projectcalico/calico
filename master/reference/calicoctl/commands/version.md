@@ -40,4 +40,4 @@ Cluster Type:      KDD,hosted
 ## See also
 
 -  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) for details on configuring `calicoctl` to access
-   the Calico datastore.
+   the {{site.prodname}} datastore.

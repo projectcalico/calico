@@ -182,7 +182,7 @@ The output from either of these formats may be used as input for all of the reso
 Example
 ```
 $ calicoctl get hostEndpoint --output=yaml
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     labels:
@@ -196,7 +196,7 @@ $ calicoctl get hostEndpoint --output=yaml
     profiles:
     - prof1
     - prof2
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     name: myhost-eth0
@@ -219,7 +219,7 @@ within that list.
 Example
 {% raw %}
 ```
-$ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.Metadata.Name}},{{end}}{{end}}"
+$ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.ObjectMeta.Name}},{{end}}{{end}}"
 endpoint1,eth0,
 ```
 {% endraw %}

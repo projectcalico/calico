@@ -25,7 +25,7 @@ in AWS.
 | BGP           | Custom TCP Rule | TCP      | 179        |
 | IPIP*         | Custom Protocol | IPIP     | all        |
 
-\* The IPIP exception is required only when using Calico with IPIP encapsulation. Keep reading 
+\* The IPIP exception is required only when using Calico with IPIP encapsulation. Keep reading
 for information on when IPIP is required in AWS.
 
 #### Routing Traffic Within a Single VPC Subnet
@@ -52,8 +52,8 @@ performance, you can configure Calico to perform IPIP encapsulation only across 
 To enable the "CrossSubnet" IPIP feature, configure your Calico IP pool resources
 to enable IPIP and set the mode to "CrossSubnet".
 
-> **Note**: This feature was introduced in Calico v2.1, if your deployment was created with 
-> an older version of Calico, or if you if you are unsure whether your deployment 
+> **Note**: This feature was introduced in Calico v2.1, if your deployment was created with
+> an older version of Calico, or if you if you are unsure whether your deployment
 > is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip)
 > which discusses this in more detail.
 >
@@ -64,7 +64,7 @@ CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet`. Adjust the pool CIDR for your
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
   metadata:
     name: ippool-cs-1
@@ -89,13 +89,13 @@ Adjust the pool CIDR for your deployment.
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
   metadata:
     name: ippool-1
   spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```

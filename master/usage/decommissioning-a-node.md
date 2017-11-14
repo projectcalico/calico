@@ -12,7 +12,7 @@ title: Decommissioning a Node
 
 ### Purpose of this page
 
-Provide guidance on how to remove a host that is part of a Calico cluster
+Provide guidance on how to remove a host that is part of a {{site.prodname}} cluster
 and clean up the associated [Node resource][Node resource reference]
 information.
 
@@ -24,7 +24,7 @@ information.
 - You must have [calicoctl configured][calicoctl setup] and operational to run
   the commands listed here.
 
-### Removing a Calico Node resource
+### Removing a {{site.prodname}} Node resource
 
 Removing a Node resource will also remove the Workload Endpoint, Host
 Endpoint, and IP Address resources and any other sub configuration items
@@ -39,18 +39,18 @@ associated with that Node.
 {: .alert .alert-danger}
 
 
-### Removing a single Calico Node resource
+### Removing a single {{site.prodname}} Node resource
 
 See the example below for how to remove a node with the calicoctl command.
 
-> **Caution** See [Removing a Calico Node resource](#removing-a-calico-node-resource) above.
+> **Caution** See [Removing a {{site.prodname}} Node resource](#removing-a-calico-node-resource) above.
 {: .alert .alert-danger}
 
 ```
 calicoctl delete node <nodeName>
 ```
 
-### Removing multiple Calico Node resources
+### Removing multiple {{site.prodname}} Node resources
 
 To remove several Nodes, a file can be created with several Node resources and
 then be passed to the `calicoctl delete` command with the `-f` flag.
@@ -60,11 +60,11 @@ Below is an example of how to create a file of Nodes and delete them.
    to be removed.  For example:
 
    ```
-   - apiVersion: projectcalico.org/v2
+   - apiVersion: projectcalico.org/v3
      kind: Node
      metadata:
        name: node-02
-   - apiVersion: projectcalico.org/v2
+   - apiVersion: projectcalico.org/v3
      kind: Node
      metadata:
        name: node-03
@@ -72,7 +72,7 @@ Below is an example of how to create a file of Nodes and delete them.
 
 2. To delete the nodes listed in the file pass it like below.
 
-   > **Caution** See [Removing a Calico Node resource](#removing-a-calico-node-resource) above.
+   > **Caution** See [Removing a {{site.prodname}} Node resource](#removing-a-calico-node-resource) above.
    {: .alert .alert-danger}
 
    ```

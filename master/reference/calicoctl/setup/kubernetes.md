@@ -25,8 +25,8 @@ datastore access.
 The config file is a yaml or json document in the following format:
 
 ```
-apiVersion: projectcalico.org/v2
-kind: calicoApiConfig
+apiVersion: projectcalico.org/v3
+kind: CalicoAPIConfig
 metadata:
 spec:
   datastoreType: "kubernetes"
@@ -77,7 +77,7 @@ See the table below for details on the Kubernetes specific environment variables
 #### Example configuration file
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: calicoApiConfig
 metadata:
 spec:

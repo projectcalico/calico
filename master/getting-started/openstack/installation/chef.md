@@ -7,11 +7,11 @@ title: Chef Trial Install
 > recommend using one of our [packaged installs]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/).
 {: .alert .alert-danger}
 
-If you're interested in trying out Calico but you don't have much
+If you're interested in trying out {{site.prodname}} but you don't have much
 familiarity with installing OpenStack, you can install an
-OpenStack-with-Calico deployment using Chef. If you're familiar with
+OpenStack-with-{{site.prodname}} deployment using Chef. If you're familiar with
 Chef, this is the fastest way to get a quick test environment for
-playing around with Calico.
+playing around with {{site.prodname}}.
 
 This install procedure has only been tested on Ubuntu 14.04. Other
 versions of Ubuntu may also work successfully. It is unlikely that this
@@ -26,9 +26,9 @@ deployment to determine how to configure a node.
 This install guide creates a deployment that contains a single control
 node and at least two compute nodes. All the compute nodes are connected
 in a BGP mesh, no BGP route reflector is required. This is the simplest
-possible configuration for Calico.
+possible configuration for {{site.prodname}}.
 
-Note that this is **not** a production install of Calico or of
+Note that this is **not** a production install of {{site.prodname}} or of
 OpenStack. It is intended for trial and testing purposes only.
 
 ## How To Use It: For Chef Newbies
@@ -37,7 +37,7 @@ If you are unfamiliar with Chef you may want to use the hosted Chef as a
 service, as mentioned on the [Getting Started with Chef
 website](http://gettingstartedwithchef.com/). The following instructions
 provide a step-by-step guide on installing Chef and using the hosted
-Chef service to install a test OpenStack+Calico environment.
+Chef service to install a test OpenStack+{{site.prodname}} environment.
 
 ### Ingredients
 
@@ -150,4 +150,4 @@ your deployment, perform the following steps:
     `compute` role builds up config that relies on knowing all the other
     `compute` nodes.
 
-3.  Play with Calico!
+3.  Play with {{site.prodname}}!

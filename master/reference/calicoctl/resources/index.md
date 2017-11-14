@@ -19,7 +19,7 @@ hostEndpoint resources).
 The general structure of a single resource is as follows:
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: <type of resource>
 metadata:
   # Identifying information
@@ -34,7 +34,7 @@ spec:
 
 | Field    | Description           | Accepted Values              | Schema |
 |----------|-----------------------|------------------------------|--------|
-| apiVersion     | Indicates the version of the API that the data corresponds to. | projectcalico.org/v2 | string |
+| apiVersion     | Indicates the version of the API that the data corresponds to. | projectcalico.org/v3 | string |
 | kind     | Specifies the type of resource described by the YAML document. |  | [kind](#supported-kinds) |
 | metadata | Contains information used to uniquely identify the particular instance of the resource. | | map |
 | spec     | Contains the resource specification. | | map |
@@ -55,15 +55,16 @@ The following resources are supported:
 
 ### Resource name requirements
 
-Every resource must have the `name` field specified.
-A valid resource name can have alphanumeric characters with optional `.`, `_`, `-`, or `/` of up to 128 characters total.
+Every resource must have the `name` field specified. Name must be unique within a namespace.
+Name required when creating resources, and cannot be updated.
+A valid resource name can have alphanumeric characters with optional `.`, `_`, or `-`. of up to 128 characters total.
 
 ### Multiple resources in a single file
 
 A file may contain multiple resource documents specified in a YAML list format. For example, the following is the contents of a file containing two `HostEndpoint` resources:
 
 ```
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     name: endpoint1
@@ -78,7 +79,7 @@ A file may contain multiple resource documents specified in a YAML list format. 
     expectedIPs:
     - 1.2.3.4
     - "00:bb::aa"
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     name: endpoint2

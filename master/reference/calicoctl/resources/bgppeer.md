@@ -2,10 +2,11 @@
 title: BGP Peer Resource (BGPPeer)
 ---
 
-A BGP peer resource (`BGPPeer`) represents a remote BGP peer with which the node(s) in a Calico 
-cluster will peer.  Configuring BGP peers allows you to peer a 
-Calico network with your datacenter fabric (e.g. ToR). For more 
-information on cluster layouts, see Calico's documentation on 
+A BGP peer resource (`BGPPeer`) represents a remote BGP peer with 
+which the node(s) in a {{site.prodname}} cluster will peer.  
+Configuring BGP peers allows you to peer a {{site.prodname}} network 
+with your datacenter fabric (e.g. ToR). For more 
+information on cluster layouts, see {{site.prodname}}'s documentation on 
 [L3 Topologies]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
@@ -14,7 +15,7 @@ aliases are supported (all case insensitive): `bgppeer`, `bgppeers`, `bgpp`, `bg
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: some.name
@@ -30,7 +31,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
 
@@ -43,7 +44,7 @@ spec:
 ### Peer Scopes
 
 BGP Peers can exist at either a global scope or a node scope. A peer's scope 
-determines which Calico nodes will attempt to establish a BGP session with that peer.
+determines which {{site.prodname}} nodes will attempt to establish a BGP session with that peer.
 
 #### Global Peer
 
@@ -53,7 +54,7 @@ the cluster will attempt to establish BGP connections with it
 #### Node Peer
 
 A BGP peer can also be added at the node scope. When the node field is included, only the specified node
-will peer with it. BGP peer resources of this nature must specify a `node` to inform Calico which node
+will peer with it. BGP peer resources of this nature must specify a `node` to inform {{site.prodname}} which node
 this peer is targeting.
 
 ### Supported operations

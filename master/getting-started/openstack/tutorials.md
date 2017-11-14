@@ -1,11 +1,11 @@
 ---
-title: 'Worked Examples: Using Calico-based OpenStack'
+title: Worked Examples Using Calico-based OpenStack
 ---
 
-Here are a few worked examples for common Calico on OpenStack deployment
+Here are a few worked examples for common {{site.prodname}} on OpenStack deployment
 scenarios. In particular, this will make it easy for
 you to set up topologies and examine their connectivity to try to get an
-understanding of the way Calico networks behave.
+understanding of the way {{site.prodname}} networks behave.
 
 ## Example 1: Development Machine
 
@@ -28,7 +28,7 @@ created by the administrator: `external` and `internal`.
 Because the user wants to be able to reach the machine from their own
 laptop, they need the machine to be reachable from outside the data
 center. In vanilla Neutron, this would mean provisioning it with a
-floating IP, but in Calico they instead want to make sure the VM is
+floating IP, but in {{site.prodname}} they instead want to make sure the VM is
 attached to the `external` network. To add themselves to this network,
 the user needs to find out the UUID for it:
 

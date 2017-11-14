@@ -11,7 +11,7 @@ aliases are supported (all case insensitive): `bgpconfiguration`, `bgpconfig`, `
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
 metadata:
   name: default
@@ -27,7 +27,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | Unique name to describe this resource instance. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | Unique name to describe this resource instance. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 - The resource with the name `default` has a specific meaning - this contains the BGP global default configuration.
 - The resources with the name `node.<nodename>` contain the node-specific overrides, and will be applied to the node `<nodename>`. When deleting a node the FelixConfiguration resource associated with the node will also be deleted.

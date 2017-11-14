@@ -2,7 +2,7 @@
 title: Red Hat Enterprise Linux 7 Packaged Install Instructions
 ---
 
-For this version of Calico, with OpenStack on RHEL 7 or CentOS 7, we recommend
+For this version of {{site.prodname}}, with OpenStack on RHEL 7 or CentOS 7, we recommend
 using OpenStack Liberty or later.
 
 > **Note**: On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
@@ -15,19 +15,19 @@ using OpenStack Liberty or later.
 >   install on each compute node.
 {: .alert .alert-info}
 
-These instructions will take you through a first-time install of Calico.  If
-you are upgrading an existing system, please see the [Calico on OpenStack
+These instructions will take you through a first-time install of {{site.prodname}}.  If
+you are upgrading an existing system, please see the [{{site.prodname}} on OpenStack
 upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
 document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
-control nodes to use Calico, and upgrading compute nodes to use Calico.
-Follow the **Common Steps** on each node before moving on to the
+control nodes to use {{site.prodname}}, and upgrading compute nodes to use {{site.prodname}}.
+Follow the [Common Steps](#common-steps) on each node before moving on to the
 specific instructions in the control and compute sections. If you want
 to create a combined control and compute node, work through all three
 sections.
 
-> **Important**: Following the upgrade to use etcd as a data store, Calico
+> **Important**: Following the upgrade to use etcd as a data store, {{site.prodname}}
 > currently only supports RHEL 7 and above. If support on RHEL 6.x
 > or other versions of Linux is important to you, then please [let
 > us know](https://www.projectcalico.org/contact/).
@@ -46,7 +46,7 @@ Before starting this you will need the following:
 
 ## Common Steps
 
-Some steps need to be taken on all machines being installed with Calico.
+Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
 ### Install OpenStack
@@ -61,7 +61,7 @@ networking.
 Add the EPEL repository -- see <https://fedoraproject.org/wiki/EPEL>.
 You may have already added this to install OpenStack.
 
-Configure the Calico repository:
+Configure the {{site.prodname}} repository:
 
 ```
     cat > /etc/yum.repos.d/calico.repo <<EOF
@@ -78,7 +78,7 @@ Configure the Calico repository:
 
 ## Etcd Install
 
-Calico requires an etcd database to operate - this may be installed on a
+{{site.prodname}} requires an etcd database to operate - this may be installed on a
 single machine or as a cluster.
 
 These instructions cover installing a single node etcd database. You may
@@ -260,7 +260,7 @@ On each control node, perform the following steps:
     > need to be deleted from the Admin section.
     {: .alert .alert-success}
 
-    > **Important**: The Calico install will fail if incompatible state is
+    > **Important**: The {{site.prodname}} install will fail if incompatible state is
     > left around.
     {: .alert .alert-danger}
 
@@ -397,7 +397,7 @@ On each compute node, perform the following steps:
     ```
 
     Then, stop and disable the Neutron DHCP agent, and install the
-    Calico DHCP agent (which uses etcd, allowing it to scale to higher
+    {{site.prodname}} DHCP agent (which uses etcd, allowing it to scale to higher
     numbers of hosts):
 
     ```
@@ -408,7 +408,7 @@ On each compute node, perform the following steps:
 
 7.  Stop and disable any other routing/bridging agents such as the L3
     routing agent or the Linux bridging agent. These conflict
-    with Calico.
+    with {{site.prodname}}.
 
     ```
     service neutron-l3-agent stop
@@ -438,7 +438,7 @@ On each compute node, perform the following steps:
     yum install calico-compute
     ```
 
-11. Configure BIRD. By default Calico assumes that you'll be deploying a
+11. Configure BIRD. By default {{site.prodname}} assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's

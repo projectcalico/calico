@@ -5,7 +5,7 @@ title: Profile Resource (Profile)
 A profile resource (`Profile`) represents a set of rules which are applied 
 to the individual endpoints to which this profile has been assigned.
 
-Each Calico endpoint or host endpoint can be assigned to zero or more profiles.
+Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles.
 
 Also see the [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) and [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) which provide an alternate way to select what policy is applied to an endpoint.
 
@@ -19,7 +19,7 @@ have the profile label set to `profile1` (i.e. endpoints that reference this pro
 except that *all* traffic from 10.0.20.0/24 is denied.
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: Profile
 metadata:
   name: profile1
@@ -44,7 +44,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 | labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
 | tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 
@@ -82,4 +82,4 @@ spec:
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
 | etcdv3                | Yes           | Yes    | Yes      |
-| Kubernetes API server | No            | No     | Yes      | Calico profiles are pre-assigned for each Namespace.
+| Kubernetes API server | No            | No     | Yes      | {{site.prodname}} profiles are pre-assigned for each Namespace.

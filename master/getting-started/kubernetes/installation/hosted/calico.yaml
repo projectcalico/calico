@@ -24,26 +24,35 @@ data:
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
-        "name": "k8s-pod-network",
-        "cniVersion": "0.1.0",
-        "type": "calico",
-        "etcd_endpoints": "__ETCD_ENDPOINTS__",
-        "etcd_key_file": "__ETCD_KEY_FILE__",
-        "etcd_cert_file": "__ETCD_CERT_FILE__",
-        "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
-        "log_level": "info",
-        "mtu": 1500,
-        "ipam": {
-            "type": "calico-ipam"
+      "name": "k8s-pod-network",
+      "cniVersion": "0.3.0",
+      "plugins": [
+        {
+            "type": "calico",
+            "etcd_endpoints": "__ETCD_ENDPOINTS__",
+            "etcd_key_file": "__ETCD_KEY_FILE__",
+            "etcd_cert_file": "__ETCD_CERT_FILE__",
+            "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+            "log_level": "info",
+            "mtu": 1500,
+            "ipam": {
+                "type": "calico-ipam"
+            },
+            "policy": {
+                "type": "k8s",
+                "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
+                "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
+            },
+            "kubernetes": {
+                "kubeconfig": "__KUBECONFIG_FILEPATH__"
+            }
         },
-        "policy": {
-            "type": "k8s",
-            "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
-            "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
-        },
-        "kubernetes": {
-            "kubeconfig": "__KUBECONFIG_FILEPATH__"
+        {
+          "type": "portmap",
+          "snat": true,
+          "capabilities": {"portMappings": true}
         }
+      ]
     }
 
   # If you're using TLS enabled etcd uncomment the following.
@@ -99,6 +108,9 @@ spec:
     spec:
       hostNetwork: true
       serviceAccountName: calico-node
+      # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
+      # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
+      terminationGracePeriodSeconds: 0
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -196,6 +208,9 @@ spec:
           image: quay.io/calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
           command: ["/install-cni.sh"]
           env:
+            # Name of the CNI config file to create.
+            - name: CNI_CONF_NAME
+              value: "10-calico.conflist"
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:

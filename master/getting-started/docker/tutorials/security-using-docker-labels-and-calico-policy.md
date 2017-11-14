@@ -4,18 +4,18 @@ title: Security using Docker Labels and Calico Policy
 
 ## Background
 
-With Calico as a Docker network plugin, Calico can be configured to extract the
-labels on a container and apply them to the workload endpoint for use with Calico
+With {{site.prodname}} as a Docker network plugin, {{site.prodname}} can be configured to extract the
+labels on a container and apply them to the workload endpoint for use with {{site.prodname}}
 [policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy).
-By default, Calico blocks all traffic unless it has been explicitly allowed
+By default, {{site.prodname}} blocks all traffic unless it has been explicitly allowed
 through configuration of the globally
 defined policy which uses selectors to determine which subset of the policy is
 applied to each container based on their labels.  This approach provides a
 powerful way to group together all of your network Policy, makes it easy to
 reuse policy in different networks, and makes it easier to define policy that
-extends across different orchestration systems that use Calico.
+extends across different orchestration systems that use {{site.prodname}}.
 
-When Calico is configured to use container labels, profiles are not created and 
+When {{site.prodname}} is configured to use container labels, profiles are not created and 
 have no impact on any container traffic.
 
 ## Enabling Docker Networking Container Labels Policy
@@ -25,12 +25,12 @@ To enable labels to be used in Policy selectors the flag
 calico/node with the `calicoctl node run` command.  All calico/node instances
 should be started with the flag to avoid a mix of labels and profiles.
 
-## Managing Calico policy for a network
+## Managing {{site.prodname}} policy for a network
 
 This section provides an example applying policy using the approach described
 above once container labels are enabled.
 
-We create a Calico-Docker network and use the `calicoctl` tool to set policies
+We create a {{site.prodname}}-Docker network and use the `calicoctl` tool to set policies
 that achieve the required isolation and allowances.
 
 For the example let's assume that we want to provide the following isolation
@@ -50,7 +50,7 @@ extracted from the Docker containers.
 
 #### 1. Create the Docker network
 
-On any host in your Calico / Docker network, run the following command:
+On any host in your {{site.prodname}} / Docker network, run the following command:
 
 ```
 docker network create --driver calico --ipam-driver calico-ipam net1
@@ -89,7 +89,7 @@ We can use `calicoctl create` to create two new policies for this:
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: database
@@ -111,7 +111,7 @@ cat << EOF | calicoctl create -f -
     - action: allow
       destination:
         selector: role == 'database'
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: frontend
@@ -152,10 +152,10 @@ documentation.
 ## Multiple networks
 
 While some network providers tend to use multiple networks to enforce
-isolation, Calico philosophy instead opts to put all containers in the same,
+isolation, {{site.prodname}} instead opts to put all containers in the same,
 flat network, where they are separated by default, and then connect them using
-Calico policy.  For this reason, Calico does not support attaching a container
-to multiple docker networks.
+{{site.prodname}} policy.  For this reason, {{site.prodname}} does not support 
+attaching a container to multiple docker networks.
 
 Extending the previous example, suppose we introduce another label that is
 used for system backups and that we want some of our database containers to

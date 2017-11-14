@@ -2,7 +2,7 @@
 title: Calico key and path prefixes in etcd v2
 ---
 
-The Paths listed here are the key or path prefixes that a particular calico
+The Paths listed here are the key or path prefixes that a particular {{site.prodname}}
 component needs access to in etcd to function successfully.
 
 > **Note**: The paths listed here may change in the future and at that point anything

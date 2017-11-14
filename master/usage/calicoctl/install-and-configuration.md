@@ -3,12 +3,12 @@ title: Installing and Configuring calicoctl
 ---
 
 This document outlines how to install and configure calicoctl which is the
-primary tool for viewing, manipulating, and creating Calico objects on the
+primary tool for viewing, manipulating, and creating {{site.prodname}} objects on the
 command line.
 
 ### Where to run calicoctl
 
-Calicoctl's primary function is to read or manipulate state stored in the
+calicoctl's primary function is to read or manipulate state stored in the
 datastore.  As such, it can run from any host with network access to the
 datastore.  There are also the `node` sub-commands of calicoctl that are for
 starting and checking the calico/node container.  To use this functionality
@@ -63,12 +63,12 @@ calicoctl get nodes
 
 A correct setup will yield a list of the nodes that have registered.  If an
 empty list is returned you are either pointed at the wrong datastore or no
-nodes have registred.  If an error is returned then attempt to correct the
+nodes have registered.  If an error is returned then attempt to correct the
 issue then try again.
 
 ### Next steps
 
-Now you are ready to read and configure most aspects of Calico.  You can
+Now you are ready to read and configure most aspects of {{site.prodname}}.  You can
 find the full list of commands in the
 [Command Reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/).
 

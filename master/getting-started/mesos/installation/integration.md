@@ -2,13 +2,13 @@
 title: Integration Guide
 ---
 
-This guide explains how to integrate Calico networking and policy on an existing
+This guide explains how to integrate {{site.prodname}} networking and policy on an existing
 Mesos cluster. These instructions should be followed on each **Agent**.
 
 Ensure you've met the [prerequisites](prerequisites) before continuing, namely that
 you have etcd running.
 
-Calico runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
+{{site.prodname}} runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
 
 1. Download the calicoctl binary:
 
@@ -42,7 +42,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    sudo calicoctl node status
    ```
 
-4. Download the Calico CNI plugin to the
+4. Download the {{site.prodname}} CNI plugin to the
    [`$NETWORK_CNI_PLUGINS_DIR` you configured for Mesos](prerequisites).
    You may skip this step if you do not plan on using the Unified Containerizer.
 
@@ -55,7 +55,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico-ipam
    ```
 
-5. Create a Calico CNI configuration in the [`$NETWORK_CNI_CONF_DIR` you configured for Mesos](prerequisites), replacing `http://master.mesos:2379` with
+5. Create a {{site.prodname}} CNI configuration in the [`$NETWORK_CNI_CONF_DIR` you configured for Mesos](prerequisites), replacing `http://master.mesos:2379` with
    etcd's address:
 
    ```shell
@@ -76,5 +76,5 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 
 ## Next Steps
 
-With Calico Installed, you're now ready to launch Calico-networked tasks.
-View the [guides on using Calico with Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos#tutorials)
+With {{site.prodname}} installed, you're now ready to launch {{site.prodname}}-networked tasks.
+View the [guides on using {{site.prodname}} with Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos#tutorials)

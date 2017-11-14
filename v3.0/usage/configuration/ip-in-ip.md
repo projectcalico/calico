@@ -29,14 +29,14 @@ CIDR 192.168.0.0/16 to use IP-in-IP with mode `Always`:
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
   name: ippool-ipip-1
 spec:
   cidr: 192.168.0.0/16
   ipipMode: Always
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
 
@@ -61,14 +61,14 @@ CIDR 192.168.0.0/16 to use IP-in-IP with mode `CrossSubnet`:
 
 ```
 $ calicoctl apply -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
   name: ippool-cs-1
 spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
-  nat-outgoing: true
+  natOutgoing: true
 EOF
 ```
 

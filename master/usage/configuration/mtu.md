@@ -2,7 +2,7 @@
 title: Configuring MTU
 ---
 
-Depending on the environment Calico is being deployed into it may be
+Depending on the environment {{site.prodname}} is being deployed into it may be
 helpful or even necessary to configure the MTU of the veth (or TAP) that is
 attached to each workload and the tunnel devices if IP-in-IP is enabled.
 
@@ -16,7 +16,7 @@ packet.
 
 #### Common MTU sizes
 
-| Network MTU | Calico MTU | Calico MTU with IP-in-IP | Calico MTU with VXLAN (IPv4) |
+| Network MTU | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP | {{site.prodname}} MTU with VXLAN (IPv4) |
 |-------------|------------|--------------------------|------------------------------|
 | 1500 | 1500 | 1480 | 1450 |
 | 9000 | 9000 | 8980 | 8950 |
@@ -29,11 +29,11 @@ The default MTU for workload interfaces is 1500, this is to match the most
 common network MTU size.  The default MTU for the IP-in-IP tunnel device
 is 1440 to match the value needed in GCE.
 
-#### Using Flannel for Networking
+#### Using flannel for Networking
 
-When using Flannel for networking, the MTU for the network interfaces
+When using flannel for networking, the MTU for the network interfaces
 should match the MTU of the flannel interface.  In the above table the 4th
-column "Calico MTU with VXLAN" is the expected MTU when using Flannel
+column "{{site.prodname}} MTU with VXLAN" is the expected MTU when using flannel
 configured with VXLAN.
 
 ### Setting MTU for workload network interfaces
@@ -82,21 +82,21 @@ calico/node container will set the MTU for Felix to use.
 
 #### Setting the MTU with calicoctl
 
-To set the IP-in-IP MTU value for all calico nodes in your cluster, use the
+To set the IP-in-IP MTU value for all {{site.prodname}} nodes in your cluster, use the
 following command to set the global config value.
 
 ```
 # Get the current Felix settings
 $ calicoctl get felixconfig -o yaml > felix.yaml
 
-# Modify ipInIpMtu to the intended integer value
+# Modify ipipMTU to the intended integer value
 $ vim felix.yaml
 
 # Replace the current felixconfig settings
 $ calicoctl replace -f felix.yaml
 ```
 
-> **Note**: Setting the `IpInIpMtu` config option will result in an immediate
+> **Note**: Setting the `ipipMTU` config option will result in an immediate
 > update of the tunnel interface MTU on all of the active nodes in your cluster.
 {: .alert .alert-info}
 
@@ -104,5 +104,5 @@ $ calicoctl replace -f felix.yaml
 ## Configuring MTU in Kubernetes self-hosted manifests
 
 When using self-hosted manifests with Kubernetes, the MTU should be set by
-updating the Calico manifest, applying the manifest with those changes, and
+updating the {{site.prodname}} manifest, applying the manifest with those changes, and
 then restarting each of the calico-node pods.

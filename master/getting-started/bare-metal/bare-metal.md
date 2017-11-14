@@ -2,22 +2,22 @@
 title: Using Calico to Secure Host Interfaces
 ---
 
-This guide describes how to use Calico to secure the network interfaces
+This guide describes how to use {{site.prodname}} to secure the network interfaces
 of the host itself (as opposed to those of any container/VM workloads
 that are present on the host). We call such interfaces "host endpoints",
 to distinguish them from "workload endpoints" (such as containers or VMs).
 
-Calico supports the same rich security policy model for host endpoints (host 
+{{site.prodname}} supports the same rich security policy model for host endpoints (host 
 endpoint policy) that it supports for workload endpoints. Host endpoints can 
 have labels, and their labels are in the same "namespace" as those of workload 
 endpoints. This allows security rules for either type of endpoint to refer to 
 the other type (or a mix of the two) using labels and selectors.
 
-Calico does not support setting IPs or policing MAC addresses for host
+{{site.prodname}} does not support setting IPs or policing MAC addresses for host
 interfaces, it assumes that the interfaces are configured by the
 underlying network fabric.
 
-Calico distinguishes workload endpoints from host endpoints by a configurable
+{{site.prodname}} distinguishes workload endpoints from host endpoints by a configurable
 prefix.  Unless you happen to have host interfaces whose name matches the
 default for that prefix (`cali`), you won't need to change it.  In case you do,
 see the `InterfacePrefix` configuration value at [Configuring
@@ -25,13 +25,13 @@ Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration).
 Interfaces that start with a value listed in `InterfacePrefix` are assumed to
 be workload interfaces.  Others are treated as host interfaces.
 
-Calico blocks all traffic to/from workload interfaces by default;
+{{site.prodname}} blocks all traffic to/from workload interfaces by default;
 allowing traffic only if the interface is known and policy is in place.
-However, for host endpoints, Calico is more lenient; it only polices
+However, for host endpoints, {{site.prodname}} is more lenient; it only polices
 traffic to/from interfaces that it's been explicitly told about. Traffic
 to/from other interfaces is left alone.
 
-You can use host endpoint policy to secure a NAT gateway or router. Calico
+You can use host endpoint policy to secure a NAT gateway or router. {{site.prodname}}
 supports selector-based policy when running on a gateway or router, allowing for
 rich, dynamic security policy based on the labels attached to your host endpoints. 
 
@@ -53,19 +53,19 @@ See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resource
 
 ## Installation overview
 
-To make use of Calico's host endpoint support, you will need to follow
+To make use of {{site.prodname}}'s host endpoint support, you will need to follow
 these steps, described in more detail below:
 
 -   download the calicoctl binary
 -   create an etcd cluster, if you haven't already
--   install Calico's Felix daemon on each host
+-   install {{site.prodname}}'s Felix daemon on each host
 -   initialize the etcd database
--   add policy to allow basic connectivity and Calico function
+-   add policy to allow basic connectivity and {{site.prodname}} function
 -   create host endpoint objects in etcd for each interface you want
-    Calico to police (in a later release, we plan to support interface
+    {{site.prodname}} to police (in a later release, we plan to support interface
     templates to remove the need to explicitly configure
     every interface)
--   insert policy into etcd for Calico to apply
+-   insert policy into etcd for {{site.prodname}} to apply
 -   decide whether to disable "failsafe SSH/etcd" access.
 
 ### Download the calicoctl binary
@@ -80,7 +80,7 @@ directory.
 
 ## Creating an etcd cluster
 
-If you haven't already created an etcd cluster for your Calico
+If you haven't already created an etcd cluster for your {{site.prodname}}
 deployment, you'll need to create one.
 
 To create a single-node etcd cluster for testing, download an etcd v3.x
@@ -126,8 +126,8 @@ There are several ways to install Felix.
     directly.
 
 -   if you want to run under docker, you can use `calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}` to start
-    the calico/node container image.  This container packages up the core Calico
-    components to provide both Calico networking and network policy.  Running
+    the calico/node container image.  This container packages up the core {{site.prodname}}
+    components to provide both {{site.prodname}} networking and network policy.  Running
     the container automatically pre-initializes the etcd database (which the
     other installations methods do not).  See the
     [`calicoctl node run`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
@@ -146,13 +146,13 @@ node instance.
 If you are self-installed you should configure a `node` resource for each
 host running Felix.  In this case, the database is initialized after
 creating the first `node` resource.  For a deployment that does not include
-the Calico/BGP integration, the specification of a node resource just requires
+the {{site.prodname}}/BGP integration, the specification of a node resource just requires
 the name of the node;  for most deployments this will be the same as the
 hostname.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
     name: <node name or hostname>
@@ -163,10 +163,10 @@ If you check the felix logfile after this step, the logs should
 transition from periodic notifications that felix is in state
 "wait-for-ready" to a stream of initialisation messages.
 
-## Creating basic connectivity and Calico policy
+## Creating basic connectivity and {{site.prodname}} policy
 
 When a host endpoint is added, if there is no security policy for that
-endpoint, Calico will default to denying traffic to/from that endpoint,
+endpoint, {{site.prodname}} will default to denying traffic to/from that endpoint,
 except for traffic that is allowed by the [failsafe rules](#failsafe-rules).
 
 While the [failsafe rules](#failsafe-rules) provide protection against removing all
@@ -178,7 +178,7 @@ connectivity to a host,
     required; for example, your network may reply on allowing ICMP,
     or DHCP.
 
-Therefore, we recommend creating a failsafe Calico security policy that
+Therefore, we recommend creating a failsafe {{site.prodname}} security policy that
 is tailored to your environment. The example command below shows one
 example of how you might do that; the command uses `calicoctl` to:
 
@@ -197,7 +197,7 @@ appropriate values for your deployment.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: failsafe
@@ -241,7 +241,7 @@ Once you have such a policy in place, you may want to disable the
 > label `endpoint_type = management` and then use selector
 > `endpoint_type == "management"`
 >
-> If you are using Calico for networking workloads, you should add
+> If you are using {{site.prodname}} for networking workloads, you should add
 > inbound and outbound rules to allow BGP:  add an ingress and egress rule
 > to allow TCP traffic to destination port 179.
 {: .alert .alert-info}
@@ -249,14 +249,14 @@ Once you have such a policy in place, you may want to disable the
 
 ## Creating host endpoint objects
 
-For each host endpoint that you want Calico to secure, you'll need to
+For each host endpoint that you want {{site.prodname}} to secure, you'll need to
 create a host endpoint object in etcd.  Use the `calicoctl create` command
 to create a host endpoint resource (hostEndpoint).
 
 There are two ways to specify the interface that a host endpoint should
 refer to. You can either specify the name of the interface or its
 expected IP address. In either case, you'll also need to know the name given to
-the Calico node running on the host that owns the interface; in most cases this
+the {{site.prodname}} node running on the host that owns the interface; in most cases this
 will be the same as the hostname of the host.
 
 For example, to secure the interface named `eth0` with IP 10.0.0.1 on
@@ -268,16 +268,16 @@ appropriate values for your deployment.
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     name: <name of endpoint>
-    node: <node name or hostname>
     labels:
       role: webserver
       environment: production
   spec:
     interfaceName: eth0
+    node: <node name or hostname>
     profiles: [<list of profile IDs>]
     expectedIPs: ["10.0.0.1"]
 EOF
@@ -302,7 +302,7 @@ key/value pairs that can be used in selector expressions.
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 
-> **Important**: When rendering security rules on other hosts, Calico uses the
+> **Important**: When rendering security rules on other hosts, {{site.prodname}} uses the
 > `expectedIPs` field to resolve label selectors
 > to IP addresses. If the `expectedIPs` field is omitted
 > then security rules that use labels will fail to match
@@ -314,15 +314,15 @@ of the interface:
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     name: <name of endpoint>
-    node: <node name or hostname>
     labels:
       role: webserver
       environment: production
   spec:
+    node: <node name or hostname>
     profiles: [<list of profile IDs>]
     expectedIPs: ["10.0.0.1"]
 EOF
@@ -332,7 +332,7 @@ After you create host endpoint objects, Felix will start policing
 traffic to/from that interface. If you have no policy or profiles in
 place, then you should see traffic being dropped on the interface.
 
-> **Note**: By default, Calico has a failsafe in place that whitelists certain
+> **Note**: By default, {{site.prodname}} has a failsafe in place that whitelists certain
 > traffic such as ssh. See below for more details on
 > disabling/configuring the failsafe rules.
 {: .alert .alert-info}
@@ -363,7 +363,7 @@ endpoints that match particular label selectors.
 
 ```
 cat << EOF | dist/calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: webserver
@@ -383,13 +383,13 @@ EOF
 ## Failsafe rules
 
 To avoid completely cutting off a host via incorrect or malformed
-policy, Calico has a failsafe mechanism that keeps various pinholes open
+policy, {{site.prodname}} has a failsafe mechanism that keeps various pinholes open
 in the firewall.
 
-By default, Calico keeps port 22 inbound open on *all* host endpoints,
+By default, {{site.prodname}} keeps port 22 inbound open on *all* host endpoints,
 which allows access to ssh; as well as inbound and outbound communications to
 ports 2379, 2380 (etcd's default ports), and to ports 6666, 6667 (etcd's ports
-as deployed by Calico's self-hosted Kubernetes manifests).
+as deployed by {{site.prodname}}'s self-hosted Kubernetes manifests).
 
 The lists of failsafe ports can be configured via the configuration parameters
 described in [Configuring
@@ -420,7 +420,7 @@ would be a server, running directly on a host, that accepts a very high rate of
 shortlived connections, such as `memcached`.  On Linux, if those connections
 are tracked, the conntrack table can fill up and then Linux may drop packets
 for further connection attempts, meaning that those newer connections will
-fail.  If you are using Calico to secure that server's host, you can avoid this
+fail.  If you are using {{site.prodname}} to secure that server's host, you can avoid this
 problem by defining a policy that allows access to the server's ports and is
 marked as 'doNotTrack'.
 
@@ -454,9 +454,9 @@ number on that pod (which is usually different from the NodePort).
 
 As NodePorts are the externally advertised way of connecting to Services (and a
 NodePort uniquely identifies a Service, whereas an internal port number may
-not), it makes sense to express Calico policy to expose or secure particular
+not), it makes sense to express {{site.prodname}} policy to expose or secure particular
 Services in terms of the corresponding NodePorts.  But that is only possible if
-the Calico policy is applied before DNAT changes the NodePort to something
+the {{site.prodname}} policy is applied before DNAT changes the NodePort to something
 else - and hence this kind of policy needs 'preDNAT' set to true.
 
 In addition to being applied before any DNAT, the enforcement of pre-DNAT
@@ -503,7 +503,7 @@ treats traffic to or from a local process: traffic to or from a local process is
 denied by default, if a host endpoint is configured but there is no applicable
 policy that explicitly allows that traffic.
 
-> **Note**: Calico's handling of host endpoint policy has changed, since before
+> **Note**: {{site.prodname}}'s handling of host endpoint policy has changed, since before
 > Calico v2.7.0, in two ways:
 > - It will not apply at all to forwarded traffic, by default. If you have an existing
 > policy and you want it to apply to forwarded traffic, you need to add `applyOnForward: true` to the policy.
@@ -517,7 +517,7 @@ policy that explicitly allows that traffic.
 {: .alert .alert-info}
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: empty-default-deny
@@ -662,7 +662,7 @@ in general:
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: allow-cluster-internal-ingress
@@ -675,7 +675,7 @@ calicoctl apply -f - <<EOF
         source:
           nets: [10.240.0.0/16, 192.168.0.0/16]
     selector: has(host-endpoint)
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: drop-other-ingress
@@ -714,7 +714,7 @@ rule for forwarded traffic, forwarded traffic will be allowed for host endpoints
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: allow-outbound-external
@@ -749,15 +749,15 @@ definitions.  For example, for `eth0` on `node1`:
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:
     name: node1-eth0
-    node: node1
     labels:
       host-endpoint: ingress
   spec:
     interfaceName: eth0
+    node: node1
 EOF
 ```
 
@@ -775,7 +775,7 @@ pre-DNAT policy like this:
 
 ```
 calicoctl apply -f - <<EOF
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: allow-nodeport
@@ -803,20 +803,20 @@ and then using `host-endpoint=='<special-value>'` as the selector of the
 
 ### A note about conntrack
 
-Calico uses Linux's connection tracking ('conntrack') as an important
-optimization to its processing.  It generally means that Calico only needs to
+{{site.prodname}} uses Linux's connection tracking ('conntrack') as an important
+optimization to its processing.  It generally means that {{site.prodname}} only needs to
 check its policies for the first packet in an allowed flow - between a pair of
 IP addresses and ports - and then conntrack automatically allows further
-packets in the same flow, without Calico rechecking every packet.
+packets in the same flow, without {{site.prodname}} rechecking every packet.
 
-This can, however, make it look like a Calico policy is not working as it
+This can, however, make it look like a {{site.prodname}} policy is not working as it
 should, if policy is changed to disallow a flow that was previously allowed.
 If packets were recently exchanged on the previously allowed flow, and so there
 is conntrack state for that flow that has not yet expired, that conntrack state
 will allow further packets between the same IP addresses and ports, even after
-the Calico policy has been changed.
+the {{site.prodname}} policy has been changed.
 
-Per Calico's current implementation, there are two workarounds for this:
+Per {{site.prodname}}'s current implementation, there are two workarounds for this:
 
 1. Somehow ensure that no further packets flow, between the relevant IP
    addresses and ports, until the conntrack state has expired (typically about
@@ -825,4 +825,4 @@ Per Calico's current implementation, there are two workarounds for this:
 2. Use the 'conntrack' tool to delete the relevant conntrack state; for example
    `conntrack -D -p tcp --orig-port-dst 80`.
 
-Then you should observe that the new Calico policy is enforced for new packets.
+Then you should observe that the new {{site.prodname}} policy is enforced for new packets.

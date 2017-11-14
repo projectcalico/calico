@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import datetime
+import functools
 import json
 import logging
 import os
@@ -97,7 +99,7 @@ def log_and_run(command, raise_exception_on_failure=True):
             logger.info("  # %s", line.rstrip())
 
     try:
-        logger.info("%s", command)
+        logger.info("[%s] %s", datetime.datetime.now(), command)
         try:
             results = check_output(command, shell=True, stderr=STDOUT).rstrip()
         finally:
@@ -230,10 +232,10 @@ def update_bgp_config(host, nodeMesh=None, asNum=None):
 
     if len(bgpcfg['items']) == 0:
         bgpcfg = {
-            'apiVersion': 'projectcalico.org/v2',
+            'apiVersion': 'projectcalico.org/v3',
             'kind': 'BGPConfigurationList',
             'items': [ {
-                    'apiVersion': 'projectcalico.org/v2',
+                    'apiVersion': 'projectcalico.org/v3',
                     'kind': 'BGPConfiguration',
                     'metadata': { 'name': 'default', },
                     'spec': {}
@@ -419,3 +421,53 @@ def wipe_etcd(ip):
     check_output("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
                  "ETCDCTL_API=3 etcdctl del --prefix /calico" +
                  "'", shell=True)
+
+
+on_failure_fns = []
+
+
+def clear_on_failures():
+    global on_failure_fns
+    on_failure_fns = []
+
+
+def add_on_failure(fn):
+    on_failure_fns.append(fn)
+
+
+def handle_failure(fn):
+    """
+    Decorator for test methods so that, if they fail, they immediately print
+    information about the problem and run any defined on_failure functions.
+    :param fn: The function to decorate.
+    :return: The decorated function.
+    """
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            logger.exception("TEST FAILED")
+            for handler in on_failure_fns:
+                logger.info("Calling failure fn %r", handler)
+                handler()
+            raise
+
+    return wrapped
+
+
+def dump_etcdv3():
+    etcd_container_name = "calico-etcd"
+    tls_vars = ""
+    if ETCD_SCHEME == "https":
+        # Etcd is running with SSL/TLS, require key/certificates
+        etcd_container_name = "calico-etcd-ssl"
+        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+
+    log_and_run("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
+                 "ETCDCTL_API=3 etcdctl get --prefix /calico" +
+                 "'")

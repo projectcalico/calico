@@ -18,7 +18,7 @@ aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: Node
 metadata:
   name: node-hostname
@@ -36,7 +36,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
 

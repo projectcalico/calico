@@ -80,9 +80,9 @@ class TestGlobalPeers(TestBase):
     def test_bird_node_peers(self):
         self._test_global_peers(backend='bird')
 
-    # TODO: Add back when gobgp is updated to work with libcalico-go v2 api
+    # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
     @attr('slow')
-    @skip("Disabled until gobgp is updated with libcalico-go v2")
+    @skip("Disabled until gobgp is updated with libcalico-go v3")
     def test_gobgp_node_peers(self):
         self._test_global_peers(backend='gobgp')
 

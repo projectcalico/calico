@@ -1,6 +1,6 @@
 A label selector is an expression which either matches or does not match an endpoint based on its labels.
 
-Calico label selectors support a number of syntactic primitives.  Each of the following 
+{{site.prodname}} label selectors support a number of syntactic primitives.  Each of the following 
 primitive expressions can be combined using the logical operator `&&`.
 
 | Syntax              | Meaning                     |

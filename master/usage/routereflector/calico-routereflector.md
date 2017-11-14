@@ -1,15 +1,15 @@
 ---
-title: 'Calico BIRD Route Reflector container'
+title: Calico BIRD Route Reflector container
 ---
 
-For many Calico deployments, the use of a Route Reflector is not required.
+For many {{site.prodname}} deployments, the use of a Route Reflector is not required.
 However, for large scale deployments a full mesh of BGP peerings between each
-of your Calico nodes may become untenable.  In this case, route reflectors
+of your {{site.prodname}} nodes may become untenable.  In this case, route reflectors
 allow you to remove the full mesh and scale up the size of the cluster.
 
 This guide discusses the calico/routereflector image: a container image that
 packages up the `BIRD` BGP daemon along with the `confd` templating engine to
-provide a simple route reflector image which may be used for scaled-out Calico
+provide a simple route reflector image which may be used for scaled-out {{site.prodname}}
 deployments.
 
 The image is currently experimental and has some key limitations discussed below.
@@ -27,11 +27,11 @@ For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bi
 
 #### Known limitations
 
--  The calico/routereflector instance will automatically peer with the Calico
-   nodes, but it currently has no mechanism to configure peerings with non-Calico
+-  The calico/routereflector instance will automatically peer with the {{site.prodname}}
+   nodes, but it currently has no mechanism to configure peerings with non-{{site.prodname}}
    BGP speakers (e.g. edge routers)
 -  There is no `calicoctl` integration or similar.
--  If you are using Kubernetes API as the Calico datastore, the Route Reflector container
+-  If you are using Kubernetes API as the {{site.prodname}} datastore, the Route Reflector container
    currently only supports running as a single-instance.
 -  For etcdv3, the Route Reflector container may be used to form a cluster of route reflectors that
    automatically create a full mesh between each Route Reflector.
@@ -43,12 +43,12 @@ For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bi
 ## Starting and configuring your route reflectors
 
 Follow the appropriate section to start and configure your route reflectors depending on
-the datastore you are using for Calico:
+the datastore you are using for {{site.prodname}}:
 
--  [Using etcdv3 as the Calico datastore](#using-etcdv3-as-the-calico-datastore)
--  [Using the Kubernetes API as the Calico datastore](#using-the-kubernetes-api-as-the-calico-datastore)
+-  [Using etcdv3 as the {{site.prodname}} datastore](#using-etcdv3-as-the-calico-datastore)
+-  [Using the Kubernetes API as the {{site.prodname}} datastore](#using-the-kubernetes-api-as-the-calico-datastore)
 
-### Using etcdv3 as the Calico datastore
+### Using etcdv3 as the {{site.prodname}} datastore
 
 #### Starting a Route Reflector instance
 
@@ -85,11 +85,11 @@ Where:
 #### Configuring a cluster of Route Reflectors
 
 If you want to use more than one route reflector, the Route Reflector container supports
-running as a single cluster of route reflectors.  The Calico BIRD Route Reflector
+running as a single cluster of route reflectors.  The {{site.prodname}} BIRD Route Reflector
 takes care of creating a full mesh between all of the route reflectors in the
 cluster.
 
-To operate a cluster of these route reflectorsm it is necessary to explicitly
+To operate a cluster of these route reflectors it is necessary to explicitly
 add an entry into etcd for each route reflector.  The following steps indicate how
 to add an entry into etcd.
 
@@ -172,9 +172,9 @@ curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L htt
 curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L https://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v6/<IPv6_RR> -XPUT -d value="{\"ip\":\"<IPv6_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
 ```
 
-### Using the Kubernetes API as the Calico datastore
+### Using the Kubernetes API as the {{site.prodname}} datastore
 
-If you are using Kuberenetes as the datastore for Calico, the Calico Route
+If you are using Kubernetes as the datastore for {{site.prodname}}, the {{site.prodname}} Route
 Reflector container only supports running as a single route reflector.  It is not
 possible with this image to set up a cluster of route reflectors.
 
@@ -207,9 +207,9 @@ When using Kubernetes API as the datastore, this route reflector image only work
 as a single standalone reflector.
 
 
-## Configuring Calico to use the route reflectors
+## Configuring {{site.prodname}} to use the route reflectors
 
-Run through this section  to set up the global Calico configuration
+Run through this section  to set up the global {{site.prodname}} configuration
 before configuring any nodes.  This only needs to be done once.
 
 -  Disable the full node-to-node BGP mesh
@@ -217,13 +217,13 @@ before configuring any nodes.  This only needs to be done once.
    the Route Reflector image when setting up the Route Reflector full mesh).
 
 If you have a small cluster of Route Reflectors and you intend to have every
-Calico Docker node peer with every Route Reflector, set this up one time as
+{{site.prodname}} Docker node peer with every Route Reflector, set this up one time as
 global configuration.
 
 
 ### Turn off the full node-to-node mesh
 
-From any Calico Docker node, run the following:
+From any {{site.prodname}} Docker node, run the following:
 
 ```
 # Get the current bgpconfig settings
@@ -238,17 +238,17 @@ $ calicoctl replace -f bgp.yaml
 
 ### Determine the AS number for your network
 
-From any Calico Docker node, run the following:
+From any {{site.prodname}} Docker node, run the following:
 
     calicoctl get nodes --output=wide
 
-This returns table of all configured Calico node instances and includes the AS
+This returns table of all configured {{site.prodname}} node instances and includes the AS
 number for each node.
 
 ### Peering with every Route Reflector (optional)
 
 If you have a small cluster of Route Reflectors (e.g. a single RR or a pair of
-RRs for redundancy) and you intend to have every Calico Docker node peer with
+RRs for redundancy) and you intend to have every {{site.prodname}} Docker node peer with
 each of the Route Reflectors, you can set up the peerings as a one-time set of
 global configuration.
 
@@ -258,7 +258,7 @@ peers with every node in the deployment):
 ```
 calicoctl bgp peer add <IP_RR> as <AS_NUM>
 $ calicoctl create -f - << EOF
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-global
@@ -274,7 +274,7 @@ Where:
 
 ## Setting up node-specific peering
 
-If you are deploying a cluster of Route Reflectors, with each Calico node
+If you are deploying a cluster of Route Reflectors, with each {{site.prodname}} node
 peering to a subset of Route Reflectors it will be necessary to set up the
 peerings on a node-by-node basis.
 
@@ -282,8 +282,8 @@ This would be the typical situation when scaling out to a very large size.  For
 example, you may have:
 
 -  a cluster of 100 route reflectors connected in a full mesh
--  a network of 100,000 Calico Docker nodes
--  each Calico Docker node is connected to two or three different Route
+-  a network of 100,000 {{site.prodname}} Docker nodes
+-  each {{site.prodname}} Docker node is connected to two or three different Route
    Reflectors.
 
 ### Configuring a node-specific Route Reflector peering
@@ -293,7 +293,7 @@ To configure a Route Reflector as a peer of a specific node, run the following
 
 ```
 $ cat << EOF | calicoctl create -f -
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-2

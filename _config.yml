@@ -9,6 +9,8 @@ gems:
 
 url: https://docs.projectcalico.org
 
+prodname: Calico
+
 exclude:
   - release-scripts
   - LICENSE

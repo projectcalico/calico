@@ -1,20 +1,20 @@
 ---
-title: 'Ubuntu Packaged Install Instructions'
+title: Ubuntu Packaged Install Instructions
 ---
 
-For this version of Calico, with OpenStack on Ubuntu Trusty or Xenial, we
+For this version of {{site.prodname}}, with OpenStack on Ubuntu Trusty or Xenial, we
 recommend using OpenStack Liberty or later; Kilo is also known to work on
 Ubuntu Trusty.
 
-These instructions will take you through a first-time install of Calico using
+These instructions will take you through a first-time install of {{site.prodname}} using
 the latest packages on a system running Ubuntu 14.04 (Trusty) or 16.04
 (Xenial). If you are upgrading an existing system, please see [this
 document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
 instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
-control nodes to use Calico, and upgrading compute nodes to use Calico.
-The **Common Steps** must be followed on each node before moving onto
+control nodes to use {{site.prodname}}, and upgrading compute nodes to use {{site.prodname}}.
+The [Common Steps](#common-steps) must be followed on each node before moving onto
 the specific instructions in those sections.
 
 ## Prerequisites
@@ -27,7 +27,7 @@ Before starting this you will need the following:
 
 ## Common Steps
 
-Some steps need to be taken on all machines being installed with Calico.
+Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
 ### Install OpenStack
@@ -54,7 +54,7 @@ provided by our 'kilo' PPA.  So if you are using Kilo:
 ```
 
 and also edit `/etc/apt/preferences` to add the following lines, whose effect
-is to prefer the Calico-provided packages for Nova and Neutron even if later
+is to prefer the {{site.prodname}}-provided packages for Nova and Neutron even if later
 versions of those packages are released by Ubuntu.
 
 ```
@@ -81,7 +81,7 @@ Once that's done, update your package manager on each machine:
 
 ## Etcd Install
 
-Calico requires an etcd database to operate -- this may be installed on
+{{site.prodname}} requires an etcd database to operate -- this may be installed on
 a single machine or as a cluster.
 
 These instructions cover installing a single node etcd database. You may
@@ -186,7 +186,7 @@ On each control node ensure etcd or an etcd proxy is installed, and then
 perform the following steps:
 
 1.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
-    will bring in Calico-specific updates to the OpenStack packages and
+    will bring in {{site.prodname}}-specific updates to the OpenStack packages and
     to `dnsmasq`. (OpenStack updates are not needed for Liberty.)
 
 2.  Install the `calico-control` package:
@@ -205,7 +205,7 @@ perform the following steps:
     -   Find the line for the `dhcp_agents_per_network` setting,
         uncomment it, and set its value to the number of compute nodes
         that you will have (or any number larger than that). This allows
-        a DHCP agent to run on every compute node, which Calico requires
+        a DHCP agent to run on every compute node, which {{site.prodname}} requires
         because the networks on different compute nodes are not
         bridged together.
 
@@ -304,7 +304,7 @@ perform the following steps:
     ```
 
 5.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
-    will bring in Calico-specific updates to the OpenStack packages and
+    will bring in {{site.prodname}}-specific updates to the OpenStack packages and
     to `dnsmasq`. For OpenStack Liberty, this step only upgrades
     `dnsmasq`.
 
@@ -336,7 +336,7 @@ perform the following steps:
         $ sudo service neutron-dhcp-agent restart
     ```
 
-    For OpenStack Liberty and later, install the Calico DHCP agent
+    For OpenStack Liberty and later, install the {{site.prodname}} DHCP agent
     (which uses etcd, allowing it to scale to higher numbers of hosts)
     and disable the Neutron-provided one:
 
@@ -355,7 +355,7 @@ perform the following steps:
     This step may prompt you to save your IPTables rules to make them
     persistent on restart -- hit yes.
 
-8.  Configure BIRD. By default Calico assumes that you'll be deploying a
+8.  Configure BIRD. By default {{site.prodname}} assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's

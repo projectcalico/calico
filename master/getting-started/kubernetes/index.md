@@ -5,7 +5,7 @@ title: Quickstart for Calico on Kubernetes
 
 ### Overview
 
-This quickstart gets you a single-host Kubernetes cluster with Calico
+This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 in approximately 15 minutes. You can use this cluster for testing and
 development.
 

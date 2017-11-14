@@ -4,14 +4,14 @@ title: Requirements for Calico with Mesos
 
 #### 1. etcd
 
-Calico uses etcd as its datastore. Ensure you have an instance of etcd running,
-and that it is accessible from all Agents in your cluster.
+{{site.prodname}} uses etcd as its datastore. Ensure you have an instance of etcd running,
+and that it is accessible from all agents in your cluster.
 
 In order to maximize availability, use [etcd's clustering guide](https://coreos.com/os/docs/latest/cluster-architectures.html)
 and run etcd across the masters or other dedicated hosts.
 
 For simplicity, you can quickly get started by running a single instance of etcd
-using Docker. Run the following command on a Master, ensure you've correctly set
+using Docker. Run the following command on a master, ensure you've correctly set
 or replaced `$ETCD_IP` and `$ETCD_PORT`:
 
 ```shell
@@ -31,13 +31,13 @@ $ curl http://$ETCD_IP:$ETCD_PORT/version
 
 #### 2. Docker Configured with Cluster Store
 
-Under the covers, Calico networks Docker tasks for Mesos with its Docker CNM
+Under the covers, {{site.prodname}} networks Docker tasks for Mesos with its Docker CNM
 plugin. Multihost Networking in Docker requires that each Agent's Docker daemon
 be configured with a cluster store.
 
 Though Docker's configured cluster-store does not have to be the same as
-Calico's, for simplicity, users can configure Docker to use the same datastore
-as Calico by setting the following flag when starting the docker daemon:
+{{site.prodname}}'s, for simplicity, users can configure Docker to use the same datastore
+as {{site.prodname}} by setting the following flag when starting the docker daemon:
 
 ```shell
 --cluster-store=etcd://$ETCD_IP:$ETCD_PORT
@@ -75,7 +75,7 @@ $ systemctl restart mesos-slave.service
 
 #### 4. CNI Isolator Enabled for Mesos Agents
 
-If you are planning to use Calico with the Unified containerizer,
+If you are planning to use {{site.prodname}} with the Unified containerizer,
 [enable the CNI Isolator on each agent](http://mesos.apache.org/documentation/latest/cni/#usage)
 
 > **Note**: You may skip this step if you do not plan on using the 

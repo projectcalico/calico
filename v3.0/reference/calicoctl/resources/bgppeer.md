@@ -14,7 +14,7 @@ aliases are supported (all case insensitive): `bgppeer`, `bgppeers`, `bgpp`, `bg
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: some.name
@@ -30,7 +30,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | Unique name to describe this resource instance. Must be specified.| Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
 

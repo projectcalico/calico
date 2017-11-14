@@ -2,17 +2,18 @@
 title: Calico Integrations
 ---
 
-To get started using Calico, we recommend running through one or more of the
+To get started using {{site.prodname}}, we recommend running through one or more of the
 available tutorials linked below.
 
 These tutorials will help you understand the different environment options when
-using Calico.  In most cases we provide worked examples using manual setup on
+using {{site.prodname}}.  In most cases we provide worked examples using manual setup on
 your own servers, a quick set-up in a virtualized environment using Vagrant and
 a number of cloud services.
 
-- [Calico with Kubernetes](kubernetes)
-- [Calico with Mesos](mesos)
-  - [Calico with DC/OS](mesos/installation/dc-os)
-- [Calico with Docker](docker)
-- [Calico with OpenStack](openstack)
+- [{{site.prodname}} with Kubernetes](kubernetes)
+- [{{site.prodname}} with OpenShift](openshift/installation)
+- [{{site.prodname}} with Mesos](mesos)
+  - [{{site.prodname}} with DC/OS](mesos/installation/dc-os)
+- [{{site.prodname}} with Docker](docker)
+- [{{site.prodname}} with OpenStack](openstack)
 - [Host protection](bare-metal/bare-metal)

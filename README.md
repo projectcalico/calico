@@ -7,7 +7,7 @@
 <img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
 Calico is an open source system enabling cloud native application connectivity and policy. Calico integrates with major orchestration
-systems like [Kubernetes](kubernetes.io), [Apache Mesos](http://mesos.apache.org/), [Docker](https://www.docker.com/), [OpenStack](https://www.openstack.org/) and more to provide a seamless
+systems like [Kubernetes](https://kubernetes.io), [Apache Mesos](http://mesos.apache.org/), [Docker](https://www.docker.com/), [OpenStack](https://www.openstack.org/) and more to provide a seamless
 experience for developers and operators.
 
 Calico is a [Tigera](https://www.tigera.io/) open source project, and is primarily maintained by the Tigera team.

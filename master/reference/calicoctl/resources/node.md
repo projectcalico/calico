@@ -2,11 +2,11 @@
 title: Node Resource (Node)
 ---
 
-A node resource (`Node`) represents a node running Calico.  When adding a host
-to a Calico cluster, a Node resource needs to be created which contains the
-configuration for the Calico Node instance running on the host.
+A node resource (`Node`) represents a node running {{site.prodname}}.  When adding a host
+to a {{site.prodname}} cluster, a Node resource needs to be created which contains the
+configuration for the {{site.prodname}} Node instance running on the host.
 
-When starting a Calico node instance, the name supplied to the instance should 
+When starting a {{site.prodname}} node instance, the name supplied to the instance should 
 match the name configured in the Node resource.  
 
 By default, starting a `calico/node` instance will automatically create a node resource 
@@ -18,7 +18,7 @@ aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: Node
 metadata:
   name: node-hostname
@@ -36,21 +36,21 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name     | The name of this node. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
 
 #### Spec
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| bgp      | BGP configuration for this node.  Omit if using Calico for policy only. | | [BGP](#bgp) |
+| bgp      | BGP configuration for this node.  Omit if using {{site.prodname}} for policy only. | | [BGP](#bgp) |
 
 #### BGP 
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| asNumber    | The AS Number of your Calico node. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/{{page.version}}/usage/configuration/bgp#example) for details about modifying the `asNumber` setting). | integer |
-| ipv4Address | The IPv4 address and subnet exported as the next-hop for the Calico endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
-| ipv6Address | The IPv6 address and subnet exported as the next-hop for the Calico endpoints on the host | Optional | string |
+| asNumber    | The AS Number of your {{site.prodname}} node. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/{{page.version}}/usage/configuration/bgp#example) for details about modifying the `asNumber` setting). | integer |
+| ipv4Address | The IPv4 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
+| ipv6Address | The IPv6 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | Optional | string |
 | ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel | Optional IPv4 address | string |
 
 ### Supported operations
@@ -58,4 +58,4 @@ spec:
 | Datastore type        | Create/Delete | Update | Get/List | Notes
 |-----------------------|---------------|--------|----------|------
 | etcdv3                | Yes           | Yes    | Yes      |
-| Kubernetes API server | No            | Yes    | Yes      | Calico Node data is directly tied to the Kubernetes nodes.
+| Kubernetes API server | No            | Yes    | Yes      | {{site.prodname}} Node data is directly tied to the Kubernetes nodes.

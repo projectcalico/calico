@@ -4,15 +4,16 @@ title: Security using Calico Profiles and Policy
 
 ## Background
 
-With Calico as a Docker network plugin, Calico uses an identically named
+With {{site.prodname}} as a Docker network plugin, {{site.prodname}} uses an identically named
 [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
 to represent each Docker network.  This profile is applied to each container
-in that network and the profile is used by Calico to configure access policy
-for that container.  The Calico network plugin will automatically create the associated profile if it
-does not exist when the container is attached to the network.  By default, the profile contains rules that allow full
-egress traffic but allow ingress traffic only from containers within the same
-network and no other source.  Custom policy for a network can be configured by
-creating in advance, or editing, the profile associated with the Docker network.
+in that network and the profile is used by {{site.prodname}} to configure access policy
+for that container.  The {{site.prodname}} network plugin will automatically create the 
+associated profile if it does not exist when the container is attached to the network.  
+By default, the profile contains rules that allow full egress traffic but allow ingress 
+traffic only from containers within the same network and no other source.  Custom policy 
+for a network can be configured by creating in advance, or editing, the profile associated 
+with the Docker network.
 
 There are two ways in which the policy that defines the Docker network can be modified:
 
@@ -22,25 +23,25 @@ There are two ways in which the policy that defines the Docker network can be mo
    the network.
 
 2. Assign labels to the profile, and define global selector based policy.  The
-   (Calico-specific) labels are assigned to containers in the associated Docker network.
+   ({{site.prodname}}-specific) labels are assigned to containers in the associated Docker network.
    The globally defined policy uses selectors to determine which subset of the policy
    is applied to each container based on their labels.  This approach provides a powerful
-   way to group together all of your network Policy, makes it easy to reuse policy in
+   way to group together all of your network policy, makes it easy to reuse policy in
    different networks, and makes it easier to define policy that extends across
-   different orchestration systems that use Calico.
+   different orchestration systems that use {{site.prodname}}.
 
-## Managing Calico policy for a network
+## Managing {{site.prodname}} policy for a network
 
 This section provides a worked examples applying policy using the two approaches
 described above.
 
-In both cases we create a Calico-Docker network and use the `calicoctl` tool to
+In both cases we create a {{site.prodname}}-Docker network and use the `calicoctl` tool to
 achieve the required isolation.
 
 For the worked examples let's assume that we want to provide the following
 isolation between a set of database containers and a set of frontend containers:
 
--  Frontend containers can only access the Database containers over TCP to port 3306.
+-  Frontend containers can only access the database containers over TCP to port 3306.
    For now we'll assume no other connectivity is allowed to/from the frontend.
 -  Database containers have no isolation between themselves (to handle synchronization
    within a cluster).  This could be improved by locking down the port ranges and
@@ -56,7 +57,7 @@ of the two network profiles to provide the required isolation.
 
 #### a.1 Create the Docker networks
 
-On any host in your Calico / Docker network, run the following commands:
+On any host in your {{site.prodname}} / Docker network, run the following commands:
 
 ```
 docker network create --driver calico --ipam-driver calico-ipam database
@@ -82,7 +83,7 @@ Use `calicoctl apply` to create or update the profiles:
 
 ```
 cat << EOF | calicoctl apply -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Profile
   metadata:
     name: database
@@ -104,7 +105,7 @@ cat << EOF | calicoctl apply -f -
     - action: allow
       destination:
         selector: role == 'database'
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Profile
   metadata:
     name: frontend
@@ -125,9 +126,9 @@ The above profiles provide the required isolation between the frontend and datab
 containers.  This works as follows:
 
 -  Containers in the "database" Docker network are assigned the "database"
-   Calico profile.
+   {{site.prodname}} profile.
 -  Containers in the "frontend" Docker network are assigned the "frontend"
-   Calico profile.
+   {{site.prodname}} profile.
 -  Each container in the "database" network inherits the label `role = database`
    from its profile.
 -  Each container in the "frontend" network inherits the label `role = frontend`
@@ -163,7 +164,7 @@ labels applied by the profile.
 
 #### b.1 Create the Docker networks
 
-On any host in your Calico / Docker network, run the following commands:
+On any host in your {{site.prodname}} / Docker network, run the following commands:
 
 ```
 docker network create --driver calico --ipam-driver calico-ipam database
@@ -186,13 +187,13 @@ Use `calicoctl apply` to create or update the profiles:
 
 ```
 cat << EOF | calicoctl apply -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Profile
   metadata:
     name: database
     labels:
       role: database
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: Profile
   metadata:
     name: frontend
@@ -218,7 +219,7 @@ We can use `calicoctl create` to create two new policies for this:
 
 ```
 cat << EOF | calicoctl create -f -
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: database
@@ -240,7 +241,7 @@ cat << EOF | calicoctl create -f -
     - action: allow
       destination:
         selector: role == 'database'
-- apiVersion: projectcalico.org/v2
+- apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
   metadata:
     name: frontend
@@ -261,9 +262,9 @@ The above policies provide the same isolation as the previous example.
 This works as follows:
 
 -  Containers in the "database" Docker network are assigned the "database"
-   Calico profile.
+   {{site.prodname}} profile.
 -  Containers in the "frontend" Docker network are assigned the "frontend"
-   Calico profile.
+   {{site.prodname}} profile.
 -  Each container in the "database" network inherits the label `role = database`
    from its profile.
 -  Each container in the "frontend" network inherits the label `role = frontend`
@@ -288,7 +289,7 @@ documentation.
 ## Multiple networks
 
 Whilst the Docker API supports the ability to attach a container to multiple
-networks, it is not possible to use this feature of Docker when using the Calico.
+networks, it is not possible to use this feature of Docker when using {{site.prodname}}.
 
 However, using the selector-based approach for defining network policy it is
 possible to achieve the same effect of overlapping networks but with a far
@@ -325,4 +326,4 @@ label.
 ## Further Reading
 
 For details on configuring advanced policy using container labels, see
-[Security using Docker Labels and Calico Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy).
+[Security using Docker Labels and {{site.prodname}} Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy).

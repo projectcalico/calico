@@ -16,7 +16,7 @@ aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `
 ### Sample YAML
 
 ```yaml
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
   name: some.name
@@ -46,7 +46,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema  |
 |-------------|-----------------------------|-------------------|---------|
-| name        | The name of this hostEndpoint. Required. |  Alphanumeric string with optional `.`, `_`, `-`, or `/` | string |
+| name        | The name of this hostEndpoint. Required. |  Alphanumeric string with optional `.`, `_`, or `-`. | string |
 | labels      | A set of labels to apply to this endpoint. |      | map    |
 
 #### Spec

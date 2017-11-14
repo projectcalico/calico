@@ -2,7 +2,7 @@
 title: IPv6 Support
 ---
 
-Calico supports connectivity over IPv6, between compute hosts, and
+{{site.prodname}} supports connectivity over IPv6, between compute hosts, and
 between compute hosts and their VMs. This means that, subject to
 security configuration, a VM can initiate an IPv6 connection to another
 VM, or to an IPv6 destination outside the data center; and that a VM can
@@ -10,12 +10,12 @@ terminate an IPv6 connection from outside.
 
 ## Requirements for containers
 
-Containers have no specific requirements for utilising IPv6
+Containers have no specific requirements for utilizing IPv6
 connectivity.
 
 ## Requirements for guest VM images
 
-When using Calico with a VM platform (e.g. OpenStack), obtaining IPv6
+When using {{site.prodname}} with a VM platform (e.g. OpenStack), obtaining IPv6
 connectivity requires certain configuration in the guest VM image:
 
 -   When it boots up, the VM should issue a DHCPv6 request for each of
@@ -51,10 +51,10 @@ changes will suffice to meet the requirements just listed.
 ## Implementation details
 
 Following are the key points of how IPv6 connectivity is currently
-implemented in Calico.
+implemented in {{site.prodname}}.
 
 -   IPv6 forwarding is globally enabled on each compute host.
--   Felix (the Calico agent):
+-   Felix (the {{site.prodname}} agent):
     -   does `ip -6 neigh add lladdr dev`, instead of IPv4 case
         `arp -s`, for each endpoint that is created with an IPv6 address
     -   adds a static route for the endpoint's IPv6 address, via its tap

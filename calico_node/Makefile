@@ -64,8 +64,6 @@ MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist)
 
 ###############################################################################
 # URL for Calico binaries
-# confd binary
-CONFD_URL?=https://github.com/projectcalico/confd/releases/download/$(CONFD_VER)/confd
 # bird binaries
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
@@ -85,6 +83,8 @@ NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 FELIX_REPO?=calico/felix
 FELIX_CONTAINER_NAME?=$(FELIX_REPO):$(FELIX_VER)
+CONFD_REPO?=calico/confd
+CONFD_CONTAINER_NAME?=$(CONFD_REPO):$(CONFD_VER)
 LIBNETWORK_PLUGIN_REPO?=calico/libnetwork-plugin
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=$(LIBNETWORK_PLUGIN_REPO):$(LIBNETWORK_PLUGIN_VER)
 CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)
@@ -133,6 +133,7 @@ dist/calicoctl-v1.0.2:
 # variables.  These are used for the STs.
 dist/calicoctl:
 	-docker rm -f calicoctl
+	docker pull $(CTL_CONTAINER_NAME)
 	docker create --name calicoctl $(CTL_CONTAINER_NAME)
 	docker cp calicoctl:calicoctl dist/calicoctl && \
 	  test -e dist/calicoctl && \
@@ -140,6 +141,7 @@ dist/calicoctl:
 	-docker rm -f calicoctl
 dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
+	docker pull calico/cni:$(CNI_VER)
 	docker create --name calico-cni calico/cni:$(CNI_VER)
 	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
 	  test -e dist/calico-cni-plugin && \
@@ -158,6 +160,14 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 $(NODE_CONTAINER_NAME): $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
+	# Check versions of the Calico binaries that will be in calico-node.tar.
+	docker run --rm $(NODE_CONTAINER_NAME) /bin/sh -c "\
+	  echo calico-felix --version; /bin/calico-felix --version; \
+	  echo bird --version;         /bin/bird --version; \
+	  echo calico-bgp-daemon -v;   /bin/calico-bgp-daemon -v; \
+	  echo confd --version;        /bin/confd --version; \
+	  echo libnetwork-plugin -v;   /bin/libnetwork-plugin -v; \
+	"
 	docker save --output $@ $(NODE_CONTAINER_NAME)
 
 # Build ACI (the APPC image file format) of calico/node.
@@ -167,6 +177,14 @@ calico-node-latest.aci: calico-node.tar
 
 # Build calico/node docker image - explicitly depend on the container binaries.
 $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
+	# Check versions of the binaries that we're going to use to build calico/node.
+	# startup: doesn't support --version or -v
+	# allocate-ipip-addr: doesn't support --version or -v
+	$(NODE_CONTAINER_BIN_DIR)/calico-felix --version
+	$(NODE_CONTAINER_BIN_DIR)/bird --version
+	$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon -v
+	$(NODE_CONTAINER_BIN_DIR)/confd --version
+	$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin -v
 	docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
 	touch $@
 
@@ -176,6 +194,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	-docker rm -f calico-felix
 	# Latest felix binaries are stored in automated builds of calico/felix.
 	# To get them, we create (but don't start) a container from that image.
+	docker pull $(FELIX_CONTAINER_NAME)
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
@@ -190,13 +209,25 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 	-docker rm -f calico-$(@F)
 	# Latest libnetwork-plugin binaries are stored in automated builds of calico/libnetwork-plugin.
 	# To get them, we pull that image, then copy the binaries out to our host
+	docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker create --name calico-$(@F) $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker cp calico-$(@F):/$(@F) $(@D)
 	-docker rm -f calico-$(@F)
 
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:
-	$(CURL) -L $(CONFD_URL) -o $@
+	-docker rm -f calico-confd
+	# Latest confd binaries are stored in automated builds of calico/confd.
+	# To get them, we create (but don't start) a container from that image.
+	docker pull $(CONFD_CONTAINER_NAME)
+	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
+	# Then we copy the files out of the container.  Since docker preserves
+	# mtimes on its copy, check the file really did appear, then touch it
+	# to make sure that downstream targets get rebuilt.
+	docker cp calico-confd:/bin/confd $(NODE_CONTAINER_BIN_DIR) && \
+	  test -e $(NODE_CONTAINER_BIN_DIR)/confd && \
+	  touch $(NODE_CONTAINER_BIN_DIR)/confd
+	-docker rm -f calico-confd
 	chmod +x $@
 
 # Get the calico-bgp-daemon binary
@@ -349,6 +380,11 @@ st-checks:
 ## Run the STs in a container
 .PHONY: st
 st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
+	# Check versions of Calico binaries that ST execution will use.
+	dist/calicoctl --version
+	dist/calicoctl-v1.0.2 --version
+	dist/calico-cni-plugin -v
+	dist/calico-ipam-plugin -v
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container

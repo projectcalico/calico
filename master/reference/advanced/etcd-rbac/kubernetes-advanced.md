@@ -3,13 +3,13 @@ title: Advanced etcd segmentation for Calico
 ---
 
 This document describes advanced segmentation of the etcd roles to limit
-access of individual Calico components or to limit calicoctl user access.
+access of individual {{site.prodname}} components or to limit calicoctl user access.
 It assumes you have followed [this guide](kubernetes) for initial etcd
-RBAC configuration of Calico and Kubernetes.
+RBAC configuration of {{site.prodname}} and Kubernetes.
 
 ## Why you might be interested in this guide
 
-You want to limit access on a per-Calico component level or create limited
+You want to limit access on a per-{{site.prodname}} component level or create limited
 access roles for calicoctl to the etcd datastore.
 
 ## Components that need etcd Roles
@@ -18,7 +18,7 @@ The following components need certificates with a Common Name that matches an
 etcd user that has been given appropriate roles allowing access to the key
 prefixes or paths listed or linked below.
 - [cni-plugin](calico-etcdv2-paths#cni-plugin)
-- [Calico Kubernetes controllers](calico-etcdv2-paths#calicokube-controllers)
+- [{{site.prodname}} Kubernetes controllers](calico-etcdv2-paths#calicokube-controllers)
 - [calico/node](calico-etcdv2-paths#caliconode)
 - It may also be useful to create a certificate key pair for use with
   calicoctl, even creating specific ones for
@@ -29,30 +29,30 @@ prefixes or paths listed or linked below.
 All certificate/key pairs that are referenced below are assumed to have been
 created for the specific component with the information above.
 
-## Calico components
+## {{site.prodname}} components
 
 Once the certificates are generated and the users and roles have been setup
 in etcd the components using them must be configured. Here are the same
 components listed above and links to their detailed configuration pages:
 - [cni-plugin]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
-- [Calico Kubernetes controllers]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
+- [{{site.prodname}} Kubernetes controllers]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
 - [calico/node]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [calicoctl](/{{page.version}}/reference/calicoctl/setup/etcdv3)
 
-Below are examples and suggestions when using a hosted Calico install where
-the Calico components are launched through a Kuberenetes manifest file, this
+Below are examples and suggestions when using a hosted {{site.prodname}} install where
+the {{site.prodname}} components are launched through a Kuberenetes manifest file, this
 is not required and the configuration could be achieved by configuring services
 that run outside of Kubernetes.
 
 ### Per component certificate setup
 
 A setup that needs a certificate for each component is possible while using a
-hosted manifest. This setup requires a certificate for each different Calico
-component type listed above (cni-plugin, Calico Kubernetes controllers, and
+hosted manifest. This setup requires a certificate for each different {{site.prodname}}
+component type listed above (cni-plugin, {{site.prodname}} Kubernetes controllers, and
 calico/node).
 
 This setup needs similar updates to the manifest like what is described in
-[Using etcd RBAC to segment Kubernetes and Calico: Updating a hosted Calico manifest](kubernetes#updating-a-hosted-Calico-manifest),
+[Using etcd RBAC to segment Kubernetes and {{site.prodname}}: Updating a hosted {{site.prodname}} manifest](kubernetes#updating-a-hosted-Calico-manifest),
 with the in addition to those updates a separate Secret for *each* component
 must be created which holds the CA, certificate, and key data base64 encoded.
 Then the specific Secret for each component must be in the `volumes` list
@@ -66,7 +66,7 @@ probably satisfy the needs of many, there is a third option that could
 utilize a different certificate for each component for each node. This type
 of setup can be achieved multiple ways and will be left as an exercise for
 the implementor. Some possibilities for achieving this are:
-- Installing and starting the Calico components with a configuration management
+- Installing and starting the {{site.prodname}} components with a configuration management
   tool which installs and configures the certificates.
 - Creating a manifest with a side car container that pulls the proper
   certificate information from Vault or other secret management tool.
