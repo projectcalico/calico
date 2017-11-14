@@ -163,6 +163,11 @@ var _ = Describe("Test Pod conversion", func() {
 			// Unknown protocol port is ignored.
 		))
 
+		// Assert the interface name is fixed.  The calculation of this name should be consistent
+		// between releases otherwise there will be issues upgrading a node with networked Pods.
+		// If this fails, fix the code not this expect!
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.InterfaceName).To(Equal("cali7f94ce7c295"))
+
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision).To(Equal("1234"))
 	})
@@ -170,7 +175,7 @@ var _ = Describe("Test Pod conversion", func() {
 	It("should not parse a Pod without an IP to a WorkloadEndpoint", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "podA",
+				Name:      "podB",
 				Namespace: "default",
 				Annotations: map[string]string{
 					"arbitrary": "annotation",
@@ -193,7 +198,7 @@ var _ = Describe("Test Pod conversion", func() {
 	It("should parse a Pod with no labels", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "podA",
+				Name:      "podB",
 				Namespace: "default",
 			},
 			Spec: kapiv1.PodSpec{
@@ -208,11 +213,11 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields.
-		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podB-eth0"))
 		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
 		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
 		// Assert value fields.
-		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Pod).To(Equal("podA"))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Pod).To(Equal("podB"))
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Node).To(Equal("nodeA"))
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Endpoint).To(Equal("eth0"))
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
@@ -221,6 +226,11 @@ var _ = Describe("Test Pod conversion", func() {
 			"projectcalico.org/namespace":    "default",
 			"projectcalico.org/orchestrator": "k8s",
 		}))
+
+		// Assert the interface name is fixed.  The calculation of this name should be consistent
+		// between releases otherwise there will be issues upgrading a node with networked Pods.
+		// If this fails, fix the code not this expect!
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.InterfaceName).To(Equal("cali92cf1f5e9f6"))
 	})
 
 	It("should not parse a Pod with no NodeName", func() {

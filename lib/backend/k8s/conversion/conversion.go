@@ -51,11 +51,11 @@ type Converter struct {
 
 // VethNameForWorkload returns a deterministic veth name
 // for the given Kubernetes workload (WEP) name and namespace.
-func VethNameForWorkload(namespace, name string) string {
+func VethNameForWorkload(namespace, podname string) string {
 	// A SHA1 is always 20 bytes long, and so is sufficient for generating the
 	// veth name and mac addr.
 	h := sha1.New()
-	h.Write([]byte(fmt.Sprintf("%s/%s", namespace, name)))
+	h.Write([]byte(fmt.Sprintf("%s.%s", namespace, podname)))
 	return fmt.Sprintf("cali%s", hex.EncodeToString(h.Sum(nil))[:11])
 }
 
@@ -173,7 +173,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 
 	// Generate the interface name based on workload.  This must match
 	// the host-side veth configured by the CNI plugin.
-	interfaceName := VethNameForWorkload(pod.Namespace, wepName)
+	interfaceName := VethNameForWorkload(pod.Namespace, pod.Name)
 
 	// Build the labels map.  Start with the pod labels, and append two additional labels for
 	// namespace and orchestrator matches.
