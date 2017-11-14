@@ -1,4 +1,4 @@
-[![Build Status](https://semaphoreci.com/api/v1/calico/calico-cni-2/branches/master/badge.svg)](https://semaphoreci.com/calico/calico-cni-2)
+[![Build Status](https://semaphoreci.com/api/v1/calico/cni-plugin/branches/master/badge.svg)](https://semaphoreci.com/calico/cni-plugin)
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 
