@@ -360,7 +360,7 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType sel
 		case metav1.LabelSelectorOpExists:
 			selectors = append(selectors, fmt.Sprintf("has(%s)", e.Key))
 		case metav1.LabelSelectorOpDoesNotExist:
-			selectors = append(selectors, fmt.Sprintf("! has(%s%s)", e.Key))
+			selectors = append(selectors, fmt.Sprintf("! has(%s)", e.Key))
 		}
 	}
 
