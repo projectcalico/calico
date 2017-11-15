@@ -48,6 +48,9 @@ Options:
                                Uses the default namespace if not specified.
   -a --all-namespaces          If present, list the requested object(s) across 
                                all namespaces.
+  --export                     If present, returns the requested object(s) stripped of
+                               cluster-specific information. This flag will be ignored
+                               if <NAME> is not specified.
 
 Description:
   The get command is used to display a set of resources by filename or stdin,
@@ -116,6 +119,9 @@ Description:
                              Uses the default namespace if not specified.
 -a --all-namespaces          If present, list the requested object(s) across 
                              all namespaces.
+--export                     If present, returns the requested object(s) stripped of
+                             cluster-specific information. This flag will be ignored
+                             if the resource name is not specified.
 ```
 
 ### General options
