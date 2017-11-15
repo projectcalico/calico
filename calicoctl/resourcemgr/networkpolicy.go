@@ -16,9 +16,12 @@ package resourcemgr
 
 import (
 	"context"
+	"strings"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
@@ -39,14 +42,35 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
+			if strings.HasPrefix(r.Name, conversion.K8sNetworkPolicyNamePrefix) {
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "create or apply",
+					Identifier: resource,
+					Reason:     "kubernetes network policies must be managed through the kubernetes API",
+				}
+			}
 			return client.NetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
+			if strings.HasPrefix(r.Name, conversion.K8sNetworkPolicyNamePrefix) {
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "apply or replace",
+					Identifier: resource,
+					Reason:     "kubernetes network policies must be managed through the kubernetes API",
+				}
+			}
 			return client.NetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
+			if strings.HasPrefix(r.Name, conversion.K8sNetworkPolicyNamePrefix) {
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "delete",
+					Identifier: resource,
+					Reason:     "kubernetes network policies must be managed through the kubernetes API",
+				}
+			}
 			return client.NetworkPolicies().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {

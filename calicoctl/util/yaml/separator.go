@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	yamlSeparator = "\n---"
+	yamlSeparator     = "\n---"
 	maxDocumentLength = 10 * 1024 * 1024 // 10MB.
 )
 

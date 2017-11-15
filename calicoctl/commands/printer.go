@@ -15,15 +15,15 @@
 package commands
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
-	"bytes"
-	"os"
 	"text/tabwriter"
 	"text/template"
-	"context"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,8 +31,8 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/libcalico-go/lib/options"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 type resourcePrinter interface {

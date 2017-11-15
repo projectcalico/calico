@@ -15,10 +15,10 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
-	"context"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
