@@ -186,7 +186,7 @@ class DockerHost(object):
         if start_calico:
             self.start_calico_node()
 
-    def execute(self, command, raise_exception_on_failure=True):
+    def execute(self, command, raise_exception_on_failure=True, daemon_mode=False):
         """
         Pass a command into a host container.
 
@@ -196,14 +196,16 @@ class DockerHost(object):
         :param command:  The command to execute.
         :param raise_exception_on_failure:  Raises an exception if the command exits with
         non-zero return code.
+        :param daemon_mode:  The command will be executed as a daemon process. Useful
+        to start a background service.
 
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
         if self.dind:
+            option = "-d" if daemon_mode else "-it"
             command = self.escape_shell_single_quotes(command)
-            command = "docker exec -it %s sh -c '%s'" % (self.name,
-                                                         command)
+            command = "docker exec %s %s sh -c '%s'" % (option, self.name, command)
 
         return log_and_run(command, raise_exception_on_failure=raise_exception_on_failure)
 
@@ -281,10 +283,13 @@ class DockerHost(object):
 
         return self.execute(calicoctl + " " + command)
 
-    def start_calico_node(self, options="", with_ipv4pool_cidr_env_var=True):
+    def start_calico_node(self, options="", with_ipv4pool_cidr_env_var=True, env_options=""):
         """
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
+        :param env_options: Docker environment options.
+        :param options: calico node options.
+        :param with_ipv4pool_cidr_env_var: dryrun options.
         """
         args = ['node', 'run']
         if with_ipv4pool_cidr_env_var:
@@ -330,7 +335,7 @@ class DockerHost(object):
             modified_cmd = (
                 prefix +
                 (" -e CALICO_IPV4POOL_CIDR=%s " % DEFAULT_IPV4_POOL_CIDR) +
-                felix_logsetting +
+                felix_logsetting + env_options +
                 " -e DISABLE_NODE_IP_CHECK=true -e FELIX_IPINIPENABLED=true " +
                 " -e " + suffix
             )
@@ -451,7 +456,7 @@ class DockerHost(object):
         """
         self.cleanup(log_extra_diags=bool(exc_type))
 
-    def cleanup(self, log_extra_diags=False):
+    def cleanup(self, log_extra_diags=False, err_words=None, ignore_list=[]):
         """
         Clean up this host, including removing any containers created.  This is
         necessary especially for Docker-in-Docker so we don't leave dangling
@@ -468,7 +473,7 @@ class DockerHost(object):
         log_exception = None
         try:
             if self.log_analyzer is not None:
-                self.log_analyzer.check_logs_for_exceptions()
+                self.log_analyzer.check_logs_for_exceptions(err_words, ignore_list)
         except Exception, e:
             log_exception = e
             log_extra_diags = True
@@ -660,7 +665,10 @@ class DockerHost(object):
         objects = yaml.load(self.calicoctl("get %s -o yaml" % resource))
         # and delete them (if there are any)
         if len(objects) > 0:
-            self._delete_data(objects)
+            if 'items' in objects and len(objects['items']) == 0:
+                pass
+            else:
+                self._delete_data(objects)
 
     def _delete_data(self, data):
         logger.debug("Deleting data with calicoctl: %s", data)
@@ -670,8 +678,17 @@ class DockerHost(object):
         self._exec_calicoctl("apply", resources)
 
     def _exec_calicoctl(self, action, data):
-        # use calicoctl with data
-        self.writejson("new_data", data)
+        # Delete creationTimestamp fields from the data that we're going to
+        # write.
+        for obj in data.get('items', []):
+            if 'creationTimestamp' in obj['metadata']:
+                del obj['metadata']['creationTimestamp']
+        if 'metadata' in data and 'creationTimestamp' in data['metadata']:
+            del data['metadata']['creationTimestamp']
+
+        # Use calicoctl with the modified data.
+        self.writefile("new_data",
+                       yaml.dump(data, default_flow_style=False))
         self.calicoctl("%s -f new_data" % action)
 
     def log_extra_diags(self):

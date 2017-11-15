@@ -40,6 +40,7 @@ LOGS_IGNORE_ALL_TESTS = [
     "Failed to connect to syslog error=Unix syslog delivery error level=",
     "Exiting for config change",
     "Exiting. reason=\"config changed\"",
+    "Exiting immediately reason=\"config changed\"",
 ]
 
 
@@ -288,7 +289,7 @@ class LogAnalyzer(object):
         log = Log(timestamp, loglevel, pid, logtext)
         return log
 
-    def check_logs_for_exceptions(self):
+    def check_logs_for_exceptions(self, err_words=None, ignore_list=[]):
         """
         Check the logs for any error level logs and raises an exception if
         any are found.
@@ -305,7 +306,7 @@ class LogAnalyzer(object):
         # of unfiltered context logs.
         for log in self._parse_latest_logs():
             logs.append(log)
-            if self._is_error_log(log):
+            if self._is_error_log(log, err_words, ignore_list):
                 errors.append(logs)
                 logs = deque(maxlen=NUM_CONTEXT_LOGS)
 
@@ -340,17 +341,24 @@ class LogAnalyzer(object):
 
         assert not errors, "Test suite failed due to errors raised in logs"
 
-    def _is_error_log(self, log):
+    def _is_error_log(self, log, err_words=None, ignore_list=[]):
         """
         Return whether the log is an error log or not.
 
         :return: True if the log is an error log.
-
-        Note that we are skipping known failures as defined by the
+        :param log: Log need to be checked.
+        :param err_words: The per test error words.
+        :param ignore_list: The per test ignore list.
+        Note that we are also skipping known failures as defined by the
         LOGS_IGNORE_ALL_TESTS.
         """
-        is_error = log.level in {"ERROR", "PANIC", "FATAL", "CRITICAL"}
+
+        ignores = LOGS_IGNORE_ALL_TESTS + ignore_list
+
+        if err_words is None:
+            err_words = {"ERROR", "PANIC", "FATAL", "CRITICAL"}
+        is_error = log.level in err_words
         if is_error:
-            is_error = not any(txt in log.msg for txt in LOGS_IGNORE_ALL_TESTS)
+            is_error = not any(log.msg.find(txt) > 0 for txt in ignores)
 
         return is_error
