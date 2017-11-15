@@ -1,5 +1,5 @@
-hash: f3c0d07a7e13b46f759a2170c6155b92603d532356eb16700d29e3524d6ec108
-updated: 2017-11-10T18:26:16.033231-08:00
+hash: a7db65293a24a3d513a5836dbbec756e8ad6532c4798547fff6e317accdc8e82
+updated: 2017-11-15T01:01:47.2637982Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -118,7 +118,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: ef42c367f0b79794b266fb60e49f32e422deb4a7
+  version: 97ab61addb82be06cc4174c3fc6d83bbfe37aeca
   subpackages:
   - client/v2
   - models
@@ -173,7 +173,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -214,7 +214,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a21bd104b2d077c89737a5b897e3ac817c79957a
+  version: 9fddc31c42a863604f7c98ab7f899eb9eadae14e
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -278,7 +278,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/afero
-  version: 5660eeed305fe5f69c8fc6cf899132a459a97064
+  version: 8d919cbe7e2627e417f3e45c3c0e489a5b7e2536
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -292,11 +292,11 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: 63ca7e48f59f463578ae6b6e839bef6906f048e2
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:

@@ -44,6 +44,7 @@ NOT_FOUND = "resource does not exist"
 NOT_NAMESPACED = "is not namespaced"
 SET_DEFAULT = "Cannot set"
 NOT_SUPPORTED = "is not supported on"
+KUBERNETES_NP = "kubernetes network policies must be managed through the kubernetes API"
 
 class CalicoctlOutput:
     """

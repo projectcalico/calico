@@ -34,7 +34,7 @@ func init() {
 			"NAME":        "{{.ObjectMeta.Name}}",
 			"LOGSEVERITY": "{{.Spec.LogSeverityScreen}}",
 			"MESHENABLED": "{{if .Spec.NodeToNodeMeshEnabled}}{{.Spec.NodeToNodeMeshEnabled}}{{ else }}-{{ end }}",
-			"ASNUMBER":  "{{if .Spec.ASNumber}}{{.Spec.ASNumber}}{{ else }}-{{ end }}",
+			"ASNUMBER":    "{{if .Spec.ASNumber}}{{.Spec.ASNumber}}{{ else }}-{{ end }}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.BGPConfiguration)
