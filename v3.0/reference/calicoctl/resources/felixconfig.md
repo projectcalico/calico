@@ -43,7 +43,7 @@ spec:
 | logSeveritySys | The log severity above which logs are sent to the syslog. Set to `NONE` for no logging to syslog. | DEBUG, INFO, WARNING, ERROR, CRITICAL, or NONE (case-insensitive) | string | `INFO` |
 | logSeverityFile| The log severity above which logs are sent to the log file. | Same as `logSeveritySys` | string | `INFO` |
 | logSeverityScreen | The log severity above which logs are sent to the stdout. | Same as LogSeveritySys | string | `INFO` |
-| ignoreLooseRPF\* | Set to `true` to allow Felix to run on systems with loose reverse path forwarding (RPF). | boolean | boolean | `false` |
+| ignoreLooseRPF | Set to `true` to allow Felix to run on systems with loose reverse path forwarding (RPF). **Warning**: {{site.prodname}} relies on "strict" RPF checking being enabled to prevent workloads, such as VMs and privileged containers, from spoofing their IP addresses and impersonating other workloads (or hosts).  Only enable this flag if you need to run with "loose" RPF and you either trust your workloads or have another mechanism in place to prevent spoofing.  | boolean | boolean | `false` |
 | prometheusMetricsEnabled | Set to `true` to enable the experimental Prometheus metrics server in Felix. | boolean | boolean | `false` |
 | prometheusMetricsPort | Experimental: TCP port that the Prometheus metrics server should bind to. | int | int | `9091` |
 | prometheusGoMetricsEnabled | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. | boolean | boolean | `true` |
