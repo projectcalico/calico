@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: policy
+metadata:
+  name: customer
+spec:
+  selector: app == 'customer'
+  ingress:
+    - action: allow
+      http:
+        methods: ["GET"]
+  egress:
+    - action: allow
+
+---
+
+apiVersion: v1
+kind: policy
+metadata:
+  name: summary
+spec:
+  selector: app == 'summary'
+  ingress:
+    - action: allow
+      source:
+        serviceAccounts:
+          namespace: default
+          names: ["customer"]
+  egress:
+    - action: allow
+
+---
+
+apiVersion: v1
+kind: policy
+metadata:
+  name: database
+spec:
+  selector: app == 'database'
+  ingress:
+    - action: allow
+      source:
+        selector: "all()"
+        serviceAccounts:
+          namespace: default
+          names: ["summary"]
+  egress:
+    - action: allow
+
+---
