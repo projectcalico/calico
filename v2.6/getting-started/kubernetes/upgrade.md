@@ -11,9 +11,9 @@ network policy for any existing pods.  However, it is recommended that you do no
 new pods to a node that is being upgraded.
 
 It is recommended to upgrade one node at a time, rendering each node as
-unscheduleable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubectl/v1.6/#cordon)
-before upgrading the node, and then make the node scheduleable after the upgrade is
-complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/v1.6/#uncordon).
+unschedulable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubectl/v1.8/#cordon)
+before upgrading the node, and then make the node schedulable after the upgrade is
+complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/v1.8/#uncordon).
 
 > **Note**: When upgrading to etcd v3, as long as the cluster is migrated with the
 `etcdctl migrate` command, the v2 data will remain untouched and the etcd v3
