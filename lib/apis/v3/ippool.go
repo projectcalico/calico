@@ -36,7 +36,7 @@ type IPPool struct {
 // IPPoolSpec contains the specification for an IPPool resource.
 type IPPoolSpec struct {
 	// The pool CIDR.
-	CIDR string `json:"cidr" validate:"omitempty,net"`
+	CIDR string `json:"cidr" validate:"net"`
 	// Contains configuration for IPIP tunneling for this pool. If not specified,
 	// then this is defaulted to "Never" (i.e. IPIP tunelling is disabled).
 	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
