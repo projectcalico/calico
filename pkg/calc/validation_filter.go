@@ -22,7 +22,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/validator"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
 )
 
 func NewValidationFilter(sink api.SyncerCallbacks) *ValidationFilter {
