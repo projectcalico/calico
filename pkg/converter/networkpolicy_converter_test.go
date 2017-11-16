@@ -90,10 +90,10 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 				"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
 		})
 
-		protoTCP := numorstring.ProtocolFromString("tcp")
+		protoTCP := numorstring.ProtocolFromString("TCP")
 		By("returning a calico policy with correct ingress rules", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Ingress).To(ConsistOf(api.Rule{
-				Action:      "allow",
+				Action:      "Allow",
 				Protocol:    &protoTCP, // Defaulted to TCP.
 				Source:      api.EntityRule{Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'"},
 				Destination: api.EntityRule{Ports: []numorstring.Port{numorstring.SinglePort(80)}},
@@ -409,10 +409,10 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 				"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
 		})
 
-		protoTCP := numorstring.ProtocolFromString("tcp")
+		protoTCP := numorstring.ProtocolFromString("TCP")
 		By("returning a calico policy with correct egress rules", func() {
 			Expect(pol.(api.NetworkPolicy).Spec.Egress).To(ConsistOf(api.Rule{
-				Action:   "allow",
+				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Destination: api.EntityRule{Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 					Ports: []numorstring.Port{numorstring.SinglePort(80)}},

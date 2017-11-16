@@ -254,7 +254,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			handle := "myhandle"
 			wepIp := net.IP{192, 168, 0, 1}
-			swepIp := "192.168.0.1"
+			swepIp := "192.168.0.1/32"
 			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 				IP:       cnet.IP{wepIp},
 				Hostname: cNodeName,
@@ -308,7 +308,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			bgpConf := api.BGPConfiguration{
 				Spec: api.BGPConfigurationSpec{
-					LogSeverityScreen: "idk",
+					LogSeverityScreen: "Error",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeConfigName,
@@ -641,12 +641,13 @@ var _ = Describe("kube-controllers FV tests", func() {
 				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}
 			wep.Spec = api.WorkloadEndpointSpec{
-				ContainerID:  "container_id_1",
-				Orchestrator: "k8s",
-				Pod:          podName,
-				Node:         nodeName,
-				Endpoint:     "eth0",
-				IPNetworks:   []string{"192.168.1.1"},
+				ContainerID:   "container-id-1",
+				Orchestrator:  "k8s",
+				Pod:           podName,
+				Node:          nodeName,
+				Endpoint:      "eth0",
+				IPNetworks:    []string{"192.168.1.1/32"},
+				InterfaceName: "testInterface",
 			}
 
 			By("creating a corresponding workload endpoint", func() {
@@ -656,7 +657,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			By("updating the pod's labels to trigger a cache update", func() {
 				// Definitively trigger a pod controller cache update by updating the pod's labels
-				// in the Kubernetes API. This ensures the controller has the cached WEP with container_id_1.
+				// in the Kubernetes API. This ensures the controller has the cached WEP with container-id-1.
 				pod.Labels["foo"] = "label2"
 				_, err := k8sClient.CoreV1().Pods("default").Update(&pod)
 				Expect(err).NotTo(HaveOccurred())
@@ -688,7 +689,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 						continue
 					}
 
-					gwep.Spec.ContainerID = "container_id_2"
+					gwep.Spec.ContainerID = "container-id-2"
 					_, err = calicoClient.WorkloadEndpoints().Update(context.Background(), gwep, options.SetOptions{})
 					if err != nil {
 						time.Sleep(1 * time.Second)
@@ -721,7 +722,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 
 			By("expecting the container ID to be correct", func() {
-				Expect(w.Spec.ContainerID).To(Equal("container_id_2"))
+				Expect(w.Spec.ContainerID).To(Equal("container-id-2"))
 			})
 		})
 	})
