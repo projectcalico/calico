@@ -1405,7 +1405,7 @@ var _ = Describe("CalicoCni", func() {
 				})
 			})
 
-			Context("Create a container then send another ADD for the same container but with a different interface", func() {
+			PContext("Create a container then send another ADD for the same container but with a different interface", func() {
 				netconf := fmt.Sprintf(`
 				{
 				"cniVersion": "%s",
