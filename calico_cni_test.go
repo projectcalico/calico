@@ -74,8 +74,8 @@ var _ = Describe("CalicoCni", func() {
 				profile, err := calicoClient.Profiles().Get(ctx, "net1", options.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(profile.Labels).Should(Equal(map[string]string{"net1": ""}))
-				Expect(profile.Spec.Egress).Should(Equal([]api.Rule{{Action: "allow"}}))
-				Expect(profile.Spec.Ingress).Should(Equal([]api.Rule{{Action: "allow", Source: api.EntityRule{Selector: "has(net1)"}}}))
+				Expect(profile.Spec.Egress).Should(Equal([]api.Rule{{Action: "Allow"}}))
+				Expect(profile.Spec.Ingress).Should(Equal([]api.Rule{{Action: "Allow", Source: api.EntityRule{Selector: "has(net1)"}}}))
 
 				// The endpoint is created in etcd
 				endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -207,7 +207,7 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "hostname": "namedHostname",
+			  "hostname": "named-hostname.somewhere",
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -233,7 +233,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items).Should(HaveLen(1))
 
 				ids := names.WorkloadEndpointIdentifiers{
-					Node:         "namedHostname",
+					Node:         "named-hostname.somewhere",
 					Orchestrator: "cni",
 					Endpoint:     "eth0",
 					Pod:          "",
@@ -245,7 +245,7 @@ var _ = Describe("CalicoCni", func() {
 
 				Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 				Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.TEST_DEFAULT_NS))
-				Expect(endpoints.Items[0].Spec.Node).Should(Equal("namedHostname"))
+				Expect(endpoints.Items[0].Spec.Node).Should(Equal("named-hostname.somewhere"))
 
 				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
 				Expect(err).ShouldNot(HaveOccurred())
@@ -261,8 +261,8 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "hostname": "namedHostname",
-			  "nodename": "namedNodename",
+			  "hostname": "named-hostname",
+			  "nodename": "named-nodename",
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -288,7 +288,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items).Should(HaveLen(1))
 
 				ids := names.WorkloadEndpointIdentifiers{
-					Node:         "namedNodename",
+					Node:         "named-nodename",
 					Orchestrator: "cni",
 					Endpoint:     "eth0",
 					Pod:          "",
@@ -301,7 +301,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 				Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.TEST_DEFAULT_NS))
 
-				Expect(endpoints.Items[0].Spec.Node).Should(Equal("namedNodename"))
+				Expect(endpoints.Items[0].Spec.Node).Should(Equal("named-nodename"))
 
 				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
 				Expect(err).ShouldNot(HaveOccurred())

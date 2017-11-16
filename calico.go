@@ -95,7 +95,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	var logger *logrus.Entry
-	if wepIDs.Orchestrator == "k8s" {
+	if wepIDs.Orchestrator == api.OrchestratorKubernetes {
 		logger = logrus.WithFields(logrus.Fields{
 			"WorkloadEndpoint": fmt.Sprintf("%s%s", wepPrefix, wepIDs.Endpoint),
 			"ContainerID":      wepIDs.ContainerID,
@@ -171,7 +171,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
-	if wepIDs.Orchestrator == "k8s" {
+	if wepIDs.Orchestrator == api.OrchestratorKubernetes {
 		if result, err = k8s.CmdAddK8s(ctx, args, conf, *wepIDs, calicoClient, endpoint); err != nil {
 			return err
 		}
@@ -315,10 +315,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Otherwise, incoming traffic is only allowed from profiles with the same tag.
 			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
 			var inboundRules []api.Rule
-			if wepIDs.Orchestrator == "k8s" {
-				inboundRules = []api.Rule{{Action: "allow"}}
+			if wepIDs.Orchestrator == api.OrchestratorKubernetes {
+				inboundRules = []api.Rule{{Action: api.Allow}}
 			} else {
-				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Selector: fmt.Sprintf("has(%s)", conf.Name)}}}
+				inboundRules = []api.Rule{{Action: api.Allow, Source: api.EntityRule{Selector: fmt.Sprintf("has(%s)", conf.Name)}}}
 			}
 
 			profile := &api.Profile{
@@ -327,7 +327,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					Labels: map[string]string{conf.Name: ""},
 				},
 				Spec: api.ProfileSpec{
-					Egress:        []api.Rule{{Action: "allow"}},
+					Egress:        []api.Rule{{Action: api.Allow}},
 					Ingress:       inboundRules,
 					LabelsToApply: map[string]string{conf.Name: ""},
 				},
@@ -395,7 +395,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	ctx := context.Background()
 
 	// Handle k8s specific bits of handling the DEL.
-	if epIDs.Orchestrator == "k8s" {
+	if epIDs.Orchestrator == api.OrchestratorKubernetes {
 		return k8s.CmdDelK8s(ctx, calicoClient, *epIDs, args, conf, logger)
 	}
 
