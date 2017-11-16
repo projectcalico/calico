@@ -63,7 +63,7 @@ var exitFunction = os.Exit
 
 var (
 	// Default values, names for different configs.
-	defaultLogSeverity        = "info"
+	defaultLogSeverity        = "Info"
 	globalFelixConfigName     = "default"
 	felixNodeConfigNamePrefix = "node."
 )
@@ -871,7 +871,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				newFelixNodeCfg := api.NewFelixConfiguration()
 				newFelixNodeCfg.Name = fmt.Sprintf("%s%s", felixNodeConfigNamePrefix, node.Name)
-				newFelixNodeCfg.Spec.DefaultEndpointToHostAction = "RETURN"
+				newFelixNodeCfg.Spec.DefaultEndpointToHostAction = "Return"
 				_, err = c.FelixConfigurations().Create(ctx, newFelixNodeCfg, options.SetOptions{})
 				if err != nil {
 					if exists, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
@@ -887,7 +887,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 			}
 		} else {
 			if felixNodeCfg.Spec.DefaultEndpointToHostAction == "" {
-				felixNodeCfg.Spec.DefaultEndpointToHostAction = "RETURN"
+				felixNodeCfg.Spec.DefaultEndpointToHostAction = "Return"
 				_, err = c.FelixConfigurations().Update(ctx, felixNodeCfg, options.SetOptions{})
 				if err != nil {
 					if conflict, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
