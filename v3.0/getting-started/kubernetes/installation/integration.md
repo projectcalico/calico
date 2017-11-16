@@ -229,7 +229,7 @@ The `kubelet` can be configured to use Calico by starting it with the following 
 For Kubernetes versions prior to v1.4.0, the `cni-conf-dir` and `cni-bin-dir` options are
 not supported.  Use `--network-plugin-dir=/etc/cni/net.d` instead.
 
-See the [`kubelet` documentation](http://kubernetes.io/docs/admin/kubelet/)
+See the [`kubelet` documentation](https://kubernetes.io/docs/reference/generated/kubelet/)
 for more details.
 
 ### Configuring the kube-proxy
