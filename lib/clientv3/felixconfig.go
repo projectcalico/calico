@@ -19,6 +19,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -41,6 +42,10 @@ type felixConfigurations struct {
 // Returns the stored representation of the FelixConfiguration, and an error
 // if there is any.
 func (r felixConfigurations) Create(ctx context.Context, res *apiv3.FelixConfiguration, opts options.SetOptions) (*apiv3.FelixConfiguration, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindFelixConfiguration, res)
 	if out != nil {
 		return out.(*apiv3.FelixConfiguration), err
@@ -52,6 +57,10 @@ func (r felixConfigurations) Create(ctx context.Context, res *apiv3.FelixConfigu
 // Returns the stored representation of the FelixConfiguration, and an error
 // if there is any.
 func (r felixConfigurations) Update(ctx context.Context, res *apiv3.FelixConfiguration, opts options.SetOptions) (*apiv3.FelixConfiguration, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindFelixConfiguration, res)
 	if out != nil {
 		return out.(*apiv3.FelixConfiguration), err

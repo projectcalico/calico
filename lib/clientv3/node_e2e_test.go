@@ -103,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			_, err = c.IPPools().Create(ctx, &pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			swepIp := "192.168.0.1"
+			swepIp := "192.168.0.1/32"
 			wepIp := net.IP{192, 168, 0, 1}
 
 			affBlock := cnet.IPNet{
@@ -169,7 +169,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 
 			bgpConf := apiv3.BGPConfiguration{
 				Spec: apiv3.BGPConfigurationSpec{
-					LogSeverityScreen: "idk",
+					LogSeverityScreen: "Info",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeConfigName,

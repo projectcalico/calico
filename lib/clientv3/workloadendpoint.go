@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -43,7 +44,9 @@ type workloadEndpoints struct {
 // Create takes the representation of a WorkloadEndpoint and creates it.  Returns the stored
 // representation of the WorkloadEndpoint, and an error, if there is any.
 func (r workloadEndpoints) Create(ctx context.Context, res *apiv3.WorkloadEndpoint, opts options.SetOptions) (*apiv3.WorkloadEndpoint, error) {
-	if err := r.validate(res); err != nil {
+	if err := r.assignOrValidateName(res); err != nil {
+		return nil, err
+	} else if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 	r.updateLabelsForStorage(res)
@@ -57,7 +60,9 @@ func (r workloadEndpoints) Create(ctx context.Context, res *apiv3.WorkloadEndpoi
 // Update takes the representation of a WorkloadEndpoint and updates it. Returns the stored
 // representation of the WorkloadEndpoint, and an error, if there is any.
 func (r workloadEndpoints) Update(ctx context.Context, res *apiv3.WorkloadEndpoint, opts options.SetOptions) (*apiv3.WorkloadEndpoint, error) {
-	if err := r.validate(res); err != nil {
+	if err := r.assignOrValidateName(res); err != nil {
+		return nil, err
+	} else if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 	r.updateLabelsForStorage(res)
@@ -102,7 +107,9 @@ func (r workloadEndpoints) Watch(ctx context.Context, opts options.ListOptions) 
 	return r.client.resources.Watch(ctx, opts, apiv3.KindWorkloadEndpoint)
 }
 
-func (r workloadEndpoints) validate(res *apiv3.WorkloadEndpoint) error {
+// assignOrValidateName either assigns the name calculated from the Spec fields, or validates
+// the name against the spec fields.
+func (r workloadEndpoints) assignOrValidateName(res *apiv3.WorkloadEndpoint) error {
 	// Validate the workload endpoint indices and the name match.
 	wepids := names.WorkloadEndpointIdentifiers{
 		Node:         res.Spec.Node,

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package validator
+package v1
 
 import (
 	"fmt"
@@ -75,7 +75,7 @@ func ValidateMetadataIDsAssigned(rm unversioned.ResourceMetadata) error {
 			return errors.ErrorInsufficientIdentifiers{Name: "name"}
 		}
 	default:
-		log.Panic(fmt.Errorf("Unexpected resource metadata: %s", metadata))
+		log.Fatal(fmt.Errorf("Unexpected resource metadata: %s", metadata))
 	}
 
 	return nil

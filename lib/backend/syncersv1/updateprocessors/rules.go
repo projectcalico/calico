@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector/parser"
 )
 
@@ -116,10 +117,10 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	return model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
-		Protocol:    ar.Protocol,
+		Protocol:    convertV3ProtocolToV1(ar.Protocol),
 		ICMPCode:    icmpCode,
 		ICMPType:    icmpType,
-		NotProtocol: ar.NotProtocol,
+		NotProtocol: convertV3ProtocolToV1(ar.NotProtocol),
 		NotICMPCode: notICMPCode,
 		NotICMPType: notICMPType,
 
@@ -153,6 +154,14 @@ func parseNamespaceSelector(s string) string {
 	return updated
 }
 
+// convertV3ProtocolToV1 converts a v1 protocol string to a v3 protocol string
+func convertV3ProtocolToV1(p *numorstring.Protocol) *numorstring.Protocol {
+	if p != nil && p.Type == numorstring.NumOrStringString {
+		p.StrVal = strings.ToLower(p.String())
+	}
+	return p
+}
+
 // normalizeIPNet converts an IPNet to a network by ensuring the IP address is correctly masked.
 func normalizeIPNet(n string) *cnet.IPNet {
 	if n == "" {
@@ -184,7 +193,7 @@ func ruleActionAPIV2ToBackend(action apiv3.Action) string {
 	if action == apiv3.Pass {
 		return "next-tier"
 	}
-	return strings.ToLower(string(action))
+	return string(action)
 }
 
 func convertStringsToNets(strs []string) []*cnet.IPNet {

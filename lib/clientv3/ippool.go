@@ -26,6 +26,7 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -52,6 +53,10 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		return nil, err
 	}
 
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	// Enable IPIP globally if required.  Do this before the Create so if it fails the user
 	// can retry the same command.
 	err := r.maybeEnableIPIP(ctx, res)
@@ -70,6 +75,10 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 // Update takes the representation of a IPPool and updates it. Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	// Get the existing settings, so that we can validate the CIDR has not changed.
 	old, err := r.Get(ctx, res.Name, options.GetOptions{})
 	if err != nil {

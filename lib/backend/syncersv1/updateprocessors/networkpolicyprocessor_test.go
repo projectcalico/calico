@@ -92,8 +92,8 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		intype := 3
 		icode := 4
 		incode := 6
-		iproto := numorstring.ProtocolFromString("tcp")
-		inproto := numorstring.ProtocolFromString("udp")
+		iproto := numorstring.ProtocolFromString("TCP")
+		inproto := numorstring.ProtocolFromString("UDP")
 		port80 := numorstring.SinglePort(uint16(80))
 		port443 := numorstring.SinglePort(uint16(443))
 		irule := apiv3.Rule{
@@ -300,7 +300,7 @@ var expected1 = []*model.KVPair{
 			ApplyOnForward: true,
 			OutboundRules: []model.Rule{
 				{
-					Action:      "allow",
+					Action:      "Allow",
 					Protocol:    &tcp,
 					SrcSelector: "",
 					DstSelector: "",

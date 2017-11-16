@@ -19,6 +19,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
@@ -40,6 +41,10 @@ type bgpPeers struct {
 // Create takes the representation of a BGPPeer and creates it.  Returns the stored
 // representation of the BGPPeer, and an error, if there is any.
 func (r bgpPeers) Create(ctx context.Context, res *apiv3.BGPPeer, opts options.SetOptions) (*apiv3.BGPPeer, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindBGPPeer, res)
 	if out != nil {
 		return out.(*apiv3.BGPPeer), err
@@ -50,6 +55,10 @@ func (r bgpPeers) Create(ctx context.Context, res *apiv3.BGPPeer, opts options.S
 // Update takes the representation of a BGPPeer and updates it. Returns the stored
 // representation of the BGPPeer, and an error, if there is any.
 func (r bgpPeers) Update(ctx context.Context, res *apiv3.BGPPeer, opts options.SetOptions) (*apiv3.BGPPeer, error) {
+	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindBGPPeer, res)
 	if out != nil {
 		return out.(*apiv3.BGPPeer), err

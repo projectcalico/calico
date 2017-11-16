@@ -35,9 +35,6 @@ type FelixConfiguration struct {
 	Spec FelixConfigurationSpec `json:"spec,omitempty"`
 }
 
-// TODO: Add validation on LogSeverityScreen, LogSeveritySys, LogSeverityFile, DatastoreType,
-// DefaultEndpointToHostAction, IptablesFilterAllowAction, IptablesMangleAllowAction,
-// ChainInsertModefor valid values.
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	UseInternalDataplaneDriver *bool  `json:"useInternalDataplaneDriver,omitempty"`
@@ -113,9 +110,9 @@ type FelixConfigurationSpec struct {
 	// “INPUT” chain; Calico will insert its rules at the top of that chain, then “RETURN” packets to the “INPUT” chain
 	// once it has completed processing workload endpoint egress policy. Use ACCEPT to unconditionally accept packets
 	// from workloads after processing workload endpoint egress policy. [Default: DROP]
-	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty"`
-	IptablesFilterAllowAction   string `json:"iptablesFilterAllowAction,omitempty"`
-	IptablesMangleAllowAction   string `json:"iptablesMangleAllowAction,omitempty"`
+	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty" validate:"omitempty,dropAcceptReturn"`
+	IptablesFilterAllowAction   string `json:"iptablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+	IptablesMangleAllowAction   string `json:"iptablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 	// LogPrefix is the log prefix that Felix uses when rendering LOG rules. [Default: calico-packet]
 	LogPrefix string `json:"logPrefix,omitempty"`
 
@@ -123,12 +120,12 @@ type FelixConfigurationSpec struct {
 	LogFilePath string `json:"logFilePath,omitempty"`
 
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: INFO]
-	LogSeverityFile string `json:"logSeverityFile,omitempty"`
+	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
-	LogSeverityScreen string `json:"logSeverityScreen,omitempty"`
+	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to NONE for no logging to syslog.
 	// [Default: INFO]
-	LogSeveritySys string `json:"logSeveritySys,omitempty"`
+	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
 
 	IPIPEnabled *bool `json:"ipipEnabled,omitempty" confignamev1:"IpInIpEnabled"`
 	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]

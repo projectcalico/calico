@@ -18,9 +18,9 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
 
 var _ = DescribeTable(
@@ -33,9 +33,9 @@ var _ = DescribeTable(
 		errors.ErrorOperationNotSupported{
 			Operation: "create",
 			Identifier: model.ResourceKey{
-				Kind: v3.KindNetworkPolicy,
+				Kind:      v3.KindNetworkPolicy,
 				Namespace: "namespace1",
-				Name: "knp.default.k8spolicy",
+				Name:      "knp.default.k8spolicy",
 			},
 		},
 		"operation create is not supported on NetworkPolicy(namespace1/knp.default.k8spolicy)",
@@ -43,9 +43,9 @@ var _ = DescribeTable(
 	Entry(
 		"Operation not supported with reason",
 		errors.ErrorOperationNotSupported{
-			Operation: "apply",
+			Operation:  "apply",
 			Identifier: "foo.bar.baz",
-			Reason: "cannot mix foobar with baz",
+			Reason:     "cannot mix foobar with baz",
 		},
 		"operation apply is not supported on foo.bar.baz: cannot mix foobar with baz",
 	),

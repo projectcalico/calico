@@ -319,6 +319,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				},
 				options.SetOptions{},
 			)
+			Expect(err).NotTo(HaveOccurred())
+
 			rev1 := outRes1.ResourceVersion
 			// Update the name to reflect the underlying data returned from the watcher
 			outRes1.GetObjectMeta().SetName("default." + name1)

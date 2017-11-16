@@ -31,7 +31,7 @@ type Rule struct {
 
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.
-	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipversion"`
+	IPVersion *int `json:"ipVersion,omitempty" validate:"omitempty,ipVersion"`
 
 	// Protocol is an optional field that restricts the rule to only apply to traffic of
 	// a specific IP protocol. Required if any of the EntityRules contain Ports

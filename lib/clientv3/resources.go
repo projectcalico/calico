@@ -83,6 +83,7 @@ func (c *resources) Create(ctx context.Context, opts options.SetOptions, kind st
 			}},
 		}
 	}
+
 	// A ResourceVersion should never be specified on a Create.
 	if len(in.GetObjectMeta().GetResourceVersion()) != 0 {
 		logWithResource(in).Info("Rejecting Create request with non-empty resource version")

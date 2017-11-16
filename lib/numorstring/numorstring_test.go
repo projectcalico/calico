@@ -84,8 +84,8 @@ func init() {
 		// Protocol tests.  Invalid integer values will be stored as strings.
 		Entry("should accept 0 protocol as int", "0", protocolType, numorstring.ProtocolFromInt(0)),
 		Entry("should accept 255 protocol as int", "255", protocolType, numorstring.ProtocolFromInt(255)),
-		Entry("should accept tcp protocol as string", "\"tcp\"", protocolType, numorstring.ProtocolFromString("tcp")),
-		Entry("should accept tcp protocol as string", "\"tcp\"", protocolType, numorstring.ProtocolFromString("tcp")),
+		Entry("should accept tcp protocol as string", "\"TCP\"", protocolType, numorstring.ProtocolFromString("TCP")),
+		Entry("should accept tcp protocol as string", "\"TCP\"", protocolType, numorstring.ProtocolFromString("TCP")),
 		Entry("should accept 0 protocol as string", "\"0\"", protocolType, numorstring.ProtocolFromInt(0)),
 		Entry("should accept 0 protocol as string", "\"255\"", protocolType, numorstring.ProtocolFromInt(255)),
 		Entry("should accept 256 protocol as string", "\"256\"", protocolType, numorstring.ProtocolFromString("256")),
@@ -120,7 +120,7 @@ func init() {
 
 		// Protocol tests.
 		Entry("should marshal protocol of 0", numorstring.ProtocolFromInt(0), "0"),
-		Entry("should marshal protocol of udp", numorstring.ProtocolFromString("udp"), "\"udp\""),
+		Entry("should marshal protocol of udp", numorstring.ProtocolFromString("UDP"), "\"UDP\""),
 	)
 
 	// Perform tests of Stringer interface various field types.
@@ -140,7 +140,7 @@ func init() {
 
 		// Protocol tests.
 		Entry("should stringify protocol of 0", numorstring.ProtocolFromInt(0), "0"),
-		Entry("should stringify protocol of udp", numorstring.ProtocolFromString("udp"), "udp"),
+		Entry("should stringify protocol of udp", numorstring.ProtocolFromString("UDP"), "UDP"),
 	)
 
 	// Perform tests of Protocols supporting ports.
@@ -152,8 +152,8 @@ func init() {
 		// Protocol tests.
 		Entry("protocol 6 supports ports", numorstring.ProtocolFromInt(6), true),
 		Entry("protocol 17 supports ports", numorstring.ProtocolFromInt(17), true),
-		Entry("protocol udp supports ports", numorstring.ProtocolFromString("udp"), true),
-		Entry("protocol udp supports ports", numorstring.ProtocolFromString("tcp"), true),
+		Entry("protocol udp supports ports", numorstring.ProtocolFromString("UDP"), true),
+		Entry("protocol udp supports ports", numorstring.ProtocolFromString("TCP"), true),
 		Entry("protocol foo does not support ports", numorstring.ProtocolFromString("foo"), false),
 		Entry("protocol 2 does not support ports", numorstring.ProtocolFromInt(2), false),
 	)

@@ -372,10 +372,10 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// Check the selector is correct, and that the matches are sorted.
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal(
 			"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
-		protoTCP := numorstring.ProtocolFromString("tcp")
+		protoTCP := numorstring.ProtocolFromString("TCP")
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
-				Action:   "allow",
+				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
@@ -385,7 +385,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				},
 			},
 			apiv3.Rule{
-				Action:   "allow",
+				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
@@ -602,10 +602,10 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// Check the selector is correct, and that the matches are sorted.
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal(
 			"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
-		protoTCP := numorstring.ProtocolFromString("tcp")
+		protoTCP := numorstring.ProtocolFromString("TCP")
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
-				Action:   "allow",
+				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
 					Selector: "projectcalico.org/orchestrator == 'k8s' && ! has(toast)",
@@ -615,7 +615,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				},
 			},
 			apiv3.Rule{
-				Action:   "allow",
+				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
 					Selector: "projectcalico.org/orchestrator == 'k8s' && ! has(toast)",
@@ -928,7 +928,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Protocol.String()).To(Equal("tcp"))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Protocol.String()).To(Equal("TCP"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports)).To(Equal(1))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports[0].String()).To(Equal("80"))
 
@@ -975,7 +975,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress)).To(Equal(1))
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Protocol.String()).To(Equal("tcp"))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Protocol.String()).To(Equal("TCP"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.Ports)).To(Equal(1))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.Ports[0].String()).To(Equal("80"))
 
@@ -1274,9 +1274,9 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 		// Check the selector is correct, and that the matches are sorted.
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal(
 			"projectcalico.org/orchestrator == 'k8s' && label == 'value' && label2 == 'value2'"))
-		protoTCP := numorstring.ProtocolFromString("tcp")
+		protoTCP := numorstring.ProtocolFromString("TCP")
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(apiv3.Rule{
-			Action:   "allow",
+			Action:   "Allow",
 			Protocol: &protoTCP, // Defaulted to TCP.
 			Source: apiv3.EntityRule{
 				Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
@@ -1633,7 +1633,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Protocol.String()).To(Equal("tcp"))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Protocol.String()).To(Equal("TCP"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports)).To(Equal(1))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports[0].String()).To(Equal("80"))
 

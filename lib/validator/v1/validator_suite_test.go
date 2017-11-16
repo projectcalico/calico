@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package validator_test
+package v1_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -23,8 +23,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func TestValidator(t *testing.T) {
+func init() {
 	testutils.HookLogrusForGinkgo()
+}
+
+func TestValidator(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Validator Suite")
 }

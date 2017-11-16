@@ -193,15 +193,15 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.FailsafeInboundHostPorts = &[]apiv3.ProtoPort{}
 		res.Spec.FailsafeOutboundHostPorts = &[]apiv3.ProtoPort{
 			{
-				Protocol: "tcp",
+				Protocol: "TCP",
 				Port:     1234,
 			},
 			{
-				Protocol: "udp",
+				Protocol: "UDP",
 				Port:     22,
 			},
 			{
-				Protocol: "tcp",
+				Protocol: "TCP",
 				Port:     65535,
 			},
 		}

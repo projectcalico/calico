@@ -24,9 +24,9 @@ import (
 )
 
 type Rule struct {
-	Action string `json:"action,omitempty" validate:"backendaction"`
+	Action string `json:"action,omitempty"`
 
-	IPVersion *int `json:"ip_version,omitempty" validate:"omitempty,ipversion"`
+	IPVersion *int `json:"ip_version,omitempty" validate:"omitempty,ipVersion"`
 
 	Protocol    *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
 	NotProtocol *numorstring.Protocol `json:"!protocol,omitempty" validate:"omitempty"`
@@ -107,7 +107,7 @@ func (r Rule) String() string {
 	if r.Action != "" {
 		parts = append(parts, r.Action)
 	} else {
-		parts = append(parts, "allow")
+		parts = append(parts, "Allow")
 	}
 
 	// Global packet attributes that don't depend on direction.

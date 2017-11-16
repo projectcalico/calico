@@ -43,12 +43,12 @@ var (
 		Order: &zeroOrder,
 		Ingress: []apiv3.Rule{
 			{
-				Action: "allow",
+				Action: "Allow",
 			},
 		},
 		Egress: []apiv3.Rule{
 			{
-				Action: "allow",
+				Action: "Allow",
 			},
 		},
 	}
@@ -56,12 +56,12 @@ var (
 		Order: &zeroOrder,
 		Ingress: []apiv3.Rule{
 			{
-				Action: "deny",
+				Action: "Deny",
 			},
 		},
 		Egress: []apiv3.Rule{
 			{
-				Action: "deny",
+				Action: "Deny",
 			},
 		},
 	}
@@ -71,12 +71,12 @@ var (
 		Order: &zeroOrder,
 		InboundRules: []model.Rule{
 			{
-				Action: "allow",
+				Action: "Allow",
 			},
 		},
 		OutboundRules: []model.Rule{
 			{
-				Action: "allow",
+				Action: "Allow",
 			},
 		},
 	}
@@ -84,12 +84,12 @@ var (
 		Order: &zeroOrder,
 		InboundRules: []model.Rule{
 			{
-				Action: "deny",
+				Action: "Deny",
 			},
 		},
 		OutboundRules: []model.Rule{
 			{
-				Action: "deny",
+				Action: "Deny",
 			},
 		},
 	}

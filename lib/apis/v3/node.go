@@ -59,12 +59,12 @@ type NodeBGPSpec struct {
 	// The AS Number of the node.  If this is not specified, the global
 	// default value will be used.
 	ASNumber *numorstring.ASNumber `json:"asNumber,omitempty"`
-	// IPv4Address is the IPv4 address and network of this node.  At least
-	// one of the IPv4 and IPv6 addresses should be specified.
-	IPv4Address string `json:"ipv4Address,omitempty" validate:"omitempty,ipv4"`
-	// IPv6Address is the IPv6 address and network of this node.  At least
-	// one of the IPv4 and IPv6 addresses should be specified.
-	IPv6Address string `json:"ipv6Address,omitempty" validate:"omitempty,ipv6"`
+	// IPv4Address is the IPv4 address and network of this node.  The IPv4 address
+	// should always be specified if you are using BGP.
+	IPv4Address string `json:"ipv4Address,omitempty" validate:"omitempty,cidrv4"`
+	// IPv6Address is the IPv6 address and network of this node.  Not required if you
+	// are not using BGP or you do not require IPv6 routing.
+	IPv6Address string `json:"ipv6Address,omitempty" validate:"omitempty,cidrv6"`
 	// IPv4IPIPTunnelAddr is the IPv4 address of the IP in IP tunnel.
 	IPv4IPIPTunnelAddr string `json:"ipv4IPIPTunnelAddr,omitempty" validate:"omitempty,ipv4"`
 }

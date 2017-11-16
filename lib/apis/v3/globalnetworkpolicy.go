@@ -105,7 +105,7 @@ type GlobalNetworkPolicySpec struct {
 	//
 	// When the policy is read back again, Types will always be one of these values, never empty
 	// or nil.
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policytype"`
+	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
 
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
