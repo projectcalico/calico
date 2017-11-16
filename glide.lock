@@ -1,5 +1,5 @@
-hash: c0e7407ccf235e89513f6a3e4f2a01bd3ceca847ff3a50378b3e97bc84d16c30
-updated: 2017-10-18T11:59:01.494957752-07:00
+hash: ee2ca161587aa178e381cfb3b0f304b2c6dd68e5bfead27a347a9f203c33af39
+updated: 2017-11-16T16:07:52.422843395-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
+  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
   subpackages:
   - auth/authpb
   - client
@@ -142,7 +142,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
   subpackages:
   - format
   - internal/assertion
@@ -254,7 +254,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
+  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
   subpackages:
   - internal
   - internal/app_identity
@@ -290,7 +290,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 6c6dac0277229b9e9578c5ca3f74a4345d35cdc2
+  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -415,7 +415,7 @@ imports:
   - util/integer
   - util/jsonpath
 - name: k8s.io/code-generator
-  version: 0c5165a97e055df28cca8bbcb8b7c8ae1019b3f1
+  version: 6db2ee6aa9ab51230d6e0d970b398274a88e81b0
 - name: k8s.io/gengo
   version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
 - name: k8s.io/kube-openapi

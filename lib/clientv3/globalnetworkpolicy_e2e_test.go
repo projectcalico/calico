@@ -405,7 +405,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			// Only etcdv3 supports watching a specific instance of a resource.
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
 				By("Starting a watcher from rev0 watching name1 - this should get all events for name1")
-				w, err = c.GlobalNetworkPolicies().Watch(ctx, options.ListOptions{Name: "default." + name1, ResourceVersion: rev0})
+				w, err = c.GlobalNetworkPolicies().Watch(ctx, options.ListOptions{Name: name1, ResourceVersion: rev0})
 				Expect(err).NotTo(HaveOccurred())
 				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
 				defer testWatcher2_1.Stop()
