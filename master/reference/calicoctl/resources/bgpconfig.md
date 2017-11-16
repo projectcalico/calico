@@ -16,7 +16,7 @@ kind: BGPConfiguration
 metadata:
   name: default
 spec:
-  logSeverityScreen: info
+  logSeverityScreen: Info
   nodeToNodeMeshEnabled: true
   asNumber: 63400
 ```
@@ -36,7 +36,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| logSeverityScreen | Global log level | none, debug, info, warning, error, critical | string | info |
+| logSeverityScreen | Global log level | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | nodeToNodeMeshEnabled | Full BGP node-to-node mesh | true, false  | string | true |
 | asNumber | The AS Number of this peer. | A valid AS Number, may be specified in dotted notation. | integer/string | 64512 |
 
