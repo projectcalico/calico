@@ -193,7 +193,7 @@ func ruleActionAPIV2ToBackend(action apiv3.Action) string {
 	if action == apiv3.Pass {
 		return "next-tier"
 	}
-	return string(action)
+	return strings.ToLower(string(action))
 }
 
 func convertStringsToNets(strs []string) []*cnet.IPNet {

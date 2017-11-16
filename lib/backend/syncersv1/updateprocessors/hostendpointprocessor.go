@@ -65,7 +65,7 @@ func convertHostEndpointV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	for _, port := range v3res.Spec.Ports {
 		ports = append(ports, model.EndpointPort{
 			Name:     port.Name,
-			Protocol: port.Protocol,
+			Protocol: port.Protocol.ToV1(),
 			Port:     port.Port,
 		})
 	}

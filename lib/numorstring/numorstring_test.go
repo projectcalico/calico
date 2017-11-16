@@ -149,13 +149,47 @@ func init() {
 			Expect(protocol.SupportsPorts()).To(Equal(supportsPorts),
 				"expected protocol port support to match")
 		},
-		// Protocol tests.
 		Entry("protocol 6 supports ports", numorstring.ProtocolFromInt(6), true),
 		Entry("protocol 17 supports ports", numorstring.ProtocolFromInt(17), true),
 		Entry("protocol udp supports ports", numorstring.ProtocolFromString("UDP"), true),
 		Entry("protocol udp supports ports", numorstring.ProtocolFromString("TCP"), true),
 		Entry("protocol foo does not support ports", numorstring.ProtocolFromString("foo"), false),
 		Entry("protocol 2 does not support ports", numorstring.ProtocolFromInt(2), false),
+	)
+
+	// Perform tests of Protocols FromString method.
+	DescribeTable("NumOrStringProtocols FromString is not case sensitive",
+		func(input, expected string) {
+			Expect(numorstring.ProtocolFromString(input).StrVal).To(Equal(expected),
+				"expected parsed protocol to match")
+		},
+		Entry("protocol udp -> UDP", "udp", "UDP"),
+		Entry("protocol tcp -> TCP", "tcp", "TCP"),
+		Entry("protocol updlite -> UDPLite", "udplite", "UDPLite"),
+		Entry("unknown protocol xxxXXX", "xxxXXX", "xxxXXX"),
+	)
+
+	// Perform tests of Protocols FromStringV1 method.
+	DescribeTable("NumOrStringProtocols FromStringV1 is lowercase",
+		func(input, expected string) {
+			Expect(numorstring.ProtocolFromStringV1(input).StrVal).To(Equal(expected),
+				"expected parsed protocol to match")
+		},
+		Entry("protocol udp -> UDP", "UDP", "udp"),
+		Entry("protocol tcp -> TCP", "TCP", "tcp"),
+		Entry("protocol updlite -> UDPLite", "UDPLite", "udplite"),
+		Entry("unknown protocol xxxXXX", "xxxXXX", "xxxxxx"),
+	)
+
+	// Perform tests of Protocols ToV1 method.
+	DescribeTable("NumOrStringProtocols FromStringV1 is lowercase",
+		func(input, expected numorstring.Protocol) {
+			Expect(input.ToV1()).To(Equal(expected),
+				"expected parsed protocol to match")
+		},
+		// Protocol tests.
+		Entry("protocol udp -> UDP", numorstring.ProtocolFromInt(2), numorstring.ProtocolFromInt(2)),
+		Entry("protocol tcp -> TCP", numorstring.ProtocolFromString("TCP"), numorstring.ProtocolFromStringV1("TCP")),
 	)
 }
 

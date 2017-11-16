@@ -287,7 +287,7 @@ var np1 = v1beta1.NetworkPolicy{
 }
 
 // expected1 is the expected v1 KVPair representation of np1 from above.
-var tcp = numorstring.ProtocolFromString("tcp")
+var tcp = numorstring.ProtocolFromStringV1("tcp")
 var port80 = numorstring.SinglePort(uint16(80))
 var order float64 = 1000.0
 var expected1 = []*model.KVPair{
@@ -300,7 +300,7 @@ var expected1 = []*model.KVPair{
 			ApplyOnForward: true,
 			OutboundRules: []model.Rule{
 				{
-					Action:      "Allow",
+					Action:      "allow",
 					Protocol:    &tcp,
 					SrcSelector: "",
 					DstSelector: "",

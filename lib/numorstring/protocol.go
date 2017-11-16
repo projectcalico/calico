@@ -14,6 +14,31 @@
 
 package numorstring
 
+import "strings"
+
+const (
+	ProtocolUDP     = "UDP"
+	ProtocolTCP     = "TCP"
+	ProtocolICMP    = "ICMP"
+	ProtocolICMPv6  = "ICMPv6"
+	ProtocolSCTP    = "SCTP"
+	ProtocolUDPLite = "UDPLite"
+
+	ProtocolUDPV1     = "udp"
+	ProtocolTCPV1     = "tcp"
+)
+
+var (
+	allProtocolNames = []string{
+		ProtocolUDP,
+		ProtocolTCP,
+		ProtocolICMP,
+		ProtocolICMPv6,
+		ProtocolSCTP,
+		ProtocolUDPLite,
+	}
+)
+
 type Protocol Uint8OrString
 
 // ProtocolFromInt creates a Protocol struct from an integer value.
@@ -25,8 +50,24 @@ func ProtocolFromInt(p uint8) Protocol {
 
 // ProtocolFromString creates a Protocol struct from a string value.
 func ProtocolFromString(p string) Protocol {
+	for _, n := range allProtocolNames {
+		if strings.ToLower(n) == strings.ToLower(p) {
+			return Protocol(
+				Uint8OrString{Type: NumOrStringString, StrVal: n},
+			)
+		}
+	}
+
+	// Unknown protocol - return the value unchanged.  Validation should catch this.
 	return Protocol(
 		Uint8OrString{Type: NumOrStringString, StrVal: p},
+	)
+}
+
+// ProtocolFromStringV1 creates a Protocol struct from a string value (for the v1 API)
+func ProtocolFromStringV1(p string) Protocol {
+	return Protocol(
+		Uint8OrString{Type: NumOrStringString, StrVal: strings.ToLower(p)},
 	)
 }
 
@@ -45,6 +86,14 @@ func (p Protocol) String() string {
 	return (Uint8OrString)(p).String()
 }
 
+// String returns the string value, or the Itoa of the int value.
+func (p Protocol) ToV1() Protocol {
+	if p.Type == NumOrStringNum {
+		return p
+	}
+	return ProtocolFromStringV1(p.StrVal)
+}
+
 // NumValue returns the NumVal if type Int, or if
 // it is a String, will attempt a conversion to int.
 func (p Protocol) NumValue() (uint8, error) {
@@ -58,6 +107,10 @@ func (p Protocol) SupportsPorts() bool {
 	if err == nil {
 		return num == 6 || num == 17
 	} else {
-		return p.StrVal == "TCP" || p.StrVal == "UDP" || p.StrVal == "tcp" || p.StrVal == "udp"
+		switch p.StrVal {
+		case ProtocolTCP, ProtocolUDP, ProtocolTCPV1, ProtocolUDPV1:
+			return true
+		}
+		return false
 	}
 }
