@@ -641,7 +641,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}
 			wep.Spec = api.WorkloadEndpointSpec{
-				ContainerID:   "container_id_1",
+				ContainerID:   "container-id-1",
 				Orchestrator:  "k8s",
 				Pod:           podName,
 				Node:          nodeName,
@@ -657,7 +657,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			By("updating the pod's labels to trigger a cache update", func() {
 				// Definitively trigger a pod controller cache update by updating the pod's labels
-				// in the Kubernetes API. This ensures the controller has the cached WEP with container_id_1.
+				// in the Kubernetes API. This ensures the controller has the cached WEP with container-id-1.
 				pod.Labels["foo"] = "label2"
 				_, err := k8sClient.CoreV1().Pods("default").Update(&pod)
 				Expect(err).NotTo(HaveOccurred())
@@ -689,7 +689,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 						continue
 					}
 
-					gwep.Spec.ContainerID = "container_id_2"
+					gwep.Spec.ContainerID = "container-id-2"
 					_, err = calicoClient.WorkloadEndpoints().Update(context.Background(), gwep, options.SetOptions{})
 					if err != nil {
 						time.Sleep(1 * time.Second)
@@ -722,7 +722,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 
 			By("expecting the container ID to be correct", func() {
-				Expect(w.Spec.ContainerID).To(Equal("container_id_2"))
+				Expect(w.Spec.ContainerID).To(Equal("container-id-2"))
 			})
 		})
 	})
