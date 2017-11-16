@@ -123,7 +123,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 	for _, port := range v3res.Spec.Ports {
 		ports = append(ports, model.EndpointPort{
 			Name:     port.Name,
-			Protocol: port.Protocol,
+			Protocol: port.Protocol.ToV1(),
 			Port:     port.Port,
 		})
 	}

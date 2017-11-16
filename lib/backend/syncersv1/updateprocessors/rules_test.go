@@ -54,7 +54,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		}
 		// Correct inbound rule
 		rulev1 := updateprocessors.RuleAPIV2ToBackend(irule, "namespace2")
-		Expect(rulev1.Action).To(Equal("Allow"))
+		Expect(rulev1.Action).To(Equal("allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
 		Expect(rulev1.Protocol.StrVal).To(Equal("tcp"))
 		Expect(rulev1.ICMPCode).To(Equal(&icode))
@@ -140,7 +140,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
 		rulev1 = rulesv1[0]
-		Expect(rulev1.Action).To(Equal("Allow"))
+		Expect(rulev1.Action).To(Equal("allow"))
 		Expect(rulev1.IPVersion).To(Equal(&v4))
 		Expect(rulev1.Protocol.StrVal).To(Equal("tcp"))
 		Expect(rulev1.ICMPCode).To(Equal(&icode))

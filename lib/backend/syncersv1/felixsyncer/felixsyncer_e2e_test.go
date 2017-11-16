@@ -70,36 +70,36 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
 					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "Allow"}},
-						OutboundRules: []model.Rule{{Action: "Allow"}},
+						InboundRules:  []model.Rule{{Action: "allow"}},
+						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-public"}},
 					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "Allow"}},
-						OutboundRules: []model.Rule{{Action: "Allow"}},
+						InboundRules:  []model.Rule{{Action: "allow"}},
+						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-system"}},
 					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "Allow"}},
-						OutboundRules: []model.Rule{{Action: "Allow"}},
+						InboundRules:  []model.Rule{{Action: "allow"}},
+						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.namespace-1"}},
 					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "Allow"}},
-						OutboundRules: []model.Rule{{Action: "Allow"}},
+						InboundRules:  []model.Rule{{Action: "allow"}},
+						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.namespace-2"}},
 					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "Allow"}},
-						OutboundRules: []model.Rule{{Action: "Allow"}},
+						InboundRules:  []model.Rule{{Action: "allow"}},
+						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
 			}
@@ -248,12 +248,12 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						Ports: []model.EndpointPort{
 							{
 								Name:     "port1",
-								Protocol: numorstring.ProtocolFromString("TCP"),
+								Protocol: numorstring.ProtocolFromStringV1("TCP"),
 								Port:     1234,
 							},
 							{
 								Name:     "port2",
-								Protocol: numorstring.ProtocolFromString("UDP"),
+								Protocol: numorstring.ProtocolFromStringV1("UDP"),
 								Port:     1010,
 							},
 						},

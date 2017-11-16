@@ -71,12 +71,12 @@ var (
 		Order: &zeroOrder,
 		InboundRules: []model.Rule{
 			{
-				Action: "Allow",
+				Action: "allow",
 			},
 		},
 		OutboundRules: []model.Rule{
 			{
-				Action: "Allow",
+				Action: "allow",
 			},
 		},
 	}
@@ -84,12 +84,12 @@ var (
 		Order: &zeroOrder,
 		InboundRules: []model.Rule{
 			{
-				Action: "Deny",
+				Action: "deny",
 			},
 		},
 		OutboundRules: []model.Rule{
 			{
-				Action: "Deny",
+				Action: "deny",
 			},
 		},
 	}

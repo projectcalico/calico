@@ -377,7 +377,7 @@ func init() {
 		Entry("should reject protocol 0 as string", protocolFromString("0"), false),
 		Entry("should reject protocol tcpfoo", protocolFromString("tcpfoo"), false),
 		Entry("should reject protocol footcp", protocolFromString("footcp"), false),
-		Entry("should reject protocol tcp", protocolFromString("tcp"), false),
+		Entry("should reject protocol tcp", numorstring.Protocol{StrVal: "tcp", Type: numorstring.NumOrStringString}, false),
 
 		// (API) IPNAT
 		Entry("should accept valid IPNAT IPv4",
