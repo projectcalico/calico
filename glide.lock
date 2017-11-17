@@ -1,5 +1,5 @@
-hash: 8d79029f82db7d87551be20b5bafcef9549b96e39751638d12174d4b97f8b396
-updated: 2017-11-16T16:15:11.659687303-08:00
+hash: b2fd75c4f24f54d6daf9fd2badadff9c628312cb4771826f6999abb851e4ddee
+updated: 2017-11-16T16:46:02.151043708-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -117,7 +117,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 97ab61addb82be06cc4174c3fc6d83bbfe37aeca
+  version: aa99a56bf122efc5a5d74dd22c10651ebfab4031
   subpackages:
   - client/v2
   - models
