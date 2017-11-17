@@ -1491,6 +1491,9 @@ master:
      felix:
       version: master
       url: ""
+     typha:
+      version: master
+      url: ""
      calicoctl:
       version: master
       url: "https://www.projectcalico.org/builds/calicoctl"
