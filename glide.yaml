@@ -35,3 +35,5 @@ import:
   subpackages:
   - fv
   - fv.containers
+- package: github.com/coreos/etcd
+  version: v3.2.7
