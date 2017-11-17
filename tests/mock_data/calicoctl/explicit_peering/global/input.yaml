@@ -4,7 +4,7 @@ metadata:
   name: default
 spec:
   nodeToNodeMeshEnabled: false
-  logSeverityScreen: debug
+  logSeverityScreen: Debug
   asNumber: 64567
 
 ---

@@ -2,3 +2,5 @@ package: github.com/kelseyhightower/confd
 import:
 - package: github.com/projectcalico/libcalico-go
   version: master
+- package: github.com/coreos/etcd
+  version: v3.2.7
