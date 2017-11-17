@@ -1,9 +1,14 @@
+// Flexvolume driver that is invoked by kubelet when a pod installs a flexvolume drive
+// of type nodeagent/uds
+// This driver communicates to the nodeagent/idagent using protos/nodeagementmgmt.proto
+// and shares the properties of the pod with nodeagent/idagent.
+//
 package main
 
 import (
-	"errors"
 	"encoding/json"
-        "fmt"
+	"errors"
+	"fmt"
 	"log"
 	"log/syslog"
 	"os"
@@ -12,13 +17,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-        pb "github.com/colabsaumoh/proto-udsuspver/udsver_v1"
 	nagent "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
+	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 )
 
-
 type Resp struct {
-	Status string `json:"status"`
+	Status  string `json:"status"`
 	Message string `json:"message"`
 	// Capability resp.
 	Attach bool `json:"attach,omitempty"`
@@ -31,31 +35,31 @@ type Resp struct {
 }
 
 type NodeAgentInputs struct {
-	Uid		string `json:"kubernetes.io/pod.uid"`
-	Name		string `json:"kubernetes.io/pod.name"`
-	Namespace string `json:"kubernetes.io/pod.namespace"`
-	ServiceAccount	string `json:"kubernetes.io/serviceAccount.name"`
+	Uid            string `json:"kubernetes.io/pod.uid"`
+	Name           string `json:"kubernetes.io/pod.name"`
+	Namespace      string `json:"kubernetes.io/pod.namespace"`
+	ServiceAccount string `json:"kubernetes.io/serviceAccount.name"`
 }
 
 const (
-	volumeName		string = "tmpfs"
-	NodeAgentMgmtAPI	string = "/tmp/udsuspver/mgmt.sock"
-	NodeAgentUdsHome	string = "/tmp/nodeagent"
+	volumeName       string = "tmpfs"
+	NodeAgentMgmtAPI string = "/tmp/udsuspver/mgmt.sock"
+	NodeAgentUdsHome string = "/tmp/nodeagent"
 )
 
 var (
-	logWrt	*syslog.Writer
+	logWrt *syslog.Writer
 
 	RootCmd = &cobra.Command{
-		Use: "flexvoldrv",
-	        Short: "Flex volume driver interface for Node Agent.",
-		Long: "Flex volume driver interface for Node Agent.",
+		Use:   "flexvoldrv",
+		Short: "Flex volume driver interface for Node Agent.",
+		Long:  "Flex volume driver interface for Node Agent.",
 	}
 
 	InitCmd = &cobra.Command{
-		Use: "init",
+		Use:   "init",
 		Short: "Flex volume init command.",
-		Long: "Flex volume init command.",
+		Long:  "Flex volume init command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return fmt.Errorf("init takes no arguments.")
@@ -65,9 +69,9 @@ var (
 	}
 
 	AttachCmd = &cobra.Command{
-		Use: "attach",
+		Use:   "attach",
 		Short: "Flex volumen attach command.",
-		Long: "Flex volumen attach command.",
+		Long:  "Flex volumen attach command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
 				return fmt.Errorf("attach takes at most 2 args.")
@@ -77,9 +81,9 @@ var (
 	}
 
 	DetachCmd = &cobra.Command{
-		Use: "detach",
+		Use:   "detach",
 		Short: "Flex volume detach command.",
-		Long: "Flex volume detach command.",
+		Long:  "Flex volume detach command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return fmt.Errorf("detach takes at least 1 arg.")
@@ -89,9 +93,9 @@ var (
 	}
 
 	WaitAttachCmd = &cobra.Command{
-		Use: "waitforattach",
+		Use:   "waitforattach",
 		Short: "Flex volume waitforattach command.",
-		Long: "Flex volume waitforattach command.",
+		Long:  "Flex volume waitforattach command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 2 {
 				return fmt.Errorf("waitforattach takes at least 2 arg.")
@@ -101,9 +105,9 @@ var (
 	}
 
 	IsAttachedCmd = &cobra.Command{
-		Use: "isattached",
+		Use:   "isattached",
 		Short: "Flex volume isattached command.",
-		Long: "Flex volume isattached command.",
+		Long:  "Flex volume isattached command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 2 {
 				return fmt.Errorf("isattached takes at least 2 arg.")
@@ -113,9 +117,9 @@ var (
 	}
 
 	MountDevCmd = &cobra.Command{
-		Use: "mountdevice",
+		Use:   "mountdevice",
 		Short: "Flex volume unmount command.",
-		Long: "Flex volume unmount command.",
+		Long:  "Flex volume unmount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 3 {
 				return fmt.Errorf("mountdevice takes 3 args.")
@@ -125,9 +129,9 @@ var (
 	}
 
 	UnmountDevCmd = &cobra.Command{
-		Use: "unmountdevice",
+		Use:   "unmountdevice",
 		Short: "Flex volume unmount command.",
-		Long: "Flex volume unmount command.",
+		Long:  "Flex volume unmount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return fmt.Errorf("unmountdevice takes 1 arg.")
@@ -137,9 +141,9 @@ var (
 	}
 
 	MountCmd = &cobra.Command{
-		Use: "mount",
+		Use:   "mount",
 		Short: "Flex volume unmount command.",
-		Long: "Flex volume unmount command.",
+		Long:  "Flex volume unmount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 2 {
 				return fmt.Errorf("mount takes 2 args.")
@@ -149,9 +153,9 @@ var (
 	}
 
 	UnmountCmd = &cobra.Command{
-		Use: "unmount",
+		Use:   "unmount",
 		Short: "Flex volume unmount command.",
-		Long: "Flex volume unmount command.",
+		Long:  "Flex volume unmount command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return fmt.Errorf("mount takes 1 args.")
@@ -161,9 +165,9 @@ var (
 	}
 
 	GetVolNameCmd = &cobra.Command{
-		Use: "getvolumename",
+		Use:   "getvolumename",
 		Short: "Flex volume getvolumename command.",
-		Long: "Flex volume getvolumename command.",
+		Long:  "Flex volume getvolumename command.",
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return fmt.Errorf("mount takes 1 args.")
@@ -171,7 +175,6 @@ var (
 			return GetVolName(args[0])
 		},
 	}
-
 )
 
 func getNewVolume() string {
@@ -184,13 +187,13 @@ func Init() error {
 
 func Attach(opts, nodeName string) error {
 	devId := getNewVolume()
-	resp, err := json.Marshal(&Resp{Device: devId, Status: "Success", Message: "Dir created" })
+	resp, err := json.Marshal(&Resp{Device: devId, Status: "Success", Message: "Dir created"})
 	if err != nil {
 		return err
 	}
 	fmt.Println(string(resp))
 	inp := opts + "|" + nodeName
-	appendToFile("attach", inp, string(resp))
+	logToSys("attach", inp, string(resp))
 	return nil
 }
 
@@ -201,7 +204,7 @@ func Detach(devId string) error {
 		return err
 	}
 	fmt.Println(string(resp))
-	appendToFile("detach", devId, string(resp))
+	logToSys("detach", devId, string(resp))
 	return nil
 }
 
@@ -212,19 +215,19 @@ func WaitAttach(dev, opts string) error {
 	}
 	fmt.Println(string(resp))
 	inp := dev + "|" + opts
-	appendToFile("waitattach", inp, string(resp))
+	logToSys("waitattach", inp, string(resp))
 	return nil
 }
 
 func IsAttached(opts, node string) error {
-	resp, err := json.Marshal(&Resp{Attached: true, Status:"Success", Message: "Is attached"})
+	resp, err := json.Marshal(&Resp{Attached: true, Status: "Success", Message: "Is attached"})
 	if err != nil {
 		return err
 	}
 	sResp := string(resp)
 	fmt.Println(sResp)
 	inp := opts + "|" + node
-	appendToFile("isattached", inp, sResp)
+	logToSys("isattached", inp, sResp)
 	return nil
 }
 
@@ -237,7 +240,7 @@ func UnmountDev(dev string) error {
 	return genericSucc("unmountdev", dev, "Unmount dev ok.")
 }
 
-// checkValidMountOpts checks if there are sufficient inputs to 
+// checkValidMountOpts checks if there are sufficient inputs to
 // call Nodeagent.
 func checkValidMountOpts(opts string) (*pb.WorkloadInfo, bool) {
 	ninputs := NodeAgentInputs{}
@@ -247,9 +250,9 @@ func checkValidMountOpts(opts string) (*pb.WorkloadInfo, bool) {
 	}
 
 	wlInfo := pb.WorkloadInfo{Uid: ninputs.Uid,
-				  Workload: ninputs.Name,
-				  Namespace: ninputs.Namespace,
-				  Serviceaccount: ninputs.ServiceAccount}
+		Workload:       ninputs.Name,
+		Namespace:      ninputs.Namespace,
+		Serviceaccount: ninputs.ServiceAccount}
 	return &wlInfo, true
 }
 
@@ -348,14 +351,14 @@ func Unmount(dir string) error {
 
 func GetVolName(opts string) error {
 	devName := getNewVolume()
-	resp, err := json.Marshal(&Resp{VolumeName: devName, Status:"Success", Message: "ok"})
+	resp, err := json.Marshal(&Resp{VolumeName: devName, Status: "Success", Message: "ok"})
 	if err != nil {
 		return err
 	}
 
 	sResp := string(resp)
 	fmt.Println(sResp)
-	appendToFile("getvolname", opts, sResp)
+	logToSys("getvolname", opts, sResp)
 	return nil
 }
 
@@ -365,23 +368,23 @@ func genericSucc(caller, inp, msg string) error {
 		return err
 	}
 	fmt.Println(string(resp))
-	appendToFile(caller, inp, string(resp))
+	logToSys(caller, inp, string(resp))
 	return nil
 }
 
 func Failure(caller, inp, msg string) error {
-	resp, err  := json.Marshal(&Resp{Status: "Failure", Message: msg})
+	resp, err := json.Marshal(&Resp{Status: "Failure", Message: msg})
 	if err != nil {
 		return err
 	}
 
 	sResp := string(resp)
 	fmt.Println(sResp)
-	appendToFile(caller, inp, sResp)
+	logToSys(caller, inp, sResp)
 	return nil
 }
 
-func appendToFile(caller, inp, opts string) {
+func logToSys(caller, inp, opts string) {
 	if logWrt == nil {
 		return
 	}
@@ -439,7 +442,7 @@ func init() {
 
 func main() {
 	var err error
-	logWrt, err = syslog.New(syslog.LOG_WARNING|syslog.LOG_DAEMON, "udsverFlexVol")
+	logWrt, err = syslog.New(syslog.LOG_WARNING|syslog.LOG_DAEMON, "FlexVolNodeAgent")
 	if err != nil {
 		log.Fatal(err)
 	}

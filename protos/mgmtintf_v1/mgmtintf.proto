@@ -1,14 +1,11 @@
 syntax = "proto3";
 
-package udsver.v1;
+package mgmtintf.v1;
 
 
-service Verify {
-	rpc Check(Request) returns (Response);
-}
-
-message Request {
-        string name = 1;
+service NodeAgentMgmt {
+	rpc AddListener(WorkloadInfo) returns (Response);
+	rpc DelListener(WorkloadInfo) returns (Response);
 }
 
 message Response {
@@ -39,4 +36,12 @@ message Response {
 	}
 
 	Status status = 1;
+}
+
+message WorkloadInfo {
+	// Delete the uid is mandatory others are optional
+	string uid = 1;
+	string workload = 2;
+	string namespace = 3;
+	string serviceaccount = 4;
 }

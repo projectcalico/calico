@@ -11,20 +11,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-        pb "github.com/colabsaumoh/proto-udsuspver/udsver_v1"
-        wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
+	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
+	wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
 )
 
 type Server struct {
-	wlapis map[string]*wlapi.Server
+	wlapis     map[string]*wlapi.Server
 	pathPrefix string
-	done chan bool //main 2 mgmt-api server to stop
+	done       chan bool //main 2 mgmt-api server to stop
 }
 
 type Client struct {
-	conn	*grpc.ClientConn
-	dest	string
-	isUds	bool
+	conn  *grpc.ClientConn
+	dest  string
+	isUds bool
 }
 
 func NewServer(pathPrefix string) *Server {
@@ -51,13 +51,13 @@ func (s *Server) Serve(isUds bool, path string) {
 			log.Fatalf("failed to %v", err)
 		}
 	} else {
-                _, e := os.Stat(path)
-                if e == nil {
-                  e := os.RemoveAll(path)
-                  if e != nil {
-	              log.Fatalf("failed to %v %v", path, err)
-                  }
-                }
+		_, e := os.Stat(path)
+		if e == nil {
+			e := os.RemoveAll(path)
+			if e != nil {
+				log.Fatalf("failed to %v %v", path, err)
+			}
+		}
 		lis, err = net.Listen("unix", path)
 		if err != nil {
 			log.Fatalf("failed to %v", err)
@@ -152,7 +152,7 @@ func (c *Client) client() (pb.NodeAgentMgmtClient, error) {
 	}(conn, sigc)
 
 	c.conn = conn
-        return pb.NewNodeAgentMgmtClient(conn), nil
+	return pb.NewNodeAgentMgmtClient(conn), nil
 }
 
 func (c *Client) AddListener(ninputs *pb.WorkloadInfo) (*pb.Response, error) {
