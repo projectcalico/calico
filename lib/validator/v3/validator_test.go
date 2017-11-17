@@ -68,6 +68,26 @@ func init() {
 	// Max name length
 	maxNameLength := 253
 
+	// Perform validation on error messages from validator
+	DescribeTable("Validator errors",
+		func(input interface{}, e string) {
+			err := v3.Validate(input)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(Equal(e))
+		},
+		Entry("should reject Rule with invalid port (name + number)",
+			api.Rule{
+				Action:   "Allow",
+				Protocol: protocolFromString("TCP"),
+				Destination: api.EntityRule{
+					NotPorts: []numorstring.Port{{
+						MinPort: 0,
+						MaxPort: 456,
+					}},
+				},
+			}, "error with field Port = '0' (port range invalid, port number must be between 1 and 65535)"),
+	)
+
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
