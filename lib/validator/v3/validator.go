@@ -55,6 +55,9 @@ var (
 	// must be the standard name format (nameRegex) prefixed with "knp.default".
 	networkPolicyNameRegex = regexp.MustCompile("^((" + nameLabelFmt + ")|(knp\\.default\\.(" + nameSubdomainFmt + ")))$")
 
+	// GlobalNetworkPolicy names must be a simple DNS1123 label format (nameLabelFmt).
+	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + ")$")
+
 	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_-]{1,15}$")
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
 	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
@@ -168,7 +171,7 @@ func init() {
 
 	// Register structs that have two level of additional structs to validate.
 	registerStructValidator(validatorTertiary, validateNetworkPolicy, api.NetworkPolicy{})
-	registerStructValidator(validatorTertiary, validateGlobalNetworkPolicySpec, api.GlobalNetworkPolicySpec{})
+	registerStructValidator(validatorTertiary, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -696,45 +699,6 @@ func validateEndpointPort(v *validator.Validate, structLevel *validator.StructLe
 	}
 }
 
-func validateGlobalNetworkPolicySpec(v *validator.Validate, structLevel *validator.StructLevel) {
-	m := structLevel.CurrentStruct.Interface().(api.GlobalNetworkPolicySpec)
-
-	if m.DoNotTrack && m.PreDNAT {
-		structLevel.ReportError(reflect.ValueOf(m.PreDNAT),
-			"PolicySpec.PreDNAT", "", reason("PreDNAT and DoNotTrack cannot both be true, for a given PolicySpec"))
-	}
-
-	if m.PreDNAT && len(m.Egress) > 0 {
-		structLevel.ReportError(reflect.ValueOf(m.Egress),
-			"PolicySpec.Egress", "", reason("PreDNAT PolicySpec cannot have any Egress"))
-	}
-
-	if m.PreDNAT && len(m.Types) > 0 {
-		for _, t := range m.Types {
-			if t == api.PolicyTypeEgress {
-				structLevel.ReportError(reflect.ValueOf(m.Types),
-					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"))
-			}
-		}
-	}
-
-	if !m.ApplyOnForward && (m.DoNotTrack || m.PreDNAT) {
-		structLevel.ReportError(reflect.ValueOf(m.ApplyOnForward),
-			"PolicySpec.ApplyOnForward", "", reason("ApplyOnForward must be true if either PreDNAT or DoNotTrack is true, for a given PolicySpec"))
-	}
-
-	// Check (and disallow) any repeats in Types field.
-	mp := map[api.PolicyType]bool{}
-	for _, t := range m.Types {
-		if _, exists := mp[t]; exists {
-			structLevel.ReportError(reflect.ValueOf(m.Types),
-				"GlobalNetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
-		} else {
-			mp[t] = true
-		}
-	}
-}
-
 func validateProtoPort(v *validator.Validate, structLevel *validator.StructLevel) {
 	m := structLevel.CurrentStruct.Interface().(api.ProtoPort)
 
@@ -814,6 +778,70 @@ func validateNetworkPolicy(v *validator.Validate, structLevel *validator.StructL
 
 	validateObjectMetaAnnotations(v, structLevel, np.Annotations)
 	validateObjectMetaLabels(v, structLevel, np.Labels)
+}
+
+func validateGlobalNetworkPolicy(v *validator.Validate, structLevel *validator.StructLevel) {
+	gnp := structLevel.CurrentStruct.Interface().(api.GlobalNetworkPolicy)
+	spec := gnp.Spec
+
+	// Check the name is within the max length.
+	if len(gnp.Name) > k8svalidation.DNS1123SubdomainMaxLength {
+		structLevel.ReportError(
+			reflect.ValueOf(gnp.Name),
+			"Metadata.Name",
+			"",
+			reason(fmt.Sprintf("name is too long by %d bytes", len(gnp.Name)-k8svalidation.DNS1123SubdomainMaxLength)),
+		)
+	}
+
+	// Uses the k8s DN1123 label format for policy names.
+	matched := globalNetworkPolicyNameRegex.MatchString(gnp.Name)
+	if !matched {
+		structLevel.ReportError(
+			reflect.ValueOf(gnp.Name),
+			"Metadata.Name",
+			"",
+			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
+		)
+	}
+
+	validateObjectMetaAnnotations(v, structLevel, gnp.Annotations)
+	validateObjectMetaLabels(v, structLevel, gnp.Labels)
+
+	if spec.DoNotTrack && spec.PreDNAT {
+		structLevel.ReportError(reflect.ValueOf(spec.PreDNAT),
+			"PolicySpec.PreDNAT", "", reason("PreDNAT and DoNotTrack cannot both be true, for a given PolicySpec"))
+	}
+
+	if spec.PreDNAT && len(spec.Egress) > 0 {
+		structLevel.ReportError(reflect.ValueOf(spec.Egress),
+			"PolicySpec.Egress", "", reason("PreDNAT PolicySpec cannot have any Egress rules"))
+	}
+
+	if spec.PreDNAT && len(spec.Types) > 0 {
+		for _, t := range spec.Types {
+			if t == api.PolicyTypeEgress {
+				structLevel.ReportError(reflect.ValueOf(spec.Types),
+					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"))
+			}
+		}
+	}
+
+	if !spec.ApplyOnForward && (spec.DoNotTrack || spec.PreDNAT) {
+		structLevel.ReportError(reflect.ValueOf(spec.ApplyOnForward),
+			"PolicySpec.ApplyOnForward", "", reason("ApplyOnForward must be true if either PreDNAT or DoNotTrack is true, for a given PolicySpec"))
+	}
+
+	// Check (and disallow) any repeats in Types field.
+	mp := map[api.PolicyType]bool{}
+	for _, t := range spec.Types {
+		if _, exists := mp[t]; exists {
+			structLevel.ReportError(reflect.ValueOf(spec.Types),
+				"GlobalNetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
+		} else {
+			mp[t] = true
+		}
+	}
 }
 
 func validateObjectMetaAnnotations(v *validator.Validate, structLevel *validator.StructLevel, annotations map[string]string) {

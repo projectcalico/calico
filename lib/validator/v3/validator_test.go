@@ -929,84 +929,275 @@ func init() {
 		Entry("should reject node with BGP but no IPs", api.NodeSpec{BGP: &api.NodeBGPSpec{}}, false),
 		Entry("should reject node with IPv6 address in IPv4 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv6_1}}, false),
 		Entry("should reject node with IPv4 address in IPv6 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: netv4_1}}, false),
+
+		// GlobalNetworkPolicy validation.
+		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
+		Entry("allow valid name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
+		Entry("disallow k8s policy name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"}}, false),
+		Entry("disallow name with dot", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
 		Entry("should reject GlobalNetworkPolicy with both PreDNAT and DoNotTrack",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				DoNotTrack:     true,
-				ApplyOnForward: true,
-			}, false),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					DoNotTrack:     true,
+					ApplyOnForward: true,
+				},
+			}, false,
+		),
 		Entry("should accept GlobalNetworkPolicy PreDNAT but not DoNotTrack",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+				},
+			}, true,
+		),
 		Entry("should accept GlobalNetworkPolicy DoNotTrack but not PreDNAT",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        false,
-				DoNotTrack:     true,
-				ApplyOnForward: true,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        false,
+					DoNotTrack:     true,
+					ApplyOnForward: true,
+				},
+			}, true,
+		),
 		Entry("should reject pre-DNAT GlobalNetworkPolicy egress rules",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Egress:         []api.Rule{{Action: "Allow"}},
-			}, false),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Egress:         []api.Rule{{Action: "Allow"}},
+				},
+			}, false,
+		),
 		Entry("should accept pre-DNAT GlobalNetworkPolicy ingress rules",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Ingress:        []api.Rule{{Action: "Allow"}},
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Ingress:        []api.Rule{{Action: "Allow"}},
+				},
+			}, true,
+		),
 
 		// GlobalNetworkPolicySpec ApplyOnForward field checks.
 		Entry("should accept GlobalNetworkPolicy ApplyOnForward but not PreDNAT",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        false,
-				ApplyOnForward: true,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        false,
+					ApplyOnForward: true,
+				},
+			}, true,
+		),
 		Entry("should accept GlobalNetworkPolicy ApplyOnForward but not DoNotTrack",
-			api.GlobalNetworkPolicySpec{
-				DoNotTrack:     false,
-				ApplyOnForward: true,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					DoNotTrack:     false,
+					ApplyOnForward: true,
+				},
+			}, true,
+		),
 		Entry("should accept GlobalNetworkPolicy ApplyOnForward and PreDNAT",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+				},
+			}, true,
+		),
 		Entry("should accept GlobalNetworkPolicy ApplyOnForward and DoNotTrack",
-			api.GlobalNetworkPolicySpec{
-				DoNotTrack:     true,
-				ApplyOnForward: true,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					DoNotTrack:     true,
+					ApplyOnForward: true,
+				},
+			}, true,
+		),
 		Entry("should accept GlobalNetworkPolicy no ApplyOnForward DoNotTrack PreDNAT",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        false,
-				DoNotTrack:     false,
-				ApplyOnForward: false,
-			}, true),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        false,
+					DoNotTrack:     false,
+					ApplyOnForward: false,
+				},
+			}, true,
+		),
 		Entry("should reject GlobalNetworkPolicy PreDNAT but not ApplyOnForward",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: false,
-			}, false),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: false,
+				},
+			}, false,
+		),
 		Entry("should reject GlobalNetworkPolicy DoNotTrack but not ApplyOnForward",
-			api.GlobalNetworkPolicySpec{
-				DoNotTrack:     true,
-				ApplyOnForward: false,
-			}, false),
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					DoNotTrack:     true,
+					ApplyOnForward: false,
+				},
+			}, false,
+		),
 
 		// GlobalNetworkPolicySpec Types field checks.
-		Entry("allow missing Types", api.GlobalNetworkPolicySpec{}, true),
-		Entry("allow empty Types", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{}}, true),
-		Entry("allow ingress Types", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress}}, true),
-		Entry("allow egress Types", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress}}, true),
-		Entry("allow ingress+egress Types", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}}, true),
-		Entry("disallow repeated egress Types", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress}}, false),
-		Entry("disallow unexpected value", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{"unexpected"}}, false),
+		Entry("allow missing Types",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{},
+			}, true,
+		),
+		Entry("allow empty Types",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Types: []api.PolicyType{},
+				},
+			}, true,
+		),
+		Entry("allow ingress Types",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
+		Entry("allow egress Types",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("allow ingress+egress Types",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("disallow repeated egress Types",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress},
+				},
+			}, false,
+		),
+		Entry("disallow unexpected value",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Types: []api.PolicyType{"unexpected"},
+				},
+			}, false,
+		),
+
+		Entry("allow Types without ingress when Ingress present (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{Action: "Allow"}},
+					Types:   []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("allow Types without egress when Egress present (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Egress: []api.Rule{{Action: "Allow"}},
+					Types:  []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
+		Entry("allow Types with ingress when Ingress present (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{Action: "Allow"}},
+					Types:   []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
+		Entry("allow Types with ingress+egress when Ingress present (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Ingress: []api.Rule{{Action: "Allow"}},
+					Types:   []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("allow Types with egress when Egress present (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Egress: []api.Rule{{Action: "Allow"}},
+					Types:  []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("allow Types with ingress+egress when Egress present (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					Egress: []api.Rule{{Action: "Allow"}},
+					Types:  []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("allow ingress Types with pre-DNAT (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Types:          []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
+		Entry("disallow egress Types with pre-DNAT (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Types:          []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, false,
+		),
+		Entry("disallow ingress+egress Types with pre-DNAT (gnp)",
+			&api.GlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.GlobalNetworkPolicySpec{
+					PreDNAT:        true,
+					ApplyOnForward: true,
+					Types:          []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, false,
+		),
 
 		// NetworkPolicySpec Types field checks.
+		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
+		Entry("disallow name with dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
+		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
+		Entry("allow k8s policy name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"}}, true),
 		Entry("allow missing Types",
 			&api.NetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
@@ -1061,18 +1252,6 @@ func init() {
 				},
 			}, false,
 		),
-
-		// NetworkPolicy Object MetaData checks.
-		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
-		Entry("disallow name with dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
-		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
-		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
-
-		// NetworkPolicy Object MetaData checks.
-		Entry("allow valid name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
-		Entry("allow name with dot", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, true),
-		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
-
 		// In the initial implementation, we validated against the following two cases but we found
 		// that prevented us from doing a smooth upgrade from type-less to typed policy since we
 		// couldn't write a policy that would work for back-level Felix instances while also
@@ -1133,56 +1312,6 @@ func init() {
 				},
 			}, true,
 		),
-
-		// For GlobalNetworkPolicySpec
-		Entry("allow Types without ingress when Ingress present (gnp)",
-			api.GlobalNetworkPolicySpec{
-				Ingress: []api.Rule{{Action: "Allow"}},
-				Types:   []api.PolicyType{api.PolicyTypeEgress},
-			}, true),
-		Entry("allow Types without egress when Egress present (gnp)",
-			api.GlobalNetworkPolicySpec{
-				Egress: []api.Rule{{Action: "Allow"}},
-				Types:  []api.PolicyType{api.PolicyTypeIngress},
-			}, true),
-		Entry("allow Types with ingress when Ingress present (gnp)",
-			api.GlobalNetworkPolicySpec{
-				Ingress: []api.Rule{{Action: "Allow"}},
-				Types:   []api.PolicyType{api.PolicyTypeIngress},
-			}, true),
-		Entry("allow Types with ingress+egress when Ingress present (gnp)",
-			api.GlobalNetworkPolicySpec{
-				Ingress: []api.Rule{{Action: "Allow"}},
-				Types:   []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
-			}, true),
-		Entry("allow Types with egress when Egress present (gnp)",
-			api.GlobalNetworkPolicySpec{
-				Egress: []api.Rule{{Action: "Allow"}},
-				Types:  []api.PolicyType{api.PolicyTypeEgress},
-			}, true),
-		Entry("allow Types with ingress+egress when Egress present (gnp)",
-			api.GlobalNetworkPolicySpec{
-				Egress: []api.Rule{{Action: "Allow"}},
-				Types:  []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
-			}, true),
-		Entry("allow ingress Types with pre-DNAT (gnp)",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Types:          []api.PolicyType{api.PolicyTypeIngress},
-			}, true),
-		Entry("disallow egress Types with pre-DNAT (gnp)",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Types:          []api.PolicyType{api.PolicyTypeEgress},
-			}, false),
-		Entry("disallow ingress+egress Types with pre-DNAT (gnp)",
-			api.GlobalNetworkPolicySpec{
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Types:          []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
-			}, false),
 	)
 }
 
