@@ -34,7 +34,7 @@ var icmpCode12 = 12
 var icmpType11 = 11
 var icmpCode13 = 13
 var proto123 = numorstring.ProtocolFromInt(uint8(123))
-var protoTCP = numorstring.ProtocolFromString("tcp")
+var protoTCP = numorstring.ProtocolFromStringV1("tcp")
 
 var fullyLoadedParsedRule = ParsedRule{
 	Action:    "allow",

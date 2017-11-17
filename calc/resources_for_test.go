@@ -72,9 +72,9 @@ var localWlEp1 = WorkloadEndpoint{
 		"b":  "b",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
-		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
-		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 1234},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9091},
 	},
 }
 
@@ -92,9 +92,9 @@ var localWlEp1WithLabelsButNoProfiles = WorkloadEndpoint{
 		"b":  "b",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
-		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
-		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 1234},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9091},
 	},
 }
 
@@ -113,9 +113,9 @@ var localWlEp1WithDupeNamedPorts = WorkloadEndpoint{
 		"b":  "b",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8081},
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8082},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8081},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8082},
 	},
 }
 
@@ -166,9 +166,9 @@ var localWlEp2 = WorkloadEndpoint{
 		"b":  "b2",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
-		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 2345},
-		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9090},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 2345},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9090},
 	},
 }
 
@@ -185,9 +185,9 @@ var localWlEp2WithLabelsButNoProfiles = WorkloadEndpoint{
 		"b":  "b2",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
-		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 2345},
-		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9090},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 2345},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9090},
 	},
 }
 
@@ -227,9 +227,9 @@ var hostEpWithNamedPorts = HostEndpoint{
 		"b":  "b",
 	},
 	Ports: []EndpointPort{
-		{Name: "tcpport", Protocol: numorstring.ProtocolFromString("tcp"), Port: 8080},
-		{Name: "tcpport2", Protocol: numorstring.ProtocolFromString("tcp"), Port: 1234},
-		{Name: "udpport", Protocol: numorstring.ProtocolFromString("udp"), Port: 9091},
+		{Name: "tcpport", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 8080},
+		{Name: "tcpport2", Protocol: numorstring.ProtocolFromStringV1("tcp"), Port: 1234},
+		{Name: "udpport", Protocol: numorstring.ProtocolFromStringV1("udp"), Port: 9091},
 	},
 }
 
@@ -276,8 +276,8 @@ var policy1_order20 = Policy{
 	Types: []string{"ingress", "egress"},
 }
 
-var protoTCP = numorstring.ProtocolFromString("tcp")
-var protoUDP = numorstring.ProtocolFromString("udp")
+var protoTCP = numorstring.ProtocolFromStringV1("tcp")
+var protoUDP = numorstring.ProtocolFromStringV1("udp")
 var policy1_order20_with_named_port_tcpport = Policy{
 	Order:    &order20,
 	Selector: "a == 'a'",
