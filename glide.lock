@@ -1,5 +1,5 @@
-hash: 210b8875ca7b767d5cfe713707ae15ac6ab3541a0a845ac11051dbef3d5b4169
-updated: 2017-11-16T12:55:24.590977209-08:00
+hash: 66c27050d15dca6d1059568ca1468cde1fecc7bd8a07a9527f06587a785e5364
+updated: 2017-11-16T17:01:15.831842528-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,10 +18,9 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
+  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
   subpackages:
   - auth/authpb
-  - client
   - clientv3
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
@@ -160,7 +159,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 6e3a4cab8ca4d6c3c73855ae9ee40fdc43fed95a
+  version: 69516f55f1dad6071c5bfe4a67cdd11fcee2aff9
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -252,7 +251,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: e48874b42435b4347fc52bdee0424a52abc974d7
+  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
   subpackages:
   - unix
   - windows
