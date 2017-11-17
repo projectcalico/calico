@@ -124,26 +124,26 @@ class TestLibnetworkLabeling(TestBase):
     def test_policy_only_selectors_allow_traffic(self):
         self.host1.add_resource([
             {
-                'apiVersion': 'v1',
-                'kind': 'policy',
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'NetworkPolicy',
                 'metadata': {'name': 'allowFooBarToBazBop'},
                 'spec': {
                     'ingress': [
                         {
                             'source': {'selector': 'foo == "bar"'},
-                            'action': 'allow',
+                            'action': 'Allow',
                         },
                     ],
-                    'egress': [{'action': 'deny'}],
+                    'egress': [{'action': 'Deny'}],
                     'selector': 'baz == "bop"'
                 }
             }, {
-                'apiVersion': 'v1',
-                'kind': 'policy',
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'NetworkPolicy',
                 'metadata': {'name': 'allowFooBarEgress'},
                 'spec': {
                     'selector': 'foo == "bar"',
-                    'egress': [{'action': 'allow'}]
+                    'egress': [{'action': 'Allow'}]
                 }
             }
         ])
