@@ -3,7 +3,7 @@ import:
 - package: github.com/sirupsen/logrus
   version: ^1.0.3
 - package: github.com/projectcalico/libcalico-go
-  version: 6e3a4cab8ca4d6c3c73855ae9ee40fdc43fed95a
+  version: master
   subpackages:
   - lib/api
   - lib/client
@@ -13,3 +13,6 @@ import:
   - lib/ipip
   - lib/net
   - lib/numorstring
+- package: github.com/coreos/etcd
+  version: v3.2.7
+
