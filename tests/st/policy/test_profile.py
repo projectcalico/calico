@@ -266,7 +266,7 @@ class MultiHostMainline(TestBase):
 
     def test_rules_tcp_port(self):
         rule = {'action': 'Allow',
-                'protocol': 'tcp',
+                'protocol': 'TCP',
                 'destination':
                     {'ports': [80]}}
         # The copy.deepcopy(rule) is needed to ensure that we don't
@@ -285,7 +285,7 @@ class MultiHostMainline(TestBase):
 
     def test_rules_udp_port(self):
             rule = {'action': 'Allow',
-                    'protocol': 'udp',
+                    'protocol': 'UDP',
                     'destination':
                         {'ports': [69]}}
             # The copy.deepcopy(rule) is needed to ensure that we don't

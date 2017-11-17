@@ -268,7 +268,7 @@ class TestFelixOnGateway(TestBase):
                 'ingress': [],
                 'egress': [],
                 'applyOnForward': True,
-                'types': ['ingress', 'egress']
+                'types': ['Ingress', 'Egress']
             }
         })
 
@@ -527,7 +527,7 @@ class TestFelixOnGateway(TestBase):
                 'order': order,
                 'ingress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80]
                         },
@@ -551,7 +551,7 @@ class TestFelixOnGateway(TestBase):
                 'ingress': [],
                 'egress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80],
                             'nets': [self.ext_server_ip + "/32"],
@@ -574,7 +574,7 @@ class TestFelixOnGateway(TestBase):
                 'order': order,
                 'ingress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80]
                         },
@@ -602,7 +602,7 @@ class TestFelixOnGateway(TestBase):
                 'order': order,
                 'ingress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80]
                         },
@@ -611,7 +611,7 @@ class TestFelixOnGateway(TestBase):
                 ],
                 'egress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'source': {
                             'ports': [80]
                         },
@@ -638,7 +638,7 @@ class TestFelixOnGateway(TestBase):
                 'order': order,
                 'ingress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'source': {
                             'ports': [80],
                             'nets': [self.ext_server_ip + "/32"],
@@ -648,7 +648,7 @@ class TestFelixOnGateway(TestBase):
                 ],
                 'egress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80],
                             'nets': [self.ext_server_ip + "/32"],
@@ -676,7 +676,7 @@ class TestFelixOnGateway(TestBase):
                 'order': order,
                 'ingress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80]
                         },
@@ -701,7 +701,7 @@ class TestFelixOnGateway(TestBase):
                 'ingress': [],
                 'egress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'destination': {
                             'ports': [80],
                             'nets': [self.ext_server_ip + "/32"],
