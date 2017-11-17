@@ -98,10 +98,10 @@ class MultiHostMainline(TestBase):
     def test_rules_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
         profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
-        rule0 = {'action': 'allow',
+        rule0 = {'action': 'Allow',
                  'source':
                      {'tag': profile1_tag}}
-        rule1 = {'action': 'allow',
+        rule1 = {'action': 'Allow',
                  'source':
                      {'tag': profile0_tag}}
         self.new_profiles[0]['spec']['ingress'].append(rule0)
@@ -113,7 +113,7 @@ class MultiHostMainline(TestBase):
     test_rules_tags.batchnumber = 2
 
     def test_rules_protocol_icmp(self):
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'protocol': 'icmp'}
         # The copy.deepcopy(rule) is needed to ensure that we don't
         # end up with a yaml document with a reference to the same
@@ -130,13 +130,13 @@ class MultiHostMainline(TestBase):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
         for workload in self.n1_workloads:
             ip = workload.ip
-            rule = {'action': 'allow',
+            rule = {'action': 'Allow',
                     'source':
                         {'nets': ['%s/32' % ip]}}
             prof_n2['spec']['ingress'].append(rule)
         for workload in self.n2_workloads:
             ip = workload.ip
-            rule = {'action': 'allow',
+            rule = {'action': 'Allow',
                     'source':
                         {'nets': ['%s/32' % ip]}}
             prof_n1['spec']['ingress'].append(rule)
@@ -150,11 +150,11 @@ class MultiHostMainline(TestBase):
         n2_ips = [workload.ip for workload in self.n2_workloads]
         n1_subnet = netaddr.spanning_cidr(n1_ips)
         n2_subnet = netaddr.spanning_cidr(n2_ips)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'nets': [str(n1_subnet)]}}
         prof_n2['spec']['ingress'].append(rule)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'nets': [str(n2_subnet)]}}
         prof_n1['spec']['ingress'].append(rule)
@@ -168,10 +168,10 @@ class MultiHostMainline(TestBase):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
         n1_ips = [str(workload.ip) + "/32" for workload in self.n1_workloads]
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n1_ips}}
         prof_n2['spec']['ingress'].append(rule)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n2_ips}}
         prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
@@ -188,13 +188,13 @@ class MultiHostMainline(TestBase):
         _log.info("Network 1 IPs: %s; Denied IPs: %s", n1_ips, n1_denied_ips)
 
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n1_ips,
                            'notNets': n1_denied_ips}}
         prof_n2['spec']['ingress'].append(rule)
         _log.info("Profile for network 2: %s", prof_n2)
 
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n2_ips,
                            'notNets': n2_ips[:1]}}
         prof_n1['spec']['ingress'].append(rule)
@@ -226,7 +226,7 @@ class MultiHostMainline(TestBase):
 
         # Add a destination whitelist to n2 that allows pods within it to reach other pods in n2.
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'destination': {'nets': n2_ips}}
         prof_n2['spec']['egress'] = [rule]
         self._apply_new_profile(self.new_profiles, self.host1)
@@ -237,10 +237,10 @@ class MultiHostMainline(TestBase):
         # Add some rules that have a single nets entry and multiple notNets entries.  These are
         # rendered a bit differently in Felix.
         n1_ips = [str(workload.ip) + "/32" for workload in self.n1_workloads]
-        rule1 = {'action': 'allow',
+        rule1 = {'action': 'Allow',
                  'destination': {'nets': n1_ips[0:1],
                                  'notNets': n1_ips[1:]}}
-        rule2 = {'action': 'allow',
+        rule2 = {'action': 'Allow',
                  'destination': {'nets': n1_ips[1:2],
                                  'notNets': n1_ips[:1]}}
         prof_n1['spec']['egress'] = [rule1, rule2]
@@ -252,11 +252,11 @@ class MultiHostMainline(TestBase):
     def test_rules_selector(self):
         self.new_profiles[0]['spec']['labelsToApply']['net'] = 'n1'
         self.new_profiles[1]['spec']['labelsToApply']['net'] = 'n2'
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'selector': 'net=="n2"'}}
         self.new_profiles[0]['spec']['ingress'].append(rule)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'selector': "net=='n1'"}}
         self.new_profiles[1]['spec']['ingress'].append(rule)
@@ -265,7 +265,7 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n1_workloads + self.n2_workloads)
 
     def test_rules_tcp_port(self):
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'protocol': 'tcp',
                 'destination':
                     {'ports': [80]}}
@@ -284,7 +284,7 @@ class MultiHostMainline(TestBase):
                                  type_list=['icmp', 'udp'])
 
     def test_rules_udp_port(self):
-            rule = {'action': 'allow',
+            rule = {'action': 'Allow',
                     'protocol': 'udp',
                     'destination':
                         {'ports': [69]}}
