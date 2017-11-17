@@ -24,8 +24,8 @@ const (
 	ProtocolSCTP    = "SCTP"
 	ProtocolUDPLite = "UDPLite"
 
-	ProtocolUDPV1     = "udp"
-	ProtocolTCPV1     = "tcp"
+	ProtocolUDPV1 = "udp"
+	ProtocolTCPV1 = "tcp"
 )
 
 var (

@@ -65,6 +65,9 @@ func init() {
 	value63 := string(longValue[:63])
 	value64 := string(longValue[:64])
 
+	// Max name length
+	maxNameLength := 253
+
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
@@ -336,6 +339,22 @@ func init() {
 				Spec: api.IPPoolSpec{CIDR: netv4_3},
 			}, false,
 		),
+		Entry("should allow a name of 253 chars",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{
+					Name: string(longValue[:maxNameLength]),
+				},
+				Spec: api.IPPoolSpec{CIDR: netv4_3},
+			}, true,
+		),
+		Entry("should disallow a name of 254 chars",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{
+					Name: string(longValue[:maxNameLength+1]),
+				},
+				Spec: api.IPPoolSpec{CIDR: netv4_3},
+			}, false,
+		),
 
 		// (API) Interface.
 		Entry("should accept a valid interface", api.WorkloadEndpointSpec{InterfaceName: "ValidIntface0-9"}, true),
@@ -535,6 +554,8 @@ func init() {
 			}, true),
 		Entry("should reject IP pool with IPv4 CIDR /27", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv4_5}}, false),
 		Entry("should reject IP pool with IPv6 CIDR /128", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv6_1}}, false),
+		Entry("should reject IP pool with IPv4 CIDR /33", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "1.2.3.4/33"}}, false),
+		Entry("should reject IP pool with IPv6 CIDR /129", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "aa:bb::/129"}}, false),
 		Entry("should reject IPIPMode 'Always' for IPv6 pool",
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
@@ -548,13 +569,13 @@ func init() {
 			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "fe80::/120"}}, false),
 
 		// (API) IPIPConfiguration
-		Entry("should accept IPPool with no IPIP mode specified", api.IPPoolSpec{}, true),
-		Entry("should accept IPIP mode Never (api)", api.IPPoolSpec{IPIPMode: api.IPIPModeNever}, true),
-		Entry("should accept IPIP mode Never", api.IPPoolSpec{IPIPMode: "Never"}, true),
-		Entry("should accept IPIP mode Always", api.IPPoolSpec{IPIPMode: "Always"}, true),
-		Entry("should accept IPIP mode CrossSubnet", api.IPPoolSpec{IPIPMode: "CrossSubnet"}, true),
-		Entry("should reject IPIP mode badVal", api.IPPoolSpec{IPIPMode: "badVal"}, false),
-		Entry("should reject IPIP mode never (lower case)", api.IPPoolSpec{IPIPMode: "never"}, false),
+		Entry("should accept IPPool with no IPIP mode specified", api.IPPoolSpec{CIDR: "1.2.3.0/24"}, true),
+		Entry("should accept IPIP mode Never (api)", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: api.IPIPModeNever}, true),
+		Entry("should accept IPIP mode Never", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
+		Entry("should accept IPIP mode Always", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Always"}, true),
+		Entry("should accept IPIP mode CrossSubnet", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "CrossSubnet"}, true),
+		Entry("should reject IPIP mode badVal", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "badVal"}, false),
+		Entry("should reject IPIP mode never (lower case)", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "never"}, false),
 
 		// (API) ICMPFields
 		Entry("should accept ICMP with no config", api.ICMPFields{}, true),
@@ -966,17 +987,66 @@ func init() {
 		Entry("disallow unexpected value", api.GlobalNetworkPolicySpec{Types: []api.PolicyType{"unexpected"}}, false),
 
 		// NetworkPolicySpec Types field checks.
-		Entry("allow missing Types", api.NetworkPolicySpec{}, true),
-		Entry("allow empty Types", api.NetworkPolicySpec{Types: []api.PolicyType{}}, true),
-		Entry("allow ingress Types", api.NetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress}}, true),
-		Entry("allow egress Types", api.NetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress}}, true),
-		Entry("allow ingress+egress Types", api.NetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}}, true),
-		Entry("disallow repeated egress Types", api.NetworkPolicySpec{Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress}}, false),
-		Entry("disallow unexpected value", api.NetworkPolicySpec{Types: []api.PolicyType{"unexpected"}}, false),
+		Entry("allow missing Types",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec:       api.NetworkPolicySpec{},
+			}, true,
+		),
+		Entry("allow empty Types",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Types: []api.PolicyType{},
+				},
+			}, true,
+		),
+		Entry("allow ingress Types",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
+		Entry("allow egress Types",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("allow ingress+egress Types",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, true,
+		),
+		Entry("disallow repeated egress Types",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Types: []api.PolicyType{api.PolicyTypeEgress, api.PolicyTypeEgress},
+				},
+			}, false,
+		),
+		Entry("disallow unexpected value",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Types: []api.PolicyType{"unexpected"},
+				},
+			}, false,
+		),
 
-		// GlobalNetworkPolicy Object MetaData checks.
+		// NetworkPolicy Object MetaData checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
 		Entry("disallow name with dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
+		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
 
 		// NetworkPolicy Object MetaData checks.
 		Entry("allow valid name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
@@ -990,36 +1060,59 @@ func init() {
 		//
 		// For NetworkPolicySpec
 		Entry("allow Types without ingress when Ingress present",
-			api.NetworkPolicySpec{
-				Ingress: []api.Rule{{Action: "Allow"}},
-				Types:   []api.PolicyType{api.PolicyTypeEgress},
-			}, true),
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{{Action: "Allow"}},
+					Types:   []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, true,
+		),
 		Entry("allow Types without egress when Egress present",
-			api.NetworkPolicySpec{
-				Egress: []api.Rule{{Action: "Allow"}},
-				Types:  []api.PolicyType{api.PolicyTypeIngress},
-			}, true),
-
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Egress: []api.Rule{{Action: "Allow"}},
+					Types:  []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
 		Entry("allow Types with ingress when Ingress present",
-			api.NetworkPolicySpec{
-				Ingress: []api.Rule{{Action: "Allow"}},
-				Types:   []api.PolicyType{api.PolicyTypeIngress},
-			}, true),
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{{Action: "Allow"}},
+					Types:   []api.PolicyType{api.PolicyTypeIngress},
+				},
+			}, true,
+		),
 		Entry("allow Types with ingress+egress when Ingress present",
-			api.NetworkPolicySpec{
-				Ingress: []api.Rule{{Action: "Allow"}},
-				Types:   []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
-			}, true),
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{{Action: "Allow"}},
+					Types:   []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, true,
+		),
 		Entry("allow Types with egress when Egress present",
-			api.NetworkPolicySpec{
-				Egress: []api.Rule{{Action: "Allow"}},
-				Types:  []api.PolicyType{api.PolicyTypeEgress},
-			}, true),
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Egress: []api.Rule{{Action: "Allow"}},
+					Types:  []api.PolicyType{api.PolicyTypeEgress},
+				},
+			}, true,
+		),
 		Entry("allow Types with ingress+egress when Egress present",
-			api.NetworkPolicySpec{
-				Egress: []api.Rule{{Action: "Allow"}},
-				Types:  []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
-			}, true),
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Egress: []api.Rule{{Action: "Allow"}},
+					Types:  []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress},
+				},
+			}, true,
+		),
 
 		// For GlobalNetworkPolicySpec
 		Entry("allow Types without ingress when Ingress present (gnp)",

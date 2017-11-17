@@ -35,9 +35,10 @@ import (
 
 // Split the validation into three groups.  Since a struct validator will trump
 // any field validation or sub-structure validation we need to split these out.
+var validatorField *validator.Validate
 var validatorPrimary *validator.Validate
 var validatorSecondary *validator.Validate
-var validatorMetadata *validator.Validate
+var validatorTertiary *validator.Validate
 
 // Maximum size of annotations.
 const totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB`
@@ -84,13 +85,19 @@ var (
 // Validate is used to validate the supplied structure according to the
 // registered field and structure validators.
 func Validate(current interface{}) error {
+	// Perform field-only validation first, that way the struct validators can assume
+	// individual fields are valid format.
+	if err := validatorField.Struct(current); err != nil {
+		return convertError(err)
+	}
+	// Then perform primary, secondary and tertiary struct-based validation.
 	if err := validatorPrimary.Struct(current); err != nil {
 		return convertError(err)
 	}
 	if err := validatorSecondary.Struct(current); err != nil {
 		return convertError(err)
 	}
-	if err := validatorMetadata.Struct(current); err != nil {
+	if err := validatorTertiary.Struct(current); err != nil {
 		return convertError(err)
 	}
 	return nil
@@ -111,9 +118,10 @@ func convertError(err error) errors.ErrorValidation {
 
 func init() {
 	// Initialise static data.
+	validatorField = validator.New(&validator.Config{TagName: "validate", FieldNameTag: "json"})
 	validatorPrimary = validator.New(&validator.Config{TagName: "validate", FieldNameTag: "json"})
 	validatorSecondary = validator.New(&validator.Config{TagName: "validate", FieldNameTag: "json"})
-	validatorMetadata = validator.New(&validator.Config{TagName: "validate", FieldNameTag: "json"})
+	validatorTertiary = validator.New(&validator.Config{TagName: "validate", FieldNameTag: "json"})
 
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
@@ -142,30 +150,25 @@ func init() {
 	registerFieldValidator("cidrv6", validateCIDRv6)
 	registerFieldValidator("cidr", validateCIDR)
 
-	// Register struct validators.
-	// Shared types.
+	// Register structs that have no additional sub structs for first round of validation.
 	registerStructValidator(validatorPrimary, validateProtocol, numorstring.Protocol{})
+	registerStructValidator(validatorPrimary, validateProtoPort, api.ProtoPort{})
 	registerStructValidator(validatorPrimary, validatePort, numorstring.Port{})
-
-	// Frontend API types.
+	registerStructValidator(validatorPrimary, validateEndpointPort, api.EndpointPort{})
 	registerStructValidator(validatorPrimary, validateIPNAT, api.IPNAT{})
-	registerStructValidator(validatorPrimary, validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
-	registerStructValidator(validatorPrimary, validateHostEndpointSpec, api.HostEndpointSpec{})
-	registerStructValidator(validatorPrimary, validateIPPool, api.IPPool{})
 	registerStructValidator(validatorPrimary, validateICMPFields, api.ICMPFields{})
-	registerStructValidator(validatorPrimary, validateRule, api.Rule{})
+	registerStructValidator(validatorPrimary, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validatorPrimary, validateNodeSpec, api.NodeSpec{})
-	registerStructValidator(validatorPrimary, validateGlobalNetworkPolicySpec, api.GlobalNetworkPolicySpec{})
-	registerStructValidator(validatorPrimary, validateNetworkPolicySpec, api.NetworkPolicySpec{})
+	registerStructValidator(validatorPrimary, validateObjectMeta, metav1.ObjectMeta{})
 
-	// Register sub structs for some of the primary structs
-	registerStructValidator(validatorSecondary, validateProtoPort, api.ProtoPort{})
-	registerStructValidator(validatorSecondary, validateEndpointPort, api.EndpointPort{})
+	// Register structs that have one level of additional structs to validate.
+	registerStructValidator(validatorSecondary, validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
+	registerStructValidator(validatorSecondary, validateHostEndpointSpec, api.HostEndpointSpec{})
+	registerStructValidator(validatorSecondary, validateRule, api.Rule{})
 
-	// Metadata validation.  This is handled separately so that we can register
-	// top level structs without it stopping sub structs from being validated.
-	registerStructValidator(validatorMetadata, validateNetworkPolicyMeta, api.NetworkPolicy{})
-	registerStructValidator(validatorMetadata, validateObjectMeta, metav1.ObjectMeta{})
+	// Register structs that have two level of additional structs to validate.
+	registerStructValidator(validatorTertiary, validateNetworkPolicy, api.NetworkPolicy{})
+	registerStructValidator(validatorTertiary, validateGlobalNetworkPolicySpec, api.GlobalNetworkPolicySpec{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -185,9 +188,12 @@ func extractReason(tag string) string {
 }
 
 func registerFieldValidator(key string, fn validator.Func) {
+	// We need to register the field validation funcs for all validators otherwise
+	// the validator panics on an unknown validation type.
+	validatorField.RegisterValidation(key, fn)
 	validatorPrimary.RegisterValidation(key, fn)
 	validatorSecondary.RegisterValidation(key, fn)
-	validatorMetadata.RegisterValidation(key, fn)
+	validatorTertiary.RegisterValidation(key, fn)
 }
 
 func registerStructValidator(validator *validator.Validate, fn validator.StructLevelFunc, t ...interface{}) {
@@ -315,9 +321,9 @@ func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel)
 // validateIPv4Network validates the field is a valid (strictly masked) IPv4 network.
 // An IP address is valid, and assumed to be fully masked (i.e /32)
 func validateIPv4Network(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	net := field.String()
-	log.Debugf("Validate IPv4 network: %s", net)
-	ipa, ipn, err := cnet.ParseCIDROrIP(net)
+	n := field.String()
+	log.Debugf("Validate IPv4 network: %s", n)
+	ipa, ipn, err := cnet.ParseCIDROrIP(n)
 	if err != nil {
 		return false
 	}
@@ -330,9 +336,9 @@ func validateIPv4Network(v *validator.Validate, topStruct reflect.Value, current
 // validateIPv4Network validates the field is a valid (strictly masked) IPv6 network.
 // An IP address is valid, and assumed to be fully masked (i.e /128)
 func validateIPv6Network(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	net := field.String()
-	log.Debugf("Validate IPv6 network: %s", net)
-	ipa, ipn, err := cnet.ParseCIDROrIP(net)
+	n := field.String()
+	log.Debugf("Validate IPv6 network: %s", n)
+	ipa, ipn, err := cnet.ParseCIDROrIP(n)
 	if err != nil {
 		return false
 	}
@@ -345,9 +351,9 @@ func validateIPv6Network(v *validator.Validate, topStruct reflect.Value, current
 // validateIPv4Network validates the field is a valid (strictly masked) IP network.
 // An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
 func validateIPNetwork(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	net := field.String()
-	log.Debugf("Validate IP network: %s", net)
-	ipa, ipn, err := cnet.ParseCIDROrIP(net)
+	n := field.String()
+	log.Debugf("Validate IP network: %s", n)
+	ipa, ipn, err := cnet.ParseCIDROrIP(n)
 	if err != nil {
 		return false
 	}
@@ -360,9 +366,9 @@ func validateIPNetwork(v *validator.Validate, topStruct reflect.Value, currentSt
 // validateIPv4Network validates the field is a valid (not strictly masked) IPv4 network.
 // An IP address is valid, and assumed to be fully masked (i.e /32)
 func validateCIDRv4(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	net := field.String()
-	log.Debugf("Validate IPv4 network: %s", net)
-	ipa, _, err := cnet.ParseCIDROrIP(net)
+	n := field.String()
+	log.Debugf("Validate IPv4 network: %s", n)
+	ipa, _, err := cnet.ParseCIDROrIP(n)
 	if err != nil {
 		return false
 	}
@@ -373,9 +379,9 @@ func validateCIDRv4(v *validator.Validate, topStruct reflect.Value, currentStruc
 // validateIPv4Network validates the field is a valid (not strictly masked) IPv6 network.
 // An IP address is valid, and assumed to be fully masked (i.e /128)
 func validateCIDRv6(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	net := field.String()
-	log.Debugf("Validate IPv6 network: %s", net)
-	ipa, _, err := cnet.ParseCIDROrIP(net)
+	n := field.String()
+	log.Debugf("Validate IPv6 network: %s", n)
+	ipa, _, err := cnet.ParseCIDROrIP(n)
 	if err != nil {
 		return false
 	}
@@ -386,9 +392,9 @@ func validateCIDRv6(v *validator.Validate, topStruct reflect.Value, currentStruc
 // validateIPv4Network validates the field is a valid (not strictly masked) IP network.
 // An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
 func validateCIDR(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	net := field.String()
-	log.Debugf("Validate IP network: %s", net)
-	_, _, err := cnet.ParseCIDROrIP(net)
+	n := field.String()
+	log.Debugf("Validate IP network: %s", n)
+	_, _, err := cnet.ParseCIDROrIP(n)
 	return err == nil
 }
 
@@ -524,52 +530,52 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 	}
 }
 
-func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
-	pool := structLevel.CurrentStruct.Interface().(api.IPPool)
+func validateIPPoolSpec(v *validator.Validate, structLevel *validator.StructLevel) {
+	pool := structLevel.CurrentStruct.Interface().(api.IPPoolSpec)
 
 	// Spec.CIDR field must not be empty.
-	if pool.Spec.CIDR == "" {
-		structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-			"IPPool.Spec.CIDR", "", reason("IPPool CIDR must be specified"))
+	if pool.CIDR == "" {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.CIDR", "", reason("IPPool CIDR must be specified"))
 	}
 
 	// Make sure the CIDR is parsable.
-	ipAddr, cidr, err := cnet.ParseCIDR(pool.Spec.CIDR)
+	ipAddr, cidr, err := cnet.ParseCIDROrIP(pool.CIDR)
 	if err != nil {
-		structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-			"IPPool.Spec.CIDR", "", reason("IPPool CIDR must be a valid subnet"))
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.CIDR", "", reason("IPPool CIDR must be a valid subnet"))
 	}
 
 	// Normalize the CIDR before persisting.
-	pool.Spec.CIDR = cidr.String()
+	pool.CIDR = cidr.String()
 
 	// IPIP cannot be enabled for IPv6.
-	if cidr.Version() == 6 && pool.Spec.IPIPMode != api.IPIPModeNever {
-		structLevel.ReportError(reflect.ValueOf(pool.Spec.IPIPMode),
-			"IPPool.Spec.IPIPMode", "", reason("IPIPMode other than 'Never' is not supported on an IPv6 IP pool"))
+	if cidr.Version() == 6 && pool.IPIPMode != api.IPIPModeNever {
+		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
+			"IPpool.IPIPMode", "", reason("IPIPMode other than 'Never' is not supported on an IPv6 IP pool"))
 	}
 
 	// The Calico IPAM places restrictions on the minimum IP pool size.  If
 	// the ippool is enabled, check that the pool is at least the minimum size.
-	if !pool.Spec.Disabled {
+	if !pool.Disabled {
 		ones, bits := cidr.Mask.Size()
 		log.Debugf("Pool CIDR: %s, num bits: %d", cidr.String(), bits-ones)
 		if bits-ones < 6 {
 			if cidr.Version() == 4 {
-				structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-					"IPPool.Spec.CIDR", "", reason(poolSmallIPv4))
+				structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+					"IPpool.CIDR", "", reason(poolSmallIPv4))
 			} else {
-				structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-					"IPPool.Spec.CIDR", "", reason(poolSmallIPv6))
+				structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+					"IPpool.CIDR", "", reason(poolSmallIPv6))
 			}
 		}
 	}
 
 	// The Calico CIDR should be strictly masked
-	log.Debugf("IPPool CIDR: %s, Masked IP: %d", pool.Spec.CIDR, cidr.IP)
+	log.Debugf("IPPool CIDR: %s, Masked IP: %d", pool.CIDR, cidr.IP)
 	if cidr.IP.String() != ipAddr.String() {
-		structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-			"IPPool.Spec.CIDR", "", reason(poolUnstictCIDR))
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.CIDR", "", reason(poolUnstictCIDR))
 	}
 
 	// IPv4 link local subnet.
@@ -585,13 +591,13 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 
 	// IP Pool CIDR cannot overlap with IPv4 or IPv6 link local address range.
 	if cidr.Version() == 4 && cidr.IsNetOverlap(ipv4LinkLocalNet) {
-		structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-			"IPPool.Spec.CIDR", "", reason(overlapsV4LinkLocal))
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.CIDR", "", reason(overlapsV4LinkLocal))
 	}
 
 	if cidr.Version() == 6 && cidr.IsNetOverlap(ipv6LinkLocalNet) {
-		structLevel.ReportError(reflect.ValueOf(pool.Spec.CIDR),
-			"IPPool.Spec.CIDR", "", reason(overlapsV6LinkLocal))
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.CIDR", "", reason(overlapsV6LinkLocal))
 	}
 }
 
@@ -726,21 +732,6 @@ func validateGlobalNetworkPolicySpec(v *validator.Validate, structLevel *validat
 	}
 }
 
-func validateNetworkPolicySpec(v *validator.Validate, structLevel *validator.StructLevel) {
-	m := structLevel.CurrentStruct.Interface().(api.NetworkPolicySpec)
-
-	// Check (and disallow) any repeats in Types field.
-	mp := map[api.PolicyType]bool{}
-	for _, t := range m.Types {
-		if _, exists := mp[t]; exists {
-			structLevel.ReportError(reflect.ValueOf(m.Types),
-				"NetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
-		} else {
-			mp[t] = true
-		}
-	}
-}
-
 func validateProtoPort(v *validator.Validate, structLevel *validator.StructLevel) {
 	m := structLevel.CurrentStruct.Interface().(api.ProtoPort)
 
@@ -757,6 +748,16 @@ func validateProtoPort(v *validator.Validate, structLevel *validator.StructLevel
 func validateObjectMeta(v *validator.Validate, structLevel *validator.StructLevel) {
 	om := structLevel.CurrentStruct.Interface().(metav1.ObjectMeta)
 
+	// Check the name is within the max length.
+	if len(om.Name) > k8svalidation.DNS1123SubdomainMaxLength {
+		structLevel.ReportError(
+			reflect.ValueOf(om.Name),
+			"Metadata.Name",
+			"",
+			reason(fmt.Sprintf("name is too long by %d bytes", len(om.Name)-k8svalidation.DNS1123SubdomainMaxLength)),
+		)
+	}
+
 	// Uses the k8s DN1123 subdomain format for most resource names.
 	matched := nameRegex.MatchString(om.Name)
 	if !matched {
@@ -772,8 +773,30 @@ func validateObjectMeta(v *validator.Validate, structLevel *validator.StructLeve
 	validateObjectMetaLabels(v, structLevel, om.Labels)
 }
 
-func validateNetworkPolicyMeta(v *validator.Validate, structLevel *validator.StructLevel) {
+func validateNetworkPolicy(v *validator.Validate, structLevel *validator.StructLevel) {
 	np := structLevel.CurrentStruct.Interface().(api.NetworkPolicy)
+	spec := np.Spec
+
+	// Check (and disallow) any repeats in Types field.
+	mp := map[api.PolicyType]bool{}
+	for _, t := range spec.Types {
+		if _, exists := mp[t]; exists {
+			structLevel.ReportError(reflect.ValueOf(spec.Types),
+				"NetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
+		} else {
+			mp[t] = true
+		}
+	}
+
+	// Check the name is within the max length.
+	if len(np.Name) > k8svalidation.DNS1123SubdomainMaxLength {
+		structLevel.ReportError(
+			reflect.ValueOf(np.Name),
+			"Metadata.Name",
+			"",
+			reason(fmt.Sprintf("name is too long by %d bytes", len(np.Name)-k8svalidation.DNS1123SubdomainMaxLength)),
+		)
+	}
 
 	// Uses the k8s DN1123 label format for policy names (plus knp.default prefixed k8s policies).
 	matched := networkPolicyNameRegex.MatchString(np.Name)
