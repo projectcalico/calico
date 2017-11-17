@@ -670,7 +670,7 @@ class TestFelixOnGateway(TestBase):
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
-                'name': 'port80-int-%s' % str(forward),
+                'name': 'port80-int-%s' % str(forward).lower(),
             },
             'spec': {
                 'order': order,
@@ -694,7 +694,7 @@ class TestFelixOnGateway(TestBase):
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
-                'name': 'port80-ext-%s' % str(forward),
+                'name': 'port80-ext-%s' % str(forward).lower(),
              },
             'spec': {
                 'order': order,
