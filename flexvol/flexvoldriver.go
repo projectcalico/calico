@@ -42,6 +42,7 @@ type NodeAgentInputs struct {
 }
 
 const (
+	ver              string = "1.8"
 	volumeName       string = "tmpfs"
 	NodeAgentMgmtAPI string = "/tmp/udsuspver/mgmt.sock"
 	NodeAgentUdsHome string = "/tmp/nodeagent"
@@ -182,6 +183,14 @@ func getNewVolume() string {
 }
 
 func Init() error {
+	if ver == "1.8" {
+		resp, err := json.Marshal(&Resp{Status: "Success", Message: "Init ok.", Attach: false})
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(resp))
+		return nil
+	}
 	return genericSucc("init", "", "Init ok.")
 }
 
@@ -328,13 +337,15 @@ func Mount(dir, opts string) error {
 func Unmount(dir string) error {
 	// Stop the listener.
 	// /var/lib/kubelet/pods/20154c76-bf4e-11e7-8a7e-080027631ab3/volumes/nodeagent~uds/test-volume/
+	// /var/lib/kubelet/pods/2dc75e9a-cbec-11e7-b158-0800270da466/volumes/nodeagent~uds/test-volume
 	comps := strings.Split(dir, "/")
-	if len(comps) < 5 {
+	if len(comps) < 6 {
 		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
 		return Failure("unmount", dir, sErr)
 	}
 
-	uid := comps[4]
+	uid := comps[5]
+	// TBD: Check if uid is the correct format.
 	naInp := &pb.WorkloadInfo{Uid: uid}
 	if err := DelListener(naInp); err != nil {
 		sErr := "Failure to notify nodeagent: " + err.Error()
@@ -345,11 +356,22 @@ func Unmount(dir string) error {
 	doUnmount(dir + "/nodeagent")
 	// unmount the tmpfs
 	doUnmount(dir)
+	// delete the directory that was created.
+	delDir := NodeAgentUdsHome + "/" + uid
+	err := os.Remove(delDir)
+	if err != nil {
+		estr := fmt.Sprintf("unmount del failure %s: %s", delDir, err.Error())
+		return genericSucc("unmount", dir, estr)
+	}
 
 	return genericSucc("unmount", dir, "Unmount ok.")
 }
 
 func GetVolName(opts string) error {
+	if ver == "1.8" {
+		return genericUnsupported("getvolname", opts, "not supported")
+	}
+
 	devName := getNewVolume()
 	resp, err := json.Marshal(&Resp{VolumeName: devName, Status: "Success", Message: "ok"})
 	if err != nil {
@@ -362,13 +384,18 @@ func GetVolName(opts string) error {
 	return nil
 }
 
+func printAndLog(caller, inp, s string) {
+	fmt.Println(s)
+	logToSys(caller, inp, s)
+}
+
 func genericSucc(caller, inp, msg string) error {
 	resp, err := json.Marshal(&Resp{Status: "Success", Message: msg})
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(resp))
-	logToSys(caller, inp, string(resp))
+
+	printAndLog(caller, inp, string(resp))
 	return nil
 }
 
@@ -378,9 +405,17 @@ func Failure(caller, inp, msg string) error {
 		return err
 	}
 
-	sResp := string(resp)
-	fmt.Println(sResp)
-	logToSys(caller, inp, sResp)
+	printAndLog(caller, inp, string(resp))
+	return nil
+}
+
+func genericUnsupported(caller, inp, msg string) error {
+	resp, err := json.Marshal(&Resp{Status: "Not supported", Message: msg})
+	if err != nil {
+		return err
+	}
+
+	printAndLog(caller, inp, string(resp))
 	return nil
 }
 

@@ -13,18 +13,18 @@ import (
 )
 
 const (
-	MgmtApiPath		string = "/tmp/udsuspver/mgmt.sock"
-	WorkloadApiUdsHome	string = "/tmp/nodeagent"
+	MgmtApiPath        string = "/tmp/udsuspver/mgmt.sock"
+	WorkloadApiUdsHome string = "/tmp/nodeagent"
 )
 
 var (
-	CfgMgmtApiPath		string
-	CfgWldApiUdsHome	string
+	CfgMgmtApiPath   string
+	CfgWldApiUdsHome string
 
 	RootCmd = &cobra.Command{
-		Use: "nodeagent",
-	        Short: "Node agent with both mgmt and workload api interfaces.",
-		Long: "Node agent with both mgmt and workload api interfaces.",
+		Use:   "nodeagent",
+		Short: "Node agent with both mgmt and workload api interfaces.",
+		Long:  "Node agent with both mgmt and workload api interfaces.",
 	}
 )
 
@@ -34,7 +34,7 @@ func init() {
 }
 
 func MgmtApi() {
-	mgmtServer := nam.NewServer(WorkloadApiUdsHome)
+	mgmtServer := nam.NewServer(CfgWldApiUdsHome)
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
@@ -45,7 +45,7 @@ func MgmtApi() {
 		os.Exit(1)
 	}(mgmtServer, sigc)
 
-	mgmtServer.Serve(true, MgmtApiPath)
+	mgmtServer.Serve(true, CfgMgmtApiPath)
 }
 
 func main() {
