@@ -1,5 +1,5 @@
-hash: 77a4e62c477726bce235d40de58b5b0d7d158d090f72c1aa0cb38ac4f120d1c2
-updated: 2017-11-14T11:24:12.13101-08:00
+hash: 7babd2ccb602c9ef172537991a9b35879d3aa1fb990525f27fdbeeded854c2f6
+updated: 2017-11-16T16:58:33.341474574-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -23,7 +23,7 @@ imports:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
+  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
   subpackages:
   - auth/authpb
   - client
@@ -189,7 +189,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 250cb94738bf94032f2af491e362543f346cfac9
+  version: 69516f55f1dad6071c5bfe4a67cdd11fcee2aff9
   subpackages:
   - lib
   - lib/apiconfig
@@ -224,10 +224,11 @@ imports:
   - lib/selector/tokenizer
   - lib/set
   - lib/testutils
-  - lib/validator
+  - lib/validator/v1
+  - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 2343517a2f18d4a47216ad93308e6a71ad7e9dc2
+  version: 3439c0869c74b6d803ef9c947b1bd166f75ac8a0
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -242,13 +243,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -270,7 +271,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 9f005a07e0d31d45e6656d241bb5c0f2efd4bc94
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net

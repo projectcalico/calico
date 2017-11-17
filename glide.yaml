@@ -6,7 +6,7 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
-  version: ^3.2.7
+  version: v3.2.7
   subpackages:
   - client
   - pkg/transport
@@ -26,7 +26,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 250cb94738bf94032f2af491e362543f346cfac9
+  version: master
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -43,7 +43,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 2343517a2f18d4a47216ad93308e6a71ad7e9dc2
+  version: 3439c0869c74b6d803ef9c947b1bd166f75ac8a0
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
