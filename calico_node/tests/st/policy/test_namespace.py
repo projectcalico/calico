@@ -184,9 +184,9 @@ class TestNamespace(TestBase):
         """
         Test global network policy with different order.
         """
-        self.add_global_ingress(500, 'deny', 'default')
-        self.add_global_ingress(200, 'allow', 'nsa')
-        self.add_global_ingress(100, 'deny', 'nsb')
+        self.add_global_ingress(500, 'Deny', 'default')
+        self.add_global_ingress(200, 'Allow', 'nsa')
+        self.add_global_ingress(100, 'Deny', 'nsb')
 
         self.check_namespace_access(self.nsa_wl, True, False, False)
         self.check_namespace_access(self.nsb_wl, True, False, False)
@@ -198,8 +198,8 @@ class TestNamespace(TestBase):
         """
         Test network policy for namespace nsa.
         """
-        self.add_global_ingress(200, 'allow')
-        self.add_namespace_ingress('nsa', 100, 'deny', 'nsb')
+        self.add_global_ingress(200, 'Allow')
+        self.add_namespace_ingress('nsa', 100, 'Deny', 'nsb')
 
         self.check_namespace_access(self.nsa_wl, True, False, True)
         self.check_namespace_access(self.nsb_wl, True, True, True)
@@ -211,9 +211,9 @@ class TestNamespace(TestBase):
         """
         Test deny network policy for namespace nsa with two orders mixed with global network policy.
         """
-        self.add_global_ingress(200, 'allow')
-        self.add_namespace_ingress('nsa', 300, 'deny', 'nsb')
-        self.add_namespace_ingress('nsa', 100, 'deny', 'default')
+        self.add_global_ingress(200, 'Allow')
+        self.add_namespace_ingress('nsa', 300, 'Deny', 'nsb')
+        self.add_namespace_ingress('nsa', 100, 'Deny', 'default')
 
         self.check_namespace_access(self.nsa_wl, True, True, False)
         self.check_namespace_access(self.nsb_wl, True, True, True)
@@ -225,9 +225,9 @@ class TestNamespace(TestBase):
         """
         Test deny network policy for namespace default with two orders mixed with global network policy.
         """
-        self.add_global_ingress(200, 'allow')
-        self.add_namespace_ingress('default', 300, 'deny', 'nsb')
-        self.add_namespace_ingress('default', 100, 'deny', 'nsa')
+        self.add_global_ingress(200, 'Allow')
+        self.add_namespace_ingress('default', 300, 'Deny', 'nsb')
+        self.add_namespace_ingress('default', 100, 'Deny', 'nsa')
 
         self.check_namespace_access(self.nsa_wl, True, True, True)
         self.check_namespace_access(self.nsb_wl, True, True, True)
@@ -239,9 +239,9 @@ class TestNamespace(TestBase):
         """
         Test deny network policy for namespace nsb with two orders mixed with global network policy.
         """
-        self.add_global_ingress(200, 'deny')
-        self.add_namespace_ingress('nsb', 300, 'allow', 'nsa')
-        self.add_namespace_ingress('nsb', 100, 'allow', 'default')
+        self.add_global_ingress(200, 'Deny')
+        self.add_namespace_ingress('nsb', 300, 'Allow', 'nsa')
+        self.add_namespace_ingress('nsb', 100, 'Allow', 'default')
 
         self.check_namespace_access(self.nsa_wl, False, False, False)
         self.check_namespace_access(self.nsb_wl, False, False, True)
@@ -253,9 +253,9 @@ class TestNamespace(TestBase):
         """
         Test deny network policy for namespace default with two orders mixed with global network policy.
         """
-        self.add_global_ingress(200, 'deny')
-        self.add_namespace_ingress('default', 300, 'allow', 'nsb')
-        self.add_namespace_ingress('default', 100, 'allow', 'nsa')
+        self.add_global_ingress(200, 'Deny')
+        self.add_namespace_ingress('default', 300, 'Allow', 'nsb')
+        self.add_namespace_ingress('default', 100, 'Allow', 'nsa')
 
         self.check_namespace_access(self.nsa_wl, False, False, False)
         self.check_namespace_access(self.nsb_wl, False, False, False)
@@ -267,13 +267,13 @@ class TestNamespace(TestBase):
         """
         Test mixed deny network policy for namespaces mixed with global network policy.
         """
-        self.add_global_ingress(200, 'allow')
-        self.add_namespace_ingress('nsa', 300, 'deny', 'default')
-        self.add_namespace_ingress('nsa', 100, 'deny', 'nsb')
-        self.add_namespace_ingress('nsb', 300, 'deny', 'default')
-        self.add_namespace_ingress('nsb', 100, 'deny', 'nsa')
-        self.add_namespace_ingress('default', 300, 'deny', 'nsa')
-        self.add_namespace_ingress('default', 100, 'deny', 'default')
+        self.add_global_ingress(200, 'Allow')
+        self.add_namespace_ingress('nsa', 300, 'Deny', 'default')
+        self.add_namespace_ingress('nsa', 100, 'Deny', 'nsb')
+        self.add_namespace_ingress('nsb', 300, 'Deny', 'default')
+        self.add_namespace_ingress('nsb', 100, 'Deny', 'nsa')
+        self.add_namespace_ingress('default', 300, 'Deny', 'nsa')
+        self.add_namespace_ingress('default', 100, 'Deny', 'default')
 
         self.check_namespace_access(self.nsa_wl, True, False, True)
         self.check_namespace_access(self.nsb_wl, False, True, True)
@@ -310,7 +310,7 @@ class TestNamespace(TestBase):
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'NetworkPolicy',
             'metadata': {
-                'name': '%s-%s-%s-from-%s' % (ns, order, action, from_ns),
+                'name': '%s-%s-%s-from-%s' % (ns, order, action.lower(), from_ns),
                 'namespace': ns
             },
             'spec': {
@@ -345,7 +345,7 @@ class TestNamespace(TestBase):
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkPolicy',
             'metadata': {
-                'name': 'global-%s-%s-from-%s' % (order, action, from_ns),
+                'name': 'global-%s-%s-from-%s' % (order, action.lower(), from_ns),
             },
             'spec': {
                 'order': order,
