@@ -321,7 +321,7 @@ class TestNamespace(TestBase):
                         'source': {
                             'namespaceSelector': ns_selector,
                         },
-                        'action': action,
+                        'action': action.capitalize(),
                     },
                 ],
                 'egress': [],
@@ -334,11 +334,11 @@ class TestNamespace(TestBase):
                 'source': {
                     'selector': "%s.ns_profile == '%s'" % (NAMESPACE_PREFIX, from_ns)
                 },
-                'action': action,
+                'action': action.capitalize(),
             }
         else:
             ingress_map = {
-                'action': action,
+                'action': action.capitalize(),
             }
 
         self.add_policy({
@@ -370,12 +370,12 @@ class TestNamespace(TestBase):
                 },
                 'ingress': [
                     {
-                        'action': 'allow',
+                        'action': 'Allow',
                     },
                 ],
                 'egress': [
                     {
-                        'action': 'allow',
+                        'action': 'Allow',
                     },
                 ],
             }
@@ -473,4 +473,3 @@ class TestNamespace(TestBase):
             "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' %s" %
             container_name)
         return ip.strip()
-

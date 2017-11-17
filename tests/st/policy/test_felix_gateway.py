@@ -222,8 +222,8 @@ class TestFelixOnGateway(TestBase):
             'spec': {
                 'order': 100,
                 'selector': 'nodeEth == "host"',
-                'egress': [{'action': 'allow'}],
-                'ingress': [{'action': 'allow'}],
+                'egress': [{'action': 'Allow'}],
+                'ingress': [{'action': 'Allow'}],
                 'applyOnForward': True,
             }
         })
@@ -286,8 +286,8 @@ class TestFelixOnGateway(TestBase):
         self.test_empty_policy_for_forward_traffic()
 
         # Add local ingress/egress allow.
-        self.add_ingress_policy(200, 'allow', False)
-        self.add_egress_policy(200, 'allow', False)
+        self.add_ingress_policy(200, 'Allow', False)
+        self.add_egress_policy(200, 'Allow', False)
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -296,8 +296,8 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
         # Add local&forward ingress/egress allow.
-        self.add_ingress_policy(200, 'allow', True)
-        self.add_egress_policy(200, 'allow', True)
+        self.add_ingress_policy(200, 'Allow', True)
+        self.add_egress_policy(200, 'Allow', True)
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -313,8 +313,8 @@ class TestFelixOnGateway(TestBase):
         self.test_empty_policy_for_forward_traffic()  # setup a deny for all traffic
 
         # Add local&forward ingress/egress allow.
-        self.add_ingress_policy(300, 'allow', True)
-        self.add_egress_policy(300, 'allow', True)
+        self.add_ingress_policy(300, 'Allow', True)
+        self.add_egress_policy(300, 'Allow', True)
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -323,8 +323,8 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
         # Add local ingress/egress deny.
-        self.add_ingress_policy(200, 'deny', False)
-        self.add_egress_policy(200, 'deny', False)
+        self.add_ingress_policy(200, 'Deny', False)
+        self.add_egress_policy(200, 'Deny', False)
 
         retry_until_success(self.assert_host_can_not_curl_local, 3)
         retry_until_success(self.assert_gateway_can_not_curl_ext, 3)
@@ -343,8 +343,8 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
 
         # Add local ingress allow and forward ingress deny
-        self.add_ingress_policy(200, 'allow', False)
-        self.add_ingress_policy(500, 'deny', True)
+        self.add_ingress_policy(200, 'Allow', False)
+        self.add_ingress_policy(500, 'Deny', True)
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_not_curl_ext, 3)
@@ -353,7 +353,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
         # Add workload egress deny
-        self.add_workload_egress(800, 'deny')
+        self.add_workload_egress(800, 'Deny')
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_not_curl_ext, 3)
@@ -372,8 +372,8 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
 
         # Add local egress allow and forward egress deny
-        self.add_egress_policy(200, 'allow', False)
-        self.add_egress_policy(500, 'deny', True)
+        self.add_egress_policy(200, 'Allow', False)
+        self.add_egress_policy(500, 'Deny', True)
 
         retry_until_success(self.assert_host_can_not_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -382,7 +382,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_workload_can_not_curl_ext, 3)
 
         # Add workload ingress deny
-        self.add_workload_ingress(800, 'deny')
+        self.add_workload_ingress(800, 'Deny')
 
         retry_until_success(self.assert_host_can_not_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -401,10 +401,10 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
 
         # Add local ingress allow, egress deny and lower forward ingress deny, forward egress allow
-        self.add_ingress_policy(200, 'allow', False)
-        self.add_ingress_policy(500, 'deny', True)
-        self.add_egress_policy(200, 'deny', False)
-        self.add_egress_policy(500, 'allow', True)
+        self.add_ingress_policy(200, 'Allow', False)
+        self.add_ingress_policy(500, 'Deny', True)
+        self.add_egress_policy(200, 'Deny', False)
+        self.add_egress_policy(500, 'Allow', True)
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_not_curl_ext, 3)
@@ -423,10 +423,10 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
 
         # Add local ingress deny, egress allow and lower forward ingress allow, forward egress deny
-        self.add_ingress_policy(200, 'deny', False)
-        self.add_ingress_policy(500, 'allow', True)
-        self.add_egress_policy(200, 'allow', False)
-        self.add_egress_policy(500, 'deny', True)
+        self.add_ingress_policy(200, 'Deny', False)
+        self.add_ingress_policy(500, 'Allow', True)
+        self.add_egress_policy(200, 'Allow', False)
+        self.add_egress_policy(500, 'Deny', True)
 
         retry_until_success(self.assert_host_can_not_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -445,8 +445,8 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
 
         # Test untracked policy.
-        self.add_untrack_gw_int(500, 'allow')
-        self.add_untrack_gw_ext(500, 'allow')
+        self.add_untrack_gw_int(500, 'Allow')
+        self.add_untrack_gw_ext(500, 'Allow')
 
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
@@ -473,8 +473,8 @@ class TestFelixOnGateway(TestBase):
 
         # Deny host endpoint ingress.
         # Ingress packet dropped. Egress packet accepted.
-        self.add_ingress_policy(200, 'deny', True)
-        self.add_egress_policy(200, 'allow', True)
+        self.add_ingress_policy(200, 'Deny', True)
+        self.add_egress_policy(200, 'Allow', True)
         retry_until_success(self.assert_host_can_not_curl_local, 3)
         retry_until_success(self.assert_host_can_not_curl_ext, 3)
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
@@ -483,7 +483,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
         # Skip normal and forward policy if preDNAT policy accept packet.
-        self.add_prednat_ingress(500, 'allow')
+        self.add_prednat_ingress(500, 'Allow')
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_host_can_curl_ext, 3)
         retry_until_success(self.assert_hostwl_can_access_workload, 3)
@@ -491,7 +491,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
-        self.add_prednat_ingress(200, 'deny')
+        self.add_prednat_ingress(200, 'Deny')
         retry_until_success(self.assert_host_can_not_curl_local, 3)
         retry_until_success(self.assert_host_can_not_curl_ext, 3)
         retry_until_success(self.assert_hostwl_can_not_access_workload, 3)
@@ -500,14 +500,14 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_workload_can_curl_ext, 3)
 
         # Skip preDNAT, normal and forward policy if untracked policy accept packet.
-        self.add_untrack_gw_int(500, 'allow')
+        self.add_untrack_gw_int(500, 'Allow')
         retry_until_success(self.assert_host_can_curl_local, 3)
         retry_until_success(self.assert_gateway_can_curl_ext, 3)
         retry_until_success(self.assert_host_can_not_curl_ext, 3)
         # We need to add egress allow because if host send request to external server,
         # return traffic will not match any conntrack entry hence been dropped by
         # cali-fhfw-eth1. An untracked egress allow skips normal forward policy.
-        self.add_untrack_gw_ext(500, 'allow')
+        self.add_untrack_gw_ext(500, 'Allow')
         # Traffic to/from workload will be dropped by workload default policy
         # since conntrack entry is invalid.
         retry_until_success(self.assert_host_can_curl_ext, 3)
