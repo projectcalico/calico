@@ -114,7 +114,7 @@ class MultiHostMainline(TestBase):
 
     def test_rules_protocol_icmp(self):
         rule = {'action': 'Allow',
-                'protocol': 'icmp'}
+                'protocol': 'ICMP'}
         # The copy.deepcopy(rule) is needed to ensure that we don't
         # end up with a yaml document with a reference to the same
         # rule.  While this is probably legal, it isn't main line.
