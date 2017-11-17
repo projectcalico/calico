@@ -317,7 +317,7 @@ class TestNamespace(TestBase):
                 'order': order,
                 'ingress': [
                     {
-                        'protocol': 'tcp',
+                        'protocol': 'TCP',
                         'source': {
                             'namespaceSelector': ns_selector,
                         },
