@@ -42,19 +42,6 @@ KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
 LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
 TYPHA_VER ?= $(V_TYPHA)
 
-$(info RELEASE_STREAM=$(RELEASE_STREAM))
-$(info CALICO_VER=$(CALICO_VER))
-$(info CALICO_GIT_VER=$(CALICO_GIT_VER))
-$(info BIRD_VER=$(BIRD_VER))
-$(info CALICOCTL_VER=$(CALICOCTL_VER))
-$(info CONFD_VER=$(CONFD_VER))
-$(info CNI_VER=$(CNI_VER))
-$(info FELIX_VER=$(FELIX_VER))
-$(info GOBGPD_VER=$(GOBGPD_VER))
-$(info KUBE_CONTROLLERS_VER=$(KUBE_CONTROLLERS_VER))
-$(info LIBNETWORK_PLUGIN_VER=$(LIBNETWORK_PLUGIN_VER))
-$(info TYPHA_VER=$(TYPHA_VER))
-
 SYSTEMTEST_CONTAINER_VER ?= latest
 # we can use "custom" build image and test image name
 SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
@@ -157,7 +144,7 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && docker build -f Dockerfile.calico_test -t $(TEST_CONTAINER_NAME) .
 	touch calico_test.created
 
-$(NODE_CONTAINER_NAME): $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
+$(NODE_CONTAINER_NAME): print-versions $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	# Check versions of the Calico binaries that will be in calico-node.tar.
@@ -566,13 +553,10 @@ semaphore:
 	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
 	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
 
-release: clean
-	@echo Using the following versions:
-	@echo "	felix:             ${FELIX_VER}"
-	@echo "	calico:            ${CALICO_VER}"
-	@echo "	bird:              ${BIRD_VER}"
-	@echo "	confd:             ${CONFD_VER}"
-	@echo "	libnetwork_plugin: ${LIBNETWORK_PLUGIN_VER}"
+release: clean print-versions
+	@echo ""
+	@echo "Hit Return to go ahead and create the tag, or Ctrl-C to cancel."
+	@bash -c read
 
 	git tag $(CALICO_VER)
 
@@ -714,3 +698,14 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
+
+#.PHONY: print-versions
+print-versions: print-RELEASE_STREAM print-BIRD_VER print-CALICOCTL_VER \
+                print-CALICO_GIT_VER print-CALICO_VER print-CNI_VER     \
+                print-CONFD_VER print-FELIX_VER print-GOBGPD_VER        \
+                print-KUBE_CONTROLLERS_VER print-LIBNETWORK_PLUGIN_VER  \
+                print-TYPHA_VER
+	@
+
+## Print the value of a specific variable
+print-%  : ; @printf "%-21s = %-10s\n" $* $($*)
