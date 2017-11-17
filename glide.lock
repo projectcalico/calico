@@ -1,5 +1,5 @@
-hash: a7db65293a24a3d513a5836dbbec756e8ad6532c4798547fff6e317accdc8e82
-updated: 2017-11-15T01:01:47.2637982Z
+hash: 8d79029f82db7d87551be20b5bafcef9549b96e39751638d12174d4b97f8b396
+updated: 2017-11-16T16:15:11.659687303-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -20,10 +20,9 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
+  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
   subpackages:
   - auth/authpb
-  - client
   - clientv3
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
@@ -214,12 +213,11 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9fddc31c42a863604f7c98ab7f899eb9eadae14e
+  version: 69516f55f1dad6071c5bfe4a67cdd11fcee2aff9
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
   - lib/apis/v1/unversioned
-  - lib/apis/v2
   - lib/apis/v3
   - lib/backend
   - lib/backend/api
@@ -232,7 +230,6 @@ imports:
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
   - lib/client
-  - lib/clientv2
   - lib/clientv3
   - lib/errors
   - lib/hash
@@ -245,11 +242,13 @@ imports:
   - lib/numorstring
   - lib/options
   - lib/scope
+  - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
   - lib/set
   - lib/testutils
   - lib/validator
+  - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
   version: 967789050ba94deca04a5e84cce8ad472ce313c1
@@ -379,6 +378,8 @@ imports:
   - stats
   - tap
   - transport
+- name: gopkg.in/go-playground/validator.v8
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v2
