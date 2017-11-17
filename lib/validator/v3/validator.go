@@ -416,10 +416,10 @@ func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 		}
 	} else if p.MinPort < 1 {
 		structLevel.ReportError(reflect.ValueOf(p.MinPort),
-			"Port", "", reason("port range invalid, port number must be between 0 and 65536"))
+			"Port", "", reason("port range invalid, port number must be between 1 and 65535"))
 	} else if p.MaxPort < 1 {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
-			"Port", "", reason("port range invalid, port number must be between 0 and 65536"))
+			"Port", "", reason("port range invalid, port number must be between 1 and 65535"))
 	}
 }
 
