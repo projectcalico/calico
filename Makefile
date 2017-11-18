@@ -172,8 +172,64 @@ bin/calicoctl:
 	  touch $@
 	-docker rm -f calico-ctl
 
+release: clean
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+	git tag $(VERSION)
+
+	# Check to make sure the tag isn't "-dirty".
+	if git describe --tags --dirty | grep dirty; \
+	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
+
+	# Build binary and docker image. 
+	$(MAKE) container 
+
+	# Check that the version output includes the version specified.
+	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
+	# Release is currently supported on darwin / linux only.
+	if ! docker run calico/confd /bin/confd --version | grep '$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run calico/confd /bin/confd --version` "\nExpected version: $(VERSION)"; \
+	  false; \
+	else \
+	  echo "Version check passed\n"; \
+	fi
+
+	# Retag images with corect version and quay
+	docker tag calico/confd calico/confd:$(VERSION)
+	docker tag calico/confd quay.io/calico/confd:$(VERSION)
+	docker tag calico/confd quay.io/calico/confd:latest
+
+	# Check that images were created recently and that the IDs of the versioned and latest images match
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd 
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd:$(VERSION)
+
+	@echo ""
+	@echo "# Push the created tag to GitHub"
+	@echo "  git push origin $(VERSION)"
+	@echo ""
+	@echo "# Now, create a GitHub release from the tag, add release notes, and attach the following binaries:"
+	@echo ""
+	@echo "- bin/confd"
+	@echo ""
+	@echo "# To find commit messages for the release notes:  git log --oneline <old_release_version>...$(VERSION)"
+	@echo ""
+	@echo "# Now push the newly created release images."
+	@echo ""
+	@echo "  docker push calico/confd:$(VERSION)"
+	@echo "  docker push quay.io/calico/confd:$(VERSION)"
+	@echo ""
+	@echo "# For the final release only, push the latest tag"
+	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES" 
+	@echo ""
+	@echo "  docker push calico/confd:latest"
+	@echo "  docker push quay.io/calico/confd:latest"
+	@echo ""
+	@echo "See RELEASING.md for detailed instructions."
 
 .PHONY: clean
 clean:
 	rm -rf bin/*
 	rm -rf tests/logs
+	-docker rmi -f calico/confd
+	-docker rmi -f quay.io/calico/confd

@@ -14,8 +14,7 @@ Verify that the versions of calicoctl etc. at the top of the Makefile are correc
 glide has been revved to the appropriate version of libcalico-go.
 
 ## Creating the release
-1. `make clean && make`
-2. Tag the release and push the tag
-3. Create a release on Github, using the tag which was just pushed.
-4. Update the `confd` artifact on github.com
 
+1. Run `make release VERSION=<version>` and follow the steps.
+1. Create a release on Github, using the tag which was just pushed.
+1. Update the `confd` artifact on github.com
