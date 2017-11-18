@@ -59,7 +59,7 @@ type resourceInterface interface {
 	Delete(ctx context.Context, opts options.DeleteOptions, kind, ns, name string) (resource, error)
 	Get(ctx context.Context, opts options.GetOptions, kind, ns, name string) (resource, error)
 	List(ctx context.Context, opts options.ListOptions, kind, listkind string, inout resourceList) error
-	Watch(ctx context.Context, opts options.ListOptions, kind string) (watch.Interface, error)
+	Watch(ctx context.Context, opts options.ListOptions, kind string, converter watcherConverter) (watch.Interface, error)
 }
 
 // resources implements resourceInterface.
@@ -235,7 +235,7 @@ func (c *resources) List(ctx context.Context, opts options.ListOptions, kind, li
 }
 
 // Watch watches a specific resource or resource type.
-func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind string) (watch.Interface, error) {
+func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind string, converter watcherConverter) (watch.Interface, error) {
 	list := model.ResourceListOptions{
 		Kind:      kind,
 		Name:      opts.Name,
@@ -249,11 +249,12 @@ func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind st
 		return nil, err
 	}
 	w := &watcher{
-		results: make(chan watch.Event, 100),
-		client:  c,
-		cancel:  cancel,
-		context: ctx,
-		backend: backend,
+		results:   make(chan watch.Event, 100),
+		client:    c,
+		cancel:    cancel,
+		context:   ctx,
+		backend:   backend,
+		converter: converter,
 	}
 	go w.run()
 	return w, nil
@@ -325,6 +326,7 @@ type watcher struct {
 	results    chan watch.Event
 	client     *resources
 	terminated uint32
+	converter  watcherConverter
 }
 
 func (w *watcher) Stop() {
@@ -385,10 +387,18 @@ func (w *watcher) convertEvent(backendEvent bapi.WatchEvent) watch.Event {
 	}
 
 	if backendEvent.Old != nil {
-		apiEvent.Previous = w.client.kvPairToResource(backendEvent.Old)
+		res := w.client.kvPairToResource(backendEvent.Old)
+		if w.converter != nil {
+			res = w.converter.Convert(res)
+		}
+		apiEvent.Previous = res
 	}
 	if backendEvent.New != nil {
-		apiEvent.Object = w.client.kvPairToResource(backendEvent.New)
+		res := w.client.kvPairToResource(backendEvent.New)
+		if w.converter != nil {
+			apiEvent.Object = w.converter.Convert(res)
+		}
+		apiEvent.Object = res
 	}
 
 	return apiEvent
@@ -411,4 +421,10 @@ func logWithResource(res resource) *log.Entry {
 		"Namespace":       res.GetObjectMeta().GetNamespace(),
 		"ResourceVersion": res.GetObjectMeta().GetResourceVersion(),
 	})
+}
+
+// watcherConverter represents a formatter for calico resources returned by Watch.
+type watcherConverter interface {
+	// Convert the internal representation of a resource to a readable format.
+	Convert(resource) resource
 }

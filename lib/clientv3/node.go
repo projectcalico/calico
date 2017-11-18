@@ -208,5 +208,5 @@ func (r nodes) List(ctx context.Context, opts options.ListOptions) (*apiv3.NodeL
 // Watch returns a watch.Interface that watches the Nodes that match the
 // supplied options.
 func (r nodes) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindNode)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindNode, nil)
 }

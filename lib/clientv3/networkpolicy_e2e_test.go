@@ -346,8 +346,6 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 				options.SetOptions{},
 			)
 			rev1 := outRes1.ResourceVersion
-			// Update the name to reflect the underlying data returned from the watcher
-			outRes1.GetObjectMeta().SetName("default." + name1)
 
 			By("Configuring a NetworkPolicy namespace2/name2/spec2 and storing the response")
 			outRes2, err := c.NetworkPolicies().Create(
@@ -358,8 +356,6 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 				},
 				options.SetOptions{},
 			)
-			// Update the name to reflect the underlying data returned from the watcher
-			outRes2.GetObjectMeta().SetName("default." + name2)
 
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.NetworkPolicies().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
@@ -391,8 +387,6 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			defer testWatcher2.Stop()
 
 			By("Modifying res2")
-			// Update the name to reflect the name that would be passed in from calicoctl
-			outRes2.GetObjectMeta().SetName(name2)
 			outRes3, err := c.NetworkPolicies().Update(
 				ctx,
 				&apiv3.NetworkPolicy{
@@ -402,9 +396,6 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			// Update the name to reflect the underlying data returned from the watcher
-			outRes2.GetObjectMeta().SetName("default." + name2)
-			outRes3.GetObjectMeta().SetName("default." + name2)
 			testWatcher2.ExpectEvents(apiv3.KindNetworkPolicy, []watch.Event{
 				{
 					Type:   watch.Added,

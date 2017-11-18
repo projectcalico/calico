@@ -100,5 +100,5 @@ func (r felixConfigurations) List(ctx context.Context, opts options.ListOptions)
 // Watch returns a watch.Interface that watches the FelixConfiguration that
 // match the supplied options.
 func (r felixConfigurations) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindFelixConfiguration)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindFelixConfiguration, nil)
 }

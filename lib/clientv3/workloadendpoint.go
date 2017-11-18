@@ -104,7 +104,7 @@ func (r workloadEndpoints) List(ctx context.Context, opts options.ListOptions) (
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
 func (r workloadEndpoints) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindWorkloadEndpoint)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindWorkloadEndpoint, nil)
 }
 
 // assignOrValidateName either assigns the name calculated from the Spec fields, or validates

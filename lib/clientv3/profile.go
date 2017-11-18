@@ -97,5 +97,5 @@ func (r profiles) List(ctx context.Context, opts options.ListOptions) (*apiv3.Pr
 // Watch returns a watch.Interface that watches the Profiles that match the
 // supplied options.
 func (r profiles) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindProfile)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindProfile, nil)
 }
