@@ -80,6 +80,8 @@ func (s *Server) Serve() error {
 	go func(ln net.Listener, c chan bool) {
 		<-c
 		ln.Close()
+		log.Printf("Closed the listener.")
+		c <- true
 	}(lis, s.done)
 
 	log.Printf("workload [%v] listen", s)
@@ -87,6 +89,12 @@ func (s *Server) Serve() error {
 	return nil
 }
 
-func (s *Server) Done() {
+// Tell the server it should stop
+func (s *Server) Stop() {
 	s.done <- true
+}
+
+// Wait for the server to stop and then return
+func (s *Server) WaitDone() {
+	<-s.done
 }

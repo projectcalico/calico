@@ -35,8 +35,12 @@ func NewServer(pathPrefix string) *Server {
 	return s
 }
 
-func (s *Server) Done() {
+func (s *Server) Stop() {
 	s.done <- true
+}
+
+func (s *Server) WaitDone() {
+	<-s.done
 }
 
 func (s *Server) Serve(isUds bool, path string) {
@@ -95,7 +99,10 @@ func (s *Server) DelListener(ctx context.Context, request *pb.WorkloadInfo) (*pb
 		return &pb.Response{Status: status}, nil
 	}
 
-	s.wlapis[request.Uid].Done()
+	log.Printf("%s: Stop.", request.Uid)
+	s.wlapis[request.Uid].Stop()
+	s.wlapis[request.Uid].WaitDone()
+
 	delete(s.wlapis, request.Uid)
 
 	status := &pb.Response_Status{Code: pb.Response_Status_OK, Message: "Ok"}
@@ -104,7 +111,10 @@ func (s *Server) DelListener(ctx context.Context, request *pb.WorkloadInfo) (*pb
 
 func (s *Server) CloseAllWlds() {
 	for _, wld := range s.wlapis {
-		wld.Done()
+		wld.Stop()
+	}
+	for _, wld := range s.wlapis {
+		wld.WaitDone()
 	}
 }
 

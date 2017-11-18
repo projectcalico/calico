@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -40,8 +39,8 @@ func MgmtApi() {
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 	go func(s *nam.Server, c chan os.Signal) {
 		<-c
-		s.Done()
-		time.Sleep(100 * time.Millisecond)
+		s.Stop()
+		s.WaitDone()
 		os.Exit(1)
 	}(mgmtServer, sigc)
 
