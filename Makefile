@@ -49,15 +49,13 @@ ARCH?=amd64
 ifeq ($(ARCH),amd64)
 	ARCHTAG?=
 	GO_BUILD_VER?=v0.9
-	TYPHA_VERSION?=v0.6.0-alpha1-17-gc6c5726
-	FV_TYPHAIMAGE?=calico/typha:$(TYPHA_VERSION)
+	FV_TYPHAIMAGE?=calico/typha:v0.6.0-alpha1-17-gc6c5726
 endif
 
 ifeq ($(ARCH),ppc64le)
 	ARCHTAG:=-ppc64le
 	GO_BUILD_VER?=latest
-	TYPHA_VERSION?=latest
-	FV_TYPHAIMAGE?=calico/typha-ppc64le:$(TYPHA_VERSION)
+	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
