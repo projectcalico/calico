@@ -110,6 +110,11 @@ func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts o
 // List returns the list of NetworkPolicy objects that match the supplied options.
 func (r networkPolicies) List(ctx context.Context, opts options.ListOptions) (*apiv3.NetworkPolicyList, error) {
 	res := &apiv3.NetworkPolicyList{}
+	// Add the name prefix if name is provided
+	if opts.Name != "" {
+		opts.Name = convertPolicyNameForStorage(opts.Name)
+	}
+
 	if err := r.client.resources.List(ctx, opts, apiv3.KindNetworkPolicy, apiv3.KindNetworkPolicyList, res); err != nil {
 		return nil, err
 	}
@@ -126,5 +131,10 @@ func (r networkPolicies) List(ctx context.Context, opts options.ListOptions) (*a
 // Watch returns a watch.Interface that watches the NetworkPolicies that match the
 // supplied options.
 func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
+	// Add the name prefix if name is provided
+	if opts.Name != "" {
+		opts.Name = convertPolicyNameForStorage(opts.Name)
+	}
+
 	return r.client.resources.Watch(ctx, opts, apiv3.KindNetworkPolicy)
 }
