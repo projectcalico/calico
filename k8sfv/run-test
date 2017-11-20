@@ -9,8 +9,10 @@
 # What version of Felix (container image) to use.
 : ${FELIX_VERSION:=latest}
 #
-# What version of the k8s API server to use.
-# Update: See FV_K8SIMAGE in the Makefile for version information.
+if ! test -n "${FV_K8SIMAGE}"; then
+    echo FV_K8SIMAGE must be set to indicate the hyperkube image to use.
+    exit -1
+fi
 #
 # A string to insert into the container names that we use; a calling
 # script can set this to something to make the container names unique,
@@ -53,8 +55,10 @@
 # Whether to tell Felix to go via Typha.
 : ${USE_TYPHA:=true}
 #
-# What version of Typha (container image) to use.
-# Update: See FV_TYPHAIMAGE in the Makefile for version information.
+if  ${USE_TYPHA} && test -z "${FV_TYPHAIMAGE}" ; then
+	echo FV_TYPHAIMAGE must be set to indicate the hyperkube image to use.
+	exit -1
+fi
 #
 # Typha logging level.
 : ${TYPHA_LOG_LEVEL:=info}
