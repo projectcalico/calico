@@ -60,7 +60,11 @@ func (c *Container) Stop() {
 	}
 }
 
-func Run(namePrefix string, args ...string) (c *Container) {
+type RunOpts struct {
+	AutoRemove bool
+}
+
+func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 
 	// Build unique container name and struct.
 	containerIdx++
@@ -68,7 +72,15 @@ func Run(namePrefix string, args ...string) (c *Container) {
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := append([]string{"run", "--rm", "--name", c.Name, "--hostname", c.Name}, args...)
+	runArgs := []string{"run", "--name", c.Name, "--hostname", c.Name}
+
+	if opts.AutoRemove {
+		runArgs = append(runArgs, "--rm")
+	}
+
+	// Add remaining args
+	runArgs = append(runArgs, args...)
+
 	c.runCmd = utils.Command("docker", runArgs...)
 
 	// Get the command's output pipes, so we can merge those into the test's own logging.
@@ -95,6 +107,39 @@ func Run(namePrefix string, args ...string) (c *Container) {
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
 	return
+}
+
+// Start executes "docker start" on a container. Useful when used after Stop()
+// to restart a container.
+func (c *Container) Start() {
+	c.runCmd = utils.Command("docker", "start", "--attach", c.Name)
+
+	stdout, err := c.runCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	stderr, err := c.runCmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Start the container running.
+	err = c.runCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Merge container's output into our own logging.
+	go copyOutputToLog(c.Name, "stdout", stdout)
+	go copyOutputToLog(c.Name, "stderr", stderr)
+
+	c.WaitUntilRunning()
+
+	log.WithField("container", c).Info("Container now running")
+}
+
+// Remove deletes a container. Should be manually called after a non-auto-removed container
+// is stopped.
+func (c *Container) Remove() {
+	c.runCmd = utils.Command("docker", "rm", "-f", c.Name)
+	err := c.runCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	log.WithField("container", c).Info("Removed container.")
 }
 
 func copyOutputToLog(name string, streamName string, stream io.Reader) {
@@ -243,6 +288,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) bool {
 
 func RunEtcd() *Container {
 	return Run("etcd",
+		RunOpts{AutoRemove: true},
 		"--privileged", // So that we can add routes inside the etcd container,
 		// when using the etcd container to model an external client connecting
 		// into the cluster.
@@ -254,6 +300,7 @@ func RunEtcd() *Container {
 
 func RunFelix(etcdIP string) *Container {
 	return Run("felix",
+		RunOpts{AutoRemove: true},
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
