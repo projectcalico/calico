@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        3.0.0
-Release:        0.1.alpha1%{?dist}
+Release:        0.1.beta1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,16 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Nov 20 2017 Neil Jerram <neil@tigera.io> 3.0.0-0.1.beta1
+  - Felix 3.0.0-beta1 (from Git commit c92d138).
+    [Changes recorded in 3.0.0-beta1 tag]
+    - Improve the performance of dockerd during iptables_lock_test.
+    - Allow override of etcd image in FVs
+    - Rev go-build to v0.9 to pick up go 1.9.2.
+    - Remove monotime dependency.
+    - Adjust timeouts and parallel executions in FVs.
+    - Update libcalico to get namespace selector support
+
 * Tue Nov 07 2017 Neil Jerram <neil@tigera.io> 3.0.0-0.1.alpha1
   - Felix 3.0.0-alpha1 (from Git commit 2af37a9).
     [Changes recorded in 3.0.0-alpha1 tag]
