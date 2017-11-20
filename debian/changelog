@@ -1,3 +1,16 @@
+felix (3.0.0~beta1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.0.0-beta1 (from Git commit c92d138).
+    [Changes recorded in 3.0.0-beta1 tag]
+    - Improve the performance of dockerd during iptables_lock_test.
+    - Allow override of etcd image in FVs
+    - Rev go-build to v0.9 to pick up go 1.9.2.
+    - Remove monotime dependency.
+    - Adjust timeouts and parallel executions in FVs.
+    - Update libcalico to get namespace selector support
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 20 Nov 2017 11:05:34 +0000
+
 felix (3.0.0~alpha1~__STREAM__) __STREAM__; urgency=low
 
   * Felix 3.0.0-alpha1 (from Git commit 2af37a9).
