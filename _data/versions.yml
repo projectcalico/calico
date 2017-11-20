@@ -1355,7 +1355,7 @@ v3.0:
 
     #### What's new
 
-    - Support for the [etcd version 3 datastore](https://coreos.com/blog/etcd3-a-new-etcd.html).
+    - Support for [etcd version 3](https://coreos.com/blog/etcd3-a-new-etcd.html).
 
     - Two new `calicoctl` resources: [BGP Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgpconfig) and [Felix Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/felixconfig).
 
@@ -1365,7 +1365,7 @@ v3.0:
     
     - [Network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) resources can include a `namespace` value, allowing you to create policies that only apply to [workload endpoint resources](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint) in the same namespace.
     
-    - You can now create `namespaceSelector` expressions in [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy) resources to apply a policy to an entire namespace.
+    - You can now specify `namespaceSelector` expressions in [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy) rules to select one or more namespaces in their entirety. 
     
     - The `get`, `apply`, `create`, `delete`, and `replace` commands of `calicoctl` now include an optional `--namespace=<NS>` flag. Refer to the `calicoctl` [Command reference](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/) section for more details.
     
