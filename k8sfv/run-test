@@ -9,8 +9,10 @@
 # What version of Felix (container image) to use.
 : ${FELIX_VERSION:=latest}
 #
-# What version of the k8s API server to use.
-: ${K8S_VERSION:=1.7.3}
+if ! test -n "${FV_K8SIMAGE}"; then
+    echo FV_K8SIMAGE must be set to indicate the hyperkube image to use.
+    exit -1
+fi
 #
 # A string to insert into the container names that we use; a calling
 # script can set this to something to make the container names unique,
@@ -53,8 +55,10 @@
 # Whether to tell Felix to go via Typha.
 : ${USE_TYPHA:=true}
 #
-# What version of Typha (container image) to use.
-: ${TYPHA_VERSION:=latest}
+if  ${USE_TYPHA} && test -z "${FV_TYPHAIMAGE}" ; then
+	echo FV_TYPHAIMAGE must be set to indicate the hyperkube image to use.
+	exit -1
+fi
 #
 # Typha logging level.
 : ${TYPHA_LOG_LEVEL:=info}
@@ -99,7 +103,7 @@ sudo modprobe ip6_tables
 
 # Run etcd.
 docker run --detach --name ${prefix}-etcd \
-       quay.io/coreos/etcd \
+       $FV_ETCDIMAGE \
        etcd \
        --advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
        --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -117,7 +121,7 @@ etcd_ip=$(get_container_ip ${prefix}-etcd)
 # gives the "system:anonymous" user unlimited power (aka the
 # "cluster-admin" role).
 docker run --detach --name ${prefix}-apiserver \
-       gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+       $FV_K8SIMAGE \
        /hyperkube apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
        --service-cluster-ip-range=10.101.0.0/16 -v=10 \
@@ -163,7 +167,7 @@ if ${USE_TYPHA}; then
 	   -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
 	   -v ${PWD}:/testcode \
 	   -w /testcode/k8sfv/output \
-	   calico/typha:${TYPHA_VERSION} \
+	   $FV_TYPHAIMAGE \
 	   /bin/sh -c "for n in 1 2; do calico-typha; done"
     typha_ip=$(get_container_ip ${prefix}-typha)
     typha_hostname=$(get_container_hostname ${prefix}-typha)
