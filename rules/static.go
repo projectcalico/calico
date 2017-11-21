@@ -23,7 +23,7 @@ import (
 func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*Chain) {
 	chains = append(chains, r.StaticFilterForwardChains()...)
 	chains = append(chains, r.StaticFilterInputChains(ipVersion)...)
-	chains = append(chains, r.StaticFilterOutputChains()...)
+	chains = append(chains, r.StaticFilterOutputChains(ipVersion)...)
 	return
 }
 
@@ -303,14 +303,14 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	}}
 }
 
-func (r *DefaultRuleRenderer) StaticFilterOutputChains() []*Chain {
+func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*Chain {
 	return []*Chain{
-		r.filterOutputChain(),
+		r.filterOutputChain(ipVersion),
 		r.failsafeOutChain(),
 	}
 }
 
-func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
+func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	rules := []Rule{}
 
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
@@ -340,6 +340,21 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 
 	// If we reach here, the packet is not going to a workload so it must be going to a
 	// host endpoint.
+
+	if ipVersion == 4 && r.IPIPEnabled {
+		// When IPIP is enabled, auto-allow IPIP traffic to other Calico nodes.  Without this,
+		// it's too easy to make a host policy that blocks IPIP traffic, resulting in very confusing
+		// connectivity problems.
+		rules = append(rules,
+			Rule{
+				Match: Match().ProtocolNum(ProtoIPIP).
+					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs)).
+					SrcAddrType(AddrTypeLocal, false),
+				Action:  r.filterAllowAction,
+				Comment: "Allow IPIP packets to other Calico hosts",
+			},
+		)
+	}
 
 	// Apply host endpoint policy.
 	rules = append(rules,
