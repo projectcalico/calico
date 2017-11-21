@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -198,6 +199,7 @@ func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error 
 }
 
 func (c *Container) Exec(cmd ...string) {
+	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	utils.Run("docker", arg...)
@@ -242,6 +244,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) bool {
 }
 
 func RunEtcd() *Container {
+	log.Info("Starting etcd")
 	return Run("etcd",
 		"--privileged", // So that we can add routes inside the etcd container,
 		// when using the etcd container to model an external client connecting
@@ -253,6 +256,7 @@ func RunEtcd() *Container {
 }
 
 func RunFelix(etcdIP string) *Container {
+	log.Info("Starting felix")
 	return Run("felix",
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
@@ -305,6 +309,87 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 		return err
 	}, "10s", "500ms").ShouldNot(HaveOccurred())
 
+	success = true
+	return
+}
+
+// StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
+// the datastore and installs a Node resource for the Felix node.
+func StartTwoNodeEtcdIPIPTopology() (felixes []*Container, etcd *Container, client client.Interface) {
+	log.Info("Starting a single-node etcd topology.")
+	success := false
+	var err error
+	defer func() {
+		if !success {
+			log.WithError(err).Error("Failed to start topology, tearing down containers")
+			for _, felix := range felixes {
+				felix.Stop()
+			}
+			etcd.Stop()
+		}
+	}()
+
+	// First start etcd.
+	etcd = RunEtcd()
+
+	// Connect to etcd.
+	client = utils.GetEtcdClient(etcd.IP)
+	Eventually(func() error {
+		log.Info("Initializing the datastore...")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = client.EnsureInitialized(
+			ctx,
+			"test-version",
+			"felix-fv",
+		)
+		log.WithError(err).Info("EnsureInitialized result")
+		if err != nil {
+			log.WithError(err).Warn("EnsureInitialized failed")
+			return err
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		ipPool := api.NewIPPool()
+		ipPool.Name = "test-pool"
+		ipPool.Spec.CIDR = "10.65.0.0/16"
+		ipPool.Spec.IPIPMode = api.IPIPModeAlways
+		_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
+		return err
+	}).ShouldNot(HaveOccurred())
+
+	for i := 0; i < 2; i++ {
+		// Then start Felix and create a node for it.
+		felix := RunFelix(etcd.IP)
+
+		felixNode := api.NewNode()
+		felixNode.Name = felix.Hostname
+		felixNode.Spec.BGP = &api.NodeBGPSpec{
+			IPv4Address:        felix.IP,
+			IPv4IPIPTunnelAddr: fmt.Sprintf("10.65.%d.1", i),
+		}
+		Eventually(func() error {
+			_, err = client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
+			if err != nil {
+				log.WithError(err).Warn("Failed to create node")
+			}
+			return err
+		}, "10s", "500ms").ShouldNot(HaveOccurred())
+
+		felixes = append(felixes, felix)
+	}
+
+	for i, iFelix := range felixes {
+		for j, jFelix := range felixes {
+			if i == j {
+				continue
+			}
+
+			jBlock := fmt.Sprintf("10.65.%d.0/24", j)
+			err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+			Expect(err).ToNot(HaveOccurred())
+		}
+	}
 	success = true
 	return
 }
