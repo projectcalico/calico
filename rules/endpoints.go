@@ -106,6 +106,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -118,6 +119,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
 		),
 	}
 }
@@ -327,6 +329,16 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 
 func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule, allowAction Action) []Rule {
 	// Allow return packets for established connections.
+	if allowAction != (AcceptAction{}) {
+		// If we've been asked to return instead of accept the packet immediately,
+		// make sure we flag the packet as allowed.
+		rules = append(rules,
+			Rule{
+				Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+				Action: SetMarkAction{Mark: r.IptablesMarkAccept},
+			},
+		)
+	}
 	rules = append(rules,
 		Rule{
 			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),

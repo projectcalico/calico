@@ -141,7 +141,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 					Protocol("tcp").
 					DestNet(r.OpenStackMetadataIP.String()).
 					DestPorts(r.OpenStackMetadataPort),
-				Action: AcceptAction{},
+				Action: r.filterAllowAction,
 			})
 		}
 
@@ -161,13 +161,13 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 					Protocol("udp").
 					SourcePorts(dhcpSrcPort).
 					DestPorts(dhcpDestPort),
-				Action: AcceptAction{},
+				Action: r.filterAllowAction,
 			},
 			Rule{
 				Match: Match().
 					Protocol("udp").
 					DestPorts(dnsDestPort),
-				Action: AcceptAction{},
+				Action: r.filterAllowAction,
 			},
 		)
 	}
