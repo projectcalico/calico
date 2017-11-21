@@ -452,11 +452,71 @@ var _ = Describe("Static", func() {
 			},
 		}
 
+		expOutputChainIPIPV4 := &Chain{
+			Name: "cali-OUTPUT",
+			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10),
+					Action: AcceptAction{}},
+
+				// To workload traffic.
+				{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
+				{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+
+				// Auto-allow IPIP traffic to other Calico hosts.
+				{
+					Match: Match().ProtocolNum(4).
+						DestIPSet("cali4-all-hosts").
+						SrcAddrType(AddrTypeLocal, false),
+					Action:  AcceptAction{},
+					Comment: "Allow IPIP packets to other Calico hosts",
+				},
+
+				// Non-workload traffic, send to host chains.
+				{Action: ClearMarkAction{Mark: 0xf0}},
+				{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+				{
+					Match:   Match().MarkSet(0x10),
+					Action:  AcceptAction{},
+					Comment: "Host endpoint policy accepted packet.",
+				},
+			},
+		}
+
+		// V6 should be unaffected.
+		expOutputChainIPIPV6 := &Chain{
+			Name: "cali-OUTPUT",
+			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10),
+					Action: AcceptAction{}},
+
+				// To workload traffic.
+				{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
+				{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+
+				// Non-workload traffic, send to host chains.
+				{Action: ClearMarkAction{Mark: 0xf0}},
+				{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+				{
+					Match:   Match().MarkSet(0x10),
+					Action:  AcceptAction{},
+					Comment: "Host endpoint policy accepted packet.",
+				},
+			},
+		}
+
 		It("IPv4: should include the expected input chain in the filter chains", func() {
 			Expect(findChain(rr.StaticFilterTableChains(4), "cali-INPUT")).To(Equal(expInputChainIPIPV4))
 		})
 		It("IPv6: should include the expected input chain in the filter chains", func() {
 			Expect(findChain(rr.StaticFilterTableChains(6), "cali-INPUT")).To(Equal(expInputChainIPIPV6))
+		})
+		It("IPv4: should include the expected output chain in the filter chains", func() {
+			Expect(findChain(rr.StaticFilterTableChains(4), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV4))
+		})
+		It("IPv6: should include the expected output chain in the filter chains", func() {
+			Expect(findChain(rr.StaticFilterTableChains(6), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV6))
 		})
 		It("IPv4: Should return expected NAT postrouting chain", func() {
 			Expect(rr.StaticNATPostroutingChains(4)).To(Equal([]*Chain{
