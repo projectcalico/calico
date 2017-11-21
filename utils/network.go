@@ -57,6 +57,16 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 			return err
 		}
 
+		if mac, err := net.ParseMAC("EE:EE:EE:EE:EE:EE"); err != nil {
+			logger.Infof("failed to parse MAC Address: %v. Using kernel generated MAC.", err)
+		} else {
+			// Set the MAC address on the host side interface so the kernel does not
+			// have to generate a persistent address which fails some times.
+			if err = netlink.LinkSetHardwareAddr(hostVeth, mac); err != nil {
+				logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
+			}
+		}
+
 		// Explicitly set the veth to UP state, because netlink doesn't always do that on all the platforms with net.FlagUp.
 		// veth won't get a link local address unless it's set to UP state.
 		if err = netlink.LinkSetUp(hostVeth); err != nil {
