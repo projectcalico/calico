@@ -30,6 +30,8 @@ import (
 
 const usage = `test-workload, test workload for Felix FV testing.
 
+If <interface-name> is "", the workload will start in the current namespace.
+
 Usage:
   test-workload [--udp] <interface-name> <ip-address> <ports>
 `
@@ -50,54 +52,60 @@ func main() {
 
 	ports := strings.Split(portsStr, ",")
 
-	// Create a new network namespace for the workload.
-	namespace, err := ns.NewNS()
-	panicIfError(err)
-	log.WithField("namespace", namespace).Debug("Created namespace")
+	var namespace ns.NetNS
+	if interfaceName != "" {
+		// Create a new network namespace for the workload.
+		namespace, err = ns.NewNS()
+		panicIfError(err)
+		log.WithField("namespace", namespace).Debug("Created namespace")
 
-	// Create a veth pair.
-	veth := &netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
-		PeerName:  "w" + interfaceName,
+		// Create a veth pair.
+		veth := &netlink.Veth{
+			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
+			PeerName:  "w" + interfaceName,
+		}
+		err = netlink.LinkAdd(veth)
+		panicIfError(err)
+		log.WithField("veth", veth).Debug("Created veth pair")
+
+		// Move the workload end of the pair into the namespace, and set it up.
+		workloadIf, err := netlink.LinkByName(veth.PeerName)
+		log.WithField("workloadIf", workloadIf).Debug("Workload end")
+		panicIfError(err)
+		err = netlink.LinkSetNsFd(workloadIf, int(namespace.Fd()))
+		panicIfError(err)
+		err = namespace.Do(func(_ ns.NetNS) (err error) {
+			err = utils.RunCommand("ip", "link", "set", veth.PeerName, "name", "eth0")
+			if err != nil {
+				return
+			}
+			err = utils.RunCommand("ip", "link", "set", "eth0", "up")
+			if err != nil {
+				return
+			}
+			err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
+			if err != nil {
+				return
+			}
+			err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
+			if err != nil {
+				return
+			}
+			err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
+			return
+		})
+		panicIfError(err)
+
+		// Set the host end up too.
+		hostIf, err := netlink.LinkByName(veth.LinkAttrs.Name)
+		log.WithField("hostIf", hostIf).Debug("Host end")
+		panicIfError(err)
+		err = netlink.LinkSetUp(hostIf)
+		panicIfError(err)
+	} else {
+		namespace, err = ns.GetCurrentNS()
+		panicIfError(err)
 	}
-	err = netlink.LinkAdd(veth)
-	panicIfError(err)
-	log.WithField("veth", veth).Debug("Created veth pair")
-
-	// Move the workload end of the pair into the namespace, and set it up.
-	workloadIf, err := netlink.LinkByName(veth.PeerName)
-	log.WithField("workloadIf", workloadIf).Debug("Workload end")
-	panicIfError(err)
-	err = netlink.LinkSetNsFd(workloadIf, int(namespace.Fd()))
-	panicIfError(err)
-	err = namespace.Do(func(_ ns.NetNS) (err error) {
-		err = utils.RunCommand("ip", "link", "set", veth.PeerName, "name", "eth0")
-		if err != nil {
-			return
-		}
-		err = utils.RunCommand("ip", "link", "set", "eth0", "up")
-		if err != nil {
-			return
-		}
-		err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
-		if err != nil {
-			return
-		}
-		err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
-		if err != nil {
-			return
-		}
-		err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
-		return
-	})
-	panicIfError(err)
-
-	// Set the host end up too.
-	hostIf, err := netlink.LinkByName(veth.LinkAttrs.Name)
-	log.WithField("hostIf", hostIf).Debug("Host end")
-	panicIfError(err)
-	err = netlink.LinkSetUp(hostIf)
-	panicIfError(err)
 
 	// Print out the namespace path, so that test code can pick it up and execute subsequent
 	// operations in the same namespace - which (in the context of this FV framework)

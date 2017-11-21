@@ -68,7 +68,8 @@ func run(checkNoError bool, command string, args ...string) error {
 	if err != nil {
 		log.WithFields(log.Fields{
 			"command": command,
-			"args":    args}).WithError(err).Warning("Command failed")
+			"args":    args,
+			"output":  string(outputBytes)}).WithError(err).Warning("Command failed")
 	}
 	if checkNoError {
 		Expect(err).NotTo(HaveOccurred())

@@ -19,6 +19,7 @@ RUN apk --no-cache add wget ca-certificates libgcc && \
 RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools 
 
 ADD felix.cfg /etc/calico/felix.cfg
+ADD calico-felix-wrapper usr/bin
 
 # Put out binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the Felix build artefacts from the container.
@@ -28,4 +29,4 @@ WORKDIR /code
 RUN ln -s /code/calico-felix /usr/bin
 
 # Run felix by default
-CMD ["calico-felix"]
+CMD ["calico-felix-wrapper"]

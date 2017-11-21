@@ -363,8 +363,8 @@ var _ = Describe("health tests", func() {
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-e", "FELIX_TYPHAADDR="+typhaAddr,
 			"-v", k8sCertFilename+":/tmp/apiserver.crt",
-			"calico/felix", // TODO Felix version
-			"calico-felix")
+			"calico/felix:latest",
+		)
 		Expect(felixContainer).NotTo(BeNil())
 
 		felixReady = getHealthStatus(felixContainer.IP, "9099", "readiness")

@@ -90,7 +90,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v %v",
+		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v '%v' '%v' '%v'",
 			w.Name,
 			udpArg,
 			w.InterfaceName,
@@ -387,4 +387,8 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
 	}
 	return result
+}
+
+func (c *ConnectivityChecker) CheckConnectivity() {
+	EventuallyWithOffset(1, c.ActualConnectivity(), "10s", "100ms").Should(Equal(c.ExpectedConnectivity()))
 }

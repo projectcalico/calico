@@ -80,6 +80,13 @@ const (
 	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
 	// lower occupancy.
 	defaultGCPercent = 20
+
+	// String sent on the failure report channel to indicate we're shutting down for config
+	// change.
+	reasonConfigChanged = "config changed"
+	// Process return code used to report a config change.  This is the same as the code used
+	// by SIGHUP, which means that the wrapper script also restarts Felix on a SIGHUP.
+	configChangedRC = 129
 )
 
 // main is the entry point to the calico-felix binary.
@@ -571,9 +578,11 @@ func servePrometheusMetrics(configParams *config.Config) {
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {
-	// Ask the runtime to tell us if we get a term signal.
-	termSignalChan := make(chan os.Signal, 1)
-	signal.Notify(termSignalChan, syscall.SIGTERM)
+	// Ask the runtime to tell us if we get a term/int signal.
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM)
+	signal.Notify(signalChan, syscall.SIGINT)
+	signal.Notify(signalChan, syscall.SIGHUP)
 
 	// Start a background thread to tell us when the dataplane driver stops.
 	// If the driver stops unexpectedly, we'll terminate this process.
@@ -592,15 +601,20 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 
 	// Wait for one of the channels to give us a reason to shut down.
 	driverAlreadyStopped := driverCmd == nil
-	receivedSignal := false
+	receivedFatalSignal := false
 	var reason string
 	select {
 	case <-driverStoppedC:
 		reason = "Driver stopped"
 		driverAlreadyStopped = true
-	case sig := <-termSignalChan:
-		reason = fmt.Sprintf("Received OS signal %v", sig)
-		receivedSignal = true
+	case sig := <-signalChan:
+		if sig == syscall.SIGHUP {
+			log.Warning("Received a SIGHUP, treating as a request to reload config")
+			reason = reasonConfigChanged
+		} else {
+			reason = fmt.Sprintf("Received OS signal %v", sig)
+			receivedFatalSignal = true
+		}
 	case reason = <-failureReportChan:
 	}
 	logCxt := log.WithField("reason", reason)
@@ -639,18 +653,36 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		}
 	}
 
-	if !receivedSignal {
+	if !receivedFatalSignal {
 		// We're exiting due to a failure or a config change, wait
 		// a couple of seconds to ensure that we don't go into a tight
-		// restart loop (which would make the init daemon give up trying
-		// to restart us).
-		logCxt.Info("Shutdown wasn't caused by signal, pausing to avoid tight restart loop")
+		// restart loop (which would make the init daemon in calico/node give
+		// up trying to restart us).
+		logCxt.Info("Sleeping to avoid tight restart loop.")
 		go func() {
 			time.Sleep(2 * time.Second)
+
+			if reason == reasonConfigChanged {
+				// We want to exit with a specific RC, but if we call Fatal() it will exit for us
+				// with the wrong RC. We need to call Fatal or Panic to force the log to be flushed
+				// so call Panic() but use defer to force an exit before the stack trace is printed.
+				defer os.Exit(configChangedRC)
+				logCxt.Panic("Exiting for config change")
+				return
+			}
+
 			logCxt.Fatal("Exiting.")
 		}()
-		// But, if we get a signal while we're waiting quit immediately.
-		<-termSignalChan
+
+		for {
+			sig := <-signalChan
+			if sig == syscall.SIGHUP {
+				logCxt.Warning("Ignoring SIGHUP because we're already shutting down")
+				continue
+			}
+			logCxt.WithField("signal", sig).Fatal(
+				"Signal received while shutting down, exiting immediately")
+		}
 	}
 
 	logCxt.Fatal("Exiting immediately")
@@ -914,7 +946,7 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 						log.WithFields(log.Fields{"key": kOld, "value": vOld}).Warn("Felix configuration changed: Key deleted")
 					}
 				}
-				fc.shutDownProcess("config changed")
+				fc.shutDownProcess(reasonConfigChanged)
 			} else if config == nil {
 				log.Info("Config resolved.")
 				config = make(map[string]string)

@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -243,6 +244,7 @@ func (c *Container) CopyFileIntoContainer(hostPath, containerPath string) error 
 }
 
 func (c *Container) Exec(cmd ...string) {
+	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	utils.Run("docker", arg...)
@@ -287,6 +289,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) bool {
 }
 
 func RunEtcd() *Container {
+	log.Info("Starting etcd")
 	return Run("etcd",
 		RunOpts{AutoRemove: true},
 		"--privileged", // So that we can add routes inside the etcd container,
@@ -299,6 +302,7 @@ func RunEtcd() *Container {
 }
 
 func RunFelix(etcdIP string) *Container {
+	log.Info("Starting felix")
 	return Run("felix",
 		RunOpts{AutoRemove: true},
 		"--privileged",
@@ -314,13 +318,42 @@ func RunFelix(etcdIP string) *Container {
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interface) {
-	log.Info("Starting a single-node etcd topology.")
+func StartSingleNodeEtcdTopology() (felix, etcd *Container, calicoClient client.Interface) {
+	felixes, etcd, calicoClient := StartNNodeEtcdTopology(1)
+	felix = felixes[0]
+	return
+}
+
+// StartTwoNodeEtcdTopology starts an etcd container and a pair of Felix hosts connected
+// with IPIP.
+//
+// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
+//   but (for simplicity) we don't actually use IPAM to assign IPs.
+// - Configures routes between the two "hosts", giving each host 10.65.x.0/24, where x is the
+//   index in the returned array.  When creating workloads, use IPs from the relevant block.
+// - Configures the Tunnel IP as 10.65.x.1
+func StartTwoNodeEtcdTopology() (felixes []*Container, etcd *Container, client client.Interface) {
+	return StartNNodeEtcdTopology(2)
+}
+
+// StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
+// up IPIP, otherwise this is skipped.
+//
+// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
+//   but (for simplicity) we don't actually use IPAM to assign IPs.
+// - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
+//   index in the returned array.  When creating workloads, use IPs from the relevant block.
+// - Configures the Tunnel IP for each host as 10.65.x.1.
+func StartNNodeEtcdTopology(n int) (felixes []*Container, etcd *Container, client client.Interface) {
+	log.Infof("Starting a %d-node etcd topology.", n)
 	success := false
+	var err error
 	defer func() {
 		if !success {
-			log.Error("Failed to start topology, tearing down containers")
-			felix.Stop()
+			log.WithError(err).Error("Failed to start topology, tearing down containers")
+			for _, felix := range felixes {
+				felix.Stop()
+			}
 			etcd.Stop()
 		}
 	}()
@@ -330,6 +363,62 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 
 	// Connect to etcd.
 	client = utils.GetEtcdClient(etcd.IP)
+	mustInitDatastore(client)
+
+	if n > 1 {
+		Eventually(func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ipPool := api.NewIPPool()
+			ipPool.Name = "test-pool"
+			ipPool.Spec.CIDR = "10.65.0.0/16"
+			ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
+			return err
+		}).ShouldNot(HaveOccurred())
+	}
+
+	for i := 0; i < n; i++ {
+		// Then start Felix and create a node for it.
+		felix := RunFelix(etcd.IP)
+
+		felixNode := api.NewNode()
+		felixNode.Name = felix.Hostname
+		if n > 1 {
+			felixNode.Spec.BGP = &api.NodeBGPSpec{
+				IPv4Address:        felix.IP,
+				IPv4IPIPTunnelAddr: fmt.Sprintf("10.65.%d.1", i),
+			}
+		}
+		Eventually(func() error {
+			_, err = client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
+			if err != nil {
+				log.WithError(err).Warn("Failed to create node")
+			}
+			return err
+		}, "10s", "500ms").ShouldNot(HaveOccurred())
+
+		felixes = append(felixes, felix)
+	}
+
+	// Set up routes between the hosts, note: we're not using IPAM here but we set up similar
+	// CIDR-based routes.
+	for i, iFelix := range felixes {
+		for j, jFelix := range felixes {
+			if i == j {
+				continue
+			}
+
+			jBlock := fmt.Sprintf("10.65.%d.0/24", j)
+			err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+			Expect(err).ToNot(HaveOccurred())
+		}
+	}
+	success = true
+	return
+}
+
+func mustInitDatastore(client client.Interface) {
 	Eventually(func() error {
 		log.Info("Initializing the datastore...")
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
@@ -341,17 +430,4 @@ func StartSingleNodeEtcdTopology() (felix, etcd *Container, client client.Interf
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
 	}).ShouldNot(HaveOccurred())
-
-	// Then start Felix and create a node for it.
-	felix = RunFelix(etcd.IP)
-
-	felixNode := api.NewNode()
-	felixNode.Name = felix.Hostname
-	Eventually(func() error {
-		_, err := client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
-		return err
-	}, "10s", "500ms").ShouldNot(HaveOccurred())
-
-	success = true
-	return
 }
