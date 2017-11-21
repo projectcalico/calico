@@ -3,13 +3,15 @@ import:
 - package: github.com/sirupsen/logrus
   version: ^1.0.3
 - package: github.com/containernetworking/cni
-  version: v0.5.2
+  subpackages:
+  - pkg/skel
+  - pkg/types
+- package: github.com/containernetworking/plugins
+  version: v0.6.0
   subpackages:
   - pkg/ip
   - pkg/ipam
   - pkg/ns
-  - pkg/skel
-  - pkg/types
 - package: github.com/golang/glog
 - package: github.com/onsi/ginkgo
   version: ^1.4.0

@@ -23,10 +23,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"

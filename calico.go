@@ -22,11 +22,11 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
+	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/projectcalico/cni-plugin/k8s"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
