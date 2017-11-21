@@ -22,7 +22,7 @@ title: Installing Calico for Docker
 3. Launch `calico/node`:
 
    ```
-   sudo calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
+   sudo calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
    ```
 
 Check that `calico/node` is now running:
@@ -30,7 +30,7 @@ Check that `calico/node` is now running:
 ```
 vagrant@calico-01:~$ docker ps
 CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
-408bd2b9ba53        quay.io/calico/node:{{site.data.versions[page.version].first.title}}   "start_runit"       About an hour ago   Up About an hour                        calico-node
+408bd2b9ba53        {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}   "start_runit"       About an hour ago   Up About an hour                        calico-node
 ```
 
 Furthermore, check that the `calico/node` container is functioning properly
@@ -50,10 +50,10 @@ To print the command `calicoctl node run` uses to launch {{site.prodname}} on th
 run the command with the `--init-system` and `--dry-run` flags:
 
 ```
-$ calicoctl node run --init-system --dryrun --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
+$ calicoctl node run --init-system --dryrun --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 Use the following command to start the calico/node container:
 
-docker run --net=host --privileged --name=calico-node --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock quay.io/calico/node:{{site.data.versions[page.version].first.title}}
+docker run --net=host --privileged --name=calico-node --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 
 Use the following command to stop the calico/node container:
 

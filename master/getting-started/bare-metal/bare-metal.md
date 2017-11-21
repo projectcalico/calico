@@ -125,7 +125,7 @@ There are several ways to install Felix.
     [this document](bare-metal-install) to use the calico-felix binary
     directly.
 
--   if you want to run under docker, you can use `calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}` to start
+-   if you want to run under docker, you can use `calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}` to start
     the calico/node container image.  This container packages up the core {{site.prodname}}
     components to provide both {{site.prodname}} networking and network policy.  Running
     the container automatically pre-initializes the etcd database (which the
