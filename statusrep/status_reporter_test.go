@@ -15,6 +15,7 @@
 package statusrep
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync"
@@ -497,7 +498,7 @@ func (d *mockDatastore) clear() {
 	d.kvs = make(map[model.Key]interface{})
 }
 
-func (d *mockDatastore) List(list model.ListInterface) ([]*model.KVPair, error) {
+func (d *mockDatastore) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -533,7 +534,7 @@ func (d *mockDatastore) List(list model.ListInterface) ([]*model.KVPair, error) 
 
 	log.WithField("KVs", kvs).Info("List() returning")
 
-	return kvs, nil
+	return &model.KVPairList{KVPairs: kvs}, nil
 }
 
 func (d *mockDatastore) Apply(object *model.KVPair) (*model.KVPair, error) {
@@ -552,7 +553,7 @@ func (d *mockDatastore) Apply(object *model.KVPair) (*model.KVPair, error) {
 	return object, nil
 }
 
-func (d *mockDatastore) Delete(object *model.KVPair) error {
+func (d *mockDatastore) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
@@ -561,23 +562,25 @@ func (d *mockDatastore) Delete(object *model.KVPair) error {
 	if len(d.DeleteErrs) > 0 {
 		err := d.DeleteErrs[0]
 		d.DeleteErrs = d.DeleteErrs[1:]
-		return err
+		return nil, err
 	}
 
-	matchingValue, ok := d.kvs[object.Key]
+	matchingValue, ok := d.kvs[key]
 	log.WithFields(log.Fields{
-		"key":           object.Key,
+		"key":           key,
 		"matchingValue": matchingValue,
 	}).Info("Delete() called")
 	if ok {
-		delete(d.kvs, object.Key)
+		delete(d.kvs, key)
 	} else {
 		log.Info("Key wasn't present, returning not-found")
-		return calierrors.ErrorResourceDoesNotExist{}
+		return nil, calierrors.ErrorResourceDoesNotExist{}
 	}
 
 	log.WithField("kvs", d.kvs).Info("Datastore updated")
-	return nil
+	// Felix's Delete calls don't use the returned (and deleted) object, so we can get away with
+	// returning nil for it here.
+	return nil, nil
 }
 
 type mockStoppable struct {

@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"strconv"
 
+	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -70,6 +71,11 @@ func addEndpoints(
 			},
 		})
 	}
+
+	Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
+		BeNumerically("==", numEndpoints),
+		"Addition of pods wasn't reflected in Felix metrics",
+	)
 
 	return
 }

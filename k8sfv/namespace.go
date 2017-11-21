@@ -20,12 +20,10 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/apis/extensions"
-
-	"github.com/projectcalico/felix/k8sfv/internalversion"
 )
 
 var nsPrefixNum = 0
@@ -71,7 +69,7 @@ func createNamespaceInt(
 		}
 	}
 	log.WithField("ns_in", ns_in).Debug("Namespace defined")
-	ns_out, err := clientset.Namespaces().Create(ns_in)
+	ns_out, err := clientset.CoreV1().Namespaces().Create(ns_in)
 	if err != nil {
 		panic(err)
 	}
@@ -80,14 +78,14 @@ func createNamespaceInt(
 
 func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.Info("Cleaning up all namespaces...")
-	nsList, err := clientset.Namespaces().List(metav1.ListOptions{})
+	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
 	for _, ns := range nsList.Items {
 		if strings.HasPrefix(ns.ObjectMeta.Name, nsPrefix) {
-			err = clientset.Namespaces().Delete(ns.ObjectMeta.Name, deleteImmediately)
+			err = clientset.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, deleteImmediately)
 			if err != nil {
 				panic(err)
 			}
@@ -101,33 +99,25 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 // Create a NetworkPolicy, for pods in the specified namespace, that allows ingress from other pods
 // in the same namespace.
 func createNetworkPolicy(clientset *kubernetes.Clientset, namespace string) {
-	npInterface := internalversion.NewNetworkPolicies(clientset.ExtensionsV1beta1Client, namespace)
-	np := extensions.NetworkPolicy{
+	np := networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      "test-syncer-basic-net-policy",
 		},
-		Spec: extensions.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{
-				MatchLabels: map[string]string{"calico/k8s_ns": namespace},
-			},
-			Ingress: []extensions.NetworkPolicyIngressRule{
-				extensions.NetworkPolicyIngressRule{
-					Ports: []extensions.NetworkPolicyPort{
-						extensions.NetworkPolicyPort{},
-					},
-					From: []extensions.NetworkPolicyPeer{
-						extensions.NetworkPolicyPeer{
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"calico/k8s_ns": namespace,
-								},
-							},
+		Spec: networkingv1.NetworkPolicySpec{
+			// An empty PodSelector selects all pods in this Namespace.
+			PodSelector: metav1.LabelSelector{},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				networkingv1.NetworkPolicyIngressRule{
+					From: []networkingv1.NetworkPolicyPeer{
+						networkingv1.NetworkPolicyPeer{
+							// An empty PodSelector selects all pods in this Namespace.
+							PodSelector: &metav1.LabelSelector{},
 						},
 					},
 				},
 			},
 		},
 	}
-	npInterface.Create(&np)
+	clientset.NetworkingV1().NetworkPolicies("").Create(&np)
 }

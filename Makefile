@@ -45,21 +45,24 @@
 # The build architecture is select by setting the ARCH variable.
 # For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
 # When ARCH is undefined it defaults to amd64.
-ifdef ARCH
-	ARCHTAG:=-$(ARCH)
-endif
 ARCH?=amd64
-ARCHTAG?=
-
 ifeq ($(ARCH),amd64)
-GO_BUILD_VER:=v0.6
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.9
+	TYPHA_VERSION?=v0.6.0-alpha1-17-gc6c5726
+	FV_TYPHAIMAGE?=calico/typha:$(TYPHA_VERSION)
 endif
 
 ifeq ($(ARCH),ppc64le)
-GO_BUILD_VER:=latest
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+	TYPHA_VERSION?=latest
+	FV_TYPHAIMAGE?=calico/typha-ppc64le:$(TYPHA_VERSION)
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 
 help:
 	@echo "Felix Makefile"
@@ -189,7 +192,7 @@ k8sfv-test: calico/felix k8sfv-test-existing-felix
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
 k8sfv-test-existing-felix: bin/k8sfv.test
-	k8sfv/run-test
+	TYPHA_VERSION=$(TYPHA_VERSION) k8sfv/run-test
 
 PROMETHEUS_DATA_DIR := $$HOME/prometheus-data
 K8SFV_PROMETHEUS_DATA_DIR := $(PROMETHEUS_DATA_DIR)/k8sfv
@@ -288,18 +291,24 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # our glide.yaml.  If there area any changes, this updates glide.lock
 # as a side effect.  Unless you're adding/updating a dependency, you probably
 # want to use the vendor target to install the versions from glide.lock.
+VENDOR_REMADE := false
 .PHONY: update-vendor
-update-vendor:
+update-vendor glide.lock:
 	mkdir -p $$HOME/.glide
 	$(DOCKER_GO_BUILD) glide up --strip-vendor
 	touch vendor/.up-to-date
+	# Optimization: since glide up does the job of glide install, flag to the
+	# vendor target that it doesn't need to do anything.
+	$(eval VENDOR_REMADE := true)
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
-	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
-	touch vendor/.up-to-date
+	if ! $(VENDOR_REMADE); then \
+	  mkdir -p $$HOME/.glide && \
+	  $(DOCKER_GO_BUILD) glide install --strip-vendor && \
+	  touch vendor/.up-to-date; \
+	fi
 
 # Linker flags for building Felix.
 #
@@ -383,12 +392,20 @@ $(FV_TESTS): vendor/.up-to-date $(FELIX_GO_FILES)
 
 .PHONY: fv
 fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_TESTS)
+	# Copy the ginkgo binary out of the container since we need to run the fv tests directly
+	# on the host (because they need to be able to manipulate docker).  It'd be even nicer
+	# if we could give the build container access to the docker API but we've so-far struggled
+	# to get that working.
 	@echo Running Go FVs.
+	$(DOCKER_GO_BUILD) cp /go/bin/ginkgo bin/ginkgo
 	# fv.test is not expecting a container name with an ARCHTAG.
 	-docker tag calico/felix$(ARCHTAG) calico/felix
 	for t in $(FV_TESTS); do \
 	    cd $(TOPDIR)/`dirname $$t` && \
-	    ./`basename $$t` -ginkgo.slowSpecThreshold 30 || exit; \
+	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
+	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)

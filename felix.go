@@ -53,9 +53,13 @@ import (
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/statusrep"
 	"github.com/projectcalico/felix/usagerep"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
+	errors2 "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
@@ -112,6 +116,8 @@ func main() {
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
 
+	ctx := context.Background()
+
 	if os.Getenv("GOGC") == "" {
 		// Tune the GC to trade off a little extra CPU usage for significantly lower
 		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
@@ -142,7 +148,7 @@ func main() {
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
 	log.Infof("Loading configuration...")
-	var datastore bapi.Client
+	var backendClient bapi.Client
 	var configParams *config.Config
 	var typhaAddr string
 configRetry:
@@ -179,14 +185,19 @@ configRetry:
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
 		datastoreConfig := configParams.DatastoreConfig()
-		datastore, err = backend.NewClient(datastoreConfig)
+		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
-			log.WithError(err).Error("Failed to connect to datastore")
+			log.WithError(err).Error("Failed to create datastore client")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig, hostConfig := loadConfigFromDatastore(datastore,
-			configParams.FelixHostname)
+		globalConfig, hostConfig, err := loadConfigFromDatastore(
+			ctx, backendClient, configParams.FelixHostname)
+		if err != nil {
+			log.WithError(err).Error("Failed to get config from datastore")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
 		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
 		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
 		configParams.Validate()
@@ -202,7 +213,7 @@ configRetry:
 		// config.  We don't need to re-load the configuration _again_ because the
 		// calculation graph will spot if the config has changed since we were initialised.
 		datastoreConfig = configParams.DatastoreConfig()
-		datastore, err = backend.NewClient(datastoreConfig)
+		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to (re)connect to datastore")
 			time.Sleep(1 * time.Second)
@@ -325,7 +336,7 @@ configRetry:
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
 	failureReportChan := make(chan string)
-	dpConnector := newConnector(configParams, datastore, dpDriver, failureReportChan)
+	dpConnector := newConnector(configParams, backendClient, dpDriver, failureReportChan)
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -361,7 +372,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		syncer = datastore.Syncer(syncerToValidator)
+		syncer = backendClient.Syncer(syncerToValidator)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 
@@ -645,51 +656,121 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt.Fatal("Exiting immediately")
 }
 
-func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
-	for {
-		log.Info("Waiting for the datastore to be ready")
-		if kv, err := datastore.Get(model.ReadyFlagKey{}); err != nil {
-			log.WithError(err).Error("Failed to read global datastore 'Ready' flag, will retry...")
-			time.Sleep(1 * time.Second)
-			continue
-		} else if kv.Value != true {
-			log.Warning("Global datastore 'Ready' flag set to false, waiting...")
-			time.Sleep(1 * time.Second)
-			continue
-		}
+func loadConfigFromDatastore(
+	ctx context.Context, client bapi.Client, hostname string,
+) (globalConfig, hostConfig map[string]string, err error) {
 
-		log.Info("Loading global config from datastore")
-		kvs, err := datastore.List(model.GlobalConfigListOptions{})
-		if err != nil {
-			log.WithError(err).Error("Failed to load config from datastore")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		globalConfig = make(map[string]string)
-		for _, kv := range kvs {
-			key := kv.Key.(model.GlobalConfigKey)
-			value := kv.Value.(string)
-			globalConfig[key.Name] = value
-		}
-
-		log.Infof("Loading per-host config from datastore; hostname=%v", hostname)
-		kvs, err = datastore.List(
-			model.HostConfigListOptions{Hostname: hostname})
-		if err != nil {
-			log.WithError(err).Error("Failed to load config from datastore")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		hostConfig = make(map[string]string)
-		for _, kv := range kvs {
-			key := kv.Key.(model.HostConfigKey)
-			value := kv.Value.(string)
-			hostConfig[key.Name] = value
-		}
-		log.Info("Loaded config from datastore")
-		break
+	// The configuration is split over 3 different resource types and 4 different resource
+	// instances in the v3 data model:
+	// -  ClusterInformation (global): name "default"
+	// -  FelixConfiguration (global): name "default"
+	// -  FelixConfiguration (per-host): name "node.<hostname>"
+	// -  Node (per-host): name: <hostname>
+	// Get the global values and host specific values separately.  We re-use the updateprocessor
+	// logic to convert the single v3 resource to a set of v1 key/values.
+	hostConfig = make(map[string]string)
+	globalConfig = make(map[string]string)
+	var ready bool
+	err = getAndMergeConfig(
+		ctx, client, globalConfig,
+		apiv3.KindClusterInformation, "default",
+		updateprocessors.NewClusterInfoUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
 	}
-	return globalConfig, hostConfig
+	if !ready {
+		// The ClusterInformation struct should contain the ready flag, if it is not set, abort.
+		err = errors.New("datastore is not ready or has not been initialised")
+		return
+	}
+	err = getAndMergeConfig(
+		ctx, client, globalConfig,
+		apiv3.KindFelixConfiguration, "default",
+		updateprocessors.NewFelixConfigUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+	err = getAndMergeConfig(
+		ctx, client, hostConfig,
+		apiv3.KindFelixConfiguration, "node."+hostname,
+		updateprocessors.NewFelixConfigUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+	err = getAndMergeConfig(
+		ctx, client, hostConfig,
+		apiv3.KindNode, hostname,
+		updateprocessors.NewFelixNodeUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+// getAndMergeConfig gets the v3 resource configuration extracts the separate config values
+// (where each configuration value is stored in a field of the v3 resource Spec) and merges into
+// the supplied map, as required by our v1-style configuration loader.
+func getAndMergeConfig(
+	ctx context.Context, client bapi.Client, config map[string]string,
+	kind string, name string,
+	configConverter watchersyncer.SyncerUpdateProcessor,
+	ready *bool,
+) error {
+	logCxt := log.WithFields(log.Fields{"kind": kind, "name": name})
+
+	cfg, err := client.Get(ctx, model.ResourceKey{
+		Kind:      kind,
+		Name:      name,
+		Namespace: "",
+	}, "")
+	if err != nil {
+		switch err.(type) {
+		case errors2.ErrorResourceDoesNotExist:
+			logCxt.Info("No config of this type")
+			return nil
+		default:
+			logCxt.WithError(err).Info("Failed to load config from datastore")
+			return err
+		}
+	}
+
+	// Re-use the update processor logic implemented for the Syncer.  We give it a v3 config
+	// object in a KVPair and it uses the annotations defined on it to split it into v1-style
+	// KV pairs.  Log any errors - but don't fail completely to avoid cyclic restarts.
+	v1kvs, err := configConverter.Process(cfg)
+	if err != nil {
+		logCxt.WithError(err).Error("Failed to convert configuration")
+	}
+
+	// Loop through the converted values and update our config map with values from either the
+	// Global or Host configs.
+	for _, v1KV := range v1kvs {
+		if _, ok := v1KV.Key.(model.ReadyFlagKey); ok {
+			logCxt.WithField("ready", v1KV.Value).Info("Loaded ready flag")
+			if v1KV.Value == true {
+				*ready = true
+			}
+		} else if v1KV.Value != nil {
+			switch k := v1KV.Key.(type) {
+			case model.GlobalConfigKey:
+				config[k.Name] = v1KV.Value.(string)
+			case model.HostConfigKey:
+				config[k.Name] = v1KV.Value.(string)
+			default:
+				logCxt.WithField("KV", v1KV).Debug("Skipping config - not required for initial loading")
+			}
+		}
+	}
+	return nil
 }
 
 type dataplaneDriver interface {
@@ -815,16 +896,27 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				fc.InSync <- true
 			}
 		case *proto.ConfigUpdate:
-			logCxt := log.WithFields(log.Fields{
+			log.WithFields(log.Fields{
 				"old": config,
 				"new": msg.Config,
-			})
-			logCxt.Info("Possible config update")
+			}).Info("Possible config update")
 			if config != nil && !reflect.DeepEqual(msg.Config, config) {
-				logCxt.Warn("Felix configuration changed. Need to restart.")
+				log.Warn("Felix configuration changed. Need to restart.")
+				for kNew, vNew := range msg.Config {
+					if vOld, prs := config[kNew]; !prs {
+						log.WithFields(log.Fields{"key": kNew, "value": vNew}).Warn("Felix configuration changed: Key added")
+					} else if vNew != vOld {
+						log.WithFields(log.Fields{"key": kNew, "old": vOld, "new": vNew}).Warn("Felix configuration changed: Key changed")
+					}
+				}
+				for kOld, vOld := range config {
+					if _, prs := config[kOld]; !prs {
+						log.WithFields(log.Fields{"key": kOld, "value": vOld}).Warn("Felix configuration changed: Key deleted")
+					}
+				}
 				fc.shutDownProcess("config changed")
 			} else if config == nil {
-				logCxt.Info("Config resolved.")
+				log.Info("Config resolved.")
 				config = make(map[string]string)
 				for k, v := range msg.Config {
 					config[k] = v

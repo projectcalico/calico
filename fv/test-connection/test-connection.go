@@ -108,7 +108,7 @@ func tryConnect(ipAddress, port string, sourcePort string, protocol string) erro
 	if protocol == "udp" {
 		remoteAddr := ipAddress + ":" + port
 		log.Infof("Connecting from %v to %v", localAddr, remoteAddr)
-		d.D.LocalAddr, err = net.ResolveUDPAddr("udp", localAddr)
+		d.D.LocalAddr, _ = net.ResolveUDPAddr("udp", localAddr)
 		conn, err := d.Dial("udp", remoteAddr)
 		if err != nil {
 			panic(err)
