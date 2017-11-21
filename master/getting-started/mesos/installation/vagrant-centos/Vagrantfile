@@ -168,7 +168,7 @@ Vagrant.configure("2") do |config|
 
       # Provision with docker, and download the calico-node docker image
       host.vm.provision :docker, images: [
-	        "quay.io/calico/node:#{calico_node_ver}",
+	        "{{site.imageNames["node"]}}:#{calico_node_ver}",
       ]
 
       # Configure docker to use etcd on master as its datastore

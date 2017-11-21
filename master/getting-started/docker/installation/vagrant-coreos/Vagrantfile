@@ -57,7 +57,7 @@ Vagrant.configure("2") do |config|
 
       # Pre-load the calico/node image.  This slows down the vagrant up
       # command, but speeds up the actual tutorial.
-      host.vm.provision :docker, images: ["quay.io/calico/node:#{calico_node_ver}", "busybox:latest"]
+      host.vm.provision :docker, images: ["{{site.imageNames["node"]}}:#{calico_node_ver}", "busybox:latest"]
 
       # Use a different cloud-init on the first server.
       if i == 1

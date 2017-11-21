@@ -126,7 +126,7 @@ enforcement and BIRD for BGP networking (when enabled).
 
 To upgrade the calico/node container:
 
-- Pull the new version of the calico/node image to each node.  e.g `docker pull quay.io/calico/node:vA.B.C`
+- Pull the new version of the calico/node image to each node.  e.g `docker pull {{site.imageNames["node"]}}:vA.B.C`
 - Update the image in your process management to reference the new version.
 - Stop the running calico/node container, and start it with the newly pulled version.
 
