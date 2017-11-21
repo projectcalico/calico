@@ -41,6 +41,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			"", // No fail-safe chains for workloads.
 			chainTypeNormal,
 			adminUp,
+			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -53,6 +54,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			"", // No fail-safe chains for workloads.
 			chainTypeNormal,
 			adminUp,
+			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 		),
 	}
 }
@@ -78,6 +80,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -90,6 +93,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ChainFailsafeIn,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
@@ -102,6 +106,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -114,6 +119,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			r.filterAllowAction,
 		),
 	}
 }
@@ -136,6 +142,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ChainFailsafeOut,
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
+			AcceptAction{},
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -148,6 +155,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ChainFailsafeIn,
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
+			AcceptAction{},
 		),
 	}
 }
@@ -170,6 +178,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 			ChainFailsafeIn,
 			chainTypePreDNAT,
 			true, // Host endpoints are always admin up.
+			r.mangleAllowAction,
 		),
 	}
 }
@@ -193,6 +202,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	failsafeChain string,
 	chainType endpointChainType,
 	adminUp bool,
+	allowAction Action,
 ) *Chain {
 	rules := []Rule{}
 	chainName := EndpointChainName(endpointPrefix, name)
@@ -213,7 +223,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType != chainTypeUntracked {
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
-		rules = r.appendConntrackRules(rules)
+		rules = r.appendConntrackRules(rules, allowAction)
 	}
 
 	// First set up failsafes.
@@ -317,12 +327,22 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	}
 }
 
-func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule) []Rule {
+func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule, allowAction Action) []Rule {
 	// Allow return packets for established connections.
+	if allowAction != (AcceptAction{}) {
+		// If we've been asked to return instead of accept the packet immediately,
+		// make sure we flag the packet as allowed.
+		rules = append(rules,
+			Rule{
+				Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+				Action: SetMarkAction{Mark: r.IptablesMarkAccept},
+			},
+		)
+	}
 	rules = append(rules,
 		Rule{
 			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: AcceptAction{},
+			Action: allowAction,
 		},
 	)
 	if !r.Config.DisableConntrackInvalid {

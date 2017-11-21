@@ -373,6 +373,73 @@ var _ = Describe("Static", func() {
 		})
 	})
 
+	Describe("with openstack special-cases and RETURN action", func() {
+		BeforeEach(func() {
+			conf = Config{
+				WorkloadIfacePrefixes:        []string{"tap"},
+				OpenStackSpecialCasesEnabled: true,
+				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
+				OpenStackMetadataPort:        1234,
+				IptablesMarkAccept:           0x10,
+				IptablesMarkPass:             0x20,
+				IptablesMarkScratch0:         0x40,
+				IptablesMarkScratch1:         0x80,
+				IptablesFilterAllowAction:    "RETURN",
+			}
+		})
+
+		expWlToHostV4 := &Chain{
+			Name: "cali-wl-to-host",
+			Rules: []Rule{
+				// OpenStack special cases.
+				{
+					Match: Match().
+						Protocol("tcp").
+						DestNet("10.0.0.1").
+						DestPorts(1234),
+					Action: ReturnAction{},
+				},
+				{Match: Match().Protocol("udp").SourcePorts(68).DestPorts(67),
+					Action: ReturnAction{}},
+				{Match: Match().Protocol("udp").DestPorts(53),
+					Action: ReturnAction{}},
+
+				{Action: JumpAction{Target: "cali-from-wl-dispatch"}},
+				{Action: ReturnAction{},
+					Comment: "Configured DefaultEndpointToHostAction"},
+			},
+		}
+
+		expWlToHostV6 := &Chain{
+			Name: "cali-wl-to-host",
+			Rules: []Rule{
+				{Match: Match().ProtocolNum(ProtoICMPv6).ICMPV6Type(130), Action: ReturnAction{}},
+				{Match: Match().ProtocolNum(ProtoICMPv6).ICMPV6Type(131), Action: ReturnAction{}},
+				{Match: Match().ProtocolNum(ProtoICMPv6).ICMPV6Type(132), Action: ReturnAction{}},
+				{Match: Match().ProtocolNum(ProtoICMPv6).ICMPV6Type(133), Action: ReturnAction{}},
+				{Match: Match().ProtocolNum(ProtoICMPv6).ICMPV6Type(135), Action: ReturnAction{}},
+				{Match: Match().ProtocolNum(ProtoICMPv6).ICMPV6Type(136), Action: ReturnAction{}},
+
+				// OpenStack special cases.
+				{Match: Match().Protocol("udp").SourcePorts(546).DestPorts(547),
+					Action: ReturnAction{}},
+				{Match: Match().Protocol("udp").DestPorts(53),
+					Action: ReturnAction{}},
+
+				{Action: JumpAction{Target: "cali-from-wl-dispatch"}},
+				{Action: ReturnAction{},
+					Comment: "Configured DefaultEndpointToHostAction"},
+			},
+		}
+
+		It("IPv4: should include the expected workload-to-host chain in the filter chains", func() {
+			Expect(findChain(rr.StaticFilterTableChains(4), "cali-wl-to-host")).To(Equal(expWlToHostV4))
+		})
+		It("IPv6: should include the expected workload-to-host chain in the filter chains", func() {
+			Expect(findChain(rr.StaticFilterTableChains(6), "cali-wl-to-host")).To(Equal(expWlToHostV6))
+		})
+	})
+
 	Describe("with IPIP enabled", func() {
 		BeforeEach(func() {
 			conf = Config{
@@ -587,7 +654,7 @@ var _ = Describe("Static", func() {
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
 						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+							Action: ReturnAction{}},
 
 						// Per-prefix workload jump rules.  Note use of goto so that we
 						// don't return here.
@@ -611,7 +678,7 @@ var _ = Describe("Static", func() {
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
 						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+							Action: ReturnAction{}},
 
 						// To workload traffic.
 						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},

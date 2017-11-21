@@ -25,69 +25,35 @@ import (
 )
 
 var _ = Describe("Endpoints", func() {
-	var rrConfigNormal = Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x8,
-		IptablesMarkPass:     0x10,
-		IptablesMarkScratch0: 0x20,
-		IptablesMarkScratch1: 0x40,
+	var rrConfigNormalMangleReturn = Config{
+		IPIPEnabled:               true,
+		IPIPTunnelAddress:         nil,
+		IPSetConfigV4:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:        0x8,
+		IptablesMarkPass:          0x10,
+		IptablesMarkScratch0:      0x20,
+		IptablesMarkScratch1:      0x40,
+		IptablesMangleAllowAction: "RETURN",
 	}
-	var rrConfigConntrackDisabled = Config{
-		IPIPEnabled:             true,
-		IPIPTunnelAddress:       nil,
-		IPSetConfigV4:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:      0x8,
-		IptablesMarkPass:        0x10,
-		IptablesMarkScratch0:    0x20,
-		IptablesMarkScratch1:    0x40,
-		DisableConntrackInvalid: true,
+
+	var rrConfigConntrackDisabledReturnAction = Config{
+		IPIPEnabled:               true,
+		IPIPTunnelAddress:         nil,
+		IPSetConfigV4:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:        0x8,
+		IptablesMarkPass:          0x10,
+		IptablesMarkScratch0:      0x20,
+		IptablesMarkScratch1:      0x40,
+		DisableConntrackInvalid:   true,
+		IptablesFilterAllowAction: "RETURN",
 	}
 
 	var renderer RuleRenderer
-	BeforeEach(func() {
-		renderer = NewRenderer(rrConfigNormal)
-	})
-
-	It("should render a minimal workload endpoint", func() {
-		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil, nil)).To(Equal([]*Chain{
-			{
-				Name: "cali-tw-cali1234",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-					{Action: DropAction{},
-						Comment: "Drop if no profiles matched"},
-				},
-			},
-			{
-				Name: "cali-fw-cali1234",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-					{Action: DropAction{},
-						Comment: "Drop if no profiles matched"},
-				},
-			},
-		}))
-	})
-
-	Describe("with ctstate=INVALID disabled", func() {
+	Context("with normal config", func() {
 		BeforeEach(func() {
-			renderer = NewRenderer(rrConfigConntrackDisabled)
+			renderer = NewRenderer(rrConfigNormalMangleReturn)
 		})
 
 		It("should render a minimal workload endpoint", func() {
@@ -98,6 +64,8 @@ var _ = Describe("Endpoints", func() {
 						// conntrack rules.
 						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
 
 						{Action: ClearMarkAction{Mark: 0x8}},
 						{Action: DropAction{},
@@ -110,6 +78,8 @@ var _ = Describe("Endpoints", func() {
 						// conntrack rules.
 						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
 
 						{Action: ClearMarkAction{Mark: 0x8}},
 						{Action: DropAction{},
@@ -118,314 +88,419 @@ var _ = Describe("Endpoints", func() {
 				},
 			}))
 		})
+
+		It("should render a disabled workload endpoint", func() {
+			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", false, nil, nil, nil)).To(Equal([]*Chain{
+				{
+					Name: "cali-tw-cali1234",
+					Rules: []Rule{
+						{Action: DropAction{},
+							Comment: "Endpoint admin disabled"},
+					},
+				},
+				{
+					Name: "cali-fw-cali1234",
+					Rules: []Rule{
+						{Action: DropAction{},
+							Comment: "Endpoint admin disabled"},
+					},
+				},
+			}))
+		})
+
+		It("should render a fully-loaded workload endpoint", func() {
+			Expect(renderer.WorkloadEndpointToIptablesChains(
+				"cali1234",
+				true,
+				[]string{"ai", "bi"},
+				[]string{"ae", "be"},
+				[]string{"prof1", "prof2"},
+			)).To(Equal([]*Chain{
+				{
+					Name: "cali-tw-cali1234",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-ai"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-bi"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action:  DropAction{},
+							Comment: "Drop if no policies passed packet"},
+
+						{Action: JumpAction{Target: "cali-pri-prof1"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+						{Action: JumpAction{Target: "cali-pri-prof2"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+
+						{Action: DropAction{},
+							Comment: "Drop if no profiles matched"},
+					},
+				},
+				{
+					Name: "cali-fw-cali1234",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-ae"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-be"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action:  DropAction{},
+							Comment: "Drop if no policies passed packet"},
+
+						{Action: JumpAction{Target: "cali-pro-prof1"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+						{Action: JumpAction{Target: "cali-pro-prof2"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+
+						{Action: DropAction{},
+							Comment: "Drop if no profiles matched"},
+					},
+				},
+			}))
+		})
+
+		It("should render a host endpoint", func() {
+			Expect(renderer.HostEndpointToFilterChains("eth0",
+				[]string{"ai", "bi"}, []string{"ae", "be"},
+				[]string{"afi", "bfi"}, []string{"afe", "bfe"},
+				[]string{"prof1", "prof2"})).To(Equal([]*Chain{
+				{
+					Name: "cali-th-eth0",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						// Host endpoints get extra failsafe rules.
+						{Action: JumpAction{Target: "cali-failsafe-out"}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-ae"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-be"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action:  DropAction{},
+							Comment: "Drop if no policies passed packet"},
+
+						{Action: JumpAction{Target: "cali-pro-prof1"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+						{Action: JumpAction{Target: "cali-pro-prof2"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+
+						{Action: DropAction{},
+							Comment: "Drop if no profiles matched"},
+					},
+				},
+				{
+					Name: "cali-fh-eth0",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						// Host endpoints get extra failsafe rules.
+						{Action: JumpAction{Target: "cali-failsafe-in"}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-ai"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-bi"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action:  DropAction{},
+							Comment: "Drop if no policies passed packet"},
+
+						{Action: JumpAction{Target: "cali-pri-prof1"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+						{Action: JumpAction{Target: "cali-pri-prof2"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if profile accepted"},
+
+						{Action: DropAction{},
+							Comment: "Drop if no profiles matched"},
+					},
+				},
+				{
+					Name: "cali-thfw-eth0",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-afe"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-bfe"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action:  DropAction{},
+							Comment: "Drop if no policies passed packet"},
+					},
+				},
+				{
+					Name: "cali-fhfw-eth0",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-afi"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-bfi"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+						{Match: Match().MarkClear(0x10),
+							Action:  DropAction{},
+							Comment: "Drop if no policies passed packet"},
+					},
+				},
+			}))
+		})
+
+		It("should render host endpoint raw chains with untracked policies", func() {
+			Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"}, []string{"c"})).To(Equal([]*Chain{
+				{
+					Name: "cali-th-eth0",
+					Rules: []Rule{
+						// Host endpoints get extra failsafe rules.
+						{Action: JumpAction{Target: "cali-failsafe-out"}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-po-c"}},
+						// Extra NOTRACK action before returning in raw table.
+						{Match: Match().MarkSet(0x8),
+							Action: NoTrackAction{}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+
+						// No drop actions or profiles in raw table.
+					},
+				},
+				{
+					Name: "cali-fh-eth0",
+					Rules: []Rule{
+						// Host endpoints get extra failsafe rules.
+						{Action: JumpAction{Target: "cali-failsafe-in"}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-c"}},
+						// Extra NOTRACK action before returning in raw table.
+						{Match: Match().MarkSet(0x8),
+							Action: NoTrackAction{}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+
+						// No drop actions or profiles in raw table.
+					},
+				},
+			}))
+		})
+
+		It("should render host endpoint mangle chains with pre-DNAT policies", func() {
+			Expect(renderer.HostEndpointToMangleChains(
+				"eth0",
+				[]string{"c"},
+			)).To(Equal([]*Chain{
+				{
+					Name: "cali-fh-eth0",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: SetMarkAction{Mark: 0x8}},
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: ReturnAction{}},
+						{Match: Match().ConntrackState("INVALID"),
+							Action: DropAction{}},
+
+						// Host endpoints get extra failsafe rules.
+						{Action: JumpAction{Target: "cali-failsafe-in"}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-c"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
+
+						// No drop actions or profiles in raw table.
+					},
+				},
+			}))
+		})
 	})
 
-	It("should render a disabled workload endpoint", func() {
-		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", false, nil, nil, nil)).To(Equal([]*Chain{
-			{
-				Name: "cali-tw-cali1234",
-				Rules: []Rule{
-					{Action: DropAction{},
-						Comment: "Endpoint admin disabled"},
+	Describe("with ctstate=INVALID disabled", func() {
+		BeforeEach(func() {
+			renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
+		})
+
+		It("should render a minimal workload endpoint", func() {
+			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil, nil)).To(Equal([]*Chain{
+				{
+					Name: "cali-tw-cali1234",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: SetMarkAction{Mark: 0x8}},
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: ReturnAction{}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+						{Action: DropAction{},
+							Comment: "Drop if no profiles matched"},
+					},
 				},
-			},
-			{
-				Name: "cali-fw-cali1234",
-				Rules: []Rule{
-					{Action: DropAction{},
-						Comment: "Endpoint admin disabled"},
+				{
+					Name: "cali-fw-cali1234",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: SetMarkAction{Mark: 0x8}},
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: ReturnAction{}},
+
+						{Action: ClearMarkAction{Mark: 0x8}},
+						{Action: DropAction{},
+							Comment: "Drop if no profiles matched"},
+					},
 				},
-			},
-		}))
-	})
+			}))
+		})
 
-	It("should render a fully-loaded workload endpoint", func() {
-		Expect(renderer.WorkloadEndpointToIptablesChains(
-			"cali1234",
-			true,
-			[]string{"ai", "bi"},
-			[]string{"ae", "be"},
-			[]string{"prof1", "prof2"},
-		)).To(Equal([]*Chain{
-			{
-				Name: "cali-tw-cali1234",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
+		It("should render host endpoint mangle chains with pre-DNAT policies", func() {
+			Expect(renderer.HostEndpointToMangleChains(
+				"eth0",
+				[]string{"c"},
+			)).To(Equal([]*Chain{
+				{
+					Name: "cali-fh-eth0",
+					Rules: []Rule{
+						// conntrack rules.
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
 
-					{Action: ClearMarkAction{Mark: 0x8}},
+						// Host endpoints get extra failsafe rules.
+						{Action: JumpAction{Target: "cali-failsafe-in"}},
 
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-ai"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-bi"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action:  DropAction{},
-						Comment: "Drop if no policies passed packet"},
+						{Action: ClearMarkAction{Mark: 0x8}},
 
-					{Action: JumpAction{Target: "cali-pri-prof1"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "cali-pri-prof2"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
+						{Comment: "Start of policies",
+							Action: ClearMarkAction{Mark: 0x10}},
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: "cali-pi-c"}},
+						{Match: Match().MarkSet(0x8),
+							Action:  ReturnAction{},
+							Comment: "Return if policy accepted"},
 
-					{Action: DropAction{},
-						Comment: "Drop if no profiles matched"},
+						// No drop actions or profiles in raw table.
+					},
 				},
-			},
-			{
-				Name: "cali-fw-cali1234",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-ae"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-be"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action:  DropAction{},
-						Comment: "Drop if no policies passed packet"},
-
-					{Action: JumpAction{Target: "cali-pro-prof1"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "cali-pro-prof2"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-
-					{Action: DropAction{},
-						Comment: "Drop if no profiles matched"},
-				},
-			},
-		}))
-	})
-
-	It("should render a host endpoint", func() {
-		Expect(renderer.HostEndpointToFilterChains("eth0",
-			[]string{"ai", "bi"}, []string{"ae", "be"},
-			[]string{"afi", "bfi"}, []string{"afe", "bfe"},
-			[]string{"prof1", "prof2"})).To(Equal([]*Chain{
-			{
-				Name: "cali-th-eth0",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					// Host endpoints get extra failsafe rules.
-					{Action: JumpAction{Target: "cali-failsafe-out"}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-ae"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-be"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action:  DropAction{},
-						Comment: "Drop if no policies passed packet"},
-
-					{Action: JumpAction{Target: "cali-pro-prof1"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "cali-pro-prof2"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-
-					{Action: DropAction{},
-						Comment: "Drop if no profiles matched"},
-				},
-			},
-			{
-				Name: "cali-fh-eth0",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					// Host endpoints get extra failsafe rules.
-					{Action: JumpAction{Target: "cali-failsafe-in"}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-ai"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-bi"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action:  DropAction{},
-						Comment: "Drop if no policies passed packet"},
-
-					{Action: JumpAction{Target: "cali-pri-prof1"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "cali-pri-prof2"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if profile accepted"},
-
-					{Action: DropAction{},
-						Comment: "Drop if no profiles matched"},
-				},
-			},
-			{
-				Name: "cali-thfw-eth0",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-afe"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-bfe"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action:  DropAction{},
-						Comment: "Drop if no policies passed packet"},
-				},
-			},
-			{
-				Name: "cali-fhfw-eth0",
-				Rules: []Rule{
-					// conntrack rules.
-					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: AcceptAction{}},
-					{Match: Match().ConntrackState("INVALID"),
-						Action: DropAction{}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-afi"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-bfi"}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-					{Match: Match().MarkClear(0x10),
-						Action:  DropAction{},
-						Comment: "Drop if no policies passed packet"},
-				},
-			},
-		}))
-	})
-
-	It("should render host endpoint raw chains with untracked policies", func() {
-		Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"}, []string{"c"})).To(Equal([]*Chain{
-			{
-				Name: "cali-th-eth0",
-				Rules: []Rule{
-					// Host endpoints get extra failsafe rules.
-					{Action: JumpAction{Target: "cali-failsafe-out"}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-po-c"}},
-					// Extra NOTRACK action before returning in raw table.
-					{Match: Match().MarkSet(0x8),
-						Action: NoTrackAction{}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-
-					// No drop actions or profiles in raw table.
-				},
-			},
-			{
-				Name: "cali-fh-eth0",
-				Rules: []Rule{
-					// Host endpoints get extra failsafe rules.
-					{Action: JumpAction{Target: "cali-failsafe-in"}},
-
-					{Action: ClearMarkAction{Mark: 0x8}},
-
-					{Comment: "Start of policies",
-						Action: ClearMarkAction{Mark: 0x10}},
-					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "cali-pi-c"}},
-					// Extra NOTRACK action before returning in raw table.
-					{Match: Match().MarkSet(0x8),
-						Action: NoTrackAction{}},
-					{Match: Match().MarkSet(0x8),
-						Action:  ReturnAction{},
-						Comment: "Return if policy accepted"},
-
-					// No drop actions or profiles in raw table.
-				},
-			},
-		}))
+			}))
+		})
 	})
 })
