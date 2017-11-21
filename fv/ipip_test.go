@@ -47,7 +47,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 	)
 
 	BeforeEach(func() {
-		felixes, etcd, client = containers.StartTwoNodeEtcdIPIPTopology()
+		felixes, etcd, client = containers.StartTwoNodeEtcdTopology()
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
@@ -145,7 +145,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 		})
 
 		It("should have workload connectivity but not host connectivity", func() {
-			// Host endpoints block host-host traffic.
+			// Host endpoints (with no policies) block host-host traffic due to default drop.
 			cc.ExpectNone(felixes[0], hostW[1])
 			cc.ExpectNone(felixes[1], hostW[0])
 			// But the rules to allow IPIP between our hosts let the workload traffic through.
