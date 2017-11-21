@@ -34,28 +34,63 @@ const (
 	baseURL = "https://usage.projectcalico.org/UsageCheck/calicoVersionCheck?"
 )
 
-func PeriodicallyReportUsage(interval time.Duration, clusterGUID, clusterType, calicoVersion string, statsUpdateC <-chan calc.StatsUpdate) {
-	log.Info("Usage reporting thread started, waiting for size estimate")
-	stats := <-statsUpdateC
-	log.WithField("stats", stats).Info("Initial stats read")
+func PeriodicallyReportUsage(
+	interval time.Duration,
+	statsUpdateC <-chan calc.StatsUpdate,
+	configUpdateC <-chan map[string]string,
+) {
+	var stats calc.StatsUpdate
+	var config map[string]string
+	var receivedFirstStats bool
+	var tickerC <-chan time.Time
+	initialDelayStarted := false
+	initialDelayDone := make(chan struct{})
 
-	// To avoid thundering herd, inject some startup jitter.
-	initialDelay := calculateInitialDelay(stats.NumHosts)
-	log.WithField("delay", initialDelay).Info("Waiting before first check-in")
-	time.Sleep(initialDelay)
+	maybeStartInitialDelay := func() {
+		if !receivedFirstStats {
+			return
+		}
+		if config == nil {
+			return
+		}
+		if initialDelayStarted {
+			return
+		}
 
-	log.Info("Initial delay complete, making first check-in")
-	ReportUsage(clusterGUID, clusterType, calicoVersion, stats)
+		// To avoid thundering herd, inject some startup jitter.
+		initialDelay := calculateInitialDelay(stats.NumHosts)
+		func() {
+			log.WithField("delay", initialDelay).Info("Waiting before first check-in")
+			time.Sleep(initialDelay)
+			close(initialDelayDone)
+		}()
+		initialDelayStarted = true
+	}
 
-	log.WithField("interval", interval).Info("Initial check-in done, switching to timer.")
-	baseInterval := interval * 9 / 10
-	maxJitter := interval - baseInterval
-	ticker := jitter.NewTicker(baseInterval, maxJitter)
+	doReport := func() {
+		ReportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], stats)
+	}
+
 	for {
 		select {
 		case stats = <-statsUpdateC:
-		case <-ticker.C:
-			ReportUsage(clusterGUID, clusterType, calicoVersion, stats)
+			receivedFirstStats = true
+			maybeStartInitialDelay()
+		case config = <-configUpdateC:
+			maybeStartInitialDelay()
+		case <-initialDelayDone:
+			log.Info("Initial delay complete, doing first report")
+			doReport()
+			log.Info("First report done, starting ticker")
+			baseInterval := interval * 9 / 10
+			maxJitter := interval - baseInterval
+			ticker := jitter.NewTicker(baseInterval, maxJitter)
+			// Disable further kicks from this now-closed channel.
+			initialDelayDone = nil
+			// Enabled the main ticker loop.
+			tickerC = ticker.C
+		case <-tickerC:
+			doReport()
 		}
 	}
 }

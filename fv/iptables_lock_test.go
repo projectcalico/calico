@@ -27,8 +27,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/fv/utils"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/fv/utils"
 )
 
 var _ = Describe("with running container", func() {
