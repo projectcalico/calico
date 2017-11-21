@@ -140,7 +140,7 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-loc
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
-			ginkgo'
+			make run-tests'
 	make stop-etcd
 
 # This does not currently work, kubernetes needs additional configuration
@@ -179,11 +179,11 @@ run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
-			ginkgo'
+			make run-tests'
 	make stop-etcd
 
 ## Run the tests in a container (as root) for different CNI spec versions
-## to make sure we don't break backwards compatiblity.
+## to make sure we don't break backwards compatibility.
 .PHONY: test-containerized-cni-versions
 test-containerized-cni-versions: build-containerized dist/host-local;
 	for cniversion in "0.2.0" "0.3.1" ; do \
@@ -203,6 +203,26 @@ build-containerized: vendor
 		$(CALICO_BUILD) sh -c '\
 			cd /go/src/github.com/projectcalico/cni-plugin && \
 			make binary'
+
+.PHONY: run-tests
+## Run the tests locally, must have local etcd running
+run-tests:
+	# Run tests recursively (-r).
+	ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install
+
+	@echo
+	@echo '+==============+'
+	@echo '| All coverage |'
+	@echo '+==============+'
+	@echo
+	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_
+
+	@echo
+	@echo '+==================+'
+	@echo '| Missing coverage |'
+	@echo '+==================+'
+	@echo
+	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_ | grep -v '100.0%'
 
 ## Etcd is used by the tests
 run-etcd: stop-etcd
