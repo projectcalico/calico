@@ -460,7 +460,6 @@ var _ = Describe("Static", func() {
 					Action: AcceptAction{}},
 
 				// To workload traffic.
-				{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 				{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 				// Auto-allow IPIP traffic to other Calico hosts.
@@ -492,7 +491,6 @@ var _ = Describe("Static", func() {
 					Action: AcceptAction{}},
 
 				// To workload traffic.
-				{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 				{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 				// Non-workload traffic, send to host chains.
