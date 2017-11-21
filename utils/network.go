@@ -7,10 +7,10 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/containernetworking/cni/pkg/ip"
-	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/containernetworking/plugins/pkg/ip"
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
