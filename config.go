@@ -32,16 +32,18 @@ var (
 	templateConfig    template.Config
 	backendsConfig    backends.Config
 	calicoconfig      string
+	routereflector    bool
 )
 
 // A Config structure is used to configure confd.
 type Config struct {
-	ConfDir      string `toml:"confdir"`
-	Interval     int    `toml:"interval"`
-	Noop         bool   `toml:"noop"`
-	Prefix       string `toml:"prefix"`
-	SyncOnly     bool   `toml:"sync-only"`
-	CalicoConfig string `toml:"calicoconfig"`
+	ConfDir        string `toml:"confdir"`
+	Interval       int    `toml:"interval"`
+	Noop           bool   `toml:"noop"`
+	Prefix         string `toml:"prefix"`
+	SyncOnly       bool   `toml:"sync-only"`
+	CalicoConfig   string `toml:"calicoconfig"`
+	RouteReflector bool   `toml:"routereflector"`
 }
 
 func init() {
@@ -55,6 +57,7 @@ func init() {
 	flag.BoolVar(&printVersion, "version", false, "print version and exit")
 	flag.BoolVar(&syncOnly, "sync-only", false, "sync without check_cmd and reload_cmd")
 	flag.StringVar(&calicoconfig, "calicoconfig", "", "Calico apiconfig file path")
+	flag.BoolVar(&routereflector, "routereflector", false, "generate config for a route reflector")
 }
 
 // initConfig initializes the confd configuration by first setting defaults,
@@ -101,7 +104,8 @@ func initConfig() error {
 	}
 
 	backendsConfig = backends.Config{
-		Calicoconfig: config.CalicoConfig,
+		Calicoconfig:   config.CalicoConfig,
+		RouteReflector: config.RouteReflector,
 	}
 	// Template configuration.
 	templateConfig = template.Config{
@@ -152,5 +156,7 @@ func setConfigFromFlag(f *flag.Flag) {
 		config.SyncOnly = syncOnly
 	case "calicoconfig":
 		config.CalicoConfig = calicoconfig
+	case "routereflector":
+		config.RouteReflector = routereflector
 	}
 }
