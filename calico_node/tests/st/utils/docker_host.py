@@ -85,12 +85,14 @@ class DockerHost(object):
                  calico_node_autodetect_ip=False,
                  simulate_gce_routing=False,
                  override_hostname=False,
-                 networking=None):
+                 networking=None,
+                 err_words=None):
         self.name = name
         self.dind = dind
         self.workloads = set()
         self.ip = None
         self.log_analyzer = None
+        self.err_words = err_words
         """
         An IP address value to pass to calicoctl as `--ip`. If left as None,
         no value will be passed, forcing calicoctl to do auto-detection.
@@ -449,9 +451,9 @@ class DockerHost(object):
         Exit the context of this host.
         :return: None
         """
-        self.cleanup(log_extra_diags=bool(exc_type))
+        self.cleanup(log_extra_diags=bool(exc_type), err_words=self.err_words)
 
-    def cleanup(self, log_extra_diags=False):
+    def cleanup(self, log_extra_diags=False, err_words=None):
         """
         Clean up this host, including removing any containers created.  This is
         necessary especially for Docker-in-Docker so we don't leave dangling
@@ -468,7 +470,7 @@ class DockerHost(object):
         log_exception = None
         try:
             if self.log_analyzer is not None:
-                self.log_analyzer.check_logs_for_exceptions()
+                self.log_analyzer.check_logs_for_exceptions(err_words)
         except Exception, e:
             log_exception = e
             log_extra_diags = True
