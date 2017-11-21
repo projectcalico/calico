@@ -62,8 +62,6 @@ var _ = Describe("CalicoCni", func() {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
 
-				mac := contVeth.Attrs().HardwareAddr
-
 				Expect(len(result.IPs)).Should(Equal(1))
 				ip := result.IPs[0].Address.IP.String()
 				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
@@ -96,6 +94,8 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 				Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.TEST_DEFAULT_NS))
 
+				mac := contVeth.Attrs().HardwareAddr
+
 				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
 					InterfaceName: fmt.Sprintf("cali%s", containerID),
 					IPNetworks:    []string{result.IPs[0].Address.String()},
@@ -116,6 +116,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(hostVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
 				Expect(hostVeth.Attrs().MTU).Should(Equal(1500))
+				Expect(hostVeth.Attrs().HardwareAddr.String()).Should(Equal("ee:ee:ee:ee:ee:ee"))
 
 				// Assert hostVeth sysctl values are set to what we expect for IPv4.
 				err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", hostVethName), "1")
