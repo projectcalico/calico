@@ -136,5 +136,5 @@ func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (w
 		opts.Name = convertPolicyNameForStorage(opts.Name)
 	}
 
-	return r.client.resources.Watch(ctx, opts, apiv3.KindNetworkPolicy)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindNetworkPolicy, &policyConverter{})
 }

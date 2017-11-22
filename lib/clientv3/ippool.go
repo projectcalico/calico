@@ -194,7 +194,7 @@ func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv3.IPP
 // Watch returns a watch.Interface that watches the IPPools that match the
 // supplied options.
 func (r ipPools) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindIPPool)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindIPPool, nil)
 }
 
 // validateAndSetDefaults validates IPPool fields and sets default values that are

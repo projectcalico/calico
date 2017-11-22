@@ -97,5 +97,5 @@ func (r hostEndpoints) List(ctx context.Context, opts options.ListOptions) (*api
 // Watch returns a watch.Interface that watches the HostEndpoints that match the
 // supplied options.
 func (r hostEndpoints) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindHostEndpoint)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindHostEndpoint, nil)
 }

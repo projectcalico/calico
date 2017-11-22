@@ -110,7 +110,7 @@ func (r bgpConfigurations) List(ctx context.Context, opts options.ListOptions) (
 // Watch returns a watch.Interface that watches the BGPConfiguration that
 // match the supplied options.
 func (r bgpConfigurations) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindBGPConfiguration)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindBGPConfiguration, nil)
 }
 
 func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration) error {

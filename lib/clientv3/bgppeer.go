@@ -97,5 +97,5 @@ func (r bgpPeers) List(ctx context.Context, opts options.ListOptions) (*apiv3.BG
 // Watch returns a watch.Interface that watches the BGPPeers that match the
 // supplied options.
 func (r bgpPeers) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, apiv3.KindBGPPeer)
+	return r.client.resources.Watch(ctx, opts, apiv3.KindBGPPeer, nil)
 }
