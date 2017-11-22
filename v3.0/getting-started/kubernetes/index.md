@@ -61,11 +61,11 @@ the host. Instead, continue directly to the
 
    ```
    kubectl apply -f \
-   https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
    ```
    
    > **Note**: You can also 
-   > [view the YAML in your browser](https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml){:target="_blank"}.
+   > [view the YAML in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
    You should see the following output.
