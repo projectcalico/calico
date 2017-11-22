@@ -1,5 +1,5 @@
-hash: 8ef3cb64891b9ebbbec46ec6d32c4f4301d4ba7c434f073ad70bfd7419de1497
-updated: 2017-09-24T16:51:30.490503721-07:00
+hash: 7254e65a7a969be62f480988d552f73e9d0bfa8ff215ab235512261821e56337
+updated: 2017-11-22T13:57:30.18830556Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -161,7 +161,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5cabf71a9999834727d83036e986836084e0a13a
+  version: 119c3c82c1c22337ceaffea0cdca5b127a139a1d
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -292,7 +292,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
