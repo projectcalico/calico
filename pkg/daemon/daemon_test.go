@@ -15,6 +15,11 @@
 package daemon_test
 
 import (
+	"errors"
+	"strconv"
+	"sync"
+	"time"
+
 	. "github.com/projectcalico/typha/pkg/daemon"
 
 	"context"
@@ -94,6 +99,8 @@ var _ = Describe("Daemon", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			d.ParseCommandLineArgs([]string{"-c", configFile.Name()})
+		})
+		JustBeforeEach(func() {
 			d.LoadConfiguration()
 			Expect(loggingConfigured).To(BeTrue())
 		})
@@ -102,8 +109,46 @@ var _ = Describe("Daemon", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		const (
+			downSecs  = 2
+			checkTime = "2s"
+		)
+		downSecsStr := strconv.Itoa(downSecs)
+
 		It("should load the configuration and connect to the datastore", func() {
-			Expect(backend.initCalled).To(BeTrue())
+			Eventually(backend.getNumInitCalls).Should(Equal(1))
+			Consistently(backend.getNumInitCalls, checkTime, "1s").Should(Equal(1))
+		})
+
+		Describe("with datastore down for "+downSecsStr+"s", func() {
+			BeforeEach(func() {
+				backend.mutex.Lock()
+				defer backend.mutex.Unlock()
+				backend.failInit = true
+			})
+			JustBeforeEach(func() {
+				time.Sleep(downSecs * time.Second)
+			})
+
+			It("should try >="+downSecsStr+" times to initialize the datastore", func() {
+				Eventually(backend.getNumInitCalls).Should(BeNumerically(">=", downSecs))
+			})
+
+			Describe("with datastore now available", func() {
+				var numFailedInitCalls int
+
+				JustBeforeEach(func() {
+					backend.mutex.Lock()
+					defer backend.mutex.Unlock()
+					backend.failInit = false
+					numFailedInitCalls = backend.initCalled
+				})
+
+				It("should initialize the datastore", func() {
+					Eventually(backend.getNumInitCalls).Should(Equal(numFailedInitCalls + 1))
+					Consistently(backend.getNumInitCalls, checkTime, "1s").Should(Equal(numFailedInitCalls + 1))
+				})
+			})
 		})
 
 		It("should create the server components", func() {
@@ -155,18 +200,33 @@ var _ = Describe("Daemon", func() {
 })
 
 type mockBackend struct {
+	mutex        sync.Mutex
 	syncerCalled bool
-	initCalled   bool
+	initCalled   int
+	failInit     bool
 }
 
 func (b *mockBackend) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
 	b.syncerCalled = true
 	return &dummySyncer{}
 }
 
 func (b *mockBackend) EnsureInitialized() error {
-	b.initCalled = true
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.initCalled++
+	if b.failInit {
+		return errors.New("Failure simulated by test code")
+	}
 	return nil
+}
+
+func (b *mockBackend) getNumInitCalls() int {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return b.initCalled
 }
 
 type dummySyncer struct {
