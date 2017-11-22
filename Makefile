@@ -19,7 +19,7 @@ CNI_SPEC_VERSION?=0.3.1
 
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
-CALICO_BUILD?=calico/go-build
+CALICO_BUILD?=calico/go-build:v0.8
 DEPLOY_CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
 
