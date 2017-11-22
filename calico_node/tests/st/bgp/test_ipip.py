@@ -51,12 +51,17 @@ class TestIPIP(TestBase):
         traffic flow to ensure it either is or is not going over the IPIP
         tunnel as expected.
         """
+
+        # Test will change ipip configuration and cause a "PANIC" error message.
+        # Skip checking "PANIC".
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
-                        start_calico=False) as host1, \
+                        start_calico=False,
+                        err_words={"ERROR", "FATAL", "CRITICAL"}) as host1, \
              DockerHost('host2',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
-                        start_calico=False) as host2:
+                        start_calico=False,
+                        err_words={"ERROR", "FATAL", "CRITICAL"}) as host2:
 
             # Before starting the node, create the default IP pool using the
             # v1.0.2 calicoctl.  For calicoctl v1.1.0+, a new IPIP mode field
@@ -335,11 +340,13 @@ class TestIPIP(TestBase):
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         simulate_gce_routing=True,
-                        start_calico=False) as host1, \
+                        start_calico=False,
+                        err_words={"ERROR", "FATAL", "CRITICAL"}) as host1, \
              DockerHost('host2',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         simulate_gce_routing=True,
-                        start_calico=False) as host2:
+                        start_calico=False,
+                        err_words={"ERROR", "FATAL", "CRITICAL"}) as host2:
 
             self._test_gce_int(with_ipip, backend, host1, host2, False)
 
@@ -353,11 +360,13 @@ class TestIPIP(TestBase):
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         simulate_gce_routing=True,
-                        start_calico=False) as host1, \
+                        start_calico=False,
+                        err_words={"ERROR", "FATAL", "CRITICAL"}) as host1, \
              DockerHost('host2',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         simulate_gce_routing=True,
-                        start_calico=False) as host2, \
+                        start_calico=False,
+                        err_words={"ERROR", "FATAL", "CRITICAL"}) as host2, \
              RouteReflectorCluster(1, 1) as rrc:
 
             self._test_gce_int(with_ipip, 'bird', host1, host2, rrc)

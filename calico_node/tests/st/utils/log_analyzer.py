@@ -288,7 +288,7 @@ class LogAnalyzer(object):
         log = Log(timestamp, loglevel, pid, logtext)
         return log
 
-    def check_logs_for_exceptions(self):
+    def check_logs_for_exceptions(self, err_words=None):
         """
         Check the logs for any error level logs and raises an exception if
         any are found.
@@ -305,7 +305,7 @@ class LogAnalyzer(object):
         # of unfiltered context logs.
         for log in self._parse_latest_logs():
             logs.append(log)
-            if self._is_error_log(log):
+            if self._is_error_log(log, err_words):
                 errors.append(logs)
                 logs = deque(maxlen=NUM_CONTEXT_LOGS)
 
@@ -340,7 +340,7 @@ class LogAnalyzer(object):
 
         assert not errors, "Test suite failed due to errors raised in logs"
 
-    def _is_error_log(self, log):
+    def _is_error_log(self, log, err_words=None):
         """
         Return whether the log is an error log or not.
 
@@ -349,7 +349,9 @@ class LogAnalyzer(object):
         Note that we are skipping known failures as defined by the
         LOGS_IGNORE_ALL_TESTS.
         """
-        is_error = log.level in {"ERROR", "PANIC", "FATAL", "CRITICAL"}
+        if err_words is None:
+            err_words = {"ERROR", "PANIC", "FATAL", "CRITICAL"}
+        is_error = log.level in err_words
         if is_error:
             is_error = not any(txt in log.msg for txt in LOGS_IGNORE_ALL_TESTS)
 
