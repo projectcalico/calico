@@ -1,6 +1,6 @@
 ###############################################################################
 
-GO_BUILD_VER?=v0.7
+GO_BUILD_VER?=v0.8
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -527,8 +527,8 @@ semaphore:
 	# Actually run the tests (refreshing the images as required), we only run a
 	# small subset of the tests for testing SSL support.  These tests are run
 	# using "latest" tagged images.
-	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
-	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
+	$(MAKE) RELEASE_STREAM=$(RELEASE_STREAM) $(NODE_CONTAINER_NAME) st
+	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=$(RELEASE_STREAM) st-ssl
 
 release: clean
 	@echo Using the following versions:
