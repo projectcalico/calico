@@ -23,7 +23,7 @@ import:
   version: 17ae440991da3bdb2df4309936dd2074f66ec394
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: 63d3fb8a5a9e1d1a03666c82674481bade1ec8ee
+  version: v1.7.2
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -43,3 +43,5 @@ testImport:
   subpackages:
   - extensions/table
 - package: github.com/onsi/gomega
++- package: google.golang.org/grpc
++  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
