@@ -405,11 +405,12 @@ configRetry:
 			}
 		}()
 
-		go usagerep.PeriodicallyReportUsage(
+		usageRep := usagerep.New(
 			24*time.Hour,
 			statsChanOut,
 			configUpdChan,
 		)
+		go usageRep.PeriodicallyReportUsage(context.Background())
 	} else {
 		// Usage reporting disabled, but we still want a stats collector for the
 		// felix_cluster_* metrics.  Register a no-op function as the callback.
