@@ -20,7 +20,7 @@ default: help
 # Makefile configuration options 
 CONTAINER_NAME=calico/kube-controllers$(ARCHTAG)
 PACKAGE_NAME?=github.com/projectcalico/kube-controllers
-GO_BUILD_VER:=latest
+GO_BUILD_VER:=v0.8
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
@@ -47,7 +47,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
 docker-image: image.created$(ARCHTAG)
 image.created$(ARCHTAG): dist/kube-controllers-linux-$(ARCH)
 	# Build the docker image for the policy controller.
-	docker build -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
+	docker build --pull -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
 	touch $@
 
 dist/kube-controllers-linux-$(ARCH):

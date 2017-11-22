@@ -7,30 +7,10 @@ import:
   version: ^0.10.0
 - package: github.com/kelseyhightower/envconfig
   version: ~1.3.0
-- package: k8s.io/apimachinery
-  version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
-- package: k8s.io/client-go
-  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
-  subpackages:
-  - kubernetes
-  - pkg/api
-  - pkg/api/errors
-  - pkg/api/meta
-  - pkg/api/unversioned
-  - pkg/api/v1
-  - pkg/apis/extensions/v1beta1
-  - pkg/fields
-  - pkg/runtime
-  - pkg/runtime/schema
-  - pkg/runtime/serializer
-  - pkg/util/wait
-  - pkg/watch
-  - rest
-  - tools/cache
-  - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: v1.x-series
+  version: v1.7.2
 - package: github.com/projectcalico/felix
+  version: 2.6.x-series
   subpackages:
   - fv
   - fv.containers
