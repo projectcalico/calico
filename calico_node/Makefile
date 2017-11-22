@@ -42,6 +42,21 @@ KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
 LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
 TYPHA_VER ?= $(V_TYPHA)
 
+# Usually the container images that we test come from a registry
+# (e.g. DockerHub or Quay) that we've previously pushed to.  Hence,
+# when using some <name>:<version> image, we 'docker pull' it to
+# ensure that any copy we may have locally is up to date; in practice
+# this is important when <version> is 'master', because 'master' does
+# not refer to a fixed build.
+#
+# However, it can also be useful to build local container images and
+# then use the following _VER variables to reference those, instead of
+# pulling from a registry.  To allow that, run make with
+# ALLOW_LOCAL_IMAGES=true and with XXX_VER=<your tag>.  (Note that you
+# must ensure that <your tag> is different from any tags available in
+# the registry.)
+ALLOW_LOCAL_IMAGES ?= false
+
 $(info RELEASE_STREAM=$(RELEASE_STREAM))
 $(info CALICO_VER=$(CALICO_VER))
 $(info CALICO_GIT_VER=$(CALICO_GIT_VER))
@@ -133,7 +148,7 @@ dist/calicoctl-v1.0.2:
 # variables.  These are used for the STs.
 dist/calicoctl:
 	-docker rm -f calicoctl
-	docker pull $(CTL_CONTAINER_NAME)
+	docker pull $(CTL_CONTAINER_NAME) || $(ALLOW_LOCAL_IMAGES)
 	docker create --name calicoctl $(CTL_CONTAINER_NAME)
 	docker cp calicoctl:calicoctl dist/calicoctl && \
 	  test -e dist/calicoctl && \
@@ -141,7 +156,7 @@ dist/calicoctl:
 	-docker rm -f calicoctl
 dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
-	docker pull calico/cni:$(CNI_VER)
+	docker pull calico/cni:$(CNI_VER) || $(ALLOW_LOCAL_IMAGES)
 	docker create --name calico-cni calico/cni:$(CNI_VER)
 	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
 	  test -e dist/calico-cni-plugin && \
@@ -194,7 +209,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	-docker rm -f calico-felix
 	# Latest felix binaries are stored in automated builds of calico/felix.
 	# To get them, we create (but don't start) a container from that image.
-	docker pull $(FELIX_CONTAINER_NAME)
+	docker pull $(FELIX_CONTAINER_NAME) || $(ALLOW_LOCAL_IMAGES)
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
@@ -209,7 +224,7 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 	-docker rm -f calico-$(@F)
 	# Latest libnetwork-plugin binaries are stored in automated builds of calico/libnetwork-plugin.
 	# To get them, we pull that image, then copy the binaries out to our host
-	docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
+	docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME) || $(ALLOW_LOCAL_IMAGES)
 	docker create --name calico-$(@F) $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker cp calico-$(@F):/$(@F) $(@D)
 	-docker rm -f calico-$(@F)
@@ -219,7 +234,7 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 	-docker rm -f calico-confd
 	# Latest confd binaries are stored in automated builds of calico/confd.
 	# To get them, we create (but don't start) a container from that image.
-	docker pull $(CONFD_CONTAINER_NAME)
+	docker pull $(CONFD_CONTAINER_NAME) || $(ALLOW_LOCAL_IMAGES)
 	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
