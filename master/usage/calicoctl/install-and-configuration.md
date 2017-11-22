@@ -17,14 +17,7 @@ is running.
 
 ### Installing calicoctl
 
-The calicoctl tool can be downloaded from the
-[release page of the calicoctl repository]({{site.data.versions[page.version].first.components.calicoctl.url}}),
-set executable, and then it is ready to run.
-
-```
-curl -O -L {{site.data.versions[page.version].first.components.calicoctl.download_url}}
-chmod +x calicoctl
-```
+{% include {{page.version}}/calicoctl-install.md %}
 
 > **Note**: Move `calicoctl` to a directory in your `PATH` or add the directory it is in to
 > your `PATH` to avoid prepending the path to invocations of calicoctl.
