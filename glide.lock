@@ -1,5 +1,5 @@
-hash: 585e3889a5d85c43b7ad7e6b11d7c3c6f9a9b3cda6ca595b5bf4110b644c1d9d
-updated: 2017-11-07T18:49:44.298411325Z
+hash: e4d95062b63a3aa4491b254d1ac41afc91347c69346819289f2b244acef9d738
+updated: 2017-11-22T10:23:39.868064751Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,7 +11,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: f1d7dd87da3e8feab4aaf675b8e29c6a5ed5f58b
+  version: 694728c496e22dfa5719c78ff23cc982e15bcb2f
   subpackages:
   - client
   - pkg/pathutil
@@ -59,7 +59,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: f280b3ba517bf5fc98922624f21fb0e7a92adaec
+  version: 32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -76,7 +76,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 1643683e1b54a9e88ad26d98f81400c8c9d9f4f9
+  version: 1e59b77b52bf8e4b449a57e6f79f21226d571845
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -135,7 +135,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: febb01a4b32897dd1ab2064958c54a1cf84ea652
+  version: 119c3c82c1c22337ceaffea0cdca5b127a139a1d
   subpackages:
   - lib
   - lib/api
@@ -171,7 +171,7 @@ imports:
   - prometheus
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -228,11 +228,11 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 75813c647272dd855bda156405bf844a5414f5bf
+  version: 82aafbf43bf885069dc71b7e7c2f9d7a614d47da
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: 4ee4af566555f5fbe026368b75596286a312663a
+  version: 19e51611da83d6be54ddafce4a4af510cb3e9ea4
   subpackages:
   - cases
   - encoding
