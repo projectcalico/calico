@@ -1,6 +1,6 @@
 ###############################################################################
 
-GO_BUILD_VER?=v0.7
+GO_BUILD_VER?=v0.8
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
