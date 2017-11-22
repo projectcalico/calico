@@ -27,7 +27,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: febb01a4b32897dd1ab2064958c54a1cf84ea652
+  version: v1.7.2
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -44,7 +44,7 @@ import:
   subpackages:
   - trie/ctrie
 - package: golang.org/x/text
-  version: 4ee4af566555f5fbe026368b75596286a312663a
+  version: 19e51611da83d6be54ddafce4a4af510cb3e9ea4
   subpackages:
   - secure/bidirule
 - package: github.com/emicklei/go-restful
