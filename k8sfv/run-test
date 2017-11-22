@@ -54,7 +54,7 @@
 : ${USE_TYPHA:=true}
 #
 # What version of Typha (container image) to use.
-: ${TYPHA_VERSION:=latest}
+: ${TYPHA_VERSION:=v0.5.x-series}
 #
 # Typha logging level.
 : ${TYPHA_LOG_LEVEL:=info}
