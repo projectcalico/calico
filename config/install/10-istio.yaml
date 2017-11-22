@@ -614,7 +614,6 @@ spec:
             - server
             - -l
             - "/var/run/dikastes/dikastes.sock"
-            - "--debug"
             - "-k"
             - "https://10.100.0.1:443"
           volumeMounts:
