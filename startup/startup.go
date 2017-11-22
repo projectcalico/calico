@@ -29,6 +29,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -191,11 +192,10 @@ func determineNodeName() string {
 		// hostname - but should warn the user that this is not a
 		// recommended way to start the node container.
 		var err error
-		if nodeName, err = os.Hostname(); err != nil {
+		if nodeName, err = names.Hostname(); err != nil {
 			log.WithError(err).Error("Unable to determine hostname")
 			terminate()
 		}
-
 		log.Warn("Auto-detecting node name. It is recommended that an explicit value is supplied using the NODENAME environment variable.")
 	}
 	return nodeName
