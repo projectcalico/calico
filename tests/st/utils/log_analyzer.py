@@ -38,6 +38,7 @@ MAX_NUM_ERRORS = 100
 # This is the list of logs we should ignore for all tests.
 LOGS_IGNORE_ALL_TESTS = [
     "Failed to connect to syslog error=Unix syslog delivery error level=",
+    "Exiting for config change",
     "Exiting. reason=\"config changed\"",
 ]
 
