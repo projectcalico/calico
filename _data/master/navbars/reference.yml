@@ -91,6 +91,8 @@ toc:
   section:
     - title: AWS
       path: /reference/public-cloud/aws
+    - title: Azure
+      path: /reference/public-cloud/azure
     - title: GCE
       path: /reference/public-cloud/gce
 - title: Deploying on Private Cloud
