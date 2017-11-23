@@ -21,7 +21,7 @@ NAME                             READY     STATUS    RESTARTS   AGE
 calico-node-1f4ih                2/2       Running   0          1m
 calico-node-hor7x                2/2       Running   0          1m
 calico-node-si5br                2/2       Running   0          1m
-calico-policy-controller-so4gl   1/1       Running   0          1m
+calico-kube-controller-so4gl   1/1       Running   0          1m
   info: 1 completed object(s) was(were) not shown in pods list. Pass --show-all to see all objects.
 ```
 
