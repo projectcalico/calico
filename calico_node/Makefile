@@ -25,7 +25,7 @@ TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREA
 KUBE_CONTROLLERS_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
 CNI_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
-CONFD_VER ?= v0.12.1-calico-0.4.0
+CONFD_VER ?= v0.12.1-calico-0.4.1
 
 SYSTEMTEST_CONTAINER_VER ?= latest
 # we can use "custom" build image and test image name
