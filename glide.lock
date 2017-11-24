@@ -1,5 +1,5 @@
-hash: 0739df0216d68c81ba2d4c473e91e7453fdb3532a2993cfcf45a767f6a0f40b4
-updated: 2017-09-22T13:49:54.523389191-07:00
+hash: 7556add4892b51bc84f466ccbbe74e38524b37f973c5fc62b5327f40e7323589
+updated: 2017-11-23T17:44:23.604945232Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -60,7 +60,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -91,9 +91,9 @@ imports:
 - name: github.com/go-openapi/jsonreference
   version: 13c6e3589ad90f49bd3e3bbe2c2cb3d7a4142272
 - name: github.com/go-openapi/spec
-  version: 6aced65f8501fe1217321abf0749d354824ba2ff
+  version: 7abd5745472fff5eb3685386d5fb8bf38683154d
 - name: github.com/go-openapi/swag
-  version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
+  version: f3f9494671f93fcff853e3c6e9e948b3eb71e590
 - name: github.com/gogo/protobuf
   version: e18d7aa8f8c624c915db340349aad4c49b10d173
   subpackages:
@@ -152,7 +152,7 @@ imports:
 - name: github.com/kelseyhightower/memkv
   version: 71620c547230ad53777a00e2ebd3bbab8353370e
 - name: github.com/mailru/easyjson
-  version: d5b7844b561a7bc640052f1b935f7b800330d7e0
+  version: 2f5df55504ebc322e4d52d34df6a1f5b503bf26d
   subpackages:
   - buffer
   - jlexer
@@ -160,7 +160,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/projectcalico/libcalico-go
-  version: fb0f93099e89eec0379f2b30e21e8427c8dc952d
+  version: 119c3c82c1c22337ceaffea0cdca5b127a139a1d
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -330,7 +330,10 @@ imports:
   - kubernetes/typed/storage/v1
   - kubernetes/typed/storage/v1beta1
   - pkg/api
+  - pkg/api/errors
   - pkg/api/install
+  - pkg/api/meta
+  - pkg/api/unversioned
   - pkg/api/v1
   - pkg/apis/apps
   - pkg/apis/apps/install
@@ -371,9 +374,15 @@ imports:
   - pkg/apis/storage/install
   - pkg/apis/storage/v1
   - pkg/apis/storage/v1beta1
+  - pkg/fields
+  - pkg/runtime
+  - pkg/runtime/schema
+  - pkg/runtime/serializer
   - pkg/util
   - pkg/util/parsers
+  - pkg/util/wait
   - pkg/version
+  - pkg/watch
   - plugin/pkg/client/auth
   - plugin/pkg/client/auth/gcp
   - plugin/pkg/client/auth/oidc
@@ -394,4 +403,8 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
+- name: k8s.io/kube-openapi
+  version: 61b46af70dfed79c6d24530cd23b41440a7f22a5
+  subpackages:
+  - pkg/common
 testImports: []
