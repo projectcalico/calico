@@ -1,3 +1,7 @@
+# Disable make's implicit rules, which are not useful for golang, and slow down the build
+# considerably.
+.SUFFIXES:
+
 ###############################################################################
 
 GO_BUILD_VER?=v0.7
@@ -7,6 +11,7 @@ CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
 
 ###############################################################################
+
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
 YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
@@ -15,32 +20,29 @@ YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
 V_RELEASE_STREAM := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
 RELEASE_STREAM ?= $(V_RELEASE_STREAM)
 
-# Use := so that these V_ variables are computed only once per make run.
-V_CALICO := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
-V_CALICO_GIT := $(shell git describe --tags --dirty --always)
-V_BIRD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
-V_CONFD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.confd.version')
-V_CALICOCTL := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
-V_CNI := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
-V_FELIX := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
-V_GOBGPD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
-V_KUBE_CONTROLLERS := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
-V_LIBNETWORK_PLUGIN := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
-V_TYPHA := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+# Include calculated version numbers, which we extract from the versions YAML file.  If this file
+# doesn't exist then make will use the target below to build it.  We include the release stream in
+# the name of the file to ensure that it gets rebuilt if the user switches release stream using
+# the environment variable.
+include versions.$(RELEASE_STREAM).mk
 
-# Now use ?= to allow the versions derived from versions.yml to be
-# overriden (by the environment).
-CALICO_VER ?= $(V_CALICO)
-CALICO_GIT_VER ?= $(V_CALICO_GIT)
-BIRD_VER ?= $(V_BIRD)
-CONFD_VER ?= $(V_CONFD)
-CALICOCTL_VER ?= $(V_CALICOCTL)
-CNI_VER ?= $(V_CNI)
-FELIX_VER ?= $(V_FELIX)
-GOBGPD_VER ?= $(V_GOBGPD)
-KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
-LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
-TYPHA_VER ?= $(V_TYPHA)
+versions.$(RELEASE_STREAM).mk: $(VERSIONS_FILE) Makefile
+	echo "Recalculating versions.mk RELEASE_STREAM=$(RELEASE_STREAM)"
+	rm -f versions*.mk
+	echo "CALICO_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')" >> versions.new.mk
+	echo "BIRD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')" >> versions.new.mk
+	echo "CONFD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.confd.version')" >> versions.new.mk
+	echo "CALICOCTL_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')" >> versions.new.mk
+	echo "CNI_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')" >> versions.new.mk
+	echo "FELIX_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')" >> versions.new.mk
+	echo "GOBGPD_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')" >> versions.new.mk
+	echo "KUBE_CONTROLLERS_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')" >> versions.new.mk
+	echo "LIBNETWORK_PLUGIN_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')" >> versions.new.mk
+	echo "TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')" >> versions.new.mk
+	mv versions.new.mk "$@"
+
+# Always re-calculate the git version.
+CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
 
 $(info RELEASE_STREAM=$(RELEASE_STREAM))
 $(info CALICO_VER=$(CALICO_VER))
@@ -686,7 +688,7 @@ $(RELEASE_DIR_BIN)/%:
 clean:
 	find . -name '*.created' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
-	rm -rf dist build certs *.tar vendor $(NODE_CONTAINER_DIR)/filesystem/bin
+	rm -rf dist build certs *.tar vendor $(NODE_CONTAINER_DIR)/filesystem/bin versions*.mk
 
 	# Delete images that we built in this repo
 	docker rmi $(NODE_CONTAINER_NAME):latest || true
