@@ -1,5 +1,5 @@
-hash: 4ca12f4cacf086f90b632ddc4f6cdd55bb7602e6e0e6a0a1609c5c43a42d1a8d
-updated: 2017-11-22T10:52:50.982544742Z
+hash: e6bcc02b36cf3f98b2ea03f04824690572c4556a15b0ece732fc6db306cb3b5f
+updated: 2017-11-27T13:19:05.958711326-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
+  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
   - spew
 - name: github.com/docker/distribution
@@ -71,9 +71,9 @@ imports:
 - name: github.com/go-openapi/jsonreference
   version: 13c6e3589ad90f49bd3e3bbe2c2cb3d7a4142272
 - name: github.com/go-openapi/spec
-  version: 7abd5745472fff5eb3685386d5fb8bf38683154d
+  version: 6aced65f8501fe1217321abf0749d354824ba2ff
 - name: github.com/go-openapi/swag
-  version: f3f9494671f93fcff853e3c6e9e948b3eb71e590
+  version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 1e59b77b52bf8e4b449a57e6f79f21226d571845
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -100,7 +100,7 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
-  version: 2f5df55504ebc322e4d52d34df6a1f5b503bf26d
+  version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
   - buffer
   - jlexer
@@ -155,7 +155,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 119c3c82c1c22337ceaffea0cdca5b127a139a1d
+  version: aab828ef9fd5405040c36368f866e5ec9ea314a6
   subpackages:
   - lib
   - lib/api
@@ -187,7 +187,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 60863f32252710455e79289ef9bbf644308a94d0
+  version: 367b3b5598d007196daee7d3a2751ab0ed6bb930
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -255,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 82aafbf43bf885069dc71b7e7c2f9d7a614d47da
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -436,8 +436,4 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
-- name: k8s.io/kube-openapi
-  version: 61b46af70dfed79c6d24530cd23b41440a7f22a5
-  subpackages:
-  - pkg/common
 testImports: []
