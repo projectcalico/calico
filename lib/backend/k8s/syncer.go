@@ -837,6 +837,8 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 		}
 		snap[KEY_RS] = []model.KVPair{*ready}
 		keys[KEY_RS] = map[string]bool{ready.Key.String(): true}
+		// There's no watcher for the ready state so we simply mark the resync as done.
+		syn.needsResync[KEY_RS] = false
 
 		log.Infof("Snapshot resourceVersions: %+v", versions)
 		log.Debugf("Created snapshot: %+v", snap)
