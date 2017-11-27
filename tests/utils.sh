@@ -63,9 +63,9 @@ populate_kdd() {
 clean_kdd() {
     echo "Cleaning out k8s API"
     to_remove=$1
-    kubectl delete -f /tests/mock_data/kdd/${to_test}/crd_data.yaml > /dev/null 2>&1
-    kubectl delete -f /tests/mock_data/kdd/${to_test}/crds.yaml > /dev/null 2>&1
-    kubectl delete -f /tests/mock_data/kdd/${to_test}/nodes.yaml > /dev/null 2>&1
+    kubectl delete -f /tests/mock_data/kdd/${to_remove}/crd_data.yaml > /dev/null 2>&1
+    kubectl delete -f /tests/mock_data/kdd/${to_remove}/crds.yaml > /dev/null 2>&1
+    kubectl delete -f /tests/mock_data/kdd/${to_remove}/nodes.yaml > /dev/null 2>&1
 }
 
 # get_templates attempts to grab the latest templates from the calico repo
