@@ -36,11 +36,11 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	// than a user error.
 	v3key, ok := kvp.Key.(model.ResourceKey)
 	if !ok || v3key.Kind != apiv3.KindIPPool {
-		return nil, errors.New("Key is not a valid BGPPeer resource key")
+		return nil, errors.New("Key is not a valid IPPool resource key")
 	}
 	v3res, ok := kvp.Value.(*apiv3.IPPool)
 	if !ok {
-		return nil, errors.New("Value is not a valid BGPPeer resource key")
+		return nil, errors.New("Value is not a valid IPPool resource value")
 	}
 
 	// Correct data types.  Handle the conversion.
