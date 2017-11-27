@@ -1,5 +1,8 @@
 ###############################################################################
+# vX.Y format: update during major release process
+RELEASE_STREAM ?= v3.0
 
+###############################################################################
 GO_BUILD_VER?=v0.7
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
@@ -10,10 +13,6 @@ VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
 YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
-
-# Read current stream version from _data/versions.yml
-V_RELEASE_STREAM := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "currentReleaseStream")
-RELEASE_STREAM ?= $(V_RELEASE_STREAM)
 
 # Use := so that these V_ variables are computed only once per make run.
 V_CALICO := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
@@ -42,18 +41,17 @@ KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
 LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
 TYPHA_VER ?= $(V_TYPHA)
 
-$(info RELEASE_STREAM=$(RELEASE_STREAM))
-$(info CALICO_VER=$(CALICO_VER))
-$(info CALICO_GIT_VER=$(CALICO_GIT_VER))
-$(info BIRD_VER=$(BIRD_VER))
-$(info CALICOCTL_VER=$(CALICOCTL_VER))
-$(info CONFD_VER=$(CONFD_VER))
-$(info CNI_VER=$(CNI_VER))
-$(info FELIX_VER=$(FELIX_VER))
-$(info GOBGPD_VER=$(GOBGPD_VER))
-$(info KUBE_CONTROLLERS_VER=$(KUBE_CONTROLLERS_VER))
-$(info LIBNETWORK_PLUGIN_VER=$(LIBNETWORK_PLUGIN_VER))
-$(info TYPHA_VER=$(TYPHA_VER))
+$(info $(shell printf "%-21s = %-10s\n" "CALICO_VER" $(CALICO_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CALICO_GIT_VER" $(CALICO_GIT_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "BIRD_VER" $(BIRD_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CONFD_VER" $(CONFD_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CALICOCTL_VER" $(CALICOCTL_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "FELIX_VER" $(FELIX_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "GOBGPD_VER" $(GOBGPD_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "KUBE_CONTROLLERS_VER" $(KUBE_CONTROLLERS_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "LIBNETWORK_PLUGIN_VER" $(LIBNETWORK_PLUGIN_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "TYPHA_VER" $(TYPHA_VER)))
 
 SYSTEMTEST_CONTAINER_VER ?= latest
 # we can use "custom" build image and test image name
@@ -567,12 +565,9 @@ semaphore:
 	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
 
 release: clean
-	@echo Using the following versions:
-	@echo "	felix:             ${FELIX_VER}"
-	@echo "	calico:            ${CALICO_VER}"
-	@echo "	bird:              ${BIRD_VER}"
-	@echo "	confd:             ${CONFD_VER}"
-	@echo "	libnetwork_plugin: ${LIBNETWORK_PLUGIN_VER}"
+	@echo ""
+	@echo "Hit Return to go ahead and create the tag, or Ctrl-C to cancel."
+	@bash -c read
 
 	git tag $(CALICO_VER)
 
@@ -714,3 +709,4 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
+
