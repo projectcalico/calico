@@ -1,5 +1,5 @@
-hash: 971493364b170f94211ce729f72ee405b77aa36bc7ad29bdf181fc8829a1a8d7
-updated: 2017-11-22T13:39:47.257469163Z
+hash: e5cd918fcdfd907214445f8771327e3c95959b2f0a4d1ff5af9edcbe0d79dea1
+updated: 2017-11-27T12:20:02.267330685-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -98,7 +98,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: e9cbc6da11435fd690561ff82e4a367ebdc62c79
+  version: 3c9eb9dad289b380ab4e46386390c4315bd5a552
   subpackages:
   - client/v2
   - models
@@ -128,7 +128,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
 - name: github.com/onsi/ginkgo
-  version: 652e15c9a27e1cec563e065568014f29eecf6bd9
+  version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
   - config
   - extensions/table
@@ -172,7 +172,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 119c3c82c1c22337ceaffea0cdca5b127a139a1d
+  version: aab828ef9fd5405040c36368f866e5ec9ea314a6
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -226,11 +226,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: c2a3de3b38bd00f07290c3c5e12b4dbc04ec8666
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -259,7 +259,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 82aafbf43bf885069dc71b7e7c2f9d7a614d47da
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -464,7 +464,7 @@ imports:
   - util/jsonpath
 testImports:
 - name: github.com/onsi/gomega
-  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
