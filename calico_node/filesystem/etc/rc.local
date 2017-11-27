@@ -60,8 +60,8 @@ case "$CALICO_NETWORKING_BACKEND" in
 	# Run confd twice.  Our confd TOML files are also generated from confd, so
 	# running twice ensures our starting configuration is correct.
 	if [ "$DATASTORE_TYPE" = "kubernetes" ]; then
-		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug -keep-stage-file >/felix-startup-1.log 2>&1 || true
-		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug -keep-stage-file >/felix-startup-2.log 2>&1 || true
+		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=info -keep-stage-file >/felix-startup-1.log 2>&1 || true
+		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=info -keep-stage-file >/felix-startup-2.log 2>&1 || true
 	else
 		# Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
 		ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
