@@ -57,24 +57,30 @@ func (cb *ConfigBatcher) OnUpdate(update api.Update) (filterOut bool) {
 			filterOut = true
 			return
 		}
-		log.Infof("Host config update for this host: %v", update)
 		if value, ok := update.Value.(string); value != cb.hostConfig[key.Name] {
+			log.Infof("Host config update for this host: %v", update)
 			if ok {
 				cb.hostConfig[key.Name] = value
 			} else {
 				delete(cb.hostConfig, key.Name)
 			}
 			cb.configDirty = true
+		} else {
+			log.Debugf("Ignoring no-op host config update for this host: %v", update)
+			return
 		}
 	case model.GlobalConfigKey:
-		log.Infof("Global config update: %v", update)
 		if value, ok := update.Value.(string); value != cb.globalConfig[key.Name] {
+			log.Infof("Global config update: %v", update)
 			if ok {
 				cb.globalConfig[key.Name] = value
 			} else {
 				delete(cb.globalConfig, key.Name)
 			}
 			cb.configDirty = true
+		} else {
+			log.Debugf("Ignoring no-op global config update: %v", update)
+			return
 		}
 	case model.ReadyFlagKey:
 		if update.Value != true {
@@ -117,4 +123,5 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 		cb.callbacks.OnDatastoreNotReady()
 	}
 	cb.callbacks.OnConfigUpdate(globalConfigCopy, hostConfigCopy)
+	cb.configDirty = false
 }
