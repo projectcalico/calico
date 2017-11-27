@@ -1,5 +1,5 @@
-hash: e4d95062b63a3aa4491b254d1ac41afc91347c69346819289f2b244acef9d738
-updated: 2017-11-22T10:23:39.868064751Z
+hash: d70a54f814bd0557898777bc562905ded29eb83f557ab11446173042f146ff2e
+updated: 2017-11-27T11:56:44.20219309-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -76,7 +76,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 1e59b77b52bf8e4b449a57e6f79f21226d571845
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -135,7 +135,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 119c3c82c1c22337ceaffea0cdca5b127a139a1d
+  version: aab828ef9fd5405040c36368f866e5ec9ea314a6
   subpackages:
   - lib
   - lib/api
@@ -171,7 +171,7 @@ imports:
   - prometheus
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -228,7 +228,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 82aafbf43bf885069dc71b7e7c2f9d7a614d47da
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
