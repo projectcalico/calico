@@ -1,4 +1,4 @@
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: WorkloadEndpoint
 metadata:
  name: rack1--host1-k8s-pod--name-eth0

@@ -1,4 +1,4 @@
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
  name: random.name5
