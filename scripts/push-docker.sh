@@ -22,9 +22,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Collect artifacts for pushing
-bin=$(bazel info bazel-bin)
-bazel build --output_groups=static //:dikastes
-cp -f "${bin}/dikastes.static" docker/dikastes
+CGO_ENABLED=0 GOOS=linux go build -o docker/dikastes
 
 # Build and push images
 

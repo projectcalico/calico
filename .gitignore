@@ -5,3 +5,4 @@ bazel-genfiles
 bazel-out
 bazel-testlogs
 docker/dikastes
+vendor/

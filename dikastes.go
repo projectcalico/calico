@@ -12,7 +12,7 @@ import (
 	authz "tigera.io/dikastes/proto"
 	"tigera.io/dikastes/server"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 
 	docopt "github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
@@ -139,11 +139,12 @@ func getDialer(proto string) func(string, time.Duration) (net.Conn, error) {
 	}
 }
 
-func getConfig(arguments map[string]interface{}) api.CalicoAPIConfig {
-	cfg := api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.Kubernetes,
-			KubeConfig:    api.KubeConfig{},
+func getConfig(arguments map[string]interface{}) apiconfig.CalicoAPIConfig {
+	cfg := apiconfig.CalicoAPIConfig{
+		Spec: apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.Kubernetes,
+			KubeConfig:    apiconfig.KubeConfig{},
+			AlphaFeatures: "serviceaccounts,httprules",
 		},
 	}
 	if arguments["--kube"] != nil {

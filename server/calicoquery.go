@@ -1,18 +1,21 @@
 package server
 
 import (
+	"context"
 	"net"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/converter"
+	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/watch"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -24,46 +27,50 @@ type (
 	CalicoQuery interface {
 
 		// Get a list of Policy objects for the given endpoint.
-		GetPolicies(metadata api.WorkloadEndpointMetadata) ([]api.Policy, error)
+		GetPolicies(name, namespace string) ([]api.GlobalNetworkPolicy, error)
 
 		// Lookup an endpoint based on its IP address.
 		GetEndpointFromIP(ip net.IP) (*model.KVPair)
 
 		// Temporary, needed to find workload endpoint from container ID.
 		// TODO (spikecurtis): remove this and replace with socket per pod.
-		GetEndpointFromContainer(cid string, nodeName string) (api.WorkloadEndpointMetadata, error)
+		GetEndpointFromContainer(cid string, nodeName string) (name, namespace string, err error)
 	}
 
 	calicoQuery struct {
-		Client *client.Client
+		Client clientv3.Interface
 		kubeClient *kubernetes.Clientset
 		pLock sync.RWMutex
-		pMap map[string]*api.Policy
+		pMap map[string]*api.GlobalNetworkPolicy
 		pConverter converter.PolicyConverter
 		status bapi.SyncStatus
+		PolicyWatcher watch.Interface
 	}
 
 )
 
-func NewCalicoQuery(client *client.Client, kubeClient *kubernetes.Clientset) (CalicoQuery){
+func NewCalicoQuery(client clientv3.Interface, kubeClient *kubernetes.Clientset) (CalicoQuery){
+	watcher, err := client.GlobalNetworkPolicies().Watch(context.TODO(), options.ListOptions{})
+	if err != nil {
+		log.Fatalf("Failed to watch policies %v", err)
+	}
 	q := calicoQuery{
-		client, kubeClient, sync.RWMutex{}, make(map[string]*api.Policy),
-		converter.PolicyConverter{}, bapi.WaitForDatastore}
-	syncer := client.Backend.Syncer(&q)
-	syncer.Start()
+		client, kubeClient, sync.RWMutex{}, make(map[string]*api.GlobalNetworkPolicy),
+		converter.PolicyConverter{}, bapi.WaitForDatastore, watcher}
+	go q.watchPolicy(watcher.ResultChan())
 	return &q
 }
 
-func (q *calicoQuery) GetPolicies(metadata api.WorkloadEndpointMetadata) ([]api.Policy, error) {
-	we, err := q.Client.WorkloadEndpoints().Get(metadata)
+func (q *calicoQuery) GetPolicies(name, namespace string) ([]api.GlobalNetworkPolicy, error) {
+	we, err := q.Client.WorkloadEndpoints().Get(context.TODO(), name, namespace, options.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	return q.getPoliciesFromLabels(we.Metadata.Labels)
+	return q.getPoliciesFromLabels(we.Labels)
 }
 
 // Methods to sort Polices by their ordering.
-type orderedPolicies []api.Policy
+type orderedPolicies []api.GlobalNetworkPolicy
 
 func (op orderedPolicies) Len() int      { return len(op) }
 func (op orderedPolicies) Swap(i, j int) { op[i], op[j] = op[j], op[i] }
@@ -75,29 +82,29 @@ func (op orderedPolicies) Less(i, j int) bool {
 	} else if op[i].Spec.Order != nil && op[j].Spec.Order != nil {
 		return *op[i].Spec.Order < *op[j].Spec.Order
 	} else {
-		return strings.Compare(op[i].Metadata.Name, op[j].Metadata.Name) < 0
+		return strings.Compare(op[i].Name, op[j].Name) < 0
 	}
 }
 
 // Return the list of active PolicySpecs for this endpoint.  This list should be sorted in the correct application
 // order.
-func (q *calicoQuery) getPoliciesFromLabels(labels map[string]string) ([]api.Policy, error) {
-	p_active := []api.Policy{}
+func (q *calicoQuery) getPoliciesFromLabels(labels map[string]string) ([]api.GlobalNetworkPolicy, error) {
+	pActive := []api.GlobalNetworkPolicy{}
 	q.pLock.RLock()
 	log.Debugf("Found %d total policies.", len(q.pMap))
 	for _, p := range q.pMap {
 		log.Debugf("Found policy %v", *p)
 		if policyActive(labels, p) {
 			log.Debugf("Active policy %v", *p)
-			p_active = append(p_active, *p)
+			pActive = append(pActive, *p)
 		}
 	}
 	q.pLock.RUnlock()
-	sort.Sort(orderedPolicies(p_active))
-	return p_active, nil
+	sort.Sort(orderedPolicies(pActive))
+	return pActive, nil
 }
 
-func policyActive(labels map[string]string, policy *api.Policy) bool {
+func policyActive(labels map[string]string, policy *api.GlobalNetworkPolicy) bool {
 	sel, err := selector.Parse(policy.Spec.Selector)
 	if err != nil {
 		log.Warnf("Could not parse policy selector %v, %v", policy.Spec.Selector, err)
@@ -111,14 +118,13 @@ func (q *calicoQuery) GetEndpointFromIP(ip net.IP) (*model.KVPair) {
 	return nil
 }
 
-func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (api.WorkloadEndpointMetadata, error) {
-	wemeta := api.WorkloadEndpointMetadata{}
+func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (name, namespace string, err error) {
 	qStr := "spec.nodeName=" + nodeName
 	opts := metav1.ListOptions{}
 	opts.FieldSelector = qStr
 	pods, err := q.kubeClient.CoreV1().Pods("").List(opts)
 	if err != nil {
-		return wemeta, err
+		return
 	}
 	log.Debugf("Number of pods on %v %v", qStr, len(pods.Items))
 
@@ -126,35 +132,33 @@ func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (api
 	for _, pod := range pods.Items {
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			if containerStatus.ContainerID == matchCid {
-				wemeta.Workload = fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
-				wemeta.Node = nodeName
-				wemeta.Orchestrator = "k8s"
-				wemeta.Name = "eth0"
-				return wemeta, nil
+				namespace = pod.ObjectMeta.Namespace
+				name = pod.ObjectMeta.Name
+				return
 			}
 		}
 	}
-	return wemeta, fmt.Errorf("unable to find pod with containerId %v", cid)
+	err = fmt.Errorf("unable to find pod with containerId %v", cid)
+	return
 }
 
 
-func (q *calicoQuery) OnUpdates(updates []bapi.Update) {
-	for _, u := range updates {
-		switch key := u.Key.(type) {
-		case model.PolicyKey:
-			if u.Value != nil {
-				log.Debugf("Storing policy for key %v", key)
-				policy, _ := q.pConverter.ConvertKVPairToAPI(&u.KVPair)
-				q.pLock.Lock()
-				q.pMap[key.Name] = policy.(*api.Policy)
-				q.pLock.Unlock()
-			} else {
-				q.pLock.Lock()
-				delete(q.pMap, key.Name)
-				q.pLock.Unlock()
-			}
+func (q *calicoQuery) watchPolicy(c <-chan watch.Event) {
+	for e := range c {
+		switch t := e.Type; t {
+		case watch.Added, watch.Modified:
+			log.Debugf("Storing policy %v", e.Object)
+			policy := e.Object.(*api.GlobalNetworkPolicy)
+			q.pLock.Lock()
+			q.pMap[policy.Name] = policy
+			q.pLock.Unlock()
+		case watch.Deleted:
+			policy := e.Previous.(*api.GlobalNetworkPolicy)
+			q.pLock.Lock()
+			delete(q.pMap, policy.Name)
+			q.pLock.Unlock()
 		default:
-			log.Debugf("Ignoring update for key %v", key)
+			log.Debugf("Ignoring update for %v", e)
 		}
 	}
 }

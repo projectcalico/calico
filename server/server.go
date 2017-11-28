@@ -3,8 +3,8 @@ package server
 import (
 	authz "tigera.io/dikastes/proto"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 
 	log "github.com/sirupsen/logrus"
@@ -20,8 +20,8 @@ type (
 	}
 )
 
-func NewServer(config api.CalicoAPIConfig, nodeName string) (*auth_server, error) {
-	c, err := client.New(config)
+func NewServer(config apiconfig.CalicoAPIConfig, nodeName string) (*auth_server, error) {
+	c, err := clientv3.New(config)
 	log.Debug("Created Calico Client.")
 	if err != nil {
 		return nil, err
@@ -44,11 +44,11 @@ func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Re
 		log.Errorf("Failed to get container ID. %v", err)
 		return &resp, nil
 	}
-	wemeta, err := as.Query.GetEndpointFromContainer(cid, as.NodeName)
+	name, namespace, err := as.Query.GetEndpointFromContainer(cid, as.NodeName)
 	if err != nil {
 		log.Errorf("Failed to get endpoint for container %v. %v", cid, err)
 	}
-	policies, err := as.Query.GetPolicies(wemeta)
+	policies, err := as.Query.GetPolicies(name, namespace)
 	if err != nil {
 		log.Errorf("Failed to get policies. %v", err)
 		return &resp, nil
@@ -63,7 +63,7 @@ func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Re
 }
 
 // Modified from libcalico-go/lib/backend/k8s/k8s.go to return bare clientset.
-func NewKubeClient(calCfg api.CalicoAPIConfig) (*kubernetes.Clientset, error) {
+func NewKubeClient(calCfg apiconfig.CalicoAPIConfig) (*kubernetes.Clientset, error) {
 	kc := &calCfg.Spec.KubeConfig
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
 	log.Debugf("Building client for config: %+v", kc)

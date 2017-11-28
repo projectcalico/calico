@@ -3,7 +3,7 @@ package server
 import (
 	authz "tigera.io/dikastes/proto"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
 	log "github.com/sirupsen/logrus"
@@ -26,7 +26,7 @@ func matchAction(rule api.Rule, act *authz.Request_Action) bool {
 	return matchHTTP(rule.HTTP, act.GetHttp())
 }
 
-func matchServiceAccounts(saMatch api.ServiceAccountMatch, subj *authz.Request_Subject) bool {
+func matchServiceAccounts(saMatch *api.ServiceAccountMatch, subj *authz.Request_Subject) bool {
 	accountName := subj.GetServiceAccount()
 	namespace := subj.GetNamespace()
 	labels := subj.GetServiceAccountLabels()
@@ -37,7 +37,6 @@ func matchServiceAccounts(saMatch api.ServiceAccountMatch, subj *authz.Request_S
 		"rule":      saMatch},
 	).Debug("Matching service account.")
 	return matchServiceAccountName(saMatch.Names, accountName) &&
-		matchServiceAccountNamespace(saMatch.Namespace, namespace) &&
 		matchServiceAccountLabels(saMatch.Selector, labels)
 }
 
@@ -52,14 +51,6 @@ func matchServiceAccountName(names []string, name string) bool {
 		}
 	}
 	return false
-}
-
-func matchServiceAccountNamespace(matchNamespace, namespace string) bool {
-	if matchNamespace == "" {
-		log.Debug("No service account namespace in rule.")
-		return true
-	}
-	return matchNamespace == namespace
 }
 
 func matchServiceAccountLabels(selectorStr string, labels map[string]string) bool {

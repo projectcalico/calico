@@ -3,22 +3,27 @@ import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/golang/protobuf
+  version: master
   subpackages:
   - proto
 - package: github.com/projectcalico/libcalico-go
+  version: http-attr
+  repo: "git@github.com:colabsaumoh/libcalico-go.git"
+  vcs: git
   subpackages:
-  - lib/api
+  - lib/apis/v3
   - lib/client
   - lib/selector
 - package: github.com/sirupsen/logrus
-  version: ^0.10.0
+  version: ^1.0.3
 - package: golang.org/x/net
   subpackages:
   - context
 - package: google.golang.org/grpc
-  version: ^1.7.0
+  version: v1.2.1
   subpackages:
   - reflection
 - package: k8s.io/apimachinery
+  version: release-1.8
   subpackages:
   - pkg/util/validation

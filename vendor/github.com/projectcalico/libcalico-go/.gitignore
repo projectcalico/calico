@@ -1,7 +1,0 @@
-*~
-bin
-*.coverprofile
-vendor
-.idea
-.go-pkg-cache
-junit.xml
