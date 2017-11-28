@@ -1,10 +1,9 @@
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
  name: abc.allow.tcp6379
- namespace: mynamespace
 spec:
- selector: has(b)
+ selector: has(abs)
  ingress:
  - action: allow
    protocol: tcp
@@ -12,6 +11,6 @@ spec:
      selector: has(a)
    destination:
      ports:
-     - 6379
+     - 1337
  egress:
  - action: allow

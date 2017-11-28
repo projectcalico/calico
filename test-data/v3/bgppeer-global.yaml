@@ -1,4 +1,4 @@
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
  name: globalpeer.name5
