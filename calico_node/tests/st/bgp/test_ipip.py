@@ -343,11 +343,10 @@ class TestIPIP(TestBase):
 
             self._test_gce_int(with_ipip, backend, host1, host2, False)
 
-    #@parameterized.expand([
-    #    (False,),
-    #    (True,),
-    #])
-    @skip("Skipping until route reflector is updated with libcalico-go v3 support")
+    @parameterized.expand([
+        (False,),
+        (True,),
+    ])
     def test_gce_rr(self, with_ipip):
         """As test_gce except with a route reflector instead of mesh config."""
         with DockerHost('host1',

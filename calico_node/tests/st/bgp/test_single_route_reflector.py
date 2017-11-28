@@ -21,8 +21,6 @@ from tests.st.utils.utils import update_bgp_config
 
 from .peer import create_bgp_peer
 
-# TODO: Re-enable
-@skip("Disabled until routereflector is updated for libcalico-go v3")
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
