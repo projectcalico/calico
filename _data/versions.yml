@@ -31,6 +31,9 @@ v2.6:
     calico-bird:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    confd:
+      version: v0.12.1-calico-0.4.1
+      url: https://github.com/projectcalico/confd/releases/tag/v0.12.1-calico-0.4.1
     calico-bgp-daemon:
       version: v0.2.1
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
