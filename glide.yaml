@@ -130,7 +130,7 @@ import:
 - package: gopkg.in/yaml.v2
   version: f7716cbe52baa25d2e9b0d0da546fcf909fc16b4
 - package: github.com/projectcalico/libcalico-go
-  version: v1.7.2
+  version: v1.7.3
   subpackages:
   - lib/backend/k8s
   - lib/backend/k8s/resources

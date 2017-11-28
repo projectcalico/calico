@@ -16,7 +16,7 @@ for test in "${TESTS_TO_RUN[@]}"; do
     if ! . ${script_dir}/test_kdd.sh ${test}; then
         success=1
     fi
-    clean_kdd
+    clean_kdd ${test}
 done
 
 exit ${success}
