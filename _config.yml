@@ -10,6 +10,8 @@ gems:
 url: https://docs.projectcalico.org
 
 prodname: Calico
+nodecontainer: calico/node
+noderunning: calico-node
 
 # Image names in case the host changes
 imageNames:
