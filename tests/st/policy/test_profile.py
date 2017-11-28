@@ -31,6 +31,7 @@ POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
 
 _log = logging.getLogger(__name__)
 
+
 class MultiHostMainline(TestBase):
     host1 = None
     host2 = None
