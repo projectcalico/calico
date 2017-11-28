@@ -21,31 +21,63 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
-func ConvertIPPool(kvp *model.KVPair) (*model.KVPair, error) {
-	pool, ok := kvp.Value.(model.IPPool)
+// IPPool implements the Converter interface.
+type IPPool struct{}
+
+// APIV1ToBackendV1 converts v1 IPPool API to v1 IPPool KVPair.
+func (_ IPPool) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error) {
+	p := rIn.(apiv1.IPPool)
+
+	var ipipInterface string
+	var ipipMode ipip.Mode
+	if p.Spec.IPIP != nil {
+		if p.Spec.IPIP.Enabled {
+			ipipInterface = "tunl0"
+		} else {
+			ipipInterface = ""
+		}
+		ipipMode = p.Spec.IPIP.Mode
+	}
+
+	d := model.KVPair{
+		Key: model.IPPoolKey{
+			CIDR: p.Metadata.CIDR,
+		},
+		Value: &model.IPPool{
+			CIDR:          p.Metadata.CIDR,
+			IPIPInterface: ipipInterface,
+			IPIPMode:      ipipMode,
+			Masquerade:    p.Spec.NATOutgoing,
+			IPAM:          !p.Spec.Disabled,
+			Disabled:      p.Spec.Disabled,
+		},
+	}
+
+	return &d, nil
+}
+
+// BackendV1ToAPIV3 converts v1 IPPool KVPair to v3 API.
+func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
+	pool, ok := kvp.Value.(*model.IPPool)
 	if !ok {
 		return nil, fmt.Errorf("value is not a valid BGPPeer resource key")
 	}
 
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name: cidrToName(pool.CIDR),
-			Kind: strings.ToLower(apiv3.KindIPPool),
-		},
-		Value: apiv3.IPPool{
-			ObjectMeta: v1.ObjectMeta{Name: cidrToName(pool.CIDR)},
-			Spec: apiv3.IPPoolSpec{
-				CIDR:        pool.CIDR.String(),
-				IPIPMode:    convertIPIPMode(pool.IPIPMode, pool.IPIPInterface),
-				NATOutgoing: pool.Masquerade,
-				Disabled:    pool.Disabled,
-			},
+	return &apiv3.IPPool{
+		ObjectMeta: v1.ObjectMeta{Name: cidrToName(pool.CIDR)},
+		Spec: apiv3.IPPoolSpec{
+			CIDR:        pool.CIDR.String(),
+			IPIPMode:    convertIPIPMode(pool.IPIPMode, pool.IPIPInterface),
+			NATOutgoing: pool.Masquerade,
+			Disabled:    pool.Disabled,
 		},
 	}, nil
 }

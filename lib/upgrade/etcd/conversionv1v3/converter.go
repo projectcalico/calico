@@ -22,12 +22,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
+// Resource is implemented by all Calico resources.
 type Resource interface {
 	runtime.Object
 	v1.ObjectMetaAccessor
 }
 
 type Converter interface {
-	apiV1ToBackendV1(unversioned.Resource) (*model.KVPair, error)
-	backendV1ToAPIV3(*model.KVPair) (Resource, error)
+	// APIV1ToBackendV1 converts unversioned resource (v1 API) to v1 KVPair.
+	APIV1ToBackendV1(unversioned.Resource) (*model.KVPair, error)
+
+	// BackendV1ToAPIV3 converts v1 KVPair to v3 resource (v3 API)
+	BackendV1ToAPIV3(*model.KVPair) (Resource, error)
 }
