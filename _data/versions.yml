@@ -1,7 +1,7 @@
 v2.6:
 - title: v2.6.3
   note: |
-    27 November 2017
+    28 November 2017
 
     Calico v2.6.3 addresses several outstanding common vulnerabilities and exposures (CVE).
 
@@ -11,11 +11,11 @@ v2.6:
 
   components:
     felix:
-      version: 2.6.1
-      url: https://github.com/projectcalico/felix/releases/tag/2.6.1
+      version: 2.6.2
+      url: https://github.com/projectcalico/felix/releases/tag/2.6.2
     typha:
-      version: v0.5.2
-      url: https://github.com/projectcalico/typha/releases/tag/v0.5.2
+      version: v0.5.3
+      url: https://github.com/projectcalico/typha/releases/tag/v0.5.3
     calicoctl:
       version: v1.6.2
       url: https://github.com/projectcalico/calicoctl/releases/tag/v1.6.2
@@ -32,8 +32,8 @@ v2.6:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
     confd:
-      version: v0.12.1-calico-0.4.1
-      url: https://github.com/projectcalico/confd/releases/tag/v0.12.1-calico-0.4.1
+      version: v0.12.1-calico-0.4.2
+      url: https://github.com/projectcalico/confd/releases/tag/v0.12.1-calico-0.4.2
     calico-bgp-daemon:
       version: v0.2.1
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
