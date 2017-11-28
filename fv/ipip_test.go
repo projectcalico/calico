@@ -23,8 +23,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/fv/containers"
@@ -91,6 +93,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range felixes {
 				felix.Exec("iptables-save", "-c")
+				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
 			}
 		}
@@ -167,6 +170,15 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 				_, err := client.Nodes().Update(ctx, &node, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
+
+			// Removing the BGP config triggers a Felix restart and Felix has a 2s timer during
+			// a config restart to ensure that it doesn't tight loop.  Wait for the ipset to be
+			// updated as a signal that Felix has restarted.
+			for _, f := range felixes {
+				Eventually(func() int {
+					return getNumIPSetMembers(f, "cali4-all-hosts")
+				}, "5s", "200ms").Should(BeZero())
+			}
 		})
 
 		It("should have no workload to workload connectivity", func() {
@@ -176,3 +188,25 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 		})
 	})
 })
+
+func getNumIPSetMembers(c *containers.Container, ipSetName string) int {
+	ipsetsOutput, err := c.ExecOutput("ipset", "list")
+	Expect(err).NotTo(HaveOccurred())
+	numMembers := map[string]int{}
+	currentName := ""
+	membersSeen := false
+	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
+	for _, line := range strings.Split(ipsetsOutput, "\n") {
+		log.WithField("line", line).Debug("Parsing line")
+		if strings.HasPrefix(line, "Name:") {
+			currentName = strings.Split(line, " ")[1]
+			membersSeen = false
+		} else if strings.HasPrefix(line, "Members:") {
+			membersSeen = true
+		} else if membersSeen && len(strings.TrimSpace(line)) > 0 {
+			log.Debugf("IP set %s has member %s", currentName, line)
+			numMembers[currentName]++
+		}
+	}
+	return numMembers[ipSetName]
+}

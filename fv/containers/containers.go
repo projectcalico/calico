@@ -256,6 +256,17 @@ func (c *Container) ExecMayFail(cmd ...string) error {
 	return utils.RunMayFail("docker", arg...)
 }
 
+func (c *Container) ExecOutput(args ...string) (string, error) {
+	arg := []string{"exec", c.Name}
+	arg = append(arg, args...)
+	cmd := exec.Command("docker", arg...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
 func (c *Container) SourceName() string {
 	return c.Name
 }
