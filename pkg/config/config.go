@@ -25,6 +25,9 @@ type Config struct {
 	// Period to perform reconciliation with the Calico datastore.
 	ReconcilerPeriod string `default:"5m" split_words:"true"`
 
+	// etcdv3 compaction period. Set to 0 to disable the compactor.
+	CompactionPeriod string `default:"10m" split_words:"true"`
+
 	// Which controllers to run.
 	EnabledControllers string `default:"policy,profile,workloadendpoint" split_words:"true"`
 
