@@ -48,6 +48,24 @@ func ProtocolFromInt(p uint8) Protocol {
 	)
 }
 
+// ProtocolV3FromProtocolV1 creates a v3 Protocol from a v1 Protocol,
+// while handling case conversion.
+func ProtocolV3FromProtocolV1(p Protocol) Protocol {
+	if p.Type == NumOrStringNum {
+		return p
+	}
+
+	for _, n := range allProtocolNames {
+		if strings.ToLower(n) == strings.ToLower(p.StrVal) {
+			return Protocol(
+				Uint8OrString{Type: NumOrStringString, StrVal: n},
+			)
+		}
+	}
+
+	return p
+}
+
 // ProtocolFromString creates a Protocol struct from a string value.
 func ProtocolFromString(p string) Protocol {
 	for _, n := range allProtocolNames {
