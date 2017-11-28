@@ -12,16 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-import json
 from functools import partial
 
 from netaddr import IPAddress
 
 from exceptions import CommandExecError
-from utils import retry_until_success, debug_failures, get_ip
-from utils import ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL
-from network import NETWORKING_CNI, NETWORKING_LIBNETWORK
-
+from utils import retry_until_success, debug_failures
 
 NET_NONE = "none"
 
@@ -48,87 +44,27 @@ class Workload(object):
         :param image: The docker image to be used to instantiate this
         container. busybox used by default because it is extremely small and
         has ping.
-        :param network: The name of the network to connect to.
+        :param network: The DockerNetwork to connect to.  Set to None to use
+        default Docker networking.
         :param ip: The ip address to assign to the container.
         :param labels: List of labels '<var>=<value>' to add to workload.
         """
         self.host = host
         self.name = name
-        self.network = network
-        assert self.network is not None
 
         lbl_args = ""
         for label in labels:
             lbl_args += " --label %s" % (label)
 
-        net_options = "--net=none"
-        if self.host.networking == NETWORKING_LIBNETWORK:
-            ip_option = (" --ip %s" % ip) if ip else ""
-            net_options = "--net %s%s" % (network, ip_option)
-
-        command = "docker run -tid --name %s %s %s %s" % (name,
-                                                          net_options,
-                                                          lbl_args,
-                                                          image)
+        ip_option = ("--ip %s" % ip) if ip else ""
+        command = "docker run -tid --name %s --net %s %s %s %s" % \
+                  (name, network, lbl_args, ip_option, image)
         docker_run_wl = partial(host.execute, command)
         retry_until_success(docker_run_wl)
-
-        if self.host.networking == NETWORKING_LIBNETWORK:
-            self.ip = host.execute(
-                "docker inspect --format "
-                "'{{.NetworkSettings.Networks.%s.IPAddress}}' %s"
-                % (network, name))
-        else:
-            self.run_cni("ADD", ip=ip)
-
-    def run_cni(self, add_or_del, ip=None):
-        adding = (add_or_del == "ADD")
-        workload_pid = self.host.execute(
-            "docker inspect --format '{{.State.Pid}}' %s" % self.name)
-        container_id = self.host.execute(
-            "docker inspect --format '{{.Id}}' %s" % self.name)
-        ip_json = (',"args":{"ip":"%s"}' % ip) if (ip and adding) else ''
-        ip_args = ('CNI_ARGS=IP=%s ' % ip) if (ip and adding) else ''
-        etcd_json = '"etcd_endpoints":"http://%s:2379",' % get_ip()
-        if ETCD_SCHEME == "https":
-            etcd_json = ('"etcd_endpoints":"https://%s:2379",' % ETCD_HOSTNAME_SSL +
-                         '"etcd_ca_cert_file":"%s",' % ETCD_CA +
-                         '"etcd_cert_file":"%s",' % ETCD_CERT +
-                         '"etcd_key_file":"%s",' % ETCD_KEY)
-        command = ('echo \'{' +
-                   '"name":"%s",' % self.network +
-                   '"type":"calico-cni-plugin",' +
-                   etcd_json +
-                   '"ipam":{"type":"calico-ipam-plugin"%s}' % ip_json +
-                   '}\' | ' +
-                   'CNI_COMMAND=%s ' % add_or_del +
-                   'CNI_CONTAINERID=%s ' % container_id +
-                   'CNI_NETNS=/proc/%s/ns/net ' % workload_pid +
-                   'CNI_IFNAME=eth0 ' +
-                   'CNI_PATH=/code/dist ' +
-                   ip_args +
-                   '/code/dist/calico-cni-plugin')
-        output = self.host.execute(command)
-
-        if adding:
-            # The CNI plugin writes its logging to stderr and its JSON output -
-            # including the IP address that we need - to stdout, but
-            # unfortunately 'docker exec' combines these into its own stdout,
-            # and that is what 'output' contains here.  So we need heuristics
-            # to ignore the logging lines and pick up the JSON.  Writing out
-            # the JSON is the last thing that the CNI plugin does, so it should
-            # be robust to ignore everything before a line that begins with a
-            # curly bracket.
-            json_text = ""
-            json_started = False
-            for line in output.split('\n'):
-                if not json_started and line.strip() == "{":
-                    json_started = True
-                if json_started:
-                    json_text = json_text + line
-            logger.debug("JSON text from Calico CNI = %s", json_text)
-            result = json.loads(json_text)
-            self.ip = result["ip4"]["ip"].split('/')[0]
+        self.ip = host.execute(
+            "docker inspect --format "
+            "'{{.NetworkSettings.Networks.%s.IPAddress}}' %s"
+            % (network, name))
 
     def execute(self, command):
         """

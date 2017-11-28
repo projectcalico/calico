@@ -1,6 +1,6 @@
 ###############################################################################
 
-GO_BUILD_VER?=v0.7
+GO_BUILD_VER?=v0.8
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -19,6 +19,7 @@ RELEASE_STREAM ?= $(V_RELEASE_STREAM)
 V_CALICO := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
 V_CALICO_GIT := $(shell git describe --tags --dirty --always)
 V_BIRD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
+V_CONFD := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.confd.version')
 V_CALICOCTL := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
 V_CNI := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 V_FELIX := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
@@ -32,6 +33,7 @@ V_TYPHA := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)
 CALICO_VER ?= $(V_CALICO)
 CALICO_GIT_VER ?= $(V_CALICO_GIT)
 BIRD_VER ?= $(V_BIRD)
+CONFD_VER ?= $(V_CONFD)
 CALICOCTL_VER ?= $(V_CALICOCTL)
 CNI_VER ?= $(V_CNI)
 FELIX_VER ?= $(V_FELIX)
@@ -39,9 +41,6 @@ GOBGPD_VER ?= $(V_GOBGPD)
 KUBE_CONTROLLERS_VER ?= $(V_KUBE_CONTROLLERS)
 LIBNETWORK_PLUGIN_VER ?= $(V_LIBNETWORK_PLUGIN)
 TYPHA_VER ?= $(V_TYPHA)
-
-# TODO - Why isn't confd in versions.yaml
-CONFD_VER ?= v0.12.1-calico-0.4.0
 
 $(info RELEASE_STREAM=$(RELEASE_STREAM))
 $(info CALICO_VER=$(CALICO_VER))
@@ -527,8 +526,8 @@ semaphore:
 	# Actually run the tests (refreshing the images as required), we only run a
 	# small subset of the tests for testing SSL support.  These tests are run
 	# using "latest" tagged images.
-	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
-	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
+	$(MAKE) RELEASE_STREAM=$(RELEASE_STREAM) $(NODE_CONTAINER_NAME) st
+	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=$(RELEASE_STREAM) st-ssl
 
 release: clean
 	@echo Using the following versions:
