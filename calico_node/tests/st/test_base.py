@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import hashlib
 import json
 import logging
 import subprocess
 import time
+import types
 from multiprocessing.dummy import Pool as ThreadPool
 from pprint import pformat
 from unittest import TestCase
@@ -25,6 +27,9 @@ from deepdiff import DeepDiff
 from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
                                   ETCD_KEY, debug_failures, ETCD_HOSTNAME_SSL,
                                   wipe_etcd, clear_on_failures)
+
+# The number of test batches used in CI.
+NUM_BATCHES = 6
 
 HOST_IPV6 = get_ip(v6=True)
 HOST_IPV4 = get_ip()
@@ -39,7 +44,45 @@ sh_logger.setLevel(level=logging.CRITICAL)
 first_log_time = None
 
 
+def calculate_batch(cname, mname):
+    combined = cname + "." + mname
+    m = hashlib.sha224()
+    m.update(combined)
+    batch = ord(m.digest()[0]) % NUM_BATCHES
+    print "Assigned %s to batch %s" % (combined, batch)
+    return batch
+
+
+class AutoBatcher(type):
+    """
+    AutoBatcher is a metaclass that makes sure every test_ method has a batchnumber.
+
+    Batch numbers are assigned deterministically using a hash of class name and
+    method name.
+    """
+
+    def __init__(cls, name, bases, dct):
+        test_methods_with_no_batch = {}
+        has_batch = False
+        for k, v in dct.iteritems():
+            if k == "batchnumber":
+                has_batch = True
+            elif k.startswith("test_"):
+                if not isinstance(v, types.FunctionType):
+                    continue
+                if hasattr(v, "batchnumber"):
+                    continue
+                test_methods_with_no_batch[k] = v
+        if not has_batch:
+            for k, v in test_methods_with_no_batch.iteritems():
+                v.batchnumber = calculate_batch(name, k)
+            dct["batchnumber"] = calculate_batch(name, "__class__")
+        super(AutoBatcher, cls).__init__(name, bases, dct)
+
+
 class TestBase(TestCase):
+    __metaclass__ = AutoBatcher
+
     """
     Base class for test-wide methods.
     """
