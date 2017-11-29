@@ -1,3 +1,18 @@
+###############################################################################
+# The build architecture is select by setting the ARCH variable.
+# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
+# When ARCH is undefined it defaults to amd64.
+ARCH?=amd64
+ifeq ($(ARCH),amd64)
+        ARCHTAG?=
+	GO_BUILD_VER:=v0.9
+endif
+
+ifeq ($(ARCH),ppc64le)
+        ARCHTAG:=-ppc64le
+	GO_BUILD_VER:=latest
+endif
+
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
 .SUFFIXES:
@@ -17,11 +32,14 @@ CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
 
+DIST=dist/$(ARCH)
 # Ensure that the dist directory is always created
-MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
-CALICO_BUILD?=calico/go-build:v0.9
-DEPLOY_CONTAINER_NAME=calico/cni
-DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
+MAKE_SURE_DIST_EXIST := $(shell mkdir -p $(DIST))
+CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+DEPLOY_CONTAINER_NAME=calico/cni$(ARCHTAG)
+DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
+
+ETCD_CONTAINER?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 
 LIBCALICOGO_PATH?=none
 
@@ -33,13 +51,13 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 default: all
 all: vendor build-containerized test-containerized
 binary:  plugin ipam
-plugin: dist/calico
-ipam: dist/calico-ipam
+plugin: $(DIST)/calico
+ipam: $(DIST)/calico-ipam
 docker-image: $(DEPLOY_CONTAINER_MARKER)
 
 .PHONY: clean
 clean:
-	rm -rf dist vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(DIST) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 
 release: clean
 ifndef VERSION
@@ -61,18 +79,17 @@ endif
 	@echo ""
 	@echo "  git push origin $(VERSION)"
 	@echo ""
-	@echo "Then create a release on Github and attach the dist/calico and dist/calico-ipam binaries"
+	@echo "Then create a release on Github and attach the $(DIST)/calico and $(DIST)/calico-ipam binaries"
 	@echo ""
 	@echo "Push the versioned release images."
 	@echo ""
-	@echo "  docker push calico/cni:$(VERSION)"
-	@echo "  docker push quay.io/calico/cni:$(VERSION)"
+	@echo "  docker push calico/cni$(ARCHTAG):$(VERSION)"
+	@echo "  docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)"
 	@echo ""
 	@echo "If this is a stable release, push the latest images as well."
 	@echo ""
-	@echo "  docker push calico/cni:latest"
-	@echo "  docker push quay.io/calico/cni:latest"
-
+	@echo "  docker push calico/cni$(ARCHTAG):latest"
+	@echo "  docker push quay.io/calico/cni$(ARCHTAG):latest"
 
 # To update upstream dependencies, delete the glide.lock file first.
 ## Use this to populate the vendor directory after checking out the repository.
@@ -91,49 +108,50 @@ vendor: glide.yaml
 			glide install -strip-vendor' 
 
 ## Build the Calico network plugin
-dist/calico: $(SRCFILES) vendor
+$(DIST)/calico: $(SRCFILES) vendor
 	mkdir -p $(@D)
-	CGO_ENABLED=0 go build -v -i -o dist/calico \
+	CGO_ENABLED=0 go build -v -i -o $(DIST)/calico \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go
 
 ## Build the Calico ipam plugin
-dist/calico-ipam: $(SRCFILES) vendor
+$(DIST)/calico-ipam: $(SRCFILES) vendor
 	mkdir -p $(@D)
-	CGO_ENABLED=0 go build -v -i -o dist/calico-ipam  \
+	CGO_ENABLED=0 go build -v -i -o $(DIST)/calico-ipam  \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go
 
 .PHONY: test
 ## Run the unit tests.
-test: dist/calico dist/calico-ipam dist/host-local run-etcd run-k8s-apiserver test-install-cni
+test: $(DIST)/calico $(DIST)/calico-ipam $(DIST)/host-local run-etcd run-k8s-apiserver test-install-cni
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo)
 
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
-test-watch: dist/calico dist/calico-ipam run-etcd run-k8s-apiserver
+test-watch: $(DIST)/calico $(DIST)/calico-ipam run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
 
-$(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
-	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
+$(DEPLOY_CONTAINER_MARKER): Dockerfile$(ARCHTAG) build-containerized fetch-cni-bins
+	docker build -f Dockerfile$(ARCHTAG) -t $(DEPLOY_CONTAINER_NAME) .
 	touch $@
 
 .PHONY: fetch-cni-bins
-fetch-cni-bins: dist/flannel dist/loopback dist/host-local dist/portmap
+fetch-cni-bins: $(DIST)/flannel $(DIST)/loopback $(DIST)/host-local $(DIST)/portmap
 
-dist/flannel dist/loopback dist/host-local dist/portmap:
-	mkdir -p dist
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-amd64-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local ./portmap
+$(DIST)/flannel $(DIST)/loopback $(DIST)/host-local $(DIST)/portmap:
+	mkdir -p $(DIST)
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C $(DIST) ./flannel ./loopback ./host-local ./portmap
 
 # Useful for CI but currently slow for local development because the
 # .go-pkg-cache can't be used (since tests run as root)
 .PHONY: test-containerized
 ## Run the tests in a container (as root)
-test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-local
+test-containerized: run-etcd run-k8s-apiserver build-containerized $(DIST)/host-local
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=0 \
 	-e PLUGIN=calico \
+	-e DIST=$(DIST) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
@@ -166,13 +184,14 @@ k8s-install/scripts/install_cni.test: vendor
 .PHONY: test-install-cni
 ## Test the install-cni.sh script
 test-install-cni: docker-image k8s-install/scripts/install_cni.test
-	cd k8s-install/scripts && ./install_cni.test
+	cd k8s-install/scripts && DEPLOY_CONTAINER_NAME=$(DEPLOY_CONTAINER_NAME) ./install_cni.test
 
 run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=0 \
 	-e PLUGIN=calico \
+	-e DIST=$(DIST) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
@@ -185,7 +204,7 @@ run-test-containerized-without-building: run-etcd run-k8s-apiserver
 ## Run the tests in a container (as root) for different CNI spec versions
 ## to make sure we don't break backwards compatibility.
 .PHONY: test-containerized-cni-versions
-test-containerized-cni-versions: build-containerized dist/host-local;
+test-containerized-cni-versions: build-containerized $(DIST)/host-local;
 	for cniversion in "0.2.0" "0.3.1" ; do \
 		make run-test-containerized-without-building CNI_SPEC_VERSION=$$cniversion; \
 	done
@@ -193,12 +212,13 @@ test-containerized-cni-versions: build-containerized dist/host-local;
 .PHONY: build-containerized
 ## Run the build in a container. Useful for CI
 build-containerized: vendor
-	-mkdir -p dist
+	-mkdir -p $(DIST)
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
+	-e ARCH=$(ARCH) \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:ro \
-	-v $(CURDIR)/dist:/go/src/github.com/projectcalico/cni-plugin/dist \
+	-v $(CURDIR)/$(DIST):/go/src/github.com/projectcalico/cni-plugin/$(DIST) \
 	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
 		$(CALICO_BUILD) sh -c '\
 			cd /go/src/github.com/projectcalico/cni-plugin && \
@@ -228,7 +248,7 @@ run-tests:
 run-etcd: stop-etcd
 	docker run --detach \
 	-p 2379:2379 \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name calico-etcd $(ETCD_CONTAINER) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -237,7 +257,7 @@ run-etcd: stop-etcd
 run-etcd-host: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name calico-etcd $(ETCD_CONTAINER) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -250,7 +270,7 @@ stop-etcd:
 run-k8s-apiserver: stop-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-  	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+  	gcr.io/google_containers/hyperkube-$(ARCH):v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 
 
@@ -264,7 +284,7 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin \
-		calico/go-build sh -c '\
+		$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --enable=vet --enable=errcheck --vendor -s test_utils ./...'
 
@@ -272,19 +292,19 @@ install:
 	CGO_ENABLED=0 go install github.com/projectcalico/cni-plugin
 
 ## Retrieve an old version of the Python CNI plugin for use in tests
-dist/calico-python:
+$(DIST)/calico-python:
 	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.3.1/calico -o $@
 	chmod +x $@
 
 ## Retrieve an old version of the Python CNI plugin for use in tests
-dist/calico-ipam-python:
+$(DIST)/calico-ipam-python:
 	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.3.1/calico-ipam -o $@
 	chmod +x $@
 
 # Copy the plugin into place
 deploy-rkt: binary
-	cp dist/calico /etc/rkt/net.d
-	cp dist/calico-ipam /etc/rkt/net.d
+	cp $(DIST)/calico /etc/rkt/net.d
+	cp $(DIST)/calico-ipam /etc/rkt/net.d
 	echo '{"name": "prod","log_level":"warning","type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"host-local","subnet": "10.10.0.0/8"}}' >/etc/rkt/net.d/calico-warning.conf
 	echo '{"name": "mtu","mtu":999,"type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"host-local","subnet": "10.10.0.0/8"}}' >/etc/rkt/net.d/calico-mtu.conf
 	echo '{"name": "dev", "log_level":"info","type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"calico-ipam"}}' >/etc/rkt/net.d/calico-info.conf
@@ -299,7 +319,7 @@ deploy-rkt: binary
 
 ## Run kubernetes master
 run-kubernetes-master: stop-kubernetes-master run-etcd-host binary 
-	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
+	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	mkdir -p net.d
 	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "usePodCidr"}}' >net.d/10-calico.conf
 	#echo '{"log_level":"DEBUG", "name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "10.101.0.0/16"}}' >net.d/10-calico.conf
@@ -314,7 +334,7 @@ run-kubernetes-master: stop-kubernetes-master run-etcd-host binary
 		--volume=/sys:/sys:ro \
 		--volume=/var/lib/docker/:/var/lib/docker:rw \
 		--volume=/var/lib/kubelet/:/var/lib/kubelet:rw \
-		--volume=`pwd`/dist:/opt/cni/bin \
+		--volume=`pwd`/$(DIST):/opt/cni/bin \
 		--volume=`pwd`/net.d:/etc/cni/net.d \
 		--volume=/var/run:/var/run:rw \
 		--net=host \
@@ -322,7 +342,7 @@ run-kubernetes-master: stop-kubernetes-master run-etcd-host binary
 		--privileged=true \
 		--name calico-kubelet-master \
 		-d \
-		gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+		gcr.io/google_containers/hyperkube-$(ARCH):v${K8S_VERSION} \
 		/hyperkube kubelet \
 			--containerized \
 			--hostname-override="127.0.0.1" \
