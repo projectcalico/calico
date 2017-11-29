@@ -11,7 +11,7 @@ component needs access to in etcd to function successfully.
 {: .alert .alert-info}
 
 
-## calico/node
+## {{site.nodecontainer}}
 
 | Path                                      | Access |
 |-------------------------------------------|--------|

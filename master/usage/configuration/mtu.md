@@ -78,7 +78,7 @@ the specified MTU.
 #### Setting MTU through Felix Environment variable
 
 Passing in the environment variable `FELIX_IPINIPMTU` when running the
-calico/node container will set the MTU for Felix to use.
+`{{site.nodecontainer}}` container will set the MTU for Felix to use.
 
 #### Setting the MTU with calicoctl
 
@@ -105,4 +105,4 @@ $ calicoctl replace -f felix.yaml
 
 When using self-hosted manifests with Kubernetes, the MTU should be set by
 updating the {{site.prodname}} manifest, applying the manifest with those changes, and
-then restarting each of the calico-node pods.
+then restarting each of the `{{site.noderunning}}` pods.

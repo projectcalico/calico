@@ -135,7 +135,7 @@ have no effect.  These include:
 ### Examples
 
 ```
-# Start the {{site.prodname}} node with a pre-configured IPv4 address for BGP.
+# Start the {{site.nodecontainer}} with a pre-configured IPv4 address for BGP.
 $ sudo calicoctl node run
 Running command to load modules: modprobe -a xt_set ip6_tables
 Enabling IPv4 forwarding
@@ -143,7 +143,7 @@ Enabling IPv6 forwarding
 Increasing conntrack limit
 Running the following command:
 
-docker run --net=host --privileged --name=calico-node -d --restart=always -e ETCD_SCHEME=http -e HOSTNAME=calico -e CALICO_LIBNETWORK_ENABLED=true -e ETCD_AUTHORITY=127.0.0.1:2379 -e AS= -e NO_DEFAULT_POOLS= -e ETCD_ENDPOINTS= -e IP= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+docker run --net=host --privileged --name={{site.noderunning}} -d --restart=always -e ETCD_SCHEME=http -e HOSTNAME=calico -e CALICO_LIBNETWORK_ENABLED=true -e ETCD_AUTHORITY=127.0.0.1:2379 -e AS= -e NO_DEFAULT_POOLS= -e ETCD_ENDPOINTS= -e IP= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 
 Waiting for etcd connection...
 Using configured IPv4 address: 192.0.2.0
@@ -160,7 +160,7 @@ Calico node started successfully
 The node resource includes IPv4 and IPv6 routing IP addresses that should
 match those on one of the host interfaces.  These IP addresses may be
 configured in advance by configuring the node resource prior to starting the
-calico/node service, alternatively, the addresses may either be explicitly
+`{{site.nodecontainer}}` service, alternatively, the addresses may either be explicitly
 specified or autodetected through options on the `calicoctl run` command.
 
 There are different autodetection methods available and you should use the one
@@ -179,10 +179,10 @@ force autodetection of an IPv6 address, use the option `--ip6=autodetect`.
 To set the autodetection method for IPv4, use the `--ip-autodetection-method` option.
 To set the autodetection method for IPv6, use the `--ip6-autodetection-method` option.
 
-> **Note**: If you are starting the calico/node container directly (and not using the
+> **Note**: If you are starting the `{{site.nodecontainer}}` container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
-> variables. These are described in the 
-> [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+> variables. These are described in 
+> [Configuring `{{site.nodecontainer}}`]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 {: .alert .alert-info}
 
 **first-found**

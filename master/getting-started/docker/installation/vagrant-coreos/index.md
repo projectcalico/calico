@@ -64,16 +64,16 @@ And finally check that Docker is running on both hosts by running
 ## 2. Install Calico
 
 With your VMs running, and connectivity between them established,
-it is time to launch `calico/node`.
+it is time to launch `{{site.nodecontainer}}`.
 
-The Vagrant machines already have `calicoctl` installed. Use it to launch `calico/node`:
+The Vagrant machines already have `calicoctl` installed. Use it to launch `{{site.nodecontainer}}`:
 
     sudo ETCD_ENDPOINTS=http://172.17.8.101:2379 calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 
 Append the `--use-docker-networking-container-labels` flag to the `calicoctl node run` command if you're combining
 [Docker Labels and {{site.prodname}} Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy).
 
-Check that the `calico/node` container is running on this host:
+Check that the `{{site.noderunning}}` container is running on this host:
 
     docker ps
 
@@ -81,7 +81,7 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
     CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
-    408bd2b9ba53        {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}   "start_runit"       About an hour ago   Up About an hour                        calico-node
+    408bd2b9ba53        {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}   "start_runit"       About an hour ago   Up About an hour                        {{site.noderunning}}
 
 ## Next Steps
 

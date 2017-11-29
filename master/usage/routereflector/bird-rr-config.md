@@ -12,7 +12,7 @@ reflector, and updating your other BIRD instances to speak to your new
 route reflector.  The instructions that are are valid for both Ubuntu 14.04 and 
 RHEL 7.  
 
-For a container-based deployment, using the calico/node container, check 
+For a container-based deployment, using the `{{site.nodecontainer}}` container, check 
 out the [{{site.prodname}} BIRD Route Reflector container](calico-routereflector).
 
 ## Prerequisites
@@ -159,7 +159,7 @@ instances as detailed in step 4.
 
 #### Container-based deployments
 
-For container-based deployments using the `calico/node` container, use 
+For container-based deployments using the `{{site.nodecontainer}}` container, use 
 `calicoctl` to disable the full mesh between each node and configure the
 route reflector as a global peer.
 

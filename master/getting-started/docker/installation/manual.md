@@ -2,7 +2,7 @@
 title: Installing Calico for Docker
 ---
 
-{{site.prodname}} runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
+{{site.prodname}} runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `{{site.nodecontainer}}` container.
 
 > **Important**: Before following the steps here ensure that you have satisfied these
 [requirements]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/requirements).
@@ -18,46 +18,47 @@ title: Installing Calico for Docker
    sudo chmod +x /usr/local/bin/calicoctl
    ```
 
-2. Configure access to your etcd cluster, [calicoctl - etcd datastore](/{{page.version}}/reference/calicoctl/setup/etcdv3).
-3. Launch `calico/node`:
+1. Configure access to your etcd cluster, [calicoctl - etcd datastore](/{{page.version}}/reference/calicoctl/setup/etcdv3).
+
+1. Launch `{{site.nodecontainer}}`:
 
    ```
    sudo calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
    ```
 
-Check that `calico/node` is now running:
+1. Check that `{{site.noderunning}}` is now running:
 
-```
-vagrant@calico-01:~$ docker ps
-CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
-408bd2b9ba53        {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}   "start_runit"       About an hour ago   Up About an hour                        calico-node
-```
+   ```
+   vagrant@calico-01:~$ docker ps
+   CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
+   408bd2b9ba53        {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}   "start_runit"       About an hour ago   Up About an hour                        {{site.noderunning}}
+   ```
 
-Furthermore, check that the `calico/node` container is functioning properly
+1. Furthermore, check that the `{{site.nodecontainer}}` container is functioning properly
 with the following command:
 
-```
-sudo calicoctl node status
-```
+   ```
+   sudo calicoctl node status
+   ```
 
 ## Using "docker run"
 
 For more control over the {{site.prodname}} startup process, and to simplify binding
 startup to an init system, `calicoctl` can print the command it uses
-to launch `calico/node`.
+to launch `{{site.nodecontainer}}`.
 
 To print the command `calicoctl node run` uses to launch {{site.prodname}} on this host,
 run the command with the `--init-system` and `--dry-run` flags:
 
 ```
 $ calicoctl node run --init-system --dryrun --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
-Use the following command to start the calico/node container:
+Use the following command to start the {{site.nodecontainer}} container:
 
-docker run --net=host --privileged --name=calico-node --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+docker run --net=host --privileged --name={{site.noderunning}} --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 
-Use the following command to stop the calico/node container:
+Use the following command to stop the {{site.nodecontainer}} container:
 
-docker stop calico-node
+docker stop {{site.noderunning}}
 
 ```
 
@@ -69,5 +70,5 @@ See [additional information on binding to an init system
 
 ## Next Steps
 
-With `calico/node` running, you are ready to start using {{site.prodname}} by following
+With `{{site.noderunning}}` running, you are ready to start using {{site.prodname}} by following
 [Security using {{site.prodname}} Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles).

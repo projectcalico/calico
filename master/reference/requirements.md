@@ -3,7 +3,7 @@ title: Calico System Requirements
 ---
 
 Depending on the {{site.prodname}} functionality you are using, there are some requirements your system needs to meet in order for {{site.prodname}} to work properly.
-calico/node container image ships with the following `ip6tables`, `ipset`, `iputils`, `iproute2`, `conntrack-tools`.
+`{{site.nodecontainer}}` container image ships with the following `ip6tables`, `ipset`, `iputils`, `iproute2`, `conntrack-tools`.
 
 ## Minumum Linux kernel versions
 

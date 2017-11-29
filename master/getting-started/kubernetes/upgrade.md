@@ -59,7 +59,7 @@ kubectl apply -f new-controllers.yaml
 
 #### Upgrading the DaemonSet
 
-Upgrading the CNI plugin or calico/node image is done through a DaemonSet.  DaemonSets do not
+Upgrading the CNI plugin or `{{site.nodecontainer}}` image is done through a DaemonSet.  DaemonSets do not
 currently support an update operation, and as such must be updated manually.
 
 To upgrade the DaemonSet:
@@ -86,14 +86,15 @@ First make the node unschedulable:
 kubectl cordon node-01
 ```
 
-Delete the `calico-node` pod running on the cordoned node and wait for the
+Delete the `{{site.noderunning}}` pod running on the cordoned node and wait for the
 DaemonSet controller to deploy a replacement.
 
 ```
-kubectl delete pod -n kube-system calico-node-ajzy6e3t
+kubectl delete pod -n kube-system {{site.noderunning}}-ajzy6e3t
 ```
 
-Once the new `calico-node` pod has started, make the node schedulable again.
+Once the new `{{site.noderunning}}` pod has started, make the node schedulable again.
+
 
 ```
 kubectl uncordon node-01
@@ -111,7 +112,7 @@ Most self-hosted {{site.prodname}} deployments use a ConfigMap for configuration
 components.
 
 To update the ConfigMap, make any desired changes and apply the new ConfigMap using
-kubectl.  You will need to restart the {{site.prodname}} Kubernetes controllers and each `calico/node` instance
+kubectl.  You will need to restart the {{site.prodname}} Kubernetes controllers and each `{{site.nodecontainer}}` instance
 as described above before new config is reflected.
 
 ## Upgrading components individually
@@ -119,16 +120,16 @@ as described above before new config is reflected.
 This section covers upgrading each component individually for use with custom configuration
 management tools.
 
-#### Upgrading the calico/node container
+#### Upgrading the {{site.nodecontainer}} container
 
-The `calico/node` container runs on each node in a Kubernetes cluster.  It runs Felix for policy
+The `{{site.nodecontainer}}` container runs on each node in a Kubernetes cluster.  It runs Felix for policy
 enforcement and BIRD for BGP networking (when enabled).
 
-To upgrade the `calico/node` container:
+To upgrade the `{{site.nodecontainer}}` container:
 
-- Pull the new version of the `calico/node` image to each node.  e.g `docker pull {{site.imageNames["node"]}}:vA.B.C`
+- Pull the new version of the `{{site.nodecontainer}}` image to each node. For example: `docker pull {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}`.
 - Update the image in your process management to reference the new version.
-- Stop the running `calico/node` container, and start it with the newly pulled version.
+- Stop the running `{{site.noderunning}}` container, and start it with the newly pulled version.
 
 #### Upgrading the CNI plugins
 

@@ -126,7 +126,7 @@ There are several ways to install Felix.
     directly.
 
 -   if you want to run under docker, you can use `calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}` to start
-    the calico/node container image.  This container packages up the core {{site.prodname}}
+    the `{{site.nodecontainer}}` container image.  This container packages up the core {{site.prodname}}
     components to provide both {{site.prodname}} networking and network policy.  Running
     the container automatically pre-initializes the etcd database (which the
     other installations methods do not).  See the
@@ -139,7 +139,7 @@ is in state "wait-for-ready". The default location for the log file is
 
 ## Initialising the etcd database
 
-If you are using the container-based installation (using the calico/node
+If you are using the container-based installation (using the `{{site.nodecontainer}}`
 container image), the database is initialized as soon as you start the first
 node instance.
 

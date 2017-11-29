@@ -11,7 +11,7 @@ command line.
 calicoctl's primary function is to read or manipulate state stored in the
 datastore.  As such, it can run from any host with network access to the
 datastore.  There are also the `node` sub-commands of calicoctl that are for
-starting and checking the calico/node container.  To use this functionality
+starting and checking the `{{site.nodecontainer}}` container.  To use this functionality
 the calicoctl tool must be run on the host where the container will run or
 is running.
 
