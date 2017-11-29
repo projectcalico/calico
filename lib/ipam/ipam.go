@@ -18,13 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -450,7 +450,7 @@ func (c ipamClient) assignFromExistingBlock(
 // within the given CIDR.  The given CIDR must fall within a configured
 // pool.  Returns a list of blocks that were claimed, as well as a
 // list of blocks that were claimed by another host.
-// If an empty string is passed as the host, then the value of os.Hostname is used.
+// If an empty string is passed as the host, then the hostname is automatically detected.
 func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error) {
 	// Validate that the given CIDR is at least as big as a block.
 	if !largerThanOrEqualToBlock(cidr) {
@@ -499,7 +499,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 // ReleaseAffinity releases affinity for all blocks within the given CIDR
 // on the given host.  If a block does not have affinity for the given host,
 // its affinity will not be released and no error will be returned.
-// If an empty string is passed as the host, then the value of os.Hostname is used.
+// If an empty string is passed as the host, then the hostname is automatically detected.
 func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host string) error {
 	// Validate that the given CIDR is at least as big as a block.
 	if !largerThanOrEqualToBlock(cidr) {
@@ -530,7 +530,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 
 // ReleaseHostAffinities releases affinity for all blocks that are affine
 // to the given host.  If an empty string is passed as the host,
-// then the value of os.Hostname is used.
+// then the hostname is automatically detected.
 func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string) error {
 	hostname := decideHostname(host)
 
@@ -598,7 +598,7 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 // RemoveIPAMHost releases affinity for all blocks on the given host,
 // and removes all host-specific IPAM data from the datastore.
 // RemoveIPAMHost does not release any IP addresses claimed on the given host.
-// If an empty string is passed as the host, then the value of os.Hostname is used.
+// If an empty string is passed as the host, then the hostname is automatically detected.
 func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 	// Determine the hostname to use.
 	hostname := decideHostname(host)
@@ -902,7 +902,7 @@ func decideHostname(host string) string {
 	if host != "" {
 		hostname = host
 	} else {
-		hostname, err = os.Hostname()
+		hostname, err = names.Hostname()
 		if err != nil {
 			log.Panicf("Failed to acquire hostname")
 		}
