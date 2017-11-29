@@ -16,7 +16,9 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
@@ -41,9 +43,15 @@ type networkPolicies struct {
 // Create takes the representation of a NetworkPolicy and creates it.  Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, opts options.SetOptions) (*apiv3.NetworkPolicy, error) {
+
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
 	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
+	// Check if it is permitted to create the network policy with the specific alpha feature support.
+	if err := r.validateAlphaFeatures(res); err != nil {
 		return nil, err
 	}
 
@@ -67,6 +75,11 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
 	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+
+	// Check if it is permitted to create the network policy with the specific alpha feature support.
+	if err := r.validateAlphaFeatures(res); err != nil {
 		return nil, err
 	}
 
@@ -137,4 +150,15 @@ func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (w
 	}
 
 	return r.client.resources.Watch(ctx, opts, apiv3.KindNetworkPolicy, &policyConverter{})
+}
+
+func (r networkPolicies) validateAlphaFeatures(res *apiv3.NetworkPolicy) error {
+	if apiconfig.IsAlphaFeatureSet(r.client.config.Spec.AlphaFeatures, apiconfig.AlphaFeatureSA) == false {
+		err := validator.ValidateNoServiceAccountRules(res.Spec.Ingress, res.Spec.Egress)
+		if err != nil {
+			return fmt.Errorf("NP %s: %s", res.GetObjectMeta().GetName(), err.Error())
+		}
+	}
+
+	return nil
 }

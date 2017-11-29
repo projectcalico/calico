@@ -16,10 +16,12 @@ package updateprocessors
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -40,6 +42,53 @@ func RulesAPIV2ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
 	return brs
 }
 
+// entityRuleAPIV2ToBackend collects the ordered set of selectors for the EntityRule:
+// (serviceAccountSelector) && (selector)
+// It also returns the namespace selector to use
+func entityRuleAPIV2TOBackend(er *apiv3.EntityRule, ns string) (nsSelector, selector string) {
+
+	// Determine which namespaces are impacted by this entityRule.
+	if er.NamespaceSelector != "" {
+		// A namespace selector was given - the rule applies to all namespaces
+		// which match this selector.
+		nsSelector = parseSelectorAttachPrefix(er.NamespaceSelector, conversion.NamespaceLabelPrefix)
+	} else if ns != "" {
+		// No namespace selector was given and this is a namespaced network policy,
+		// so the rule applies only to its own namespace.
+		nsSelector = fmt.Sprintf("%s == '%s'", apiv3.LabelNamespace, ns)
+	}
+
+	var selectors []string
+
+	// Determine which service account selector.
+	if er.ServiceAccounts != nil {
+		// A service account selector was given - the rule applies to all serviceaccount
+		// which match this selector.
+		saSelector := parseServiceAccounts(er.ServiceAccounts)
+		if saSelector != "" {
+			selectors = append(selectors, saSelector)
+		}
+	}
+
+	if er.Selector != "" {
+		selectors = append(selectors, er.Selector)
+	}
+
+	if len(selectors) > 0 {
+		// If it's just one selector then just return it
+		// it will be enclosed in () by the caller.
+		if len(selectors) == 1 {
+			selector = selectors[0]
+		} else {
+			// Combine the selectors together
+			selector = strings.Join(selectors, ") && (")
+			selector = "(" + selector + ")"
+		}
+	}
+
+	return
+}
+
 // RuleAPIToBackend converts an API Rule structure to a Backend Rule structure.
 func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	var icmpCode, icmpType, notICMPCode, notICMPType *int
@@ -53,64 +102,40 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		notICMPType = ar.NotICMP.Type
 	}
 
-	// Determine which namespaces are impacted by this rule.
-	var sourceNSSelector string
-	if ar.Source.NamespaceSelector != "" {
-		// A namespace selector was given - the rule applies to all namespaces
-		// which match this selector.
-		sourceNSSelector = parseNamespaceSelector(ar.Source.NamespaceSelector)
-	} else if ns != "" {
-		// No namespace selector was given and this is a namespaced network policy,
-		// so the rule applies only to its own namespace.
-		sourceNSSelector = fmt.Sprintf("%s == '%s'", apiv3.LabelNamespace, ns)
-	}
+	sourceNSSelector, sourceSelector := entityRuleAPIV2TOBackend(&ar.Source, ns)
 
-	var destNSSelector string
-	if ar.Destination.NamespaceSelector != "" {
-		// A namespace selector was given - the rule applies to all namespaces
-		// which match this selector.
-		destNSSelector = parseNamespaceSelector(ar.Destination.NamespaceSelector)
-	} else if ns != "" {
-		// No namespace selector was given and this is a namespaced network policy,
-		// so the rule applies only to its own namespace.
-		destNSSelector = fmt.Sprintf("%s == '%s'", apiv3.LabelNamespace, ns)
-	}
-
-	srcSelector := ar.Source.Selector
-	if sourceNSSelector != "" && (ar.Source.Selector != "" || ar.Source.NotSelector != "" || ar.Source.NamespaceSelector != "") {
-		// We need to namespace the rule's selector when converting to a v1 object.
-		// This occurs when a Selector, NotSelector, or NamespaceSelector is provided and either this is a
-		// namespaced NetworkPolicy object, or a NamespaceSelector was defined.
+	// We need to namespace the rule's selector when converting to a v1 object.
+	// This occurs when the selector (and/or SA Selector), NotSelector, or NamespaceSelector
+	// is provided and either this is a namespaced NetworkPolicy object, or a
+	// NamespaceSelector was defined.
+	if sourceNSSelector != "" && (sourceSelector != "" || ar.Source.NotSelector != "" || ar.Source.NamespaceSelector != "") {
 		logCxt := log.WithFields(log.Fields{
 			"Namespace":         ns,
-			"Selector":          ar.Source.Selector,
-			"NamespaceSelector": ar.Source.NamespaceSelector,
+			"Selector(s)":       sourceSelector,
+			"NamespaceSelector": sourceNSSelector,
 			"NotSelector":       ar.Source.NotSelector,
 		})
 		logCxt.Debug("Update source Selector to include namespace")
-		if ar.Source.Selector != "" {
-			srcSelector = fmt.Sprintf("(%s) && (%s)", sourceNSSelector, ar.Source.Selector)
+		if sourceSelector != "" {
+			sourceSelector = fmt.Sprintf("(%s) && (%s)", sourceNSSelector, sourceSelector)
 		} else {
-			srcSelector = sourceNSSelector
+			sourceSelector = sourceNSSelector
 		}
 	}
 
-	dstSelector := ar.Destination.Selector
-	if destNSSelector != "" && (ar.Destination.Selector != "" || ar.Destination.NotSelector != "" || ar.Destination.NamespaceSelector != "") {
-		// We need to namespace the rule's selector when converting to a v1 object.
-		// This occurs when a Selector, NotSelector, or NamespaceSelector is provided and either this is a
-		// namespaced NetworkPolicy object, or a NamespaceSelector was defined.
+	destNSSelector, destSelector := entityRuleAPIV2TOBackend(&ar.Destination, ns)
+	if destNSSelector != "" && (destSelector != "" || ar.Destination.NotSelector != "" || ar.Destination.NamespaceSelector != "") {
 		logCxt := log.WithFields(log.Fields{
 			"Namespace":         ns,
-			"Selector":          ar.Destination.Selector,
-			"NamespaceSelector": ar.Destination.NamespaceSelector,
+			"Selector(s)":       destSelector,
+			"NamespaceSelector": destNSSelector,
 			"NotSelector":       ar.Destination.NotSelector,
 		})
 		logCxt.Debug("Update Destination Selector to include namespace")
-		if ar.Destination.Selector != "" {
-			dstSelector = fmt.Sprintf("(%s) && (%s)", destNSSelector, ar.Destination.Selector)
+		if destSelector != "" {
+			destSelector = fmt.Sprintf("(%s) && (%s)", destNSSelector, destSelector)
 		} else {
-			dstSelector = destNSSelector
+			destSelector = destNSSelector
 		}
 	}
 
@@ -125,10 +150,10 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		NotICMPType: notICMPType,
 
 		SrcNets:     convertStringsToNets(ar.Source.Nets),
-		SrcSelector: srcSelector,
+		SrcSelector: sourceSelector,
 		SrcPorts:    ar.Source.Ports,
 		DstNets:     normalizeIPNets(ar.Destination.Nets),
-		DstSelector: dstSelector,
+		DstSelector: destSelector,
 		DstPorts:    ar.Destination.Ports,
 
 		NotSrcNets:     convertStringsToNets(ar.Source.NotNets),
@@ -140,18 +165,60 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	}
 }
 
-// parseNamespaceSelector takes a v3 namespace selector and returns the appropriate v1 representation
-// by prefixing the keys with the `pcns.` prefix. For example, `k == 'v'` becomes `pcns.k == 'v'`.
-func parseNamespaceSelector(s string) string {
+// parseSelectorAttachPrefix takes a v3 selector and returns the appropriate v1 representation
+// by prefixing the keys with the given prefix.
+// If prefix is `pcns.` then the selector changes from `k == 'v'` to `pcns.k == 'v'`.
+func parseSelectorAttachPrefix(s, prefix string) string {
 	parsedSelector, err := parser.Parse(s)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to parse namespace selector: %s", s)
+		log.WithError(err).Errorf("Failed to parse selector: %s (for prefix) %s", s, prefix)
 		return ""
 	}
-	parsedSelector.AcceptVisitor(parser.PrefixVisitor{Prefix: conversion.NamespaceLabelPrefix})
+	parsedSelector.AcceptVisitor(parser.PrefixVisitor{Prefix: prefix})
 	updated := parsedSelector.String()
-	log.WithFields(log.Fields{"original": s, "updated": updated}).Debug("Updated namespace selector")
+	log.WithFields(log.Fields{"original": s, "updated": updated}).Debug("Updated selector")
 	return updated
+}
+
+// parseServiceAccounts takes a v3 service account match and returns the appropriate v1 representation
+// by converting the list of service account names into a set of service account with
+// key: "projectcalico.org/serviceaccount" in { 'sa-1', 'sa-2' } AND
+// by prefixing the keys with the `pcsa.` prefix. For example, `k == 'v'` becomes `pcsa.k == 'v'`.
+// NOTE: Check if the env variable ALPHA_FEATURES is set or not before converting the ServiceAccountMatch to selector
+func parseServiceAccounts(sam *apiv3.ServiceAccountMatch) string {
+
+	if apiconfig.IsAlphaFeatureSet(os.Getenv("ALPHA_FEATURES"), apiconfig.AlphaFeatureSA) == false {
+		log.Warnf("ServiceAccount match when ALPHA_FEATURES flag does not have %s set", apiconfig.AlphaFeatureSA)
+		return ""
+	}
+
+	var updated string
+	if sam.Selector != "" {
+		updated = parseSelectorAttachPrefix(sam.Selector, conversion.ServiceAccountLabelPrefix)
+	}
+	if len(sam.Names) == 0 {
+		return updated
+	}
+
+	// Convert the list of ServiceAccounts to selector
+	names := strings.Join(sam.Names, "', '")
+	selectors := fmt.Sprintf("%s in { '%s' }", apiv3.LabelServiceAccount, names)
+
+	// Normailize it now
+	parsedSelector, err := parser.Parse(selectors)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to parse service account Names: %s", selectors)
+		return ""
+	}
+
+	selectors = parsedSelector.String()
+
+	// A list of Service account names are AND'd with the selectors.
+	if updated != "" {
+		selectors = fmt.Sprintf("(%s) && (%s)", updated, selectors)
+	}
+	log.Debugf("SA Selector is: %s", selectors)
+	return selectors
 }
 
 // convertV3ProtocolToV1 converts a v1 protocol string to a v3 protocol string

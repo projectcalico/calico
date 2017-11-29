@@ -32,7 +32,7 @@ func NewClient(config apiconfig.CalicoAPIConfig) (c bapi.Client, err error) {
 	case apiconfig.EtcdV3:
 		c, err = etcdv3.NewEtcdV3Client(&config.Spec.EtcdConfig)
 	case apiconfig.Kubernetes:
-		c, err = k8s.NewKubeClient(&config.Spec.KubeConfig)
+		c, err = k8s.NewKubeClient(&config.Spec)
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v",
 			config.Spec.DatastoreType))

@@ -72,26 +72,26 @@ type KubeClient struct {
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
-func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
+func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	log.Debugf("Building client for config: %+v", kc)
+	log.Debugf("Building client for config: %+v", ca)
 	configOverrides := &clientcmd.ConfigOverrides{}
 	var overridesMap = []struct {
 		variable *string
 		value    string
 	}{
-		{&configOverrides.ClusterInfo.Server, kc.K8sAPIEndpoint},
-		{&configOverrides.AuthInfo.ClientCertificate, kc.K8sCertFile},
-		{&configOverrides.AuthInfo.ClientKey, kc.K8sKeyFile},
-		{&configOverrides.ClusterInfo.CertificateAuthority, kc.K8sCAFile},
-		{&configOverrides.AuthInfo.Token, kc.K8sAPIToken},
+		{&configOverrides.ClusterInfo.Server, ca.K8sAPIEndpoint},
+		{&configOverrides.AuthInfo.ClientCertificate, ca.K8sCertFile},
+		{&configOverrides.AuthInfo.ClientKey, ca.K8sKeyFile},
+		{&configOverrides.ClusterInfo.CertificateAuthority, ca.K8sCAFile},
+		{&configOverrides.AuthInfo.Token, ca.K8sAPIToken},
 	}
 
 	// Set an explicit path to the kubeconfig if one
 	// was provided.
 	loadingRules := clientcmd.ClientConfigLoadingRules{}
-	if kc.Kubeconfig != "" {
-		loadingRules.ExplicitPath = kc.Kubeconfig
+	if ca.Kubeconfig != "" {
+		loadingRules.ExplicitPath = ca.Kubeconfig
 	}
 
 	// Using the override map above, populate any non-empty values.
@@ -100,7 +100,7 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 			*override.variable = override.value
 		}
 	}
-	if kc.K8sInsecureSkipTLSVerify {
+	if ca.K8sInsecureSkipTLSVerify {
 		configOverrides.ClusterInfo.InsecureSkipTLSVerify = true
 	}
 	log.Debugf("Config overrides: %+v", configOverrides)
@@ -128,7 +128,7 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 	kubeClient := &KubeClient{
 		clientSet:             cs,
 		crdClientV1:           crdClientV1,
-		disableNodePoll:       kc.K8sDisableNodePoll,
+		disableNodePoll:       ca.K8sDisableNodePoll,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
 		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
 		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
@@ -187,13 +187,13 @@ func NewKubeClient(kc *apiconfig.KubeConfig) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindProfile,
-		resources.NewProfileClient(cs),
+		resources.NewProfileClient(cs, ca.AlphaFeatures),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindWorkloadEndpoint,
-		resources.NewWorkloadEndpointClient(cs),
+		resources.NewWorkloadEndpointClient(cs, ca.AlphaFeatures),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.BlockAffinityKey{}),

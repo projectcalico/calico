@@ -128,12 +128,13 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		})
 	}
 
-	// Make sure there are no "namespace" labels on the wep
+	// Make sure there are no "namespace" or "serviceaccount" labels on the wep
 	// we pass to felix. This prevents a wep from pretending it is
 	// in another namespace.
 	labels := map[string]string{}
 	for k, v := range v3res.GetLabels() {
-		if !strings.HasPrefix(k, conversion.NamespaceLabelPrefix) {
+		if !strings.HasPrefix(k, conversion.NamespaceLabelPrefix) &&
+			!strings.HasPrefix(k, conversion.ServiceAccountLabelPrefix) {
 			labels[k] = v
 		}
 	}

@@ -15,6 +15,8 @@
 package apiconfig
 
 import (
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -26,6 +28,7 @@ const (
 	EtcdV3              DatastoreType = "etcdv3"
 	Kubernetes          DatastoreType = "kubernetes"
 	KindCalicoAPIConfig               = "CalicoAPIConfig"
+	AlphaFeatureSA                    = "serviceaccounts"
 )
 
 // CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource
@@ -44,6 +47,8 @@ type CalicoAPIConfigSpec struct {
 	EtcdConfig
 	// Inline the k8s config fields.
 	KubeConfig
+	// Alpha Feature set: comma separated list of alpha features that are enabled.
+	AlphaFeatures string `json:"alphafeatures" envconfig:"ALPHA_FEATURES" default:""`
 }
 
 type EtcdConfig struct {
@@ -75,4 +80,18 @@ func NewCalicoAPIConfig() *CalicoAPIConfig {
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
+}
+
+// IsAlphaFeatureSet checks if the comma separated features have the
+// name set in it.
+func IsAlphaFeatureSet(features, name string) bool {
+
+	fs := strings.Split(features, ",")
+	for _, f := range fs {
+		if f == name {
+			return true
+		}
+	}
+
+	return false
 }
