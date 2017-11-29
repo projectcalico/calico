@@ -607,11 +607,12 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: dikastes-node
-          image: gcr.io/unique-caldron-775/dikastes:latest
+          image: gcr.io/unique-caldron-775/dikastes:20171115195952
           imagePullPolicy: Always
           args:
             - /dikastes
             - server
+            - --debug
             - -l
             - "/var/run/dikastes/dikastes.sock"
             - "-k"
