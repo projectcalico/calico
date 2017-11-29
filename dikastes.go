@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	authz "tigera.io/dikastes/proto"
-	"tigera.io/dikastes/server"
+	authz "github.com/projectcalico/app-policy/proto"
+	"github.com/projectcalico/app-policy/server"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 

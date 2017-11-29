@@ -1,7 +1,7 @@
 package server
 
 import (
-	authz "tigera.io/dikastes/proto"
+	authz "github.com/projectcalico/app-policy/proto"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/selector"

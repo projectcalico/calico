@@ -1,4 +1,4 @@
-package: tigera.io/dikastes
+package: github.com/projectcalico/app-policy
 import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
