@@ -135,6 +135,11 @@ spec:
               value: "192.168.0.0/16"
             - name: CALICO_IPV4POOL_IPIP
               value: "always"
+            # Set noderef for node controller.
+            - name: CALICO_K8S_NODE_REF
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             # Disable IPv6 on Kubernetes.
             - name: FELIX_IPV6SUPPORT
               value: "false"
@@ -298,6 +303,9 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_cert
+            # Choose which controllers to run.
+            - name: ENABLED_CONTROLLERS
+              value: policy,profile,workloadendpoint,node
           volumeMounts:
             # Mount in the etcd TLS secrets.
             - mountPath: /calico-secrets
