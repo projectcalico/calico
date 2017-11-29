@@ -81,7 +81,7 @@ func (q *calicoQuery) GetPolicies(id names.WorkloadEndpointIdentifiers, namespac
 	if err != nil {
 		log.Fatalf("Failed to compute workload endpoint name from ID: %v. %v", id, err)
 	}
-	we, err := q.Client.WorkloadEndpoints().Get(context.TODO(), weName, namespace, options.GetOptions{})
+	we, err := q.Client.WorkloadEndpoints().Get(context.TODO(), namespace, weName, options.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
