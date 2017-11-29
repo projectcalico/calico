@@ -150,6 +150,7 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized $(DIST)/host-
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=0 \
+	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \
 	-e DIST=$(DIST) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
@@ -190,6 +191,7 @@ run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=0 \
+	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \
 	-e DIST=$(DIST) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
