@@ -15,14 +15,16 @@
 package conversionv1v3
 
 import (
-	"strings"
+	"fmt"
+	"net"
 	"regexp"
+	"strings"
 )
 
 var (
-	nonNameChar = regexp.MustCompile("[^-.a-z0-9]+")
-	nonNameNoDotChar = regexp.MustCompile("[^-a-z0-9]+")
-	dotDashSeq = regexp.MustCompile("[.-]*[.][.-]*")
+	nonNameChar               = regexp.MustCompile("[^-.a-z0-9]+")
+	nonNameNoDotChar          = regexp.MustCompile("[^-a-z0-9]+")
+	dotDashSeq                = regexp.MustCompile("[.-]*[.][.-]*")
 	trailingLeadingDotsDashes = regexp.MustCompile("^[.-]*(.*?)[.-]*$")
 )
 
@@ -35,7 +37,7 @@ var (
 // -  Remove leading and trailing dashes and dots
 func convertName(v1Name string) string {
 	name := strings.ToLower(v1Name)
-	name = strings.Replace(name,"/", ".", -1)
+	name = strings.Replace(name, "/", ".", -1)
 	name = nonNameChar.ReplaceAllString(name, "-")
 	name = dotDashSeq.ReplaceAllString(name, ".")
 
@@ -61,5 +63,25 @@ func convertNameNoDots(v1Name string) string {
 	// slice is the captured match group.
 	submatches := trailingLeadingDotsDashes.FindStringSubmatch(name)
 	name = submatches[1]
+	return name
+}
+
+// Convert an IP to an IPv4 or IPv6 representation
+// - IPv4 addresses will be of the format 1-2-3-4
+// - IPv6 addresses will be of the format 00aa-00bb-0000-0000-0000-0000-0000-0000
+//   with all zeros expanded
+func convertIpToName(ip net.IP) string {
+	name := ""
+	if ip.To4() != nil {
+		name = strings.Replace(ip.String(), ".", "-", 3)
+	} else {
+		ip6 := ip.To16()
+		bytes := []string{}
+		for i := 0; i < len(ip6); i += 2 {
+			bytes = append(bytes, fmt.Sprintf("%.2x%.2x", ip6[i], ip6[i+1]))
+		}
+		name = strings.Join(bytes, "-")
+	}
+
 	return name
 }
