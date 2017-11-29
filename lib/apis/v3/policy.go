@@ -57,6 +57,15 @@ type Rule struct {
 	Source EntityRule `json:"source,omitempty" validate:"omitempty"`
 	// Destination contains the match criteria that apply to destination entity.
 	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
+
+	// HTTP contains match criteria that apply to HTTP requests.
+	HTTP HTTPRule `json:"http,omitempty" validate:"omitempty"`
+}
+
+type HTTPRule struct {
+	// Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed
+	// HTTP Methods (e.g. GET, PUT, etc.)
+	Methods []string `json:"methods,omitempty" validate:"omitempty"`
 }
 
 // ICMPFields defines structure for ICMP and NotICMP sub-struct for ICMP code and type
