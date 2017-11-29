@@ -1,0 +1,418 @@
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: node
+  node: .123Im_a_Little.Teapot-Short_And-Stout.Heres-My-Handle_Heres_My.Spout.Im_Also.A.Very.LongNodeNameTryingTo-CatchOut_UpgradeCode75
+  peerIP: 192.168.255.255
+spec:
+  asNumber: "4294967294"
+
+---
+
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: global
+  peerIP: 2006::2:1
+spec:
+  asNumber: "1.10"
+
+---
+apiVersion: v1
+kind: hostEndpoint
+metadata:
+  name: eth0
+  node: myhost
+  labels:
+    type: production
+spec:
+  interfaceName: eth0
+  expectedIPs:
+  - 192.168.0.1
+  - 192.168.0.2
+  profiles:
+  - profile1
+  - profile2
+
+---
+
+apiVersion: v1
+kind: hostEndpoint
+metadata:
+  name: .123Im_a_Little.Teapot-Short_And-Stout.Heres-My-Handle_Heres_My.Spout.Im_AlsoAVeryLongInterfaceNameTryingToCatchOutUpgradeCode75
+  node: .123Im_a_Little.Teapot-Short_And-Stout.Heres-My-Handle_Heres_My.Spout.Im_Also.A.Very.LongNodeNameTryingTo-CatchOut_UpgradeCode75
+  labels:
+    8roper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/Key_Name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/Key_name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/key_Name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/9: frontendFrontEnd.0123456789-_-23wdffrontendFrontEnd.0124679-_-0
+    calico/k8s_ns: default
+    type: type-endFrontEnd.0123456789-_-23wdffrontendFrontEnd.0124679-_-0
+spec:
+  interfaceName: eth0
+  expectedIPs:
+  - fd00:1::321
+  profiles:
+  - profile1
+  - profile2
+
+---
+
+apiVersion: v1
+kind: hostEndpoint
+metadata:
+  name: eth0
+  node: myhost
+  labels:
+    type: production
+spec:
+  interfaceName: eth0
+  expectedIPs:
+  - 192.168.0.1
+  - 192.168.0.2
+  - fd00:ca:fe:1d:52:bb:e9:80
+  profiles:
+  - profile1
+  - profile2
+
+---
+
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 10.1.0.0/26
+spec:
+  ipip:
+    enabled: true
+    mode: cross-subnet
+  nat-outgoing: true
+  disabled: false
+
+---
+
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 10.0.0.0/8
+spec:
+  ipip:
+    enabled: true
+    mode: always
+  nat-outgoing: true
+  disabled: false
+
+---
+
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 2006::/64
+spec:
+  ipip:
+    enabled: false
+    mode: always
+  nat-outgoing: false
+  disabled: false
+
+---
+
+apiVersion: v1
+kind: node
+metadata:
+  name: -Mary_had-A-Little___Lamb--Whose---Fleece-Was-White.As.Snow...She-Also-Had_an-Evil-NodeName_in_order_to.break.upgrade-code201600
+spec:
+  bgp:
+    asNumber: "7.20"
+    ipv4Address: 10.244.0.1/24
+    ipv6Address: 2001:db8:85a3::8a2e:370:7334/120
+
+---
+apiVersion: v1
+kind: policy
+metadata:
+  name: allow-tcp-6379
+spec:
+  selector: role == 'database'
+  types:
+  - ingress
+  - egress
+  ingress:
+  - action: allow
+    protocol: tcp
+    source:
+      selector: role == 'frontend'
+    destination:
+      ports:
+      - 6379
+  egress:
+  - action: allow
+
+---
+apiVersion: v1
+kind: policy
+metadata:
+  name: -Mary_had-A-Little___Lamb--Whose---Fleece-Was-White.As.Snow...She-Also-Had_an-Evil-PolicyName_in_order_to.break.upgrade-code2016
+spec:
+  selector: role == 'database'
+  types:
+  - ingress
+  - egress
+  ingress:
+  - action: allow
+    protocol: tcp
+    source:
+      nets: [192.168.0.1/32]
+    destination:
+      ports:
+      - 6379
+  egress:
+  - action: allow
+
+---
+
+apiVersion: v1
+kind: profile
+metadata:
+  name: profile1
+  labels:
+    profile: profile1
+spec:
+  ingress:
+  - action: deny
+    source:
+      nets:
+      - 10.0.20.0/24
+  - action: allow
+    source:
+      selector: profile == 'profile1'
+  egress:
+  - action: allow
+
+---
+apiVersion: v1
+kind: profile
+metadata:
+  name: -Mary_had-A-Little___Lamb--Whose---Fleece-Was-White.As.Snow...She-Also-Had_an-Evil-ProfileName_in_order_to.break.upgradeprofile1
+  labels:
+    8roper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/Key_Name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/Key_name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/key_Name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/9: frontendFrontEnd.0123456789-_-23wdffrontendFrontEnd.0124679-_-0
+spec:
+  ingress:
+  - action: deny
+    source:
+      nets:
+      - 10.0.20.0/24
+      - 192.168.000.000/32
+      - 192.168.001.255/32
+      - 192.168.002.254/32
+      - 192.168.003.253/32
+      - 192.168.004.252/32
+      - 192.168.005.251/32
+      - 192.168.006.250/32
+      - 192.168.007.249/32
+      - 192.168.008.248/32
+      - 192.168.009.247/32
+      - 192.168.010.246/32
+      - 192.168.011.245/32
+      - 192.168.012.244/32
+      - 192.168.013.243/32
+      - 192.168.014.242/32
+      - 192.168.015.241/32
+      - 192.168.016.240/32
+      - 192.168.017.239/32
+      - 192.168.018.238/32
+      - 192.168.100.000/32
+      - 192.168.101.255/32
+      - 192.168.102.254/32
+      - 192.168.103.253/32
+      - 192.168.104.252/32
+      - 192.168.105.251/32
+      - 192.168.106.250/32
+      - 192.168.107.249/32
+      - 192.168.108.248/32
+      - 192.168.109.247/32
+      - 192.168.110.246/32
+      - 192.168.111.245/32
+      - 192.168.112.244/32
+      - 192.168.113.243/32
+      - 192.168.114.242/32
+      - 192.168.115.241/32
+      - 192.168.116.240/32
+      - 192.168.117.239/32
+      - 192.168.118.238/32
+      - 192.168.200.000/32
+      - 192.168.201.255/32
+      - 192.168.202.254/32
+      - 192.168.203.253/32
+      - 192.168.204.252/32
+      - 192.168.205.251/32
+      - 192.168.206.250/32
+      - 192.168.207.249/32
+      - 192.168.208.248/32
+      - 192.168.209.247/32
+      - 192.168.210.246/32
+      - 192.168.211.245/32
+      - 192.168.212.244/32
+      - 192.168.213.243/32
+      - 192.168.214.242/32
+      - 192.168.215.241/32
+      - 192.168.216.240/32
+      - 192.168.217.239/32
+      - 192.168.218.238/32
+      - 47.0.0.0/8
+  - action: allow
+    source:
+      selector: profile == 'profile1'
+  egress:
+  - action: allow
+
+---
+
+apiVersion: v1
+kind: workloadEndpoint
+metadata:
+  name: eth0
+  workload: default.frontend-5gs43
+  orchestrator: k8s
+  node: rack1-host1
+  labels:
+    app: frontend
+    calico/k8s_ns: default
+spec:
+  interfaceName: cali0ef24ba
+  mac: ca:fe:1d:52:bb:e9
+  ipNetworks:
+  - 192.168.000.000/32
+  - 192.168.001.255/32
+  - 192.168.002.254/32
+  - 192.168.003.253/32
+  - 192.168.004.252/32
+  - 192.168.005.251/32
+  - 192.168.006.250/32
+  - 192.168.007.249/32
+  - 192.168.008.248/32
+  - 192.168.009.247/32
+  - 192.168.010.246/32
+  - 192.168.011.245/32
+  - 192.168.012.244/32
+  - 192.168.013.243/32
+  - 192.168.014.242/32
+  - 192.168.015.241/32
+  - 192.168.016.240/32
+  - 192.168.017.239/32
+  - 192.168.018.238/32
+  - 192.168.100.000/32
+  - 192.168.101.255/32
+  - 192.168.102.254/32
+  - 192.168.103.253/32
+  - 192.168.104.252/32
+  - 192.168.105.251/32
+  - 192.168.106.250/32
+  - 192.168.107.249/32
+  - 192.168.108.248/32
+  - 192.168.109.247/32
+  - 192.168.110.246/32
+  - 192.168.111.245/32
+  - 192.168.112.244/32
+  - 192.168.113.243/32
+  - 192.168.114.242/32
+  - 192.168.115.241/32
+  - 192.168.116.240/32
+  - 192.168.117.239/32
+  - 192.168.118.238/32
+  - 192.168.200.000/32
+  - 192.168.201.255/32
+  - 192.168.202.254/32
+  - 192.168.203.253/32
+  - 192.168.204.252/32
+  - 192.168.205.251/32
+  - 192.168.206.250/32
+  - 192.168.207.249/32
+  - 192.168.208.248/32
+  - 192.168.209.247/32
+  - 192.168.210.246/32
+  - 192.168.211.245/32
+  - 192.168.212.244/32
+  - 192.168.213.243/32
+  - 192.168.214.242/32
+  - 192.168.215.241/32
+  - 192.168.216.240/32
+  - 192.168.217.239/32
+  - 192.168.218.238/32
+  profiles:
+  - profile1
+
+---
+
+apiVersion: v1
+kind: workloadEndpoint
+metadata:
+  name: eth0
+  workload: default/frontend-5gs43
+  orchestrator: k8s
+  node: rack1-host1
+  labels:
+    app: frontend
+    calico/k8s_ns: default
+spec:
+  interfaceName: cali0ef24ba
+  mac: fe:ed:ca:fe:00:00
+  ipNetworks:
+  - 192.168.0.0/32
+  - 192.168.1.255/32
+  - 192.168.2.254/32
+  - 192.168.3.253/32
+  - 192.168.4.252/32
+  - 192.168.5.251/32
+  - 192.168.6.250/32
+  - 192.168.7.249/32
+  - 192.168.8.248/32
+  - 192.168.9.247/32
+  - 192.168.10.246/32
+  - 192.168.11.245/32
+  - 192.168.12.244/32
+  - 192.168.13.243/32
+  - 192.168.14.242/32
+  - 192.168.15.241/32
+  - 192.168.16.240/32
+  - 192.168.17.239/32
+  - 192.168.18.238/32
+  profiles:
+  - profile1
+
+---
+
+apiVersion: v1
+kind: workloadEndpoint
+metadata:
+  name: .123Im_a_Little.Teapot-Short_And-Stout.Heres-My-Handle_Heres_My.Spout.Im_AlsoAVeryLongInterfaceNameTryingToCatchOutUpgradeCode75
+  workload: default.-_.123Im_a_Little.Teapot-Short_And-Stout.Heres-My-Handle_Heres_My_AlsoAVeryLongWorkload-NameTryingToCatchOutUpgradeCode5
+  orchestrator: k8s
+  node: .123Im_a_Little.Teapot-Short_And-Stout.Heres-My-Handle_Heres_My.Spout.Im_Also.A.Very.LongNodeNameTryingTo-CatchOut_UpgradeCode75
+  labels:
+    8roper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/Key_Name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/Key_name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/key_Name.which/is-also_very.long...1234567890//proper/evil-02/key_name.which/is-also_very.long...1234567890//proper/evil-02/9: frontendFrontEnd.0123456789-_-23wdffrontendFrontEnd.0124679-_-0
+    calico/k8s_ns: default
+spec:
+  interfaceName: cali0ef24ba
+  mac: ca:fe:1d:52:bb:e9
+  ipNetworks:
+  - 192.168.255.255/32
+  - fd::1:40
+  profiles:
+  - profile1
+
+---
+
+apiVersion: v1
+kind: workloadEndpoint
+metadata:
+  name: eth0
+  workload: default.frontend.5gs43
+  orchestrator: k8s
+  node: rack1-host1
+  labels:
+    app: frontend
+    calico/k8s_ns: default
+spec:
+  interfaceName: cali0ef24ba
+  mac: ca:fe:1d:52:bb:e9
+  ipNetworks:
+  - fd00:ca:fe:1d:52:bb:e9:80
+  profiles:
+  - profile1
