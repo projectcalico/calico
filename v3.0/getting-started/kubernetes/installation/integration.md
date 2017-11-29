@@ -42,8 +42,8 @@ and the Felix agent which programs network policy rules.
 The `cni-plugin` plugin integrates directly with the Kubernetes `kubelet` process
 on each node to discover which pods have been created, and adds them to Calico networking.
 
-The `calico/kube-controllers` container runs as a pod on top of Kubernetes and implements
-the `NetworkPolicy` API.
+The `calico/kube-controllers` container runs as a pod on top of Kubernetes and keeps {{site.prodname}}
+in-sync with Kubernetes.
 
 ## Installing `calico/node`
 
@@ -171,9 +171,11 @@ sudo cp loopback /opt/cni/bin/
 
 ## Installing the Calico Kubernetes controllers
 
-The `calico/kube-controllers` container implements the Kubernetes `NetworkPolicy` API by watching the
-Kubernetes API for `Pod`, `Namespace`, and `NetworkPolicy` events and configuring Calico in response. It runs as
-a single pod managed by a Deployment.
+The `calico/kube-controllers` container keeps {{site.prodname}}'s datastore in-sync with Kubernetes.
+It runs as a single pod managed by a Deployment.
+
+> **Note**: The `calico/kube-controllers` container is required even if policy is not in use.
+{: .alert .alert-info}
 
 To install the controllers:
 
