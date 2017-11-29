@@ -22,14 +22,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/pkg/transport"
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -110,11 +114,36 @@ func main() {
 		}
 	}
 
+	// If configured to do so, start an etcdv3 compaction.
+	startCompactor(ctx, config)
+
 	// Wait forever.
 	select {}
 }
 
-// getClients builds and returns Kubernetes, Calico and Extensions clients.
+// Starts an etcdv3 compaction goroutine with the given config.
+func startCompactor(ctx context.Context, config *config.Config) {
+	interval, err := time.ParseDuration(config.CompactionPeriod)
+	if err != nil {
+		log.WithError(err).Fatal("Invalid compact interval")
+	}
+
+	if interval.Nanoseconds() == 0 {
+		log.Info("Disabling periodic etcdv3 compaction")
+		return
+	}
+
+	// Kick off a periodic compaction of etcd.
+	etcdClient, err := newEtcdV3Client()
+	if err != nil {
+		log.WithError(err).Error("Failed to start etcd compaction routine")
+	} else {
+		log.WithField("period", interval).Info("Starting periodic etcdv3 compaction")
+		etcd3.StartCompactor(ctx, etcdClient, interval)
+	}
+}
+
+// getClients builds and returns Kubernetes and Calico clients.
 func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, error) {
 	// Get Calico client
 	calicoClient, err := client.NewFromEnv()
@@ -136,4 +165,46 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 	}
 
 	return k8sClientset, calicoClient, nil
+}
+
+// Returns an etcdv3 client based on the environment. The client will be configured to
+// match that in use by the libcalico-go client.
+func newEtcdV3Client() (*clientv3.Client, error) {
+	config, err := apiconfig.LoadClientConfigFromEnvironment()
+	if err != nil {
+		return nil, err
+	}
+
+	// Split the endpoints into a location slice.
+	etcdLocation := []string{}
+	if config.Spec.EtcdEndpoints != "" {
+		etcdLocation = strings.Split(config.Spec.EtcdEndpoints, ",")
+	}
+
+	if len(etcdLocation) == 0 {
+		log.Warning("No etcd endpoints specified in etcdv3 API config")
+		return nil, fmt.Errorf("no etcd endpoints specified")
+	}
+
+	// Create the etcd client
+	tlsInfo := &transport.TLSInfo{
+		CAFile:   config.Spec.EtcdCACertFile,
+		CertFile: config.Spec.EtcdCertFile,
+		KeyFile:  config.Spec.EtcdKeyFile,
+	}
+	tls, _ := tlsInfo.ClientConfig()
+
+	cfg := clientv3.Config{
+		Endpoints:   etcdLocation,
+		TLS:         tls,
+		DialTimeout: 10 * time.Second,
+	}
+
+	// Plumb through the username and password if both are configured.
+	if config.Spec.EtcdUsername != "" && config.Spec.EtcdPassword != "" {
+		cfg.Username = config.Spec.EtcdUsername
+		cfg.Password = config.Spec.EtcdPassword
+	}
+
+	return clientv3.New(cfg)
 }
