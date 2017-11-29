@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
@@ -31,9 +32,11 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
-func NewWorkloadEndpointClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewWorkloadEndpointClient(c *kubernetes.Clientset, a string) K8sResourceClient {
+	alphaSA := apiconfig.IsAlphaFeatureSet(a, apiconfig.AlphaFeatureSA)
 	return &WorkloadEndpointClient{
 		clientSet: c,
+		converter: conversion.Converter{AlphaSA: alphaSA},
 	}
 }
 

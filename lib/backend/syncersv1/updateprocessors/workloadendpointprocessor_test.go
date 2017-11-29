@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -273,6 +274,53 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 		Expect(kvps).To(HaveLen(1))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1WorkloadEndpointKey1,
+		}))
+	})
+
+	It("should filter out a WEP with namespace or serviceAccount labels", func() {
+		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+		nsLabel := conversion.NamespaceLabelPrefix + "ns1"
+		saLabel := conversion.ServiceAccountLabelPrefix + "sa1"
+		res := apiv3.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+			nsLabel: "ns1",
+			saLabel: "sa1",
+			"k1":    "v1",
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
+		res.Spec.InterfaceName = iface1
+		res.Spec.IPNetworks = []string{"10.100.10.1"}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3WorkloadEndpointKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		_, ipn, err := cnet.ParseCIDROrIP("10.100.10.1")
+		expectedIPv4Net := *(ipn.Network())
+		Expect(kvps).To(HaveLen(1))
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key: v1WorkloadEndpointKey1,
+			Value: &model.WorkloadEndpoint{
+				State: "active",
+				Name:  iface1,
+				Ports: []model.EndpointPort{},
+				Labels: map[string]string{
+					"projectcalico.org/namespace":    ns1,
+					"projectcalico.org/orchestrator": oid1,
+					"k1": "v1",
+				},
+				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
+			},
+			Revision: "abcde",
 		}))
 	})
 })

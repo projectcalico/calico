@@ -32,6 +32,10 @@ const (
 	// and may be used for label matches by Policy selectors.
 	LabelNamespace = "projectcalico.org/namespace"
 
+	// Label used to denote the ServiceAccount.  This is added to the workload endpoints by Calico
+	// and may be used for label matches by Policy selectors.
+	LabelServiceAccount = "projectcalico.org/serviceaccount"
+
 	// Label used to denote the Orchestrator.  This is added to the workload endpoints by an
 	// orchestrator.
 	LabelOrchestrator = "projectcalico.org/orchestrator"

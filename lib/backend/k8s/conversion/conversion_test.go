@@ -57,6 +57,30 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(ns).To(Equal(""))
 	})
+
+	It("should parse valid sa profile names", func() {
+		name := "ksa.default.test"
+		ns, sa, err := c.ProfileNameToServiceAccount(name)
+		Expect(sa).To(Equal("test"))
+		Expect(ns).To(Equal("default"))
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should parse valid sa profile names with dot(.)", func() {
+		name := "ksa.default.test.foo"
+		ns, sa, err := c.ProfileNameToServiceAccount(name)
+		Expect(sa).To(Equal("test.foo"))
+		Expect(ns).To(Equal("default"))
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should not parse invalid sa profile names", func() {
+		name := "ns.projectcalico.org/default"
+		ns, sa, err := c.ProfileNameToServiceAccount(name)
+		Expect(err).To(HaveOccurred())
+		Expect(ns).To(Equal(""))
+		Expect(sa).To(Equal(""))
+	})
 })
 
 var _ = Describe("Test selector conversion", func() {
@@ -204,6 +228,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
 		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(1))
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks[0]).To(Equal("192.168.0.1/32"))
+		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Profiles)).To(Equal(1))
 		expectedLabels := map[string]string{
 			"labelA":                         "valueA",
 			"labelB":                         "valueB",
@@ -285,6 +310,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Endpoint).To(Equal("eth0"))
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Orchestrator).To(Equal("k8s"))
 		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(1))
+		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Profiles)).To(Equal(1))
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(map[string]string{
 			"projectcalico.org/namespace":    "default",
 			"projectcalico.org/orchestrator": "k8s",
@@ -1831,4 +1857,232 @@ var _ = Describe("Test Namespace conversion", func() {
 		_, _, err = c.SplitNetworkPolicyRevision("1234/5678/1313")
 		Expect(err).To(HaveOccurred())
 	})
+})
+
+var _ = Describe("Test ServiceAccount conversion", func() {
+
+	// Use a single instance of the Converter for these tests.
+	c := Converter{AlphaSA: true}
+
+	It("should parse a ServiceAccount in default namespace to a Profile", func() {
+		sa := kapiv1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "sa-test",
+				Labels: map[string]string{
+					"foo":   "bar",
+					"roger": "rabbit",
+				},
+				Annotations: map[string]string{},
+			},
+		}
+
+		p, err := c.ServiceAccountToProfile(&sa)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(p.Key.(model.ResourceKey).Name).To(Equal("ksa.default.sa-test"))
+		Expect(p.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindProfile))
+
+		// Ensure rules are correct for profile.
+		Ingress := p.Value.(*apiv3.Profile).Spec.Ingress
+		Egress := p.Value.(*apiv3.Profile).Spec.Egress
+		Expect(len(Ingress)).To(Equal(0))
+		Expect(len(Egress)).To(Equal(0))
+
+		// Check labels.
+		labels := p.Value.(*apiv3.Profile).Spec.LabelsToApply
+		Expect(labels["pcsa.foo"]).To(Equal("bar"))
+		Expect(labels["pcsa.roger"]).To(Equal("rabbit"))
+	})
+
+	It("should parse a ServiceAccount in Namespace to a Profile", func() {
+		sa := kapiv1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "sa-test",
+				Namespace:   "test",
+				Annotations: map[string]string{},
+			},
+		}
+
+		p, err := c.ServiceAccountToProfile(&sa)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(p.Key.(model.ResourceKey).Name).To(Equal("ksa.test.sa-test"))
+		Expect(p.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindProfile))
+	})
+
+	It("should parse a ServiceAccount with no labels to a Profile", func() {
+		sa := kapiv1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "sa-test",
+			},
+		}
+
+		p, err := c.ServiceAccountToProfile(&sa)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Ensure rules are correct.
+		Ingress := p.Value.(*apiv3.Profile).Spec.Ingress
+		Egress := p.Value.(*apiv3.Profile).Spec.Egress
+		Expect(len(Ingress)).To(Equal(0))
+		Expect(len(Egress)).To(Equal(0))
+
+		// Check labels.
+		labels := p.Value.(*apiv3.Profile).Spec.LabelsToApply
+		Expect(len(labels)).To(Equal(0))
+	})
+
+	It("should handle ServiceAccount resource versions, with feature flag set", func() {
+		By("converting ns and sa versions to the correct combined version")
+		rev := c.JoinProfileRevisions("1234", "5678")
+		Expect(rev).To(Equal("1234/5678"))
+
+		rev = c.JoinProfileRevisions("", "5678")
+		Expect(rev).To(Equal("/5678"))
+
+		rev = c.JoinProfileRevisions("1234", "")
+		Expect(rev).To(Equal("1234/"))
+
+		By("extracting ns and sa versions from the combined version")
+		nsRev, saRev, err := c.SplitProfileRevision("")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal(""))
+		Expect(saRev).To(Equal(""))
+
+		nsRev, saRev, err = c.SplitProfileRevision("/")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal(""))
+		Expect(saRev).To(Equal(""))
+
+		nsRev, saRev, err = c.SplitProfileRevision("1234/5678")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal("1234"))
+		Expect(saRev).To(Equal("5678"))
+
+		nsRev, saRev, err = c.SplitProfileRevision("/5678")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal(""))
+		Expect(saRev).To(Equal("5678"))
+
+		nsRev, saRev, err = c.SplitProfileRevision("1234/")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal("1234"))
+		Expect(saRev).To(Equal(""))
+
+		By("failing to convert an invalid combined version")
+		_, _, err = c.SplitProfileRevision("1234")
+		Expect(err).To(HaveOccurred())
+
+		_, _, err = c.SplitProfileRevision("1234/5678/1313")
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should handle ServiceAccount resource versions, with feature flag unset", func() {
+		// When AlphaSA == false profile ignore the saRev completely.
+		c.AlphaSA = false
+		By("returning only the ns version")
+		rev := c.JoinProfileRevisions("1234", "5678")
+		Expect(rev).To(Equal("1234"))
+
+		rev = c.JoinProfileRevisions("", "5678")
+		Expect(rev).To(Equal(""))
+
+		rev = c.JoinProfileRevisions("1234", "")
+		Expect(rev).To(Equal("1234"))
+
+		By("extracting only the input version without spliting")
+		nsRev, saRev, err := c.SplitProfileRevision("")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal(""))
+		Expect(saRev).To(Equal(""))
+
+		nsRev, saRev, err = c.SplitProfileRevision("1234/5678")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal("1234/5678"))
+		Expect(saRev).To(Equal(""))
+
+		nsRev, saRev, err = c.SplitProfileRevision("1234")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(nsRev).To(Equal("1234"))
+		Expect(saRev).To(Equal(""))
+
+	})
+})
+
+var _ = Describe("Test Pod conversion with alpha feature flag", func() {
+
+	// Use a single instance of the Converter for these tests.
+	c := Converter{AlphaSA: true}
+
+	It("should parse a Pod with serviceaccount", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary": "annotation",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:           "nodeA",
+				ServiceAccountName: "sa-test",
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								ContainerPort: 5678,
+							},
+							{
+								Name:          "no-proto",
+								ContainerPort: 1234,
+							},
+						},
+					},
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure the type information is correct.
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).APIVersion).To(Equal(apiv3.GroupVersionCurrent))
+
+		// Assert key fields.
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
+		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
+		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
+
+		// Check for only values that are controlled by the alphaSA flag
+		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Profiles)).To(Equal(2))
+		expectedLabels := map[string]string{
+			"labelA":                         "valueA",
+			"labelB":                         "valueB",
+			"projectcalico.org/namespace":    "default",
+			"projectcalico.org/orchestrator": "k8s",
+			apiv3.LabelServiceAccount:        "sa-test",
+		}
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
+
+		// Assert ResourceVersion is present.
+		Expect(wep.Revision).To(Equal("1234"))
+	})
+
 })

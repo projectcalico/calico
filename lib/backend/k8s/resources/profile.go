@@ -18,28 +18,33 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
-func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewProfileClient(c *kubernetes.Clientset, af string) K8sResourceClient {
+	alphaSA := apiconfig.IsAlphaFeatureSet(af, apiconfig.AlphaFeatureSA)
 	return &profileClient{
 		clientSet: c,
+		Converter: conversion.Converter{AlphaSA: alphaSA},
 	}
 }
 
 // Implements the api.Client interface for Profiles.
 type profileClient struct {
 	clientSet *kubernetes.Clientset
-	converter conversion.Converter
+	conversion.Converter
 }
 
 func (c *profileClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -66,22 +71,78 @@ func (c *profileClient) Delete(ctx context.Context, key model.Key, revision stri
 	}
 }
 
+func (c *profileClient) getSaKv(sa *kapiv1.ServiceAccount) (*model.KVPair, error) {
+	kvPair, err := c.ServiceAccountToProfile(sa)
+	if err != nil {
+		return nil, err
+	}
+
+	return kvPair, nil
+}
+
+func (c *profileClient) getServiceAccount(ctx context.Context, rk model.ResourceKey, revision string) (*model.KVPair, error) {
+
+	namespace, serviceAccountName, err := c.ProfileNameToServiceAccount(rk.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	serviceAccount, err := c.clientSet.CoreV1().ServiceAccounts(namespace).Get(serviceAccountName, metav1.GetOptions{ResourceVersion: revision})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, rk)
+	}
+
+	return c.getSaKv(serviceAccount)
+}
+
+func (c *profileClient) getNsKv(ns *kapiv1.Namespace) (*model.KVPair, error) {
+	kvPair, err := c.NamespaceToProfile(ns)
+	if err != nil {
+		return nil, err
+	}
+
+	return kvPair, nil
+}
+
+func (c *profileClient) getNamespace(ctx context.Context, rk model.ResourceKey, revision string) (*model.KVPair, error) {
+	namespaceName, err := c.ProfileNameToNamespace(rk.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	namespace, err := c.clientSet.CoreV1().Namespaces().Get(namespaceName, metav1.GetOptions{ResourceVersion: revision})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, rk)
+	}
+
+	return c.getNsKv(namespace)
+}
+
 func (c *profileClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	log.Debug("Received Get request on Profile type")
 	rk := key.(model.ResourceKey)
 	if rk.Name == "" {
 		return nil, fmt.Errorf("Profile key missing name: %+v", rk)
 	}
-	namespaceName, err := c.converter.ProfileNameToNamespace(rk.Name)
+
+	nsRev, saRev, err := c.SplitProfileRevision(revision)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse Profile name: %s", err)
-	}
-	namespace, err := c.clientSet.CoreV1().Namespaces().Get(namespaceName, metav1.GetOptions{ResourceVersion: revision})
-	if err != nil {
-		return nil, K8sErrorToCalico(err, rk)
+		return nil, err
 	}
 
-	return c.converter.NamespaceToProfile(namespace)
+	if strings.HasPrefix(rk.Name, conversion.NamespaceProfileNamePrefix) {
+		return c.getNamespace(ctx, rk, nsRev)
+	}
+
+	if c.AlphaSA == false {
+		return nil, fmt.Errorf("Revision %s invalid", revision)
+	}
+
+	if strings.HasPrefix(rk.Name, conversion.ServiceAccountProfileNamePrefix) {
+		return c.getServiceAccount(ctx, rk, saRev)
+	}
+
+	return nil, fmt.Errorf("Revision %s invalid", revision)
 }
 
 func (c *profileClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
@@ -109,24 +170,54 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		}, nil
 	}
 
+	nsRev, saRev, err := c.SplitProfileRevision(revision)
+	if err != nil {
+		return nil, err
+	}
+
 	// Otherwise, enumerate all.
-	namespaces, err := c.clientSet.CoreV1().Namespaces().List(metav1.ListOptions{ResourceVersion: revision})
+	namespaces, err := c.clientSet.CoreV1().Namespaces().List(metav1.ListOptions{ResourceVersion: nsRev})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, nl)
 	}
 
 	// For each Namespace, return a profile.
 	for _, ns := range namespaces.Items {
-		kvp, err := c.converter.NamespaceToProfile(&ns)
+		kvp, err := c.getNsKv(&ns)
 		if err != nil {
 			log.Errorf("Unable to convert k8s Namespace to Calico Profile: Namespace=%s: %v", ns.Name, err)
 			continue
 		}
 		kvps = append(kvps, kvp)
 	}
+
+	if c.AlphaSA == false {
+		return &model.KVPairList{
+			KVPairs:  kvps,
+			Revision: namespaces.ResourceVersion,
+		}, nil
+	}
+
+	// Enumerate all SA
+	var serviceaccounts *kapiv1.ServiceAccountList
+	// TBD: narrow down to only to the required namespace
+	serviceaccounts, err = c.clientSet.CoreV1().ServiceAccounts(kapiv1.NamespaceAll).List(metav1.ListOptions{ResourceVersion: saRev})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, nl)
+	}
+
+	for _, sa := range serviceaccounts.Items {
+		kvp, err := c.getSaKv(&sa)
+		if err != nil {
+			log.WithError(err).Errorf("Unable to convert k8s service account to Calico Profile: %s", sa.Name)
+			continue
+		}
+		log.Debug("Converted k8s sa to Calico profile ", sa.Name)
+		kvps = append(kvps, kvp)
+	}
 	return &model.KVPairList{
 		KVPairs:  kvps,
-		Revision: namespaces.ResourceVersion,
+		Revision: c.JoinProfileRevisions(namespaces.ResourceVersion, serviceaccounts.ResourceVersion),
 	}, nil
 }
 
@@ -135,11 +226,24 @@ func (c *profileClient) EnsureInitialized() error {
 }
 
 func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	if len(list.(model.ResourceListOptions).Name) != 0 {
+	resl := list.(model.ResourceListOptions)
+	if len(resl.Name) != 0 {
 		return nil, fmt.Errorf("cannot watch specific resource instance: %s", list.(model.ResourceListOptions).Name)
 	}
 
-	k8sWatch, err := c.clientSet.CoreV1().Namespaces().Watch(metav1.ListOptions{ResourceVersion: revision})
+	nsRev, saRev, err := c.SplitProfileRevision(revision)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.AlphaSA {
+		log.WithFields(log.Fields{
+			"nsRev": nsRev,
+			"saRev": saRev,
+		}).Info("Watching two resources at individual revisions")
+	}
+
+	nsWatch, err := c.clientSet.CoreV1().Namespaces().Watch(metav1.ListOptions{ResourceVersion: nsRev})
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
@@ -148,7 +252,197 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		if !ok {
 			return nil, errors.New("profile conversion with incorrect k8s resource type")
 		}
-		return c.converter.NamespaceToProfile(k8sNamespace)
+		return c.NamespaceToProfile(k8sNamespace)
 	}
-	return newK8sWatcherConverter(ctx, "Profile", converter, k8sWatch), nil
+
+	nsWatcher := newK8sWatcherConverter(ctx, "Profile-NS", converter, nsWatch)
+
+	if c.AlphaSA == false {
+		return nsWatcher, nil
+	}
+
+	// Watch all service accounts in ALL namespaces
+	saWatch, err := c.clientSet.CoreV1().ServiceAccounts(kapiv1.NamespaceAll).Watch(metav1.ListOptions{ResourceVersion: saRev})
+	if err != nil {
+		nsWatch.Stop()
+		return nil, K8sErrorToCalico(err, list)
+	}
+
+	converterSA := func(r Resource) (*model.KVPair, error) {
+		k8sServiceAccount, ok := r.(*kapiv1.ServiceAccount)
+		if !ok {
+			nsWatch.Stop()
+			return nil, errors.New("Profile converion with incorrect k8s resource type")
+		}
+		return c.ServiceAccountToProfile(k8sServiceAccount)
+	}
+
+	saWatcher := newK8sWatcherConverter(ctx, "Profile-SA", converterSA, saWatch)
+
+	return newProfileWatcher(ctx, nsWatcher, saWatcher), nil
+
+}
+
+func newProfileWatcher(ctx context.Context, k8sWatchNS, k8sWatchSA api.WatchInterface) api.WatchInterface {
+	ctx, cancel := context.WithCancel(ctx)
+	wc := &profileWatcher{
+		k8sNSWatch: k8sWatchNS,
+		k8sSAWatch: k8sWatchSA,
+		context:    ctx,
+		cancel:     cancel,
+		resultChan: make(chan api.WatchEvent, resultsBufSize),
+		Converter:  conversion.Converter{AlphaSA: true},
+	}
+	go wc.processProfileEvents()
+	return wc
+}
+
+type profileWatcher struct {
+	conversion.Converter
+	converter  ConvertK8sResourceToKVPair
+	k8sNSWatch api.WatchInterface
+	k8sSAWatch api.WatchInterface
+	k8sNSRev   string
+	k8sSARev   string
+	context    context.Context
+	cancel     context.CancelFunc
+	resultChan chan api.WatchEvent
+	terminated uint32
+}
+
+// Stop stops the watcher and releases associated resources.
+// This calls through the context cancel function.
+func (pw *profileWatcher) Stop() {
+	pw.cancel()
+	pw.k8sNSWatch.Stop()
+	pw.k8sSAWatch.Stop()
+}
+
+// ResultChan returns a channel used to receive WatchEvents.
+func (pw *profileWatcher) ResultChan() <-chan api.WatchEvent {
+	return pw.resultChan
+}
+
+// HasTerminated returns true when the watcher has completed termination processing.
+func (pw *profileWatcher) HasTerminated() bool {
+	terminated := atomic.LoadUint32(&pw.terminated) != 0
+
+	if pw.k8sNSWatch != nil {
+		terminated = terminated && pw.k8sNSWatch.HasTerminated()
+	}
+	if pw.k8sSAWatch != nil {
+		terminated = terminated && pw.k8sSAWatch.HasTerminated()
+	}
+
+	return terminated
+}
+
+// Loop to process the events stream from the underlying k8s Watcher and convert them to
+// backend KVPs.
+func (pw *profileWatcher) processProfileEvents() {
+	log.Info("Watcher process started for profile.")
+	defer func() {
+		log.Info("Profile watcher process terminated")
+		pw.Stop()
+		close(pw.resultChan)
+		atomic.AddUint32(&pw.terminated, 1)
+	}()
+
+	for {
+		var ok bool
+		var e api.WatchEvent
+		var isNsEvent bool
+		select {
+		case e, ok = <-pw.k8sNSWatch.ResultChan():
+			if !ok {
+				// We shouldn't get a closed channel without first getting a terminating error,
+				// so write a warning log and convert to a termination error.
+				log.Warn("Profile, namespace watch channel closed.")
+				e = api.WatchEvent{
+					Type: api.WatchError,
+					Error: cerrors.ErrorWatchTerminated{
+						ClosedByRemote: true,
+						Err:            errors.New("Profile namespace watch channel closed."),
+					},
+				}
+			}
+			log.Debug("Processing Namespace event")
+			isNsEvent = true
+
+		case e, ok = <-pw.k8sSAWatch.ResultChan():
+			if !ok {
+				// We shouldn't get a closed channel without first getting a terminating error,
+				// so write a warning log and convert to a termination error.
+				log.Warn("Profile, serviceaccount watch channel closed.")
+				e = api.WatchEvent{
+					Type: api.WatchError,
+					Error: cerrors.ErrorWatchTerminated{
+						ClosedByRemote: true,
+						Err:            errors.New("Profile serviceaccount watch channel closed."),
+					},
+				}
+			}
+			log.Debug("Processing SeriveAccount event")
+			isNsEvent = false
+
+		case <-pw.context.Done(): //user cancel
+			log.Info("Process watcher done event in kdd client")
+			return
+		}
+
+		// Update the resource version of the Object in the watcher. The version returned on a watch
+		// event needs to be such that the Watch client can resume watching when a watch fails.
+		// The watch client expects a slash separated list of resource versions in the format
+		// <NS Revision/SA Revision>.
+		var value interface{}
+		switch e.Type {
+		case api.WatchModified, api.WatchAdded:
+			value = e.New.Value
+		case api.WatchDeleted:
+			value = e.Old.Value
+		}
+
+		if value != nil {
+			oma, ok := value.(metav1.ObjectMetaAccessor)
+
+			if !ok {
+				log.WithField("event", e).Error(
+					"Resource returned from watch does not implement ObjectMetaAccessor interface")
+				e = api.WatchEvent{
+					Type: api.WatchError,
+					Error: cerrors.ErrorWatchTerminated{
+						ClosedByRemote: true,
+						Err:            errors.New("Profile value does not implement ObjectMetaAccessor interface."),
+					},
+				}
+			} else {
+				if isNsEvent {
+					pw.k8sNSRev = oma.GetObjectMeta().GetResourceVersion()
+				} else {
+					pw.k8sSARev = oma.GetObjectMeta().GetResourceVersion()
+				}
+				oma.GetObjectMeta().SetResourceVersion(pw.JoinProfileRevisions(pw.k8sNSRev, pw.k8sSARev))
+			}
+		} else if e.Error == nil {
+			log.WithField("event", e).Warning("Event without error or value")
+		}
+
+		// Send the processed event.
+		select {
+		case pw.resultChan <- e:
+			// If this is an error event. check to see if it's a terminating one.
+			// If so, terminate this watcher.
+			if e.Type == api.WatchError {
+				log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
+				if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
+					log.Info("Watch terminated event")
+					return
+				}
+			}
+
+		case <-pw.context.Done():
+			log.Info("Process watcher done event during watch event in kdd client")
+			return
+		}
+	}
 }
