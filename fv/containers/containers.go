@@ -28,6 +28,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"strconv"
+
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -128,6 +130,22 @@ func (c *Container) GetHostname() string {
 	return strings.TrimSpace(output)
 }
 
+func (c *Container) GetPIDs(processName string) []int {
+	out, err := c.ExecOutput("pgrep", fmt.Sprintf("^%s$", processName))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(out).NotTo(BeEmpty())
+	var pids []int
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		pid, err := strconv.Atoi(line)
+		Expect(err).NotTo(HaveOccurred())
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
 func (c *Container) WaitUntilRunning() {
 	log.Info("Wait for container to be listed in docker ps")
 
@@ -202,6 +220,17 @@ func (c *Container) ExecMayFail(cmd ...string) error {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	return utils.RunMayFail("docker", arg...)
+}
+
+func (c *Container) ExecOutput(args ...string) (string, error) {
+	arg := []string{"exec", c.Name}
+	arg = append(arg, args...)
+	cmd := exec.Command("docker", arg...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func (c *Container) SourceName() string {
