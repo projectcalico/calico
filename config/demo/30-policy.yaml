@@ -19,11 +19,11 @@ metadata:
 spec:
   selector: app == 'customer'
   ingress:
-    - action: allow
+    - action: Allow
       http:
         methods: ["GET"]
   egress:
-    - action: allow
+    - action: Allow
 
 ---
 
@@ -34,13 +34,13 @@ metadata:
 spec:
   selector: app == 'summary'
   ingress:
-    - action: allow
+    - action: Allow
       source:
         serviceAccounts:
           namespace: default
           names: ["customer"]
   egress:
-    - action: allow
+    - action: Allow
 
 ---
 apiVersion: projectcalico.org/v2
@@ -50,12 +50,12 @@ metadata:
 spec:
   selector: app == 'database'
   ingress:
-    - action: allow
+    - action: Allow
       source:
         serviceAccounts:
           namespace: default
           names: ["summary"]
   egress:
-    - action: allow
+    - action: Allow
 
 ---
