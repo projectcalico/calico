@@ -41,3 +41,5 @@ import:
   - fv.containers
 - package: github.com/coreos/etcd
   version: v3.2.7
+- package: golang.org/x/crypto
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d

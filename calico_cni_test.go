@@ -26,7 +26,7 @@ import (
 )
 
 var _ = Describe("CalicoCni", func() {
-	hostname, _ := os.Hostname()
+	hostname, _ := names.Hostname()
 	ctx := context.Background()
 	calicoClient, _ := client.NewFromEnv()
 
