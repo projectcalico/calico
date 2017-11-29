@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: node
+  node: rack1-host1
+  peerIP: 192.168.1.1
+spec:
+  asNumber: 63400
+
+---
+
+apiVersion: v1
+kind: hostEndpoint
+metadata:
+  name: eth0
+  node: myhost
+  labels:
+    type: production
+spec:
+  interfaceName: eth0
+  expectedIPs:
+  - 192.168.0.1
+  - 192.168.0.2
+  profiles:
+  - profile1
+  - profile2
+
+---
+
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 10.1.0.0/16
+spec:
+  ipip:
+    enabled: true
+    mode: cross-subnet
+  nat-outgoing: true
+  disabled: false
+
+---
+
+apiVersion: v1
+kind: node
+metadata:
+  name: node-hostname
+spec:
+  bgp:
+    asNumber: 64512
+    ipv4Address: 10.244.0.1/24
+    ipv6Address: 2001:db8:85a3::8a2e:370:7334/120
+
+----
+
+apiVersion: v1
+kind: policy
+metadata:
+  name: allow-tcp-6379
+spec:
+  selector: role == 'database'
+  types:
+  - ingress
+  - egress
+  ingress:
+  - action: allow
+    protocol: tcp
+    source:
+      selector: role == 'frontend'
+    destination:
+      ports:
+      - 6379
+  egress:
+  - action: allow
+
+---
+
+apiVersion: v1
+kind: profile
+metadata:
+  name: profile1
+  labels:
+    profile: profile1 
+spec:
+  ingress:
+  - action: deny
+    source:
+      nets:
+      - 10.0.20.0/24
+  - action: allow
+    source:
+      selector: profile == 'profile1'
+  egress:
+  - action: allow 
+
+----
+
+apiVersion: v1
+kind: workloadEndpoint
+metadata:
+  name: eth0
+  workload: default.frontend-5gs43
+  orchestrator: k8s
+  node: rack1-host1
+  labels:
+    app: frontend
+    calico/k8s_ns: default
+spec:
+  interfaceName: cali0ef24ba
+  mac: ca:fe:1d:52:bb:e9
+  ipNetworks:
+  - 192.168.0.0/32
+  profiles:
+  - profile1
