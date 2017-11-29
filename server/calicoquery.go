@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/converter"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/watch"
+	"github.com/projectcalico/libcalico-go/lib/names"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
@@ -41,14 +42,14 @@ type (
 	CalicoQuery interface {
 
 		// Get a list of Policy objects for the given endpoint.
-		GetPolicies(name, namespace string) ([]api.GlobalNetworkPolicy, error)
+		GetPolicies(id names.WorkloadEndpointIdentifiers, namespace string) ([]api.GlobalNetworkPolicy, error)
 
 		// Lookup an endpoint based on its IP address.
 		GetEndpointFromIP(ip net.IP) (*model.KVPair)
 
 		// Temporary, needed to find workload endpoint from container ID.
 		// TODO (spikecurtis): remove this and replace with socket per pod.
-		GetEndpointFromContainer(cid string, nodeName string) (name, namespace string, err error)
+		GetEndpointFromContainer(cid string, nodeName string) (id names.WorkloadEndpointIdentifiers, namespace string, err error)
 	}
 
 	calicoQuery struct {
@@ -75,8 +76,12 @@ func NewCalicoQuery(client clientv3.Interface, kubeClient *kubernetes.Clientset)
 	return &q
 }
 
-func (q *calicoQuery) GetPolicies(name, namespace string) ([]api.GlobalNetworkPolicy, error) {
-	we, err := q.Client.WorkloadEndpoints().Get(context.TODO(), name, namespace, options.GetOptions{})
+func (q *calicoQuery) GetPolicies(id names.WorkloadEndpointIdentifiers, namespace string) ([]api.GlobalNetworkPolicy, error) {
+	weName, err := id.CalculateWorkloadEndpointName(false)
+	if err != nil {
+		log.Fatalf("Failed to compute workload endpoint name from ID: %v. %v", id, err)
+	}
+	we, err := q.Client.WorkloadEndpoints().Get(context.TODO(), weName, namespace, options.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +140,10 @@ func (q *calicoQuery) GetEndpointFromIP(ip net.IP) (*model.KVPair) {
 	return nil
 }
 
-func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (name, namespace string, err error) {
+func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (id names.WorkloadEndpointIdentifiers, namespace string, err error) {
+	id.Node = nodeName
+	id.Orchestrator = "k8s"
+	id.Endpoint = "eth0"
 	qStr := "spec.nodeName=" + nodeName
 	opts := metav1.ListOptions{}
 	opts.FieldSelector = qStr
@@ -150,7 +158,7 @@ func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (nam
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			if containerStatus.ContainerID == matchCid {
 				namespace = pod.ObjectMeta.Namespace
-				name = pod.ObjectMeta.Name
+				id.Pod = pod.Name
 				return
 			}
 		}
