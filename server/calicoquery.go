@@ -20,16 +20,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/selector"
-	"github.com/projectcalico/libcalico-go/lib/converter"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/watch"
 	"github.com/projectcalico/libcalico-go/lib/names"
 
 	log "github.com/sirupsen/logrus"
@@ -55,24 +51,12 @@ type (
 	calicoQuery struct {
 		Client clientv3.Interface
 		kubeClient *kubernetes.Clientset
-		pLock sync.RWMutex
-		pMap map[string]*api.GlobalNetworkPolicy
-		pConverter converter.PolicyConverter
-		status bapi.SyncStatus
-		//PolicyWatcher watch.Interface
 	}
 
 )
 
 func NewCalicoQuery(client clientv3.Interface, kubeClient *kubernetes.Clientset) (CalicoQuery){
-	//watcher, err := client.GlobalNetworkPolicies().Watch(context.TODO(), options.ListOptions{})
-	//if err != nil {
-	//	log.Fatalf("Failed to watch policies %v", err)
-	//}
-	q := calicoQuery{
-		client, kubeClient, sync.RWMutex{}, make(map[string]*api.GlobalNetworkPolicy),
-		converter.PolicyConverter{}, bapi.WaitForDatastore}
-	//go q.watchPolicy(watcher.ResultChan())
+	q := calicoQuery{client, kubeClient}
 	return &q
 }
 
@@ -113,7 +97,7 @@ func (q *calicoQuery) getPoliciesFromLabels(labels map[string]string) ([]api.Glo
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Found %d total policies.", len(q.pMap))
+	log.Debugf("Found %d total policies.", len(pList.Items))
 	for _, p := range pList.Items {
 		log.Debugf("Found policy %v", p)
 		if policyActive(labels, &p) {
@@ -165,29 +149,3 @@ func (q *calicoQuery) GetEndpointFromContainer(cid string, nodeName string) (id 
 	err = fmt.Errorf("unable to find pod with containerId %v", cid)
 	return
 }
-
-
-func (q *calicoQuery) watchPolicy(c <-chan watch.Event) {
-	for e := range c {
-		switch t := e.Type; t {
-		case watch.Added, watch.Modified:
-			log.Debugf("Storing policy %v", e.Object)
-			policy := e.Object.(*api.GlobalNetworkPolicy)
-			q.pLock.Lock()
-			q.pMap[policy.Name] = policy
-			q.pLock.Unlock()
-		case watch.Deleted:
-			policy := e.Previous.(*api.GlobalNetworkPolicy)
-			q.pLock.Lock()
-			delete(q.pMap, policy.Name)
-			q.pLock.Unlock()
-		default:
-			log.Debugf("Ignoring update for %v", e)
-		}
-	}
-}
-
-func (q *calicoQuery) OnStatusUpdated(status bapi.SyncStatus) {
-	q.status = status
-}
-
