@@ -44,20 +44,20 @@ type (
 		pMap map[string]*api.GlobalNetworkPolicy
 		pConverter converter.PolicyConverter
 		status bapi.SyncStatus
-		PolicyWatcher watch.Interface
+		//PolicyWatcher watch.Interface
 	}
 
 )
 
 func NewCalicoQuery(client clientv3.Interface, kubeClient *kubernetes.Clientset) (CalicoQuery){
-	watcher, err := client.GlobalNetworkPolicies().Watch(context.TODO(), options.ListOptions{})
-	if err != nil {
-		log.Fatalf("Failed to watch policies %v", err)
-	}
+	//watcher, err := client.GlobalNetworkPolicies().Watch(context.TODO(), options.ListOptions{})
+	//if err != nil {
+	//	log.Fatalf("Failed to watch policies %v", err)
+	//}
 	q := calicoQuery{
 		client, kubeClient, sync.RWMutex{}, make(map[string]*api.GlobalNetworkPolicy),
-		converter.PolicyConverter{}, bapi.WaitForDatastore, watcher}
-	go q.watchPolicy(watcher.ResultChan())
+		converter.PolicyConverter{}, bapi.WaitForDatastore}
+	//go q.watchPolicy(watcher.ResultChan())
 	return &q
 }
 
@@ -90,13 +90,16 @@ func (op orderedPolicies) Less(i, j int) bool {
 // order.
 func (q *calicoQuery) getPoliciesFromLabels(labels map[string]string) ([]api.GlobalNetworkPolicy, error) {
 	pActive := []api.GlobalNetworkPolicy{}
-	q.pLock.RLock()
+	pList, err := q.Client.GlobalNetworkPolicies().List(context.TODO(), options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
 	log.Debugf("Found %d total policies.", len(q.pMap))
-	for _, p := range q.pMap {
-		log.Debugf("Found policy %v", *p)
-		if policyActive(labels, p) {
-			log.Debugf("Active policy %v", *p)
-			pActive = append(pActive, *p)
+	for _, p := range pList.Items {
+		log.Debugf("Found policy %v", p)
+		if policyActive(labels, &p) {
+			log.Debugf("Active policy %v", p)
+			pActive = append(pActive, p)
 		}
 	}
 	q.pLock.RUnlock()
