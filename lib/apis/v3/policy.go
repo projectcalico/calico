@@ -59,7 +59,7 @@ type Rule struct {
 	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
-	HTTP HTTPRule `json:"http,omitempty" validate:"omitempty"`
+	HTTP *HTTPRule `json:"http,omitempty" validate:"omitempty"`
 }
 
 type HTTPRule struct {
