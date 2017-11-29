@@ -24,7 +24,7 @@ var (
 )
 
 // convertSelector converts a v1 selector to a v3 selector.
-func convertSelector(sel string) (string, error) {
+func convertSelector(sel string) string {
 	// v1 selectors used calico/k8s_ns, v3 instead uses projectcalico.org/namespace
-	return strings.Replace(sel, v1NamespaceSelector, v3NamespaceSelector, -1), nil
+	return strings.Replace(sel, v1NamespaceSelector, v3NamespaceSelector, -1)
 }
