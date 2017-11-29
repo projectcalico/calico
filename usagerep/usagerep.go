@@ -15,8 +15,7 @@
 package usagerep
 
 import (
-	"github.com/projectcalico/felix/jitter"
-
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -26,10 +25,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"context"
-
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/jitter"
 )
 
 const (
@@ -96,9 +94,11 @@ func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
 	for {
 		select {
 		case stats = <-u.statsUpdateC:
+			log.WithField("stats", stats).Debug("Received stats update")
 			receivedFirstStats = true
 			maybeStartInitialDelay()
 		case config = <-u.configUpdateC:
+			log.WithField("config", config).Debug("Received config update")
 			maybeStartInitialDelay()
 		case <-initialDelayDone:
 			log.Info("Initial delay complete, doing first report")
@@ -112,6 +112,7 @@ func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
 			// Enabled the main ticker loop.
 			tickerC = ticker.C
 		case <-tickerC:
+			log.Debug("Received tick")
 			doReport()
 		case <-ctx.Done():
 			log.Warn("Context stopped")
