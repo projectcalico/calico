@@ -18,6 +18,7 @@ rules:
       - pods
       - namespaces
       - networkpolicies
+      - nodes
     verbs:
       - watch
       - list
