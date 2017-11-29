@@ -121,7 +121,6 @@ func (q *calicoQuery) getPoliciesFromLabels(labels map[string]string) ([]api.Glo
 			pActive = append(pActive, p)
 		}
 	}
-	q.pLock.RUnlock()
 	sort.Sort(orderedPolicies(pActive))
 	return pActive, nil
 }
