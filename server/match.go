@@ -50,6 +50,10 @@ func matchServiceAccounts(saMatch *api.ServiceAccountMatch, subj *authz.Request_
 		"labels":    labels,
 		"rule":      saMatch},
 	).Debug("Matching service account.")
+	if saMatch == nil {
+		log.Debug("nil ServiceAccountMatch.  Return true.")
+		return true
+	}
 	return matchServiceAccountName(saMatch.Names, accountName) &&
 		matchServiceAccountLabels(saMatch.Selector, labels)
 }
