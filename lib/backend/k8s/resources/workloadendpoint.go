@@ -129,6 +129,12 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 	if err != nil {
 		return nil, err
 	}
+	if wepID.Pod == "" {
+		return nil, cerrors.ErrorResourceDoesNotExist{
+			Identifier: key,
+			Err: errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
+		}
+	}
 
 	pod, err := c.clientSet.CoreV1().Pods(k.Namespace).Get(wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
 	if err != nil {
