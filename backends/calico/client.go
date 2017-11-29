@@ -31,7 +31,7 @@ type backendClientAccessor interface {
 	Backend() api.Client
 }
 
-func NewCalicoClient(configfile string) (*client, error) {
+func NewCalicoClient(configfile string, routeReflector bool) (*client, error) {
 	// Load the client config.  This loads from the environment if a filename
 	// has not been specified.
 	config, err := apiconfig.LoadClientConfig(configfile)
@@ -77,6 +77,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 		cacheRevision:     1,
 		revisionsByPrefix: make(map[string]uint64),
 		nodeMeshEnabled:   nodeMeshEnabled,
+		routeReflector:    routeReflector,
 	}
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
@@ -94,7 +95,7 @@ func NewCalicoClient(configfile string) (*client, error) {
 	// confd process.
 	nodeName := os.Getenv("NODENAME")
 	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", nodeName)
-	c.syncer = bgpsyncer.New(c.client, c, nodeName, nodeMeshEnabled)
+	c.syncer = bgpsyncer.New(c.client, c, nodeName, nodeMeshEnabled || routeReflector)
 	c.syncer.Start()
 
 	return c, nil
@@ -128,14 +129,17 @@ type client struct {
 	cacheLock   sync.Mutex
 	watcherCond *sync.Cond
 
-	// Whether the ndoe to node mesh is enabled or not.
+	// Whether the node to node mesh is enabled or not.
 	nodeMeshEnabled bool
 
 	// This node's log level key.
 	nodeLogKey string
+
+	// Whether we're running for a route reflector.
+	routeReflector bool
 }
 
-// SetPrefixes is called from confd to nofity this client of the full set of prefixes that will
+// SetPrefixes is called from confd to notify this client of the full set of prefixes that will
 // be watched.
 // This client uses this information to initialize the revision map used to keep track of the
 // revision number of each prefix that the template is monitoring.
@@ -218,16 +222,20 @@ func (c *client) OnUpdates(updates []api.Update) {
 		}
 	}
 
-	// If the node-to-node mesh configuration has been toggled then we need to terminate
-	// so that confd can be restarted and monitor the correct set of nodes.
 	if c.synced {
-		// The node is disabled if the setting is present and is set to false.  Although this
-		// is a json blob, it only contains a single field, so searching for "false" will
-		// suffice.
-		nodeMeshEnabled := !strings.Contains(c.cache[globalNodeMesh], "false")
-		if nodeMeshEnabled != c.nodeMeshEnabled {
-			log.Info("Node to node mesh setting has been modified - restarting confd")
-			os.Exit(1)
+		// If we're not running for a route reflector, and the node-to-node mesh
+		// configuration has been toggled, we need to terminate so that confd can be
+		// restarted and monitor the correct set of nodes.  (If we running for a route
+		// reflector, we always monitor all nodes.)
+		if !c.routeReflector {
+			// The node is disabled if the setting is present and is set to false.  Although this
+			// is a json blob, it only contains a single field, so searching for "false" will
+			// suffice.
+			nodeMeshEnabled := !strings.Contains(c.cache[globalNodeMesh], "false")
+			if nodeMeshEnabled != c.nodeMeshEnabled {
+				log.Info("Node to node mesh setting has been modified - restarting confd")
+				os.Exit(1)
+			}
 		}
 
 		// Wake up the watchers to let them know there may be some updates of interest.  We only

@@ -1,5 +1,6 @@
 package backends
 
 type Config struct {
-	Calicoconfig string
+	Calicoconfig   string
+	RouteReflector bool
 }
