@@ -2,13 +2,20 @@
 title: Decommissioning a Node
 ---
 
-### Why you might be interested in this guide
+### About decommissioning nodes
 
-- You are decomissioning a host running calico/node or removing it from your
+If you are running the [node controller]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
+or using the Kubernetes API datastore, you do not need to manually decommission nodes.
+
+In other configurations, you may need to manually decommission a node for one
+of the following reasons.
+
+- You are decommissioning a host running `calico/node` or removing it from your
   cluster.
-- You are renaming a Node.
+- You are renaming a node.
 - You are receiving an error about an IP address already in use.
 - Hosts are regularly added and removed from your cluster.
+
 
 ### Purpose of this page
 
