@@ -74,6 +74,17 @@ func main() {
 
 func runServer(arguments map[string]interface{}) {
 	filePath := arguments["--listen"].(string)
+	_, err := os.Stat(filePath)
+	if !os.IsNotExist(err) {
+		// file exists, try to delete it.
+		err := os.Remove(filePath)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"listen": filePath,
+				"err":    err,
+			}).Fatal("File exists and unable to remove.")
+		}
+	}
 	lis, err := net.Listen("unix", filePath)
 	if err != nil {
 		log.WithFields(log.Fields{
