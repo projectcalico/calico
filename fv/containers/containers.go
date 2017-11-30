@@ -179,14 +179,18 @@ func (c *Container) Stopped() bool {
 	return c.runCmd == nil
 }
 
+func (c *Container) ListedInDockerPS() bool {
+	cmd := utils.Command("docker", "ps")
+	out, err := cmd.CombinedOutput()
+	Expect(err).NotTo(HaveOccurred())
+	return strings.Contains(string(out), c.Name)
+}
+
 func (c *Container) WaitNotRunning(timeout time.Duration) {
 	log.Info("Wait for container not to be listed in docker ps")
 	start := time.Now()
 	for {
-		cmd := utils.Command("docker", "ps")
-		out, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred())
-		if !strings.Contains(string(out), c.Name) {
+		if !c.ListedInDockerPS() {
 			break
 		}
 		if time.Since(start) > timeout {

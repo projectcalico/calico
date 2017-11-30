@@ -160,7 +160,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 			// Felix has a 2s timer before it restarts so we should see the same PID for a while.
 			Consistently(getFelixPIDs, "1s", "100ms").Should(ContainElement(felixInitialPID))
 			// TODO(smc) When porting this test to v3.0, need to check felix restarts without killing container.
-			Eventually(felix.Stopped, "5s", "100ms").Should(BeTrue())
+			Eventually(felix.ListedInDockerPS, "5s", "100ms").Should(BeFalse())
 		})
 	})
 })
