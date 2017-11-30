@@ -29,6 +29,7 @@ POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
 
 _log = logging.getLogger(__name__)
 
+
 class MultiHostMainline(TestBase):
     host1 = None
     host2 = None
@@ -90,6 +91,7 @@ class MultiHostMainline(TestBase):
         # Check everything can contact everything else now
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_tags.batchnumber = 5
 
     def test_rules_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
@@ -106,7 +108,7 @@ class MultiHostMainline(TestBase):
         # Check everything can contact everything else now
         self.assert_connectivity(retries=3,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 2
+    test_rules_tags.batchnumber = 5
 
     def test_rules_protocol_icmp(self):
         rule = {'action': 'allow',
@@ -121,6 +123,7 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads,
                                  type_list=["icmp"])
+    test_rules_protocol_icmp.batchnumber = 1
 
     def test_rules_ip_addr(self):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
@@ -139,6 +142,7 @@ class MultiHostMainline(TestBase):
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_ip_addr.batchnumber = 1
 
     def test_rules_ip_net(self):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
@@ -157,6 +161,7 @@ class MultiHostMainline(TestBase):
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_ip_net.batchnumber = 1
 
     def test_rules_source_ip_nets(self):
         # Add a rule to each profile that allows traffic from all the workloads in the *other*
@@ -173,6 +178,7 @@ class MultiHostMainline(TestBase):
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_source_ip_nets.batchnumber = 4
 
     def test_rules_source_ip_nets_2(self):
         # Adjust each profile to allow traffic from all IPs in the other group but then exclude
@@ -209,6 +215,7 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n1_workloads[1:] + self.n2_workloads[1:])
         self.assert_connectivity(retries=2,
                                  pass_list=self.n2_workloads[1:] + self.n1_workloads[1:])
+    test_rules_source_ip_nets_2.batchnumber = 4
 
     def test_rules_dest_ip_nets(self):
         # Adjust the egress policies to drop all traffic
@@ -244,6 +251,7 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads[:2],
                                  fail_list=self.n1_workloads[2:])
+    test_rules_dest_ip_nets.batchnumber = 5
 
     def test_rules_selector(self):
         self.new_profiles[0]['metadata']['labels'] = {'net': 'n1'}
@@ -259,6 +267,7 @@ class MultiHostMainline(TestBase):
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_selector.batchnumber = 5
 
     def test_rules_tcp_port(self):
         rule = {'action': 'allow',
@@ -278,6 +287,7 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n1_workloads,
                                  fail_list=self.n2_workloads,
                                  type_list=['icmp', 'udp'])
+    test_rules_tcp_port.batchnumber = 5
 
     def test_rules_udp_port(self):
             rule = {'action': 'allow',
@@ -297,6 +307,7 @@ class MultiHostMainline(TestBase):
                                      pass_list=self.n1_workloads,
                                      fail_list=self.n2_workloads,
                                      type_list=['icmp', 'tcp'])
+    test_rules_udp_port.batchnumber = 5
 
     @staticmethod
     def _get_profiles(profiles):
@@ -399,4 +410,3 @@ class MultiHostMainline(TestBase):
                                  fail_list=n1_workloads,
                                  type_list=types)
 
-MultiHostMainline.batchnumber = 5  # Adds a batch number for parallel testing
