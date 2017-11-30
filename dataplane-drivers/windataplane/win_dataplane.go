@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gavv/monotime"
 	log "github.com/sirupsen/logrus"
 	"github.com/projectcalico/felix/jitter"
 	"github.com/projectcalico/felix/proto"
@@ -232,12 +231,12 @@ func (d *WindowsDataplane) loopUpdatingDataplane() {
 					beingThrottled = false
 				}
 				log.Info("Applying dataplane updates")
-				applyStart := monotime.Now()
+				applyStart := time.Now()
 
 				// Actually apply the changes to the dataplane.
 				d.apply()
 
-				applyTime := monotime.Since(applyStart)
+				applyTime := time.Since(applyStart)
 				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Info(
 					"Finished applying updates to dataplane.")
 			} else {
