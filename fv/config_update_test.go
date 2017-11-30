@@ -57,6 +57,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 		_, err := client.Nodes().Create(felixNode)
 		Expect(err).NotTo(HaveOccurred())
 
+		// Get Felix's PID.  This retry loop ensures that we don't get tripped up if we see multiple
+		// PIDs, which can happen transiently when Felix forks off a subprocess.
 		start := time.Now()
 		for {
 			pids := getFelixPIDs()
@@ -119,7 +121,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 		It("should stay up >2s", shouldStayUp)
 
-		Context("after deleteing config that felix can handle", func() {
+		Context("after deleting config that felix can handle", func() {
 			BeforeEach(func() {
 				err := client.Config().SetFelixConfig("ClusterGUID", "", "")
 				Expect(err).NotTo(HaveOccurred())

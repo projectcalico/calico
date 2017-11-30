@@ -53,13 +53,12 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 			http.Serve(tcpListener, httpHandler)
 		}()
 
-		// Channels to sent data to the UsageReporter.
+		// Channels to send data to the UsageReporter.
 		statsUpdateC = make(chan calc.StatsUpdate)
 		configUpdateC = make(chan map[string]string)
 
 		// Create a usage reporter and override its base URL and initial interval.
-		u = New(1*time.Second, statsUpdateC, configUpdateC)
-		u.InitialDelay = 500 * time.Millisecond
+		u = New(500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
 		port := tcpListener.Addr().(*net.TCPAddr).Port
 		u.BaseURL = fmt.Sprintf("http://localhost:%d/UsageCheck/calicoVersionCheck?", port)
 
@@ -102,7 +101,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 				By("checking in within 2s")
 				startTime := time.Now()
 				Eventually(httpHandler.GetRequestURIs, "2s", "100ms").Should(HaveLen(1))
-				By("waiting until after the intial delay")
+				By("waiting until after the initial delay")
 				Expect(time.Since(startTime)).To(BeNumerically(">=", 500*time.Millisecond))
 
 				By("including correct URL parameters")
@@ -191,7 +190,7 @@ var _ = Describe("UsageReporter with default URL", func() {
 	var u *UsageReporter
 
 	BeforeEach(func() {
-		u = New(24*time.Hour, nil, nil)
+		u = New(5*time.Minute, 24*time.Hour, nil, nil)
 	})
 
 	It("should calculate correct URL mainline", func() {

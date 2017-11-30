@@ -35,6 +35,7 @@ const (
 )
 
 func New(
+	initialDelay time.Duration,
 	interval time.Duration,
 	statsUpdateC <-chan calc.StatsUpdate,
 	configUpdateC <-chan map[string]string,
@@ -43,7 +44,7 @@ func New(
 		interval:      interval,
 		statsUpdateC:  statsUpdateC,
 		configUpdateC: configUpdateC,
-		InitialDelay:  5 * time.Minute,
+		InitialDelay:  initialDelay,
 		BaseURL:       DefaultBaseURL,
 	}
 }
@@ -66,19 +67,13 @@ func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
 	initialDelayDone := make(chan struct{})
 
 	maybeStartInitialDelay := func() {
-		if !receivedFirstStats {
-			return
-		}
-		if config == nil {
-			return
-		}
-		if initialDelayStarted {
+		if !receivedFirstStats || config == nil || initialDelayStarted {
 			return
 		}
 
 		// To avoid thundering herd, inject some startup jitter.
 		initialDelay := u.calculateInitialDelay(stats.NumHosts)
-		func() {
+		go func() {
 			log.WithField("delay", initialDelay).Info("Waiting before first check-in")
 			time.Sleep(initialDelay)
 			close(initialDelayDone)

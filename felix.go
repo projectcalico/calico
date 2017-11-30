@@ -321,11 +321,13 @@ configRetry:
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
 	failureReportChan := make(chan string)
-	var configUpdChan chan map[string]string
+	var connToUsageRepUpdChan chan map[string]string
 	if configParams.UsageReportingEnabled {
-		configUpdChan = make(chan map[string]string, 1)
+		// Make a channel for the connector to use to send updates to the usage reporter.
+		// (Otherwise, we pass in a nil channel, which disables such updates.)
+		connToUsageRepUpdChan = make(chan map[string]string, 1)
 	}
-	dpConnector := newConnector(configParams, configUpdChan, datastore, dpDriver, failureReportChan)
+	dpConnector := newConnector(configParams, connToUsageRepUpdChan, datastore, dpDriver, failureReportChan)
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -406,9 +408,10 @@ configRetry:
 		}()
 
 		usageRep := usagerep.New(
-			24*time.Hour,
+			configParams.UsageReportingInitialDelaySecs,
+			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
-			configUpdChan,
+			connToUsageRepUpdChan,
 		)
 		go usageRep.PeriodicallyReportUsage(context.Background())
 	} else {
@@ -720,9 +723,11 @@ func newConnector(configParams *config.Config,
 	configUpdChan chan<- map[string]string,
 	datastore bapi.Client,
 	dataplane dataplaneDriver,
-	failureReportChan chan<- string) *DataplaneConnector {
+	failureReportChan chan<- string,
+) *DataplaneConnector {
 	felixConn := &DataplaneConnector{
 		config:                     configParams,
+		configUpdChan:              configUpdChan,
 		datastore:                  datastore,
 		ToDataplane:                make(chan interface{}),
 		StatusUpdatesFromDataplane: make(chan interface{}),

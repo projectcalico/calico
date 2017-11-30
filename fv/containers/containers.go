@@ -228,7 +228,10 @@ func (c *Container) ExecOutput(args ...string) (string, error) {
 	cmd := exec.Command("docker", arg...)
 	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		if out == nil {
+			return "", err
+		}
+		return string(out), err
 	}
 	return string(out), nil
 }
