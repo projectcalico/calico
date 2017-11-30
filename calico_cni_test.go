@@ -17,6 +17,7 @@ import (
 	. "github.com/projectcalico/cni-plugin/test_utils"
 	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -198,6 +199,36 @@ var _ = Describe("CalicoCni", func() {
 
 					_, err = DeleteContainerWithId(netconf, contNs.Path(), "", container_id)
 					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+			Context("when the ready flag is not set", func() {
+				It("should return error on Add", func() {
+					kv, err := calicoClient.Backend.Apply(
+						&model.KVPair{
+							Key:   model.ReadyFlagKey{},
+							Value: false,
+						})
+					Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("%v", kv))
+					_, session, _, _, _, _, err := CreateContainer(netconf, "", "")
+					Expect(err).Should(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(1))
+				})
+			})
+			Context("when the ready flag is not set", func() {
+				It("should return error on DEL", func() {
+					_, session, _, _, _, contNs, err := CreateContainerWithId(netconf, "", "", "dontcare")
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
+
+					kv, err := calicoClient.Backend.Apply(
+						&model.KVPair{
+							Key:   model.ReadyFlagKey{},
+							Value: false,
+						})
+					Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("%v", kv))
+					exitCode, err := DeleteContainerWithId(netconf, contNs.Path(), "", "dontcare")
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).Should(Equal(1))
 				})
 			})
 		})

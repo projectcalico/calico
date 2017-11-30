@@ -32,6 +32,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
@@ -261,6 +262,21 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 		return nil, err
 	}
 	return calicoClient, nil
+}
+
+// Check the Datastore for the ready flag to know if it is ok to proceed
+func IsReady(client *client.Client) (bool, error) {
+	kvPair, err := client.Backend.Get(model.ReadyFlagKey{})
+	if err != nil {
+		return false, fmt.Errorf("Unable to retreive ReadyFlag from Backend: %v", err)
+	}
+
+	v, ok := kvPair.Value.(bool)
+	if !ok {
+		return false, fmt.Errorf("Invalid data in Value for ReadyFlag")
+	}
+
+	return v, nil
 }
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during

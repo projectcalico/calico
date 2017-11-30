@@ -26,6 +26,8 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
 	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -51,6 +53,20 @@ func min(a, b int) int {
 func WipeEtcd() {
 	_, err := kapi.Delete(context.Background(), "/calico", &etcdclient.DeleteOptions{Dir: true, Recursive: true})
 	if err != nil && !etcdclient.IsKeyNotFound(err) {
+		panic(err)
+	}
+
+	calicoClient, err := client.NewFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	// Set the Ready flag so the CNI plugin can run
+	_, err = calicoClient.Backend.Apply(
+		&model.KVPair{
+			Key:   model.ReadyFlagKey{},
+			Value: true,
+		})
+	if err != nil {
 		panic(err)
 	}
 }

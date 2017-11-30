@@ -92,6 +92,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	ready, err := IsReady(calicoClient)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		logger.Warn("Upgrade may be in progress, ready flag is not set")
+		return fmt.Errorf("Calico is currently not ready to process requests")
+	}
+
 	// Always check if there's an existing endpoint.
 	endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{
 		Node:         nodename,
@@ -331,6 +340,15 @@ func cmdDel(args *skel.CmdArgs) error {
 	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
+	}
+
+	ready, err := IsReady(calicoClient)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		logger.Warn("Upgrade may be in progress, ready flag is not set")
+		return fmt.Errorf("Calico is currently not ready to process requests")
 	}
 
 	wep := api.WorkloadEndpointMetadata{
