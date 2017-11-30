@@ -347,7 +347,11 @@ func (w *watcher) run() {
 
 	for {
 		select {
-		case event := <-w.backend.ResultChan():
+		case event, ok := <-w.backend.ResultChan():
+			if !ok {
+				log.Debug("Watcher results channel closed by remote")
+				return
+			}
 			e := w.convertEvent(event)
 			select {
 			case w.results <- e:
