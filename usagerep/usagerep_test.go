@@ -76,12 +76,16 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 	})
 
 	Context("after sending config", func() {
-		BeforeEach(func() {
+		sendConfig := func() {
 			configUpdateC <- map[string]string{
 				"ClusterGUID":   "someguid",
 				"ClusterType":   "openstack,k8s,kdd",
 				"CalicoVersion": "v2.6.3",
 			}
+		}
+
+		BeforeEach(func() {
+			sendConfig()
 		})
 
 		It("should not check in before receiving stats", func() {
@@ -89,12 +93,16 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 		})
 
 		Context("after sending stats", func() {
-			BeforeEach(func() {
+			sendStats := func() {
 				statsUpdateC <- calc.StatsUpdate{
 					NumHosts:             1,
 					NumHostEndpoints:     2,
 					NumWorkloadEndpoints: 3,
 				}
+			}
+
+			BeforeEach(func() {
+				sendStats()
 			})
 
 			It("should do first check ins correctly", func() {
@@ -122,6 +130,19 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 				Eventually(httpHandler.GetRequestURIs, "2s", "100ms").Should(HaveLen(2))
 				By("waiting until at least initial delay + 90% (due to jitter) of interval for second check in")
 				Expect(time.Since(startTime)).To(BeNumerically(">=", 1400*time.Millisecond))
+			})
+
+			It("should not block the channels while doing initial delay", func() {
+				startTime := time.Now()
+				// We created the channel as a blocking channel so, if we can send a few updates,
+				// we know that the main loop is processing them
+				sendStats()
+				sendStats()
+				sendStats()
+				sendConfig()
+				sendConfig()
+				sendConfig()
+				Expect(time.Since(startTime)).To(BeNumerically("<", 100*time.Millisecond))
 			})
 
 			Context("after first report, and sending in config and stat updates", func() {
