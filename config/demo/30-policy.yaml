@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
   name: customer
@@ -27,7 +27,7 @@ spec:
 
 ---
 
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
   name: summary
@@ -37,13 +37,12 @@ spec:
     - action: Allow
       source:
         serviceAccounts:
-          namespace: default
           names: ["customer"]
   egress:
     - action: Allow
 
 ---
-apiVersion: projectcalico.org/v2
+apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
   name: database
@@ -53,7 +52,6 @@ spec:
     - action: Allow
       source:
         serviceAccounts:
-          namespace: default
           names: ["summary"]
   egress:
     - action: Allow

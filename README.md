@@ -288,60 +288,68 @@ Return to your web browser and refresh to confirm the new balance.
 
 #### Policy
 
-We can mitigate both of the above deficiencies with a Calico policy.  Apply the sample policy.
+We can mitigate both of the above deficiencies with a Calico policy.
+
+You will need the latest (nightly) build of `calicoctl`.
+
+    wget https://www.projectcalico.org/builds/calicoctl
+    
+The policy uses alpha features of Calico behind a feature flag.  Enable these features.
+
+    export ALPHA_FEATURES=serviceaccounts,httprules
+
+Apply the sample policy.
 
     calicoctl create -f config/demo/30-policy.yaml
 
 Let's examine this policy piece by piece.  It consists of 3 policy objects, one for each microservice.
 
-    apiVersion: v1
-    kind: policy
+    apiVersion: projectcalico.org/v3
+    kind: GlobalNetworkPolicy
     metadata:
       name: customer
     spec:
       selector: app == 'customer'
       ingress:
-        - action: allow
+        - action: Allow
           http:
             methods: ["GET"]
       egress:
-        - action: allow
+        - action: Allow
 
 This policy protects the customer web app.  Since this application is customer facing, we do not restrict what can
 communicate with it.  We do, however, restrict that only HTTP `GET` requests are allowed.
 
-    apiVersion: v1
-    kind: policy
+    apiVersion: projectcalico.org/v3
+    kind: GlobalNetworkPolicy
     metadata:
       name: summary
     spec:
       selector: app == 'summary'
       ingress:
-        - action: allow
+        - action: Allow
           source:
             serviceAccounts:
-              namespace: default
               names: ["customer"]
       egress:
-        - action: allow
+        - action: Allow
 
 The second policy protects the account summary microservice.  We know the only consumer of this service is the customer
 web app, so we restrict the source of incoming connections to the service account for the customer web app.
 
-    apiVersion: v1
-    kind: policy
+    apiVersion: projectcalico.org/v3
+    kind: GlobalNetworkPolicy
     metadata:
       name: database
     spec:
       selector: app == 'database'
       ingress:
-        - action: allow
+        - action: Allow
           source:
             serviceAccounts:
-              namespace: default
               names: ["summary"]
       egress:
-        - action: allow
+        - action: Allow
 
 The third policy protects the database.  Only the summary microservice should have direct access to the database.
 
