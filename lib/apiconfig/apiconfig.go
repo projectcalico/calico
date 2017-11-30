@@ -29,6 +29,7 @@ const (
 	Kubernetes          DatastoreType = "kubernetes"
 	KindCalicoAPIConfig               = "CalicoAPIConfig"
 	AlphaFeatureSA                    = "serviceaccounts"
+	AlphaFeatureHTTP                  = "httprules"
 )
 
 // CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource

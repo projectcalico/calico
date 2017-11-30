@@ -39,3 +39,21 @@ func ValidateNoServiceAccountRules(ingress, egress []apiv3.Rule) error {
 
 	return nil
 }
+
+// ValidateNoHTTPRules checks if the set of rules have the
+// serviceAccount match set and if yes then it returns an error.
+func ValidateNoHTTPRules(ingress, egress []apiv3.Rule) error {
+	for _, rule := range ingress {
+		if rule.HTTP != nil {
+			return errors.New("alpha feature HTTP Rules used")
+		}
+	}
+
+	for _, rule := range egress {
+		if rule.HTTP != nil {
+			return errors.New("alpha feature HTTP Rules used")
+		}
+	}
+
+	return nil
+}
