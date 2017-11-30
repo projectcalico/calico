@@ -1,5 +1,5 @@
 hash: 66c27050d15dca6d1059568ca1468cde1fecc7bd8a07a9527f06587a785e5364
-updated: 2017-11-29T19:41:05.635502917-08:00
+updated: 2017-11-29T22:27:00.796284547-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -150,11 +150,6 @@ imports:
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
-- name: github.com/projectcalico/calico
-  version: a9705c2319a6d2179997b0dd281e3f331866ec2a
-  subpackages:
-  - calico_node/calicoclient
-  - calico_node/startup/autodetection
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -259,7 +254,6 @@ imports:
   version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
