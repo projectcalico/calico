@@ -1,6 +1,6 @@
 ---
 title: Configuring calicoctl - etcdv3 datastore
-no_canonical: true
+canonical: false
 ---
 
 This document covers the configuration options for calicoctl when using an etcdv3 datastore.
