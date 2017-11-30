@@ -46,6 +46,11 @@ func New(
 		configUpdateC: configUpdateC,
 		InitialDelay:  initialDelay,
 		BaseURL:       DefaultBaseURL,
+		httpClient: http.Client{
+			// Short timeout to make sure we don't block on the request, leaving the channels
+			// starved for too long.
+			Timeout: 5 * time.Second,
+		},
 	}
 }
 
@@ -56,6 +61,7 @@ type UsageReporter struct {
 
 	InitialDelay time.Duration
 	BaseURL      string
+	httpClient   http.Client
 }
 
 func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
@@ -136,7 +142,7 @@ func (u *UsageReporter) calculateInitialDelay(numHosts int) time.Duration {
 
 func (u *UsageReporter) ReportUsage(clusterGUID, clusterType, calicoVersion string, stats calc.StatsUpdate) {
 	fullURL := u.calculateURL(clusterGUID, clusterType, calicoVersion, stats)
-	resp, err := http.Get(fullURL)
+	resp, err := u.httpClient.Get(fullURL)
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
