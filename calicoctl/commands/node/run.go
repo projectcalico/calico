@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
 )
@@ -226,7 +227,7 @@ Description:
 	// changes the hostname, the calico/node won't start using a different
 	// name.
 	if name == "" {
-		name, err = os.Hostname()
+		name, err = names.Hostname()
 		if err != nil || name == "" {
 			fmt.Println("Error executing command: unable to determine node name")
 			os.Exit(1)
