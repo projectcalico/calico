@@ -1,27 +1,80 @@
-# Dikastes - The Decider.
+# Application Layer Policy
 
-Dikastes is a component of [Project Calico][calico] for enforcing network and application layer authorization policies using [Istio].
+This is a technical preview of Application Layer Policy for [Project Calico][calico], which enforces network and
+application layer authorization policies using [Istio].
  
 ## Getting Started
  
-This guide explains how to install Istio with Dikastes into your cluster, and use it to
+This guide explains how to install Calico & Istio into your cluster, and use it to
 enforce authorization policies in a simple demo application.
  
- ### Prerequisites
+This demo will run on a Calico-enabled Kubernetes cluster. You will need a [Kubernetes][kubernetes] cluster running v1.8
+with RBAC and [Initializers] enabled. 
  
-This demo will run on a Calico-enabled Kubernetes cluster.
- 
- * A [Kubernetes][kubernetes] cluster running v1.8 with the following features enabled
-   * RBAC
-   * Initializers
- * Calico v3.0 (beta) with the Kubernetes Data Store
- 
-If you have Istio installed, remove it from the cluster.  Dikastes relies on several 
-custom-built Istio components which will be installed in the demo.
+If you have Calico or Istio installed, remove them from the cluster.  This preview relies on the latest Calico build and
+several custom-built Istio components which will be installed in the demo.
+
+### Starting a cluster with Vagrant
+
+If you do not have a test cluster running Kubernetes 1.8 with RBAC and Initializers, this section will walk you through
+creating one on your local machine using [Vagrant].
+
+If you already have a test cluster, you can skip to [installing Calico](#install-calico).
+
+#### Prerequisites
+
+ - [Vagrant]
+ - [VirtualBox]
+
+
+    cd config/cluster
+    vagrant up
+    
+This will create a 3-node Kubernetes cluster in 3 Virtual Box VMs.
+
+**DO NOT USE THIS IN PRODUCTION**.  The API server is loaded with a certificate and keypair checked into this
+repository.  If you put this in production anyone will be able to impersonate your API server. 
+
+Open VirtualBox and click on one of the created VMs, then click Network and go to the tab for Adapter 2.  You should see
+it "Attached to: Host-only Adapter".  Make a note of the entry in the "Name:" box.  This is the name of the host-only
+network adapter you will use to communicate with your cluster.
+
+Add an IP address to this network adapter and bring it up.
+
+On Linux
+
+    sudo ip addr add 172.18.18.1/24 dev <adaptername>
+    sudo ip link set <adaptername> up
+    
+Verify you can ping the master
+
+    ping 172.18.18.101
+    
+Finally, add the cluster to your kubeconfig and activate the context
+
+    kubectl config set-cluster vagrant-cluster --server=https://172.18.18.101:6443 --certificate-authority=$(pwd)/apiserver.crt
+    kubectl config set-credentials vagrant-admin --username=admin --password=admin
+    kubectl config set-context vagrant-admin --cluster=vagrant-cluster --user=vagrant-admin
+    kubectl config use-context vagrant-admin
+    
+Verify your kubeconfig is working, for example:
+
+    kubectl get pods
+    
+
+### Install Calico
+
+This technical preview relies on a master build of Calico at present.  This tutorial and associated manifests will be
+updated after the next Calico release.
+
+From the main project directory:
+
+    kubectl apply -f config/install/05-calico.yaml
+
  
 ### Install Istio
  
-Install the Istio and Dikastes roles, bindings, and components.
+Install the Istio roles, bindings, and components.
  
     kubectl apply -f config/install/10-istio.yaml
 
@@ -39,7 +92,9 @@ namespace similar to the following.
     istio-ingress-174722661-3fv5x        1/1       Running   0          20h
     istio-pilot-1557643696-zt8jg         1/1       Running   0          20h
 
-You should see a `dikastes-node` pod for each host in your cluster.
+You should see a `dikastes-node` pod for each host in your cluster.  Dikastes is a Calico component that computes
+authorization policy for the Istio proxies on each host.  It is a separate component in this technical preview, but our
+plan is to integrate it into the `calico-node` pod in future versions.
 
 Note that Istio Mixer is not included in this demo because it is not required.  You can add a
 Mixer deployment and [use it for telemetry or additional authorization checks](#can-i-use-dikastes-with-istio-mixer?).
@@ -329,3 +384,7 @@ requests must pass both checks in order to be allowed.
  [etcd]: https://github.com/coreos/etcd
  [struts cve]https://nvd.nist.gov/vuln/detail/CVE-2017-5638
  [heartbleed] http://heartbleed.com/
+ [minikube] https://github.com/kubernetes/minikube
+ [initializers] https://kubernetes.io/docs/admin/extensible-admission-controllers/
+ [vagrant] https://www.vagrantup.com/
+ [virtualbox] https://www.virtualbox.org/
