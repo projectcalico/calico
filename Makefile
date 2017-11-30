@@ -401,6 +401,7 @@ st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-n
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
+	           -e RR_VER=$(RR_VER) \
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
