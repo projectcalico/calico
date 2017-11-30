@@ -367,6 +367,17 @@ had the keys to fool the X.509 certificate check, Calico also monitors the Kuber
 are associated with which service accounts.  Since our attack pod has an IP not associated with the account summary 
 service account we disallow the connection.
 
+## Known Limitations
+
+This is an early access preview and it has not been fully integrated with all aspects of Calico.  In particular
+
+ - Only GlobalNetworkPolicies are supported.  Calico NetworkPolicy objects cannot yet be used for Application Layer 
+   Policy
+ - Only `Allow` rules are fully supported.  The demo supports whitelisting traffic with allow rules.  More advanced use
+   cases like mixing `Allow` and `Deny` rules are not yet supported.
+ - The decision engine queries the Kube API Server on every request.  This is fine for small test applications, but
+   will not scale to large clusters.  Future versions will integrate with the API sync functionality in `calico-node`.
+
 
 ## FAQ
 
