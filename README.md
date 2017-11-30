@@ -194,7 +194,7 @@ You will use the `istio-ingress` service to access the YAO Bank application.
    export GATEWAY_URL=<public IP of the worker node>:$(kubectl get svc istio-ingress -n istio-system -o jsonpath='{.spec.ports[0].nodePort}')
    ```
 
-1. _Minikube:_ External load balancers are not supported in Minikube. You can use the host IP of the ingress service, along with the NodePort, to access the ingress.
+1. _Vagrant:_ External load balancers are not supported in the Vagrant test cluster. You can use the host IP of the ingress service, along with the NodePort, to access the ingress.
    
    ```bash
    export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingress -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingress -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
