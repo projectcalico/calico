@@ -425,7 +425,7 @@ st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-n
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
 	           -e RR_VER=$(RR_VER) \
-	           --rm -ti \
+	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
 	           $(SYSTEMTEST_CONTAINER) \
@@ -457,7 +457,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -e ETCD_CA_CERT_FILE=$(SOURCE_DIR)/certs/ca.pem \
 	           -e ETCD_CERT_FILE=$(SOURCE_DIR)/certs/client.pem \
 	           -e ETCD_KEY_FILE=$(SOURCE_DIR)/certs/client-key.pem \
-	           --rm -ti \
+	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
 	           -v $(SOURCE_DIR)/certs:$(SOURCE_DIR)/certs \
