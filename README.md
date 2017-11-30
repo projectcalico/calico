@@ -35,6 +35,7 @@ If you already have a test cluster, you can skip to [installing Calico](#install
  - [Vagrant]
  - [VirtualBox]
 
+Install Vagrant and Virtual box, then from the root directory of this repo
 
     cd config/cluster
     vagrant up
