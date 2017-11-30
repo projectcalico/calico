@@ -86,7 +86,14 @@ func matchServiceAccountLabels(selectorStr string, labels map[string]string) boo
 
 }
 
-func matchHTTP(rule api.HTTPRule, req *authz.HTTPRequest) bool {
+func matchHTTP(rule *api.HTTPRule, req *authz.HTTPRequest) bool {
+	log.WithFields(log.Fields{
+		"rule": rule,
+	}).Debug("Matching HTTP.")
+	if rule == nil {
+		log.Debug("nil HTTPRule.  Return true")
+		return true
+	}
 	return matchHTTPMethods(rule.Methods, req.GetMethod())
 }
 

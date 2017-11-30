@@ -1,5 +1,5 @@
-hash: d9edaafce5253e00dbbefd604db92006337e00b13080903d81bbd4f9b508e024
-updated: 2017-11-29T08:14:41.256129863-08:00
+hash: 6df7f63dcfb04460537bfb6e1cb9decd965523007c8bb1e608b08d43e82e0070
+updated: 2017-11-29T16:14:22.262880478-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -120,9 +120,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ccabc62393160a32d0bd331310b905aad432a738
-  repo: git@github.com:colabsaumoh/libcalico-go.git
-  vcs: git
+  version: eb2220e43561b3ec398486183b450cd5a50cdbad
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -140,7 +138,6 @@ imports:
   - lib/backend/watchersyncer
   - lib/client
   - lib/clientv3
-  - lib/converter
   - lib/errors
   - lib/hash
   - lib/ipam
@@ -168,7 +165,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/spiffe/spire
-  version: fe3fa6489d1d5dc4d06e4d6e71e027b23ba25b02
+  version: 8c7a502a1638c342e73781f8f1b835a7af86a3ad
   subpackages:
   - pkg/agent/auth
 - name: golang.org/x/crypto

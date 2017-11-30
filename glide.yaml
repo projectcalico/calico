@@ -7,9 +7,7 @@ import:
   subpackages:
   - proto
 - package: github.com/projectcalico/libcalico-go
-  version: http-attr
-  repo: "git@github.com:colabsaumoh/libcalico-go.git"
-  vcs: git
+  version: master
   subpackages:
   - lib/apis/v3
   - lib/client
