@@ -402,9 +402,9 @@ requests must pass both checks in order to be allowed.
  [kubernetes]: https://kubernetes.io/
  [yao bank]: https://github.com/spikecurtis/yaobank
  [etcd]: https://github.com/coreos/etcd
- [struts cve]https://nvd.nist.gov/vuln/detail/CVE-2017-5638
- [heartbleed] http://heartbleed.com/
- [minikube] https://github.com/kubernetes/minikube
- [initializers] https://kubernetes.io/docs/admin/extensible-admission-controllers/
- [vagrant] https://www.vagrantup.com/
- [virtualbox] https://www.virtualbox.org/
+ [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
+ [heartbleed]: http://heartbleed.com/
+ [minikube]: https://github.com/kubernetes/minikube
+ [initializers]: https://kubernetes.io/docs/admin/extensible-admission-controllers/
+ [vagrant]: https://www.vagrantup.com/
+ [virtualbox]: https://www.virtualbox.org/
