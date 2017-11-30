@@ -145,9 +145,28 @@ class TestBase(TestCase):
         if fail_list is None:
             fail_list = []
 
+        # First check that each of the workloads that we're looking at can ping
+        # _itself_, allowing 20 retries for that.  That will ensure that each
+        # workload is properly up and running.
+        self_conn_list = []
+        for source in pass_list + fail_list:
+            if 'icmp' in type_list:
+                self_conn_list.append((source, source.ip, 'icmp', True, 20))
+            if 'tcp' in type_list:
+                self_conn_list.append((source, source.ip, 'tcp', True, 20))
+            if 'udp' in type_list:
+                self_conn_list.append((source, source.ip, 'udp', True, 20))
+
+        results, diagstring = self.probe_connectivity(self_conn_list)
+        assert False not in results, ("Self-connectivity check error!\r\n"
+                                      "Results:\r\n %s\r\n" % diagstring)
+
+        # Now check that connectivity _between_ the workloads is as expected.
         conn_check_list = []
         for source in pass_list:
             for dest in pass_list:
+                if source is dest:
+                    continue
                 if 'icmp' in type_list:
                     conn_check_list.append((source, dest.ip, 'icmp', True, retries))
                 if 'tcp' in type_list:
@@ -162,13 +181,19 @@ class TestBase(TestCase):
                 if 'udp' in type_list:
                     conn_check_list.append((source, dest.ip, 'udp', False, retries))
 
+
+        results, diagstring = self.probe_connectivity(conn_check_list)
+        assert False not in results, ("Connectivity check error!\r\n"
+                                      "Results:\r\n %s\r\n" % diagstring)
+
+    def probe_connectivity(self, conn_check_list):
         # Empirically, 18 threads works well on my machine!
         check_pool = ThreadPool(18)
         results = check_pool.map(self._conn_checker, conn_check_list)
         check_pool.close()
         check_pool.join()
-        # _con_checker should only return None if there is an error in calling it
-        assert None not in results, ("_con_checker error - returned None")
+        # _conn_checker should only return None if there is an error in calling it
+        assert None not in results, ("_conn_checker error - returned None")
         diagstring = ""
         # Check that all tests passed
         if False in results:
@@ -187,8 +212,7 @@ class TestBase(TestCase):
                 diagline = "{: >18} {: >18} {: >7} {: >6} {: >6}\r\n".format(*diag)
                 diagstring += diagline
 
-        assert False not in results, ("Connectivity check error!\r\n"
-                                      "Results:\r\n %s\r\n" % diagstring)
+        return results, diagstring
 
     @debug_failures
     def assert_ip_connectivity(self, workload_list, ip_pass_list,
