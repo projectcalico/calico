@@ -1,4 +1,4 @@
-FROM alpine:3.4
+FROM ppc64le/alpine:3.6
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
@@ -10,9 +10,9 @@ ADD typha.cfg /etc/calico/typha.cfg
 # Put out binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
 RUN mkdir /code
-ADD bin/calico-typha-amd64 /code
+ADD bin/calico-typha-ppc64le /code
 WORKDIR /code
-RUN ln -s /code/calico-typha-amd64 /usr/bin/calico-typha
+RUN ln -s /code/calico-typha-ppc64le /usr/bin/calico-typha
 
 # Run Typha by default
 CMD ["calico-typha"]

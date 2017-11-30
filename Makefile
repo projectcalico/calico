@@ -1,3 +1,18 @@
+###############################################################################
+# The build architecture is select by setting the ARCH variable.
+# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
+# When ARCH is undefined it defaults to amd64.
+ARCH?=amd64
+ifeq ($(ARCH),amd64)
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.9
+endif
+
+ifeq ($(ARCH),ppc64le)
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+endif
+
 help:
 	@echo "Typha Makefile"
 	@echo
@@ -29,10 +44,10 @@ help:
 # considerably.
 .SUFFIXES:
 
-all: bin/calico-typha calico/typha bin/typha-client
+all: calico/typha bin/typha-client-$(ARCH)
 test: ut
 
-GO_BUILD_CONTAINER?=calico/go-build:v0.9
+GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
@@ -58,11 +73,11 @@ MY_GID:=$(shell id -g)
 
 # Build the calico/typha docker image, which contains only Typha.
 .PHONY: calico/typha
-calico/typha: bin/calico-typha
+calico/typha: bin/calico-typha-$(ARCH)
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
-	cp bin/calico-typha docker-image/bin/
-	docker build --pull -t calico/typha docker-image
+	cp bin/calico-typha-$(ARCH) docker-image/bin/
+	docker build --pull -t calico/typha$(ARCHTAG) docker-image -f docker-image/Dockerfile$(ARCHTAG)
 
 # Pre-configured docker run command that runs as this user with the repo
 # checked out to /code, uses the --rm flag to avoid leaving the container
@@ -117,21 +132,23 @@ LDFLAGS:=-ldflags "\
         -X github.com/projectcalico/typha/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
         -B 0x$(BUILD_ID)"
 
-bin/calico-typha: $(TYPHA_GO_FILES) vendor/.up-to-date
+bin/calico-typha-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
 	@echo Building typha...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/typha/cmd/calico-typha" && \
-               ( ldd bin/calico-typha 2>&1 | grep -q "Not a valid dynamic program" || \
-	             ( echo "Error: bin/calico-typha was not statically linked"; false ) )'
+		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
+		-e "not a dynamic executable" || \
+		( echo "Error: bin/calico-typha was not statically linked"; false ) )'
 
-bin/typha-client: $(TYPHA_GO_FILES) vendor/.up-to-date
+bin/typha-client-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
 	@echo Building typha client...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/typha/cmd/typha-client" && \
-               ( ldd bin/typha-client 2>&1 | grep -q "Not a valid dynamic program" || \
-	             ( echo "Error: bin/typha-client was not statically linked"; false ) )'
+		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
+		-e "not a dynamic executable" || \
+		( echo "Error: bin/typha-client was not statically linked"; false ) )'
 
 # Install or update the tools used by the build
 .PHONY: update-tools
@@ -219,8 +236,8 @@ ifndef COVERALLS_REPO_TOKEN
 endif
 	$(DOCKER_GO_BUILD) goveralls -repotoken=$(COVERALLS_REPO_TOKEN) -coverprofile=combined.coverprofile
 
-bin/calico-typha.transfer-url: bin/calico-typha
-	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-typha https://transfer.sh/calico-typha > $@'
+bin/calico-typha.transfer-url: bin/calico-typha-$(ARCH)
+	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
 
 .PHONY: clean
 clean:
@@ -269,13 +286,13 @@ release-once-tagged:
 	@echo
 	@echo "Will now build release artifacts..."
 	@echo
-	$(MAKE) bin/calico-typha calico/typha
-	docker tag calico/typha calico/typha:$(VERSION)
-	docker tag calico/typha quay.io/calico/typha:latest
-	docker tag calico/typha:$(VERSION) quay.io/calico/typha:$(VERSION)
+	$(MAKE) bin/calico-typha-$(ARCH) calico/typha
+	docker tag calico/typha$(ARCHTAG) calico/typha$(ARCHTAG):$(VERSION)
+	docker tag calico/typha$(ARCHTAG) quay.io/calico/typha$(ARCHTAG):latest
+	docker tag calico/typha$(ARCHTAG):$(VERSION) quay.io/calico/typha$(ARCHTAG):$(VERSION)
 	@echo
 	@echo "Checking built typha has correct version..."
-	@if docker run quay.io/calico/typha:$(VERSION) calico-typha --version | grep -q '$(VERSION)$$'; \
+	@if docker run quay.io/calico/typha$(ARCHTAG):$(VERSION) calico-typha --version | grep -q '$(VERSION)$$'; \
 	then \
 	  echo "Check successful."; \
 	else \
@@ -285,9 +302,9 @@ release-once-tagged:
 	@echo
 	@echo "Typha release artifacts have been built:"
 	@echo
-	@echo "- Binary:                 bin/calico-typha"
-	@echo "- Docker container image: calico/typha:$(VERSION)"
-	@echo "- Same, tagged for Quay:  quay.io/calico/typha:$(VERSION)"
+	@echo "- Binary:                 bin/calico-typha-$(ARCH)"
+	@echo "- Docker container image: calico/typha$(ARCHTAG):$(VERSION)"
+	@echo "- Same, tagged for Quay:  quay.io/calico/typha$(ARCHTAG):$(VERSION)"
 	@echo
 	@echo "Now to publish this release to Github:"
 	@echo
@@ -308,11 +325,11 @@ release-once-tagged:
 	@echo
 	@echo "Then, push the versioned docker images to Dockerhub and Quay:"
 	@echo
-	@echo "- docker push calico/typha:$(VERSION)"
-	@echo "- docker push quay.io/calico/typha:$(VERSION)"
+	@echo "- docker push calico/typha$(ARCHTAG):$(VERSION)"
+	@echo "- docker push quay.io/calico/typha$(ARCHTAG):$(VERSION)"
 	@echo
 	@echo "If this is the latest release from the most recent stable"
 	@echo "release series, also push the 'latest' tag:"
 	@echo
-	@echo "- docker push calico/typha:latest"
-	@echo "- docker push quay.io/calico/typha:latest"
+	@echo "- docker push calico/typha$(ARCHTAG):latest"
+	@echo "- docker push quay.io/calico/typha$(ARCHTAG):latest"
