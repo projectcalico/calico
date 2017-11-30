@@ -12,8 +12,8 @@ data:
     namespaces: [""] # everything, aka v1.NamepsaceAll, aka cluster-wide
     initializerName: "sidecar.initializer.istio.io"
     params:
-      initImage: gcr.io/unique-caldron-775/proxy_init:latest
-      proxyImage: gcr.io/unique-caldron-775/proxy_debug:latest
+      initImage: quay.io/calico/istio-proxy_init:latest
+      proxyImage: quay.io/calico/istio-proxy_debug:latest
       verbosity: 2
       version: runner_171031_222114
       meshConfigMapName: istio
@@ -49,7 +49,7 @@ spec:
       serviceAccountName: istio-initializer-service-account
       containers:
         - name: initializer
-          image: gcr.io/unique-caldron-775/sidecar_initializer:latest
+          image: quay.io/calico/istio-sidecar_initializer:latest
           imagePullPolicy: Always
           args:
             - --port=8083

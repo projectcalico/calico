@@ -6,7 +6,7 @@ set -o nounset
 set -o pipefail
 
 
-hubs="gcr.io/unique-caldron-775"
+hubs="quay.io/calico"
 local_tag=$(date +%Y%m%d%H%M%S)
 git_commit=$(git rev-parse --short HEAD)
 image="dikastes"
