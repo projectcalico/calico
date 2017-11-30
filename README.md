@@ -2,6 +2,15 @@
 
 This is a technical preview of Application Layer Policy for [Project Calico][calico], which enforces network and
 application layer authorization policies using [Istio].
+
+![arch](https://github.com/tigera/dikastes/raw/master/doc/arch.png)
+
+Istio mints and distributes cryptographic identities and uses them to establish mutually authenticated TLS connections
+between pods.  Calico enforces authorization policy on this communication integrating cryptographic identities and 
+network layer attributes.
+
+A small shim filter is inserted into the proxy, which calls out to Calico components when service requests are
+processed.  We compute policy based on a global store which is distributed to the Calico components.
  
 ## Getting Started
  
