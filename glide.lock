@@ -1,5 +1,5 @@
 hash: 819908344e25e7408c3092e12810a3d19d89cdedf135ae90fa2379392247fb62
-updated: 2017-11-16T16:53:05.46361588-08:00
+updated: 2017-11-29T16:34:00.379974308-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 7e7da451323b6766da368f8a1e8ec9a88a16b4a0
+  version: 32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -142,7 +142,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
   subpackages:
   - format
   - internal/assertion
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 69516f55f1dad6071c5bfe4a67cdd11fcee2aff9
+  version: eb2220e43561b3ec398486183b450cd5a50cdbad
   subpackages:
   - lib
   - lib/apiconfig
@@ -241,7 +241,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -270,7 +270,6 @@ imports:
   version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
   subpackages:
   - unix
-  - windows
 - name: golang.org/x/text
   version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
