@@ -1,5 +1,3 @@
-// +build !windows
-
 // Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +16,9 @@ package logutils
 
 import (
 	"io"
-	"log/syslog"
 	"os"
 	"path"
 
-	"github.com/mipearson/rfw"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -124,43 +120,17 @@ func ConfigureLogging(configParams *config.Config) {
 	var fileDirErr, fileOpenErr error
 	if configParams.LogSeverityFile != "" && configParams.LogFilePath != "" {
 		fileDirErr = os.MkdirAll(path.Dir(configParams.LogFilePath), 0755)
-		var rotAwareFile io.Writer
-		rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
+		var logFile io.Writer
+		logFile, fileOpenErr = openLogFile(configParams.LogFilePath, 0644)
 		if fileDirErr == nil && fileOpenErr == nil {
 			fileDest := logutils.NewStreamDestination(
 				logLevelFile,
-				rotAwareFile,
+				logFile,
 				make(chan logutils.QueuedLog, logQueueSize),
 				configParams.DebugDisableLogDropping,
 				counterLogErrors,
 			)
 			dests = append(dests, fileDest)
-		}
-	}
-
-	// Syslog target.  Again, we record the error if we fail to connect to syslog.
-	var sysErr error
-	if configParams.LogSeveritySys != "" {
-		// Set net/addr to "" so we connect to the system syslog server rather
-		// than a remote one.
-		net := ""
-		addr := ""
-		// The priority parameter is a combination of facility and default
-		// severity.  We want to log with the standard LOG_USER facility; the
-		// severity is actually irrelevant because the hook always overrides
-		// it.
-		priority := syslog.LOG_USER | syslog.LOG_INFO
-		tag := "calico-felix"
-		w, sysErr := syslog.Dial(net, addr, priority, tag)
-		if sysErr == nil {
-			syslogDest := logutils.NewSyslogDestination(
-				logLevelSyslog,
-				w,
-				make(chan logutils.QueuedLog, logQueueSize),
-				configParams.DebugDisableLogDropping,
-				counterLogErrors,
-			)
-			dests = append(dests, syslogDest)
 		}
 	}
 
@@ -185,12 +155,28 @@ func ConfigureLogging(configParams *config.Config) {
 		log.WithError(fileOpenErr).WithField("file", configParams.LogFilePath).
 			Fatal("Failed to open log file.")
 	}
-	if sysErr != nil {
-		// We don't bail out if we can't connect to syslog because our default is to try to
-		// connect but it's very common for syslog to be disabled when we're run in a
-		// container.
-		log.WithError(sysErr).Error(
-			"Failed to connect to syslog. To prevent this error, either set config " +
-				"parameter LogSeveritySys=none or configure a local syslog service.")
+}
+
+// Stub, this func is not used on Windows
+func DumpHeapMemoryOnSignal(configParams *config.Config) {
+	return
+}
+
+// A simple io.Writer for logging to file
+type FileWriter struct {
+	file  *os.File
+}
+
+func (f *FileWriter) Write(p []byte) (int, error) {
+	return f.file.Write(p)
+}
+
+func openLogFile(path string, mode os.FileMode) (*FileWriter, error) {
+	var w FileWriter
+	var err error
+	w.file, err = os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, mode)
+	if err != nil {
+		return nil, err
 	}
+	return &w, err
 }
