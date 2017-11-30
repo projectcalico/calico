@@ -265,7 +265,7 @@ customer pod later).
 
     kubectl apply -f config/demo/20-attack-pod.yaml
     
-Take a look at the `30-attack-pod.yaml` file in an editor.  It creates an `ubuntu` pod and mounts `istio.summary`
+Take a look at the `20-attack-pod.yaml` file in an editor.  It creates an `ubuntu` pod and mounts `istio.summary`
 secret.  This will allow us to masquerade as if we were the `summary` service, even though this pod is not run as that
 service account.  Let's try this out.  First, `exec` into the pod.
 
