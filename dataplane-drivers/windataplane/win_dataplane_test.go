@@ -15,8 +15,6 @@
 package windataplane_test
 
 import (
-	"net"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -26,7 +24,7 @@ import (
 
 var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
-	var dpConfig intdataplane.Config
+	var dpConfig windataplane.Config
 
 	JustBeforeEach(func() {
 		configParams = config.New()

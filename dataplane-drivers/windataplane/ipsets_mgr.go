@@ -19,8 +19,8 @@ package windataplane
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/dataplane-drivers/windataplane/ipsets"
+	"github.com/projectcalico/felix/proto"
 )
 
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
@@ -46,8 +46,8 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	case *proto.IPSetUpdate:
 		log.WithField("ipSetId", msg.Id).Info("Processing IPSetUpdate")
 		metadata := ipsets.IPSetMetadata{
-			Type:    ipsets.IPSetTypeHashIP,
-			SetID:   msg.Id,
+			Type:  ipsets.IPSetTypeHashIP,
+			SetID: msg.Id,
 		}
 		m.ipsetsDataplane.AddOrReplaceIPSet(metadata, msg.Members)
 	case *proto.IPSetRemove:

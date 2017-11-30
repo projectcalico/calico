@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	hns "github.com/Microsoft/hcsshim"
+
 	"github.com/projectcalico/felix/dataplane-drivers/windataplane/set"
 )
 
@@ -33,7 +34,7 @@ const (
 )
 
 var (
-	SkipRule = errors.New("Rule skipped")
+	SkipRule   = errors.New("Rule skipped")
 	MissingSet = errors.New("Missing IPSet")
 )
 
@@ -41,7 +42,7 @@ var (
 type PolicySetType string
 
 const (
-	PolicySetTypePolicy PolicySetType = "policy"
+	PolicySetTypePolicy  PolicySetType = "policy"
 	PolicySetTypeProfile PolicySetType = "profile"
 )
 
@@ -52,7 +53,7 @@ func (t PolicySetType) SetType() string {
 // PolicySetMetadata contains the metadata for a particular Policy set, such as its name and type.
 type PolicySetMetadata struct {
 	SetId string
-	Type PolicySetType
+	Type  PolicySetType
 }
 
 // PolicySetsDataplane is a interface for managing a plane of policySet objects

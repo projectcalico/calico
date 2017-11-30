@@ -18,6 +18,7 @@ import (
 	"os/exec"
 
 	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dataplane-drivers/windataplane"
 	"github.com/projectcalico/libcalico-go/lib/health"

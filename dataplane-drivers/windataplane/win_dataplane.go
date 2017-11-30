@@ -21,11 +21,12 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/dataplane-drivers/windataplane/ipsets"
+	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
 	"github.com/projectcalico/felix/jitter"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/throttle"
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/ipsets"
 )
 
 const (
@@ -73,7 +74,7 @@ type Config struct {
 // event before it sends a rule that references that IP set.
 type WindowsDataplane struct {
 	// the channel which we receive messages from felix
-	toDataplane   chan interface{}
+	toDataplane chan interface{}
 	// the channel used to send messages from the dataplane to felix
 	fromDataplane chan interface{}
 	// stores all of the managers which will be processing  the various updates from felix.
@@ -129,10 +130,10 @@ func NewWinDataplaneDriver(config Config) *WindowsDataplane {
 	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
 
 	dp := &WindowsDataplane{
-		toDataplane:       make(chan interface{}, msgPeekLimit),
-		fromDataplane:     make(chan interface{}, 100),
-		config:            config,
-		applyThrottle:     throttle.New(10),
+		toDataplane:   make(chan interface{}, msgPeekLimit),
+		fromDataplane: make(chan interface{}, 100),
+		config:        config,
+		applyThrottle: throttle.New(10),
 	}
 
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
@@ -160,7 +161,6 @@ func (d *WindowsDataplane) SendMessage(msg interface{}) error {
 	d.toDataplane <- msg
 	return nil
 }
-
 
 // Called by Felix.go so that it can receive a channel to listen for message being
 // sent by this dataplane driver.

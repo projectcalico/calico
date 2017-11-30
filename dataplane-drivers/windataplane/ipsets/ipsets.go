@@ -20,20 +20,21 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/dataplane-drivers/windataplane/set"
 )
 
 // IPSets manages a whole plane of IP sets, i.e. all the IPv4 sets, or all the IPv6 IP sets.
 type IPSets struct {
 	IPVersionConfig *IPVersionConfig
-	ipSetIDToIPSet map[string]*ipSet
-	logCxt *log.Entry
+	ipSetIDToIPSet  map[string]*ipSet
+	logCxt          *log.Entry
 }
 
 func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
 	return &IPSets{
 		IPVersionConfig: ipVersionConfig,
-		ipSetIDToIPSet: map[string]*ipSet{},
+		ipSetIDToIPSet:  map[string]*ipSet{},
 		logCxt: log.WithFields(log.Fields{
 			"family": ipVersionConfig.Family,
 		}),
@@ -52,7 +53,7 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	setID := setMetadata.SetID
 	ipSet := &ipSet{
 		IPSetMetadata: setMetadata,
-		Members: filteredMembers,
+		Members:       filteredMembers,
 	}
 	s.ipSetIDToIPSet[setID] = ipSet
 }
@@ -75,7 +76,7 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 		return
 	}
 	s.logCxt.WithFields(log.Fields{
-		"setID": setID,
+		"setID":           setID,
 		"filteredMembers": filteredMembers,
 	}).Info("Adding new members to IP set")
 	filteredMembers.Iter(func(m interface{}) error {
@@ -96,7 +97,7 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 		return
 	}
 	s.logCxt.WithFields(log.Fields{
-		"setID": setID,
+		"setID":           setID,
 		"filteredMembers": filteredMembers,
 	}).Info("Removing members from IP set")
 
@@ -111,7 +112,7 @@ func (s *IPSets) GetIPSetMembers(setID string) []string {
 	var retVal []string
 
 	ipSet := s.ipSetIDToIPSet[setID]
-	if (ipSet == nil) {
+	if ipSet == nil {
 		return nil
 	}
 

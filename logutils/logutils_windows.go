@@ -164,7 +164,7 @@ func DumpHeapMemoryOnSignal(configParams *config.Config) {
 
 // A simple io.Writer for logging to file
 type FileWriter struct {
-	file  *os.File
+	file *os.File
 }
 
 func (f *FileWriter) Write(p []byte) (int, error) {

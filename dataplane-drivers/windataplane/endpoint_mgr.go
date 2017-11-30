@@ -17,16 +17,17 @@
 package windataplane
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"sync"
 	"time"
-	"errors"
-	"os"
 
-	log "github.com/sirupsen/logrus"
 	hns "github.com/Microsoft/hcsshim"
-	"github.com/projectcalico/felix/proto"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
+	"github.com/projectcalico/felix/proto"
 )
 
 const (
@@ -46,7 +47,7 @@ const (
 
 var (
 	ErrorUnknownEndpoint = errors.New("Endpoint could not be found")
-	ErrorUpdateFailed = errors.New("Endpoint update failed")
+	ErrorUpdateFailed    = errors.New("Endpoint update failed")
 )
 
 // endpointManager processes WorkloadEndpoint* updates from the datastore. Updates are
@@ -81,11 +82,11 @@ func newEndpointManager(policysets policysets.PolicySetsDataplane) *endpointMana
 	}
 
 	return &endpointManager{
-		hnsNetworkName: networkName,
+		hnsNetworkName:      networkName,
 		policysetsDataplane: policysets,
 		addressToEndpointId: make(map[string]string),
-		activeWlEndpoints: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingWlEpUpdates: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlEndpoints:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 	}
 }
 
@@ -109,7 +110,7 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 // last refresh or if a forceRefresh is requested (may happen if the endpointManager determines that
 // a required endpoint id is not present in the cache).
 func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
-	if (!forceRefresh && (time.Since(m.lastCacheUpdate) < cacheTimeout)) {
+	if !forceRefresh && (time.Since(m.lastCacheUpdate) < cacheTimeout) {
 		return nil
 	}
 
@@ -129,12 +130,12 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 	for _, endpoint := range endpoints {
 		if strings.ToLower(endpoint.VirtualNetworkName) == strings.ToLower(m.hnsNetworkName) {
 			ip := endpoint.IPAddress.String() + ipv4AddrSuffix
-			log.WithFields(log.Fields{"IPAddress":ip,"EndpointId":endpoint.Id}).Debug("Adding HNS Endpoint Id entry to cache")
+			log.WithFields(log.Fields{"IPAddress": ip, "EndpointId": endpoint.Id}).Debug("Adding HNS Endpoint Id entry to cache")
 			m.addressToEndpointId[ip] = endpoint.Id
 		}
 	}
 
-	log.Infof("Cache refresh is complete. %v endpoints were cached", len(m.addressToEndpointId)) 
+	log.Infof("Cache refresh is complete. %v endpoints were cached", len(m.addressToEndpointId))
 	m.lastCacheUpdate = time.Now()
 
 	m.endpointLock.Unlock()
@@ -171,11 +172,11 @@ func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
 			}
 		}
 
-Policies:
+	Policies:
 		for _, policyName := range activePolicyNames {
 			for _, updatedPolicy := range updatedPolicies {
 				if policyName == updatedPolicy {
-					log.WithFields(log.Fields{"policyName":policyName, "endpointId":endpointId}).Info("Endpoint is being marked for policy refresh")
+					log.WithFields(log.Fields{"policyName": policyName, "endpointId": endpointId}).Info("Endpoint is being marked for policy refresh")
 					m.pendingWlEpUpdates[endpointId] = workload
 					break Policies
 				}
@@ -202,17 +203,17 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		var endpointId string
 
 		// A non-nil workload indicates this is a pending add or update operation
-		if (workload != nil) {
+		if workload != nil {
 			for _, ip := range workload.Ipv4Nets {
 				var err error
 				logCxt.WithField("ip", ip).Debug("Resolving workload ip to hns endpoint Id")
 				endpointId, err = m.getHnsEndpointId(ip)
-				if (err == nil && endpointId != "") {
+				if err == nil && endpointId != "" {
 					// Resolution was successful
 					break
 				}
 			}
-			if (endpointId == "") {
+			if endpointId == "" {
 				// Failed to find the associated hns endpoint id
 				return ErrorUnknownEndpoint
 			}
@@ -231,7 +232,7 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			}
 
 			err := m.applyRules(id, endpointId, policyNames)
-			if (err != nil) {
+			if err != nil {
 				// Failed to apply, this will be rescheduled and retried
 				return err
 			}
@@ -253,11 +254,11 @@ func (m *endpointManager) CompleteDeferredWork() error {
 // applyRules gathers all of the rules for the specified policies and sends them to hns
 // as an endpoint policy update (this actually applies the rules to the dataplane).
 func (m *endpointManager) applyRules(workloadId proto.WorkloadEndpointID, endpointId string, policyNames []string) error {
-	logCxt := log.WithFields(log.Fields{"id":workloadId, "endpointId":endpointId})
+	logCxt := log.WithFields(log.Fields{"id": workloadId, "endpointId": endpointId})
 	logCxt.WithField("policies", policyNames).Info("Applying endpoint rules")
 
 	var rules []*hns.ACLPolicy
-	if (len(policyNames) > 0) {
+	if len(policyNames) > 0 {
 		rules = m.policysetsDataplane.GetPolicySetRules(policyNames)
 		for _, rule := range rules {
 			logCxt.WithField("rule", rule).Debug("Complete set of rules to be applied")
@@ -289,8 +290,8 @@ func (m *endpointManager) getHnsEndpointId(ip string) (string, error) {
 		m.endpointLock.RLock()
 		id, ok := m.addressToEndpointId[ip]
 		m.endpointLock.RUnlock()
-		if (ok) {
-			log.WithFields(log.Fields{"ip":ip, "id":id}).Info("Resolved hns endpoint id")
+		if ok {
+			log.WithFields(log.Fields{"ip": ip, "id": id}).Info("Resolved hns endpoint id")
 			return id, nil
 		}
 

@@ -22,8 +22,8 @@ import (
 
 // IPSetMetadata contains the metadata for a particular IP set, such as its name and type.
 type IPSetMetadata struct {
-	SetID   string
-	Type    IPSetType
+	SetID string
+	Type  IPSetType
 }
 
 // IPSetsDataplane is interface for managing a plane of ipSet objects.

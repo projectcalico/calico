@@ -24,8 +24,8 @@ import (
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dataplane-drivers/extdataplane"
-	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/dataplane-drivers/intdataplane"
+	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/rules"
@@ -92,7 +92,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
 			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
- 			RouteRefreshInterval:           configParams.RouteRefreshInterval,
+			RouteRefreshInterval:           configParams.RouteRefreshInterval,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
 			IptablesInsertMode:             configParams.ChainInsertMode,
@@ -106,8 +106,8 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 
 			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
 
-			PostInSyncCallback: func() { logutils.DumpHeapMemoryProfile(configParams) },
-			HealthAggregator:   healthAggregator,
+			PostInSyncCallback:              func() { logutils.DumpHeapMemoryProfile(configParams) },
+			HealthAggregator:                healthAggregator,
 			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)

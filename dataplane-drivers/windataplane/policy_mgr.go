@@ -19,8 +19,8 @@ package windataplane
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
+	"github.com/projectcalico/felix/proto"
 )
 
 // policyManager simply passes through Policy and Profile updates from the datastore to the
