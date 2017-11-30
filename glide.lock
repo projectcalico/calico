@@ -1,5 +1,5 @@
-hash: 7babd2ccb602c9ef172537991a9b35879d3aa1fb990525f27fdbeeded854c2f6
-updated: 2017-11-16T16:58:33.341474574-08:00
+hash: 3454397a7c6e3dd4b0c29e95fd352d0632c5bbaf60c89d00ee9d2c9a9a176f38
+updated: 2017-11-29T18:22:21.470424823-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -50,7 +50,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 7e7da451323b6766da368f8a1e8ec9a88a16b4a0
+  version: 32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -189,7 +189,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 69516f55f1dad6071c5bfe4a67cdd11fcee2aff9
+  version: eb2220e43561b3ec398486183b450cd5a50cdbad
   subpackages:
   - lib
   - lib/apiconfig
@@ -228,7 +228,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 3439c0869c74b6d803ef9c947b1bd166f75ac8a0
+  version: 596ddb78e6d487f8899bc33f0d9b54c4f0fb9354
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -271,7 +271,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
