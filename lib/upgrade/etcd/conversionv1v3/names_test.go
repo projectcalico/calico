@@ -15,6 +15,7 @@
 package conversionv1v3
 
 import (
+	"net"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -84,6 +85,24 @@ func TestCanConvertV1ToV3NameNoDots(t *testing.T) {
 		t.Run(entry.v1Name, func(t *testing.T) {
 			RegisterTestingT(t)
 			Expect(convertNameNoDots(entry.v1Name)).To(Equal(entry.v3Name), entry.v1Name)
+		})
+	}
+}
+
+var ipToNameTable = []struct {
+	ip   net.IP
+	name string
+}{
+	{net.ParseIP("192.168.0.1"), "192-168-0-1"},
+	{net.ParseIP("Aa:bb::"), "00aa-00bb-0000-0000-0000-0000-0000-0000"},
+	{net.ParseIP("0Aa:bb::50"), "00aa-00bb-0000-0000-0000-0000-0000-0050"},
+}
+
+func TestCanConvertIpToName(t *testing.T) {
+	for _, entry := range ipToNameTable {
+		t.Run(entry.ip.String(), func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(convertIpToName(entry.ip)).To(Equal(entry.name), entry.ip.String())
 		})
 	}
 }

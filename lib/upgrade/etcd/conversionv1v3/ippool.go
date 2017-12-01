@@ -68,7 +68,7 @@ func (_ IPPool) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error
 func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	pool, ok := kvp.Value.(*model.IPPool)
 	if !ok {
-		return nil, fmt.Errorf("value is not a valid BGPPeer resource key")
+		return nil, fmt.Errorf("value is not a valid IPPool resource Value")
 	}
 
 	return &apiv3.IPPool{
