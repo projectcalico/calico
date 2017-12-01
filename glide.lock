@@ -1,5 +1,5 @@
-hash: 3454397a7c6e3dd4b0c29e95fd352d0632c5bbaf60c89d00ee9d2c9a9a176f38
-updated: 2017-11-29T18:22:21.470424823-08:00
+hash: 53dbf8bafcc2ad03696ca119a8b00586cca77dcf627a58fa2ff28e60c6faeef3
+updated: 2017-12-01T13:57:01.893981263Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -189,7 +189,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: eb2220e43561b3ec398486183b450cd5a50cdbad
+  version: 1fe1fb290389b4d14d85551a9cabf89cd4f305ec
   subpackages:
   - lib
   - lib/apiconfig
@@ -228,7 +228,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 596ddb78e6d487f8899bc33f0d9b54c4f0fb9354
+  version: 082d08e607bf02aa3f991f72dff133724708b8e1
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -239,17 +239,17 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -271,7 +271,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
