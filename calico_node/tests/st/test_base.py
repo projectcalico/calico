@@ -145,21 +145,10 @@ class TestBase(TestCase):
         if fail_list is None:
             fail_list = []
 
-        # First check that each of the workloads that we're looking at can ping
-        # _itself_, allowing 20 retries for that.  That will ensure that each
-        # workload is properly up and running.
-        self_conn_list = []
-        for source in pass_list + fail_list:
-            if 'icmp' in type_list:
-                self_conn_list.append((source, source.ip, 'icmp', True, 20))
-            if 'tcp' in type_list:
-                self_conn_list.append((source, source.ip, 'tcp', True, 20))
-            if 'udp' in type_list:
-                self_conn_list.append((source, source.ip, 'udp', True, 20))
-
-        results, diagstring = self.probe_connectivity(self_conn_list)
-        assert False not in results, ("Self-connectivity check error!\r\n"
-                                      "Results:\r\n %s\r\n" % diagstring)
+        # Wait (up to 20 retries) for each of the workloads to be able to ping
+        # _itself_.  That will ensure that each workload is properly up and
+        # running.
+        self.wait_assert_self_connectivity(pass_list + fail_list, type_list)
 
         # Now check that connectivity _between_ the workloads is as expected.
         conn_check_list = []
@@ -181,9 +170,24 @@ class TestBase(TestCase):
                 if 'udp' in type_list:
                     conn_check_list.append((source, dest.ip, 'udp', False, retries))
 
-
         results, diagstring = self.probe_connectivity(conn_check_list)
         assert False not in results, ("Connectivity check error!\r\n"
+                                      "Results:\r\n %s\r\n" % diagstring)
+
+    def wait_assert_self_connectivity(self, workloads, type_list):
+        # First check that each of the workloads that we're looking at can ping
+        # _itself_, allowing 20 retries for that.
+        self_conn_list = []
+        for source in workloads:
+            if 'icmp' in type_list:
+                self_conn_list.append((source, source.ip, 'icmp', True, 20))
+            if 'tcp' in type_list:
+                self_conn_list.append((source, source.ip, 'tcp', True, 20))
+            if 'udp' in type_list:
+                self_conn_list.append((source, source.ip, 'udp', True, 20))
+
+        results, diagstring = self.probe_connectivity(self_conn_list)
+        assert False not in results, ("Self-connectivity check error!\r\n"
                                       "Results:\r\n %s\r\n" % diagstring)
 
     def probe_connectivity(self, conn_check_list):
@@ -216,7 +220,7 @@ class TestBase(TestCase):
 
     @debug_failures
     def assert_ip_connectivity(self, workload_list, ip_pass_list,
-                               ip_fail_list=None, type_list=None):
+                               ip_fail_list=None, type_list=None, retries=0):
         """
         Assert partial connectivity graphs between workloads and given ips.
 
@@ -237,49 +241,32 @@ class TestBase(TestCase):
         if ip_fail_list is None:
             ip_fail_list = []
 
+        # Wait (up to 20 retries) for each of the workloads to be able to ping
+        # _itself_.  That will ensure, at least, that each _source_ workload is
+        # properly up and running, before we start trying to ping from it to
+        # another IP.  (Unfortunately we can't do anything here to ensure that
+        # the target IPs are actually available.)
+        self.wait_assert_self_connectivity(workload_list, type_list)
+
         conn_check_list = []
         for workload in workload_list:
             for ip in ip_pass_list:
                 if 'icmp' in type_list:
-                    conn_check_list.append((workload, ip, 'icmp', True, 0))
+                    conn_check_list.append((workload, ip, 'icmp', True, retries))
                 if 'tcp' in type_list:
-                    conn_check_list.append((workload, ip, 'tcp', True, 0))
+                    conn_check_list.append((workload, ip, 'tcp', True, retries))
                 if 'udp' in type_list:
-                    conn_check_list.append((workload, ip, 'udp', True, 0))
+                    conn_check_list.append((workload, ip, 'udp', True, retries))
 
             for ip in ip_fail_list:
                 if 'icmp' in type_list:
-                    conn_check_list.append((workload, ip, 'icmp', False, 0))
+                    conn_check_list.append((workload, ip, 'icmp', False, retries))
                 if 'tcp' in type_list:
-                    conn_check_list.append((workload, ip, 'tcp', False, 0))
+                    conn_check_list.append((workload, ip, 'tcp', False, retries))
                 if 'udp' in type_list:
-                    conn_check_list.append((workload, ip, 'udp', False, 0))
+                    conn_check_list.append((workload, ip, 'udp', False, retries))
 
-        # Empirically, 18 threads works well on my machine!
-        check_pool = ThreadPool(18)
-        results = check_pool.map(self._conn_checker, conn_check_list)
-        check_pool.close()
-        check_pool.join()
-        # _con_checker should only return None if there is an error in calling it
-        assert None not in results, ("_con_checker error - returned None")
-        diagstring = ""
-        # Check that all tests passed
-        if False in results:
-            # We've failed, lets put together some diags.
-            header = ["source.ip", "dest.ip", "type", "exp_result", "actual_result"]
-            diagstring = "{: >18} {: >18} {: >7} {: >6} {: >6}\r\n".format(*header)
-            for i in range(len(conn_check_list)):
-                source, dest, test_type, exp_result, retries = conn_check_list[i]
-                pass_fail = results[i]
-                # Convert pass/fail into an actual result
-                if not pass_fail:
-                    actual_result = not exp_result
-                else:
-                    actual_result = exp_result
-                diag = [source.ip, dest, test_type, exp_result, actual_result]
-                diagline = "{: >18} {: >18} {: >7} {: >6} {: >6}\r\n".format(*diag)
-                diagstring += diagline
-
+        results, diagstring = self.probe_connectivity(conn_check_list)
         assert False not in results, ("Connectivity check error!\r\n"
                                       "Results:\r\n %s\r\n" % diagstring)
 

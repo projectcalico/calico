@@ -129,11 +129,6 @@ class TestAutodetection(TestBase):
             workload_host4 = host4.create_workload("workload4", network=network1)
             workload_host5 = host5.create_workload("workload5", network=network1)
 
-            # Allow network to converge
-            self.assert_true(workload_host1.check_can_ping(workload_host3.ip, retries=10))
-            self.assert_true(workload_host1.check_can_ping(workload_host4.ip, retries=10))
-            self.assert_true(workload_host1.check_can_ping(workload_host5.ip, retries=10))
-
             # Check connectivity in both directions
             self.assert_ip_connectivity(workload_list=[workload_host1,
                                                        workload_host2,
@@ -144,4 +139,5 @@ class TestAutodetection(TestBase):
                                                       workload_host2.ip,
                                                       workload_host3.ip,
                                                       workload_host4.ip,
-                                                      workload_host5.ip])
+                                                      workload_host5.ip],
+                                        retries=10)
