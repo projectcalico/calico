@@ -21,8 +21,6 @@ from tests.st.utils.utils import update_bgp_config
 
 from .peer import create_bgp_peer
 
-# TODO: Re-enable
-@skip("Disabled until routereflector is updated for libcalico-go v3")
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
@@ -45,7 +43,7 @@ class TestSingleRouteReflector(TestBase):
 
             # Set the default AS number - as this is used by the RR mesh, and
             # turn off the node-to-node mesh (do this from any host).
-            update_bgp_config(host1, asNum=12345, nodeMesh=False)
+            update_bgp_config(host1, asNum=64514, nodeMesh=False)
 
             # Create a workload on each host in the same network.
             network1 = host1.create_network("subnet1")
