@@ -57,7 +57,7 @@ the host. Instead, continue directly to the
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
    ```
    
-1. Install Calico and a single node etcd with the following command.
+1. Install {{site.prodname}} and a single node etcd with the following command.
 
    ```
    kubectl apply -f \
@@ -166,7 +166,7 @@ the host. Instead, continue directly to the
    ```
    
 Congratulations! You now have a single-host Kubernetes cluster
-equipped with Calico.
+equipped with {{site.prodname}}.
 
 
 ### Next steps
