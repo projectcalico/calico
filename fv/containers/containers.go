@@ -16,19 +16,19 @@ package containers
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"context"
 
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -178,6 +178,22 @@ func (c *Container) GetHostname() string {
 	return strings.TrimSpace(output)
 }
 
+func (c *Container) GetPIDs(processName string) []int {
+	out, err := c.ExecOutput("pgrep", fmt.Sprintf("^%s$", processName))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(out).NotTo(BeEmpty())
+	var pids []int
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		pid, err := strconv.Atoi(line)
+		Expect(err).NotTo(HaveOccurred())
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
 func (c *Container) WaitUntilRunning() {
 	log.Info("Wait for container to be listed in docker ps")
 
@@ -211,14 +227,18 @@ func (c *Container) Stopped() bool {
 	return c.runCmd == nil
 }
 
+func (c *Container) ListedInDockerPS() bool {
+	cmd := utils.Command("docker", "ps")
+	out, err := cmd.CombinedOutput()
+	Expect(err).NotTo(HaveOccurred())
+	return strings.Contains(string(out), c.Name)
+}
+
 func (c *Container) WaitNotRunning(timeout time.Duration) {
 	log.Info("Wait for container not to be listed in docker ps")
 	start := time.Now()
 	for {
-		cmd := utils.Command("docker", "ps")
-		out, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred())
-		if !strings.Contains(string(out), c.Name) {
+		if !c.ListedInDockerPS() {
 			break
 		}
 		if time.Since(start) > timeout {
@@ -262,7 +282,10 @@ func (c *Container) ExecOutput(args ...string) (string, error) {
 	cmd := exec.Command("docker", arg...)
 	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		if out == nil {
+			return "", err
+		}
+		return string(out), err
 	}
 	return string(out), nil
 }

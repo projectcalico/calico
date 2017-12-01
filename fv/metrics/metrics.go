@@ -56,3 +56,11 @@ func GetFelixMetric(felixIP, name string) (metric string, err error) {
 	err = scanner.Err()
 	return
 }
+
+func GetFelixMetricInt(felixIP, name string) (metric int, err error) {
+	s, err := GetFelixMetric(felixIP, name)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(s)
+}
