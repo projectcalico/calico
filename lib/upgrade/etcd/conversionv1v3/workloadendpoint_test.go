@@ -90,6 +90,7 @@ var wepTable = []struct {
 				Node:          "testnode",
 				Pod:           "frontend-5gs43",
 				Endpoint:      "eth0",
+				ContainerID:   "1337495556942031415926535",
 				IPNetworks:    []string{"10.0.0.1/32", "2001::/128"},
 				IPNATs:        makeIPNATv3(),
 				IPv4Gateway:   "10.0.0.254",
@@ -157,6 +158,7 @@ var wepTable = []struct {
 				Orchestrator: "k8s",
 				Node:         "testnode",
 				Pod:          "frontend-5gs43",
+				ContainerID:   "1337495556942031415926535",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"10.0.0.1/32"},
 				IPNATs: []apiv3.IPNAT{apiv3.IPNAT{
@@ -179,7 +181,7 @@ var wepTable = []struct {
 				Workload:         "default.frontend-5gs43",
 				Orchestrator:     "k8s",
 				Node:             "TestNode",
-				ActiveInstanceID: "1337495556942031415926535",
+				ActiveInstanceID: "133749555694203141592653c",
 				Labels:           makeLabelsV1(),
 			},
 			Spec: apiv1.WorkloadEndpointSpec{
@@ -205,7 +207,7 @@ var wepTable = []struct {
 			},
 			Value: &model.WorkloadEndpoint{
 				Labels:           makeLabelsV1(),
-				ActiveInstanceID: "1337495556942031415926535",
+				ActiveInstanceID: "133749555694203141592653c",
 				State:            "active",
 				Name:             "cali1234",
 				Mac:              makeMac(),
@@ -227,6 +229,7 @@ var wepTable = []struct {
 				Orchestrator: "k8s",
 				Node:         "testnode",
 				Pod:          "frontend-5gs43",
+				ContainerID:   "133749555694203141592653c",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"2001::/128"},
 				IPNATs: []apiv3.IPNAT{apiv3.IPNAT{
@@ -249,7 +252,7 @@ var wepTable = []struct {
 				Workload:         "default.frontend-5gs43",
 				Orchestrator:     "k8s",
 				Node:             "TestNode",
-				ActiveInstanceID: "1337495556942031415926535",
+				ActiveInstanceID: "133749555694203141592653a",
 				Labels:           map[string]string{},
 			},
 			Spec: apiv1.WorkloadEndpointSpec{
@@ -272,7 +275,7 @@ var wepTable = []struct {
 			},
 			Value: &model.WorkloadEndpoint{
 				Labels:           map[string]string{},
-				ActiveInstanceID: "1337495556942031415926535",
+				ActiveInstanceID: "133749555694203141592653a",
 				State:            "active",
 				Name:             "cali1234",
 				Mac:              makeMac(),
@@ -295,6 +298,7 @@ var wepTable = []struct {
 				Orchestrator:  "k8s",
 				Node:          "testnode",
 				Pod:           "frontend-5gs43",
+				ContainerID:   "133749555694203141592653a",
 				Endpoint:      "eth0",
 				IPNetworks:    []string{"10.0.0.1/32", "2001::/128"},
 				IPNATs:        makeIPNATv3(),

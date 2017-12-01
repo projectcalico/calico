@@ -201,7 +201,7 @@ func TestHEPDataIsConvertedCorrectly(t *testing.T) {
 		b, err := convertHEPV1ToV3(a)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(b.ObjectMeta.Name).To(Equal("nod2.h3p.n.me"), "Should convert new name")
+		Expect(b.ObjectMeta.Name).To(Equal("nod2.h3p.n.me-7188e863"), "Should convert new name")
 	})
 
 	t.Run("converts protocol names", func(t *testing.T) {
@@ -265,7 +265,7 @@ func TestHEPDataIsConvertedCorrectly(t *testing.T) {
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(b.Spec.Profiles)).To(Equal(1))
-		Expect(b.Spec.Profiles[0]).To(Equal("pro.le"), "Should convert profile name")
+		Expect(b.Spec.Profiles[0]).To(Equal("pro.le-b1554692"), "Should convert profile name")
 	})
 
 	t.Run("converts profile names", func(t *testing.T) {

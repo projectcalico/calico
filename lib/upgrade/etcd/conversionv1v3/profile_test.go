@@ -61,7 +61,7 @@ var profileTable = []struct {
 		},
 		v3API: apiv3.Profile{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "nameymcprofilename",
+				Name: "nameymcprofilename-9740ed19",
 			},
 			Spec: apiv3.ProfileSpec{
 				Ingress:       []apiv3.Rule{V3InRule1, V3InRule2},
@@ -97,7 +97,7 @@ var profileTable = []struct {
 		},
 		v3API: apiv3.Profile{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "kns.flux.capacitor",
+				Name: "kns.flux.capacitor-a9ad9f16",
 			},
 			Spec: apiv3.ProfileSpec{
 				Ingress:       []apiv3.Rule{V3InRule1, V3InRule2},

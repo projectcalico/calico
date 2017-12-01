@@ -111,13 +111,15 @@ func (_ HostEndpoint) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 		})
 	}
 
+	nodeName := ConvertNodeName(bk.Hostname)
+
 	ah := &apiv3.HostEndpoint{
 		ObjectMeta: v1.ObjectMeta{
-			Name:   convertName(fmt.Sprintf("%s.%s", bk.Hostname, bk.EndpointID)),
+			Name:   convertName(fmt.Sprintf("%s.%s", nodeName, bk.EndpointID)),
 			Labels: bh.Labels,
 		},
 		Spec: apiv3.HostEndpointSpec{
-			Node:          convertName(bk.Hostname),
+			Node:          nodeName,
 			Ports:         ports,
 			InterfaceName: bh.Name,
 			Profiles:      convertProfiles(bh.ProfileIDs),

@@ -105,7 +105,10 @@ func (bp BGPPeer) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 		r.ObjectMeta = v1.ObjectMeta{Name: convertIpToName(peer.PeerIP.IP)}
 	case model.NodeBGPPeerKey:
 		nk := kvp.Key.(model.NodeBGPPeerKey)
-		n := convertName(nk.Nodename)
+
+		// Node names are normalized but we don't add any qualifying hashes (so we just use
+		// the normalizeName function to convert).
+		n := ConvertNodeName(nk.Nodename)
 		r.Spec.Node = n
 		r.ObjectMeta = v1.ObjectMeta{Name: n + "." + convertIpToName(peer.PeerIP.IP)}
 	default:

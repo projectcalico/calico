@@ -28,6 +28,61 @@ import (
 
 type Node struct{}
 
+// convertAPIToKVPair converts an API Node structure to a KVPair containing a
+// backend Node and NodeKey.
+// This is part of the conversionHelper interface.
+func (n Node) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
+	an, ok := a.(apiv1.Node)
+	if !ok {
+		return nil, fmt.Errorf("Conversion to Node is not possible with %v", a)
+	}
+
+	k, err := n.convertMetadataToKey(an.Metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	v := model.Node{}
+	if an.Spec.BGP != nil {
+		if an.Spec.BGP.IPv4Address == nil && an.Spec.BGP.IPv6Address == nil {
+			return nil, fmt.Errorf("Invalid NodeBGPSpec, missing address: %v", an.Spec.BGP)
+		}
+		if an.Spec.BGP.IPv4Address != nil {
+			v.BGPIPv4Addr = &cnet.IP{an.Spec.BGP.IPv4Address.IP}
+			v.BGPIPv4Net = an.Spec.BGP.IPv4Address.Network()
+		}
+		if an.Spec.BGP.IPv6Address != nil {
+			v.BGPIPv6Addr = &cnet.IP{an.Spec.BGP.IPv6Address.IP}
+			v.BGPIPv6Net = an.Spec.BGP.IPv6Address.Network()
+		}
+		v.BGPASNumber = an.Spec.BGP.ASNumber
+	}
+
+	for _, orchRef := range an.Spec.OrchRefs {
+		v.OrchRefs = append(v.OrchRefs, model.OrchRef{
+			Orchestrator: orchRef.Orchestrator,
+			NodeName:     orchRef.NodeName,
+		})
+	}
+
+	kv := &model.KVPair{Key: k, Value: &v}
+
+	log.WithFields(log.Fields{
+		"APIV1":  a,
+		"KVPair": *kv,
+	}).Debug("Converted Node")
+	return kv, nil
+}
+
+// convertMetadataToKey converts a NodeMetadata to a NodeKey
+func (_ Node) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
+	nm := m.(apiv1.NodeMetadata)
+	k := model.NodeKey{
+		Hostname: nm.Name,
+	}
+	return k, nil
+}
+
 // convertKVPairToAPI converts a KVPair containing a backend Node and NodeKey
 // to an API Node structure.
 // The Node.Spec.BGP.IPv4IPIPTunnelAddr field will need to be populated
@@ -46,7 +101,7 @@ func (_ Node) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 
 	apiNode := apiv3.NewNode()
 
-	apiNode.ObjectMeta.Name = convertName(bk.Hostname)
+	apiNode.ObjectMeta.Name = ConvertNodeName(bk.Hostname)
 
 	if bv.BGPIPv4Addr != nil || bv.BGPIPv6Addr != nil {
 		apiNode.Spec.BGP = &apiv3.NodeBGPSpec{
@@ -95,57 +150,3 @@ func (_ Node) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 	return apiNode, nil
 }
 
-// convertMetadataToKey converts a NodeMetadata to a NodeKey
-func (_ Node) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
-	nm := m.(apiv1.NodeMetadata)
-	k := model.NodeKey{
-		Hostname: nm.Name,
-	}
-	return k, nil
-}
-
-// convertAPIToKVPair converts an API Node structure to a KVPair containing a
-// backend Node and NodeKey.
-// This is part of the conversionHelper interface.
-func (n Node) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
-	an, ok := a.(apiv1.Node)
-	if !ok {
-		return nil, fmt.Errorf("Conversion to Node is not possible with %v", a)
-	}
-
-	k, err := n.convertMetadataToKey(an.Metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	v := model.Node{}
-	if an.Spec.BGP != nil {
-		if an.Spec.BGP.IPv4Address == nil && an.Spec.BGP.IPv6Address == nil {
-			return nil, fmt.Errorf("Invalid NodeBGPSpec, missing address: %v", an.Spec.BGP)
-		}
-		if an.Spec.BGP.IPv4Address != nil {
-			v.BGPIPv4Addr = &cnet.IP{an.Spec.BGP.IPv4Address.IP}
-			v.BGPIPv4Net = an.Spec.BGP.IPv4Address.Network()
-		}
-		if an.Spec.BGP.IPv6Address != nil {
-			v.BGPIPv6Addr = &cnet.IP{an.Spec.BGP.IPv6Address.IP}
-			v.BGPIPv6Net = an.Spec.BGP.IPv6Address.Network()
-		}
-		v.BGPASNumber = an.Spec.BGP.ASNumber
-	}
-
-	for _, orchRef := range an.Spec.OrchRefs {
-		v.OrchRefs = append(v.OrchRefs, model.OrchRef{
-			Orchestrator: orchRef.Orchestrator,
-			NodeName:     orchRef.NodeName,
-		})
-	}
-
-	kv := &model.KVPair{Key: k, Value: &v}
-
-	log.WithFields(log.Fields{
-		"APIV1":  a,
-		"KVPair": *kv,
-	}).Debug("Converted Node")
-	return kv, nil
-}
