@@ -21,7 +21,8 @@ This demo will run on a Calico-enabled Kubernetes cluster. You will need a [Kube
 with RBAC and [Initializers] enabled. 
  
 If you have Calico or Istio installed, remove them from the cluster.  This preview relies on the latest Calico build and
-several custom-built Istio components which will be installed in the demo.
+several [custom-built Istio components](https://github.com/projectcalico/istio/tree/dikastes) which will be installed in
+the demo.
 
 ### Starting a cluster with Vagrant
 
@@ -395,7 +396,6 @@ This is an early access preview and it has not been fully integrated with all as
    cases like mixing `Allow` and `Deny` rules are not yet supported.
  - The decision engine queries the Kube API Server on every request.  This is fine for small test applications, but
    will not scale to large clusters.  Future versions will integrate with the API sync functionality in `calico-node`.
-
 
 ## FAQ
 
