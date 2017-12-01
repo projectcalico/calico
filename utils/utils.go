@@ -52,7 +52,7 @@ func Min(a, b int) int {
 // 2. Nodename field in NetConf.
 // 3. OS Hostname.
 func DetermineNodename(conf types.NetConf) string {
-	nodename, _ := os.Hostname()
+	nodename, _ := names.Hostname()
 	if conf.Hostname != "" {
 		nodename = conf.Hostname
 		logrus.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")

@@ -40,7 +40,7 @@ var _ = Describe("CalicoCni", func() {
 	log.AddHook(&logutils.ContextHook{})
 	log.SetOutput(GinkgoWriter)
 	log.SetLevel(log.DebugLevel)
-	hostname, _ := os.Hostname()
+	hostname, _ := names.Hostname()
 	ctx := context.Background()
 	calicoClient, err := client.NewFromEnv()
 	if err != nil {
