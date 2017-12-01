@@ -96,6 +96,10 @@ type FelixConfigurationSpec struct {
 	// configure this appropriately. For example our Kubernetes and Docker integrations set the ‘cali’ value,
 	// and our OpenStack integration sets the ‘tap’ value. [Default: cali]
 	InterfacePrefix string `json:"interfacePrefix,omitempty"`
+	// InterfaceExclude is a list of interfaces that Felix should exclude when monitoring for host
+	// endpoints.  The default value ensures that Felix ignores Kubernetes' IPVS dummy interface,
+	// which is used internally by kube-proxy.  [Default: kube-ipvs0]
+	InterfaceExclude string `json:"interfaceExclude,omitempty"`
 
 	// ChainInsertMode controls whether Felix hooks the kernel’s top-level iptables chains by inserting a rule
 	// at the top of the chain or by appending a rule at the bottom. insert is the safe default since it prevents
@@ -176,6 +180,10 @@ type FelixConfigurationSpec struct {
 	// UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage
 	// server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
 	UsageReportingEnabled *bool `json:"usageReportingEnabled,omitempty"`
+	// UsageReportingInitialDelaySecs controls the minimum delay (in seconds) before Felix makes a report. [Default: 300]
+	UsageReportingInitialDelaySecs *int `json:"usageReportingInitialDelaySecs,omitempty"`
+	// UsageReportingIntervalSecs controls the interval (in seconds) at which Felix makes reports. [Default: 86400]
+	UsageReportingIntervalSecs *int `json:"usageReportingIntervalSecs,omitempty"`
 
 	DebugMemoryProfilePath              string `json:"debugMemoryProfilePath,omitempty"`
 	DebugDisableLogDropping             *bool  `json:"debugDisableLogDropping,omitempty"`
