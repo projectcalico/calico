@@ -183,7 +183,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/saurabh/calico_node:latest
+          image: quay.io/calico/node:master
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -228,6 +228,9 @@ spec:
               value: ""
             - name: FELIX_HEALTHENABLED
               value: "true"
+            # Enable Alpha features for Application Layer Policy
+            - name: ALPHA_FEATURES
+              value: serviceaccounts,httprules
           securityContext:
             privileged: true
           resources:
@@ -255,7 +258,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/saurabh/cni:latest
+          image: quay.io/calico/cni:latest
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
