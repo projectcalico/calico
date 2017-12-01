@@ -1,5 +1,5 @@
-hash: 8a3bf737e4d823611c42d4f66326af8c61b919359b70d0aea8e47fee2a0c8df9
-updated: 2017-11-27T15:26:54.279983188-08:00
+hash: 848bda1f175b0ed6ceb0c249cb4dcd02e5030426f0f97c98900b6d4df7cc0b14
+updated: 2017-11-30T15:52:51.22898068-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -160,7 +160,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/projectcalico/libcalico-go
-  version: aab828ef9fd5405040c36368f866e5ec9ea314a6
+  version: d5ff4aa493340f0239d9b9e557e11603b3f84532
   subpackages:
   - lib/api
   - lib/api/unversioned
