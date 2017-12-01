@@ -60,6 +60,7 @@ items:
   spec:
     peerIP: 10.192.0.3
     asNumber: 64567
+    scope: global
 - apiVersion: crd.projectcalico.org/v1
   kind: BGPPeer
   metadata:
@@ -67,3 +68,4 @@ items:
   spec:
     peerIP: 10.192.0.4
     asNumber: 64567
+    scope: global
