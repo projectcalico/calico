@@ -1,5 +1,5 @@
-hash: e5cd918fcdfd907214445f8771327e3c95959b2f0a4d1ff5af9edcbe0d79dea1
-updated: 2017-11-27T12:20:02.267330685-08:00
+hash: cb94457d405a4ce987f56ad7a1387402bb378b7ba135237f49bc0715801068b9
+updated: 2017-11-30T15:55:07.534516902-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -57,7 +57,7 @@ imports:
   - log
   - swagger
 - name: github.com/fsnotify/fsnotify
-  version: 4da3e2cfbabc9f751898f250b49f2439785783a1
+  version: 9297c46340639aebbb6820f260c699465528fb60
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
@@ -83,7 +83,7 @@ imports:
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/hashicorp/hcl
-  version: 23c074d0eceb2b8a5bfdbb271ab780cde70f05a8
+  version: 1c284ec98f4b398443cbabb0d9197f7f4cc0077c
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -98,7 +98,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 3c9eb9dad289b380ab4e46386390c4315bd5a552
+  version: fd11e200c8b2e4d23c31945e330b2768b83d46f5
   subpackages:
   - client/v2
   - models
@@ -108,7 +108,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 462fda1f11d8cad3660e52737b8beefd27acfb3f
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/magiconair/properties
   version: 49d762b9817ba1c2e9d0c69183c2b4a8b8f1d934
 - name: github.com/mailru/easyjson
@@ -124,7 +124,7 @@ imports:
 - name: github.com/mitchellh/go-ps
   version: 4fdf99ab29366514c69ccccddab5dc58b8d84062
 - name: github.com/mitchellh/mapstructure
-  version: 06020f85339e21b2478f756a78e295255ffa4d6a
+  version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/olekukonko/tablewriter
   version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
 - name: github.com/onsi/ginkgo
@@ -172,7 +172,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: aab828ef9fd5405040c36368f866e5ec9ea314a6
+  version: d5ff4aa493340f0239d9b9e557e11603b3f84532
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -204,7 +204,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/afero
@@ -259,7 +259,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 076b546753157f758b316e59bcb51e6807c04057
+  version: 20457ee8ea8546920d3f4e19e405da45250dc5a5
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -311,7 +311,7 @@ imports:
   - peer
   - transport
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
