@@ -28,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
 var (
@@ -568,11 +569,11 @@ func New() *Config {
 	for _, param := range knownParams {
 		param.setDefault(p)
 	}
-	hostname, err := os.Hostname()
+	hostname, err := names.Hostname()
 	if err != nil {
 		log.Warningf("Failed to get hostname from kernel, "+
 			"trying HOSTNAME variable: %v", err)
-		hostname = os.Getenv("HOSTNAME")
+		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
 	}
 	p.FelixHostname = hostname
 	return p
