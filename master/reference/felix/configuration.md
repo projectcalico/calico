@@ -37,7 +37,7 @@ The full list of parameters which can be set is as follows.
 | ReportingIntervalSecs (FELIX_REPORTINGINTERVALSECS)                      | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments. [Default: `30`]                                                       | int                                     |
 | ReportingTTLSecs (FELIX_REPORTINGTTLSECS)                                | Time-to-live setting for process-wide status reports. [Default: `90`]                                                                                                                            | int                                     |
 | IpInIpMtu (FELIX_IPINIPMTU)                                              | The MTU to set on the tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/usage/configuration/mtu) [Default: `1440`]                                                          | int                                     |
-| IpInIpEnabled (FELIX_IPINIPENABLED)                                      | When Kubernetes datastore driver is being used, tell Felix if IPinIP is enabled (not required for Etcd datastore since this information is available through the datastore) [Default: `false`]   | boolean                                 |   
+| IpInIpEnabled (FELIX_IPINIPENABLED)                                      | Whether Felix should configure an IPinIP interface on the host [Default: `false`]                                                                                                                | boolean                                 |   
 
 
 #### etcdv3 datastore configuration
