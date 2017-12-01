@@ -21,13 +21,201 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"sync"
+
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 )
 
-var _ = Describe("Usagerep", func() {
+// These tests start a local HTTP server on a random port and tell the usage reporter to
+// connect to it.  Then we can check that it correctly makes HTTP requests at the right times.
+var _ = Describe("UsageReporter with mocked URL and short interval", func() {
+	var u *UsageReporter
+	var tcpListener net.Listener
+	var httpHandler *requestRecorder
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var statsUpdateC chan calc.StatsUpdate
+	var configUpdateC chan map[string]string
+
+	BeforeEach(func() {
+		// Open a listener on a random local port.
+		var err error
+		tcpListener, err = net.Listen("tcp", ":0")
+		Expect(err).NotTo(HaveOccurred())
+		httpHandler = &requestRecorder{}
+		go func() {
+			defer GinkgoRecover()
+			http.Serve(tcpListener, httpHandler)
+		}()
+
+		// Channels to send data to the UsageReporter.
+		statsUpdateC = make(chan calc.StatsUpdate)
+		configUpdateC = make(chan map[string]string)
+
+		// Create a usage reporter and override its base URL and initial interval.
+		u = New(500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
+		port := tcpListener.Addr().(*net.TCPAddr).Port
+		u.BaseURL = fmt.Sprintf("http://localhost:%d/UsageCheck/calicoVersionCheck?", port)
+
+		ctx, cancel = context.WithCancel(context.Background())
+		go u.PeriodicallyReportUsage(ctx)
+	})
+
+	AfterEach(func() {
+		cancel()
+		tcpListener.Close()
+	})
+
+	It("should not check in before receiving config/stats", func() {
+		Consistently(httpHandler.GetRequestURIs, "2s").Should(BeEmpty())
+	})
+
+	Context("after sending config", func() {
+		sendConfig := func() {
+			configUpdateC <- map[string]string{
+				"ClusterGUID":   "someguid",
+				"ClusterType":   "openstack,k8s,kdd",
+				"CalicoVersion": "v2.6.3",
+			}
+		}
+
+		BeforeEach(func() {
+			sendConfig()
+		})
+
+		It("should not check in before receiving stats", func() {
+			Consistently(httpHandler.GetRequestURIs, "2s").Should(BeEmpty())
+		})
+
+		Context("after sending stats", func() {
+			sendStats := func() {
+				statsUpdateC <- calc.StatsUpdate{
+					NumHosts:             1,
+					NumHostEndpoints:     2,
+					NumWorkloadEndpoints: 3,
+				}
+			}
+
+			BeforeEach(func() {
+				sendStats()
+			})
+
+			It("should do first check ins correctly", func() {
+				By("checking in within 2s")
+				startTime := time.Now()
+				Eventually(httpHandler.GetRequestURIs, "2s", "100ms").Should(HaveLen(1))
+				By("waiting until after the initial delay")
+				Expect(time.Since(startTime)).To(BeNumerically(">=", 500*time.Millisecond))
+
+				By("including correct URL parameters")
+				uri := httpHandler.GetRequestURIs()[0]
+				url, err := url.Parse(uri)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(url.Path).To(Equal("/UsageCheck/calicoVersionCheck"))
+				q := url.Query()
+				Expect(len(q)).To(Equal(8))
+				Expect(q.Get("guid")).To(Equal("someguid"))
+				Expect(q.Get("type")).To(Equal("openstack,k8s,kdd"))
+				Expect(q.Get("cal_ver")).To(Equal("v2.6.3"))
+				Expect(q.Get("size")).To(Equal("1"))
+				Expect(q.Get("heps")).To(Equal("2"))
+				Expect(q.Get("weps")).To(Equal("3"))
+
+				By("checking in again")
+				Eventually(httpHandler.GetRequestURIs, "2s", "100ms").Should(HaveLen(2))
+				By("waiting until at least initial delay + 90% (due to jitter) of interval for second check in")
+				Expect(time.Since(startTime)).To(BeNumerically(">=", 1400*time.Millisecond))
+			})
+
+			It("should not block the channels while doing initial delay", func() {
+				startTime := time.Now()
+				// We created the channel as a blocking channel so, if we can send a few updates,
+				// we know that the main loop is processing them
+				sendStats()
+				sendStats()
+				sendStats()
+				sendConfig()
+				sendConfig()
+				sendConfig()
+				Expect(time.Since(startTime)).To(BeNumerically("<", 100*time.Millisecond))
+			})
+
+			Context("after first report, and sending in config and stat updates", func() {
+				BeforeEach(func() {
+					Eventually(httpHandler.GetRequestURIs, "2s", "100ms").Should(HaveLen(1))
+					statsUpdateC <- calc.StatsUpdate{
+						NumHosts:             10,
+						NumHostEndpoints:     20,
+						NumWorkloadEndpoints: 30,
+					}
+					configUpdateC <- map[string]string{
+						"ClusterGUID":   "someguid2",
+						"ClusterType":   "openstack,k8s,kdd,typha",
+						"CalicoVersion": "v3.0.0",
+					}
+				})
+
+				It("should do second check in correctly", func() {
+					By("checking in within 2s")
+					Eventually(httpHandler.GetRequestURIs, "2s", "100ms").Should(HaveLen(2))
+
+					By("including correct URL parameters")
+					uri := httpHandler.GetRequestURIs()[1]
+					url, err := url.Parse(uri)
+					Expect(err).NotTo(HaveOccurred())
+					q := url.Query()
+					Expect(len(q)).To(Equal(8))
+					Expect(q.Get("guid")).To(Equal("someguid2"))
+					Expect(q.Get("type")).To(Equal("openstack,k8s,kdd,typha"))
+					Expect(q.Get("cal_ver")).To(Equal("v3.0.0"))
+					Expect(q.Get("size")).To(Equal("10"))
+					Expect(q.Get("heps")).To(Equal("20"))
+					Expect(q.Get("weps")).To(Equal("30"))
+				})
+			})
+		})
+	})
+})
+
+type requestRecorder struct {
+	lock             sync.Mutex
+	requestsReceived []string
+}
+
+func (h *requestRecorder) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	h.requestsReceived = append(h.requestsReceived, req.RequestURI)
+
+	resp.Write([]byte(`{"usage_warning": "Warning!"}`))
+}
+
+func (h *requestRecorder) GetRequestURIs() []string {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	var result []string
+	for _, r := range h.requestsReceived {
+		result = append(result, r)
+	}
+	return result
+}
+
+// These tests create a usage reporter but they don't start it.  Instead they validate its
+// internal calculation methods and and the default configuration.
+var _ = Describe("UsageReporter with default URL", func() {
+	var u *UsageReporter
+
+	BeforeEach(func() {
+		u = New(5*time.Minute, 24*time.Hour, nil, nil)
+	})
+
 	It("should calculate correct URL mainline", func() {
-		rawURL := calculateURL("theguid", "atype", "testVer", calc.StatsUpdate{
+		rawURL := u.calculateURL("theguid", "atype", "testVer", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,
@@ -50,7 +238,7 @@ var _ = Describe("Usagerep", func() {
 		Expect(url.Path).To(Equal("/UsageCheck/calicoVersionCheck"))
 	})
 	It("should default cluster type, GUID, and Calico Version", func() {
-		rawURL := calculateURL("", "", "", calc.StatsUpdate{
+		rawURL := u.calculateURL("", "", "", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,
@@ -64,20 +252,20 @@ var _ = Describe("Usagerep", func() {
 		Expect(q.Get("cal_ver")).To(Equal("unknown"))
 	})
 	It("should delay at least 5 minutes", func() {
-		Expect(calculateInitialDelay(0)).To(BeNumerically(">=", 5*time.Minute))
-		Expect(calculateInitialDelay(1)).To(BeNumerically(">=", 5*time.Minute))
-		Expect(calculateInitialDelay(1000)).To(BeNumerically(">=", 5*time.Minute))
+		Expect(u.calculateInitialDelay(0)).To(BeNumerically(">=", 5*time.Minute))
+		Expect(u.calculateInitialDelay(1)).To(BeNumerically(">=", 5*time.Minute))
+		Expect(u.calculateInitialDelay(1000)).To(BeNumerically(">=", 5*time.Minute))
 	})
 	It("should delay at most 10000 seconds", func() {
-		Expect(calculateInitialDelay(10000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
-		Expect(calculateInitialDelay(100000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
-		Expect(calculateInitialDelay(1000000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
-		Expect(calculateInitialDelay(10000000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(u.calculateInitialDelay(10000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(u.calculateInitialDelay(100000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(u.calculateInitialDelay(1000000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(u.calculateInitialDelay(10000000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
 	})
 	It("should have a random component", func() {
-		firstDelay := calculateInitialDelay(1000)
+		firstDelay := u.calculateInitialDelay(1000)
 		for i := 0; i < 10; i++ {
-			if calculateInitialDelay(1000) != firstDelay {
+			if u.calculateInitialDelay(1000) != firstDelay {
 				return // Success
 			}
 		}
@@ -87,7 +275,7 @@ var _ = Describe("Usagerep", func() {
 		var total time.Duration
 		// Give it a high but bounded number of iterations to converge.
 		for i := int64(0); i < 100000; i++ {
-			total += calculateInitialDelay(60)
+			total += u.calculateInitialDelay(60)
 			if i > 100 {
 				average := time.Duration(int64(total) / (i + 1))
 				// Delay should an average of 0.5s per host so the average should

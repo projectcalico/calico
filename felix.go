@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
@@ -56,6 +55,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
@@ -321,7 +321,13 @@ configRetry:
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
 	failureReportChan := make(chan string)
-	dpConnector := newConnector(configParams, datastore, dpDriver, failureReportChan)
+	var connToUsageRepUpdChan chan map[string]string
+	if configParams.UsageReportingEnabled {
+		// Make a channel for the connector to use to send updates to the usage reporter.
+		// (Otherwise, we pass in a nil channel, which disables such updates.)
+		connToUsageRepUpdChan = make(chan map[string]string, 1)
+	}
+	dpConnector := newConnector(configParams, connToUsageRepUpdChan, datastore, dpDriver, failureReportChan)
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -401,13 +407,13 @@ configRetry:
 			}
 		}()
 
-		go usagerep.PeriodicallyReportUsage(
-			24*time.Hour,
-			configParams.ClusterGUID,
-			configParams.ClusterType,
-			configParams.CalicoVersion,
+		usageRep := usagerep.New(
+			configParams.UsageReportingInitialDelaySecs,
+			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
+			connToUsageRepUpdChan,
 		)
+		go usageRep.PeriodicallyReportUsage(context.Background())
 	} else {
 		// Usage reporting disabled, but we still want a stats collector for the
 		// felix_cluster_* metrics.  Register a no-op function as the callback.
@@ -695,6 +701,7 @@ type dataplaneDriver interface {
 
 type DataplaneConnector struct {
 	config                     *config.Config
+	configUpdChan              chan<- map[string]string
 	ToDataplane                chan interface{}
 	StatusUpdatesFromDataplane chan interface{}
 	InSync                     chan bool
@@ -713,11 +720,14 @@ type Startable interface {
 }
 
 func newConnector(configParams *config.Config,
+	configUpdChan chan<- map[string]string,
 	datastore bapi.Client,
 	dataplane dataplaneDriver,
-	failureReportChan chan<- string) *DataplaneConnector {
+	failureReportChan chan<- string,
+) *DataplaneConnector {
 	felixConn := &DataplaneConnector{
 		config:                     configParams,
+		configUpdChan:              configUpdChan,
 		datastore:                  datastore,
 		ToDataplane:                make(chan interface{}),
 		StatusUpdatesFromDataplane: make(chan interface{}),
@@ -794,6 +804,8 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatus
 	}
 }
 
+var handledConfigChanges = set.From("CalicoVersion", "ClusterGUID", "ClusterType")
+
 func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 	defer func() {
 		fc.shutDownProcess("Failed to send messages to dataplane")
@@ -811,31 +823,55 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				fc.InSync <- true
 			}
 		case *proto.ConfigUpdate:
-			log.WithFields(log.Fields{
-				"old": config,
-				"new": msg.Config,
-			}).Info("Possible config update")
-			if config != nil && !reflect.DeepEqual(msg.Config, config) {
-				log.Warn("Felix configuration changed. Need to restart.")
+			if config != nil {
+				log.WithFields(log.Fields{
+					"old": config,
+					"new": msg.Config,
+				}).Info("Config updated, checking whether we need to restart")
+				restartNeeded := false
 				for kNew, vNew := range msg.Config {
+					logCxt := log.WithFields(log.Fields{"key": kNew, "new": vNew})
 					if vOld, prs := config[kNew]; !prs {
-						log.WithFields(log.Fields{"key": kNew, "value": vNew}).Warn("Key added")
+						logCxt = logCxt.WithField("updateType", "add")
 					} else if vNew != vOld {
-						log.WithFields(log.Fields{"key": kNew, "old": vOld, "new": vNew}).Warn("Key changed")
+						logCxt = logCxt.WithFields(log.Fields{"old": vOld, "updateType": "update"})
+					} else {
+						continue
 					}
+					if handledConfigChanges.Contains(kNew) {
+						logCxt.Info("Config change can be handled without restart")
+						continue
+					}
+					logCxt.Warning("Config change requires restart")
+					restartNeeded = true
 				}
 				for kOld, vOld := range config {
-					if _, prs := config[kOld]; !prs {
-						log.WithFields(log.Fields{"key": kOld, "value": vOld}).Warn("Key deleted")
+					logCxt := log.WithFields(log.Fields{"key": kOld, "old": vOld, "updateType": "delete"})
+					if _, prs := config[kOld]; prs {
+						continue
 					}
+					if handledConfigChanges.Contains(kOld) {
+						logCxt.Info("Config change can be handled without restart")
+						continue
+					}
+					logCxt.Warning("Config change requires restart")
+					restartNeeded = true
 				}
-				fc.shutDownProcess("config changed")
-			} else if config == nil {
-				log.Info("Config resolved.")
-				config = make(map[string]string)
-				for k, v := range msg.Config {
-					config[k] = v
+
+				if restartNeeded {
+					fc.shutDownProcess("config changed")
 				}
+			}
+
+			// Take a copy of the config to compare against next time.
+			config = make(map[string]string)
+			for k, v := range msg.Config {
+				config[k] = v
+			}
+
+			if fc.configUpdChan != nil {
+				// Send the config over to the usage reporter.
+				fc.configUpdChan <- config
 			}
 		case *calc.DatastoreNotReady:
 			log.Warn("Datastore became unready, need to restart.")
