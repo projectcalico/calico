@@ -73,6 +73,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	ctx := context.Background()
+	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting ClusterInformation: %v", err)
+	}
+	if *ci.Spec.DatastoreReady != true {
+		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		return fmt.Errorf("Calico is currently not ready to process requests")
+	}
+
 	// Remove the endpoint field (IfName) from the wepIDs so we can get a WEP name prefix.
 	// We use the WEP name prefix (e.g. prefix: "node1-k8s-mypod--1-", full name: "node1-k8s-mypod--1-eth0"
 	// to list all the WEPs so if we have a WEP with a different IfName (e.g. "node1-k8s-mypod--1-eth1")
@@ -85,8 +95,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("error constructing WorkloadEndpoint prefix: %s", err)
 	}
-
-	ctx := context.Background()
 
 	// Check if there's an existing endpoint by listing the existing endpoints based on the WEP name prefix.
 	endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{Name: wepPrefix, Namespace: wepIDs.Namespace, Prefix: true})
@@ -379,6 +387,16 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
+	ctx := context.Background()
+	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting ClusterInformation: %v", err)
+	}
+	if *ci.Spec.DatastoreReady != true {
+		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		return fmt.Errorf("Calico is currently not ready to process requests")
+	}
+
 	// Calculate the WEP name so we can call DEL on the exact endpoint.
 	epIDs.WEPName, err = epIDs.CalculateWorkloadEndpointName(false)
 	if err != nil {
@@ -391,8 +409,6 @@ func cmdDel(args *skel.CmdArgs) error {
 		"WorkloadEndpoint": epIDs.WEPName,
 		"ContainerID":      epIDs.ContainerID,
 	}).Info("Extracted identifiers")
-
-	ctx := context.Background()
 
 	// Handle k8s specific bits of handling the DEL.
 	if epIDs.Orchestrator == api.OrchestratorKubernetes {

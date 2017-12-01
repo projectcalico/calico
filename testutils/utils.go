@@ -59,6 +59,18 @@ func WipeEtcd() {
 		panic(err)
 	}
 	_ = be.Clean()
+
+	// Set the ready flag so calls to the CNI plugin can proceed
+	calicoClient, _ := client.NewFromEnv()
+	newClusterInfo := api.NewClusterInformation()
+	newClusterInfo.Name = "default"
+	datastoreReady := true
+	newClusterInfo.Spec.DatastoreReady = &datastoreReady
+	ci, err := calicoClient.ClusterInformation().Create(context.Background(), newClusterInfo, options.SetOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Set ClusterInformation: %v %v\n", ci, *ci.Spec.DatastoreReady)
 }
 
 // MustCreateNewIPPool creates a new Calico IPAM IP Pool.
