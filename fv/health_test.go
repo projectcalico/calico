@@ -35,6 +35,7 @@ package fv_test
 // says that it is ready.)
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -51,8 +52,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	"context"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"

@@ -91,7 +91,7 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
-	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail"`
+	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
 	FelixHostname string `config:"hostname;;local,non-zero"`
 
@@ -102,11 +102,11 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	TyphaAddr           string        `config:"authority;;"`
-	TyphaK8sServiceName string        `config:"string;"`
-	TyphaK8sNamespace   string        `config:"string;kube-system;non-zero"`
-	TyphaReadTimeout    time.Duration `config:"seconds;30"`
-	TyphaWriteTimeout   time.Duration `config:"seconds;10"`
+	TyphaAddr           string        `config:"authority;;local"`
+	TyphaK8sServiceName string        `config:"string;;local"`
+	TyphaK8sNamespace   string        `config:"string;kube-system;non-zero,local"`
+	TyphaReadTimeout    time.Duration `config:"seconds;30;local"`
+	TyphaWriteTimeout   time.Duration `config:"seconds;10;local"`
 
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
@@ -164,10 +164,12 @@ type Config struct {
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
 
-	UsageReportingEnabled bool   `config:"bool;true"`
-	ClusterGUID           string `config:"string;baddecaf"`
-	ClusterType           string `config:"string;"`
-	CalicoVersion         string `config:"string;"`
+	UsageReportingEnabled          bool          `config:"bool;true"`
+	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
+	UsageReportingIntervalSecs     time.Duration `config:"seconds;86400"`
+	ClusterGUID                    string        `config:"string;baddecaf"`
+	ClusterType                    string        `config:"string;"`
+	CalicoVersion                  string        `config:"string;"`
 
 	DebugMemoryProfilePath          string        `config:"file;;"`
 	DebugDisableLogDropping         bool          `config:"bool;false"`

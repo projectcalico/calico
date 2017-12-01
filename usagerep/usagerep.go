@@ -15,8 +15,7 @@
 package usagerep
 
 import (
-	"github.com/projectcalico/felix/jitter"
-
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -28,39 +27,105 @@ import (
 
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/jitter"
 )
 
 const (
-	baseURL = "https://usage.projectcalico.org/UsageCheck/calicoVersionCheck?"
+	DefaultBaseURL = "https://usage.projectcalico.org/UsageCheck/calicoVersionCheck?"
 )
 
-func PeriodicallyReportUsage(interval time.Duration, clusterGUID, clusterType, calicoVersion string, statsUpdateC <-chan calc.StatsUpdate) {
-	log.Info("Usage reporting thread started, waiting for size estimate")
-	stats := <-statsUpdateC
-	log.WithField("stats", stats).Info("Initial stats read")
+func New(
+	initialDelay time.Duration,
+	interval time.Duration,
+	statsUpdateC <-chan calc.StatsUpdate,
+	configUpdateC <-chan map[string]string,
+) *UsageReporter {
+	return &UsageReporter{
+		interval:      interval,
+		statsUpdateC:  statsUpdateC,
+		configUpdateC: configUpdateC,
+		InitialDelay:  initialDelay,
+		BaseURL:       DefaultBaseURL,
+		httpClient: http.Client{
+			// Short timeout to make sure we don't block on the request, leaving the channels
+			// starved for too long.
+			Timeout: 5 * time.Second,
+		},
+	}
+}
 
-	// To avoid thundering herd, inject some startup jitter.
-	initialDelay := calculateInitialDelay(stats.NumHosts)
-	log.WithField("delay", initialDelay).Info("Waiting before first check-in")
-	time.Sleep(initialDelay)
+type UsageReporter struct {
+	interval      time.Duration
+	statsUpdateC  <-chan calc.StatsUpdate
+	configUpdateC <-chan map[string]string
 
-	log.Info("Initial delay complete, making first check-in")
-	ReportUsage(clusterGUID, clusterType, calicoVersion, stats)
+	InitialDelay time.Duration
+	BaseURL      string
+	httpClient   http.Client
+}
 
-	log.WithField("interval", interval).Info("Initial check-in done, switching to timer.")
-	baseInterval := interval * 9 / 10
-	maxJitter := interval - baseInterval
-	ticker := jitter.NewTicker(baseInterval, maxJitter)
+func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
+	var stats calc.StatsUpdate
+	var config map[string]string
+	var receivedFirstStats bool
+	var tickerC <-chan time.Time
+	initialDelayStarted := false
+	initialDelayDone := make(chan struct{})
+
+	maybeStartInitialDelay := func() {
+		if !receivedFirstStats || config == nil || initialDelayStarted {
+			return
+		}
+
+		// To avoid thundering herd, inject some startup jitter.
+		initialDelay := u.calculateInitialDelay(stats.NumHosts)
+		go func() {
+			log.WithField("delay", initialDelay).Info("Waiting before first check-in")
+			time.Sleep(initialDelay)
+			close(initialDelayDone)
+		}()
+		initialDelayStarted = true
+	}
+
+	doReport := func() {
+		u.ReportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], stats)
+	}
+
+	var ticker *jitter.Ticker
 	for {
 		select {
-		case stats = <-statsUpdateC:
-		case <-ticker.C:
-			ReportUsage(clusterGUID, clusterType, calicoVersion, stats)
+		case stats = <-u.statsUpdateC:
+			log.WithField("stats", stats).Debug("Received stats update")
+			receivedFirstStats = true
+			maybeStartInitialDelay()
+		case config = <-u.configUpdateC:
+			log.WithField("config", config).Debug("Received config update")
+			maybeStartInitialDelay()
+		case <-initialDelayDone:
+			log.Info("Initial delay complete, doing first report")
+			doReport()
+			log.Info("First report done, starting ticker")
+			baseInterval := u.interval * 9 / 10
+			maxJitter := u.interval - baseInterval
+			ticker = jitter.NewTicker(baseInterval, maxJitter)
+			// Disable further kicks from this now-closed channel.
+			initialDelayDone = nil
+			// Enabled the main ticker loop.
+			tickerC = ticker.C
+		case <-tickerC:
+			log.Debug("Received tick")
+			doReport()
+		case <-ctx.Done():
+			log.Warn("Context stopped")
+			if ticker != nil {
+				ticker.Stop()
+			}
+			return
 		}
 	}
 }
 
-func calculateInitialDelay(numHosts int) time.Duration {
+func (u *UsageReporter) calculateInitialDelay(numHosts int) time.Duration {
 	// Clamp numHosts so that we don't pass anything out-of-range to rand.Intn().
 	if numHosts <= 0 {
 		numHosts = 1
@@ -71,13 +136,13 @@ func calculateInitialDelay(numHosts int) time.Duration {
 	initialJitter := time.Duration(rand.Intn(numHosts*1000)) * time.Millisecond
 	// To avoid spamming the server if we're in a cyclic restart, delay the first report by
 	// a few minutes.
-	initialDelay := 5*time.Minute + initialJitter
+	initialDelay := u.InitialDelay + initialJitter
 	return initialDelay
 }
 
-func ReportUsage(clusterGUID, clusterType, calicoVersion string, stats calc.StatsUpdate) {
-	fullURL := calculateURL(clusterGUID, clusterType, calicoVersion, stats)
-	resp, err := http.Get(fullURL)
+func (u *UsageReporter) ReportUsage(clusterGUID, clusterType, calicoVersion string, stats calc.StatsUpdate) {
+	fullURL := u.calculateURL(clusterGUID, clusterType, calicoVersion, stats)
+	resp, err := u.httpClient.Get(fullURL)
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
@@ -98,7 +163,7 @@ func ReportUsage(clusterGUID, clusterType, calicoVersion string, stats calc.Stat
 	}
 }
 
-func calculateURL(clusterGUID, clusterType, calicoVersion string, stats calc.StatsUpdate) string {
+func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion string, stats calc.StatsUpdate) string {
 	if clusterType == "" {
 		clusterType = "unknown"
 	}
@@ -126,7 +191,7 @@ func calculateURL(clusterGUID, clusterType, calicoVersion string, stats calc.Sta
 		"version": {buildinfo.GitVersion},
 		"rev":     {buildinfo.GitRevision},
 	}
-	fullURL := baseURL + queryParams.Encode()
+	fullURL := u.BaseURL + queryParams.Encode()
 	log.WithField("url", fullURL).Debug("Calculated URL.")
 	return fullURL
 }

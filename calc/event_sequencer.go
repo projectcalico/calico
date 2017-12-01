@@ -206,7 +206,7 @@ func (buf *EventSequencer) flushConfigUpdate() {
 	}
 	if globalChanged || hostChanged {
 		rawConfig := buf.config.RawValues()
-		log.WithField("merged", rawConfig).Warn("Config changed. Sending ConfigUpdate message.")
+		log.WithField("merged", rawConfig).Info("Config changed. Sending ConfigUpdate message.")
 		buf.Callback(&proto.ConfigUpdate{
 			Config: rawConfig,
 		})
