@@ -22,12 +22,14 @@ import (
 
 	"time"
 
+	"context"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/metrics"
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 var _ = Context("Config update tests, after starting felix", func() {
@@ -36,7 +38,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 		etcd            *containers.Container
 		felix           *containers.Container
 		felixInitialPID int
-		client          *client.Client
+		client          client.Interface
 		w               [3]*workload.Workload
 	)
 
@@ -45,17 +47,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 	}
 
 	BeforeEach(func() {
-		etcd = containers.RunEtcd()
-
-		client = utils.GetEtcdClient(etcd.IP)
-		Eventually(client.EnsureInitialized, "10s", "1s").ShouldNot(HaveOccurred())
-
-		felix = containers.RunFelix(etcd.IP)
-
-		felixNode := api.NewNode()
-		felixNode.Metadata.Name = felix.Hostname
-		_, err := client.Nodes().Create(felixNode)
-		Expect(err).NotTo(HaveOccurred())
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
 
 		// Get Felix's PID.  This retry loop ensures that we don't get tripped up if we see multiple
 		// PIDs, which can happen transiently when Felix forks off a subprocess.
@@ -102,17 +94,9 @@ var _ = Context("Config update tests, after starting felix", func() {
 	It("should stay up >2s", shouldStayUp)
 
 	updateConfig := func() {
-		err := client.Config().SetFelixConfig("ClusterGUID", "", "foobarbaz")
-		Expect(err).NotTo(HaveOccurred())
-		err = client.Config().SetFelixConfig("ClusterType", "", "felix-fv,something-new")
-		Expect(err).NotTo(HaveOccurred())
-		err = client.Config().SetFelixConfig("CalicoVersion", "", "v3.0")
-		Expect(err).NotTo(HaveOccurred())
-		err = client.Config().SetFelixConfig("ClusterGUID", felix.Hostname, "foobarbaz")
-		Expect(err).NotTo(HaveOccurred())
-		err = client.Config().SetFelixConfig("ClusterType", felix.Hostname, "felix-fv,something-new")
-		Expect(err).NotTo(HaveOccurred())
-		err = client.Config().SetFelixConfig("CalicoVersion", felix.Hostname, "v3.0")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err := client.EnsureInitialized(ctx, "a-new-version", "updated-type")
 		Expect(err).NotTo(HaveOccurred())
 	}
 
@@ -123,17 +107,15 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 		Context("after deleting config that felix can handle", func() {
 			BeforeEach(func() {
-				err := client.Config().SetFelixConfig("ClusterGUID", "", "")
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				ci, err := client.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				err = client.Config().SetFelixConfig("ClusterType", "", "")
-				Expect(err).NotTo(HaveOccurred())
-				err = client.Config().SetFelixConfig("CalicoVersion", "", "")
-				Expect(err).NotTo(HaveOccurred())
-				err = client.Config().SetFelixConfig("ClusterGUID", felix.Hostname, "")
-				Expect(err).NotTo(HaveOccurred())
-				err = client.Config().SetFelixConfig("ClusterType", felix.Hostname, "")
-				Expect(err).NotTo(HaveOccurred())
-				err = client.Config().SetFelixConfig("CalicoVersion", felix.Hostname, "")
+				ci.Spec.ClusterGUID = ""
+				ci.Spec.CalicoVersion = ""
+				ci.Spec.ClusterType = ""
+				_, err = client.ClusterInformation().Update(ctx, ci, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -152,15 +134,21 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	Context("after updating config that should trigger a restart", func() {
 		BeforeEach(func() {
-			err := client.Config().SetFelixConfig("InterfacePrefix", "", "foo")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			config := api.NewFelixConfiguration()
+			config.Name = "default"
+			config.Spec.InterfacePrefix = "foobarbaz"
+
+			_, err := client.FelixConfigurations().Create(ctx, config, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should exit after a delay", func() {
 			// Felix has a 2s timer before it restarts so we should see the same PID for a while.
 			Consistently(getFelixPIDs, "1s", "100ms").Should(ContainElement(felixInitialPID))
-			// TODO(smc) When porting this test to v3.0, need to check felix restarts without killing container.
-			Eventually(felix.ListedInDockerPS, "5s", "100ms").Should(BeFalse())
+			Eventually(getFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixInitialPID))
 		})
 	})
 })
