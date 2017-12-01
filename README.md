@@ -202,7 +202,8 @@ You will use the `istio-ingress` service to access the YAO Bank application.
    export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingress -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingress -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
    ```
 
-Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning correctly.
+Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning correctly.  It may take
+several minutes for all the services to come up and respond, during which time you may see 404 or 500 errors.
 
 ### The need for policy
 
@@ -291,9 +292,10 @@ Return to your web browser and refresh to confirm the new balance.
 
 We can mitigate both of the above deficiencies with a Calico policy.
 
-You will need the latest (nightly) build of `calicoctl`.
+You will need the latest (nightly) build of `calicoctl`.  Exit out of any pods you are exec'd into.
 
     wget https://www.projectcalico.org/builds/calicoctl
+    chmod +x calicoctl
     
 The policy uses alpha features of Calico behind a feature flag.  Enable these features.
 
@@ -301,7 +303,7 @@ The policy uses alpha features of Calico behind a feature flag.  Enable these fe
 
 Apply the sample policy.
 
-    calicoctl create -f config/demo/30-policy.yaml
+    ./calicoctl create -f config/demo/30-policy.yaml
 
 Let's examine this policy piece by piece.  It consists of 3 policy objects, one for each microservice.
 
