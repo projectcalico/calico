@@ -21,10 +21,90 @@ import (
 	"reflect"
 	"time"
 
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
+
+var _ = Describe("FelixConfig vs ConfigParams parity", func() {
+	var fcFields map[string]reflect.StructField
+	var cpFields map[string]reflect.StructField
+	cpFieldsToIgnore := []string{
+		"sourceToRawConfig",
+		"rawValues",
+		"Err",
+		"numIptablesBitsAllocated",
+
+		// Moved to ClusterInformation
+		"ClusterGUID",
+		"ClusterType",
+		"CalicoVersion",
+
+		// Moved to Node.
+		"IpInIpTunnelAddr",
+	}
+	cpFieldNameToFC := map[string]string{
+		"RouteRefreshInterval":            "RouteRefreshIntervalSecs",
+		"IpInIpEnabled":                   "IPIPEnabled",
+		"IpInIpMtu":                       "IPIPMTU",
+		"Ipv6Support":                     "IPv6Support",
+		"IpsetsRefreshInterval":           "IpsetsRefreshIntervalSecs",
+		"IptablesRefreshInterval":         "IptablesRefreshIntervalSecs",
+		"DebugSimulateCalcGraphHangAfter": "DebugSimulateCalcGraphHangAfterSecs",
+		"DebugSimulateDataplaneHangAfter": "DebugSimulateDataplaneHangAfterSecs",
+	}
+	fcFieldNameToCP := map[string]string{}
+	for k, v := range cpFieldNameToFC {
+		fcFieldNameToCP[v] = k
+	}
+
+	BeforeEach(func() {
+		fcFields = fieldsByName(v3.FelixConfigurationSpec{})
+		cpFields = fieldsByName(Config{})
+		for _, name := range cpFieldsToIgnore {
+			delete(cpFields, name)
+		}
+	})
+
+	It("FelixConfigurationSpec should contain all Config fields", func() {
+		for n, f := range cpFields {
+			mappedName := cpFieldNameToFC[n]
+			if mappedName != "" {
+				n = mappedName
+			}
+			if strings.HasPrefix(n, "Debug") {
+				continue
+			}
+			if strings.Contains(string(f.Tag), "local") {
+				continue
+			}
+			Expect(fcFields).To(HaveKey(n))
+		}
+	})
+	It("Config should contain all FelixConfigurationSpec fields", func() {
+		for n := range fcFields {
+			mappedName := fcFieldNameToCP[n]
+			if mappedName != "" {
+				n = mappedName
+			}
+			Expect(cpFields).To(HaveKey(n))
+		}
+	})
+})
+
+func fieldsByName(example interface{}) map[string]reflect.StructField {
+	fields := map[string]reflect.StructField{}
+	t := reflect.TypeOf(example)
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		fields[f.Name] = f
+	}
+	return fields
+}
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
