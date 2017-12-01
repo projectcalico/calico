@@ -197,6 +197,59 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
+
+			Context("when ready flag is false", func() {
+				It("errors when ADD is done", func() {
+					ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					r := false
+					ci.Spec.DatastoreReady = &r
+					ci, err = calicoClient.ClusterInformation().Update(ctx, ci, options.SetOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					_, session, _, _, _, _, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+					Expect(err).Should(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(1))
+				})
+
+				It("errors when DEL is done", func() {
+					_, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
+
+					ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					r := false
+					ci.Spec.DatastoreReady = &r
+					ci, err = calicoClient.ClusterInformation().Update(ctx, ci, options.SetOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+
+					exitCode, err := testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).ShouldNot(Equal(0))
+				})
+			})
+
+			Context("when ready flag is missing", func() {
+				It("errors when ADD is done", func() {
+					_, err := calicoClient.ClusterInformation().Delete(ctx, "default", options.DeleteOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					_, session, _, _, _, _, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+					Expect(err).Should(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(1))
+				})
+
+				It("errors when DEL is done", func() {
+					_, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
+
+					_, err = calicoClient.ClusterInformation().Delete(ctx, "default", options.DeleteOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					exitCode, err := testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).ShouldNot(Equal(0))
+				})
+			})
 		})
 	})
 
