@@ -18,19 +18,14 @@ copyright_owner="Tigera, Inc"
 
 [ -f "git-hooks/settings.sh" ] && source "git-hooks/settings.sh"
 
-# Run go fmt over the changed files.
-echo "Checking changed files with gofmt..."
-gofmt_failed=false
+# Run goimports over the changed files.
+echo "Running code format checks..."
+format_failed=false
 repo_loc_failed=false
-for filename in $changed_go_files; do
-  if [ ! -e "${filename}" ]; then
-    continue;
-  fi
-  if gofmt -d "${filename}" | grep '.'; then
-    echo "  gofmt would make changes to file:" ${filename}
-    gofmt_failed=true
-  fi
-done
+if ! make static-checks; then
+  echo "  Code formatting checks failed"
+  format_failed=true
+fi
 
 echo "Checking repo location..."
 for filename in $all_go_files; do
@@ -52,10 +47,10 @@ for filename in $changed_go_files; do
   fi
 done
 
-if $gofmt_failed; then
+if $format_failed; then
   echo
-  echo "Some files failed gofmt check.  Run "
-  echo "  glide nv | xargs go fmt"
+  echo "Some files failed code formatting check.  Run "
+  echo "  make format-code"
   echo "to format all files."
 fi
 
@@ -76,7 +71,7 @@ if $repo_loc_failed; then
   echo "projectcalico/libcalico-go."
 fi
 
-if $copyright_check_failed || $repo_loc_failed || $gofmt_failed; then
+if $copyright_check_failed || $repo_loc_failed || $format_failed; then
   echo
   exit 1
 fi

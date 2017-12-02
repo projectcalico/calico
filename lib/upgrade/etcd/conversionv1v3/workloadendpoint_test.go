@@ -27,8 +27,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var wepTable = []struct {
@@ -374,7 +374,7 @@ func TestBadK8sWorkloadID(t *testing.T) {
 		}
 		_, err := w.BackendV1ToAPIV3(wepBackendV1)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("malformed k8s workload ID 'default/frontend-5gs43': workload was not added "+
+		Expect(err.Error()).To(Equal("malformed k8s workload ID 'default/frontend-5gs43': workload was not added " +
 			"through the Calico CNI plugin and cannot be converted"))
 	})
 }
