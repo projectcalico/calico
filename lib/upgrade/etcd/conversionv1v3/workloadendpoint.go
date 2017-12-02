@@ -240,9 +240,9 @@ func convertProfiles(v1Profiles []string) []string {
 	for _, p := range v1Profiles {
 		if strings.HasPrefix(p, "k8s_ns.") {
 			prof := "kns." + strings.TrimPrefix(p, "k8s_ns.")
-			v3Profiles = append(v3Profiles, prof)
+			v3Profiles = append(v3Profiles, convertName(prof))
 		} else {
-			v3Profiles = append(v3Profiles, p)
+			v3Profiles = append(v3Profiles, convertName(p))
 		}
 	}
 
