@@ -8,7 +8,7 @@ import:
 - package: github.com/kelseyhightower/envconfig
   version: ~1.3.0
 - package: github.com/projectcalico/libcalico-go
-  version: v1.7.3
+  version: v1.7.x-series
 - package: github.com/projectcalico/felix
   version: 2.6.x-series
   subpackages:
