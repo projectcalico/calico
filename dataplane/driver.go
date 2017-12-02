@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataplanedriver
+package dataplane
 
 import (
 	"net"
@@ -23,8 +23,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/dataplane-drivers/extdataplane"
-	"github.com/projectcalico/felix/dataplane-drivers/intdataplane"
+	"github.com/projectcalico/felix/dataplane/external"
+	"github.com/projectcalico/felix/dataplane/linux"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
@@ -34,7 +34,7 @@ import (
 
 func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.HealthAggregator) (DataplaneDriver, *exec.Cmd) {
 	if configParams.UseInternalDataplaneDriver {
-		log.Info("Using internal dataplane driver.")
+		log.Info("Using internal (linux) dataplane driver.")
 		// Dedicated mark bits for accept and pass actions.  These are long lived bits
 		// that we use for communicating between chains.
 		markAccept := configParams.NextIptablesMark()

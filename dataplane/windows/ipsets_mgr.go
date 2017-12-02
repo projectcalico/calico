@@ -19,7 +19,7 @@ package windataplane
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/ipsets"
+	"github.com/projectcalico/felix/dataplane/windows/ipsets"
 	"github.com/projectcalico/felix/proto"
 )
 

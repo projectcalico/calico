@@ -19,7 +19,7 @@ package windataplane
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
+	"github.com/projectcalico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -41,16 +41,16 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
-		m.policysetsDataplane.AddOrReplacePolicySet(msg.Id.Name, msg.Policy)
+		m.policysetsDataplane.AddOrReplacePolicySet(policysets.PolicyNamePrefix+msg.Id.Name, msg.Policy)
 	case *proto.ActivePolicyRemove:
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyRemove")
-		m.policysetsDataplane.RemovePolicySet(msg.Id.Name)
+		m.policysetsDataplane.RemovePolicySet(policysets.PolicyNamePrefix + msg.Id.Name)
 	case *proto.ActiveProfileUpdate:
 		log.WithField("profileId", msg.Id).Info("Processing ActiveProfileUpdate")
-		m.policysetsDataplane.AddOrReplacePolicySet(msg.Id.Name, msg.Profile)
+		m.policysetsDataplane.AddOrReplacePolicySet(policysets.ProfileNamePrefix+msg.Id.Name, msg.Profile)
 	case *proto.ActiveProfileRemove:
 		log.WithField("profileId", msg.Id).Info("Processing ActiveProfileRemove")
-		m.policysetsDataplane.RemovePolicySet(msg.Id.Name)
+		m.policysetsDataplane.RemovePolicySet(policysets.ProfileNamePrefix + msg.Id.Name)
 	}
 }
 

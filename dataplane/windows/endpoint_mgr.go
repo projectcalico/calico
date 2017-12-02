@@ -20,13 +20,12 @@ import (
 	"errors"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	hns "github.com/Microsoft/hcsshim"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
+	"github.com/projectcalico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -65,8 +64,6 @@ type endpointManager struct {
 	// addressToEndpointId serves as a hns endpoint id cache. It enables us to lookup the hns
 	// endpoint id for a given endpoint ip address.
 	addressToEndpointId map[string]string
-	// read-write lock to protect access to the addressToEndpointId map during cache updates.
-	endpointLock sync.RWMutex
 	// lastCacheUpdate records the last time that the addressToEndpointId map was refreshed.
 	lastCacheUpdate time.Time
 }
@@ -100,6 +97,9 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 	case *proto.WorkloadEndpointRemove:
 		log.WithField("workloadEndpointId", msg.Id).Info("Processing WorkloadEndpointRemove")
 		m.pendingWlEpUpdates[*msg.Id] = nil
+	case *proto.IPSetUpdate:
+		log.WithField("ipSetId", msg.Id).Info("Processing IPSetUpdate")
+		m.ProcessIpSetUpdate(msg.Id)
 	case *proto.IPSetDeltaUpdate:
 		log.WithField("ipSetId", msg.Id).Info("Processing IPSetDeltaUpdate")
 		m.ProcessIpSetUpdate(msg.Id)
@@ -121,9 +121,6 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		return err
 	}
 
-	// lock is taken to pend any read attempts while the cache is being cleared + repopulated
-	m.endpointLock.Lock()
-
 	log.Debug("Clearing the endpoint cache")
 	m.addressToEndpointId = make(map[string]string)
 
@@ -137,8 +134,6 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 
 	log.Infof("Cache refresh is complete. %v endpoints were cached", len(m.addressToEndpointId))
 	m.lastCacheUpdate = time.Now()
-
-	m.endpointLock.Unlock()
 
 	return nil
 }
@@ -163,7 +158,6 @@ func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
 
 		var activePolicyNames []string
 		if len(workload.Tiers) > 0 {
-			// Todo: Check on this merge approach, as rules also have direction specified
 			activePolicyNames = append(activePolicyNames, workload.Tiers[0].IngressPolicies...)
 			activePolicyNames = append(activePolicyNames, workload.Tiers[0].EgressPolicies...)
 		} else {
@@ -260,8 +254,10 @@ func (m *endpointManager) applyRules(workloadId proto.WorkloadEndpointID, endpoi
 	var rules []*hns.ACLPolicy
 	if len(policyNames) > 0 {
 		rules = m.policysetsDataplane.GetPolicySetRules(policyNames)
-		for _, rule := range rules {
-			logCxt.WithField("rule", rule).Debug("Complete set of rules to be applied")
+		if log.GetLevel() >= log.DebugLevel {
+			for _, rule := range rules {
+				logCxt.WithField("rule", rule).Debug("Complete set of rules to be applied")
+			}
 		}
 	} else {
 		logCxt.Info("No policies/profiles were specified, all rules will be removed from this endpoint")
@@ -287,9 +283,7 @@ func (m *endpointManager) getHnsEndpointId(ip string) (string, error) {
 	allowRefresh := true
 	for {
 		// First check the endpoint cache
-		m.endpointLock.RLock()
 		id, ok := m.addressToEndpointId[ip]
-		m.endpointLock.RUnlock()
 		if ok {
 			log.WithFields(log.Fields{"ip": ip, "id": id}).Info("Resolved hns endpoint id")
 			return id, nil

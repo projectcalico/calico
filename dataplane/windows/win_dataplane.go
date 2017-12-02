@@ -17,16 +17,16 @@
 package windataplane
 
 import (
-	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/ipsets"
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/policysets"
+	"github.com/projectcalico/felix/dataplane/windows/ipsets"
+	"github.com/projectcalico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/felix/jitter"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/throttle"
+	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 const (
@@ -40,8 +40,17 @@ const (
 	reschedDelay = time.Duration(5) * time.Second
 )
 
+var (
+	processStartTime time.Time
+)
+
+func init() {
+	processStartTime = time.Now()
+}
+
 type Config struct {
-	IPv6Enabled bool
+	IPv6Enabled      bool
+	HealthAggregator *health.HealthAggregator
 }
 
 // winDataplane implements an in-process Felix dataplane driver capable of applying network policy
@@ -88,6 +97,9 @@ type WindowsDataplane struct {
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
 	// call apply().
 	dataplaneNeedsSync bool
+	// doneFirstApply is set after we finish the first update to the dataplane. It indicates
+	// that the dataplane should now be in sync.
+	doneFirstApply bool
 	// the reschedule timer/channel enable us to force the dataplane driver to attempt to
 	// apply any pending updates to the dataplane. This is only enabled and used if a previous
 	// apply operation has failed and needs to be retried.
@@ -100,6 +112,11 @@ type WindowsDataplane struct {
 	// to the dataplane driver. This isn't really used currently, but will be in the future.
 	config Config
 }
+
+const (
+	healthName     = "win_dataplane"
+	healthInterval = 10 * time.Second
+)
 
 // Interface for Managers. Each Manager is responsible for processing updates from felix and
 // for applying any necessary updates to the dataplane.
@@ -145,6 +162,16 @@ func NewWinDataplaneDriver(config Config) *WindowsDataplane {
 	dp.RegisterManager(newPolicyManager(dp.policySets))
 	dp.RegisterManager(newEndpointManager(dp.policySets))
 
+	// Register that we will report liveness and readiness.
+	if config.HealthAggregator != nil {
+		log.Info("Registering to report health.")
+		config.HealthAggregator.RegisterReporter(
+			healthName,
+			&health.HealthReport{Live: true, Ready: true},
+			healthInterval*2,
+		)
+	}
+
 	return dp
 }
 
@@ -174,7 +201,10 @@ func (d *WindowsDataplane) RecvMessage() (interface{}, error) {
 // to the managers for processing. After managers have had a chance to process the updates
 // the loop will call Apply() to actually apply changes to the dataplane.
 func (d *WindowsDataplane) loopUpdatingDataplane() {
-	log.Debug("Started internal dataplane driver loop")
+	log.Debug("Started windows dataplane driver loop")
+
+	healthTicks := time.NewTicker(healthInterval).C
+	d.reportHealth()
 
 	// Fill the apply throttle leaky bucket.
 	throttleC := jitter.NewTicker(100*time.Millisecond, 10*time.Millisecond).C
@@ -184,14 +214,15 @@ func (d *WindowsDataplane) loopUpdatingDataplane() {
 
 	// function to pass messages to the managers for processing
 	processMsgFromCalcGraph := func(msg interface{}) {
-		log.WithField("msg", msgStringer{msg: msg}).Infof(
+		log.WithField("msg", proto.MsgStringer{Msg: msg}).Infof(
 			"Received %T update from calculation graph", msg)
 		for _, mgr := range d.allManagers {
 			mgr.OnUpdate(msg)
 		}
 		switch msg.(type) {
 		case *proto.InSync:
-			log.Info("Datastore in sync, flushing the dataplane for the first time...")
+			log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
+				"Datastore in sync, flushing the dataplane for the first time...")
 			datastoreInSync = true
 		}
 	}
@@ -217,6 +248,8 @@ func (d *WindowsDataplane) loopUpdatingDataplane() {
 			d.dataplaneNeedsSync = true
 		case <-throttleC:
 			d.applyThrottle.Refill()
+		case <-healthTicks:
+			d.reportHealth()
 		case <-d.reschedC:
 			log.Debug("Reschedule kick received")
 			d.dataplaneNeedsSync = true
@@ -239,6 +272,15 @@ func (d *WindowsDataplane) loopUpdatingDataplane() {
 				applyTime := time.Since(applyStart)
 				log.WithField("msecToApply", applyTime.Seconds()*1000.0).Info(
 					"Finished applying updates to dataplane.")
+
+				if !d.doneFirstApply {
+					log.WithField(
+						"secsSinceStart", time.Since(processStartTime).Seconds(),
+					).Info("Completed first update to dataplane.")
+					d.doneFirstApply = true
+				}
+
+				d.reportHealth()
 			} else {
 				if !beingThrottled {
 					log.Info("Dataplane updates throttled")
@@ -292,38 +334,12 @@ func (d *WindowsDataplane) apply() {
 	}
 }
 
-// msgStringer wraps an API message to customise how we stringify it.  For example, it truncates
-// the lists of members in the (potentially very large) IPSetsUpdate messages.
-type msgStringer struct {
-	msg interface{}
-}
-
-func (m msgStringer) String() string {
-	if log.GetLevel() < log.DebugLevel && m.msg != nil {
-		const truncateAt = 10
-		switch msg := m.msg.(type) {
-		case *proto.IPSetUpdate:
-			if len(msg.Members) < truncateAt {
-				return fmt.Sprintf("%v", msg)
-			}
-			return fmt.Sprintf("id:%#v members(%d):%#v(truncated)",
-				msg.Id, len(msg.Members), msg.Members[:truncateAt])
-		case *proto.IPSetDeltaUpdate:
-			if len(msg.AddedMembers) < truncateAt && len(msg.RemovedMembers) < truncateAt {
-				return fmt.Sprintf("%v", msg)
-			}
-			addedNum := truncateAt
-			removedNum := truncateAt
-			if len(msg.AddedMembers) < addedNum {
-				addedNum = len(msg.AddedMembers)
-			}
-			if len(msg.RemovedMembers) < removedNum {
-				removedNum = len(msg.RemovedMembers)
-			}
-			return fmt.Sprintf("id:%#v addedMembers(%d):%#v(truncated) removedMembers(%d):%#v(truncated)",
-				msg.Id, len(msg.AddedMembers), msg.AddedMembers[:addedNum],
-				len(msg.RemovedMembers), msg.RemovedMembers[:removedNum])
-		}
+// Invoked periodically to report health (liveness/readiness)
+func (d *WindowsDataplane) reportHealth() {
+	if d.config.HealthAggregator != nil {
+		d.config.HealthAggregator.Report(
+			healthName,
+			&health.HealthReport{Live: true, Ready: d.doneFirstApply},
+		)
 	}
-	return fmt.Sprintf("%v", m.msg)
 }

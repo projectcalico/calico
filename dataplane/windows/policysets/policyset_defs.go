@@ -21,7 +21,7 @@ import (
 
 	hns "github.com/Microsoft/hcsshim"
 
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -31,6 +31,10 @@ const (
 	// default dataplane rule priority for any rules generated
 	// from a Policy set.
 	rulePriority uint16 = 1000
+	// prefix to use for all policy names
+	PolicyNamePrefix string = "policy-"
+	// prefix to use for all profile names
+	ProfileNamePrefix string = "profile-"
 )
 
 var (

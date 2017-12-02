@@ -17,7 +17,7 @@
 package ipsets
 
 import (
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // IPSetMetadata contains the metadata for a particular IP set, such as its name and type.

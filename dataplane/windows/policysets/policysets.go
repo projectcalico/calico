@@ -22,9 +22,9 @@ import (
 	hns "github.com/Microsoft/hcsshim"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/ipsets"
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane/set"
+	"github.com/projectcalico/felix/dataplane/windows/ipsets"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // PolicySets manages a whole plane of policies/profiles
@@ -427,6 +427,9 @@ func ruleHasNegativeMatches(pRule *proto.Rule) bool {
 		return true
 	}
 	if len(pRule.NotSrcIpSetIds) > 0 || len(pRule.NotDstIpSetIds) > 0 {
+		return true
+	}
+	if len(pRule.NotSrcNamedPortIpSetIds) > 0 || len(pRule.NotDstNamedPortIpSetIds) > 0 {
 		return true
 	}
 	if pRule.NotProtocol != nil {

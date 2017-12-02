@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,24 +16,25 @@ package logutils
 
 import (
 	"io"
+	"log/syslog"
 	"os"
 	"path"
 
+	"github.com/mipearson/rfw"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 )
 
-// File destination for Windows
 func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDest *logutils.Destination, fileDirErr error, fileOpenErr error) {
 	fileDirErr = os.MkdirAll(path.Dir(configParams.LogFilePath), 0755)
-	var logFile io.Writer
-	logFile, fileOpenErr = openLogFile(configParams.LogFilePath, 0644)
+	var rotAwareFile io.Writer
+	rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
 	if fileDirErr == nil && fileOpenErr == nil {
 		fileDest = logutils.NewStreamDestination(
 			logLevel,
-			logFile,
+			rotAwareFile,
 			make(chan logutils.QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
 			counterLogErrors,
@@ -42,31 +43,27 @@ func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDe
 	return
 }
 
-// Stub, syslog destination is not used on Windows
 func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*logutils.Destination, error) {
-	return nil, nil
-}
-
-// Stub, this func is not used on Windows
-func DumpHeapMemoryOnSignal(configParams *config.Config) {
-	return
-}
-
-// A simple io.Writer for logging to file
-type FileWriter struct {
-	file *os.File
-}
-
-func (f *FileWriter) Write(p []byte) (int, error) {
-	return f.file.Write(p)
-}
-
-func openLogFile(path string, mode os.FileMode) (*FileWriter, error) {
-	var w FileWriter
-	var err error
-	w.file, err = os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, mode)
-	if err != nil {
-		return nil, err
+	// Set net/addr to "" so we connect to the system syslog server rather
+	// than a remote one.
+	net := ""
+	addr := ""
+	// The priority parameter is a combination of facility and default
+	// severity.  We want to log with the standard LOG_USER facility; the
+	// severity is actually irrelevant because the hook always overrides
+	// it.
+	priority := syslog.LOG_USER | syslog.LOG_INFO
+	tag := "calico-felix"
+	w, sysErr := syslog.Dial(net, addr, priority, tag)
+	if sysErr == nil {
+		syslogDest := logutils.NewSyslogDestination(
+			logLevel,
+			w,
+			make(chan logutils.QueuedLog, logQueueSize),
+			configParams.DebugDisableLogDropping,
+			counterLogErrors,
+		)
+		return syslogDest, sysErr
 	}
-	return &w, err
+	return nil, sysErr
 }

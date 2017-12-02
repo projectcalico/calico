@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dataplanedriver
+package dataplane
 
 import (
 	"os/exec"
@@ -20,7 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/dataplane-drivers/windataplane"
+	"github.com/projectcalico/felix/dataplane/windows"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
@@ -28,7 +28,8 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 	log.Info("Using Windows dataplane driver.")
 
 	dpConfig := windataplane.Config{
-		IPv6Enabled: configParams.Ipv6Support,
+		IPv6Enabled:      configParams.Ipv6Support,
+		HealthAggregator: healthAggregator,
 	}
 
 	winDP := windataplane.NewWinDataplaneDriver(dpConfig)
