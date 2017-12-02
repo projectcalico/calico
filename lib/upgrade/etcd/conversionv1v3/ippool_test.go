@@ -234,11 +234,10 @@ var poolTable = []struct {
 }
 
 func TestCanConvertV1ToV3IPPool(t *testing.T) {
-	RegisterTestingT(t)
 
 	for _, entry := range poolTable {
 		t.Run(entry.description, func(t *testing.T) {
-			t.Parallel()
+			RegisterTestingT(t)
 
 			p := IPPool{}
 
