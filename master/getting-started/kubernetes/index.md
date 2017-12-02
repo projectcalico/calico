@@ -74,7 +74,7 @@ the host. Instead, continue directly to the
    configmap "calico-config" created
    daemonset "calico-etcd" created
    service "calico-etcd" created
-   daemonset "calico-node" created
+   daemonset "{{site.noderunning}}" created
    deployment "calico-kube-controllers" created
    deployment "calico-policy-controller" created
    clusterrolebinding "calico-cni-plugin" created
@@ -97,7 +97,7 @@ the host. Instead, continue directly to the
    NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
    kube-system  calico-etcd-x2482                          1/1    Running  0         2m
    kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m
-   kube-system  calico-node-24h85                          2/2    Running  0         2m
+   kube-system  {{site.noderunning}}-24h85                          2/2    Running  0         2m
    kube-system  etcd-jbaker-virtualbox                     1/1    Running  0         6m
    kube-system  kube-apiserver-jbaker-virtualbox           1/1    Running  0         6m
    kube-system  kube-controller-manager-jbaker-virtualbox  1/1    Running  0         6m

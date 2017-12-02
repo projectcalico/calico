@@ -92,7 +92,7 @@ Upgrade your deployment to use the latest {{site.prodname}} versions - the proce
 will be dependent on your orchestration system (if using one).
 
 Prior to Calico v2.1, the subnet information was not detected and stored on the
-node configuration.  Thus, if you have calico/node instances that were deployed
+node configuration.  Thus, if you have `{{site.nodecontainer}}` instances that were deployed
 prior to v2.1, the node configuration may need updating to fix the host subnet.
 The subnet configuration must be set correctly for each node before `CrossSubnet`
 IPIP mode is enabled.
@@ -112,5 +112,5 @@ In this example, node1 has the correct subnet information whereas node2 needs
 to be fixed.
 
 The subnet configuration may be fixed in a few different ways depending on how
-you have deployed your calico/node containers.  This is discussed in the
+you have deployed your `{{site.nodecontainer}}` containers.  This is discussed in the
 [Configuring a Node IP Address and Subnet guide]({{site.baseurl}}/{{page.version}}/usage/configuration/node).

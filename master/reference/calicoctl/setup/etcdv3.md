@@ -126,11 +126,11 @@ Use the IPv4 endpoint:
 ETCD_ENDPOINTS=http://127.0.0.1:2379 calicoctl get bgppeers
 ```
 
-## calico/node
+## {{site.nodecontainer}}
 
 It is important to note that not only will calicoctl will use the specified keys directly
 on the host to access etcd, **it will also pass on these environment variables
-and volume mount the keys into the started calico-node container.**
+and volume mount the keys into the started `{{site.noderunning}}` container.**
 
-Therefore, configuring calico-node for etcd is easily accomplished by running
+Therefore, configuring `{{site.nodecontainer}}` for etcd is easily accomplished by running
 `calicoctl node run` with the parameters set correctly.

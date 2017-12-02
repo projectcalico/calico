@@ -2,14 +2,14 @@
 title: Running calico/node with an init system
 ---
 
-This guide explains how to run `calico/node` with an init system like
+This guide explains how to run `{{site.nodecontainer}}` with an init system like
 systemd, inside either of the following container types:
 - [Docker](#running-caliconode-in-a-docker-container)
 - [rkt](#running-caliconode-in-a-rkt-container)
 
-## Running calico/node in a Docker container
+## Running `{{site.nodecontainer}}` in a Docker container
 
-This section describes how to run `calico/node` as a Docker container.
+This section describes how to run `{{site.nodecontainer}}` as a Docker container.
 
 > **Note**: We include examples for systemd, but the commands can be 
 > applied to other init daemons such as upstart.
@@ -17,7 +17,7 @@ This section describes how to run `calico/node` as a Docker container.
 
 Included here is an `EnvironmentFile` that defines the environment
 variables for {{site.prodname}} and a sample systemd service file that uses the
-environment file and starts the `calico/node` image as a service.
+environment file and starts the `{{site.nodecontainer}}` image as a service.
 
 `calico.env` - the `EnvironmentFile`:
 
@@ -71,19 +71,19 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
 ### systemd service example
 
-`calico-node.service` - the systemd service:
+`{{site.noderunning}}.service` - the systemd service:
 
 ```shell
 [Unit]
-Description=calico-node
+Description={{site.noderunning}}
 After=docker.service
 Requires=docker.service
 
 [Service]
 EnvironmentFile=/etc/calico/calico.env
-ExecStartPre=-/usr/bin/docker rm -f calico-node
+ExecStartPre=-/usr/bin/docker rm -f {{site.noderunning}}
 ExecStart=/usr/bin/docker run --net=host --privileged \
- --name=calico-node \
+ --name={{site.noderunning}} \
  -e NODENAME=${CALICO_NODENAME} \
  -e IP=${CALICO_IP} \
  -e IP6=${CALICO_IP6} \
@@ -101,7 +101,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -v /var/run/calico:/var/run/calico \
  {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 
-ExecStop=-/usr/bin/docker stop calico-node
+ExecStop=-/usr/bin/docker stop {{site.noderunning}}
 
 Restart=on-failure
 StartLimitBurst=3
@@ -114,10 +114,10 @@ WantedBy=multi-user.target
 The systemd service above does the following on start:
   - Confirm Docker is installed under the `[Unit]` section
   - Get environment variables from the environment file above
-  - Remove existing `calico-node` container (if it exists)
-  - Start `calico/node`
+  - Remove existing `{{site.nodecontainer}}` container (if it exists)
+  - Start `{{site.nodecontainer}}`
 
-The script will also stop the calico-node container when the service is stopped.
+The script will also stop the `{{site.nodecontainer}}` container when the service is stopped.
 
 > **Note**: Depending on how you've installed Docker, the name of the Docker service
 > under the `[Unit]` section may be different (such as `docker-engine.service`).
@@ -125,11 +125,11 @@ The script will also stop the calico-node container when the service is stopped.
 {: .alert .alert-info}
 
 
-## Running calico/node in a rkt container
+## Running `{{site.nodecontainer}}` in a rkt container
 
-Each {{site.prodname}}-rkt enabled node requires the `calico/node` container to be running.
+Each {{site.prodname}}-rkt enabled node requires the `{{site.nodecontainer}}` container to be running.
 
-The `calico/node` container can be run directly through rkt and needs to be run as
+The `{{site.nodecontainer}}` container can be run directly through rkt and needs to be run as
 as a fly stage-1 container.
 
 ```shell

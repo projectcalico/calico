@@ -19,7 +19,7 @@ etcd user that has been given appropriate roles allowing access to the key
 prefixes or paths listed or linked below.
 - [cni-plugin](calico-etcdv3-paths#cni-plugin)
 - [{{site.prodname}} Kubernetes controllers](calico-etcdv3-paths#calicokube-controllers)
-- [calico/node](calico-etcdv3-paths#caliconode)
+- [{{site.nodecontainer}}](calico-etcdv3-paths#caliconode)
 - It may also be useful to create a certificate key pair for use with
   calicoctl, even creating specific ones for
   [read only access](calico-etcdv3-paths#calicoctl-read-only-access),
@@ -36,7 +36,7 @@ in etcd the components using them must be configured. Here are the same
 components listed above and links to their detailed configuration pages:
 - [cni-plugin]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
 - [{{site.prodname}} Kubernetes controllers]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
-- [calico/node]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
+- [{{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [calicoctl](/{{page.version}}/reference/calicoctl/setup/etcdv3)
 
 Below are examples and suggestions when using a hosted {{site.prodname}} install where
@@ -49,7 +49,7 @@ that run outside of Kubernetes.
 A setup that needs a certificate for each component is possible while using a
 hosted manifest. This setup requires a certificate for each different {{site.prodname}}
 component type listed above (cni-plugin, {{site.prodname}} Kubernetes controllers, and
-calico/node).
+`{{site.nodecontainer}}`).
 
 This setup needs similar updates to the manifest like what is described in
 [Using etcd RBAC to segment Kubernetes and {{site.prodname}}: Updating a hosted {{site.prodname}} manifest](kubernetes#updating-a-hosted-Calico-manifest),

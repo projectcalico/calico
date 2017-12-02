@@ -51,9 +51,9 @@ spec:
 
 #### Spec
 
-| Field       | Description                 | Accepted Values   | Schema | Default    |
-|-------------|-----------------------------|-------------------|--------|------------|
-| node        | The name of the node where this HostEndpoint resides. |      | string |
+| Field         | Description                 | Accepted Values   | Schema | Default    |
+|---------------|-----------------------------|-------------------|--------|------------|
+| node          | The name of the node where this HostEndpoint resides. |      | string |
 | interfaceName | The name of the interface on which to apply policy.      |                             | string          |
 | expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list |
 | profiles      | The list of profiles to apply to the endpoint.           |                             | list |

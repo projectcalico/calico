@@ -2,9 +2,9 @@
 title: Logging
 ---
 
-## The calico-node container
+## The {{site.nodecontainer}} container
 
-The components in the calico-node container all log to the directories under
+The components in the `{{site.nodecontainer}}` container all log to the directories under
 `/var/log/calico` inside the container.  By default this is mapped to the
 `/var/log/calico` directory on the host but can be changed by specifying a
 `--log-dir` parameter on the `calicoctl node run` command.
@@ -30,14 +30,14 @@ svlogd can also be configured to forward logs to syslog, to prefix each line
 and to filter logs. See the [documentation](http://smarden.org/runit/svlogd.8.html)
 for further details.
 
-See the following sub-sections for details on configuring the log level for
-each calico-node component.
+See the following subsections for details on configuring the log level for
+each `{{site.nodecontainer}}` component.
 
 ### Bird/Bird6
 
 Bird and Bird6 are used for distributing IPv4 and IPv6 routes between {{site.prodname}}
 enabled hosts.  The logs are output in the `bird` and `bird6` sub-directories
-of the calico/node logging directory.
+of the `{{site.nodecontainer}}` logging directory.
 
 See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
 for details on how to modify the logging level. For example:
@@ -59,7 +59,7 @@ $ calicoctl replace -f bgp.yaml
 
 Felix is the primary {{site.prodname}} agent that runs on each machine that hosts
 endpoints.  Felix is responsible for the programming of iptables rules on the
-host.  The logs are output in the `felix` sub-directory of the calico/node
+host.  The logs are output in the `felix` sub-directory of the `{{site.nodecontainer}}`
 logging directory.
 
 ```
@@ -79,7 +79,7 @@ $ calicoctl replace -f felix.yaml
 
 The confd agent generates configuration files for Felix and Bird using
 configuration data present in the etcd datastore.  The logs are output in the
-`confd` sub-directory of the calico/node logging directory.
+`confd` sub-directory of the `{{site.nodecontainer}}` logging directory.
 
 By default, the confd logging level is "debug" and cannot be changed without
 editing configuration within the node image.
@@ -90,5 +90,5 @@ For more information on the allowed levels, see the
 ## Docker network and IPAM driver
 
 When running {{site.prodname}} as a Docker network plugin, the {{site.prodname}} network driver runs
-inside the calico/node container.  The logs are output in the `libnetwork` sub-directory
-of the calico/node logging directory.
+inside the `{{site.nodecontainer}}` container.  The logs are output in the `libnetwork` sub-directory
+of the `{{site.nodecontainer}}` logging directory.
