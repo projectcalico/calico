@@ -16,6 +16,7 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func NewWorkloadEndpointClient(c *kubernetes.Clientset, a string) K8sResourceClient {
@@ -48,68 +50,22 @@ type WorkloadEndpointClient struct {
 
 func (c *WorkloadEndpointClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debug("Received Create request on WorkloadEndpoint type")
-
-	// We only patch the existing Pod to include an IP address, if one has been
-	// set on the workload endpoint.
-	// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
-	// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
-	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
-	if len(ips) > 0 {
-		log.Debugf("Applying workload with IPs: %+v", ips)
-		wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
-		if err != nil {
-			return nil, err
-		}
-		if wepID.Pod == "" {
-			return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
-		}
-		ns := kvp.Key.(model.ResourceKey).Namespace
-		pod, err := c.clientSet.CoreV1().Pods(ns).Get(wepID.Pod, metav1.GetOptions{})
-		if err != nil {
-			return nil, K8sErrorToCalico(err, kvp.Key)
-		}
-		pod.Status.PodIP = ips[0]
-		pod, err = c.clientSet.CoreV1().Pods(ns).UpdateStatus(pod)
-		if err != nil {
-			return nil, K8sErrorToCalico(err, kvp.Key)
-		}
-		log.Debugf("Successfully applied pod: %+v", pod)
-		return c.converter.PodToWorkloadEndpoint(pod)
-	}
-	return kvp, nil
+	// As a special case for the CNI plugin, try to patch the Pod with the IP that we've calculated.
+	// This works around a bug in kubelet that causes it to delay writing the Pod IP for a long time:
+	// https://github.com/kubernetes/kubernetes/issues/39113.
+	//
+	// Note: it's a bit odd to do this in the Create, but the CNI plugin uses CreateOrUpdate().  Doing it
+	// here makes sure that, if the update fails: we retry here, and, we don't report success without
+	// making the patch.
+	return c.patchPodIP(ctx, kvp)
 }
 
 func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debug("Received Update request on WorkloadEndpoint type")
-
-	// We only patch the existing Pod to include an IP address, if one has been
-	// set on the workload endpoint.
-	// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
-	// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
-	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
-	if len(ips) > 0 {
-		log.Debugf("Applying workload with IPs: %+v", ips)
-		wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
-		if err != nil {
-			return nil, err
-		}
-		if wepID.Pod == "" {
-			return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
-		}
-		ns := kvp.Key.(model.ResourceKey).Namespace
-		pod, err := c.clientSet.CoreV1().Pods(ns).Get(wepID.Pod, metav1.GetOptions{})
-		if err != nil {
-			return nil, K8sErrorToCalico(err, kvp.Key)
-		}
-		pod.Status.PodIP = ips[0]
-		pod, err = c.clientSet.CoreV1().Pods(ns).UpdateStatus(pod)
-		if err != nil {
-			return nil, K8sErrorToCalico(err, kvp.Key)
-		}
-		log.Debugf("Successfully applied pod: %+v", pod)
-		return c.converter.PodToWorkloadEndpoint(pod)
-	}
-	return kvp, nil
+	// As a special case for the CNI plugin, try to patch the Pod with the IP that we've calculated.
+	// This works around a bug in kubelet that causes it to delay writing the Pod IP for a long time:
+	// https://github.com/kubernetes/kubernetes/issues/39113.
+	return c.patchPodIP(ctx, kvp)
 }
 
 func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
@@ -118,6 +74,57 @@ func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revi
 		Identifier: key,
 		Operation:  "Delete",
 	}
+}
+
+// patchPodIP PATCHes the Kubernetes Pod associated with the given KVPair with the IP address it contains.
+// This is a no-op if there is no IP address.
+//
+// We store the IP address in an annotation because patching the PodIP directly races with changes that
+// kubelet makes so kubelet can undo our changes.
+func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
+	if len(ips) == 0 {
+		return kvp, nil
+	}
+
+	log.Debugf("PATCHing pod with IP: %v", ips[0])
+	wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
+	if err != nil {
+		return nil, err
+	}
+	if wepID.Pod == "" {
+		return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
+	}
+	// Write the IP address into an annotation.  This generates an event more quickly than
+	// waiting for kubelet to update the Status.PodIP field.
+	ns := kvp.Key.(model.ResourceKey).Namespace
+	patch, err := calculateAnnotationPatch(conversion.AnnotationPodIP, ips[0])
+	if err != nil {
+		log.WithError(err).Error("Failed to calculate Pod patch.")
+		return nil, err
+	}
+	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch)
+	if err != nil {
+		return nil, K8sErrorToCalico(err, kvp.Key)
+	}
+	log.Debugf("Successfully PATCHed pod to add podIP annotation: %+v", pod)
+	return c.converter.PodToWorkloadEndpoint(pod)
+}
+
+const annotationPatchTemplate = `{"metadata": {"annotations": {%s: %s}}}`
+
+func calculateAnnotationPatch(name, value string) ([]byte, error) {
+	// Marshal the key and value in order to make sure all the escaping is done correctly.
+	nameJson, err := json.Marshal(name)
+	if err != nil {
+		return nil, err
+	}
+	valueJson, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	patch := []byte(fmt.Sprintf(annotationPatchTemplate, nameJson, valueJson))
+	return patch, nil
 }
 
 func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
@@ -132,7 +139,7 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 	if wepID.Pod == "" {
 		return nil, cerrors.ErrorResourceDoesNotExist{
 			Identifier: key,
-			Err: errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
+			Err:        errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
 		}
 	}
 
