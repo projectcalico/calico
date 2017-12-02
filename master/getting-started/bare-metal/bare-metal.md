@@ -205,24 +205,24 @@ cat << EOF | calicoctl create -f -
     selector: "all()"
     order: 0
     ingress:
-    - action: allow
-      protocol: tcp
+    - action: Allow
+      protocol: TCP
       source:
         nets:
         - "<your management CIDR>"
       destination:
         ports: [22]
-    - action: allow
-      protocol: icmp
+    - action: Allow
+      protocol: ICMP
     egress:
-    - action: allow
-      protocol: tcp
+    - action: Allow
+      protocol: TCP
       destination:
         nets:
         - "<your etcd IP>/32"
         ports: [<your etcd ports>]
-    - action: allow
-      protocol: udp
+    - action: Allow
+      protocol: UDP
       destination:
         ports: [67]
 EOF
@@ -371,12 +371,12 @@ cat << EOF | dist/calicoctl create -f -
     selector: "role==\"webserver\""
     order: 100
     ingress:
-    - action: allow
-      protocol: tcp
+    - action: Allow
+      protocol: TCP
       destination:
         ports: [80]
     egress:
-    - action: allow
+    - action: Allow
 EOF
 ```
 
@@ -671,7 +671,7 @@ calicoctl apply -f - <<EOF
     preDNAT: true
     applyOnForward: true
     ingress:
-      - action: allow
+      - action: Allow
         source:
           nets: [10.240.0.0/16, 192.168.0.0/16]
     selector: has(host-endpoint)
@@ -684,7 +684,7 @@ calicoctl apply -f - <<EOF
     preDNAT: true
     applyOnForward: true
     ingress:
-      - action: deny
+      - action: Deny
     selector: has(host-endpoint)
 EOF
 ```
@@ -721,7 +721,7 @@ calicoctl apply -f - <<EOF
   spec:
     order: 10
     egress:
-      - action: allow
+      - action: Allow
     selector: has(host-endpoint)
 EOF
 ```
@@ -784,8 +784,8 @@ calicoctl apply -f - <<EOF
     applyOnForward: true
     order: 10
     ingress:
-      - action: allow
-        protocol: tcp
+      - action: Allow
+        protocol: TCP
         destination:
           ports: [31852]
     selector: has(host-endpoint)
