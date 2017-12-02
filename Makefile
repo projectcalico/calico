@@ -65,6 +65,9 @@ vendor vendor/.up-to-date: glide.lock
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
+container: bin/confd
+	docker build -t calico/confd .
+
 bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
 	$(DOCKER_GO_BUILD) \
@@ -135,9 +138,6 @@ bin/bird6:
 
 bin/etcdctl:
 	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VER)/etcd-$(ETCD_VER)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VER)-linux-$(ARCH)/etcdctl 
-
-container:
-	@echo success!
 
 .PHONY: clean
 clean:
