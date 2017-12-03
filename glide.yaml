@@ -12,6 +12,8 @@ import:
   - pkg/ip
   - pkg/ipam
   - pkg/ns
+- package: github.com/coreos/go-iptables
+  version: ^0.2.0
 - package: github.com/golang/glog
 - package: github.com/onsi/ginkgo
   version: ^1.4.0
@@ -20,7 +22,7 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: master
+  version: c07bf34a9a362e92e5e51853fd5fe03c27ecf333
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
