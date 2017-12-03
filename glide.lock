@@ -1,5 +1,5 @@
-hash: b2fd75c4f24f54d6daf9fd2badadff9c628312cb4771826f6999abb851e4ddee
-updated: 2017-11-29T16:41:36.285031905-08:00
+hash: ad5b4d15b730b4b0f4fcb3be9ad71f89216b56c2e1ee27ecb60001a9a5b84ce3
+updated: 2017-12-03T20:35:27.841168863Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -117,7 +117,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 4531165ce280a843ec4beff42a101542928a43db
+  version: fd11e200c8b2e4d23c31945e330b2768b83d46f5
   subpackages:
   - client/v2
   - models
@@ -149,7 +149,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: 06020f85339e21b2478f756a78e295255ffa4d6a
 - name: github.com/olekukonko/tablewriter
-  version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
+  version: 65fec0d89a572b4367094e2058d3ebe667de3b60
 - name: github.com/onsi/ginkgo
   version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
@@ -172,7 +172,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 1eecca0ba8e6f5ea5a431ce21d3aee2af0b4c90b
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -213,7 +213,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: eb2220e43561b3ec398486183b450cd5a50cdbad
+  version: c07bf34a9a362e92e5e51853fd5fe03c27ecf333
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -255,7 +255,7 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -291,11 +291,11 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: f67b75edbf5e3bb7dfe70bb788610693a71be3d1
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
