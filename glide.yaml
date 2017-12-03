@@ -12,6 +12,8 @@ import:
   - pkg/ip
   - pkg/ipam
   - pkg/ns
+- package: github.com/coreos/go-iptables
+  version: ^0.2.0
 - package: github.com/golang/glog
 - package: github.com/onsi/ginkgo
   version: ^1.4.0
