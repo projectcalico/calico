@@ -260,6 +260,83 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Revision).To(Equal("1234"))
 	})
 
+	It("should look in the calico annotation for the IP", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                   "annotation",
+					"cni.projectcalico.org/podIP": "192.168.0.1",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
+	})
+
+	It("should return an error for a bad pod IP", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"cni.projectcalico.org/podIP": "foobar",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		_, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should prioritise PodIP over the calico annotation for the IP", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                   "annotation",
+					"cni.projectcalico.org/podIP": "192.168.0.1",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.2",
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.2/32"))
+	})
+
 	It("should not parse a Pod without an IP to a WorkloadEndpoint", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

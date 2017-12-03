@@ -1199,6 +1199,134 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	})
 
+	defineAnnotationTest := func(preExistingAnnotations map[string]string) {
+		pod := &k8sapi.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "test-syncer-basic-pod",
+				Namespace:   "default",
+				Annotations: preExistingAnnotations,
+			},
+			Spec: k8sapi.PodSpec{
+				NodeName: "127.0.0.1",
+				Containers: []k8sapi.Container{
+					{
+						Name:    "container1",
+						Image:   "busybox",
+						Command: []string{"sleep", "3600"},
+					},
+				},
+			},
+		}
+		// Note: assigning back to pod variable in order to pick up revision information. If we don't do that then
+		// the call to UpdateStatus() below would succeed, but it would overwrite our annotation patch.
+		pod, err := c.clientSet.CoreV1().Pods("default").Create(pod)
+		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
+
+		// Make sure we clean up after ourselves.  This might fail if we reach the
+		// test below which deletes this pod, but that's OK.
+		defer func() {
+			log.Warnf("[TEST] Cleaning up test pod: %s", pod.ObjectMeta.Name)
+			_ = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
+		}()
+		By("Creating a pod", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Assigning an IP", func() {
+			// Add the IP via our API.  This simulates what the CNI plugin does.
+			wep, err := c.Get(
+				ctx,
+				model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint},
+				"",
+			)
+			Expect(err).NotTo(HaveOccurred())
+			wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks = []string{"192.168.1.1"}
+			fmt.Printf("Updating Wep %+v\n", wep.Value.(*apiv3.WorkloadEndpoint).Spec)
+			_, err = c.Update(ctx, wep)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Get the pod through the k8s API to check the annotation has appeared.
+			p, err := c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(p.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
+
+			// Get the wep through our API to check that the annotation round-trips.
+			wep, err = c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.1.1/32"))
+		})
+
+		By("Setting the pod phase to Running", func() {
+			// Try to update the pod using the old revision; this should fail because our patch made it
+			// stale.
+			pod.Status.Phase = k8sapi.PodRunning
+			_, err = c.clientSet.CoreV1().Pods("default").UpdateStatus(pod)
+			Expect(err).To(HaveOccurred())
+
+			// Re-get the pod and try again...
+			pod, err = c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			pod.Status.Phase = k8sapi.PodRunning
+			pod, err = c.clientSet.CoreV1().Pods("default").UpdateStatus(pod)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Waiting for the pod to start", func() {
+			// Wait up to 120s for pod to start running.
+			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
+
+			for i := 0; i < 120; i++ {
+				p, err := c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				if p.Status.Phase == k8sapi.PodRunning {
+					// Pod is running
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+
+			pod, err = c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pod.Status.Phase).To(Equal(k8sapi.PodRunning))
+			Expect(pod.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
+			for k, v := range preExistingAnnotations {
+				Expect(pod.Annotations[k]).To(Equal(v))
+			}
+		})
+
+		expectedKVP := model.KVPair{
+			Key: model.WorkloadEndpointKey{
+				Hostname:       "127.0.0.1",
+				OrchestratorID: "k8s",
+				WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
+				EndpointID:     "eth0",
+			},
+		}
+
+		// We only get this update if the Pod passes our check that it has an IP.
+		By("Expecting an update with type 'KVUpdated' on the Syncer API", func() {
+			cb.ExpectExists([]api.Update{
+				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVUpdated},
+			})
+		})
+
+		By("Deleting the Pod and expecting the wep to be deleted", func() {
+			err = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			cb.ExpectDeleted([]model.KVPair{expectedKVP})
+		})
+	}
+
+	It("should patch Pod (with no existing annotations) with our PodIP annotation", func() {
+		defineAnnotationTest(nil)
+	})
+
+	It("should patch Pod (with existing annotations) with our PodIP annotation", func() {
+		defineAnnotationTest(map[string]string{
+			"anotherAnnotation": "someValue",
+		})
+	})
+
 	// Add a defer to wait for all pods to clean up.
 	defer func() {
 		It("should clean up all pods", func() {

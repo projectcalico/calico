@@ -140,7 +140,28 @@ func (c Converter) IsHostNetworked(pod *kapiv1.Pod) bool {
 }
 
 func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
-	return pod.Status.PodIP != ""
+	return pod.Status.PodIP != "" || pod.Annotations[AnnotationPodIP] != ""
+}
+
+// GetPodIPs extracts the IP addresses from a Kubernetes Pod.  At present, only a single IP
+// is expected/supported.  GetPodIPs loads the IP either from the PodIP field, if present, or
+// the calico podIP annotation.
+func (c Converter) GetPodIPs(pod *kapiv1.Pod) ([]string, error) {
+	var podIP string
+	if podIP = pod.Status.PodIP; podIP != "" {
+		log.WithField("ip", podIP).Debug("PodIP field filled in.")
+	} else if podIP = pod.Annotations[AnnotationPodIP]; podIP != "" {
+		log.WithField("ip", podIP).Debug("PodIP missing, falling back on Calico annotation.")
+	} else {
+		log.WithField("ip", podIP).Debug("Pod has no IP.")
+		return nil, nil
+	}
+	_, ipNet, err := cnet.ParseCIDROrIP(podIP)
+	if err != nil {
+		log.WithFields(log.Fields{"ip": podIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
+		return nil, err
+	}
+	return []string{ipNet.String()}, nil
 }
 
 // PodToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
@@ -148,7 +169,7 @@ func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
 // PodToWorkloadEndpoint requires a Pods Name and Node Name to be populated. It will
 // fail to convert from a Pod to WorkloadEndpoint otherwise.
 func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
-
+	log.WithField("pod", pod).Debug("Converting pod to WorkloadEndpoint")
 	// Get all the profiles that apply
 	var profiles []string
 
@@ -173,14 +194,9 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 
 	// An IP address may not yet be assigned (or may have been removed for a Pod deletion), so
 	// handle a missing IP gracefully.
-	ipNets := []string{}
-	if c.HasIPAddress(pod) {
-		_, ipNet, err := cnet.ParseCIDROrIP(pod.Status.PodIP)
-		if err != nil {
-			log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
-			return nil, err
-		}
-		ipNets = append(ipNets, ipNet.String())
+	ipNets, err := c.GetPodIPs(pod)
+	if err != nil {
+		return nil, err
 	}
 
 	// Generate the interface name based on workload.  This must match
