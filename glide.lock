@@ -1,5 +1,5 @@
-hash: 69a9d041dd0c907599b8b86f5b6563bb8e2adeb9179ebdcdf7417113d6bc6a30
-updated: 2017-11-29T12:52:46.702521903-08:00
+hash: 0b38e96493e13e3445c8c70ea3f1c2a3fcf535f5c4eb704535bc9df43d0de95c
+updated: 2017-12-03T20:33:48.942104569Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -44,7 +44,7 @@ imports:
   - pkg/tlsutil
   - pkg/transport
 - name: github.com/coreos/go-iptables
-  version: 259c8e6a4275d497442c721fa52204d7a58bde8b
+  version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
   subpackages:
   - iptables
 - name: github.com/davecgh/go-spew
@@ -188,7 +188,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 70c29d49cca7c243c0447367328b734dd42dd24a
+  version: c07bf34a9a362e92e5e51853fd5fe03c27ecf333
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -253,11 +253,11 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
