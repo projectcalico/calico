@@ -17,8 +17,8 @@ package conversionv1v3
 import (
 	"testing"
 
-	cnet "net"
 	. "github.com/onsi/gomega"
+	cnet "net"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"

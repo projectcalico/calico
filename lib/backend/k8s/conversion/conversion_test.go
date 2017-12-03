@@ -287,6 +287,26 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
 	})
 
+	It("should return an error for a bad pod IP", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"cni.projectcalico.org/podIP": "foobar",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		_, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("should prioritise PodIP over the calico annotation for the IP", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

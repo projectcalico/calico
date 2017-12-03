@@ -1199,11 +1199,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	})
 
-	It("should handle patching a Pod with our IP address annotation", func() {
+	defineAnnotationTest := func(preExistingAnnotations map[string]string) {
 		pod := &k8sapi.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-syncer-basic-pod",
-				Namespace: "default",
+				Name:        "test-syncer-basic-pod",
+				Namespace:   "default",
+				Annotations: preExistingAnnotations,
 			},
 			Spec: k8sapi.PodSpec{
 				NodeName: "127.0.0.1",
@@ -1216,7 +1217,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		// Note: assigning back to pod variable in order to pick up revision information. If we don't do tha then
+		// Note: assigning back to pod variable in order to pick up revision information. If we don't do that then
 		// the call to UpdateStatus() below would succeed, but it would overwrite our annotation patch.
 		pod, err := c.clientSet.CoreV1().Pods("default").Create(pod)
 		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
@@ -1288,6 +1289,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pod.Status.Phase).To(Equal(k8sapi.PodRunning))
 			Expect(pod.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
+			for k, v := range preExistingAnnotations {
+				Expect(pod.Annotations[k]).To(Equal(v))
+			}
 		})
 
 		expectedKVP := model.KVPair{
@@ -1310,6 +1314,16 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			err = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			cb.ExpectDeleted([]model.KVPair{expectedKVP})
+		})
+	}
+
+	It("should patch Pod (with no existing annotations) with our PodIP annotation", func() {
+		defineAnnotationTest(nil)
+	})
+
+	It("should patch Pod (with existing annotations) with our PodIP annotation", func() {
+		defineAnnotationTest(map[string]string{
+			"anotherAnnotation": "someValue",
 		})
 	})
 

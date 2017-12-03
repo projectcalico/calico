@@ -195,6 +195,9 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	// An IP address may not yet be assigned (or may have been removed for a Pod deletion), so
 	// handle a missing IP gracefully.
 	ipNets, err := c.GetPodIPs(pod)
+	if err != nil {
+		return nil, err
+	}
 
 	// Generate the interface name based on workload.  This must match
 	// the host-side veth configured by the CNI plugin.
