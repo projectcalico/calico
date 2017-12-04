@@ -2,12 +2,12 @@
 title: Host Endpoint Resource (HostEndpoint)
 ---
 
-A host endpoint resource (`HostEndpoint`) represents an interface attached to a host that is running Calico.
+A host endpoint resource (`HostEndpoint`) represents an interface attached to a host that is running {{site.prodname}}.
 
-Each host endpoint may include a set of labels and list of profiles that Calico
+Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
 will use to apply
 [policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
-to the interface.  If no profiles or labels are applied, Calico will not apply
+to the interface.  If no profiles or labels are applied, {{site.prodname}} will not apply
 any policy.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
@@ -34,30 +34,30 @@ spec:
   ports:
   - name: some-port
     port: 1234
-    protocol: tcp
+    protocol: TCP
   - name: another-port
     port: 5432
-    protocol: udp
+    protocol: UDP
 ```
 
 ### HostEndpoint Definition
 
 #### Metadata
 
-| Field       | Description                 | Accepted Values   | Schema  |
-|-------------|-----------------------------|-------------------|---------|
-| name        | The name of this hostEndpoint. Required. |  Alphanumeric string with optional `.`, `_`, or `-`. | string |
-| labels      | A set of labels to apply to this endpoint. |      | map    |
+| Field   | Description                                | Accepted Values                                     | Schema |
+|---------|--------------------------------------------|-----------------------------------------------------|--------|
+| name    | The name of this hostEndpoint. Required.   | Alphanumeric string with optional `.`, `_`, or `-`. | string |
+| labels  | A set of labels to apply to this endpoint. |                                                     | map    |
 
 #### Spec
 
-| Field       | Description                 | Accepted Values   | Schema | Default    |
-|-------------|-----------------------------|-------------------|--------|------------|
-| node        | The name of the node where this HostEndpoint resides. |      | string |
-| interfaceName | The name of the interface on which to apply policy.      |                             | string          |
-| expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list |
-| profiles      | The list of profiles to apply to the endpoint.           |                             | list |
-| ports         | List on named ports that this workload exposes. | | List of [EndpointPorts](#endpointport) |
+| Field         | Description                                              | Accepted Values             | Schema                                 | Default |
+|---------------|----------------------------------------------------------|-----------------------------|----------------------------------------|---------|
+| node          | The name of the node where this HostEndpoint resides.    |                             | string                                 |
+| interfaceName | The name of the interface on which to apply policy.      |                             | string                                 |
+| expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list                                   |
+| profiles      | The list of profiles to apply to the endpoint.           |                             | list                                   |
+| ports         | List on named ports that this workload exposes.          |                             | List of [EndpointPorts](#endpointport) |
 
 #### EndpointPort
 
