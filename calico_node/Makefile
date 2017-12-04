@@ -1,6 +1,7 @@
 ###############################################################################
 # vX.Y format: update during major release process
 RELEASE_STREAM ?= v2.6
+export RELEASE_STREAM
 
 ###############################################################################
 GO_BUILD_VER?=v0.8
@@ -688,4 +689,3 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
-
