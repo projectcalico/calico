@@ -106,6 +106,9 @@ PACKAGE_NAME?=github.com/projectcalico/calico/calico_node
 
 LIBCALICOGO_PATH?=none
 
+# Whether the update-felix target should pull the felix image.
+PULL_FELIX?=true
+
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.yaml
@@ -195,7 +198,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	-docker rm -f calico-felix
 	# Latest felix binaries are stored in automated builds of calico/felix.
 	# To get them, we create (but don't start) a container from that image.
-	docker pull $(FELIX_CONTAINER_NAME)
+	if $(PULL_FELIX); then docker pull $(FELIX_CONTAINER_NAME); fi
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
