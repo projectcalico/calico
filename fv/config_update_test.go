@@ -44,6 +44,20 @@ var _ = Context("Config update tests, after starting felix", func() {
 		return felix.GetPIDs("calico-felix")
 	}
 
+	updateFelixPID := func() {
+		// Get Felix's PID.  This retry loop ensures that we don't get tripped up if we see multiple
+		// PIDs, which can happen transiently when Felix forks off a subprocess.
+		start := time.Now()
+		for {
+			pids := getFelixPIDs()
+			if len(pids) == 1 {
+				felixInitialPID = pids[0]
+				break
+			}
+			Expect(time.Since(start)).To(BeNumerically("<", time.Second))
+		}
+	}
+
 	BeforeEach(func() {
 		etcd = containers.RunEtcd()
 
@@ -57,18 +71,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 		_, err := client.Nodes().Create(felixNode)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Get Felix's PID.  This retry loop ensures that we don't get tripped up if we see multiple
-		// PIDs, which can happen transiently when Felix forks off a subprocess.
-		start := time.Now()
-		for {
-			pids := getFelixPIDs()
-			Expect(pids).NotTo(BeEmpty())
-			if len(pids) == 1 {
-				felixInitialPID = pids[0]
-				break
-			}
-			Expect(time.Since(start)).To(BeNumerically("<", time.Second))
-		}
+		updateFelixPID()
 	})
 
 	AfterEach(func() {
@@ -156,11 +159,33 @@ var _ = Context("Config update tests, after starting felix", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should exit after a delay", func() {
+		shouldDieAfterAWhile := func() {
 			// Felix has a 2s timer before it restarts so we should see the same PID for a while.
 			Consistently(getFelixPIDs, "1s", "100ms").Should(ContainElement(felixInitialPID))
 			// TODO(smc) When porting this test to v3.0, need to check felix restarts without killing container.
 			Eventually(felix.ListedInDockerPS, "5s", "100ms").Should(BeFalse())
+		}
+
+		It("should exit after a delay", shouldDieAfterAWhile)
+
+		Context("after restart", func() {
+
+			BeforeEach(func() {
+				Eventually(felix.ListedInDockerPS, "5s", "100ms").Should(BeFalse())
+				felix.Stop()
+
+				felix = containers.RunFelix(etcd.IP)
+				updateFelixPID()
+			})
+
+			It("should stay up until we delete the config again", func() {
+				shouldStayUp()
+
+				err := client.Config().UnsetFelixConfig("InterfacePrefix", "")
+				Expect(err).NotTo(HaveOccurred())
+
+				shouldDieAfterAWhile()
+			})
 		})
 	})
 })
