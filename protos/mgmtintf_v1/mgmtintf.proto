@@ -4,8 +4,8 @@ package mgmtintf.v1;
 
 
 service NodeAgentMgmt {
-	rpc AddListener(WorkloadInfo) returns (Response);
-	rpc DelListener(WorkloadInfo) returns (Response);
+	rpc WorkloadAdded(WorkloadInfo) returns (Response);
+	rpc WorkloadDeleted(WorkloadInfo) returns (Response);
 }
 
 message Response {

@@ -9,6 +9,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
 	pbmgmt "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 	pb "github.com/colabsaumoh/proto-udsuspver/udsver_v1"
 )
@@ -27,7 +28,7 @@ type Server struct {
 	done           chan bool
 }
 
-func NewServer(wli *pbmgmt.WorkloadInfo, pathPrefix string) *Server {
+func NewServer(wli *pbmgmt.WorkloadInfo, pathPrefix string) *nam.WorkloadInterface {
 	s := new(Server)
 	s.done = make(chan bool, 1)
 
@@ -56,6 +57,7 @@ func (s *Server) Check(ctx context.Context, request *pb.Request) (*pb.Response, 
 	return &pb.Response{Status: status}, nil
 }
 
+// WorkloadApi adherence to nodeagent workload management interface.
 func (s *Server) Serve() error {
 	grpcServer := grpc.NewServer()
 	pb.RegisterVerifyServer(grpcServer, s)

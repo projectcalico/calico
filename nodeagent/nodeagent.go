@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
+	wlh "github.com/colabsaumoh/proto-udsuspver/workloadapi"
 )
 
 const (
@@ -33,7 +34,7 @@ func init() {
 }
 
 func MgmtApi() {
-	mgmtServer := nam.NewServer(CfgWldApiUdsHome)
+	mgmtServer := nam.NewServer(CfgWldApiUdsHome, wlh.NewServer)
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
