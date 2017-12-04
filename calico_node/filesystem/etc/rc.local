@@ -15,7 +15,7 @@ startup || exit 1
 # Source any additional environment that was added by the startup script.  This
 # is done immediately after the startup script because the environments are
 # required by the remaining processing.
-. startup.env
+. ./startup.env
 
 # If possible pre-allocate the IP address on the IPIP tunnel.
 allocate-ipip-addr || exit 1
