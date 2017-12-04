@@ -964,7 +964,8 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				}
 				for kOld, vOld := range config {
 					logCxt := log.WithFields(log.Fields{"key": kOld, "old": vOld, "updateType": "delete"})
-					if _, prs := config[kOld]; prs {
+					if _, prs := msg.Config[kOld]; prs {
+						// Key was present in the message so we've handled above.
 						continue
 					}
 					if handledConfigChanges.Contains(kOld) {
