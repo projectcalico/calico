@@ -71,14 +71,6 @@ toc:
         path: /reference/calicoctl/resources/profile
       - title: Workload Endpoint
         path: /reference/calicoctl/resources/workloadendpoint
-  - title: Setup
-    section:
-      - title: Overview
-        path: /reference/calicoctl/setup/
-      - title: etcdv3 datastore
-        path: /reference/calicoctl/setup/etcdv3
-      - title: kubernetes api datastore
-        path: /reference/calicoctl/setup/kubernetes
 - title: calico/node
   section:
   - title: Configuration

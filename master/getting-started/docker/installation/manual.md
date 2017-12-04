@@ -4,21 +4,18 @@ title: Installing Calico for Docker
 
 {{site.prodname}} runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `{{site.nodecontainer}}` container.
 
-> **Important**: Before following the steps here ensure that you have satisfied these
+## Before you begin 
+
+- Ensure that you have satisfied these
 [requirements]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/requirements).
-{: .alert .alert-danger}
+
+- [Install `calicoctl` as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary).
+
+- [Configure `calicoctl` to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
 
 
 ## Using calicoctl
 
-1. Download the calicoctl binary:
-
-   ```
-   sudo wget -O /usr/local/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
-   sudo chmod +x /usr/local/bin/calicoctl
-   ```
-
-1. Configure access to your etcd cluster, [calicoctl - etcd datastore](/{{page.version}}/reference/calicoctl/setup/etcdv3).
 
 1. Launch `{{site.nodecontainer}}`:
 
