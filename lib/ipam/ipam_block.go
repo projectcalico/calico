@@ -205,7 +205,7 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		}
 	}
 	if len(attrsToDelete) != 0 {
-		log.Infof("Deleting attributes: %s", attrsToDelete)
+		log.Infof("Deleting attributes: %v", attrsToDelete)
 		b.deleteAttributes(attrsToDelete, ordinals)
 	}
 
