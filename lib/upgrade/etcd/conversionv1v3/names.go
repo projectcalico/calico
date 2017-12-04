@@ -15,6 +15,8 @@
 package conversionv1v3
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"regexp"
@@ -23,20 +25,26 @@ import (
 
 var (
 	nonNameChar               = regexp.MustCompile("[^-.a-z0-9]+")
-	nonNameNoDotChar          = regexp.MustCompile("[^-a-z0-9]+")
 	dotDashSeq                = regexp.MustCompile("[.-]*[.][.-]*")
 	trailingLeadingDotsDashes = regexp.MustCompile("^[.-]*(.*?)[.-]*$")
 )
 
-// Convert the v1 name to a standard v3 name.  This converts as follows (in the
-// listed order):
+// Convert the v1 node name to a standard v3 name.  This uses the standard name normalization
+// but does not add a qualifier.  Any overlapping names will result in a failed upgrade, so the
+// pre-upgrade validation script will check for conflicting names.
+func ConvertNodeName(v1Name string) string {
+	return normalizeName(v1Name)
+}
+
+// Convert a name to normalized form.  This is used for conversion of os.Hostname to a
+// suitable node name, and is also used for the v2->v3 migration code.
 // -  Convert to lowercase
 // -  Convert [/] to .
 // -  Convert any other char that is not in the set [-.a-z0-9] to -
 // -  Convert any multi-byte sequence of [-.] with at least one [.] to a single .
 // -  Remove leading and trailing dashes and dots
-func convertName(v1Name string) string {
-	name := strings.ToLower(v1Name)
+func normalizeName(name string) string {
+	name = strings.ToLower(name)
 	name = strings.Replace(name, "/", ".", -1)
 	name = nonNameChar.ReplaceAllString(name, "-")
 	name = dotDashSeq.ReplaceAllString(name, ".")
@@ -49,21 +57,35 @@ func convertName(v1Name string) string {
 	return name
 }
 
-// Convert the v1 name to a standard v3 name with no dots.
-// -  Convert to lowercase
-// -  Convert any char that is not in the set [-a-z0-9] to -
-// -  Remove leading and trailing dashes
-func convertNameNoDots(v1Name string) string {
-	name := strings.ToLower(v1Name)
-	name = nonNameNoDotChar.ReplaceAllString(name, "-")
+// Convert the v1 name to a standard v3 name.  This uses the standard name normalization,
+// and adds an additional qualifier if the name was modified.  The qualifier is calculated
+// from the original name.
+func convertName(v1Name string) string {
+	name := normalizeName(v1Name)
 
-	// Extract the trailing and leading dashes (there are no dots by this point).
-	// This should always match even if the matched substring is empty.  The second
-	// item in the returned submatc
-	// slice is the captured match group.
-	submatches := trailingLeadingDotsDashes.FindStringSubmatch(name)
-	name = submatches[1]
-	return name
+	// If the name is different append a qualifier.
+	return qualifiedName(v1Name, name)
+}
+
+// Convert the v1 name to a standard v3 name with no dots.
+func convertNameNoDots(v1Name string) string {
+	// Normalize the name and then convert dots to dashes.
+	name := normalizeName(v1Name)
+	name = strings.Replace(name, ".", "-", -1)
+
+	// If the name is different append a qualifier.
+	return qualifiedName(v1Name, name)
+}
+
+func qualifiedName(orig, final string) string {
+	// If the name was not modified, just return the unmodified name.
+	if orig == final {
+		return orig
+	}
+	// The name was modified.  Calculate an 8-byte hex qualifier to append.
+	h := sha1.New()
+	h.Write([]byte(orig))
+	return fmt.Sprintf("%s-%s", final, strings.ToLower(hex.EncodeToString(h.Sum(nil))[:8]))
 }
 
 // Convert an IP to an IPv4 or IPv6 representation

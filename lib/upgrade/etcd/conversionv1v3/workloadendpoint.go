@@ -120,6 +120,7 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	switch wepKey.OrchestratorID {
 	case "k8s":
 		namespace, pod = getPodNamespaceName(wepKey.WorkloadID)
+		container = wepValue.ActiveInstanceID
 	case "cni":
 		container = wepKey.WorkloadID
 	case "libnetwork":
@@ -143,7 +144,7 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	wep.Spec = apiv3.WorkloadEndpointSpec{
 		Orchestrator:  convertName(wepKey.OrchestratorID),
 		Workload:      workload,
-		Node:          convertName(wepKey.Hostname),
+		Node:          ConvertNodeName(wepKey.Hostname),
 		Pod:           pod,
 		ContainerID:   container,
 		Endpoint:      convertName(wepKey.EndpointID),

@@ -68,7 +68,7 @@ var policyTable = []struct {
 		},
 		v3API: apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "nameymcpolicyname",
+				Name: "nameymcpolicyname-32df456f",
 			},
 			Spec: apiv3.GlobalNetworkPolicySpec{
 				Order:          &order1,
@@ -116,7 +116,7 @@ var policyTable = []struct {
 		},
 		v3API: apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "make.make",
+				Name: "make.make-1b6971c8",
 			},
 			Spec: apiv3.GlobalNetworkPolicySpec{
 				Order:          &order1,
@@ -162,7 +162,7 @@ var policyTable = []struct {
 		},
 		v3API: apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "rawr",
+				Name: "rawr-03d81e1d",
 			},
 			Spec: apiv3.GlobalNetworkPolicySpec{
 				Order:          &order1,
@@ -256,7 +256,7 @@ var policyTable = []struct {
 		},
 		v3API: apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "make.make",
+				Name: "make.make-1b6971c8",
 			},
 			Spec: apiv3.GlobalNetworkPolicySpec{
 				Order: &order1,
