@@ -238,12 +238,7 @@ func convertIPNATs(v1IPNATs []model.IPNAT) []apiv3.IPNAT {
 func convertProfiles(v1Profiles []string) []string {
 	var v3Profiles []string
 	for _, p := range v1Profiles {
-		if strings.HasPrefix(p, "k8s_ns.") {
-			prof := "kns." + strings.TrimPrefix(p, "k8s_ns.")
-			v3Profiles = append(v3Profiles, convertName(prof))
-		} else {
-			v3Profiles = append(v3Profiles, convertName(p))
-		}
+		v3Profiles = append(v3Profiles, convertProfileName(p))
 	}
 
 	return v3Profiles
