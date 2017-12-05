@@ -30,13 +30,18 @@ class TestBGP(TestBase):
         Test default BGP configuration commands.
         """
         with DockerHost('host', start_calico=False, dind=False) as host:
-            # TODO: Re-enable or remove after decsision is made on the defaults
-            # Check default AS command
-            #response = host.calicoctl("get BGPConfiguration -o yaml")
-            #bgpcfg = yaml.safe_load(response)
-            #self.assertEquals(bgpcfg['items'][0]['spec']['asNumber'], 64512)
+            # As the v3 data model now stands, there is no way to query what
+            # the default AS number is, in the absence of any resources.  Also,
+            # if you create a BGPConfiguration resource that does not specify
+            # an AS number, and then read it back, the output does not include
+            # the default AS number.
+            #
+            # So we can't test the default AS number directly with calicoctl
+            # operations.  We can of course test it indirectly: see
+            # test_bird_single_route_reflector_default_as in
+            # test_single_route_reflector.py.
 
-            # Set the default AS number.
+            # Set the global-default AS number.
             update_bgp_config(host, asNum=12345)
 
             self.assertEquals(get_bgp_spec(host)['asNumber'], 12345)
