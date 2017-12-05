@@ -259,6 +259,12 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 		return nil, SkipRule
 	}
 
+	// Skip rules with name port ipsets
+	if len(pRule.SrcNamedPortIpSetIds) > 0 || len(pRule.DstNamedPortIpSetIds) > 0 {
+		log.WithField("rule", pRule).Info("Skipping rule because it contains named port ipsets (currently unsupported).")
+		return nil, SkipRule
+	}
+
 	// Filter the Src and Dst CIDRs to only the IP version that we're rendering
 	var filteredAll bool
 	ruleCopy := *pRule
