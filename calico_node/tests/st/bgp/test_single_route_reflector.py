@@ -24,7 +24,7 @@ from .peer import create_bgp_peer
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
-    def _test_single_route_reflector(self, backend='bird'):
+    def _test_single_route_reflector(self, backend='bird', bgpconfig_as_num=64514, peer_as_num=64514):
         """
         Run a multi-host test using a single route reflector and global
         peering.
@@ -43,7 +43,7 @@ class TestSingleRouteReflector(TestBase):
 
             # Set the default AS number - as this is used by the RR mesh, and
             # turn off the node-to-node mesh (do this from any host).
-            update_bgp_config(host1, asNum=64514, nodeMesh=False)
+            update_bgp_config(host1, nodeMesh=False, asNum=bgpconfig_as_num)
 
             # Create a workload on each host in the same network.
             network1 = host1.create_network("subnet1")
@@ -59,7 +59,7 @@ class TestSingleRouteReflector(TestBase):
             # route reflector.  This can be run from either host.
             rg = rrc.get_redundancy_group()
             assert len(rg) == 1
-            create_bgp_peer(host1, "global", rg[0].ip, 64514)
+            create_bgp_peer(host1, "global", rg[0].ip, peer_as_num)
 
             # Allow network to converge (which it now will).
             self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
@@ -73,6 +73,10 @@ class TestSingleRouteReflector(TestBase):
     @attr('slow')
     def test_bird_single_route_reflector(self):
         self._test_single_route_reflector(backend='bird')
+
+    @attr('slow')
+    def test_bird_single_route_reflector_default_as(self):
+        self._test_single_route_reflector(backend='bird', bgpconfig_as_num=None, peer_as_num=64512)
 
     # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
     @attr('slow')
