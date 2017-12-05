@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 10.1.0.0/16
+spec:
+  ipip:
+    enabled: true
+    mode: cross-subnet
+  nat-outgoing: true
+  disabled: false

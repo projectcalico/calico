@@ -1,0 +1,18 @@
+## This won't work with KDD
+apiVersion: v1
+kind: workloadEndpoint
+metadata:
+  name: eth0
+  workload: default.frontend-5gs43
+  orchestrator: k8s
+  node: rack1-host1
+  labels:
+    app: frontend
+    calico/k8s_ns: default
+spec:
+  interfaceName: cali0ef24ba
+  mac: ca:fe:1d:52:bb:e9
+  ipNetworks:
+  - 192.168.0.0/32
+  profiles:
+  - profile1
