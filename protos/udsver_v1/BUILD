@@ -14,7 +14,7 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     srcs = ["udsver.pb.go"],
-    importpath = "colabsaumoh/proto-udsuspver/protos/udsver_v1",
+    importpath = "github.com/colabsaumoh/proto-udsuspver/protos/udsver_v1",
     visibility = ["//visibility:public"],
     deps = [
         "@com_github_golang_protobuf//proto:go_default_library",

@@ -11,7 +11,7 @@ import (
 
 	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
 	pbmgmt "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
-	pb "github.com/colabsaumoh/proto-udsuspver/udsver_v1"
+	pb "github.com/colabsaumoh/proto-udsuspver/protos/udsver_v1"
 )
 
 const (
@@ -28,15 +28,15 @@ type Server struct {
 	done           chan bool
 }
 
-func NewServer(wli *pbmgmt.WorkloadInfo, pathPrefix string) *nam.WorkloadInterface {
-	s := new(Server)
-	s.done = make(chan bool, 1)
-
-	s.Uid = wli.Uid
-	s.Name = wli.Workload
-	s.Namespace = wli.Namespace
-	s.ServiceAccount = wli.Serviceaccount
-	s.SockFile = pathPrefix + "/" + s.Uid + socName
+func NewServer(wli *pbmgmt.WorkloadInfo, pathPrefix string) nam.WorkloadMgmtInterface {
+	s := &Server{
+		done: make(chan bool, 1),
+		Uid: wli.Uid,
+		Name: wli.Workload,
+		Namespace: wli.Namespace,
+		ServiceAccount: wli.Serviceaccount,
+		SockFile: pathPrefix + "/" + wli.Uid + socName,
+	}
 	return s
 }
 
@@ -58,7 +58,7 @@ func (s *Server) Check(ctx context.Context, request *pb.Request) (*pb.Response, 
 }
 
 // WorkloadApi adherence to nodeagent workload management interface.
-func (s *Server) Serve() error {
+func (s *Server) Serve() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterVerifyServer(grpcServer, s)
 
@@ -69,14 +69,14 @@ func (s *Server) Serve() error {
 		e := os.RemoveAll(s.SockFile)
 		if e != nil {
 			log.Printf("Failed to rm %v (%v)", s.SockFile, e)
-			return e
+			return
 		}
 	}
 
 	lis, err = net.Listen("unix", s.SockFile)
 	if err != nil {
 		log.Printf("failed to %v", err)
-		return e
+		return
 	}
 
 	go func(ln net.Listener, c chan bool) {
@@ -88,7 +88,6 @@ func (s *Server) Serve() error {
 
 	log.Printf("workload [%v] listen", s)
 	grpcServer.Serve(lis)
-	return nil
 }
 
 // Tell the server it should stop
