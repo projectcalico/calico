@@ -19,7 +19,6 @@ import yaml
 from netaddr import IPAddress, IPNetwork
 from nose_parameterized import parameterized
 from time import sleep
-from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
