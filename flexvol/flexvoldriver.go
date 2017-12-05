@@ -437,7 +437,7 @@ func AddListener(ninputs *pb.WorkloadInfo) error {
 		return errors.New("Failed to create Nodeagent client.")
 	}
 
-	_, err := client.AddListener(ninputs)
+	_, err := client.WorkloadAdded(ninputs)
 	if err != nil {
 		return err
 	}
@@ -453,7 +453,7 @@ func DelListener(ninputs *pb.WorkloadInfo) error {
 		return errors.New("Failed to create Nodeagent client.")
 	}
 
-	_, err := client.DelListener(ninputs)
+	_, err := client.WorkloadDeleted(ninputs)
 	if err != nil {
 		return err
 	}

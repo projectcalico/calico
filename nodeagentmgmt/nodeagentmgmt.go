@@ -27,10 +27,10 @@ type WorkloadMgmtInterface interface {
 
 // NewWorkloadHandler is a function provided by workload handler that nodeagentmgmt will invoke
 // to initialize the new workload handler when a new workload is added.
-type NewWorkloadHandler func(info *pb.WorkloadInfo, prefix string) *WorkloadMgmtInterface
+type NewWorkloadHandler func(info *pb.WorkloadInfo, prefix string) WorkloadMgmtInterface
 
 type Server struct {
-	wlmgmts     map[string]*WorkloadMgmtInterface
+	wlmgmts     map[string]WorkloadMgmtInterface
 	pathPrefix string
 	done       chan bool //main 2 mgmt-api server to stop
 	createNewWl NewWorkloadHandler
@@ -47,7 +47,7 @@ func NewServer(pathPrefix string, wlh NewWorkloadHandler) *Server {
 	s.done = make(chan bool, 1)
 	s.pathPrefix = pathPrefix
 	s.createNewWl = wlh
-	s.wlmgmts = make(map[string]*WorkloadMgmtInterface)
+	s.wlmgmts = make(map[string]WorkloadMgmtInterface)
 	return s
 }
 
@@ -129,7 +129,7 @@ func (s *Server) CloseAllWlds() {
 	for _, wld := range s.wlmgmts {
 		wld.Stop()
 	}
-	for _, wld := range s.wlapis {
+	for _, wld := range s.wlmgmts {
 		wld.WaitDone()
 	}
 }

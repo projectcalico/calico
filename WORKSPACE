@@ -22,3 +22,17 @@ proto_repositories()
 load("@org_pubref_rules_protobuf//go:rules.bzl", "go_proto_repositories")
 
 go_proto_repositories()
+
+load("@io_bazel_rules_go//go:def.bzl", "go_repository")
+
+go_repository(
+    name = "com_github_spf13_pflag",
+    commit = "e57e3eeb33f795204c1ca35f56c44f83227c6e66",
+    importpath = "github.com/spf13/pflag",
+)
+
+go_repository(
+    name = "com_github_spf13_cobra",
+    commit = "2df9a531813370438a4d79bfc33e21f58063ed87",
+    importpath = "github.com/spf13/cobra",
+)
