@@ -65,6 +65,8 @@ Description:
 		switch command {
 		case "validate":
 			commands.Validate(args)
+		case "start-upgrade":
+			commands.StartUpgrade(args)
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
 			fmt.Println(doc)
