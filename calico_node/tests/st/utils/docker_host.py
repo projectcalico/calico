@@ -336,7 +336,6 @@ class DockerHost(object):
                 prefix +
                 (" -e CALICO_IPV4POOL_CIDR=%s " % DEFAULT_IPV4_POOL_CIDR) +
                 felix_logsetting + env_options +
-                " -e DISABLE_NODE_IP_CHECK=true -e FELIX_IPINIPENABLED=true " +
                 " -e " + suffix
             )
 
