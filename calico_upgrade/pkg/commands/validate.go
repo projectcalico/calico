@@ -66,7 +66,7 @@ Description:
 	if len(cData.NameConversions) > 0 {
 		fmt.Println("The following resource names will be changed:")
 		for _, change := range cData.NameConversions {
-			fmt.Printf("    %s: %s -> %s\n", change.Kind, change.Original, change.New)
+			fmt.Printf(" -  %s: %s -> %s\n", change.Kind, change.Original, change.New)
 		}
 	}
 
@@ -101,7 +101,7 @@ Description:
 		fmt.Println("The following data will be skipped as it will be recreated by the Kubernetes " +
 			"Policy Controller:")
 		for _, skipped := range cData.HandledByPolicyCtrl {
-			fmt.Printf("%s\n", skipped)
+			fmt.Printf(" -  %s\n", skipped)
 		}
 	}
 
