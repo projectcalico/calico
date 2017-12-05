@@ -95,24 +95,6 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n1_workloads + self.n2_workloads)
     test_tags.batchnumber = 5
 
-    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
-    def test_rules_tags(self):
-        profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
-        profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
-        rule0 = {'action': 'Allow',
-                 'source':
-                     {'tag': profile1_tag}}
-        rule1 = {'action': 'Allow',
-                 'source':
-                     {'tag': profile0_tag}}
-        self.new_profiles[0]['spec']['ingress'].append(rule0)
-        self.new_profiles[1]['spec']['ingress'].append(rule1)
-        self._apply_new_profile(self.new_profiles, self.host1)
-        # Check everything can contact everything else now
-        self.assert_connectivity(retries=3,
-                                 pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 5
-
     def test_rules_protocol_icmp(self):
         rule = {'action': 'Allow',
                 'protocol': 'ICMP'}
