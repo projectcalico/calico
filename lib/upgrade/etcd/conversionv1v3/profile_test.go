@@ -35,7 +35,7 @@ var profileTable = []struct {
 }{
 	{
 		description: "fully populated Profile",
-		v1API: apiv1.Profile{
+		v1API: &apiv1.Profile{
 			Metadata: apiv1.ProfileMetadata{
 				Name:   "nameyMcProfileName",
 				Tags:   []string{"meep", "mop"},
@@ -72,7 +72,7 @@ var profileTable = []struct {
 	},
 	{
 		description: "Profile name conversion",
-		v1API: apiv1.Profile{
+		v1API: &apiv1.Profile{
 			Metadata: apiv1.ProfileMetadata{
 				Name: "k8s_ns.FlUx-.-CaPaCiToR$$",
 				Tags: []string{"lalala"},

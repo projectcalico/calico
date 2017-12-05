@@ -36,7 +36,7 @@ var bgpPeerTable = []struct {
 }{
 	{
 		description: "global scoped BGPPeer",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Global,
 				PeerIP: *net.ParseIP("10.0.0.1"),
@@ -66,7 +66,7 @@ var bgpPeerTable = []struct {
 	},
 	{
 		description: "global scoped ipv6 BGPPeer",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Global,
 				PeerIP: *net.ParseIP("Aa:bb::"),
@@ -96,7 +96,7 @@ var bgpPeerTable = []struct {
 	},
 	{
 		description: "node scoped BGPPeer",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Node,
 				Node:   "namedNode",
@@ -129,7 +129,7 @@ var bgpPeerTable = []struct {
 	},
 	{
 		description: "node scoped BGPPeer with ipv6",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Node,
 				Node:   "namedNode",
@@ -172,7 +172,7 @@ func TestCanConvertV1ToV3BGPPeer(t *testing.T) {
 			// Test and assert v1 API to v1 backend logic.
 			v1KVPResult, err := p.APIV1ToBackendV1(entry.v1API)
 			Expect(err).NotTo(HaveOccurred(), entry.description)
-			md := entry.v1API.(apiv1.BGPPeer).Metadata
+			md := entry.v1API.(*apiv1.BGPPeer).Metadata
 			if md.Scope == "global" {
 				Expect(v1KVPResult.Key.(model.GlobalBGPPeerKey).PeerIP).To(Equal(entry.v1KVP.Key.(model.GlobalBGPPeerKey).PeerIP))
 			} else {
@@ -195,7 +195,7 @@ var bgpPeerFailTable = []struct {
 }{
 	{
 		description: "missing PeerIP",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope: scope.Global,
 			},
@@ -206,7 +206,7 @@ var bgpPeerFailTable = []struct {
 	},
 	{
 		description: "scope set global with node specified",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Global,
 				Node:   "namedNode",
@@ -219,7 +219,7 @@ var bgpPeerFailTable = []struct {
 	},
 	{
 		description: "scope set node with NO node specified",
-		v1API: apiv1.BGPPeer{
+		v1API: &apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Node,
 				PeerIP: *net.ParseIP("10.0.0.1"),
@@ -249,7 +249,7 @@ func TestBGPConvertWithInvalidResource(t *testing.T) {
 	t.Run("APIV1ToBackendV1 with the wrong resource produces an error",
 		func(t *testing.T) {
 			RegisterTestingT(t)
-			resource := apiv1.IPPool{
+			resource := &apiv1.IPPool{
 				Metadata: apiv1.IPPoolMetadata{},
 				Spec:     apiv1.IPPoolSpec{},
 			}

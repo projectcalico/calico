@@ -37,7 +37,7 @@ var hepTable = []struct {
 }{
 	{
 		description: "Valid basic v1 hep has data moved to right place",
-		v1API: apiv1.HostEndpoint{
+		v1API: &apiv1.HostEndpoint{
 			Metadata: apiv1.HostEndpointMetadata{
 				Name: "my-hep",
 				Node: "my-node",
@@ -67,7 +67,7 @@ var hepTable = []struct {
 	},
 	{
 		description: "Valid filled v1 hep has data moved to right place",
-		v1API: apiv1.HostEndpoint{
+		v1API: &apiv1.HostEndpoint{
 			Metadata: apiv1.HostEndpointMetadata{
 				Name: "my-hep",
 				Node: "my-node",
@@ -163,8 +163,8 @@ func TestHEPDataIsMovedCorrectly(t *testing.T) {
 	}
 }
 
-func basicHep() apiv1.HostEndpoint {
-	return apiv1.HostEndpoint{
+func basicHep() *apiv1.HostEndpoint {
+	return &apiv1.HostEndpoint{
 		Metadata: apiv1.HostEndpointMetadata{
 			Name: "my-hep",
 			Node: "my-node",
@@ -175,7 +175,7 @@ func basicHep() apiv1.HostEndpoint {
 	}
 }
 
-func convertHEPV1ToV3(a apiv1.HostEndpoint) (*apiv3.HostEndpoint, error) {
+func convertHEPV1ToV3(a *apiv1.HostEndpoint) (*apiv3.HostEndpoint, error) {
 	h := HostEndpoint{}
 
 	b, err := h.APIV1ToBackendV1(a)

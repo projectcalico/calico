@@ -32,7 +32,7 @@ type Node struct{}
 // backend Node and NodeKey.
 // This is part of the conversionHelper interface.
 func (n Node) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
-	an, ok := a.(apiv1.Node)
+	an, ok := a.(*apiv1.Node)
 	if !ok {
 		return nil, fmt.Errorf("Conversion to Node is not possible with %v", a)
 	}
