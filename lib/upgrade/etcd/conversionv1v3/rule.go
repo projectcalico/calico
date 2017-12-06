@@ -166,17 +166,24 @@ func rulebackendToAPIv3(br model.Rule) apiv3.Rule {
 	notSrcSelector := mergeTagsAndSelectors(br.NotSrcSelector, br.NotSrcTag)
 	notDstSelector := mergeTagsAndSelectors(br.NotDstSelector, br.NotDstTag)
 
-	var v3Protocol numorstring.Protocol
+	var v3Protocol *numorstring.Protocol
 	if br.Protocol != nil {
-		v3Protocol = numorstring.ProtocolV3FromProtocolV1(*br.Protocol)
+		protocol := numorstring.ProtocolV3FromProtocolV1(*br.Protocol)
+		v3Protocol = &protocol
+	}
+
+	var v3NotProtocol *numorstring.Protocol
+	if br.NotProtocol != nil {
+		notProtocol := numorstring.ProtocolV3FromProtocolV1(*br.NotProtocol)
+		v3NotProtocol = &notProtocol
 	}
 
 	return apiv3.Rule{
 		Action:      ruleActionV1ToV3API(br.Action),
 		IPVersion:   br.IPVersion,
-		Protocol:    &v3Protocol,
+		Protocol:    v3Protocol,
 		ICMP:        icmp,
-		NotProtocol: br.NotProtocol,
+		NotProtocol: v3NotProtocol,
 		NotICMP:     notICMP,
 		Source: apiv3.EntityRule{
 			Nets:        srcNetsStr,
