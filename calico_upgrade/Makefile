@@ -201,7 +201,8 @@ semaphore: clean
 	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv} /usr/local/golang /var/lib/mongodb'
 
 	# Run the containerized tests first.
-	$(MAKE) test-containerized st
+	# Need st's added back when we have them.
+	$(MAKE) test-containerized
 
 	$(MAKE) calico/upgrade
 
