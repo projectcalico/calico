@@ -22,3 +22,6 @@ vendor/
 # Bazel
 /bazel-*
 vendor
+
+# Local build bin
+/bin
