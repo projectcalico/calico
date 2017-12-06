@@ -30,9 +30,8 @@ func RegisterGrpc(s *grpc.Server) {
 }
 
 func (s *WlServer) Check(ctx context.Context, request *pb.Request) (*pb.Response, error) {
-	var r string
 
-	log.Printf("[%v]: %v Check called, resp: %v", s, request, r)
+	log.Printf("[%v]: %v Check called", s, request)
 	// Get the caller's credentials from the context.
 	creds, e := wlh.CallerFromContext(ctx)
 	if !e {
