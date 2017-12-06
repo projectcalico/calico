@@ -12,28 +12,14 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
+	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
 )
 
-// Workloadhandler support this given interface.
-// nodeagentmgmt will invoke
-// Serve() as a go routine when a Workload is added.
-// Stop() when a Workload is deleted.
-// and WaitDone() to wait for a response back from Workloadhandler
-type WorkloadMgmtInterface interface {
-	Serve()
-	Stop()
-	WaitDone()
-}
-
-// NewWorkloadHandler is a function provided by workload handler that nodeagentmgmt will invoke
-// to initialize the new workload handler when a new workload is added.
-type NewWorkloadHandler func(info *pb.WorkloadInfo, prefix string) WorkloadMgmtInterface
-
 type Server struct {
-	wlmgmts     map[string]WorkloadMgmtInterface
+	wlmgmts     map[string]mwi.WorkloadMgmtInterface
 	pathPrefix string
 	done       chan bool //main 2 mgmt-api server to stop
-	createNewWl NewWorkloadHandler
+	wli		*mwi.WlHandler
 }
 
 type Client struct {
@@ -42,13 +28,13 @@ type Client struct {
 	isUds bool
 }
 
-func NewServer(pathPrefix string, wlh NewWorkloadHandler) *Server {
-	s := new(Server)
-	s.done = make(chan bool, 1)
-	s.pathPrefix = pathPrefix
-	s.createNewWl = wlh
-	s.wlmgmts = make(map[string]WorkloadMgmtInterface)
-	return s
+func NewServer(pathPrefix string, wli *mwi.WlHandler) *Server {
+	return &Server{
+		done: make(chan bool, 1),
+		pathPrefix: pathPrefix,
+		wli: wli,
+		wlmgmts: make(map[string]mwi.WorkloadMgmtInterface),
+	}
 }
 
 func (s *Server) Stop() {
@@ -101,7 +87,7 @@ func (s *Server) WorkloadAdded(ctx context.Context, request *pb.WorkloadInfo) (*
 		return &pb.Response{Status: status}, nil
 	}
 
-	s.wlmgmts[request.Uid] = s.createNewWl(request, s.pathPrefix)
+	s.wlmgmts[request.Uid] = s.wli.NewWlhCb(request, s.wli.Wl, s.pathPrefix)
 	go s.wlmgmts[request.Uid].Serve()
 	log.Printf("%v", s)
 

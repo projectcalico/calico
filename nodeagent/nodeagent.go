@@ -9,7 +9,9 @@ import (
 	"github.com/spf13/cobra"
 
 	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
-	wlh "github.com/colabsaumoh/proto-udsuspver/workloadapi"
+	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
+	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
+	wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
 )
 
 const (
@@ -34,7 +36,12 @@ func init() {
 }
 
 func MgmtApi() {
-	mgmtServer := nam.NewServer(CfgWldApiUdsHome, wlh.NewServer)
+	// initialize the workload api.
+	wl := wlapi.NewWlAPIServer()
+	// initialize the workload api handler with the workload api.
+	wli := mwi.NewWlHandler(wl, wlh.NewServer)
+	// finally initialize the node mgmt interface with workload handler.
+	mgmtServer := nam.NewServer(CfgWldApiUdsHome, wli)
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
