@@ -31,7 +31,7 @@ func Validate(args []string) {
   calico-upgrade validate [--calicov3-config=<V3CONFIG>] [--calicov2-config=<V2CONFIG>]
 
 Example:
-  calico-upgrade --calicov3-config=/path/to/v3/config --calicov2-config=/path/to/v2/config validate
+  calico-upgrade validate --calicov3-config=/path/to/v3/config --calicov2-config=/path/to/v2/config validate
 
 Options:
   -h --help                  Show this screen.

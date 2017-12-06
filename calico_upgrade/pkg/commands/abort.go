@@ -26,12 +26,12 @@ import (
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
-func StartUpgrade(args []string) {
+func Abort(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calico-upgrade start-upgrade [--calicov3-config=<V3CONFIG>] [--calicov2-config=<V2CONFIG>]
+  calico-upgrade abort [--calicov3-config=<V3CONFIG>] [--calicov2-config=<V2CONFIG>]
 
 Example:
-  calico-upgrade start-upgrade --calicov3-config=/path/to/v3/config --calicov2-config=/path/to/v2/config start-upgrade
+  calico-upgrade abort --calicov3-config=/path/to/v3/config --calicov2-config=/path/to/v2/config start-upgrade
 
 Options:
   -h --help                  Show this screen.
@@ -54,18 +54,16 @@ Description:
 	cfv2 := parsedArgs["--calicov2-config"].(string)
 	cfv3 := parsedArgs["--calicov3-config"].(string)
 
-	clientV3, clientV2, err := upgradeclients.LoadClients(cfv3, cfv2)
+	_, clientV2, err := upgradeclients.LoadClients(cfv3, cfv2)
 	if err != nil {
 		fmt.Printf("Failed to create Calico API client: %s\n", err)
 		os.Exit(1)
 	}
 
-	_, err = migrate.MigrateData(clientV3, clientV2)
+	err = migrate.Abort(clientV2)
 	if err != nil {
-		fmt.Println("There were errors seen when running `start-upgrade`, please follow the steps above " +
-			"to resolve the errors.")
+		fmt.Println("WARNING: Unable to abort the upgrade - Calico networking is still disabled.  " +
+			"Please re-run `calico-upgrade abort`.")
 		os.Exit(1)
 	}
-
-	fmt.Println("The data migration was successful, please run `calico-upgrade complete-upgrade` to finish upgrade.")
 }
