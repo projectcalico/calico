@@ -91,7 +91,7 @@ class MultiHostMainline(TestBase):
         # Check everything can contact everything else now
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-    test_tags.batchnumber = 5
+    test_tags.batchnumber = 3
 
     def test_rules_tags(self):
         profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
@@ -108,7 +108,7 @@ class MultiHostMainline(TestBase):
         # Check everything can contact everything else now
         self.assert_connectivity(retries=3,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 5
+    test_rules_tags.batchnumber = 2
 
     def test_rules_protocol_icmp(self):
         rule = {'action': 'allow',
@@ -251,7 +251,7 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads[:2],
                                  fail_list=self.n1_workloads[2:])
-    test_rules_dest_ip_nets.batchnumber = 5
+    test_rules_dest_ip_nets.batchnumber = 3
 
     def test_rules_selector(self):
         self.new_profiles[0]['metadata']['labels'] = {'net': 'n1'}
@@ -267,7 +267,7 @@ class MultiHostMainline(TestBase):
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_selector.batchnumber = 5
+    test_rules_selector.batchnumber = 3
 
     def test_rules_tcp_port(self):
         rule = {'action': 'allow',
