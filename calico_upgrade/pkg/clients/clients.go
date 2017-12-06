@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
@@ -30,6 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
 )
 
 type V1ClientInterface interface {
@@ -40,6 +42,23 @@ type V1ClientInterface interface {
 }
 
 func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterface, error) {
+	// If the v3Config or v1Config are the default paths, and those files do not exist, then
+	// switch to using environments by settings the path to an empty string.
+	if _, err := os.Stat(v3Config); err != nil {
+		if v3Config != constants.DefaultConfigPathV3 {
+			return nil, nil, fmt.Errorf("Error reading apiconfigv3 file: %s\n", v3Config)
+		}
+		log.Infof("Config file: %s cannot be read - reading config from environment", v3Config)
+		v3Config = ""
+	}
+	if _, err := os.Stat(v1Config); err != nil {
+		if v1Config != constants.DefaultConfigPathV1 {
+			return nil, nil, fmt.Errorf("Error reading apiconfigv1 file: %s\n", v1Config)
+		}
+		log.Infof("Config file: %s cannot be read - reading config from environment", v1Config)
+		v1Config = ""
+	}
+
 	// Load the v3 client config - either from file or environments.
 	v3ApiConfig, err := apiconfig.LoadClientConfig(v3Config)
 	if err != nil {
@@ -52,7 +71,7 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, err
 	}
 
-	// If this is Kubernetes then that's all we need.
+	// Kubernetes is not yet supported.
 	if v3ApiConfig.Spec.DatastoreType == apiconfig.Kubernetes {
 		return nil, nil, errors.New("upgrade script is not yet supported for KDD")
 	}
