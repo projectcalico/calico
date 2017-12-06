@@ -17,8 +17,9 @@ package conversionv1v3
 import (
 	"testing"
 
-	. "github.com/onsi/gomega"
 	cnet "net"
+
+	. "github.com/onsi/gomega"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -37,7 +38,7 @@ var wepTable = []struct {
 }{
 	{
 		description: "fully populated WEP",
-		v1API: apiv1.WorkloadEndpoint{
+		v1API: &apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -104,7 +105,7 @@ var wepTable = []struct {
 	},
 	{
 		description: "IPv4 only WEP",
-		v1API: apiv1.WorkloadEndpoint{
+		v1API: &apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -158,7 +159,7 @@ var wepTable = []struct {
 				Orchestrator: "k8s",
 				Node:         "testnode",
 				Pod:          "frontend-5gs43",
-				ContainerID:   "1337495556942031415926535",
+				ContainerID:  "1337495556942031415926535",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"10.0.0.1/32"},
 				IPNATs: []apiv3.IPNAT{apiv3.IPNAT{
@@ -175,7 +176,7 @@ var wepTable = []struct {
 	},
 	{
 		description: "IPv6 only WEP",
-		v1API: apiv1.WorkloadEndpoint{
+		v1API: &apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -229,7 +230,7 @@ var wepTable = []struct {
 				Orchestrator: "k8s",
 				Node:         "testnode",
 				Pod:          "frontend-5gs43",
-				ContainerID:   "133749555694203141592653c",
+				ContainerID:  "133749555694203141592653c",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"2001::/128"},
 				IPNATs: []apiv3.IPNAT{apiv3.IPNAT{
@@ -246,7 +247,7 @@ var wepTable = []struct {
 	},
 	{
 		description: "WEP missing labels",
-		v1API: apiv1.WorkloadEndpoint{
+		v1API: &apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",

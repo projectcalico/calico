@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -34,7 +33,7 @@ type IPPool struct{}
 
 // APIV1ToBackendV1 converts v1 IPPool API to v1 IPPool KVPair.
 func (_ IPPool) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error) {
-	p := rIn.(apiv1.IPPool)
+	p := rIn.(*apiv1.IPPool)
 
 	var ipipInterface string
 	var ipipMode ipip.Mode
@@ -71,15 +70,16 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 		return nil, fmt.Errorf("value is not a valid IPPool resource Value")
 	}
 
-	return &apiv3.IPPool{
-		ObjectMeta: v1.ObjectMeta{Name: cidrToName(pool.CIDR)},
-		Spec: apiv3.IPPoolSpec{
-			CIDR:        pool.CIDR.String(),
-			IPIPMode:    convertIPIPMode(pool.IPIPMode, pool.IPIPInterface),
-			NATOutgoing: pool.Masquerade,
-			Disabled:    pool.Disabled,
-		},
-	}, nil
+	ipp := apiv3.NewIPPool()
+	ipp.Name = cidrToName(pool.CIDR)
+	ipp.Spec = apiv3.IPPoolSpec{
+		CIDR:        pool.CIDR.String(),
+		IPIPMode:    convertIPIPMode(pool.IPIPMode, pool.IPIPInterface),
+		NATOutgoing: pool.Masquerade,
+		Disabled:    pool.Disabled,
+	}
+
+	return ipp, nil
 }
 
 func convertIPIPMode(mode ipip.Mode, ipipInterface string) apiv3.IPIPMode {

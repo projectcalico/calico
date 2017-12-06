@@ -42,7 +42,7 @@ var nodeTable = []struct {
 }{
 	{
 		description: "Valid basic v1 node has data moved to right place",
-		v1API: apiv1.Node{
+		v1API: &apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -81,7 +81,7 @@ var nodeTable = []struct {
 	},
 	{
 		description: "Check name conversion",
-		v1API: apiv1.Node{
+		v1API: &apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "myNode.here",
 			},
@@ -120,7 +120,7 @@ var nodeTable = []struct {
 	},
 	{
 		description: "Conversion with only IPv6",
-		v1API: apiv1.Node{
+		v1API: &apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -152,7 +152,7 @@ var nodeTable = []struct {
 	},
 	{
 		description: "Conversion with only IPv4",
-		v1API: apiv1.Node{
+		v1API: &apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -184,7 +184,7 @@ var nodeTable = []struct {
 	},
 	{
 		description: "Conversion with OrchRefs",
-		v1API: apiv1.Node{
+		v1API: &apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -256,7 +256,7 @@ var nodeV1FailTable = []struct {
 }{
 	{
 		description: "No IPv4 or IPv6 Address",
-		v1API: apiv1.Node{
+		v1API: &apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},

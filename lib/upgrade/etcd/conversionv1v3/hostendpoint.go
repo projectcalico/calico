@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -35,7 +34,7 @@ type HostEndpoint struct{}
 // backend HostEndpoint and HostEndpointKey.
 // This is part of the converter interface.
 func (_ HostEndpoint) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
-	ah, ok := a.(apiv1.HostEndpoint)
+	ah, ok := a.(*apiv1.HostEndpoint)
 	if !ok {
 		return nil, fmt.Errorf("value is not a valid v1 HostEndpoint")
 	}
@@ -113,18 +112,15 @@ func (_ HostEndpoint) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 
 	nodeName := ConvertNodeName(bk.Hostname)
 
-	ah := &apiv3.HostEndpoint{
-		ObjectMeta: v1.ObjectMeta{
-			Name:   convertName(fmt.Sprintf("%s.%s", nodeName, bk.EndpointID)),
-			Labels: bh.Labels,
-		},
-		Spec: apiv3.HostEndpointSpec{
-			Node:          nodeName,
-			Ports:         ports,
-			InterfaceName: bh.Name,
-			Profiles:      convertProfiles(bh.ProfileIDs),
-			ExpectedIPs:   ips,
-		},
+	ah := apiv3.NewHostEndpoint()
+	ah.Name = convertName(fmt.Sprintf("%s.%s", nodeName, bk.EndpointID))
+	ah.Labels = bh.Labels
+	ah.Spec = apiv3.HostEndpointSpec{
+		Node:          nodeName,
+		Ports:         ports,
+		InterfaceName: bh.Name,
+		Profiles:      convertProfiles(bh.ProfileIDs),
+		ExpectedIPs:   ips,
 	}
 
 	log.WithFields(log.Fields{

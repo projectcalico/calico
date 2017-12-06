@@ -36,7 +36,7 @@ var policyTable = []struct {
 }{
 	{
 		description: "fully populated Policy",
-		v1API: apiv1.Policy{
+		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "nameyMcPolicyName",
 			},
@@ -84,7 +84,7 @@ var policyTable = []struct {
 	},
 	{
 		description: "policy name conversion",
-		v1API: apiv1.Policy{
+		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "MaKe.-.MaKe",
 			},
@@ -133,7 +133,7 @@ var policyTable = []struct {
 	{
 		description: "policy with ApplyOnForward set to it's zero value (missing), and PreDNAT and DoNotTrack set to true " +
 			"should convert ApplyOnForward to true in v3 API",
-		v1API: apiv1.Policy{
+		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "RAWR",
 			},
@@ -178,7 +178,7 @@ var policyTable = []struct {
 	{
 		description: "policy with ApplyOnForward set to it's zero value (missing), and PreDNAT and DoNotTrack both " +
 			"set to false should NOT convert ApplyOnForward to true in v3 API",
-		v1API: apiv1.Policy{
+		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "meow",
 			},
@@ -222,7 +222,7 @@ var policyTable = []struct {
 	},
 	{
 		description: "policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
-		v1API: apiv1.Policy{
+		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "MaKe.-.MaKe",
 			},

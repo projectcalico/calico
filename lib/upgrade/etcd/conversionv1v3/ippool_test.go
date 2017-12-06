@@ -36,7 +36,7 @@ var poolTable = []struct {
 }{
 	{
 		description: "fully populated IPv4 IPPool",
-		v1API: apiv1.IPPool{
+		v1API: &apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("10.0.0.1/24"),
 			},
@@ -76,7 +76,7 @@ var poolTable = []struct {
 	},
 	{
 		description: "fully populated IPv6 IPPool",
-		v1API: apiv1.IPPool{
+		v1API: &apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("2001::/120"),
 			},
@@ -116,7 +116,7 @@ var poolTable = []struct {
 	},
 	{
 		description: "IPv4 IPPool with IPIPMode blank, should be converted to IPIPMode Always",
-		v1API: apiv1.IPPool{
+		v1API: &apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("5.5.5.5/25"),
 			},
@@ -156,7 +156,7 @@ var poolTable = []struct {
 	},
 	{
 		description: "IPv4 IPPool with IPIPMode unspecified, should be converted to IPIPMode Always",
-		v1API: apiv1.IPPool{
+		v1API: &apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("6.6.6.6/26"),
 			},
@@ -193,7 +193,7 @@ var poolTable = []struct {
 	},
 	{
 		description: "partially populated IPv4 IPPool with IPIPMode set to cross-subnet",
-		v1API: apiv1.IPPool{
+		v1API: &apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("1.1.1.1/11"),
 			},

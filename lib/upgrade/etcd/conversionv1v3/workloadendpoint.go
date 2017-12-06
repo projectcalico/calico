@@ -33,7 +33,7 @@ type WorkloadEndpoint struct{}
 
 // APIV1ToBackendV1 converts v1 WorkloadEndpoint API to v1 WorkloadEndpoint KVPair.
 func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error) {
-	ah := rIn.(apiv1.WorkloadEndpoint)
+	ah := rIn.(*apiv1.WorkloadEndpoint)
 	k, err := convertMetadataToKey(ah.Metadata)
 	if err != nil {
 		return nil, err

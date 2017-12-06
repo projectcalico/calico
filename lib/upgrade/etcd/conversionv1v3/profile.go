@@ -31,7 +31,7 @@ type Profile struct{}
 
 // APIV1ToBackendV1 converts v1 Profile API to v1 Profile KVPair.
 func (_ Profile) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
-	ap := a.(apiv1.Profile)
+	ap := a.(*apiv1.Profile)
 
 	// Fix up tags and labels so to be empty values rather than nil.  Felix does not
 	// expect a null value in the JSON, so we fix up to make Labels an empty map

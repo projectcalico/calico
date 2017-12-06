@@ -33,7 +33,7 @@ type BGPPeer struct{}
 
 // APIV1ToBackendV1 converts v1 BGPPeer API to v1 BGPPeer KVPair.
 func (bp BGPPeer) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error) {
-	ap, ok := rIn.(apiv1.BGPPeer)
+	ap, ok := rIn.(*apiv1.BGPPeer)
 	if !ok {
 		return nil, fmt.Errorf("Conversion to BGPPeer is not possible with %v", rIn)
 	}
@@ -93,11 +93,10 @@ func (bp BGPPeer) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 		return nil, fmt.Errorf("value is not a valid BGPPeer resource Value: %v", kvp.Value)
 	}
 
-	r := &apiv3.BGPPeer{
-		Spec: apiv3.BGPPeerSpec{
-			PeerIP:   peer.PeerIP.String(),
-			ASNumber: peer.ASNum,
-		},
+	r := apiv3.NewBGPPeer()
+	r.Spec = apiv3.BGPPeerSpec{
+		PeerIP:   peer.PeerIP.String(),
+		ASNumber: peer.ASNum,
 	}
 
 	switch kvp.Key.(type) {

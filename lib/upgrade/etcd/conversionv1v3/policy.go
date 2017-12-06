@@ -31,7 +31,7 @@ type Policy struct{}
 
 // APIV1ToBackendV1 converts v1 Policy API to v1 Policy KVPair.
 func (_ Policy) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
-	ap := a.(apiv1.Policy)
+	ap := a.(*apiv1.Policy)
 
 	d := model.KVPair{
 		Key: model.PolicyKey{
