@@ -57,9 +57,16 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string, watchAll
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
 			UpdateProcessor: updateprocessors.NewBGPPeerUpdateProcessor(),
 		},
-		{
+	}
+	// When this syncer is used (via confd) in calico/node, it needs to know the affinity blocks
+	// for that node so that it can set up the blackhole routes; in that case,
+	// node is non-empty.  When this syncer is used (also via confd) in
+	// calico/routereflector, it has no need for affinity block information, so we skip that
+	// here; in that case, node is empty.
+	if node != "" {
+		resourceTypes = append(resourceTypes, watchersyncer.ResourceType{
 			ListInterface: model.BlockAffinityListOptions{Host: node},
-		},
+		})
 	}
 
 	return watchersyncer.New(
