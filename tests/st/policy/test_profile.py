@@ -15,7 +15,6 @@ import copy
 import netaddr
 import logging
 import yaml
-from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -81,38 +80,19 @@ class MultiHostMainline(TestBase):
 
             super(MultiHostMainline, self).tearDown()
 
-    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
     def test_tags(self):
-        profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
-        profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
-        # Make a new profiles dict where the two networks have each
-        # other in their tags list
-        self.new_profiles[0]['metadata']['tags'].append(profile1_tag)
-        self.new_profiles[1]['metadata']['tags'].append(profile0_tag)
-
+        # Update profiles so that they each include each other's labelsToApply.
+        _log.info("Profile 0 labelsToApply = %r", self.new_profiles[0]['spec']['labelsToApply'])
+        _log.info("Profile 1 labelsToApply = %r", self.new_profiles[1]['spec']['labelsToApply'])
+        self.new_profiles[0]['spec']['labelsToApply'].update(self.new_profiles[1]['spec']['labelsToApply'])
+        self.new_profiles[1]['spec']['labelsToApply'].update(self.new_profiles[0]['spec']['labelsToApply'])
+        _log.info("Merged profile 0 labelsToApply = %r", self.new_profiles[0]['spec']['labelsToApply'])
+        _log.info("Merged profile 1 labelsToApply = %r", self.new_profiles[1]['spec']['labelsToApply'])
         self._apply_new_profile(self.new_profiles, self.host1)
         # Check everything can contact everything else now
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
     test_tags.batchnumber = 5
-
-    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
-    def test_rules_tags(self):
-        profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
-        profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
-        rule0 = {'action': 'Allow',
-                 'source':
-                     {'tag': profile1_tag}}
-        rule1 = {'action': 'Allow',
-                 'source':
-                     {'tag': profile0_tag}}
-        self.new_profiles[0]['spec']['ingress'].append(rule0)
-        self.new_profiles[1]['spec']['ingress'].append(rule1)
-        self._apply_new_profile(self.new_profiles, self.host1)
-        # Check everything can contact everything else now
-        self.assert_connectivity(retries=3,
-                                 pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 5
 
     def test_rules_protocol_icmp(self):
         rule = {'action': 'Allow',
