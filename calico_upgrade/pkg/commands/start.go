@@ -41,11 +41,11 @@ Options:
   -h --help                    Show this screen.
   --apiconfigv3=<V3_APICONFIG> Path to the file containing connection
                                configuration in YAML or JSON format for
-							   the Calico v1 API.
+                               the Calico v1 API.
                                [default: ` + constants.DefaultConfigPathV3 + `]
   --apiconfigv1=<V1_APICONFIG> Path to the file containing connection
                                configuration in YAML or JSON format for
-							   the Calico v3 API.
+                               the Calico v3 API.
                                [default: ` + constants.DefaultConfigPathV1 + `]
   --output-dir=<OUTPUTDIR>     Directory in which the data migration reports
                                are written to.
@@ -61,11 +61,62 @@ Options:
                                updated by the upgrade.
 
 Description:
+  Start the upgrade process to migrate from the Calico v1 data format to the
+  Calico v3 data format required by Calico v3.0+.
+
+  Before running this command, all calico/node instances should be running
+  the latest 2.x release.  This command will temporarily pause Calico
+  networking across your cluster which means no new endpoints can be created
+  until the upgrade is complete.  Note that existing endpoints will continue
+  to be networked with Calico during the upgrade process.
+
+  When this command completes successfully, upgrade all of your calico/node
+  instances to the required 3.x release.  Once each node is upgrade you can
+  complete the upgrade using the 'calico-update complete' command which will
+  unpause Calico networking and allow new endpoints to be created.
+
+  This command generates the following set of reports (if it contains no data
+  an individual report is not generated).
+
+    ` + constants.FileConvertedNames + `
+      This contains a mapping between the v1 resource name and the v3 resource
+      name.  This will contain an entry for every v1 resource that was
+      migrated.
+
+    ` + constants.FileNameClashes + `
+      This contains a list of resources that after conversion to v3 have
+      names that are identical to other converted resources.  This may occur
+      because name formats in Calico v3 are in some cases more restrictive
+      than previous versions and the mapping used to convert a v1 name to a
+      v3 name is algorithmic.  Generally, name clashes should be rare.
+
+    ` + constants.FileConversionErrors + `
+      This contains a full list of all of the errors converting the v1 data to
+      v3 format.  There may be multiple conversion errors for a single
+      resource.  Provided the v1 format data is correct, conversion errors
+      should be rare.
+
+    ` + constants.FilePolicyController + `
+      This contains a list of the v1 resources that we are not migrating
+      because the name of the resource indicates that the resource is created
+      by the policy controller and will automatically be created when the
+      policy controller is upgraded.
+
+    ` + constants.FileValidationErrors + `
+      This contains a list of errors that occurred when validating the v3
+      resources that were otherwise successfully converted from v1.  These
+      errors usually suggest an issue with the migration script itself and it
+      is recommended to raise a GitHub issue at
+         https://github.com/projectcalico/calico/issues
+      and await a patch before continuing with the upgrade.
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
+	}
+	if len(parsedArgs) == 0 {
+		return
 	}
 	cfv3 := parsedArgs["--apiconfigv3"].(string)
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
