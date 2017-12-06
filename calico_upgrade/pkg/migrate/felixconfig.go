@@ -23,7 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
@@ -34,22 +34,18 @@ type felixConfig struct{}
 // Query the v1 format of GlobalConfigList and convert to the v3 format of
 // FelixConfiguration and ClusterInformation.
 func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
-	clientv1 upgradeclients.V1ClientInterface,
+	clientv1 clients.V1ClientInterface,
 	data *ConvertedData,
 ) error {
 	// Query all of the global config into a slice of KVPairs.
 	kvps, err := clientv1.List(model.GlobalConfigListOptions{})
 	if err != nil {
-		data.ConversionErrors = append(data.ConversionErrors, ConversionError{
-			Msg:   "Failed to list global felix config",
-			Cause: err,
-		})
 		return err
 	}
 
 	// Parse the separate KVPairs into a global FelixConfiguration resource and a
-	// global ClusterInformation resource.  Note that we just set the Ready flag to true
-	// (the migration code will set it to false when required).
+	// global ClusterInformation resource.  Note that if this is KDD we set the Ready
+	// flag to true, otherwise to false.
 	globalConfig := apiv3.NewFelixConfiguration()
 	globalConfig.Name = "default"
 	if err := fc.parseFelixConfigV1IntoResourceV3(kvps, globalConfig, data); err != nil {
@@ -61,16 +57,12 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	if err = fc.parseFelixConfigV1IntoResourceV3(kvps, clusterInfo, data); err != nil {
 		return err
 	}
-	ready := true
+	ready := clientv1.IsKDD()
 	clusterInfo.Spec.DatastoreReady = &ready
 
 	// Query all of the per-host felix config into a slice of KVPairs.
 	kvps, err = clientv1.List(model.HostConfigListOptions{})
 	if err != nil {
-		data.ConversionErrors = append(data.ConversionErrors, ConversionError{
-			Msg:   "Failed to list per-node felix config",
-			Cause: err,
-		})
 		return err
 	}
 

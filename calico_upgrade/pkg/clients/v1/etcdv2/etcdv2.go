@@ -31,9 +31,6 @@ import (
 
 var (
 	etcdApplyOpts        = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
-	etcdCreateOpts       = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
-	etcdCreateDirOpts    = &etcd.SetOptions{PrevExist: etcd.PrevNoExist, Dir: true}
-	etcdDeleteEmptyOpts  = &etcd.DeleteOptions{Recursive: false, Dir: true}
 	etcdGetOpts          = &etcd.GetOptions{Quorum: true}
 	etcdListOpts         = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
 	etcdListChildrenOpts = &etcd.GetOptions{Quorum: true, Recursive: false, Sort: true}
@@ -48,7 +45,7 @@ type EtcdClient struct {
 func NewEtcdClient(config *apiv1.EtcdConfig) (*EtcdClient, error) {
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
-	etcdLocation := []string{}
+	var etcdLocation []string
 	if config.EtcdAuthority != "" {
 		etcdLocation = []string{config.EtcdScheme + "://" + config.EtcdAuthority}
 	}
@@ -66,14 +63,14 @@ func NewEtcdClient(config *apiv1.EtcdConfig) (*EtcdClient, error) {
 		CertFile: config.EtcdCertFile,
 		KeyFile:  config.EtcdKeyFile,
 	}
-	transport, err := transport.NewTransport(tls, clientTimeout)
+	t, err := transport.NewTransport(tls, clientTimeout)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := etcd.Config{
 		Endpoints:               etcdLocation,
-		Transport:               transport,
+		Transport:               t,
 		HeaderTimeoutPerRequest: clientTimeout,
 	}
 
@@ -222,7 +219,7 @@ func (c *EtcdClient) set(d *model.KVPair, options *etcd.SetOptions) (*model.KVPa
 // Process a node returned from a list to filter results based on the List type and to
 // compile and return the required results.
 func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
-	kvs := []*model.KVPair{}
+	var kvs []*model.KVPair
 	if n.Dir {
 		for _, node := range n.Nodes {
 			kvs = append(kvs, filterEtcdList(node, l)...)
@@ -334,7 +331,7 @@ func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model
 	// to perform an additional get here, but in the future when the metadata
 	// may contain fields, we would need to perform a get.
 	log.Debug("Parse host directories.")
-	kvs := []*model.KVPair{}
+	var kvs []*model.KVPair
 	for _, n := range results.Node.Nodes {
 		k := l.KeyFromDefaultPath(n.Key + "/metadata")
 		if k != nil {

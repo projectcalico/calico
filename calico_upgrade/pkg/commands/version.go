@@ -20,32 +20,28 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
 )
 
 var VERSION, BUILD_DATE, GIT_REVISION string
 var VERSION_SUMMARY string
 
 func init() {
-	VERSION_SUMMARY = "calicoctl version " + VERSION + ", build " + GIT_REVISION
+	VERSION_SUMMARY = "calico-upgrade version " + VERSION + ", build " + GIT_REVISION
 }
 
 func Version(args []string) {
 	doc := `Usage:
-  calicoctl version [--config=<CONFIG>]
+  calico-upgrade version
 
 Options:
   -h --help             Show this screen.
-  -c --config=<CONFIG>  Path to the file containing connection configuration in
-                        YAML or JSON format.
-                        [default: ` + constants.DefaultConfigPath + `]
 
 Description:
-  Display the version of calicoctl.
+  Display the version of calico-upgrade.
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
@@ -55,30 +51,4 @@ Description:
 	fmt.Println("Client Version:   ", VERSION)
 	fmt.Println("Build date:       ", BUILD_DATE)
 	fmt.Println("Git commit:       ", GIT_REVISION)
-
-	/*
-		// Load the client config and connect.
-		cf := parsedArgs["--config"].(string)
-		client, err := clientmgr.NewClient(cf)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		cfg := client.Config()
-
-		val, assigned, err := cfg.GetFelixConfig("CalicoVersion", "")
-		if err != nil {
-			val = fmt.Sprintf("unknown (%s)", err)
-		} else if !assigned {
-			val = "unknown"
-		}
-		fmt.Println("Cluster Version:  ", val)
-		val, assigned, err = cfg.GetFelixConfig("ClusterType", "")
-		if err != nil {
-			val = fmt.Sprintf("unknown (%s)", err)
-		} else if !assigned {
-			val = "unknown"
-		}
-		fmt.Println("Cluster Type:     ", val)
-	*/
 }

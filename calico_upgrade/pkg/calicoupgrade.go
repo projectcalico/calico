@@ -28,11 +28,18 @@ func main() {
 	doc := `Usage:
   calico-upgrade [options] <command> [<args>...]
 
-    validate
-    start-upgrade
-    complete-upgrade
-    abort
-    convert-manifest
+    validate  Validate the v1 formatted data, check that it can be migrated to
+              the v3 format, and output a full report of any migrated names,
+              migration errors, or migrated name conflicts.
+    start     Start the upgrade process.  This will validate the data, pause
+              Calico networking, and migrate the data from v1 to v3 format.
+              Once the data is migrated successfully, the calico/node
+              instances can be upgraded to v3.x.
+    complete  This completes the upgrade process by un-pausing Calico
+              networking.
+    abort     This aborts the upgrade process by un-pausing Calico
+              networking.
+    version   Display the version of calico-upgrade.
 
 Options:
   -h --help               Show this screen.
@@ -40,8 +47,8 @@ Options:
                           warn, info, debug) [default: panic]
 
 Description:
-  The calico-upgrade command line tool is used to assist with the migration of Calico v2 data
-  when upgrading your deployment to Calico v3.
+  The calico-upgrade command line tool is used to assist with the migration of
+  v1-formatted data to the v3 format used by Calico v3.x.
 
   See 'calico-upgrade <command> --help' to read about a specific subcommand.
 `
@@ -66,10 +73,14 @@ Description:
 		switch command {
 		case "validate":
 			commands.Validate(args)
-		case "start-upgrade":
-			commands.StartUpgrade(args)
+		case "start":
+			commands.Start(args)
+		case "complete":
+			commands.Complete(args)
 		case "abort":
 			commands.Abort(args)
+		case "version":
+			commands.Version(args)
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
 			fmt.Println(doc)

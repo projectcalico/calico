@@ -21,95 +21,138 @@ import (
 
 	"github.com/docopt/docopt-go"
 
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
 func Validate(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calico-upgrade validate [--calicov3-config=<V3CONFIG>] [--calicov2-config=<V2CONFIG>]
+  calico-upgrade validate
+      [--apiconfigv3=<V3_APICONFIG>]
+      [--apiconfigv1=<V1_APICONFIG>]
+      [--output-dir=<OUTPUTDIR>]
 
 Example:
-  calico-upgrade validate --calicov3-config=/path/to/v3/config --calicov2-config=/path/to/v2/config validate
+  calico-upgrade validate --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
 
 Options:
-  -h --help                  Show this screen.
-  --calicov2-config=<CONFIG> Path to the file containing connection
-                             configuration in YAML or JSON format for
-							 the Calico v1 API.
-                             [default: ` + constants.DefaultConfigPath + `]
-  --calicov3-config=<CONFIG> Path to the file containing connection
-                             configuration in YAML or JSON format for
-							 the Calico v3 API.
-                             [default: ` + constants.DefaultConfigPath + `]
+  -h --help                    Show this screen.
+  --apiconfigv3=<V3_APICONFIG> Path to the file containing connection
+                               configuration in YAML or JSON format for
+							   the Calico v1 API.
+                               [default: ` + constants.DefaultConfigPathV3 + `]
+  --apiconfigv1=<V1_APICONFIG> Path to the file containing connection
+                               configuration in YAML or JSON format for
+							   the Calico v3 API.
+                               [default: ` + constants.DefaultConfigPathV1 + `]
+  --output-dir=<OUTPUTDIR>     Directory in which the data migration reports
+                               are written to.
+                               [default: ` + constants.GetDefaultOutputDir() + `]
 
 Description:
+  Validate that the Calico v1 format data can be migrated to Calico v3 format
+  required by Calico v3.0+.
+
+  This command generates the following set of reports (if it contains no data
+  an individual report is not generated).
+
+    ` + constants.FileConvertedNames + `
+      This contains a mapping between the v1 resource name and the v3 resource
+      name.  This will contain an entry for every v1 resource that was
+      migrated.
+
+    ` + constants.FileNameClashes + `
+      This contains a list of resources that after conversion to v3 have
+      names that are identical to other converted resources.  This may occur
+      because name formats in Calico v3 are in some cases more restrictive
+      than previous versions and the mapping used to convert a v1 name to a
+      v3 name is algorithmic.  Generally, name clashes should be rare.
+
+    ` + constants.FileConversionErrors + `
+      This contains a full list of all of the errors converting the v1 data to
+      v3 format.  There may be multiple conversion errors for a single
+      resource.  Provided the v1 format data is correct, conversion errors
+      should be rare.
+
+    ` + constants.FilePolicyController + `
+      This contains a list of the v1 resources that we are not migrating
+      because the name of the resource indicates that the resource is created
+      by the policy controller and will automatically be created when the
+      policy controller is upgraded.
+
+    ` + constants.FileValidationErrors + `
+      This contains a list of errors that occurred when validating the v3
+      resources that were otherwise successfully converted from v1.  These
+      errors usually suggest an issue with the migration script itself and it
+      is recommended to raise a GitHub issue at
+         https://github.com/projectcalico/calico/issues
+      and await a patch before continuing with the upgrade.
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
-	cfv2 := parsedArgs["--calicov2-config"].(string)
-	cfv3 := parsedArgs["--calicov3-config"].(string)
+	cfv3 := parsedArgs["--apiconfigv3"].(string)
+	cfv1 := parsedArgs["--apiconfigv1"].(string)
+	output := parsedArgs["--output-dir"].(string)
 
-	_, clientV2, err := upgradeclients.LoadClients(cfv3, cfv2)
+	// Ensure we are able to write the output report to the designated output directory.
+	ensureDirectory(output)
+
+	// Obtain the v1 and v3 clients.
+	clientv3, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
-		fmt.Printf("Failed to create Calico API client: %s\n", err)
+		printFinalMessage("Failed to validate v1 to v3 conversion.\n"+
+			"Error accessing the Calico API: %v", err)
 		os.Exit(1)
 	}
 
-	cData, err := migrate.QueryAndConvertResources(clientV2)
+	// Ensure the migration code displays messages (this is basically indicating that it
+	// is being called from the calico-upgrade script).
+	migrate.DisplayStatusMessages(true)
 
-	// Any resource names we plan to change should be reported to the user.
-	if len(cData.NameConversions) > 0 {
-		fmt.Println("The following resource names will be changed:")
-		for _, change := range cData.NameConversions {
-			fmt.Printf(" -  %s: %s -> %s\n", change.Kind, change.Original, change.New)
+	// Perform the data validation.  The validation result can only be OK or Fail.  The
+	// Fail case may or may not have associated conversion data.
+	data, res := migrate.Validate(clientv3, clientv1)
+	if res == migrate.ResultOK {
+		// We validated the data successfully.  Include a report.
+		printFinalMessage("Successfully validated v1 to v3 conversion.\n" +
+			"See reports below for details of the conversion.")
+		printAndOutputReport(output, data)
+	} else {
+		if data == nil || !data.HasErrors() {
+			// We failed to migrate the data and it is not due to conversion errors.  In this
+			// case refer to previous messages.
+			printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
+				"See previous messages for details.")
+		} else {
+			// We failed to migrate the data and it appears to be due to conversion errors.
+			// In this case refer to the report for details.
+			printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
+				"See reports blow for details of any conversion errors.")
+			printAndOutputReport(output, data)
 		}
-	}
-
-	// After we've converted the names we might end up with clashing names that the user will need to update.
-	if len(cData.NameClashes) > 0 {
-		fmt.Println("The following names clashed after conversion was applied:")
-		for _, nError := range cData.NameClashes {
-			fmt.Println(nError)
-		}
-	}
-
-	// Errors with data that cannot be converted.
-	if len(cData.ConversionErrors) > 0 {
-		fmt.Println("The following errors were seen during validation, please resolve these errors " +
-			"and run `calico-upgrade validate` again:")
-		for _, cError := range cData.ConversionErrors {
-			fmt.Println(cError)
-		}
-	}
-
-	// Errors with validation logic, user should report these.
-	if len(cData.ConversedValidationErrors) > 0 {
-		fmt.Println("Errors with validation were seen, please report these to the Calico team " +
-			"on Github by filing an issue (https://github.com/projectcalico/calico/issues):")
-		for _, vError := range cData.ConversedValidationErrors {
-			fmt.Println(vError)
-		}
-	}
-
-	// Some data will be dropped and recreated by the Kubernetes Policy Controller.
-	if len(cData.HandledByPolicyCtrl) > 0 {
-		fmt.Println("The following data will be skipped as it will be recreated by the Kubernetes " +
-			"Policy Controller:")
-		for _, skipped := range cData.HandledByPolicyCtrl {
-			fmt.Printf(" -  %s\n", skipped)
-		}
-	}
-
-	if cData.HasErrors() {
-		fmt.Println("Please correct the above errors and run `calico-upgrade validate` again.")
 		os.Exit(1)
 	}
 
-	fmt.Println("Validation was successful, please install Calico v3.0 and then run `calico-upgrade start-upgrade` " +
-		"to migrate your data.")
+	if data == nil {
+		printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
+			"See previous messages for details.")
+		os.Exit(1)
+	} else if data.HasErrors() {
+		printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
+			"See reports below for details on any conversion errors.")
+		printAndOutputReport(output, data)
+		os.Exit(1)
+	} else if res != migrate.ResultOK {
+		printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
+			"See previous messages for details.")
+		os.Exit(1)
+	} else {
+		printFinalMessage("Successfully validated v1 to v3 conversion.\n" +
+			"See reports below for details of the conversion.")
+		printAndOutputReport(output, data)
+	}
 }

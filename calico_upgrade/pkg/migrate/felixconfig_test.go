@@ -17,7 +17,6 @@ package migrate
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -37,68 +36,68 @@ var _ = Describe("Test felix configuration upgrade", func() {
 		Kind: apiv3.KindFelixConfiguration,
 		Name: "node.mynode",
 	}
-	perNodeFelix := &apiv3.FelixConfiguration{
-		ObjectMeta: metav1.ObjectMeta{Name: "node.mynode"},
-		Spec: apiv3.FelixConfigurationSpec{
-			RouteRefreshIntervalSecs: &int1,
-			InterfacePrefix:          "califoobar",
-			IPIPEnabled:              &bool1,
-			IptablesMarkMask:         &uint1,
-			FailsafeInboundHostPorts: &[]apiv3.ProtoPort{},
-			FailsafeOutboundHostPorts: &[]apiv3.ProtoPort{
-				{
-					Protocol: "TCP",
-					Port:     1234,
-				},
-				{
-					Protocol: "UDP",
-					Port:     22,
-				},
-				{
-					Protocol: "TCP",
-					Port:     65535,
-				},
+
+	perNodeFelix := apiv3.NewFelixConfiguration()
+	perNodeFelix.Name = "node.mynode"
+	perNodeFelix.Spec = apiv3.FelixConfigurationSpec{
+		RouteRefreshIntervalSecs: &int1,
+		InterfacePrefix:          "califoobar",
+		IPIPEnabled:              &bool1,
+		IptablesMarkMask:         &uint1,
+		FailsafeInboundHostPorts: &[]apiv3.ProtoPort{},
+		FailsafeOutboundHostPorts: &[]apiv3.ProtoPort{
+			{
+				Protocol: "TCP",
+				Port:     1234,
+			},
+			{
+				Protocol: "UDP",
+				Port:     22,
+			},
+			{
+				Protocol: "TCP",
+				Port:     65535,
 			},
 		},
 	}
+
 	globalFelixKey := model.ResourceKey{
 		Kind: apiv3.KindFelixConfiguration,
 		Name: "default",
 	}
-	globalFelix := &apiv3.FelixConfiguration{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec: apiv3.FelixConfigurationSpec{
-			RouteRefreshIntervalSecs: &int2,
-			InterfacePrefix:          "califoobar",
-			IPIPEnabled:              &bool2,
-			IptablesMarkMask:         &uint2,
-			FailsafeInboundHostPorts: &[]apiv3.ProtoPort{
-				{
-					Protocol: "TCP",
-					Port:     1234,
-				},
-				{
-					Protocol: "UDP",
-					Port:     22,
-				},
-				{
-					Protocol: "TCP",
-					Port:     65535,
-				},
+	globalFelix := apiv3.NewFelixConfiguration()
+	globalFelix.Name = "default"
+	globalFelix.Spec = apiv3.FelixConfigurationSpec{
+		RouteRefreshIntervalSecs: &int2,
+		InterfacePrefix:          "califoobar",
+		IPIPEnabled:              &bool2,
+		IptablesMarkMask:         &uint2,
+		FailsafeInboundHostPorts: &[]apiv3.ProtoPort{
+			{
+				Protocol: "TCP",
+				Port:     1234,
+			},
+			{
+				Protocol: "UDP",
+				Port:     22,
+			},
+			{
+				Protocol: "TCP",
+				Port:     65535,
 			},
 		},
 	}
+
 	globalClusterKey := model.ResourceKey{
 		Kind: apiv3.KindClusterInformation,
 		Name: "default",
 	}
-	globalCluster := &apiv3.ClusterInformation{
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec: apiv3.ClusterInformationSpec{
-			ClusterGUID:    "abcedfg",
-			ClusterType:    "Mesos,K8s",
-			DatastoreReady: &bool2,
-		},
+	globalCluster := apiv3.NewClusterInformation()
+	globalCluster.Name = "default"
+	globalCluster.Spec = apiv3.ClusterInformationSpec{
+		ClusterGUID:    "abcedfg",
+		ClusterType:    "Mesos,K8s",
+		DatastoreReady: &bool1,
 	}
 
 	It("should handle different field types being assigned", func() {
@@ -136,10 +135,14 @@ var _ = Describe("Test felix configuration upgrade", func() {
 		fc := &felixConfig{}
 		err = fc.queryAndConvertFelixConfigV1ToV3(client, data)
 		Expect(err).NotTo(HaveOccurred())
+		By("Checking total conversion is 3")
 		Expect(data.Resources).To(HaveLen(3))
+		By("Checking global felix config")
 		Expect(data.Resources[0]).To(Equal(globalFelix))
-		Expect(data.Resources[2]).To(Equal(globalCluster))
-		Expect(data.Resources[3]).To(Equal(perNodeFelix))
+		By("Checking global cluster info")
+		Expect(data.Resources[1]).To(Equal(globalCluster))
+		By("Checking per node felix config")
+		Expect(data.Resources[2]).To(Equal(perNodeFelix))
 	})
 })
 

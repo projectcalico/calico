@@ -19,7 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients/v1/etcdv2"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/etcdv2"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -98,7 +98,7 @@ func (c *ModelAdaptor) getProfile(k model.Key) (*model.KVPair, error) {
 	var err error
 	pk := k.(model.ProfileKey)
 
-	if t, err = c.client.Get(model.ProfileTagsKey{pk}); err != nil {
+	if t, err = c.client.Get(model.ProfileTagsKey{ProfileKey: pk}); err != nil {
 		return nil, err
 	}
 	d := model.KVPair{
@@ -109,10 +109,10 @@ func (c *ModelAdaptor) getProfile(k model.Key) (*model.KVPair, error) {
 		Revision: t.Revision,
 	}
 	p := d.Value.(*model.Profile)
-	if l, err = c.client.Get(model.ProfileLabelsKey{pk}); err == nil {
+	if l, err = c.client.Get(model.ProfileLabelsKey{ProfileKey: pk}); err == nil {
 		p.Labels = l.Value.(map[string]string)
 	}
-	if r, err = c.client.Get(model.ProfileRulesKey{pk}); err == nil {
+	if r, err = c.client.Get(model.ProfileRulesKey{ProfileKey: pk}); err == nil {
 		p.Rules = *r.Value.(*model.ProfileRules)
 	}
 	return &d, nil
@@ -142,7 +142,7 @@ func (c *ModelAdaptor) getNode(nk model.NodeKey) (*model.KVPair, error) {
 
 	// Fill in the Metadata specific part of the node configuration.  At the
 	// moment, there is nothing to fill in.
-	if _, err = c.client.Get(model.HostMetadataKey{nk.Hostname}); err != nil {
+	if _, err = c.client.Get(model.HostMetadataKey{Hostname: nk.Hostname}); err != nil {
 		return nil, err
 	}
 	nv := model.Node{}
@@ -319,15 +319,15 @@ func ToTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
 	pk := d.Key.(model.ProfileKey)
 
 	t = &model.KVPair{
-		Key:   model.ProfileTagsKey{pk},
+		Key:   model.ProfileTagsKey{ProfileKey: pk},
 		Value: p.Tags,
 	}
 	l = &model.KVPair{
-		Key:   model.ProfileLabelsKey{pk},
+		Key:   model.ProfileLabelsKey{ProfileKey: pk},
 		Value: p.Labels,
 	}
 	r = &model.KVPair{
-		Key:   model.ProfileRulesKey{pk},
+		Key:   model.ProfileRulesKey{ProfileKey: pk},
 		Value: &p.Rules,
 	}
 

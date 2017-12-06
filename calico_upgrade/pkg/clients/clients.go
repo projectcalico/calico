@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package upgradeclients
+package clients
 
 import (
 	"errors"
@@ -22,9 +22,9 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients/v1/compat"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients/v1/etcdv2"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/compat"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/etcdv2"
+	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
@@ -47,14 +47,14 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 	}
 
 	// Create the front end v3 client and extract the backend client from it.
-	clientv3, err := clientv3.New(*v3ApiConfig)
+	cv3, err := clientv3.New(*v3ApiConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// If this is Kubernetes then that's all we need.
 	if v3ApiConfig.Spec.DatastoreType == apiconfig.Kubernetes {
-		return nil, nil, errors.New("Upgrade script is not yet supported for KDD")
+		return nil, nil, errors.New("upgrade script is not yet supported for KDD")
 	}
 
 	// This must be an etcd backend.  Grab the Calico v1 API config (which must be specified).
@@ -65,17 +65,13 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 	}
 	// Create the back end etcdv2 client.  We wrap this in the compat module to handle
 	// multi-key backed resources.
-	etcdv1, err := etcdv2.NewEtcdClient(&v1ApiConfig.Spec.EtcdConfig)
-	backendv1 := compat.NewAdaptor(etcdv1)
+	ev1, err := etcdv2.NewEtcdClient(&v1ApiConfig.Spec.EtcdConfig)
 	if err != nil {
 		return nil, nil, err
 	}
+	bv1 := compat.NewAdaptor(ev1)
 
-	return clientv3, backendv1, nil
-}
-
-type backend interface {
-	Backend() clientv3.Interface
+	return cv3, bv1, nil
 }
 
 // loadClientConfigV1 loads the ClientConfig from the specified file (if specified)
