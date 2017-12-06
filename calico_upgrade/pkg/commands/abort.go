@@ -39,11 +39,11 @@ Options:
   -h --help                    Show this screen.
   --apiconfigv3=<V3_APICONFIG> Path to the file containing connection
                                configuration in YAML or JSON format for
-							   the Calico v1 API.
+                               the Calico v1 API.
                                [default: ` + constants.DefaultConfigPathV3 + `]
   --apiconfigv1=<V1_APICONFIG> Path to the file containing connection
                                configuration in YAML or JSON format for
-							   the Calico v3 API.
+                               the Calico v3 API.
                                [default: ` + constants.DefaultConfigPathV1 + `]
 
 Description:
@@ -55,6 +55,9 @@ Description:
 	if err != nil {
 		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
+	}
+	if len(parsedArgs) == 0 {
+		return
 	}
 	cfv3 := parsedArgs["--apiconfigv3"].(string)
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
