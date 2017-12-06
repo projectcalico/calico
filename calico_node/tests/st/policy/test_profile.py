@@ -70,6 +70,12 @@ class MultiHostMainline(TestBase):
         self.host1.calicoctl("delete globalnetworkset netset-1", raise_exception_on_failure=False)
         self.host1.calicoctl("delete globalnetworkset netset-2", raise_exception_on_failure=False)
 
+        # Delete conntrack state for UDP connections to the workloads.
+        # Otherwise a new UDP connection may be allowed where it should be
+        # denied.
+        self.host1.delete_conntrack_state_to_workloads("udp")
+        self.host2.delete_conntrack_state_to_workloads("udp")
+
         # Now restore the original profile and check it all works as before
         self._apply_new_profile(self.original_profiles, self.host1)
         self.host1.calicoctl("get profile -o yaml")
