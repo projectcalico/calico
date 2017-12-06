@@ -43,7 +43,7 @@ func CreateRule(ipv, icmpType, icmpCode int, proto, cidrStr, tag, selector, inAc
 
 	_, cidr, err := net.ParseCIDR(cidrStr)
 	if err != nil {
-		log.Printf("Error parsing CIDR: %s\n", err)
+		log.Printf("Error parsing CIDR: %v\n", err)
 	}
 
 	src := api.EntityRule{

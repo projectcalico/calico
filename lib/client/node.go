@@ -261,7 +261,7 @@ func (h *nodes) RemoveBGPNode(metadata api.NodeMetadata) error {
 	if err != nil {
 		// Return the error unless the resource does not exist.
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-			log.Errorf("Error removing BGP Node: %s", err)
+			log.Errorf("Error removing BGP Node: %v", err)
 			return err
 		}
 	}

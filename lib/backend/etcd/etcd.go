@@ -202,7 +202,7 @@ func (c *EtcdClient) Delete(d *model.KVPair) error {
 		log.Debugf("Delete empty Key: %s", parent)
 		_, err2 := c.etcdKeysAPI.Delete(context.Background(), parent, etcdDeleteEmptyOpts)
 		if err2 != nil {
-			log.Debugf("Unable to delete parent: %s", err2)
+			log.Debugf("Unable to delete parent: %v", err2)
 			break
 		}
 	}

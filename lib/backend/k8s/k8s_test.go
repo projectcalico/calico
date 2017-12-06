@@ -177,7 +177,7 @@ func (c cb) ProcessUpdates() {
 func (c cb) ExpectExists(updates []api.Update) {
 	// For each Key, wait for it to exist.
 	for _, update := range updates {
-		log.Infof("[TEST] Expecting key: %s", update.Key)
+		log.Infof("[TEST] Expecting key: %v", update.Key)
 		matches := false
 
 		wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
@@ -201,7 +201,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 		})
 
 		// Expect the key to have existed.
-		Expect(matches).To(Equal(true), fmt.Sprintf("Expected update not found: %s", update.Key))
+		Expect(matches).To(Equal(true), fmt.Sprintf("Expected update not found: %v", update.Key))
 	}
 }
 
@@ -209,7 +209,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 // via an update over the Syncer.
 func (c cb) ExpectDeleted(kvps []model.KVPair) {
 	for _, kvp := range kvps {
-		log.Infof("[TEST] Not expecting key: %s", kvp.Key)
+		log.Infof("[TEST] Not expecting key: %v", kvp.Key)
 		exists := true
 
 		wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
@@ -230,7 +230,7 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 		})
 
 		// Expect the key to not exist.
-		Expect(exists).To(Equal(false), fmt.Sprintf("Expected key not to exist: %s", kvp.Key))
+		Expect(exists).To(Equal(false), fmt.Sprintf("Expected key not to exist: %v", kvp.Key))
 	}
 }
 
@@ -241,7 +241,7 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 // exist in the cache.
 func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 	return func() interface{} {
-		log.Infof("Checking entry in cache: %s", key)
+		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
 		defer func() {
 			c.Lock.Unlock()
@@ -262,7 +262,7 @@ func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 // The returned function returns true if the entry is present.
 func (c cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
 	return func() interface{} {
-		log.Infof("Checking entry in cache: %s", key)
+		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
 		defer func() { c.Lock.Unlock() }()
 		_, ok := c.State[key.String()]

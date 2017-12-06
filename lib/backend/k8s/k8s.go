@@ -122,7 +122,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 
 	crdClientV1, err := buildCRDClientV1(*config)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to build V1 CRD client: %s", err)
+		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
 
 	kubeClient := &KubeClient{

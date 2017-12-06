@@ -36,7 +36,7 @@ type ErrorResourceDoesNotExist struct {
 }
 
 func (e ErrorResourceDoesNotExist) Error() string {
-	return fmt.Sprintf("resource does not exist: %s", e.Identifier)
+	return fmt.Sprintf("resource does not exist: %v", e.Identifier)
 }
 
 // Error indicating an operation is not supported.
@@ -48,9 +48,9 @@ type ErrorOperationNotSupported struct {
 
 func (e ErrorOperationNotSupported) Error() string {
 	if e.Reason == "" {
-		return fmt.Sprintf("operation %s is not supported on %s", e.Operation, e.Identifier)
+		return fmt.Sprintf("operation %s is not supported on %v", e.Operation, e.Identifier)
 	} else {
-		return fmt.Sprintf("operation %s is not supported on %s: %s", e.Operation, e.Identifier, e.Reason)
+		return fmt.Sprintf("operation %s is not supported on %v: %s", e.Operation, e.Identifier, e.Reason)
 	}
 }
 
@@ -62,7 +62,7 @@ type ErrorResourceAlreadyExists struct {
 }
 
 func (e ErrorResourceAlreadyExists) Error() string {
-	return fmt.Sprintf("resource already exists: %s", e.Identifier)
+	return fmt.Sprintf("resource already exists: %v", e.Identifier)
 }
 
 // Error indicating a problem connecting to the backend.
@@ -130,7 +130,7 @@ type ErrorResourceUpdateConflict struct {
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
-	return fmt.Sprintf("update conflict: %s", e.Identifier)
+	return fmt.Sprintf("update conflict: %v", e.Identifier)
 }
 
 // UpdateErrorIdentifier modifies the supplied error to use the new resource
@@ -167,7 +167,7 @@ type ErrorWatchTerminated struct {
 }
 
 func (e ErrorWatchTerminated) Error() string {
-	return fmt.Sprintf("watch terminated (closedByRemote:%v): %s", e.ClosedByRemote, e.Err)
+	return fmt.Sprintf("watch terminated (closedByRemote:%v): %v", e.ClosedByRemote, e.Err)
 }
 
 // Error indicating the datastore has failed to parse an entry.
@@ -178,5 +178,5 @@ type ErrorParsingDatastoreEntry struct {
 }
 
 func (e ErrorParsingDatastoreEntry) Error() string {
-	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %s", e.RawKey, e.RawValue, e.Err)
+	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %v", e.RawKey, e.RawValue, e.Err)
 }
