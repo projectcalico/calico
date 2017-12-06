@@ -8,7 +8,7 @@ all: dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-wi
 # calico-upgrade build
 # - Building the calico-upgrade binary in a container
 # - Building the calico-upgrade binary outside a container ("simple-binary")
-# - Building the calico/ctl image
+# - Building the calico/upgrade image
 ###############################################################################
 # Determine which OS / ARCH.
 OS := $(shell uname -s | tr A-Z a-z)
@@ -20,7 +20,7 @@ GO_BUILD_VER:=latest
 
 CALICO_UPGRADE_VERSION?=$(shell git describe --tags --dirty --always)
 CALICO_UPGRADE_DIR=pkg
-UPGRADE_CONTAINER_NAME?=calico/ctl
+UPGRADE_CONTAINER_NAME?=calico/upgrade
 CALICO_UPGRADE_FILES=$(shell find $(CALICO_UPGRADE_DIR) -name '*.go')
 UPGRADE_CONTAINER_CREATED=$(CALICO_UPGRADE_DIR)/.calico_upgrade.created
 
@@ -38,7 +38,7 @@ LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/commands.VERSION=$(CALICO_UPGRADE_VERSI
 
 LIBCALICOGO_PATH?=none
 
-calico/upgrade: $(UPGRADE_CONTAINER_CREATED)      ## Create the calico/ctl image
+calico/upgrade: $(UPGRADE_CONTAINER_CREATED)      ## Create the calico/upgrade image
 
 .PHONY: clean-calico-upgrade
 clean-calico-upgrade:
@@ -63,8 +63,8 @@ vendor: glide.yaml
       glide install -strip-vendor'
 
 # build calico_upgrade image
-$(UPGRADE_CONTAINER_CREATED): pkg/Dockerfile.calico-upgrade dist/calico-upgrade
-	docker build -t $(UPGRADE_CONTAINER_NAME) -f pkg/Dockerfile.calico-upgrade .
+$(UPGRADE_CONTAINER_CREATED): pkg/Dockerfile.calico_upgrade dist/calico-upgrade
+	docker build -t $(UPGRADE_CONTAINER_NAME) -f pkg/Dockerfile.calico_upgrade .
 	touch $@
 
 ## Build calico-upgrade
@@ -203,7 +203,7 @@ semaphore: clean
 	# Run the containerized tests first.
 	$(MAKE) test-containerized st
 
-	$(MAKE) calico/ctl
+	$(MAKE) calico/upgrade
 
 	# Make sure that calico-upgrade builds cross-platform.
 	$(MAKE) dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe
@@ -218,9 +218,9 @@ endif
 	if git describe --tags --dirty | grep dirty; \
 	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
 
-	# Build the calico-upgrade binaries, as well as the calico/ctl and calico/node images.
+	# Build the calico-upgrade binaries, as well as the calico/upgrade image.
 	$(MAKE) dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe
-	$(MAKE) calico/ctl
+	$(MAKE) calico/upgrade
 
 	# Check that the version output includes the version specified.
 	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
@@ -246,10 +246,10 @@ endif
 	@echo "\nAdd release notes for calico-upgrade. Use this command"
 	@echo "to find commit messages for this release: git log --oneline <old_release_version>...$(VERSION)"
 	@echo "git push origin $(VERSION)"
-	@echo "docker push calico/ctl:$(VERSION)"
-	@echo "docker push quay.io/calico/ctl:$(VERSION)"
-	@echo "docker push calico/ctl:latest"
-	@echo "docker push quay.io/calico/ctl:latest"
+	@echo "docker push $(UPGRADE_CONTAINER_NAME):$(VERSION)"
+	@echo "docker push quay.io/$(UPGRADE_CONTAINER_NAME):$(VERSION)"
+	@echo "docker push $(UPGRADE_CONTAINER_NAME):latest"
+	@echo "docker push quay.io/$(UPGRADE_CONTAINER_NAME):latest"
 	@echo "See RELEASING.md for detailed instructions."
 
 ## Clean enough that a new release build will be clean
