@@ -26,14 +26,14 @@ import (
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
-func Abort(args []string) {
+func Complete(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calico-upgrade abort
+  calico-upgrade complete
       [--apiconfigv3=<V3_APICONFIG>]
       [--apiconfigv1=<V1_APICONFIG>]
 
 Example:
-  calico-upgrade abort --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
+  calico-upgrade complete --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
 
 Options:
   -h --help                    Show this screen.
@@ -47,9 +47,7 @@ Options:
                                [default: ` + constants.DefaultConfigPathV1 + `]
 
 Description:
-  Abort an upgrade that was started using 'calico-upgrade start'.  In the event
-  of a failure that requires an explicit abort, the start command will indicate
-  that the abort command will need to be executed.
+  Complete an upgrade that was started using 'calico-upgrade start'.
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
@@ -72,12 +70,12 @@ Description:
 	migrate.DisplayStatusMessages(true)
 
 	// Perform the upgrade abort.
-	res := migrate.Abort(clientv1)
+	res := migrate.Complete(clientv1)
 	if res == migrate.ResultOK {
 		// We aborted successfully.
-		printFinalMessage("Successfully aborted the upgrade process.")
+		printFinalMessage("Successfully completed the upgrade process.")
 	} else {
-		printFinalMessage("Failed to abort the upgrade - please retry the command.\n" +
+		printFinalMessage("Failed to complete the upgrade - please retry the command.\n" +
 			"The previous messages may contain more details.")
 		os.Exit(1)
 	}

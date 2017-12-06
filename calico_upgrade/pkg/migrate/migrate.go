@@ -36,14 +36,24 @@ import (
 
 const (
 	forceEnableReadyRetries = 30
-	maxApplyRetries = 5
-	numAppliesPerUpdate = 100
+	maxApplyRetries         = 5
+	numAppliesPerUpdate     = 100
 )
 
 var displayStatus = false
+
 func DisplayStatusMessages(d bool) {
 	displayStatus = d
 }
+
+type Result int
+
+const (
+	ResultOK Result = iota
+	ResultFail
+	ResultFailNeedsAbort
+	ResultFailNeedsRetry
+)
 
 type ConvertedData struct {
 	// The converted resources
@@ -52,7 +62,8 @@ type ConvertedData struct {
 	// The converted resource names
 	NameConversions []NameConversion
 
-	// Errors hit attempting to convert the v1 data to v3 format
+	// Errors hit attempting to convert the v1 data to v3 format.  The
+	// KeyV3 and ValueV3 will be nil for these conversion errors.
 	ConversionErrors []ConversionError
 
 	// Errors hit validating the converted v3 data.  This suggests an error in the
@@ -61,7 +72,7 @@ type ConvertedData struct {
 
 	// Name clashes in the converted resources.  These need to be resolved through
 	// reconfiguration before attempting the upgrade.
-	NameClashes []ConversionError
+	NameClashes []NameClash
 
 	// Entries that were skipped because they will be handled by the Kubernetes
 	// Policy controller.
@@ -75,32 +86,38 @@ func (c *ConvertedData) HasErrors() bool {
 }
 
 type ConversionError struct {
-	Msg         string
-	Cause       error
-	V1Key       model.Key
-	V1Value     interface{}
-	V3Converted conversionv1v3.Resource
+	Cause   error
+	KeyV1   model.Key
+	ValueV1 interface{}
+	KeyV3   model.Key
+	ValueV3 conversionv1v3.Resource
 }
 
 // Details about name/id conversions.
 type NameConversion struct {
-	Kind     string
-	Original string
-	New      string
+	KeyV1 model.Key
+	KeyV3 model.Key
+}
+
+// Details about name/id conversions.
+type NameClash struct {
+	KeyV1      model.Key
+	KeyV3      model.Key
+	OtherKeyV1 model.Key
 }
 
 // Validate validates that the v1 data can be correctly migrated to v3.
-func Validate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterface) (*ConvertedData, bool) {
+func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) (*ConvertedData, Result) {
 	status("Validating conversion of v1 data to v3")
 	data, err := queryAndConvertResources(clientv1)
 	if err != nil {
 		status("Error: unable to perform validation, please resolve errors and retry")
 		substatus("Cause: %v", err)
-		return nil, false
+		return nil, ResultFail
 	}
 	if data.HasErrors() {
 		status("FAIL: error validating data, check output for details and resolve issues before upgrading")
-		return data, false
+		return data, ResultFail
 	}
 	substatus("success: data conversion validated")
 
@@ -111,31 +128,31 @@ func Validate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInter
 	} else if !clean {
 		status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
 			"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
-			"the `--force` flag when running the `start-upgrade` command to force the upgrade, in which " +
+			"the `--ignore-v3-data` flag when running the `start-upgrade` command to force the upgrade, in which " +
 			"case the v1 data will be converted and applied over the data that is currently in the v3 " +
 			"datastore.")
 		substatus("check the output for details of the migrated resources")
-		return data, false
+		return data, ResultFail
 	}
 
 	status("SUCCESS: data conversion validated")
 	substatus("check the output for details of the migrated resources")
-	return data, true
+	return data, ResultOK
 }
 
 // Migrate migrates the data from v1 format to v3.  Both a v1 and v3 client are required.
-// It returns the converted set of data, *and* an error if the migration failed.
-func Migrate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterface, force bool) (*ConvertedData, bool) {
+// It returns the converted set of data, a bool indicating whether the migration succeeded.
+func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ignoreV3Data bool) (*ConvertedData, Result) {
 	status("Validating conversion of v1 data to v3")
 	data, err := queryAndConvertResources(clientv1)
 	if err != nil {
 		status("Error: unable to perform validation, please resolve errors and retry")
 		substatus("Cause: %v", err)
-		return nil, false
+		return nil, ResultFail
 	}
 	if data.HasErrors() {
 		status("FAIL: error validating data, check output for details and resolve issues before upgrading")
-		return data, false
+		return data, ResultFail
 	}
 	substatus("success: data conversion validated")
 
@@ -144,16 +161,16 @@ func Migrate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterf
 		status("FAIL: unable to validate the v3 datastore")
 		substatus("Cause: %v", err)
 	} else if !clean {
-		if force {
-			substatus("v3 datastore is dirty, but `--force` flag is set, so continuing with migration")
+		if ignoreV3Data {
+			substatus("v3 datastore is dirty, but `--ignoreV3Data` flag is set, so continuing with migration")
 		} else {
 			status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
 				"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
-				"the `--force` flag when running the `start-upgrade` command to force the upgrade, in which " +
+				"the `--ignore-v3-data` flag when running the `start-upgrade` command to force the upgrade, in which " +
 				"case the v1 data will be converted and applied over the data that is currently in the v3 " +
 				"datastore.")
 			substatus("check the output for details of the migrated resources")
-			return data, false
+			return data, ResultFail
 		}
 	}
 	substatus("success: data conversion validated")
@@ -164,7 +181,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterf
 		status("Pausing Calico networking")
 		if err = setReadyV1(clientv1, false); err != nil {
 			status("FAIL: unable to pause calico networking - no changes have been made.  Retry the command.")
-			return nil, false
+			return nil, ResultFailNeedsRetry
 		}
 	}
 
@@ -176,10 +193,21 @@ func Migrate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterf
 	status("Querying current v1 snapshot and converting to v3")
 	data, err = queryAndConvertResources(clientv1)
 	if err != nil {
-		 status("FAIL: unable to convert the v1 snapshot to v3 - will attempt to abort upgrade")
-		 substatus("cause: %v", err)
-		 Abort(clientv1)
-		 return nil, false
+		status("FAIL: unable to convert the v1 snapshot to v3 - will attempt to abort upgrade")
+		substatus("cause: %v", err)
+		r := Abort(clientv1)
+		if r == ResultOK {
+			return nil, ResultFail
+		}
+		return nil, ResultFailNeedsAbort
+	}
+	if data.HasErrors() {
+		status("FAIL: error validating data - will attempt to abort upgrade")
+		r := Abort(clientv1)
+		if r == ResultOK {
+			return nil, ResultFail
+		}
+		return data, ResultFailNeedsAbort
 	}
 	substatus("data converted successfully")
 
@@ -187,26 +215,32 @@ func Migrate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterf
 	if err = storeV3Resources(clientv3, data); err != nil {
 		status("FAIL: unable to store the v3 resources - will attempt to abort upgrade")
 		substatus("cause: %v", err)
-		Abort(clientv1)
-		return nil, false
+		r := Abort(clientv1)
+		if r == ResultOK {
+			return nil, ResultFail
+		}
+		return nil, ResultFailNeedsAbort
 	}
 
 	// And we also need to migrate the IPAM data.
 	if err = migrateIPAMData(clientv3, clientv1); err != nil {
 		status("FAIL: unable to migrate the v3 IPAM data - will attempt to abort upgrade")
 		substatus("cause: %v", err)
-		Abort(clientv1)
-		return nil, false
+		r := Abort(clientv1)
+		if r == ResultOK {
+			return nil, ResultFail
+		}
+		return nil, ResultFailNeedsAbort
 	}
 
 	status("SUCCESS: Migrated data from v1 to v3 datastore")
 	substatus("check the output for details of the migrated resources")
 	substatus("continue by upgrading your calico/node versions to Calico v3.x")
-	return data, true
+	return data, ResultOK
 }
 
 // Abort aborts the upgrade by re-enabling Calico networking in v1.
-func Abort(clientv1 upgradeclients.V1ClientInterface) bool {
+func Abort(clientv1 clients.V1ClientInterface) Result {
 	status("Aborting upgrade")
 	var err error
 	if !clientv1.IsKDD() {
@@ -222,15 +256,14 @@ func Abort(clientv1 upgradeclients.V1ClientInterface) bool {
 	if err != nil {
 		status("FAIL: failed to abort upgrade.  Retry command.")
 		substatus("cause: %v", err)
-		return false
+		return ResultFailNeedsAbort
 	}
 	status("SUCCESS: upgdade aborted")
-	return true
+	return ResultOK
 }
 
-
 // Complete completes the upgrade by re-enabling Calico networking in v1.
-func Complete(clientv1 upgradeclients.V1ClientInterface) error {
+func Complete(clientv1 clients.V1ClientInterface) Result {
 	status("Completing upgrade")
 	var err error
 	if !clientv1.IsKDD() {
@@ -243,11 +276,17 @@ func Complete(clientv1 upgradeclients.V1ClientInterface) error {
 			time.Sleep(1 * time.Second)
 		}
 	}
-	status("Upgrade completed successfully")
-	return err
+	if err != nil {
+		status("FAIL: failed to complete upgrade.  Retry command.")
+		substatus("cause: %v", err)
+		return ResultFailNeedsRetry
+	}
+	status("SUCCESS: upgdade completed")
+	return ResultOK
 }
 
 type policyCtrlFilterOut func(model.Key) bool
+
 var noFilter = func(_ model.Key) bool { return false }
 
 type ic interface {
@@ -268,7 +307,7 @@ func v3DatastoreIsClean(clientv3 clientv3.Interface) (bool, error) {
 // attempt to convert everything before returning with the set of converted data and
 // conversion errors - this allows a full pre-migration report to be generated in a single
 // shot.
-func queryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*ConvertedData, error) {
+func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedData, error) {
 	res := &ConvertedData{}
 
 	substatus("handling global FelixConfiguration")
@@ -357,8 +396,8 @@ func queryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 // Query the v1 format resources and convert to the v3 format.  Successfully
 // migrated resources are appended to res, and conversion errors to convErr.
 func queryAndConvertV1ToV3Resources(
-	clientv1 upgradeclients.V1ClientInterface,
-	res *ConvertedData,
+	clientv1 clients.V1ClientInterface,
+	data *ConvertedData,
 	listInterface model.ListInterface,
 	converter conversionv1v3.Converter,
 	filterOut policyCtrlFilterOut,
@@ -384,15 +423,14 @@ func queryAndConvertV1ToV3Resources(
 	for _, kvp := range kvps {
 		if filterOut(kvp.Key) {
 			log.Infof("Filter out Policy Controller created resource: %s", kvp.Key)
-			res.HandledByPolicyCtrl = append(res.HandledByPolicyCtrl, kvp.Key)
+			data.HandledByPolicyCtrl = append(data.HandledByPolicyCtrl, kvp.Key)
 		}
 
 		r, err := converter.BackendV1ToAPIV3(kvp)
 		if err != nil {
-			res.ConversionErrors = append(res.ConversionErrors, ConversionError{
-				V1Key:   kvp.Key,
-				V1Value: kvp.Value,
-				Msg:     "error occurred converting the resource",
+			data.ConversionErrors = append(data.ConversionErrors, ConversionError{
+				KeyV1:   kvp.Key,
+				ValueV1: kvp.Value,
 				Cause:   err,
 			})
 			continue
@@ -403,10 +441,10 @@ func queryAndConvertV1ToV3Resources(
 		valid := true
 		convertedName := r.GetObjectMeta().GetNamespace() + "/" + r.GetObjectMeta().GetName()
 		if k, ok := convertedNames[convertedName]; ok {
-			res.NameClashes = append(res.NameClashes, ConversionError{
-				V1Key:       kvp.Key,
-				V3Converted: r,
-				Msg:         fmt.Sprintf("converted resource name clashes with the name of the following v1 resource: %s", k),
+			data.NameClashes = append(data.NameClashes, NameClash{
+				KeyV1:      kvp.Key,
+				KeyV3:      resourceToKey(r),
+				OtherKeyV1: k,
 			})
 			valid = false
 		}
@@ -414,26 +452,30 @@ func queryAndConvertV1ToV3Resources(
 
 		// Check the converted resource validates correctly.
 		if err := validatorv3.Validate(r); err != nil {
-			res.ConvertedResourceValidationErrors = append(res.ConvertedResourceValidationErrors, ConversionError{
-				V1Key:       kvp.Key,
-				V1Value:     kvp.Value,
-				V3Converted: r,
-				Msg:         "converted resource does not validate correctly",
-				Cause:       err,
+			data.ConvertedResourceValidationErrors = append(data.ConvertedResourceValidationErrors, ConversionError{
+				KeyV1:   kvp.Key,
+				ValueV1: kvp.Value,
+				KeyV3:   resourceToKey(r),
+				ValueV3: r,
+				Cause:   err,
 			})
 			valid = false
 		}
 
-		// Only store the resource if it's valid.
+		// Only store the resource and the converted name if it's valid.
 		if valid {
-			res.Resources = append(res.Resources, r)
+			data.Resources = append(data.Resources, r)
+			data.NameConversions = append(data.NameConversions, NameConversion{
+				KeyV1: kvp.Key,
+				KeyV3: resourceToKey(r),
+			})
 		}
 	}
 
 	return nil
 }
 
-func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 upgradeclients.V1ClientInterface, res *ConvertedData) error {
+func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 clients.V1ClientInterface, res *ConvertedData) error {
 	globalBGPConfig := apiv3.NewBGPConfiguration()
 	globalBGPConfig.Name = "default"
 
@@ -448,9 +490,8 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 upgradeclients.V1ClientInterf
 		if err != nil {
 			log.WithError(err).WithField("ASNumber", kvp.Value).Info("Invalid global default ASNumber")
 			res.ConversionErrors = append(res.ConversionErrors, ConversionError{
-				V1Value: kvp.Value,
-				Msg:     "default ASNumber is not valid",
-				Cause:   err,
+				ValueV1: kvp.Value,
+				Cause:   fmt.Errorf("default ASNumber is not valid: %s", kvp.Value.(string)),
 			})
 			return err
 		}
@@ -482,14 +523,14 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 upgradeclients.V1ClientInterf
 // Query the v1 format resources and convert to the v3 format.  Successfully
 // migrated resources are appended to res, and conversion errors to convErr.
 func queryAndConvertV1ToV3Nodes(
-	v1Client upgradeclients.V1ClientInterface,
-	res *ConvertedData,
+	v1Client clients.V1ClientInterface,
+	data *ConvertedData,
 ) error {
 	// Start by querying the nodes and converting them, we don't add the nodes to the list
 	// of results just yet.
 	var nodes []conversionv1v3.Resource
 	err := queryAndConvertV1ToV3Resources(
-		v1Client, res,
+		v1Client, data,
 		model.NodeListOptions{}, conversionv1v3.Node{}, noFilter,
 	)
 	if err != nil {
@@ -524,7 +565,7 @@ func queryAndConvertV1ToV3Nodes(
 	}
 
 	// Now the nodes are updated, append them to the full list of results.
-	res.Resources = append(res.Resources, nodes...)
+	data.Resources = append(data.Resources, nodes...)
 
 	return nil
 }
@@ -567,7 +608,7 @@ func substatus(format string, a ...interface{}) {
 	}
 }
 
-func setReadyV1(clientv1 upgradeclients.V1ClientInterface, ready bool) error {
+func setReadyV1(clientv1 clients.V1ClientInterface, ready bool) error {
 	log.WithField("Ready", ready).Info("Updating Ready flag in v1")
 	_, err := clientv1.Apply(&model.KVPair{
 		Key:   model.ReadyFlagKey{},
@@ -643,6 +684,14 @@ func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	return nil
 }
 
+func resourceToKey(r conversionv1v3.Resource) model.Key {
+	return model.ResourceKey{
+		Kind:      r.GetObjectKind().GroupVersionKind().Kind,
+		Name:      r.GetObjectMeta().GetName(),
+		Namespace: r.GetObjectMeta().GetNamespace(),
+	}
+}
+
 // storeV3Resources stores the converted resources in the v3 datastore.
 func storeV3Resources(clientv3 clientv3.Interface, data *ConvertedData) error {
 	status("Storing resources in v3 format")
@@ -651,18 +700,14 @@ func storeV3Resources(clientv3 clientv3.Interface, data *ConvertedData) error {
 		// This is slightly more efficient, and cuts out some of the unneccessary additional
 		// processing.
 		if err := applyToBackend(clientv3, &model.KVPair{
-			Key: model.ResourceKey{
-				Kind: r.GetObjectKind().GroupVersionKind().Kind,
-				Name: r.GetObjectMeta().GetName(),
-				Namespace: r.GetObjectMeta().GetNamespace(),
-			},
+			Key:   resourceToKey(r),
 			Value: r,
 		}); err != nil {
 			return err
 		}
 
-		if (n+1) % numAppliesPerUpdate == 0 {
-			substatus("applied %d resources", (n+1))
+		if (n+1)%numAppliesPerUpdate == 0 {
+			substatus("applied %d resources", (n + 1))
 		}
 	}
 	substatus("success: resources stored in v3 datastore")
@@ -671,7 +716,7 @@ func storeV3Resources(clientv3 clientv3.Interface, data *ConvertedData) error {
 
 // migrateIPAMData queries, converts and migrates all of the IPAM data from v1
 // to v3 formats.
-func migrateIPAMData(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterface) error {
+func migrateIPAMData(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) error {
 	var kvpsv3 []*model.KVPair
 
 	// Query all of the IPAM data:
