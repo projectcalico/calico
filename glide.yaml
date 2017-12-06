@@ -28,7 +28,7 @@ import:
   - ssh/terminal
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: c07bf34a9a362e92e5e51853fd5fe03c27ecf333
+  version: 7fdfaa3a86b1f6de47000ae4772b87e8979cde6f
   subpackages:
   - lib/apis/v3
   - lib/clientv3
