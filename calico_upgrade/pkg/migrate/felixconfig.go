@@ -23,7 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
@@ -48,8 +48,8 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	}
 
 	// Parse the separate KVPairs into a global FelixConfiguration resource and a
-	// global ClusterInformation resource.  Note that we just set the Ready flag to true
-	// (the migration code will set it to false when required).
+	// global ClusterInformation resource.  Note that if this is KDD we set the Ready
+	// flag to true, otherwise to false.
 	globalConfig := apiv3.NewFelixConfiguration()
 	globalConfig.Name = "default"
 	if err := fc.parseFelixConfigV1IntoResourceV3(kvps, globalConfig, data); err != nil {
@@ -61,7 +61,7 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	if err = fc.parseFelixConfigV1IntoResourceV3(kvps, clusterInfo, data); err != nil {
 		return err
 	}
-	ready := true
+	ready := clientv1.IsKDD()
 	clusterInfo.Spec.DatastoreReady = &ready
 
 	// Query all of the per-host felix config into a slice of KVPairs.

@@ -16,14 +16,13 @@ package migrate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -33,21 +32,15 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
 	validatorv3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
-	"github.com/projectcalico/yaml"
 )
 
 const (
-	forceEnableReadyRetries = 10
+	forceEnableReadyRetries = 30
+	maxApplyRetries = 5
+	numAppliesPerUpdate = 100
 )
 
-var verbose = false
-
-func SetVerboseMessages(v bool) {
-	verbose = v
-}
-
 var displayStatus = false
-
 func DisplayStatusMessages(d bool) {
 	displayStatus = d
 }
@@ -64,7 +57,7 @@ type ConvertedData struct {
 
 	// Errors hit validating the converted v3 data.  This suggests an error in the
 	// conversion script which should be fixed before reattempting the conversion.
-	ConversedValidationErrors []ConversionError
+	ConvertedResourceValidationErrors []ConversionError
 
 	// Name clashes in the converted resources.  These need to be resolved through
 	// reconfiguration before attempting the upgrade.
@@ -76,9 +69,9 @@ type ConvertedData struct {
 }
 
 func (c *ConvertedData) HasErrors() bool {
-	return len(c.ConversedValidationErrors) != 0 ||
-		len(c.NameClashes) != 0 ||
-		len(c.ConversedValidationErrors) != 0
+	return len(c.ConversionErrors) != 0 ||
+		len(c.ConvertedResourceValidationErrors) != 0 ||
+		len(c.NameClashes) != 0
 }
 
 type ConversionError struct {
@@ -96,60 +89,202 @@ type NameConversion struct {
 	New      string
 }
 
-func (c ConversionError) String() string {
-	if c.Cause == nil && c.V1Key == nil && c.V1Value == nil && c.V3Converted == nil {
-		return c.Msg
+// Validate validates that the v1 data can be correctly migrated to v3.
+func Validate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterface) (*ConvertedData, bool) {
+	status("Validating conversion of v1 data to v3")
+	data, err := queryAndConvertResources(clientv1)
+	if err != nil {
+		status("Error: unable to perform validation, please resolve errors and retry")
+		substatus("Cause: %v", err)
+		return nil, false
 	}
-	msg := c.Msg + ":"
-	if c.Cause != nil {
-		msg += fmt.Sprintf("\n -  Cause: %v", c.Cause)
+	if data.HasErrors() {
+		status("FAIL: error validating data, check output for details and resolve issues before upgrading")
+		return data, false
 	}
-	if c.V1Key != nil {
-		msg += fmt.Sprintf("\n -  Original resource name: %s", c.V1Key)
+	substatus("success: data conversion validated")
+
+	status("Validating the v3 datastore")
+	if clean, err := v3DatastoreIsClean(clientv3); err != nil {
+		status("FAIL: unable to validate the v3 datastore")
+		substatus("Cause: %v", err)
+	} else if !clean {
+		status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
+			"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
+			"the `--force` flag when running the `start-upgrade` command to force the upgrade, in which " +
+			"case the v1 data will be converted and applied over the data that is currently in the v3 " +
+			"datastore.")
+		substatus("check the output for details of the migrated resources")
+		return data, false
 	}
-	if c.V3Converted != nil {
-		if data, err := yaml.Marshal(c.V3Converted); err != nil {
-			msg += fmt.Sprintf("\n -  Converted resource (raw): %v", c.V3Converted)
+
+	status("SUCCESS: data conversion validated")
+	substatus("check the output for details of the migrated resources")
+	return data, true
+}
+
+// Migrate migrates the data from v1 format to v3.  Both a v1 and v3 client are required.
+// It returns the converted set of data, *and* an error if the migration failed.
+func Migrate(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterface, force bool) (*ConvertedData, bool) {
+	status("Validating conversion of v1 data to v3")
+	data, err := queryAndConvertResources(clientv1)
+	if err != nil {
+		status("Error: unable to perform validation, please resolve errors and retry")
+		substatus("Cause: %v", err)
+		return nil, false
+	}
+	if data.HasErrors() {
+		status("FAIL: error validating data, check output for details and resolve issues before upgrading")
+		return data, false
+	}
+	substatus("success: data conversion validated")
+
+	status("Validating the v3 datastore")
+	if clean, err := v3DatastoreIsClean(clientv3); err != nil {
+		status("FAIL: unable to validate the v3 datastore")
+		substatus("Cause: %v", err)
+	} else if !clean {
+		if force {
+			substatus("v3 datastore is dirty, but `--force` flag is set, so continuing with migration")
 		} else {
-			msg += fmt.Sprintf("\n -  Converted resource: \n%s\n", data)
+			status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
+				"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
+				"the `--force` flag when running the `start-upgrade` command to force the upgrade, in which " +
+				"case the v1 data will be converted and applied over the data that is currently in the v3 " +
+				"datastore.")
+			substatus("check the output for details of the migrated resources")
+			return data, false
 		}
 	}
-	if c.V1Value != nil && verbose {
-		if data, err := yaml.Marshal(c.V1Value); err != nil {
-			msg += fmt.Sprintf("\n -  Original v1 data (raw): %v", c.V1Value)
-		} else {
-			msg += fmt.Sprintf("\n -  Original v1 data: \n%s\n", data)
+	substatus("success: data conversion validated")
+
+	// Now set the Ready flag to False.  This will stop Felix from making any data plane updates
+	// and will prevent the orchestrator plugins from adding any new workloads or IP allocations
+	if !clientv1.IsKDD() {
+		status("Pausing Calico networking")
+		if err = setReadyV1(clientv1, false); err != nil {
+			status("FAIL: unable to pause calico networking - no changes have been made.  Retry the command.")
+			return nil, false
 		}
 	}
 
-	return msg
+	// Pause to allow orchestrators to finish any current allocations.
+	status("Calico networking is now paused - waiting for 15s")
+	time.Sleep(15 * time.Second)
+
+	// Now query all the resources again and convert - this is the final snapshot that we will use.
+	status("Querying current v1 snapshot and converting to v3")
+	data, err = queryAndConvertResources(clientv1)
+	if err != nil {
+		 status("FAIL: unable to convert the v1 snapshot to v3 - will attempt to abort upgrade")
+		 substatus("cause: %v", err)
+		 Abort(clientv1)
+		 return nil, false
+	}
+	substatus("data converted successfully")
+
+	status("Storing v3 data")
+	if err = storeV3Resources(clientv3, data); err != nil {
+		status("FAIL: unable to store the v3 resources - will attempt to abort upgrade")
+		substatus("cause: %v", err)
+		Abort(clientv1)
+		return nil, false
+	}
+
+	// And we also need to migrate the IPAM data.
+	if err = migrateIPAMData(clientv3, clientv1); err != nil {
+		status("FAIL: unable to migrate the v3 IPAM data - will attempt to abort upgrade")
+		substatus("cause: %v", err)
+		Abort(clientv1)
+		return nil, false
+	}
+
+	status("SUCCESS: Migrated data from v1 to v3 datastore")
+	substatus("check the output for details of the migrated resources")
+	substatus("continue by upgrading your calico/node versions to Calico v3.x")
+	return data, true
+}
+
+// Abort aborts the upgrade by re-enabling Calico networking in v1.
+func Abort(clientv1 upgradeclients.V1ClientInterface) bool {
+	status("Aborting upgrade")
+	var err error
+	if !clientv1.IsKDD() {
+		status("Re-enabling Calico networking for v1")
+		for i := 0; i < forceEnableReadyRetries; i++ {
+			err = setReadyV1(clientv1, true)
+			if err == nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+	if err != nil {
+		status("FAIL: failed to abort upgrade.  Retry command.")
+		substatus("cause: %v", err)
+		return false
+	}
+	status("SUCCESS: upgdade aborted")
+	return true
+}
+
+
+// Complete completes the upgrade by re-enabling Calico networking in v1.
+func Complete(clientv1 upgradeclients.V1ClientInterface) error {
+	status("Completing upgrade")
+	var err error
+	if !clientv1.IsKDD() {
+		status("Re-enabling Calico networking for v1")
+		for i := 0; i < forceEnableReadyRetries; i++ {
+			err = setReadyV1(clientv1, true)
+			if err == nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+	status("Upgrade completed successfully")
+	return err
 }
 
 type policyCtrlFilterOut func(model.Key) bool
-
 var noFilter = func(_ model.Key) bool { return false }
 
-// QueryAndConvertResources queries the v1 resources and converts them to the equivalent
+type ic interface {
+	IsClean() (bool, error)
+}
+
+func v3DatastoreIsClean(clientv3 clientv3.Interface) (bool, error) {
+	if i, ok := clientv3.(ic); ok {
+		return i.IsClean()
+	}
+	return true, nil
+}
+
+// queryAndConvertResources queries the v1 resources and converts them to the equivalent
 // v3 resources.
 // This method returns an error if it is unable to query the current v1 settings.
 // Errors from the conversion are returned within the ConvertedData - this function will
 // attempt to convert everything before returning with the set of converted data and
 // conversion errors - this allows a full pre-migration report to be generated in a single
 // shot.
-func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*ConvertedData, error) {
+func queryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*ConvertedData, error) {
 	res := &ConvertedData{}
 
-	// Query the global BGP configuration:  default AS number; node-to-node mesh.
-	if err := queryAndConvertGlobalBGPConfig(clientv1, res); err != nil {
-		return nil, err
-	}
-
+	substatus("handling global FelixConfiguration")
 	// Query and convert global felix configuration and cluster info.
 	fc := &felixConfig{}
 	if err := fc.queryAndConvertFelixConfigV1ToV3(clientv1, res); err != nil {
 		return nil, err
 	}
 
+	substatus("handling global BGPConfiguration")
+	// Query the global BGP configuration:  default AS number; node-to-node mesh.
+	if err := queryAndConvertGlobalBGPConfigV1ToV3(clientv1, res); err != nil {
+		return nil, err
+	}
+
+	substatus("handling global BGPPeer configuration")
 	// Query and convert the BGPPeers
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
@@ -157,6 +292,7 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 	); err != nil {
 		return nil, err
 	}
+	substatus("handling node specific BGPPeer configuration")
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
 		model.NodeBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
@@ -164,6 +300,7 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 		return nil, err
 	}
 
+	substatus("handling HostEndpoint configuration")
 	// Query and convert the HostEndpoints
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
@@ -172,6 +309,7 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 		return nil, err
 	}
 
+	substatus("handling IPPool configuration")
 	// Query and convert the IPPools
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
@@ -180,11 +318,13 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 		return nil, err
 	}
 
+	substatus("handling Node configuration")
 	// Query and convert the Nodes
 	if err := queryAndConvertV1ToV3Nodes(clientv1, res); err != nil {
 		return nil, err
 	}
 
+	substatus("handling GlobalNetworkPolicy configuration")
 	// Query and convert the Policies
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
@@ -193,6 +333,7 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 		return nil, err
 	}
 
+	substatus("handling Profile configuration")
 	// Query and convert the Profiles
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
@@ -201,6 +342,7 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 		return nil, err
 	}
 
+	substatus("handling WorkloadEndpoint configuration")
 	// Query and convert the WorkloadEndpoints
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, res,
@@ -210,52 +352,6 @@ func QueryAndConvertResources(clientv1 upgradeclients.V1ClientInterface) (*Conve
 	}
 
 	return res, nil
-}
-
-func queryAndConvertGlobalBGPConfig(clientv1 upgradeclients.V1ClientInterface, res *ConvertedData) error {
-	globalBGPConfig := apiv3.NewBGPConfiguration()
-	globalBGPConfig.Name = "default"
-
-	log.Info("Converting BGP config -> BGPConfiguration(default)")
-	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "AsNumber"}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-			return err
-		}
-		log.Info("No global default ASNumber configured")
-	} else if kvp.Value.(string) != "" {
-		asNum, err := numorstring.ASNumberFromString(kvp.Value.(string))
-		if err != nil {
-			log.WithError(err).WithField("ASNumber", kvp.Value).Info("Invalid global default ASNumber")
-			res.ConversionErrors = append(res.ConversionErrors, ConversionError{
-				V1Value: kvp.Value,
-				Msg:     "default ASNumber is not valid",
-				Cause:   err,
-			})
-			return err
-		}
-		globalBGPConfig.Spec.ASNumber = &asNum
-	}
-
-	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "LogLevel"}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-			return err
-		}
-		log.Info("No global BGP log level configured")
-	} else if kvp.Value.(string) != "" {
-		globalBGPConfig.Spec.LogSeverityScreen = convertLogLevel(kvp.Value.(string))
-	}
-
-	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-			return err
-		}
-		log.Info("No global node to node mesh enabled setting configured")
-	} else if kvp.Value.(string) != "" {
-		nodeMeshEnabled := strings.ToLower(kvp.Value.(string)) == "true"
-		globalBGPConfig.Spec.NodeToNodeMeshEnabled = &nodeMeshEnabled
-	}
-	res.Resources = append(res.Resources, globalBGPConfig)
-	return nil
 }
 
 // Query the v1 format resources and convert to the v3 format.  Successfully
@@ -318,7 +414,7 @@ func queryAndConvertV1ToV3Resources(
 
 		// Check the converted resource validates correctly.
 		if err := validatorv3.Validate(r); err != nil {
-			res.ConversedValidationErrors = append(res.ConversedValidationErrors, ConversionError{
+			res.ConvertedResourceValidationErrors = append(res.ConvertedResourceValidationErrors, ConversionError{
 				V1Key:       kvp.Key,
 				V1Value:     kvp.Value,
 				V3Converted: r,
@@ -334,6 +430,52 @@ func queryAndConvertV1ToV3Resources(
 		}
 	}
 
+	return nil
+}
+
+func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 upgradeclients.V1ClientInterface, res *ConvertedData) error {
+	globalBGPConfig := apiv3.NewBGPConfiguration()
+	globalBGPConfig.Name = "default"
+
+	log.Info("Converting BGP config -> BGPConfiguration(default)")
+	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "AsNumber"}); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			return err
+		}
+		log.Info("No global default ASNumber configured")
+	} else if kvp.Value.(string) != "" {
+		asNum, err := numorstring.ASNumberFromString(kvp.Value.(string))
+		if err != nil {
+			log.WithError(err).WithField("ASNumber", kvp.Value).Info("Invalid global default ASNumber")
+			res.ConversionErrors = append(res.ConversionErrors, ConversionError{
+				V1Value: kvp.Value,
+				Msg:     "default ASNumber is not valid",
+				Cause:   err,
+			})
+			return err
+		}
+		globalBGPConfig.Spec.ASNumber = &asNum
+	}
+
+	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "LogLevel"}); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			return err
+		}
+		log.Info("No global BGP log level configured")
+	} else if kvp.Value.(string) != "" {
+		globalBGPConfig.Spec.LogSeverityScreen = convertLogLevel(kvp.Value.(string))
+	}
+
+	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"}); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			return err
+		}
+		log.Info("No global node to node mesh enabled setting configured")
+	} else if kvp.Value.(string) != "" {
+		nodeMeshEnabled := strings.ToLower(kvp.Value.(string)) == "true"
+		globalBGPConfig.Spec.NodeToNodeMeshEnabled = &nodeMeshEnabled
+	}
+	res.Resources = append(res.Resources, globalBGPConfig)
 	return nil
 }
 
@@ -410,14 +552,22 @@ func convertLogLevel(logLevel string) string {
 	}
 }
 
-func status(msg string) {
-	log.Info(msg)
+func status(format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	log.Info(strings.TrimSpace(msg))
 	if displayStatus {
 		fmt.Println(msg)
 	}
 }
+func substatus(format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	log.Info(strings.TrimSpace(msg))
+	if displayStatus {
+		fmt.Println("-  " + msg)
+	}
+}
 
-func SetReadyV1(clientv1 upgradeclients.V1ClientInterface, ready bool) error {
+func setReadyV1(clientv1 upgradeclients.V1ClientInterface, ready bool) error {
 	log.WithField("Ready", ready).Info("Updating Ready flag in v1")
 	_, err := clientv1.Apply(&model.KVPair{
 		Key:   model.ReadyFlagKey{},
@@ -425,20 +575,20 @@ func SetReadyV1(clientv1 upgradeclients.V1ClientInterface, ready bool) error {
 	})
 	if err != nil {
 		if ready {
-			status("- Failed to enable Calico networking in the v1 configuration")
+			substatus("failed to enable Calico networking in the v1 configuration")
 		} else {
-			status("- Failed to disable Calico networking in the v1 configuration")
+			substatus("failed to disable Calico networking in the v1 configuration")
 		}
 	}
 	if ready {
-		status("- Successfully enabled Calico networking in the v1 configuration")
+		substatus("successfully enabled Calico networking in the v1 configuration")
 	} else {
-		status("- Successfully disabled Calico networking in the v1 configuration")
+		substatus("successfully disabled Calico networking in the v1 configuration")
 	}
 	return nil
 }
 
-func SetReadyV3(clientv3 clientv3.Interface, ready bool) error {
+func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	log.WithField("Ready", ready).Info("Updating Ready flag in v3")
 	c, err := clientv3.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
 	if err == nil {
@@ -448,16 +598,16 @@ func SetReadyV3(clientv3 clientv3.Interface, ready bool) error {
 		_, err = clientv3.ClusterInformation().Update(context.Background(), c, options.SetOptions{})
 		if err != nil {
 			if ready {
-				status("- Failed to enable Calico networking in the v3 configuration (unable to update ClusterInformation)")
+				substatus("failed to enable Calico networking in the v3 configuration (unable to update ClusterInformation)")
 			} else {
-				status("- Failed to disable Calico networking in the v3 configuration (unable to update ClusterInformation)")
+				substatus("failed to disable Calico networking in the v3 configuration (unable to update ClusterInformation)")
 			}
 			return err
 		}
 		if ready {
-			status("- Successfully enabled Calico networking in the v3 configuration (updated ClusterInformation)")
+			substatus("successfully enabled Calico networking in the v3 configuration (updated ClusterInformation)")
 		} else {
-			status("- Successfully disabled Calico networking in the v3 configuration (updated ClusterInformation)")
+			substatus("successfully disabled Calico networking in the v3 configuration (updated ClusterInformation)")
 		}
 		return nil
 	}
@@ -465,9 +615,9 @@ func SetReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 		// ClusterInformation could not be queried.
 		if ready {
-			status("- Failed to enable Calico networking in the v3 configuration (unable to query ClusterInformation)")
+			substatus("failed to enable Calico networking in the v3 configuration (unable to query ClusterInformation)")
 		} else {
-			status("- Failed to disable Calico networking in the v3 configuration (unable to query ClusterInformation)")
+			substatus("failed to disable Calico networking in the v3 configuration (unable to query ClusterInformation)")
 		}
 		return err
 	}
@@ -479,91 +629,44 @@ func SetReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	_, err = clientv3.ClusterInformation().Create(context.Background(), c, options.SetOptions{})
 	if err != nil {
 		if ready {
-			status("- Failed to enable Calico networking in the v3 configuration (unable to create ClusterInformation)")
+			substatus("failed to enable Calico networking in the v3 configuration (unable to create ClusterInformation)")
 		} else {
-			status("- Failed to disable Calico networking in the v3 configuration (unable to create ClusterInformation)")
+			substatus("failed to disable Calico networking in the v3 configuration (unable to create ClusterInformation)")
 		}
 		return err
 	}
 	if ready {
-		status("- Successfully enabled Calico networking in the v1 configuration (created ClusterInformation)")
+		substatus("successfully enabled Calico networking in the v1 configuration (created ClusterInformation)")
 	} else {
-		status("- Successfully disabled Calico networking in the v1 configuration (created ClusterInformation)")
+		substatus("successfully disabled Calico networking in the v1 configuration (created ClusterInformation)")
 	}
 	return nil
 }
 
-// MigrateData migrates the data from v1 format to v3.  Both a v1 and v3 client are required.
-// It returns the converted set of data, *and* an error if the migration failed.
-func MigrateData(clientv3 clientv3.Interface, clientv1 upgradeclients.V1ClientInterface) (*ConvertedData, error) {
-	// Start by querying and converting all resources.
-	status("Performing initial validation of data - no changes will be made")
-	res, err := QueryAndConvertResources(clientv1)
-	if err != nil {
-		return nil, err
-	}
-	if res.HasErrors() {
-		status("- Error converting current v1 snapshot, please run `calico-upgrade validate` to get a detailed report.")
-		return nil, errors.New("unable to convert v1 resources to v3")
-	}
-
-	// Now set the Ready flag to False.  This will stop Felix from making any data plane updates
-	// and will prevent the orchestrator plugins from adding any new workloads or IP allocations
-	status("Initial validation of resources was successful")
-	if !clientv1.IsKDD() {
-		status("Disabling calico networking - this will prevent new calico endpoints from being created but existing endpoints should still be functional")
-		if err = SetReadyV1(clientv1, false); err != nil {
-			status("Failed to disable calico networking - no changes have been made.  Retry the command.")
-			return nil, err
+// storeV3Resources stores the converted resources in the v3 datastore.
+func storeV3Resources(clientv3 clientv3.Interface, data *ConvertedData) error {
+	status("Storing resources in v3 format")
+	for n, r := range data.Resources {
+		// Convert the resource to a KVPair and access the backend datastore directly.
+		// This is slightly more efficient, and cuts out some of the unneccessary additional
+		// processing.
+		if err := applyToBackend(clientv3, &model.KVPair{
+			Key: model.ResourceKey{
+				Kind: r.GetObjectKind().GroupVersionKind().Kind,
+				Name: r.GetObjectMeta().GetName(),
+				Namespace: r.GetObjectMeta().GetNamespace(),
+			},
+			Value: r,
+		}); err != nil {
+			return err
 		}
 
-		if oerr := SetReadyV3(clientv3, false); oerr != nil {
-			status("Failed to disable calico networking for v3")
-			err = Abort(clientv1)
-			if err == nil {
-				status("Error disabling Calico networking - no changes have been made, re-run the upgrade command.")
-				return nil, oerr
-			} else {
-				status("WARNING: Unable to abort the upgrade - Calico networking is still disabled.  Please either re-run the " +
-					"upgrade command, or run `calico-upgrade abort`.")
-				return nil, err
-			}
-		}
-
-	}
-
-	// Pause to allow orchstrators to finish any current allocations.
-	status("Calico networking is now disabled - pausing for 15s")
-	time.Sleep(15 * time.Second)
-
-	// Now query all the resources again and convert - this is the final snapshot that we will use.
-	status("Querying v1 data and converting to v3")
-	res, err = QueryAndConvertResources(clientv1)
-	status("Data converted")
-	status("Storing v3 data")
-
-	// And we also need to migrate the IPAM data.
-	migrateIPAMData(clientv3, clientv1)
-
-	return res, err
-}
-
-// Abort aborts the upgrade by re-enabling Calico networking in v1.
-func Abort(clientv1 upgradeclients.V1ClientInterface) error {
-	status("Aborting upgrade")
-	var err error
-	if !clientv1.IsKDD() {
-		status("Re-enabling Calico networking for v1")
-		for i := 0; i < forceEnableReadyRetries; i++ {
-			err = SetReadyV1(clientv1, true)
-			if err == nil {
-				break
-			}
-			time.Sleep(1 * time.Second)
+		if (n+1) % numAppliesPerUpdate == 0 {
+			substatus("applied %d resources", (n+1))
 		}
 	}
-	status("Upgdade aborted successfully")
-	return err
+	substatus("success: resources stored in v3 datastore")
+	return nil
 }
 
 // migrateIPAMData queries, converts and migrates all of the IPAM data from v1
@@ -575,18 +678,19 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 upgradeclients.V1Clie
 	// -  Blocks
 	// -  BlockAffinity
 	// -  IPAMHandle
-	status("Migrate IPAM data")
+	status("Migrating IPAM data")
 	if clientv1.IsKDD() {
-		status("-  No IPAM data migration required when using Kubernetes API as the datastore")
+		substatus("no IPAM data migration required when using Kubernetes API as the datastore")
 		return nil
 	}
 
 	// AllocationBlocks need to have their host affinity updated to use the
 	// normalized node name.
-	status("Convert IPAM allocation blocks")
+	substatus("listing and converting IPAM allocation blocks")
 	kvps, err := clientv1.List(model.BlockListOptions{})
 	if err != nil {
-		status("-  Failed to list IPAM allocation blocks")
+		status("FAIL: unable to list IPAM allocation blocks")
+		substatus("cause: %v", err)
 		return err
 	}
 	for _, kvp := range kvps {
@@ -607,10 +711,11 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 upgradeclients.V1Clie
 
 	// BlockAffinities need to have their host updated to use the
 	// normalized node name.
-	status("Convert IPAM affinity blocks")
+	substatus("listing and converting IPAM affinity blocks")
 	kvps, err = clientv1.List(model.BlockAffinityListOptions{})
 	if err != nil {
-		status("-  Failed to list IPAM affinity blocks")
+		status("FAIL: unable to list IPAM affinity blocks")
+		substatus("cause: %v", err)
 		return err
 	}
 	for _, kvp := range kvps {
@@ -621,24 +726,26 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 upgradeclients.V1Clie
 	}
 
 	// IPAMHandle does not require any conversion.
-	status("Migrate IPAM handles")
+	substatus("listing IPAM handles")
 	kvps, err = clientv1.List(model.IPAMHandleListOptions{})
 	if err != nil {
-		status("-  Failed to list IPAM handles")
+		status("FAIL: unable to list IPAM handles")
+		substatus("cause: %v", err)
 		return err
 	}
 	kvpsv3 = append(kvpsv3, kvps...)
 
 	// Create/Apply the converted entries into the v3 datastore.
-	status("Storing IPAM data in v3 format")
+	substatus("storing IPAM data in v3 format")
 	for _, kvp := range kvps {
 		if err := applyToBackend(clientv3, kvp); err != nil {
-			status("-  Failed to write IPAM data")
+			status("FAIL: error writing IPAM data to v3 datastore")
 			return err
 		}
 	}
-	status("IPAM data successfully migrated")
 
+	// We migrated the data successfully.
+	substatus("success: IPAM data migrated")
 	return nil
 }
 
@@ -653,33 +760,37 @@ func applyToBackend(clientv3 clientv3.Interface, kvp *model.KVPair) error {
 	bc := clientv3.(backend).Backend()
 
 	// First try creating the resource.  If the resource already exists, try an update.
+	logCxt := log.WithField("Key", kvp.Key)
+	logCxt.Debug("Attempting to create resource")
 	kvp.Revision = ""
 	_, err := bc.Create(context.Background(), kvp)
 	if err == nil {
-		// We created the resource.
+		logCxt.Debug("Resource created")
 		return nil
 	}
 	if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
-		for i := 0; i < 5; i++ {
+		logCxt.Debug("Resource already exists, try update")
+		for i := 0; i < maxApplyRetries; i++ {
+			// Query the current settings and update the kvp revision so that we can
+			// perform an update.
+			logCxt.Debug("Attempting to update resource")
 			current, err := bc.Get(context.Background(), kvp.Key, "")
 			if err != nil {
 				return err
 			}
-
-			// Use the obtained KVP for the revision, but update the value with the migrated
-			// value.
 			kvp.Revision = current.Revision
+
 			_, err = bc.Update(context.Background(), kvp)
 			if err == nil {
-				// We updated the entry.
+				logCxt.Debug("Resource updated")
 				return nil
 			}
 			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); !ok {
-				// We hit an error, but not a resource update conflict.  Return the error.
-				return err
+				break
 			}
 		}
 	}
 
+	logCxt.WithError(err).Info("Failed to create or update resource")
 	return err
 }
