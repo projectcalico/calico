@@ -395,13 +395,28 @@ func (c *etcdV3Client) EnsureInitialized() error {
 func (c *etcdV3Client) Clean() error {
 	log.Warning("Cleaning etcdv3 datastore of all Calico data")
 	_, err := c.etcdClient.Txn(context.Background()).If().Then(
-		clientv3.OpDelete("/calico", clientv3.WithPrefix()),
+		clientv3.OpDelete("/calico/", clientv3.WithPrefix()),
 	).Commit()
 
 	if err != nil {
 		return cerrors.ErrorDatastoreError{Err: err}
 	}
 	return nil
+}
+
+// IsClean() returns true if there are no /calico/ prefixed entries in the
+// datastore.  This is not part of the exposed API, but is public to allow
+// direct consumers of the backend API to access this.
+func (c *etcdV3Client) IsClean() (bool, error) {
+	log.Debug("Calling Get on etcdv3 client")
+	resp, err := c.etcdClient.Get(context.Background(), "/calico/", clientv3.WithPrefix())
+	if err != nil {
+		log.WithError(err).Info("Error returned from etcdv3 client")
+		return false, cerrors.ErrorDatastoreError{Err: err}
+	}
+
+	// The datastore is clean if no results were enumerated.
+	return len(resp.Kvs) == 0, nil
 }
 
 // Syncer returns a v1 Syncer used to stream resource updates.
