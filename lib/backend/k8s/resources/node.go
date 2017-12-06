@@ -101,7 +101,7 @@ func (c *nodeClient) Get(ctx context.Context, key model.Key, revision string) (*
 
 	kvp, err := K8sNodeToCalico(node)
 	if err != nil {
-		log.Panicf("%s", err)
+		log.Panicf("%v", err)
 	}
 
 	return kvp, nil

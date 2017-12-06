@@ -614,7 +614,7 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			log.Printf("No affined blocks found")
 		} else {
-			Expect(err).NotTo(HaveOccurred(), "Error getting affine blocks: %s", err)
+			Expect(err).NotTo(HaveOccurred(), "Error getting affine blocks: %v", err)
 		}
 	}
 

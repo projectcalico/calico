@@ -48,7 +48,7 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 			return []cnet.IPNet{}, nil
 
 		} else {
-			log.Errorf("Error getting affine blocks: %s", err)
+			log.Errorf("Error getting affine blocks: %v", err)
 			return nil, err
 		}
 	}
@@ -82,7 +82,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(ctx context.Context, host string
 	// Get all the configured pools.
 	enabledPools, err := rw.pools.GetEnabledPools(version.Number)
 	if err != nil {
-		log.Errorf("Error reading configured pools: %s", err)
+		log.Errorf("Error reading configured pools: %v", err)
 		return nil, err
 	}
 	log.Debugf("enabled IPPools: %v", enabledPools)
@@ -135,7 +135,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(ctx context.Context, host string
 					err = rw.claimBlockAffinity(ctx, *subnet, host, config)
 					return subnet, err
 				} else {
-					log.Errorf("Error getting block: %s", err)
+					log.Errorf("Error getting block: %v", err)
 					return nil, err
 				}
 			}
@@ -211,7 +211,7 @@ func (rw blockReaderWriter) claimBlockAffinity(ctx context.Context, subnet cnet.
 			// Some other host beat us to this block.  Cleanup and return error.
 			_, err = rw.client.Delete(ctx, model.BlockAffinityKey{Host: host, CIDR: b.CIDR}, "")
 			if err != nil {
-				log.Errorf("Error cleaning up block affinity: %s", err)
+				log.Errorf("Error cleaning up block affinity: %v", err)
 				return err
 			}
 			return affinityClaimedError{Block: b}
@@ -229,7 +229,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 		// so that we can pass it back to the datastore on Update.
 		obj, err := rw.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
-			log.Errorf("Error getting block %s: %s", blockCIDR.String(), err)
+			log.Errorf("Error getting block %s: %v", blockCIDR.String(), err)
 			return err
 		}
 		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
@@ -252,7 +252,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 			if err != nil {
 				// Return the error unless the block didn't exist.
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-					log.Errorf("Error deleting block: %s", err)
+					log.Errorf("Error deleting block: %v", err)
 					return err
 				}
 			}
@@ -283,7 +283,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 		if err != nil {
 			// Return the error unless the affinity didn't exist.
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				log.Errorf("Error deleting block affinity: %s", err)
+				log.Errorf("Error deleting block affinity: %v", err)
 				return err
 			}
 		}
