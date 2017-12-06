@@ -57,9 +57,11 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string, watchAll
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
 			UpdateProcessor: updateprocessors.NewBGPPeerUpdateProcessor(),
 		},
-		{
+	}
+	if node != "" {
+		resourceTypes = append(resourceTypes, watchersyncer.ResourceType{
 			ListInterface: model.BlockAffinityListOptions{Host: node},
-		},
+		})
 	}
 
 	return watchersyncer.New(
