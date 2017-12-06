@@ -53,30 +53,22 @@ See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resource
 
 ## Installation overview
 
-To make use of {{site.prodname}}'s host endpoint support, you will need to follow
-these steps, described in more detail below:
+To make use of {{site.prodname}}'s host endpoint support, you will need to complete
+the following steps.
 
--   download the calicoctl binary
--   create an etcd cluster, if you haven't already
--   install {{site.prodname}}'s Felix daemon on each host
--   initialize the etcd database
--   add policy to allow basic connectivity and {{site.prodname}} function
--   create host endpoint objects in etcd for each interface you want
-    {{site.prodname}} to police (in a later release, we plan to support interface
-    templates to remove the need to explicitly configure
-    every interface)
--   insert policy into etcd for {{site.prodname}} to apply
--   decide whether to disable "failsafe SSH/etcd" access.
 
-### Download the calicoctl binary
+1.  [Create an etcd cluster, if you haven't already](#creating-an-etcd-cluster).
+1.  [Install and configure `calicoctl`](#install-and-configure-calicoctl).
+1.  [Install the Felix daemon on each host](#installing-felix).
+1.  [Initialize the etcd database](#initializing-the-etcd-database).
+1.  [Add policy to allow basic connectivity](#creating-basic-connectivity-and-policy).
+1.  [Create host endpoint objects in etcd](#creating-host-endpoint-objects) for each interface you want
+    {{site.prodname}} to police. (In a later 
+    release, we plan to support interface templates to remove the need to explicitly 
+    configure every interface).
+1.  [Insert policy into etcd](#creating-more-security-policy) for {{site.prodname}} to apply.
+1.  [Decide whether to disable "failsafe SSH/etcd" access](#failsafe-rules).
 
-Download the calicoctl binary onto your host.
-
-	wget {{site.data.versions[page.version].first.components.calicoctl.download_url}}
-	chmod +x calicoctl
-
-This binary should be placed in your `$PATH` so it can be run from any
-directory.
 
 ## Creating an etcd cluster
 
@@ -92,20 +84,28 @@ To create a production cluster, you should follow the guidance in the
 [etcd manual](https://coreos.com/etcd/docs/latest/). In particular, the
 [clustering guide](https://coreos.com/etcd/docs/latest/).
 
+### Install and configure calicoctl
+
+1. [Install calicoctl as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary).
+
+1. [Configure calicoctl to connect to etcd](/{{page.version}}/usage/calicoctl/configure/).
+
+1. Return to this page and continue to the [next section](#installing-felix).
+
 ## Installing Felix
 
 {% include ppa_repo_name %}
 
 There are several ways to install Felix.
 
--   if you are running Ubuntu 14.04 or 16.04, you can install from our PPA:
+-   If you are running Ubuntu 14.04 or 16.04, you can install from our PPA:
 
         sudo add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
         sudo apt-get update
         sudo apt-get upgrade
         sudo apt-get install calico-felix
 
--   if you are running a RedHat 7-derived distribution, you can install
+-   If you are running a RedHat 7-derived distribution, you can install
     from our RPM repository:
 
         cat > /etc/yum.repos.d/calico.repo <<EOF
@@ -121,11 +121,11 @@ There are several ways to install Felix.
 
         yum install calico-felix
 
--   if you are running another distribution, follow the instructions in
-    [this document](bare-metal-install) to use the calico-felix binary
+-   If you are running another distribution, follow the instructions in
+    [this document](bare-metal-install) to use the `calico-felix` binary
     directly.
 
--   if you want to run under docker, you can use `calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}` to start
+-   If you want to run under Docker, you can use `calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}` to start
     the `{{site.nodecontainer}}` container image.  This container packages up the core {{site.prodname}}
     components to provide both {{site.prodname}} networking and network policy.  Running
     the container automatically pre-initializes the etcd database (which the
@@ -137,7 +137,7 @@ Until you initialize the database, Felix will make a regular log that it
 is in state "wait-for-ready". The default location for the log file is
 `/var/log/calico/felix.log`.
 
-## Initialising the etcd database
+## Initializing the etcd database
 
 If you are using the container-based installation (using the `{{site.nodecontainer}}`
 container image), the database is initialized as soon as you start the first
@@ -159,37 +159,38 @@ cat << EOF | calicoctl create -f -
 EOF
 ```
 
-If you check the felix logfile after this step, the logs should
-transition from periodic notifications that felix is in state
-"wait-for-ready" to a stream of initialisation messages.
+If you check the Felix logfile after this step, the logs should
+transition from periodic notifications that Felix is in state
+"wait-for-ready" to a stream of initialization messages.
 
-## Creating basic connectivity and {{site.prodname}} policy
+## Creating basic connectivity and policy
 
 When a host endpoint is added, if there is no security policy for that
 endpoint, {{site.prodname}} will default to denying traffic to/from that endpoint,
 except for traffic that is allowed by the [failsafe rules](#failsafe-rules).
 
 While the [failsafe rules](#failsafe-rules) provide protection against removing all
-connectivity to a host,
+connectivity to a host:
 
--   they are overly broad in allowing inbound SSH on any interface and
-    allowing traffic out to etcd's ports on any interface
--   depending on your network, they may not cover all the ports that are
+-   They are overly broad in allowing inbound SSH on any interface and
+    allowing traffic out to etcd's ports on any interface.
+    
+-   Depending on your network, they may not cover all the ports that are
     required; for example, your network may reply on allowing ICMP,
     or DHCP.
 
 Therefore, we recommend creating a failsafe {{site.prodname}} security policy that
 is tailored to your environment. The example command below shows one
-example of how you might do that; the command uses `calicoctl` to:
+example of how you might do that; the command uses `calicoctl` to create a single 
+policy resource, which:
 
-- Create a single policy resource, which
-  - applies to all known endpoints
-  - allows inbound ssh access from a defined "management" subnet
-  - allows outbound connectivity to etcd on a particular IP; if
+  - Applies to all known endpoints.
+  - Allows inbound ssh access from a defined "management" subnet.
+  - Allows outbound connectivity to etcd on a particular IP; if
     you have multiple etcd servers you should duplicate the rule
-    for each destination
-  - allows inbound ICMP
-  - allows outbound UDP on port 67, for DHCP.
+    for each destination.
+  - Allows inbound ICMP.
+  - Allows outbound UDP on port 67, for DHCP.
 
 When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
@@ -359,7 +360,7 @@ We recommend using selector-based security policy with
 bare-metal workloads. This allows ordered policy to be applied to
 endpoints that match particular label selectors.
 
-+For example, you could add a second policy for webserver access:
+For example, you could add a second policy for webserver access:
 
 ```
 cat << EOF | dist/calicoctl create -f -
@@ -403,28 +404,28 @@ can be disabled by setting each configuration value to "none".
 >
 > Before disabling the failsafe rules, we recommend creating a policy to
 > replace it with more-specific rules for your environment: see 
-> [above](#creating-basic-connectivity-and-calico-policy).
+> [above](#creating-basic-connectivity-and-policy).
 {: .alert .alert-danger}
 
 
 ## Untracked policy
 
-Policy for host endpoints can be marked as 'doNotTrack'.  This means that rules
+Policy for host endpoints can be marked as `doNotTrack`.  This means that rules
 in that policy should be applied before any data plane connection tracking, and
 that packets allowed by these rules should not be tracked.
 
 Untracked policy is designed for allowing untracked connections to a server
-process running directly on a host - where by 'directly' we mean _not_ in a
-pod/VM/container workload.  A typical scenario for using 'doNotTrack' policy
+process running directly on a host—where, by 'directly', we mean _not_ in a
+pod/VM/container workload.  A typical scenario for using `doNotTrack` policy
 would be a server, running directly on a host, that accepts a very high rate of
 shortlived connections, such as `memcached`.  On Linux, if those connections
 are tracked, the conntrack table can fill up and then Linux may drop packets
 for further connection attempts, meaning that those newer connections will
 fail.  If you are using {{site.prodname}} to secure that server's host, you can avoid this
 problem by defining a policy that allows access to the server's ports and is
-marked as 'doNotTrack'.
+marked as `doNotTrack`.
 
-Since there is no connection tracking for a 'doNotTrack' policy, it is
+Since there is no connection tracking for a `doNotTrack` policy, it is
 important that the policy's ingress and egress rules are specified
 symmetrically.  For example, for a server on port 999, the policy must include
 an ingress rule allowing access *to* port 999 and an egress rule allowing
@@ -433,48 +434,48 @@ is usually enough to specify the ingress rule only, and then connection
 tracking will automatically allow the return path.)
 
 Because of how untracked policy is implemented, untracked ingress rules apply
-to all incoming traffic through a host endpoint - regardless of where that
-traffic is going - but untracked egress rules only apply to traffic that is
+to all incoming traffic through a host endpoint—regardless of where that
+traffic is going—but untracked egress rules only apply to traffic that is
 sent from the host itself (not from a local workload) out of that host
 endpoint.
 
 ## Pre-DNAT policy
 
-Policy for host endpoints can be marked as 'preDNAT'.  This means that rules in
+Policy for host endpoints can be marked as `preDNAT`.  This means that rules in
 that policy should be applied before any DNAT (Destination Network Address
-Translation), which is useful if it is more convenient to specify Calico policy
+Translation), which is useful if it is more convenient to specify {{site.prodname}} policy
 in terms of a packet's original destination IP address and port, than in terms
 of that packet's destination IP address and port after it has been DNAT'd.
 
 An example is securing access to Kubernetes NodePorts from outside the cluster.
 Traffic from outside is addressed to any node's IP address, on a known
 NodePort, and Kubernetes (kube-proxy) then DNATs that to the IP address of one
-of the pods that provides the corresponding Service, and the relevant port
+of the pods that provides the corresponding service, and the relevant port
 number on that pod (which is usually different from the NodePort).
 
-As NodePorts are the externally advertised way of connecting to Services (and a
-NodePort uniquely identifies a Service, whereas an internal port number may
+As NodePorts are the externally advertised way of connecting to services (and a
+NodePort uniquely identifies a service, whereas an internal port number may
 not), it makes sense to express {{site.prodname}} policy to expose or secure particular
 Services in terms of the corresponding NodePorts.  But that is only possible if
 the {{site.prodname}} policy is applied before DNAT changes the NodePort to something
-else - and hence this kind of policy needs 'preDNAT' set to true.
+else. Hence this kind of policy needs `preDNAT` set to `true`.
 
 In addition to being applied before any DNAT, the enforcement of pre-DNAT
 policy differs from that of normal host endpoint policy in three key details,
 reflecting that it is designed for the policing of incoming traffic from
 outside the cluster:
 
-1. Pre-DNAT policy may only have ingress rules, not egress.  (When incoming
+-  Pre-DNAT policy may only have ingress rules, not egress.  (When incoming
    traffic is allowed by the ingress rules, standard connection tracking is
    sufficient to allow the return path traffic.)
 
-2. Pre-DNAT policy is enforced for all traffic arriving through a host
+-  Pre-DNAT policy is enforced for all traffic arriving through a host
    endpoint, regardless of where that traffic is going, and - in particular -
    even if that traffic is routed to a local workload on the same host.
    (Whereas normal host endpoint policy is skipped, for traffic going to a
    local workload.)
 
-3. There is no 'default drop' semantic for pre-DNAT policy (as there is for
+-  There is no 'default drop' semantic for pre-DNAT policy (as there is for
    normal host endpoint policy).  In other words, if a host endpoint is defined
    but has no pre-DNAT policies that explicitly allow or deny a particular
    incoming packet, that packet is allowed to continue on its way, and will
@@ -498,7 +499,7 @@ because they apply to all forwarded traffic.
 Forwarded traffic is allowed by default. In other words, if a host endpoint is
 configured, but there are no rules that explicitly allow or deny a particular
 forwarding flow (in any of policies with `applyOnForward` set to `true` that apply
-to that host endpoint), that flow is still allowed. This is different from how Calico
+to that host endpoint), that flow is still allowed. This is different from how {{site.prodname}}
 treats traffic to or from a local process: traffic to or from a local process is
 denied by default, if a host endpoint is configured but there is no applicable
 policy that explicitly allows that traffic.
@@ -523,8 +524,8 @@ calicoctl apply -f - <<EOF
     name: empty-default-deny
   spec:
     types: 
-      - ingress
-      - egress
+      - Ingress
+      - Egress
     selector: has(host-endpoint)
     applyOnForward: true
 EOF
@@ -545,7 +546,7 @@ those rules together, for all possible flows and all types of host endpoints
 policy.
 
 For packets that arrive on a host interface and are destined for a local
-workload - i.e. a locally-hosted pod, container or VM:
+workload, i.e., a locally-hosted pod, container or VM:
 
 - Pre-DNAT policies apply.
 
@@ -626,14 +627,14 @@ For packets that are sent from a local workload out of a host interface:
 
 ## Host endpoint policy: a worked example
 
-Imagine a Kubernetes cluster, that its administrator wants to secure as much as
+Imagine that the administrator of a Kubernetes cluster wants to secure it as much as
 possible against incoming traffic from outside the cluster.  But suppose that
-the cluster provides various useful Services that are exposed as Kubernetes
-NodePorts - i.e. as well-known TCP port numbers that appear to be available on
-any node in the cluster - and that the administrator does want to expose some
+the cluster provides various useful services that are exposed as Kubernetes
+NodePorts, i.e., as well-known TCP port numbers that appear to be available on
+any node in the cluster. The administrator does want to expose some
 of those NodePorts to traffic from outside.
 
-In this example we will use pre-DNAT policy, applied to the external interfaces
+In this example we will use pre-DNAT policy applied to the external interfaces
 of each cluster node:
 
 - to disallow incoming traffic from outside, in general
@@ -762,9 +763,9 @@ EOF
 ```
 
 After defining host endpoints for each node, you should find that internal
-cluster communications are all still working as normal - for example, that you
+cluster communications are all still working as normal—for example, that you
 can successfully execute commands like `calicoctl get hep` and `calicoctl get
-pol` - but that it is impossible to connect into the cluster from outside
+pol`—but that it is impossible to connect into the cluster from outside
 (except for any [failsafe ports](#failsafe-rules)).  For example, if the
 cluster includes a Kubernetes Service that is exposed as NodePort 31852, you
 should find, at this point, that that NodePort works from within the cluster,
@@ -805,8 +806,8 @@ and then using `host-endpoint=='<special-value>'` as the selector of the
 
 {{site.prodname}} uses Linux's connection tracking ('conntrack') as an important
 optimization to its processing.  It generally means that {{site.prodname}} only needs to
-check its policies for the first packet in an allowed flow - between a pair of
-IP addresses and ports - and then conntrack automatically allows further
+check its policies for the first packet in an allowed flow—between a pair of
+IP addresses and ports—and then conntrack automatically allows further
 packets in the same flow, without {{site.prodname}} rechecking every packet.
 
 This can, however, make it look like a {{site.prodname}} policy is not working as it
@@ -818,11 +819,11 @@ the {{site.prodname}} policy has been changed.
 
 Per {{site.prodname}}'s current implementation, there are two workarounds for this:
 
-1. Somehow ensure that no further packets flow, between the relevant IP
-   addresses and ports, until the conntrack state has expired (typically about
+- Somehow ensure that no further packets flow between the relevant IP
+   addresses and ports until the conntrack state has expired (typically about
    a minute).
 
-2. Use the 'conntrack' tool to delete the relevant conntrack state; for example
+- Use the 'conntrack' tool to delete the relevant conntrack state; for example
    `conntrack -D -p tcp --orig-port-dst 80`.
 
 Then you should observe that the new {{site.prodname}} policy is enforced for new packets.
