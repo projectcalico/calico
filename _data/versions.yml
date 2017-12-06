@@ -1408,6 +1408,9 @@ master:
      felix:
       version: 2.6.x-series
       url: ""
+     typha:
+      version: v0.5.x-series
+      url: ""
      calicoctl:
       version: v1.6.x-series
       url: "https://www.projectcalico.org/builds/calicoctl"
