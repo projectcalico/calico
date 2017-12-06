@@ -271,6 +271,61 @@ var policyTable = []struct {
 			},
 		},
 	},
+	{
+		description: "policy test3",
+		v1API: &apiv1.Policy{
+			Metadata: apiv1.PolicyMetadata{
+				Name: "policy1",
+			},
+			Spec: apiv1.PolicySpec{
+				Order: &order1,
+				// Source Nets selector in V1InRule1 and V1EgressRule1 are non-strictly masked CIDRs.
+				IngressRules: []apiv1.Rule{
+					{
+						Action: "deny",
+						Source: apiv1.EntityRule{
+							Selector: "type=='application'",
+						},
+					},
+				},
+				Selector: "type=='database'",
+			},
+		},
+		v1KVP: &model.KVPair{
+			Key: model.PolicyKey{
+				Name: "policy1",
+			},
+			Value: &model.Policy{
+				Order: &order1,
+				// Source Nets selector in V1ModelInRule1 and V1ModelEgressRule1 are non-strictly masked CIDRs.
+				InboundRules: []model.Rule{{
+					Action:      "deny",
+					SrcSelector: "type=='application'",
+				}},
+				OutboundRules: []model.Rule{},
+				Selector:      "type=='database'",
+				Types:         []string{"ingress"},
+			},
+		},
+		v3API: apiv3.GlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{
+				Name: "policy1",
+			},
+			Spec: apiv3.GlobalNetworkPolicySpec{
+				Order: &order1,
+				// Source Nets selector in V3InRule1 and V3EgressRule1 are strictly masked CIDRs.
+				Ingress: []apiv3.Rule{{
+					Action: apiv3.Deny,
+					Source: apiv3.EntityRule{
+						Selector: "type=='application'",
+					},
+				}},
+				Egress:   []apiv3.Rule{},
+				Selector: "type=='database'",
+				Types:    []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			},
+		},
+	},
 }
 
 func TestCanConvertV1ToV3Policy(t *testing.T) {
