@@ -22,28 +22,27 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/upgradeclients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
 func Validate(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calico-upgrade validate [--calicov3-config=<V3CONFIG>] [--calicov2-config=<V2CONFIG>]
 
-Examples:
-  # Create a policy using the data in policy.yaml.
-  calicoctl create -f ./policy.yaml
-
-  # Create a policy based on the JSON passed into stdin.
-  cat policy.json | calicoctl create -f -
+Example:
+  calico-upgrade validate --calicov3-config=/path/to/v3/config --calicov2-config=/path/to/v2/config validate
 
 Options:
-  -h --help                 Show this screen.
-  -f --filename=<FILENAME>  Filename to use to create the resource.  If set to
-                            "-" loads from stdin.
-     --skip-exists          Skip over and treat as successful any attempts to
-                            create an entry that already exists.
-  -c --config=<CONFIG>      Path to the file containing connection
-                            configuration in YAML or JSON format.
-                            [default: ` + constants.DefaultConfigPath + `]
+  -h --help                  Show this screen.
+  --calicov2-config=<CONFIG> Path to the file containing connection
+                             configuration in YAML or JSON format for
+							 the Calico v1 API.
+                             [default: ` + constants.DefaultConfigPath + `]
+  --calicov3-config=<CONFIG> Path to the file containing connection
+                             configuration in YAML or JSON format for
+							 the Calico v3 API.
+                             [default: ` + constants.DefaultConfigPath + `]
 
 Description:
 `
@@ -52,8 +51,65 @@ Description:
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
-	if len(parsedArgs) == 0 {
-		return
+	cfv2 := parsedArgs["--calicov2-config"].(string)
+	cfv3 := parsedArgs["--calicov3-config"].(string)
+
+	_, clientV2, err := upgradeclients.LoadClients(cfv3, cfv2)
+	if err != nil {
+		fmt.Printf("Failed to create Calico API client: %s\n", err)
+		os.Exit(1)
 	}
 
+	cData, err := migrate.QueryAndConvertResources(clientV2)
+
+	// Any resource names we plan to change should be reported to the user.
+	if len(cData.NameConversions) > 0 {
+		fmt.Println("The following resource names will be changed:")
+		for _, change := range cData.NameConversions {
+			fmt.Printf(" -  %s: %s -> %s\n", change.Kind, change.Original, change.New)
+		}
+	}
+
+	// After we've converted the names we might end up with clashing names that the user will need to update.
+	if len(cData.NameClashes) > 0 {
+		fmt.Println("The following names clashed after conversion was applied:")
+		for _, nError := range cData.NameClashes {
+			fmt.Println(nError)
+		}
+	}
+
+	// Errors with data that cannot be converted.
+	if len(cData.ConversionErrors) > 0 {
+		fmt.Println("The following errors were seen during validation, please resolve these errors " +
+			"and run `calico-upgrade validate` again:")
+		for _, cError := range cData.ConversionErrors {
+			fmt.Println(cError)
+		}
+	}
+
+	// Errors with validation logic, user should report these.
+	if len(cData.ConversedValidationErrors) > 0 {
+		fmt.Println("Errors with validation were seen, please report these to the Calico team " +
+			"on Github by filing an issue (https://github.com/projectcalico/calico/issues):")
+		for _, vError := range cData.ConversedValidationErrors {
+			fmt.Println(vError)
+		}
+	}
+
+	// Some data will be dropped and recreated by the Kubernetes Policy Controller.
+	if len(cData.HandledByPolicyCtrl) > 0 {
+		fmt.Println("The following data will be skipped as it will be recreated by the Kubernetes " +
+			"Policy Controller:")
+		for _, skipped := range cData.HandledByPolicyCtrl {
+			fmt.Printf(" -  %s\n", skipped)
+		}
+	}
+
+	if cData.HasErrors() {
+		fmt.Println("Please correct the above errors and run `calico-upgrade validate` again.")
+		os.Exit(1)
+	}
+
+	fmt.Println("Validation was successful, please install Calico v3.0 and then run `calico-upgrade start-upgrade` " +
+		"to migrate your data.")
 }

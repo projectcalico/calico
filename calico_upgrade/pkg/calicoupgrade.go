@@ -31,6 +31,7 @@ func main() {
     validate
     start-upgrade
     complete-upgrade
+    abort
     convert-manifest
 
 Options:
@@ -65,6 +66,10 @@ Description:
 		switch command {
 		case "validate":
 			commands.Validate(args)
+		case "start-upgrade":
+			commands.StartUpgrade(args)
+		case "abort":
+			commands.Abort(args)
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
 			fmt.Println(doc)
