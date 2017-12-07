@@ -194,7 +194,7 @@ ST_OPTIONS?=
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd-host
+st: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -208,6 +208,23 @@ st: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd-host
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 
 	$(MAKE) stop-etcd
+
+## Run the STs in a container
+.PHONY: st
+testenv: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd
+	# Use the host, PID and network namespaces from the host.
+	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
+	# Map the docker socket in so docker can be used from inside the container
+	# All of code under test is mounted into the container.
+	#   - This also provides access to calico-upgrade and the docker client
+	docker run --net=host --privileged \
+	           -e MY_IP=$(LOCAL_IP_ENV) \
+	           --rm -ti \
+	           -v $(SOURCE_DIR):/code \
+	           --name=testenv \
+	           calico/test \
+	           sh
+	docker exec -it --name=testenv sh
 
 dist/calicoctl:
 	-docker rm -f calicoctl
@@ -227,16 +244,15 @@ dist/calicoctlv2:
 	  touch dist/calicoctlv2
 	-docker rm -f calicoctlv2
 
-## Etcd is used by the STs
-.PHONY: run-etcd-host
-run-etcd-host:
-	@-docker rm -f calico-etcd
+## Run etcd as a container (calico-etcd)
+run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd \
-	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--entrypoint=/usr/local/bin/etcd \
+	--name calico-etcd quay.io/coreos/etcd:v3.1.7 \
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
 
 .PHONY: stop-etcd
 stop-etcd:

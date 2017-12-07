@@ -22,6 +22,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/uuid"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -119,7 +121,7 @@ type NameClash struct {
 }
 
 // Validate validates that the v1 data can be correctly migrated to v3.
-func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) (*ConvertedData, Result) {
+func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ignoreV3Data bool) (*ConvertedData, Result) {
 	status("Validating conversion of v1 data to v3")
 	data, err := queryAndConvertResources(clientv1)
 	if err != nil {
@@ -137,44 +139,10 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) (
 	if clean, err := v3DatastoreIsClean(clientv3); err != nil {
 		status("FAIL: unable to validate the v3 datastore")
 		substatus("Cause: %v", err)
-	} else if !clean {
-		status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
-			"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
-			"the `--ignore-v3-data` flag when running the `start-upgrade` command to force the upgrade, in which " +
-			"case the v1 data will be converted and applied over the data that is currently in the v3 " +
-			"datastore.")
-		substatus("check the output for details of the migrated resources")
 		return data, ResultFail
-	}
-
-	status("SUCCESS: data conversion validated")
-	substatus("check the output for details of the migrated resources")
-	return data, ResultOK
-}
-
-// Migrate migrates the data from v1 format to v3.  Both a v1 and v3 client are required.
-// It returns the converted set of data, a bool indicating whether the migration succeeded.
-func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ignoreV3Data bool) (*ConvertedData, Result) {
-	status("Validating conversion of v1 data to v3")
-	data, err := queryAndConvertResources(clientv1)
-	if err != nil {
-		status("Error: unable to perform validation, please resolve errors and retry")
-		substatus("Cause: %v", err)
-		return nil, ResultFail
-	}
-	if data.HasErrors() {
-		status("FAIL: error validating data, check output for details and resolve issues before upgrading")
-		return data, ResultFail
-	}
-	substatus("success: data conversion validated")
-
-	status("Validating the v3 datastore")
-	if clean, err := v3DatastoreIsClean(clientv3); err != nil {
-		status("FAIL: unable to validate the v3 datastore")
-		substatus("Cause: %v", err)
 	} else if !clean {
 		if ignoreV3Data {
-			substatus("v3 datastore is dirty, but `--ignoreV3Data` flag is set, so continuing with migration")
+			substatus("v3 datastore is dirty, but `--ignore-v3-data` flag is set, so continuing with migration")
 		} else {
 			status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
 				"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
@@ -184,8 +152,22 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 			substatus("check the output for details of the migrated resources")
 			return data, ResultFail
 		}
+	} else {
+		substatus("datastore is clean")
 	}
-	substatus("success: data conversion validated")
+	status("Data conversion validated successfully")
+
+	return data, ResultOK
+}
+
+// Migrate migrates the data from v1 format to v3.  Both a v1 and v3 client are required.
+// It returns the converted set of data, a bool indicating whether the migration succeeded.
+func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ignoreV3Data bool) (*ConvertedData, Result) {
+	// Start by validating the conversion.
+	data, rc := Validate(clientv3, clientv1, ignoreV3Data)
+	if rc != ResultOK {
+		return data, rc
+	}
 
 	// Now set the Ready flag to False.  This will stop Felix from making any data plane updates
 	// and will prevent the orchestrator plugins from adding any new workloads or IP allocations
@@ -205,7 +187,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 		}
 
 		status("Pausing Calico networking")
-		if err = setReadyV1(clientv1, false); err != nil {
+		if err := setReadyV1(clientv1, false); err != nil {
 			status("FAIL: unable to pause calico networking - no changes have been made.  Retry the command.")
 			return nil, ResultFailNeedsRetry
 		}
@@ -217,7 +199,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 
 	// Now query all the resources again and convert - this is the final snapshot that we will use.
 	status("Querying current v1 snapshot and converting to v3")
-	data, err = queryAndConvertResources(clientv1)
+	data, err := queryAndConvertResources(clientv1)
 	if err != nil {
 		status("FAIL: unable to convert the v1 snapshot to v3 - will attempt to abort upgrade")
 		substatus("cause: %v", err)
@@ -346,7 +328,8 @@ type ic interface {
 }
 
 func v3DatastoreIsClean(clientv3 clientv3.Interface) (bool, error) {
-	if i, ok := clientv3.(ic); ok {
+	bc := clientv3.(backend).Backend()
+	if i, ok := bc.(ic); ok {
 		return i.IsClean()
 	}
 	return true, nil
@@ -690,10 +673,11 @@ func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 		c.Spec.DatastoreReady = &ready
 		_, err = clientv3.ClusterInformation().Update(context.Background(), c, options.SetOptions{})
 		if err != nil {
+			log.WithError(err).Info("Hit error setting ready flag in v3 ClusterInformation")
 			if ready {
-				substatus("failed to enable Calico networking in the v3 configuration (unable to update ClusterInformation)")
+				substatus("failed to enable Calico networking in the v3 configuration: %v", err)
 			} else {
-				substatus("failed to disable Calico networking in the v3 configuration (unable to update ClusterInformation)")
+				substatus("failed to disable Calico networking in the v3 configuration: %v", err)
 			}
 			return err
 		}
@@ -750,7 +734,10 @@ func storeV3Resources(clientv3 clientv3.Interface, data *ConvertedData) error {
 	for n, r := range data.Resources {
 		// Convert the resource to a KVPair and access the backend datastore directly.
 		// This is slightly more efficient, and cuts out some of the unneccessary additional
-		// processing.
+		// processing.  Since we applying directly to the backend we need to set the UUID
+		// and creation timestamp which is normally handled by clientv3.
+		r.GetObjectMeta().SetCreationTimestamp(metav1.Now())
+		r.GetObjectMeta().SetUID(uuid.NewUUID())
 		if err := applyToBackend(clientv3, &model.KVPair{
 			Key:   resourceToKey(r),
 			Value: r,

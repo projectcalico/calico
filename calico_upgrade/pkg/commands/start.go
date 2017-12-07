@@ -89,8 +89,8 @@ Description:
 	}
 	cfv3 := parsedArgs["--apiconfigv3"].(string)
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
-	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
 	output := parsedArgs["--output-dir"].(string)
+	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
 
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)

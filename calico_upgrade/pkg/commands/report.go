@@ -74,7 +74,7 @@ func printAndOutputReport(output string, data *migrate.ConvertedData) {
 
 		file, err := os.Create(fp)
 		if err != nil {
-			fmt.Println("Unable to open report file for writing: ", file)
+			fmt.Printf("Unable to open report file for writing: %s\n", fp)
 		} else {
 			for _, n := range data.NameConversions {
 				fmt.Fprintf(file, "%s -> %s\n", n.KeyV1.String(), n.KeyV3.String())
@@ -90,7 +90,7 @@ func printAndOutputReport(output string, data *migrate.ConvertedData) {
 
 		file, err := os.Create(fp)
 		if err != nil {
-			fmt.Println("Unable to open report file for writing: ", file)
+			fmt.Printf("Unable to open report file for writing: %s\n", fp)
 		} else {
 			for _, k := range data.HandledByPolicyCtrl {
 				fmt.Fprintf(file, "%s\n", k.String())
@@ -106,7 +106,7 @@ func printAndOutputReport(output string, data *migrate.ConvertedData) {
 
 		file, err := os.Create(fp)
 		if err != nil {
-			fmt.Println("Unable to open report file for writing: ", file)
+			fmt.Printf("Unable to open report file for writing: %s\n", fp)
 		} else {
 			for _, n := range data.NameClashes {
 				fmt.Fprintf(file, "%s and %s -> %s\n", n.KeyV1, n.OtherKeyV1, n.KeyV3)
@@ -122,7 +122,7 @@ func printAndOutputReport(output string, data *migrate.ConvertedData) {
 
 		file, err := os.Create(fp)
 		if err != nil {
-			fmt.Println("Unable to open report file for writing: ", file)
+			fmt.Printf("Unable to open report file for writing: %s\n", fp)
 		} else {
 			for _, c := range data.ConversionErrors {
 				fmt.Fprintf(file, "%s: %v\n", c.KeyV1, c.Cause)
@@ -134,11 +134,11 @@ func printAndOutputReport(output string, data *migrate.ConvertedData) {
 
 	if len(data.ConvertedResourceValidationErrors) != 0 {
 		fp := filepath.Join(output, constants.FileValidationErrors)
-		fmt.Printf("- (errors) v3 validation errors: %s\n")
+		fmt.Printf("- (errors) v3 validation errors: %s\n", fp)
 
 		file, err := os.Create(fp)
 		if err != nil {
-			fmt.Println("Unable to open report file for writing: ", file)
+			fmt.Printf("Unable to open report file for writing: %s\n", fp)
 		} else {
 			for _, c := range data.ConvertedResourceValidationErrors {
 				fmt.Fprintf(file, "v1 name: %s", c.KeyV1)
