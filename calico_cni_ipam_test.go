@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	. "github.com/projectcalico/cni-plugin/test_utils"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -229,6 +231,54 @@ var _ = Describe("Calico IPAM Tests", func() {
 		It("should exit successfully even if no address exists", func() {
 			_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
 			Expect(exitCode).Should(Equal(0))
+		})
+
+		Context("when using old IPAM handle", func() {
+			It("should remove the old handle", func() {
+				// Create an IP using workload.
+				workload := "a"
+				assignArgs := client.AssignIPArgs{
+					IP:       cnet.MustParseIP("192.168.123.123"),
+					HandleID: &workload,
+				}
+				err := calicoClient.IPAM().AssignIP(assignArgs)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the new IP was set.
+				ips, err := calicoClient.IPAM().IPsByHandle(workload)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ips).To(HaveLen(1))
+
+				// Remove the IP and handle.
+				result, _, _ := RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(0))
+
+				// Verify that the workload handle is gone.
+				_, err = calicoClient.IPAM().IPsByHandle(workload)
+				Expect(err).To(HaveOccurred())
+
+				// Create an IP using the new network name and containerID
+				handleID := "net1.a"
+				assignArgs = client.AssignIPArgs{
+					IP:       cnet.MustParseIP("192.168.123.123"),
+					HandleID: &handleID,
+				}
+				err = calicoClient.IPAM().AssignIP(assignArgs)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the new IP was set.
+				ips, err = calicoClient.IPAM().IPsByHandle(handleID)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ips).To(HaveLen(1))
+
+				// Remove the IP and handle.
+				result, _, _ = RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(0))
+
+				// Verify that the handleID is gone.
+				_, err = calicoClient.IPAM().IPsByHandle(handleID)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 })
