@@ -218,7 +218,7 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml"):
         return CalicoctlOutput(full_cmd, e.output, error=e.returncode)
 
 
-def clean_calico_data(data):
+def clean_calico_data(data, extra_keys_to_remove=None):
     """
     Clean the data returned from a calicoctl get command to remove empty
     structs, null values and non-configurable fields.  This makes comparison
@@ -226,6 +226,7 @@ def clean_calico_data(data):
 
     Args:
         data: The data to clean.
+        extra_keys_to_remove: more keys to remove if needed.
 
     Returns: The cleaned data.
 
@@ -234,24 +235,27 @@ def clean_calico_data(data):
 
     # Recursively delete empty structs / nil values and non-configurable
     # fields.
-    def clean_elem(elem):
+    def clean_elem(elem, extra_keys):
         if isinstance(elem, list):
             # Loop through each element in the list
             for i in elem:
-                clean_elem(i)
+                clean_elem(i, extra_keys)
         if isinstance(elem, dict):
             # Remove non-settable fields, and recursively clean each value of
             # the dictionary, removing nil values or values that are empty
             # dicts after cleaning.
             del_keys = ['creationTimestamp', 'resourceVersion', 'uid']
+            if extra_keys is not None:
+                for extra_key in extra_keys:
+                    del_keys.append(extra_key)
             for k, v in elem.iteritems():
-                clean_elem(v)
+                clean_elem(v, extra_keys)
                 if v is None or v == {}:
                     del_keys.append(k)
             for k in del_keys:
                 if k in elem:
                     del(elem[k])
-    clean_elem(new)
+    clean_elem(new, extra_keys_to_remove)
     return new
 
 
@@ -409,6 +413,18 @@ def wipe_etcd(ip):
     curl_etcd("calico/v1/config/UsageReportingEnabled",
                    options=["-XPUT -d value=False"], ip=ip)
 
+    etcd_container_name = "calico-etcd"
+    tls_vars = ""
+    if ETCD_SCHEME == "https":
+        # Etcd is running with SSL/TLS, require key/certificates
+        etcd_container_name = "calico-etcd-ssl"
+        tls_vars = ("ETCDCTL_CACERT=/etc/calico/certs/ca.pem " +
+                    "ETCDCTL_CERT=/etc/calico/certs/client.pem " +
+                    "ETCDCTL_KEY=/etc/calico/certs/client-key.pem ")
+
+    check_output("docker exec " + etcd_container_name + " sh -c '" + tls_vars +
+                 "ETCDCTL_API=3 etcdctl del --prefix /calico" +
+                 "'", shell=True)
 
 def make_list(kind, items):
     """
