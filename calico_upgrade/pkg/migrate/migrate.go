@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -40,10 +41,19 @@ const (
 	numAppliesPerUpdate     = 100
 )
 
+// DisplayStatusMessages is used to set whether the migration code should
+// output status messages to stdout and logs (true), or just log (false).
 var displayStatus = false
-
 func DisplayStatusMessages(d bool) {
 	displayStatus = d
+}
+
+// Interactive is used to set whether the migration code should be interactive
+// (true) or not.  If interactive, the script will explicitly request the user
+// to verify certain actions.
+var interactive = false
+func Interactive(i bool) {
+	interactive = i
 }
 
 type Result int
@@ -178,6 +188,20 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 	// Now set the Ready flag to False.  This will stop Felix from making any data plane updates
 	// and will prevent the orchestrator plugins from adding any new workloads or IP allocations
 	if !clientv1.IsKDD() {
+		if interactive {
+			fmt.Print("\nYou are about to start the migration of Calico v1 data format to\n" +
+				"Calico v3 data format.  During this time and until the upgrade is completed\n" +
+				"Calico networking will be paused - which means no new Calico networked\n" +
+				"endpoints can be created.\n\n" +
+				"Type yes to proceed (any other input cancels): ")
+			var input string
+			fmt.Scanln(&input)
+			if strings.ToLower(strings.TrimSpace(input)) != "yes" {
+				fmt.Println("User cancelled.  Exiting.")
+				os.Exit(1)
+			}
+		}
+
 		status("Pausing Calico networking")
 		if err = setReadyV1(clientv1, false); err != nil {
 			status("FAIL: unable to pause calico networking - no changes have been made.  Retry the command.")
@@ -263,13 +287,27 @@ func Abort(clientv1 clients.V1ClientInterface) Result {
 }
 
 // Complete completes the upgrade by re-enabling Calico networking in v1.
-func Complete(clientv1 clients.V1ClientInterface) Result {
+func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) Result {
+	if interactive {
+		fmt.Print("\nYou are about to complete the upgrade process to Calico v3.\n" +
+			"At this point, the v1 format data should have been successfully converted\n" +
+			"to v3 format, and all calico/node instances and orchestrator plugins\n" +
+			"(e.g. CNI) should be running Calico v3.\n\n" +
+			"Type yes to proceed (any other input cancels): ")
+		var input string
+		fmt.Scanln(&input)
+		if strings.ToLower(strings.TrimSpace(input)) != "yes" {
+			fmt.Println("User cancelled.  Exiting.")
+			os.Exit(1)
+		}
+	}
+
 	status("Completing upgrade")
 	var err error
 	if !clientv1.IsKDD() {
-		status("Re-enabling Calico networking for v1")
+		status("Enabling Calico networking for v3")
 		for i := 0; i < forceEnableReadyRetries; i++ {
-			err = setReadyV1(clientv1, true)
+			err = setReadyV3(clientv3, true)
 			if err == nil {
 				break
 			}

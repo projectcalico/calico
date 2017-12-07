@@ -5,6 +5,41 @@ test: test-containerized                             ## Run all the tests
 all: dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe test-containerized
 
 ###############################################################################
+# vX.Y format: update during major release process
+RELEASE_STREAM ?= master
+
+###############################################################################
+# Go Build versions
+GO_BUILD_VER:=v0.7
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+
+###############################################################################
+# Version directory
+CALICO_UPGR_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
+VERSIONS_FILE?=$(CALICO_UPGR_DIR)/../_data/versions.yml
+
+###############################################################################
+# Determine whether there's a local yaml installed or use dockerized version.
+# Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
+YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+
+# Use := so that these V_ variables are computed only once per make run.
+V_CALICOCTL := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
+V_CALICOCTL_V2 := "v1.6.2"
+
+# Now use ?= to allow the versions derived from versions.yml to be
+# overriden (by the environment).
+CALICOCTL_VER ?= $(V_CALICOCTL)
+CALICOCTL_V2_VER ?= $(V_CALICOCTL_V2)
+
+# Construct the calico/ctl names we'll use to download calicoctl and extract the
+# binaries.
+$(info $(shell printf "%-21s = %-10s\n" "CALICOCTL_VER" $(CALICOCTL_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CALICOCTL_V2_VER" $(CALICOCTL_V2_VER)))
+CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)
+CTL_CONTAINER_V2_NAME?=calico/ctl:$(CALICOCTL_V2_VER)
+
+###############################################################################
 # calico-upgrade build
 # - Building the calico-upgrade binary in a container
 # - Building the calico-upgrade binary outside a container ("simple-binary")
@@ -13,10 +48,6 @@ all: dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-wi
 # Determine which OS / ARCH.
 OS := $(shell uname -s | tr A-Z a-z)
 ARCH := amd64
-###############################################################################
-# Subcomponent versions:
-GO_BUILD_VER:=latest
-###############################################################################
 
 CALICO_UPGRADE_VERSION?=$(shell git describe --tags --dirty --always)
 CALICO_UPGRADE_DIR=pkg
@@ -27,7 +58,6 @@ UPGRADE_CONTAINER_CREATED=$(CALICO_UPGRADE_DIR)/.calico_upgrade.created
 CALICO_UPGRADE_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICO_UPGRADE_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calico/calico_upgrade
@@ -158,13 +188,13 @@ static-checks: vendor
 SOURCE_DIR?=$(dir $(lastword $(MAKEFILE_LIST)))
 SOURCE_DIR:=$(abspath $(SOURCE_DIR))
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
-ST_TO_RUN?=tests/st/pkg/test_crud.py
+ST_TO_RUN?=tests/st/calico_upgrade/test_crud.py
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calico-upgrade run-etcd-host
+st: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd-host
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -178,6 +208,24 @@ st: dist/calico-upgrade run-etcd-host
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 
 	$(MAKE) stop-etcd
+
+dist/calicoctl:
+	-docker rm -f calicoctl
+	docker pull $(CTL_CONTAINER_NAME)
+	docker create --name calicoctl $(CTL_CONTAINER_NAME)
+	docker cp calicoctl:calicoctl dist/calicoctl && \
+	  test -e dist/calicoctl && \
+	  touch dist/calicoctl
+	-docker rm -f calicoctl
+
+dist/calicoctlv2:
+	-docker rm -f calicoctlv2
+	docker pull $(CTL_CONTAINER_V2_NAME)
+	docker create --name calicoctlv2 $(CTL_CONTAINER_V2_NAME)
+	docker cp calicoctlv2:calicoctl dist/calicoctlv2 && \
+	  test -e dist/calicoctlv2 && \
+	  touch dist/calicoctlv2
+	-docker rm -f calicoctlv2
 
 ## Etcd is used by the STs
 .PHONY: run-etcd-host
