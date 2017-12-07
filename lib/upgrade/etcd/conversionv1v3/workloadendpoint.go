@@ -112,6 +112,7 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	labels := convertLabels(wepValue.Labels)
 	namespace := "default"
 
+	var err error
 	var pod string
 	var container string
 	var workload string
@@ -119,7 +120,9 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 	// Populate our values based on the orchestrator.
 	switch wepKey.OrchestratorID {
 	case "k8s":
-		namespace, pod = getPodNamespaceName(wepKey.WorkloadID)
+		if namespace, pod, err = getPodNamespaceName(wepKey.WorkloadID); err != nil {
+			return nil, err
+		}
 		container = wepValue.ActiveInstanceID
 	case "cni":
 		container = wepKey.WorkloadID
@@ -247,9 +250,13 @@ func convertProfiles(v1Profiles []string) []string {
 
 // getPodNamespaceName separates the workload string which is in the format "namespace.podName" into
 // both parts and returns both the namespace and pod name.
-func getPodNamespaceName(workload string) (string, string) {
+func getPodNamespaceName(workload string) (string, string, error) {
 	parts := strings.SplitN(workload, ".", 2)
-	return parts[0], parts[1]
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("malformed k8s workload ID '%s': workload was not added "+
+			"through the Calico CNI plugin and cannot be converted", workload)
+	}
+	return parts[0], parts[1], nil
 }
 
 // convertPorts updates to the new apiv3.EndpointPort struct.

@@ -1055,7 +1055,7 @@ func init() {
 		Entry("allow missing Types",
 			&api.GlobalNetworkPolicy{
 				ObjectMeta: v1.ObjectMeta{Name: "thing"},
-				Spec: api.GlobalNetworkPolicySpec{},
+				Spec:       api.GlobalNetworkPolicySpec{},
 			}, true,
 		),
 		Entry("allow empty Types",

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package conversionv1v3
+package conversionv1v3_test
 
 import (
 	"testing"
@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
 )
 
 var wepTable = []struct {
@@ -117,10 +118,11 @@ var wepTable = []struct {
 			Spec: apiv1.WorkloadEndpointSpec{
 				IPNetworks: []net.IPNet{net.MustParseNetwork("10.0.0.1/32")},
 				IPNATs: []apiv1.IPNAT{
-					apiv1.IPNAT{
+					{
 						InternalIP: net.MustParseIP("10.0.0.1"),
 						ExternalIP: net.MustParseIP("172.0.0.1"),
-					}},
+					},
+				},
 				IPv4Gateway:   net.ParseIP("10.0.0.254"),
 				Profiles:      makeProfilesV1(),
 				InterfaceName: "cali1234",
@@ -162,7 +164,7 @@ var wepTable = []struct {
 				ContainerID:  "1337495556942031415926535",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"10.0.0.1/32"},
-				IPNATs: []apiv3.IPNAT{apiv3.IPNAT{
+				IPNATs: []apiv3.IPNAT{{
 					InternalIP: "10.0.0.1",
 					ExternalIP: "172.0.0.1",
 				}},
@@ -188,10 +190,11 @@ var wepTable = []struct {
 			Spec: apiv1.WorkloadEndpointSpec{
 				IPNetworks: []net.IPNet{net.MustParseNetwork("2001::/128")},
 				IPNATs: []apiv1.IPNAT{
-					apiv1.IPNAT{
+					{
 						InternalIP: net.MustParseIP("2001::"),
 						ExternalIP: net.MustParseIP("2002::"),
-					}},
+					},
+				},
 				IPv6Gateway:   net.ParseIP("2001::"),
 				Profiles:      makeProfilesV1(),
 				InterfaceName: "cali1234",
@@ -233,7 +236,7 @@ var wepTable = []struct {
 				ContainerID:  "133749555694203141592653c",
 				Endpoint:     "eth0",
 				IPNetworks:   []string{"2001::/128"},
-				IPNATs: []apiv3.IPNAT{apiv3.IPNAT{
+				IPNATs: []apiv3.IPNAT{{
 					InternalIP: "2001::",
 					ExternalIP: "2002::",
 				}},
@@ -315,12 +318,11 @@ var wepTable = []struct {
 }
 
 func TestCanConvertV1ToV3WorkloadEndpoint(t *testing.T) {
-
 	for _, entry := range wepTable {
 		t.Run(entry.description, func(t *testing.T) {
 			RegisterTestingT(t)
 
-			w := WorkloadEndpoint{}
+			w := conversionv1v3.WorkloadEndpoint{}
 
 			// Test and assert v1 API to v1 backend logic.
 			v1KVPResult, err := w.APIV1ToBackendV1(entry.v1API)
@@ -343,6 +345,40 @@ func TestCanConvertV1ToV3WorkloadEndpoint(t *testing.T) {
 	}
 }
 
+func TestBadK8sWorkloadID(t *testing.T) {
+	t.Run("Test invalid k8s workloadID (no dot in name) fails to convert", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		w := conversionv1v3.WorkloadEndpoint{}
+		wepBackendV1 := &model.KVPair{
+			Key: model.WorkloadEndpointKey{
+				Hostname:       "TestNode",
+				OrchestratorID: "k8s",
+				WorkloadID:     "default/frontend-5gs43",
+				EndpointID:     "eth0",
+			},
+			Value: &model.WorkloadEndpoint{
+				Labels:           makeLabelsV1(),
+				ActiveInstanceID: "1337495556942031415926535",
+				State:            "active",
+				Name:             "cali1234",
+				Mac:              makeMac(),
+				ProfileIDs:       makeProfilesV1(),
+				IPv4Nets:         []net.IPNet{net.MustParseNetwork("10.0.0.1/32")},
+				IPv6Nets:         []net.IPNet{},
+				IPv4NAT:          makeIPv4NATKvp(),
+				IPv6NAT:          []model.IPNAT{},
+				IPv4Gateway:      net.ParseIP("10.0.0.254"),
+				Ports:            makeEndpointPortsKvp(),
+			},
+		}
+		_, err := w.BackendV1ToAPIV3(wepBackendV1)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("malformed k8s workload ID 'default/frontend-5gs43': workload was not added "+
+			"through the Calico CNI plugin and cannot be converted"))
+	})
+}
+
 func makeLabelsV1() map[string]string {
 	return map[string]string{
 		"calico/k8s_ns": "default",
@@ -360,11 +396,11 @@ func makeLabelsV3() map[string]string {
 
 func makeIPNATv1() []apiv1.IPNAT {
 	return []apiv1.IPNAT{
-		apiv1.IPNAT{
+		{
 			InternalIP: net.MustParseIP("10.0.0.1"),
 			ExternalIP: net.MustParseIP("172.0.0.1"),
 		},
-		apiv1.IPNAT{
+		{
 			InternalIP: net.MustParseIP("2001::"),
 			ExternalIP: net.MustParseIP("2002::"),
 		},
@@ -372,7 +408,7 @@ func makeIPNATv1() []apiv1.IPNAT {
 }
 
 func makeIPv4NATKvp() []model.IPNAT {
-	ipv4NAT := []model.IPNAT{}
+	var ipv4NAT []model.IPNAT
 	for _, ipnat := range makeIPNATv1() {
 		nat := model.IPNAT{IntIP: ipnat.InternalIP, ExtIP: ipnat.ExternalIP}
 		if ipnat.InternalIP.Version() == 4 {
@@ -383,7 +419,7 @@ func makeIPv4NATKvp() []model.IPNAT {
 }
 
 func makeIPv6NATKvp() []model.IPNAT {
-	ipv6NAT := []model.IPNAT{}
+	var ipv6NAT []model.IPNAT
 	for _, ipnat := range makeIPNATv1() {
 		nat := model.IPNAT{IntIP: ipnat.InternalIP, ExtIP: ipnat.ExternalIP}
 		if ipnat.InternalIP.Version() == 6 {
@@ -395,11 +431,11 @@ func makeIPv6NATKvp() []model.IPNAT {
 
 func makeIPNATv3() []apiv3.IPNAT {
 	return []apiv3.IPNAT{
-		apiv3.IPNAT{
+		{
 			InternalIP: "10.0.0.1",
 			ExternalIP: "172.0.0.1",
 		},
-		apiv3.IPNAT{
+		{
 			InternalIP: "2001::",
 			ExternalIP: "2002::",
 		},
@@ -430,7 +466,7 @@ func makeMac() *net.MAC {
 
 func makeEndpointPortsV1() []apiv1.EndpointPort {
 	return []apiv1.EndpointPort{
-		apiv1.EndpointPort{
+		{
 			Name:     "ep1",
 			Protocol: numorstring.ProtocolFromString("tcp"),
 			Port:     80,
@@ -452,7 +488,7 @@ func makeEndpointPortsKvp() []model.EndpointPort {
 
 func makeEndpointPortsV3() []apiv3.EndpointPort {
 	return []apiv3.EndpointPort{
-		apiv3.EndpointPort{
+		{
 			Name:     "ep1",
 			Protocol: numorstring.ProtocolFromString("tcp"),
 			Port:     80,
