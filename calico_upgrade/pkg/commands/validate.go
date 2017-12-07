@@ -32,6 +32,7 @@ func Validate(args []string) {
       [--apiconfigv3=<V3_APICONFIG>]
       [--apiconfigv1=<V1_APICONFIG>]
       [--output-dir=<OUTPUTDIR>]
+      [--ignore-v3-data]
 
 Example:
   calico-upgrade validate --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
@@ -49,6 +50,13 @@ Options:
   --output-dir=<OUTPUTDIR>     Directory in which the data migration reports
                                are written to.
                                [default: ` + constants.GetDefaultOutputDir() + `]
+  --ignore-v3-data             Ignore any existing Calico data that is in the
+                               v3 format.  If there is v3 data present, we
+                               recommend you remove all Calico data from the
+                               v3 datastore before upgrading, however, this
+                               option may be used if that is not possible, or
+                               if you know all of the data present will be
+                               updated by the upgrade.
 
 Description:
   Validate that the Calico v1 format data can be migrated to Calico v3 format
@@ -69,6 +77,7 @@ Description:
 	cfv3 := parsedArgs["--apiconfigv3"].(string)
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
 	output := parsedArgs["--output-dir"].(string)
+	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
 
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
@@ -87,7 +96,7 @@ Description:
 
 	// Perform the data validation.  The validation result can only be OK or Fail.  The
 	// Fail case may or may not have associated conversion data.
-	data, res := migrate.Validate(clientv3, clientv1)
+	data, res := migrate.Validate(clientv3, clientv1, ignoreV3Data)
 	if res == migrate.ResultOK {
 		// We validated the data successfully.  Include a report.
 		printFinalMessage("Successfully validated v1 to v3 conversion.\n" +
