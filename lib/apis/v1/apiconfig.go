@@ -37,7 +37,7 @@ type CalicoAPIConfigMetadata struct {
 
 // CalicoAPIConfigSpec contains the specification for a Calico CalicoAPIConfig resource.
 type CalicoAPIConfigSpec struct {
-	DatastoreType DatastoreType `json:"datastoreType" envconfig:"DATASTORE_TYPE" default:"etcdv2"`
+	DatastoreType DatastoreType `json:"datastoreType" envconfig:"APIV1_DATASTORE_TYPE" default:"etcdv2"`
 
 	// Inline the ectd config fields
 	EtcdConfig
@@ -47,25 +47,25 @@ type CalicoAPIConfigSpec struct {
 }
 
 type EtcdConfig struct {
-	EtcdScheme     string `json:"etcdScheme" envconfig:"ETCD_SCHEME" default:"http"`
-	EtcdAuthority  string `json:"etcdAuthority" envconfig:"ETCD_AUTHORITY" default:"127.0.0.1:2379"`
-	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
-	EtcdUsername   string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
-	EtcdPassword   string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
-	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
-	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
-	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
+	EtcdScheme     string `json:"etcdScheme" envconfig:"APIV1_ETCD_SCHEME" default:""`
+	EtcdAuthority  string `json:"etcdAuthority" envconfig:"APIV1_ETCD_AUTHORITY" default:""`
+	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"APIV1_ETCD_ENDPOINTS"`
+	EtcdUsername   string `json:"etcdUsername" envconfig:"APIV1_ETCD_USERNAME"`
+	EtcdPassword   string `json:"etcdPassword" envconfig:"APIV1_ETCD_PASSWORD"`
+	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"APIV1_ETCD_KEY_FILE"`
+	EtcdCertFile   string `json:"etcdCertFile" envconfig:"APIV1_ETCD_CERT_FILE"`
+	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"APIV1_ETCD_CA_CERT_FILE"`
 }
 
 type KubeConfig struct {
-	Kubeconfig               string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
-	K8sAPIEndpoint           string `json:"k8sAPIEndpoint" envconfig:"K8S_API_ENDPOINT" default:""`
-	K8sKeyFile               string `json:"k8sKeyFile" envconfig:"K8S_KEY_FILE" default:""`
-	K8sCertFile              string `json:"k8sCertFile" envconfig:"K8S_CERT_FILE" default:""`
-	K8sCAFile                string `json:"k8sCAFile" envconfig:"K8S_CA_FILE" default:""`
-	K8sAPIToken              string `json:"k8sAPIToken" envconfig:"K8S_API_TOKEN" default:""`
-	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
-	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"K8S_DISABLE_NODE_POLL" default:""`
+	Kubeconfig               string `json:"kubeconfig" envconfig:"APIV1_KUBECONFIG" default:""`
+	K8sAPIEndpoint           string `json:"k8sAPIEndpoint" envconfig:"APIV1_K8S_API_ENDPOINT" default:""`
+	K8sKeyFile               string `json:"k8sKeyFile" envconfig:"APIV1_K8S_KEY_FILE" default:""`
+	K8sCertFile              string `json:"k8sCertFile" envconfig:"APIV1_K8S_CERT_FILE" default:""`
+	K8sCAFile                string `json:"k8sCAFile" envconfig:"APIV1_K8S_CA_FILE" default:""`
+	K8sAPIToken              string `json:"k8sAPIToken" envconfig:"APIV1_K8S_API_TOKEN" default:""`
+	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"APIV1_K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
+	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"APIV1_K8S_DISABLE_NODE_POLL" default:""`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the
