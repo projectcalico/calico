@@ -17,9 +17,9 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -44,6 +44,7 @@ const (
 // DisplayStatusMessages is used to set whether the migration code should
 // output status messages to stdout and logs (true), or just log (false).
 var displayStatus = false
+
 func DisplayStatusMessages(d bool) {
 	displayStatus = d
 }
@@ -52,6 +53,7 @@ func DisplayStatusMessages(d bool) {
 // (true) or not.  If interactive, the script will explicitly request the user
 // to verify certain actions.
 var interactive = false
+
 func Interactive(i bool) {
 	interactive = i
 }
@@ -327,6 +329,18 @@ type policyCtrlFilterOut func(model.Key) bool
 
 var noFilter = func(_ model.Key) bool { return false }
 
+// Filter to filter out K8s backed network policies
+var filterGNP = func(k model.Key) bool {
+	gk := k.(model.PolicyKey)
+	return strings.HasPrefix(gk.Name, "knp.default.")
+}
+
+// Filter to filter out K8s (namespace) backed profiles
+var filterProfile = func(k model.Key) bool {
+	gk := k.(model.ProfileKey)
+	return strings.HasPrefix(gk.Name, "k8s_ns.")
+}
+
 type ic interface {
 	IsClean() (bool, error)
 }
@@ -346,32 +360,32 @@ func v3DatastoreIsClean(clientv3 clientv3.Interface) (bool, error) {
 // conversion errors - this allows a full pre-migration report to be generated in a single
 // shot.
 func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedData, error) {
-	res := &ConvertedData{}
+	data := &ConvertedData{}
 
 	substatus("handling global FelixConfiguration")
 	// Query and convert global felix configuration and cluster info.
 	fc := &felixConfig{}
-	if err := fc.queryAndConvertFelixConfigV1ToV3(clientv1, res); err != nil {
+	if err := fc.queryAndConvertFelixConfigV1ToV3(clientv1, data); err != nil {
 		return nil, err
 	}
 
 	substatus("handling global BGPConfiguration")
 	// Query the global BGP configuration:  default AS number; node-to-node mesh.
-	if err := queryAndConvertGlobalBGPConfigV1ToV3(clientv1, res); err != nil {
+	if err := queryAndConvertGlobalBGPConfigV1ToV3(clientv1, data); err != nil {
 		return nil, err
 	}
 
 	substatus("handling global BGPPeer configuration")
 	// Query and convert the BGPPeers
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
+		clientv1, data,
 		model.GlobalBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
 	); err != nil {
 		return nil, err
 	}
 	substatus("handling node specific BGPPeer configuration")
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
+		clientv1, data,
 		model.NodeBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
 	); err != nil {
 		return nil, err
@@ -380,7 +394,7 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 	substatus("handling HostEndpoint configuration")
 	// Query and convert the HostEndpoints
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
+		clientv1, data,
 		model.HostEndpointListOptions{}, conversionv1v3.HostEndpoint{}, noFilter,
 	); err != nil {
 		return nil, err
@@ -389,7 +403,7 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 	substatus("handling IPPool configuration")
 	// Query and convert the IPPools
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
+		clientv1, data,
 		model.IPPoolListOptions{}, conversionv1v3.IPPool{}, noFilter,
 	); err != nil {
 		return nil, err
@@ -397,15 +411,15 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 
 	substatus("handling Node configuration")
 	// Query and convert the Nodes
-	if err := queryAndConvertV1ToV3Nodes(clientv1, res); err != nil {
+	if err := queryAndConvertV1ToV3Nodes(clientv1, data); err != nil {
 		return nil, err
 	}
 
 	substatus("handling GlobalNetworkPolicy configuration")
 	// Query and convert the Policies
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
-		model.PolicyListOptions{}, conversionv1v3.Policy{}, noFilter,
+		clientv1, data,
+		model.PolicyListOptions{}, conversionv1v3.Policy{}, filterGNP,
 	); err != nil {
 		return nil, err
 	}
@@ -413,8 +427,8 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 	substatus("handling Profile configuration")
 	// Query and convert the Profiles
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
-		model.ProfileListOptions{}, conversionv1v3.Profile{}, noFilter,
+		clientv1, data,
+		model.ProfileListOptions{}, conversionv1v3.Profile{}, filterProfile,
 	); err != nil {
 		return nil, err
 	}
@@ -422,13 +436,13 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 	substatus("handling WorkloadEndpoint configuration")
 	// Query and convert the WorkloadEndpoints
 	if err := queryAndConvertV1ToV3Resources(
-		clientv1, res,
+		clientv1, data,
 		model.WorkloadEndpointListOptions{}, conversionv1v3.WorkloadEndpoint{}, noFilter,
 	); err != nil {
 		return nil, err
 	}
 
-	return res, nil
+	return data, nil
 }
 
 // Query the v1 format resources and convert to the v3 format.  Successfully

@@ -108,7 +108,8 @@ Description:
 	migrate.DisplayStatusMessages(true)
 	migrate.Interactive(true)
 
-	// Perform the data migration.
+	// Perform the data migration.  This may return OK, Fail, FailNeedsRetry or
+	// FailNeedsAbort.
 	data, res := migrate.Migrate(clientv3, clientv1, ignoreV3Data)
 
 	if res == migrate.ResultOK {

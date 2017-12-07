@@ -108,23 +108,4 @@ Description:
 		}
 		os.Exit(1)
 	}
-
-	if data == nil {
-		printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
-			"See previous messages for details.")
-		os.Exit(1)
-	} else if data.HasErrors() {
-		printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
-			"See reports below for details on any conversion errors.")
-		printAndOutputReport(output, data)
-		os.Exit(1)
-	} else if res != migrate.ResultOK {
-		printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
-			"See previous messages for details.")
-		os.Exit(1)
-	} else {
-		printFinalMessage("Successfully validated v1 to v3 conversion.\n" +
-			"See reports below for details of the conversion.")
-		printAndOutputReport(output, data)
-	}
 }

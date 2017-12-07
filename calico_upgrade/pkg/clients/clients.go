@@ -25,13 +25,13 @@ import (
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/compat"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/etcdv2"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
 )
 
 type V1ClientInterface interface {
@@ -151,7 +151,7 @@ func loadClientConfigFromEnvironmentV1() (*apiv1.CalicoAPIConfig, error) {
 
 	// Load client config from environment variables.
 	log.Info("Loading config from environment")
-	if err := envconfig.Process("V1", &c.Spec); err != nil {
+	if err := envconfig.Process("APIV1", &c.Spec); err != nil {
 		return nil, err
 	}
 
