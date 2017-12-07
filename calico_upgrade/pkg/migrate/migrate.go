@@ -17,9 +17,9 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -44,6 +44,7 @@ const (
 // DisplayStatusMessages is used to set whether the migration code should
 // output status messages to stdout and logs (true), or just log (false).
 var displayStatus = false
+
 func DisplayStatusMessages(d bool) {
 	displayStatus = d
 }
@@ -52,6 +53,7 @@ func DisplayStatusMessages(d bool) {
 // (true) or not.  If interactive, the script will explicitly request the user
 // to verify certain actions.
 var interactive = false
+
 func Interactive(i bool) {
 	interactive = i
 }

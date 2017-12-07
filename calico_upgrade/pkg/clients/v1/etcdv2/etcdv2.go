@@ -230,7 +230,7 @@ func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
 			kvs = append(kvs, kv)
 		}
 	}
-	log.Debugf("Returning: %#v", kvs)
+	log.Debugf("Returning %d entries (from %#v query)", len(kvs), l)
 	return kvs
 }
 
