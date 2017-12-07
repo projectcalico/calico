@@ -47,9 +47,9 @@ Options:
                                [default: ` + constants.DefaultConfigPathV1 + `]
 
 Description:
-  Abort an upgrade that was started using 'calico-upgrade start'.  In the event
-  of a failure that requires an explicit abort, the start command will indicate
-  that the abort command will need to be executed.
+  Abort an upgrade that was started using 'calico-upgrade start'. In the event
+  of a failure that requires an explicit abort, the start command indicates
+  that the abort command needs to be executed.
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

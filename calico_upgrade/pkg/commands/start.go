@@ -51,9 +51,9 @@ Options:
                                are written to.
                                [default: ` + constants.GetDefaultOutputDir() + `]
   --ignore-v3-data             Ignore any existing Calico data that is in the
-                               v3 format.  The migrated data will overwrite
+                               v3 format. The migrated data will overwrite
                                any common resources, and leave other resources
-                               unchanged.  If there is v3 data present, we
+                               unchanged. If there is v3 data present, we
                                recommend you remove all Calico data from the
                                v3 datastore before upgrading, however, this
                                option may be used if that is not possible, or
@@ -65,15 +65,16 @@ Description:
   Calico v3 data format required by Calico v3.0+.
 
   Before running this command, all calico/node instances should be running
-  the latest 2.x release.  This command will temporarily pause Calico
-  networking across your cluster which means no new endpoints can be created
-  until the upgrade is complete.  Note that existing endpoints will continue
-  to be networked with Calico during the upgrade process.
+  the latest 2.x release. This command temporarily pauses Calico networking
+  across your cluster which means no new endpoints can be created until the
+  upgrade is complete. Note that existing endpoints will continue to be
+  networked with Calico during the upgrade process.
 
   When this command completes successfully, upgrade all of your calico/node
-  instances to the required 3.x release.  Once each node is upgrade you can
-  complete the upgrade using the 'calico-update complete' command which will
-  unpause Calico networking and allow new endpoints to be created.
+  instances to the required 3.x release. Once all nodes are upgraded,
+  complete the upgrade using the 'calico-update complete' command.
+  The 'calico-update complete' command un-pauses Calico networking and
+  allows new endpoints to be created.
 
   This command generates the following set of reports (if it contains no data
   an individual report is not generated).

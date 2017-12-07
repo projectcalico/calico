@@ -144,11 +144,9 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 		if ignoreV3Data {
 			substatus("v3 datastore is dirty, but `--ignore-v3-data` flag is set, so continuing with migration")
 		} else {
-			status("FAIL: v3 datastore is not clean.  We recommend that you remove any calico " +
-				"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
-				"the `--ignore-v3-data` flag when running the `start-upgrade` command to force the upgrade, in which " +
-				"case the v1 data will be converted and applied over the data that is currently in the v3 " +
-				"datastore.")
+			status("FAIL: The v3 datastore is not clean. We recommend that you remove all calico data\n" +
+				"before attempting the upgrade. In order to merge the existing v3 data with the converted\n" +
+				"v1 data, use the '--ignore-v3-data' flag when running the 'start-upgrade' command.\n")
 			substatus("check the output for details of the migrated resources")
 			return data, ResultFail
 		}
@@ -174,9 +172,8 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 	if !clientv1.IsKDD() {
 		if interactive {
 			fmt.Print("\nYou are about to start the migration of Calico v1 data format to\n" +
-				"Calico v3 data format.  During this time and until the upgrade is completed\n" +
-				"Calico networking will be paused - which means no new Calico networked\n" +
-				"endpoints can be created.\n\n" +
+				"Calico v3 data format. Until the upgrade completes, Calico networking is\n" +
+				"paused and no new Calico networked endpoints can be created.\n\n" +
 				"Type yes to proceed (any other input cancels): ")
 			var input string
 			fmt.Scanln(&input)
@@ -188,7 +185,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 
 		status("Pausing Calico networking")
 		if err := setReadyV1(clientv1, false); err != nil {
-			status("FAIL: unable to pause calico networking - no changes have been made.  Retry the command.")
+			status("FAIL: unable to pause calico networking - no changes have been made. Retry the command.")
 			return nil, ResultFailNeedsRetry
 		}
 	}
@@ -262,11 +259,11 @@ func Abort(clientv1 clients.V1ClientInterface) Result {
 		}
 	}
 	if err != nil {
-		status("FAIL: failed to abort upgrade.  Retry command.")
+		status("FAIL: failed to abort upgrade. Retry command.")
 		substatus("cause: %v", err)
 		return ResultFailNeedsAbort
 	}
-	status("SUCCESS: upgdade aborted")
+	status("SUCCESS: upgrade aborted")
 	return ResultOK
 }
 
@@ -274,10 +271,9 @@ func Abort(clientv1 clients.V1ClientInterface) Result {
 func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) Result {
 	if interactive {
 		fmt.Print("\nYou are about to complete the upgrade process to Calico v3.\n" +
-			"At this point, the v1 format data should have been successfully converted\n" +
-			"to v3 format, and all calico/node instances and orchestrator plugins\n" +
-			"(e.g. CNI) should be running Calico v3.\n\n" +
-			"Type yes to proceed (any other input cancels): ")
+			"Please verify that all calico/node instances and orchestrator\n" +
+			"plugins (e.g. CNI) are running Calico v3.\n\n" +
+			"Type 'yes' to proceed (any other input cancels): ")
 		var input string
 		fmt.Scanln(&input)
 		if strings.ToLower(strings.TrimSpace(input)) != "yes" {

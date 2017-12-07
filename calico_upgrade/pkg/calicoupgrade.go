@@ -31,14 +31,12 @@ func main() {
     validate  Validate the v1 formatted data, check that it can be migrated to
               the v3 format, and output a full report of any migrated names,
               migration errors, or migrated name conflicts.
-    start     Start the upgrade process.  This will validate the data, pause
-              Calico networking, and migrate the data from v1 to v3 format.
+    start     Start the upgrade process. This validates the data, pauses
+              Calico networking, and migrates the data from v1 to v3 format.
               Once the data is migrated successfully, the calico/node
               instances can be upgraded to v3.x.
-    complete  This completes the upgrade process by un-pausing Calico
-              networking.
-    abort     This aborts the upgrade process by un-pausing Calico
-              networking.
+    complete  Complete the upgrade process by un-pausing Calico networking.
+    abort     Abort the upgrade process by un-pausing Calico networking.
     version   Display the version of calico-upgrade.
 
 Options:
