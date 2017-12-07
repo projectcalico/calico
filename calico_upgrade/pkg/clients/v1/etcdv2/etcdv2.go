@@ -240,9 +240,9 @@ func convertEtcdError(err error, key model.Key) error {
 		return nil
 	}
 
-	switch err.(type) {
-	case *etcd.Error:
-		switch err.(*etcd.Error).Code {
+	switch ee := err.(type) {
+	case etcd.Error:
+		switch ee.Code {
 		case etcd.ErrorCodeTestFailed:
 			log.Debug("Test failed error")
 			return errors.ErrorResourceUpdateConflict{Identifier: key}
