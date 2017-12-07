@@ -363,6 +363,15 @@ dist/calico-felix/calico-felix: bin/calico-felix
 	mkdir -p dist/calico-felix/
 	cp bin/calico-felix dist/calico-felix/calico-felix
 
+# Cross-compile Felix for Windows
+bin/calico-felix.exe: $(FELIX_GO_FILES) vendor/.up-to-date
+	@echo Building felix for Windows...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+           sh -c 'GOOS=windows go build -v -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
+		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program" || \
+		( echo "Error: $@ was not statically linked"; false ) )'
+
 # Install or update the tools used by the build
 .PHONY: update-tools
 update-tools:
@@ -449,12 +458,12 @@ static-checks:
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv $(GINKGO_OPTIONS)
+	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_OPTIONS)
 
 .PHONY: ut-watch
 ut-watch: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv $(GINKGO_OPTIONS)
+	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_OPTIONS)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser

@@ -19,15 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
-	"runtime/pprof"
-	"strings"
 	"syscall"
 	"time"
 
@@ -43,13 +40,9 @@ import (
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/extdataplane"
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/intdataplane"
-	"github.com/projectcalico/felix/ipsets"
+	dp "github.com/projectcalico/felix/dataplane"
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/statusrep"
 	"github.com/projectcalico/felix/usagerep"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -251,94 +244,10 @@ configRetry:
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
-	var dpDriver dataplaneDriver
+	var dpDriver dp.DataplaneDriver
 	var dpDriverCmd *exec.Cmd
-	if configParams.UseInternalDataplaneDriver {
-		log.Info("Using internal dataplane driver.")
-		// Dedicated mark bits for accept and pass actions.  These are long lived bits
-		// that we use for communicating between chains.
-		markAccept := configParams.NextIptablesMark()
-		markPass := configParams.NextIptablesMark()
-		// Short-lived mark bits for local calculations within a chain.
-		markScratch0 := configParams.NextIptablesMark()
-		markScratch1 := configParams.NextIptablesMark()
-		log.WithFields(log.Fields{
-			"acceptMark":   markAccept,
-			"passMark":     markPass,
-			"scratch0Mark": markScratch0,
-			"scratch1Mark": markScratch1,
-		}).Info("Calculated iptables mark bits")
-		dpConfig := intdataplane.Config{
-			IfaceMonitorConfig: ifacemonitor.Config{
-				InterfaceExcludes: configParams.InterfaceExcludes(),
-			},
-			RulesConfig: rules.Config{
-				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
-				IPSetConfigV4: ipsets.NewIPVersionConfig(
-					ipsets.IPFamilyV4,
-					rules.IPSetNamePrefix,
-					rules.AllHistoricIPSetNamePrefixes,
-					rules.LegacyV4IPSetNames,
-				),
-				IPSetConfigV6: ipsets.NewIPVersionConfig(
-					ipsets.IPFamilyV6,
-					rules.IPSetNamePrefix,
-					rules.AllHistoricIPSetNamePrefixes,
-					nil,
-				),
-
-				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),
-				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
-				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
-
-				IptablesMarkAccept:   markAccept,
-				IptablesMarkPass:     markPass,
-				IptablesMarkScratch0: markScratch0,
-				IptablesMarkScratch1: markScratch1,
-
-				IPIPEnabled:       configParams.IpInIpEnabled,
-				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
-
-				IptablesLogPrefix:         configParams.LogPrefix,
-				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
-				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
-				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
-
-				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
-				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
-
-				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
-			},
-			IPIPMTU:                        configParams.IpInIpMtu,
-			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
-			RouteRefreshInterval:           configParams.RouteRefreshInterval,
-			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
-			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
-			IptablesInsertMode:             configParams.ChainInsertMode,
-			IptablesLockFilePath:           configParams.IptablesLockFilePath,
-			IptablesLockTimeout:            configParams.IptablesLockTimeoutSecs,
-			IptablesLockProbeInterval:      configParams.IptablesLockProbeIntervalMillis,
-			MaxIPSetSize:                   configParams.MaxIpsetSize,
-			IgnoreLooseRPF:                 configParams.IgnoreLooseRPF,
-			IPv6Enabled:                    configParams.Ipv6Support,
-			StatusReportingInterval:        configParams.ReportingIntervalSecs,
-
-			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
-
-			PostInSyncCallback: func() { dumpHeapMemoryProfile(configParams) },
-			HealthAggregator:   healthAggregator,
-
-			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
-		}
-		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
-		intDP.Start()
-		dpDriver = intDP
-	} else {
-		log.WithField("driver", configParams.DataplaneDriver).Info(
-			"Using external dataplane driver.")
-		dpDriver, dpDriverCmd = extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
-	}
+	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
@@ -510,54 +419,11 @@ configRetry:
 	}
 
 	// On receipt of SIGUSR1, write out heap profile.
-	usr1SignalChan := make(chan os.Signal, 1)
-	signal.Notify(usr1SignalChan, syscall.SIGUSR1)
-	go func() {
-		for {
-			<-usr1SignalChan
-			dumpHeapMemoryProfile(configParams)
-		}
-	}()
+	logutils.DumpHeapMemoryOnSignal(configParams)
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
-}
-
-func dumpHeapMemoryProfile(configParams *config.Config) {
-	// If a memory profile file name is configured, dump a heap memory profile.  If the
-	// configured filename includes "<timestamp>", that will be replaced with a stamp indicating
-	// the current time.
-	memProfFileName := configParams.DebugMemoryProfilePath
-	if memProfFileName != "" {
-		logCxt := log.WithField("file", memProfFileName)
-		logCxt.Info("Asked to create a memory profile.")
-
-		// If the configured file name includes "<timestamp>", replace that with the current
-		// time.
-		if strings.Contains(memProfFileName, "<timestamp>") {
-			timestamp := time.Now().Format("2006-01-02-15:04:05")
-			memProfFileName = strings.Replace(memProfFileName, "<timestamp>", timestamp, 1)
-			logCxt = log.WithField("file", memProfFileName)
-		}
-
-		// Open a file with that name.
-		memProfFile, err := os.Create(memProfFileName)
-		if err != nil {
-			logCxt.WithError(err).Fatal("Could not create memory profile file")
-			memProfFile = nil
-		} else {
-			defer memProfFile.Close()
-			logCxt.Info("Writing memory profile...")
-			// The initial resync uses a lot of scratch space so now is
-			// a good time to force a GC and return any RAM that we can.
-			debug.FreeOSMemory()
-			if err := pprof.WriteHeapProfile(memProfFile); err != nil {
-				logCxt.WithError(err).Fatal("Could not write memory profile")
-			}
-			logCxt.Info("Finished writing memory profile")
-		}
-	}
 }
 
 func servePrometheusMetrics(configParams *config.Config) {
@@ -811,11 +677,6 @@ func getAndMergeConfig(
 	return nil
 }
 
-type dataplaneDriver interface {
-	SendMessage(msg interface{}) error
-	RecvMessage() (msg interface{}, err error)
-}
-
 type DataplaneConnector struct {
 	config                     *config.Config
 	configUpdChan              chan<- map[string]string
@@ -823,7 +684,7 @@ type DataplaneConnector struct {
 	StatusUpdatesFromDataplane chan interface{}
 	InSync                     chan bool
 	failureReportChan          chan<- string
-	dataplane                  dataplaneDriver
+	dataplane                  dp.DataplaneDriver
 	datastore                  bapi.Client
 	statusReporter             *statusrep.EndpointStatusReporter
 
@@ -839,7 +700,7 @@ type Startable interface {
 func newConnector(configParams *config.Config,
 	configUpdChan chan<- map[string]string,
 	datastore bapi.Client,
-	dataplane dataplaneDriver,
+	dataplane dp.DataplaneDriver,
 	failureReportChan chan<- string,
 ) *DataplaneConnector {
 	felixConn := &DataplaneConnector{
