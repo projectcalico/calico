@@ -95,7 +95,7 @@ func (_ Policy) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	}
 
 	ap := apiv3.NewGlobalNetworkPolicy()
-	ap.Name = convertName(bk.Name)
+	ap.Name = convertNameNoDots(bk.Name)
 	ap.Annotations = bp.Annotations
 	ap.Spec.Order = bp.Order
 	ap.Spec.Ingress = rulesV1BackendToV3API(bp.InboundRules)
