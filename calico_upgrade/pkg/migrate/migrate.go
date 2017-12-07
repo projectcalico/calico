@@ -178,7 +178,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 			var input string
 			fmt.Scanln(&input)
 			if strings.ToLower(strings.TrimSpace(input)) != "yes" {
-				fmt.Println("User cancelled.  Exiting.")
+				fmt.Println("User cancelled. Exiting.")
 				os.Exit(1)
 			}
 		}
@@ -277,7 +277,7 @@ func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) R
 		var input string
 		fmt.Scanln(&input)
 		if strings.ToLower(strings.TrimSpace(input)) != "yes" {
-			fmt.Println("User cancelled.  Exiting.")
+			fmt.Println("User cancelled. Exiting.")
 			os.Exit(1)
 		}
 	}
@@ -295,7 +295,7 @@ func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) R
 		}
 	}
 	if err != nil {
-		status("FAIL: failed to complete upgrade.  Retry command.")
+		status("FAIL: failed to complete upgrade. Retry command.")
 		substatus("cause: %v", err)
 		return ResultFailNeedsRetry
 	}
