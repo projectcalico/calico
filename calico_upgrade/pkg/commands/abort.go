@@ -65,7 +65,7 @@ Description:
 	// Obtain the v1 and v3 clients.
 	_, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
-		printFinalMessage("Failed to validate v1 to v3 conversion.\n"+
+		printFinalMessage("Failed to abort the upgrade.\n"+
 			"Error accessing the Calico API: %v", err)
 		os.Exit(1)
 	}
