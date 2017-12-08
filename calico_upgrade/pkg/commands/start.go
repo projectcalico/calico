@@ -72,8 +72,8 @@ Description:
 
   When this command completes successfully, upgrade all of your calico/node
   instances to the required 3.x release.  Once each node is upgrade you can
-  complete the upgrade using the 'calico-update complete' command which will
-  resume Calico networking and allow new endpoints to be created.
+  complete the upgrade using the 'calico-update complete' command which
+  resumes Calico networking and allow new endpoints to be created.
 
   This command generates the following set of reports (if it contains no data
   an individual report is not generated).

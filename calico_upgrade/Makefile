@@ -5,12 +5,8 @@ test: test-containerized                             ## Run all the tests
 all: dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe test-containerized
 
 ###############################################################################
-# vX.Y format: update during major release process
-RELEASE_STREAM ?= master
-
-###############################################################################
 # Go Build versions
-GO_BUILD_VER:=v0.7
+GO_BUILD_VER:=v0.8
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 ###############################################################################
@@ -24,8 +20,8 @@ VERSIONS_FILE?=$(CALICO_UPGR_DIR)/../_data/versions.yml
 YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
 
 # Use := so that these V_ variables are computed only once per make run.
-V_CALICOCTL := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
-V_CALICOCTL_V2 := "v1.6.2"
+V_CALICOCTL := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"v3.0".[0].components.calicoctl.version')
+V_CALICOCTL_V2 :=  $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"v2.6".[0].components.calicoctl.version')
 
 # Now use ?= to allow the versions derived from versions.yml to be
 # overriden (by the environment).
@@ -49,7 +45,7 @@ CTL_CONTAINER_V2_NAME?=calico/ctl:$(CALICOCTL_V2_VER)
 OS := $(shell uname -s | tr A-Z a-z)
 ARCH := amd64
 
-CALICO_UPGRADE_VERSION?=$(shell git describe --tags --dirty --always)
+GIT_VERSION?=$(shell git describe --tags --dirty --always)
 CALICO_UPGRADE_DIR=pkg
 UPGRADE_CONTAINER_NAME?=calico/upgrade
 CALICO_UPGRADE_FILES=$(shell find $(CALICO_UPGRADE_DIR) -name '*.go')
@@ -62,6 +58,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calico/calico_upgrade
 
+CALICO_UPGRADE_VERSION ?= $(GIT_VERSION)
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/commands.VERSION=$(CALICO_UPGRADE_VERSION) \
 	-X $(PACKAGE_NAME)/pkg/commands.BUILD_DATE=$(CALICO_UPGRADE_BUILD_DATE) \
 	-X $(PACKAGE_NAME)/pkg/commands.GIT_REVISION=$(CALICO_UPGRADE_GIT_REVISION) -s -w"
@@ -273,19 +270,15 @@ release: clean
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
-	git tag $(VERSION)
-
 	# Check to make sure the tag isn't "-dirty".
 	if git describe --tags --dirty | grep dirty; \
 	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
 
 	# Build the calico-upgrade binaries, as well as the calico/upgrade image.
-	$(MAKE) dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe
-	$(MAKE) calico/upgrade
+	CALICO_UPGRADE_VERSION=$(VERSION) $(MAKE) dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe
+	CALICO_UPGRADE_VERSION=$(VERSION) $(MAKE) calico/upgrade
 
 	# Check that the version output includes the version specified.
-	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
-	# Release is currently supported on darwin / linux only.
 	if ! docker run $(UPGRADE_CONTAINER_NAME) version | grep 'Version:\s*$(VERSION)$$'; then \
 	  echo "Reported version:" `docker run $(UPGRADE_CONTAINER_NAME) version` "\nExpected version: $(VERSION)"; \
 	  false; \
@@ -302,7 +295,7 @@ endif
 	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(UPGRADE_CONTAINER_NAME)
 	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(UPGRADE_CONTAINER_NAME):$(VERSION)
 
-	@echo "\nNow push the tag and images. Then create a release on Github and"
+	@echo "\nNow push the images. Then create a release on Github and"
 	@echo "attach dist/calico-upgrade, dist/calico-upgrade-darwin-amd64, and dist/calico-upgrade-windows-amd64.exe binaries"
 	@echo "\nAdd release notes for calico-upgrade. Use this command"
 	@echo "to find commit messages for this release: git log --oneline <old_release_version>...$(VERSION)"
@@ -311,7 +304,6 @@ endif
 	@echo "docker push quay.io/$(UPGRADE_CONTAINER_NAME):$(VERSION)"
 	@echo "docker push $(UPGRADE_CONTAINER_NAME):latest"
 	@echo "docker push quay.io/$(UPGRADE_CONTAINER_NAME):latest"
-	@echo "See RELEASING.md for detailed instructions."
 
 ## Clean enough that a new release build will be clean
 clean: clean-calico-upgrade

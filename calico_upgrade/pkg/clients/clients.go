@@ -76,14 +76,6 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", v1ApiConfig.Spec.DatastoreType)
 	}
 
-	fmt.Printf("v1 config: %#v\n", v1ApiConfig)
-
-	// Create the front end v3 client and extract the backend client from it.
-	cv3, err := clientv3.New(*v3ApiConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
-	}
-
 	// Create the backend etcdv2 client (v1 API).  We wrap this in the compat module to handle
 	// multi-key backed resources.
 	ev1, err := etcdv2.NewEtcdClient(&v1ApiConfig.Spec.EtcdConfig)
@@ -91,6 +83,12 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, fmt.Errorf("error with apiconfigv1: %v", err)
 	}
 	bv1 := compat.NewAdaptor(ev1)
+
+	// Create the front end v3 client.
+	cv3, err := clientv3.New(*v3ApiConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
+	}
 
 	return cv3, bv1, nil
 }
