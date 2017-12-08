@@ -706,29 +706,26 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete networkpolicy %s" % name(rev3))
         rc.assert_no_error()
 
-        def test_get(self):
-            """
-            Test that we disallow CRUD on a knp.default prefixed NetworkPolicy.
-            """
-            k8s_np = copy.deepcopy(networkpolicy_name1_rev1)
-            k8s_np['metadata']['name'] = 'knp.default.foobarfizz'
+    def test_disallow_crud_on_knp_defaults(self):
+        """
+        Test that we disallow CRUD on a knp.default prefixed NetworkPolicy.
+        """
+        k8s_np = copy.deepcopy(networkpolicy_name1_rev1)
+        k8s_np['metadata']['name'] = 'knp.default.foobarfizz'
 
-            rc = calicoctl("create", data=k8s_np)
-            rc.assert_error(text=NOT_SUPPORTED)
-            rc.assert_error(text=KUBERNETES_NP)
+        rc = calicoctl("create", data=k8s_np)
+        rc.assert_error(text=NOT_SUPPORTED)
+        rc.assert_error(text=KUBERNETES_NP)
 
-            rc = calicoctl("apply", data=k8s_np)
-            rc.assert_error(text=NOT_SUPPORTED)
-            rc.assert_error(text=KUBERNETES_NP)
+        rc = calicoctl("apply", data=k8s_np)
+        rc.assert_error(text=NOT_FOUND)
 
-            rc = calicoctl("replace", data=k8s_np)
-            rc.assert_error(text=NOT_SUPPORTED)
-            rc.assert_error(text=KUBERNETES_NP)
+        rc = calicoctl("replace", data=k8s_np)
+        rc.assert_error(text=NOT_FOUND)
 
-            rc = calicoctl("delete", data=k8s_np)
-            rc.assert_error(text=NOT_SUPPORTED)
-            rc.assert_error(text=KUBERNETES_NP)
-
+        rc = calicoctl("delete", data=k8s_np)
+        rc.assert_error(text=NOT_SUPPORTED)
+        rc.assert_error(text=KUBERNETES_NP)
 #
 #
 # class TestCreateFromFile(TestBase):
