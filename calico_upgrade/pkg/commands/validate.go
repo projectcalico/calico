@@ -60,7 +60,8 @@ Options:
 
 Description:
   Validate that the Calico v1 format data can be migrated to Calico v3 format
-  required by Calico v3.0+.
+  required by Calico v3.0+, and also checks that the v3 datastore is correctly
+  configured for the migration.
 
   This command generates the following set of reports (if it contains no data
   an individual report is not generated).
@@ -79,9 +80,6 @@ Description:
 	output := parsedArgs["--output-dir"].(string)
 	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
 
-	// Ensure we are able to write the output report to the designated output directory.
-	ensureDirectory(output)
-
 	// Obtain the v1 and v3 clients.
 	clientv3, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
@@ -93,6 +91,9 @@ Description:
 	// Ensure the migration code displays messages (this is basically indicating that it
 	// is being called from the calico-upgrade script).
 	migrate.DisplayStatusMessages(true)
+
+	// Ensure we are able to write the output report to the designated output directory.
+	ensureDirectory(output)
 
 	// Perform the data validation.  The validation result can only be OK or Fail.  The
 	// Fail case may or may not have associated conversion data.

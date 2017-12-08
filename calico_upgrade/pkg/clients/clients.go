@@ -70,18 +70,20 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, errors.New("upgrade script is not yet supported for KDD")
 	}
 
+	// Grab the Calico v1 API config (which must be specified).
+	v1ApiConfig, err := loadClientConfigV1(v1Config)
+	if v1ApiConfig.Spec.DatastoreType != apiv1.EtcdV2 {
+		return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", v1ApiConfig.Spec.DatastoreType)
+	}
+
+	fmt.Printf("v1 config: %#v\n", v1ApiConfig)
+
 	// Create the front end v3 client and extract the backend client from it.
 	cv3, err := clientv3.New(*v3ApiConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
 	}
 
-	// This must be an etcd backend.  Grab the Calico v1 API config (which must be specified).
-	// We'll need to convert to the v3 API config format to create the etcdv2 backend client.
-	v1ApiConfig, err := loadClientConfigV1(v1Config)
-	if v1ApiConfig.Spec.DatastoreType != apiv1.EtcdV2 {
-		return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", v1ApiConfig.Spec.DatastoreType)
-	}
 	// Create the backend etcdv2 client (v1 API).  We wrap this in the compat module to handle
 	// multi-key backed resources.
 	ev1, err := etcdv2.NewEtcdClient(&v1ApiConfig.Spec.EtcdConfig)
@@ -151,7 +153,7 @@ func loadClientConfigFromEnvironmentV1() (*apiv1.CalicoAPIConfig, error) {
 
 	// Load client config from environment variables.
 	log.Info("Loading config from environment")
-	if err := envconfig.Process("APIV1", &c.Spec); err != nil {
+	if err := envconfig.Process("CALICO", &c.Spec); err != nil {
 		return nil, err
 	}
 

@@ -73,7 +73,7 @@ Description:
   When this command completes successfully, upgrade all of your calico/node
   instances to the required 3.x release.  Once each node is upgrade you can
   complete the upgrade using the 'calico-update complete' command which will
-  unpause Calico networking and allow new endpoints to be created.
+  resume Calico networking and allow new endpoints to be created.
 
   This command generates the following set of reports (if it contains no data
   an individual report is not generated).
@@ -92,9 +92,6 @@ Description:
 	output := parsedArgs["--output-dir"].(string)
 	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
 
-	// Ensure we are able to write the output report to the designated output directory.
-	ensureDirectory(output)
-
 	// Obtain the v1 and v3 clients.
 	clientv3, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
@@ -107,6 +104,9 @@ Description:
 	// is being called from the calico-upgrade script).
 	migrate.DisplayStatusMessages(true)
 	migrate.Interactive(true)
+
+	// Ensure we are able to write the output report to the designated output directory.
+	ensureDirectory(output)
 
 	// Perform the data migration.  This may return OK, Fail, FailNeedsRetry or
 	// FailNeedsAbort.
@@ -136,7 +136,7 @@ Description:
 		if res == migrate.ResultFailNeedsRetry {
 			fmt.Println("\n\nPlease retry the command.")
 		} else if res == migrate.ResultFailNeedsAbort {
-			fmt.Println("\n\nPlease run the `calico-upgrade abort` command to ensure Calico networking is unpaused.")
+			fmt.Println("\n\nPlease run the `calico-upgrade abort` command to ensure Calico networking is resumed.")
 		}
 
 		os.Exit(1)

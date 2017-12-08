@@ -209,14 +209,10 @@ st: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd
 
 	$(MAKE) stop-etcd
 
-## Run the STs in a container
+## Run etcd and a container for testing the upgrade binaries.  The dist directory will
+## contain calico-upgrade and a v2.x and current v3.x versions of calicoctl.
 .PHONY: st
 testenv: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd
-	# Use the host, PID and network namespaces from the host.
-	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
-	# Map the docker socket in so docker can be used from inside the container
-	# All of code under test is mounted into the container.
-	#   - This also provides access to calico-upgrade and the docker client
 	docker run --net=host --privileged \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           --rm -ti \
