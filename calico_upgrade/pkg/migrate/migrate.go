@@ -652,7 +652,6 @@ func substatus(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	log.Info(strings.TrimSpace(msg))
 	if displayStatus {
-		fmt.Println("-  " + msg)
 		lines := wordWrap(msg, 76)
 		fmt.Println("-  " + lines[0])
 		for _, line := range lines[1:] {
