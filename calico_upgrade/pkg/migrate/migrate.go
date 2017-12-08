@@ -52,7 +52,7 @@ func DisplayStatusMessages(d bool) {
 }
 
 // Interactive is used to set whether the migration code should be interactive
-// (true) or not.  If interactive, the script will explicitly request the user
+// (true) or not. If interactive, the script will explicitly request the user
 // to verify certain actions.
 var interactive = false
 
@@ -76,15 +76,15 @@ type ConvertedData struct {
 	// The converted resource names
 	NameConversions []NameConversion
 
-	// Errors hit attempting to convert the v1 data to v3 format.  The
+	// Errors hit attempting to convert the v1 data to v3 format. The
 	// KeyV3 and ValueV3 will be nil for these conversion errors.
 	ConversionErrors []ConversionError
 
-	// Errors hit validating the converted v3 data.  This suggests an error in the
+	// Errors hit validating the converted v3 data. This suggests an error in the
 	// conversion script which should be fixed before reattempting the conversion.
 	ConvertedResourceValidationErrors []ConversionError
 
-	// Name clashes in the converted resources.  These need to be resolved through
+	// Name clashes in the converted resources. These need to be resolved through
 	// reconfiguration before attempting the upgrade.
 	NameClashes []NameClash
 
@@ -142,11 +142,11 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 		return data, ResultFail
 	} else if !clean {
 		if ignoreV3Data {
-			substatus("v3 datastore is dirty, but `--ignore-v3-data` flag is set, so continuing with migration")
+			substatus("v3 datastore is dirty, but '--ignore-v3-data' flag is set, so continuing with migration")
 		} else {
-			status("ERROR: the v3 datastore is not clean.  We recommend that you remove any calico " +
-				"data before attempting the upgrade.  If you want to keep the existing v3 data, you may use " +
-				"the `--ignore-v3-data` flag when running the `start-upgrade` command to force the upgrade, in which " +
+			status("ERROR: the v3 datastore is not clean. We recommend that you remove any calico " +
+				"data before attempting the upgrade. If you want to keep the existing v3 data, you may use " +
+				"the '--ignore-v3-data' flag when running the 'start-upgrade' command to force the upgrade, in which " +
 				"case the v1 data will be converted and will overwrite matching entries in the v3 datastore.")
 			substatus("check the output for details of the migrated resources")
 			return data, ResultFail
@@ -166,7 +166,7 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 	return data, ResultOK
 }
 
-// Migrate migrates the data from v1 format to v3.  Both a v1 and v3 client are required.
+// Migrate migrates the data from v1 format to v3. Both a v1 and v3 client are required.
 // It returns the converted set of data, a bool indicating whether the migration succeeded.
 func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ignoreV3Data bool) (*ConvertedData, Result) {
 	// Start by validating the conversion.
@@ -175,26 +175,27 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 		return data, rc
 	}
 
-	// Now set the Ready flag to False.  This will stop Felix from making any data plane updates
+	// Now set the Ready flag to False. This will stop Felix from making any data plane updates
 	// and will prevent the orchestrator plugins from adding any new workloads or IP allocations
 	if !clientv1.IsKDD() {
 		if interactive {
-			fmt.Print("\nYou are about to start the migration of Calico v1 data format to\n" +
-				"Calico v3 data format.  During this time and until the upgrade is completed\n" +
-				"Calico networking will be paused - which means no new Calico networked\n" +
-				"endpoints can be created.\n\n" +
-				"Type yes to proceed (any other input cancels): ")
+			status("\nYou are about to start the migration of Calico v1 data format to " +
+				"Calico v3 data format. During this time and until the upgrade is completed " +
+				"Calico networking will be paused - which means no new Calico networked " +
+				"endpoints can be created.\n")
+			// Use printf for the prompt so that we don't insert a newline.
+			fmt.Printf("Type yes to proceed (any other input cancels): ")
 			var input string
 			fmt.Scanln(&input)
 			if strings.ToLower(strings.TrimSpace(input)) != "yes" {
-				fmt.Println("User cancelled.  Exiting.")
+				fmt.Println("User cancelled. Exiting.")
 				os.Exit(1)
 			}
 		}
 
 		status("Pausing Calico networking")
 		if err := setReadyV1(clientv1, false); err != nil {
-			status("ERROR: unable to pause calico networking - no changes have been made.  Retry the command.")
+			status("ERROR: unable to pause calico networking - no changes have been made. Retry the command.")
 			return nil, ResultFailNeedsRetry
 		}
 	}
@@ -268,7 +269,7 @@ func Abort(clientv1 clients.V1ClientInterface) Result {
 		}
 	}
 	if err != nil {
-		status("ERROR: failed to abort upgrade.  Retry command.")
+		status("ERROR: failed to abort upgrade. Retry command.")
 		substatus("cause: %v", err)
 		return ResultFailNeedsAbort
 	}
@@ -287,7 +288,7 @@ func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) R
 		var input string
 		fmt.Scanln(&input)
 		if strings.ToLower(strings.TrimSpace(input)) != "yes" {
-			fmt.Println("User cancelled.  Exiting.")
+			fmt.Println("User cancelled. Exiting.")
 			os.Exit(1)
 		}
 	}
@@ -305,7 +306,7 @@ func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) R
 		}
 	}
 	if err != nil {
-		status("ERROR: failed to complete upgrade.  Retry command.")
+		status("ERROR: failed to complete upgrade. Retry command.")
 		substatus("cause: %v", err)
 		return ResultFailNeedsRetry
 	}
@@ -434,7 +435,7 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 	return data, nil
 }
 
-// Query the v1 format resources and convert to the v3 format.  Successfully
+// Query the v1 format resources and convert to the v3 format. Successfully
 // migrated resources are appended to res, and conversion errors to convErr.
 func queryAndConvertV1ToV3Resources(
 	clientv1 clients.V1ClientInterface,
@@ -455,7 +456,7 @@ func queryAndConvertV1ToV3Resources(
 	}
 
 	// Keep track of the converted names so that we can determine if we have any
-	// name clashes.  We don't generally expect this, but we do need to police against
+	// name clashes. We don't generally expect this, but we do need to police against
 	// it just in case.
 	convertedNames := make(map[string]model.Key, len(kvps))
 
@@ -477,7 +478,7 @@ func queryAndConvertV1ToV3Resources(
 			continue
 		}
 
-		// Check the converted name for clashes.  Store an error if there is a clash and
+		// Check the converted name for clashes. Store an error if there is a clash and
 		// continue with additional checks so that we output as much information as possible.
 		valid := true
 		convertedName := r.GetObjectMeta().GetNamespace() + "/" + r.GetObjectMeta().GetName()
@@ -561,7 +562,7 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 clients.V1ClientInterface, re
 	return nil
 }
 
-// Query the v1 format resources and convert to the v3 format.  Successfully
+// Query the v1 format resources and convert to the v3 format. Successfully
 // migrated resources are appended to res, and conversion errors to convErr.
 func queryAndConvertV1ToV3Nodes(
 	v1Client clients.V1ClientInterface,
@@ -611,7 +612,7 @@ func queryAndConvertV1ToV3Nodes(
 	return nil
 }
 
-// convertLogLevel converts the v1 log level to the equivalent v3 log level.  We
+// convertLogLevel converts the v1 log level to the equivalent v3 log level. We
 // ignore errors, defaulting to info in the event of a conversion error.
 func convertLogLevel(logLevel string) string {
 	switch strings.ToLower(logLevel) {
@@ -634,21 +635,33 @@ func convertLogLevel(logLevel string) string {
 	}
 }
 
+// Display a 79-char word wrapped status message.
 func status(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	log.Info(strings.TrimSpace(msg))
 	if displayStatus {
-		fmt.Println(msg)
+		lines := wordWrap(msg, 79)
+		for _, line := range lines {
+			fmt.Println(line)
+		}
 	}
 }
+
+// Display a 79-char word wrapped sub status (a bulleted message).
 func substatus(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	log.Info(strings.TrimSpace(msg))
 	if displayStatus {
 		fmt.Println("-  " + msg)
+		lines := wordWrap(msg, 76)
+		fmt.Println("-  " + lines[0])
+		for _, line := range lines[1:] {
+			fmt.Println("   " + line)
+		}
 	}
 }
 
+// setReadyV1 sets the ready flag in the v1 datastore.
 func setReadyV1(clientv1 clients.V1ClientInterface, ready bool) error {
 	log.WithField("Ready", ready).Info("Updating Ready flag in v1")
 	_, err := clientv1.Apply(&model.KVPair{
@@ -670,6 +683,7 @@ func setReadyV1(clientv1 clients.V1ClientInterface, ready bool) error {
 	return nil
 }
 
+// setReadyV1 sets the ready flag in the v3 datastore.
 func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	log.WithField("Ready", ready).Info("Updating Ready flag in v3")
 	c, err := clientv3.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
@@ -726,6 +740,7 @@ func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	return nil
 }
 
+// resourceToKey creates a model.Key from a v3 resource.
 func resourceToKey(r conversionv1v3.Resource) model.Key {
 	return model.ResourceKey{
 		Kind:      r.GetObjectKind().GroupVersionKind().Kind,
@@ -740,7 +755,7 @@ func storeV3Resources(clientv3 clientv3.Interface, data *ConvertedData) error {
 	for n, r := range data.Resources {
 		// Convert the resource to a KVPair and access the backend datastore directly.
 		// This is slightly more efficient, and cuts out some of the unneccessary additional
-		// processing.  Since we applying directly to the backend we need to set the UUID
+		// processing. Since we applying directly to the backend we need to set the UUID
 		// and creation timestamp which is normally handled by clientv3.
 		r.GetObjectMeta().SetCreationTimestamp(metav1.Now())
 		r.GetObjectMeta().SetUID(uuid.NewUUID())
@@ -849,7 +864,7 @@ func applyToBackend(clientv3 clientv3.Interface, kvp *model.KVPair) error {
 	// Extract the backend API from the v3 client.
 	bc := clientv3.(backend).Backend()
 
-	// First try creating the resource.  If the resource already exists, try an update.
+	// First try creating the resource. If the resource already exists, try an update.
 	logCxt := log.WithField("Key", kvp.Key)
 	logCxt.Debug("Attempting to create resource")
 	kvp.Revision = ""
@@ -883,4 +898,40 @@ func applyToBackend(clientv3 clientv3.Interface, kvp *model.KVPair) error {
 
 	logCxt.WithError(err).Info("Failed to create or update resource")
 	return err
+}
+
+// wordWrap wraps a long string at the specified max length. The text may
+// contain newlines.
+func wordWrap(text string, length int) []string {
+	// First split by newlines. We want to honor existing newlines.
+	var lines []string
+	parts := strings.Split(text, "\n")
+	for _, part := range parts {
+		lines = append(lines, wordWrapPart(part, length)...)
+	}
+	return lines
+}
+
+// wordWrapPart wraps a long string at the specified max length. Newlines
+// are treated as whitespace.
+func wordWrapPart(text string, length int) []string {
+	// First split by newlines. We want to honor existing newlines.
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{}
+	}
+
+	var lines []string
+	line := words[0]
+	for _, word := range words[1:] {
+		if len(line) + 1 + len(word) > length {
+			lines = append(lines, line)
+			line = word
+		} else {
+			line += " " + word
+		}
+	}
+	lines = append(lines, line)
+
+	return lines
 }

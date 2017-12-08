@@ -22,20 +22,20 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
-func Validate(args []string) {
+func DryRun(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calico-upgrade validate
+  calico-upgrade dryrun
       [--apiconfigv3=<V3_APICONFIG>]
       [--apiconfigv1=<V1_APICONFIG>]
       [--output-dir=<OUTPUTDIR>]
       [--ignore-v3-data]
 
 Example:
-  calico-upgrade validate --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
+  calico-upgrade dryrun --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
 
 Options:
   -h --help                    Show this screen.
@@ -47,11 +47,10 @@ Options:
                                configuration in YAML or JSON format for
                                the Calico v3 API.
                                [default: ` + constants.DefaultConfigPathV1 + `]
-  --output-dir=<OUTPUTDIR>     Directory in which the data migration reports
-                               are written to.
+  --output-dir=<OUTPUTDIR>     Directory to store the data migration reports in.
                                [default: ` + constants.GetDefaultOutputDir() + `]
   --ignore-v3-data             Ignore any existing Calico data that is in the
-                               v3 format.  If there is v3 data present, we
+                               v3 format. If there is v3 data present, we
                                recommend you remove all Calico data from the
                                v3 datastore before upgrading, however, this
                                option may be used if that is not possible, or
@@ -59,9 +58,9 @@ Options:
                                updated by the upgrade.
 
 Description:
-  Validate that the Calico v1 format data can be migrated to Calico v3 format
-  required by Calico v3.0+, and also checks that the v3 datastore is correctly
-  configured for the migration.
+  This command performs a dryrun of the data migration. This validate that
+  the v1 formatted data will be successfully converted and that the v3
+  datastore is in the correct state for the data migration.
 
   This command generates the following set of reports (if it contains no data
   an individual report is not generated).
@@ -69,7 +68,7 @@ Description:
 ` + constants.ReportHelp
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		fmt.Printf("Invalid option:\n  calico-upgrade %s\nUse flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
@@ -95,17 +94,17 @@ Description:
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
 
-	// Perform the data validation.  The validation result can only be OK or Fail.  The
+	// Perform the data validation. The validation result can only be OK or Fail. The
 	// Fail case may or may not have associated conversion data.
 	data, res := migrate.Validate(clientv3, clientv1, ignoreV3Data)
 	if res == migrate.ResultOK {
-		// We validated the data successfully.  Include a report.
+		// We validated the data successfully. Include a report.
 		printFinalMessage("Successfully validated v1 to v3 conversion.\n" +
 			"See reports below for details of the conversion.")
 		printAndOutputReport(output, data)
 	} else {
 		if data == nil || !data.HasErrors() {
-			// We failed to migrate the data and it is not due to conversion errors.  In this
+			// We failed to migrate the data and it is not due to conversion errors. In this
 			// case refer to previous messages.
 			printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
 				"See previous messages for details.")

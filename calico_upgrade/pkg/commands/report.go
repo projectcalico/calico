@@ -20,7 +20,7 @@ import (
 
 	"path/filepath"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 	"github.com/projectcalico/yaml"
 )
@@ -56,7 +56,7 @@ func ensureDirectory(output string) {
 	}
 }
 
-// printFinalMessage displays the final message for a command.  It adds a large
+// printFinalMessage displays the final message for a command. It adds a large
 // banner to make it stand out.
 func printFinalMessage(reportFormat string, parms ...interface{}) {
 	fmt.Println("\n*******************************************************************************\n")

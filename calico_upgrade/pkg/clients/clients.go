@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/compat"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/etcdv2"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -89,7 +89,6 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 	if err != nil {
 		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
 	}
-
 	return cv3, bv1, nil
 }
 
@@ -109,9 +108,8 @@ func loadClientConfigV1(filename string) (*apiv1.CalicoAPIConfig, error) {
 			return nil, fmt.Errorf("syntax error in %s: %s", filename, err)
 		}
 		return c, nil
-	} else {
-		return loadClientConfigFromEnvironmentV1()
 	}
+	return loadClientConfigFromEnvironmentV1()
 }
 
 // loadClientConfigFromBytesV1 loads the ClientConfig from the supplied bytes containing

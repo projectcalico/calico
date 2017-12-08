@@ -44,7 +44,7 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	}
 
 	// Parse the separate KVPairs into a global FelixConfiguration resource and a
-	// global ClusterInformation resource.  Note that if this is KDD we set the Ready
+	// global ClusterInformation resource. Note that if this is KDD we set the Ready
 	// flag to true, otherwise to false.
 	globalConfig := apiv3.NewFelixConfiguration()
 	globalConfig.Name = "default"
@@ -70,7 +70,7 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	// nodename as we go.
 	nodeKvps := make(map[string][]*model.KVPair, 0)
 	for _, kvp := range kvps {
-		// Extract the key, update it and store the updated key.  Store in the node-specific
+		// Extract the key, update it and store the updated key. Store in the node-specific
 		// bucket.
 		hk := kvp.Key.(model.HostConfigKey)
 		hk.Hostname = conversionv1v3.ConvertNodeName(hk.Hostname)
@@ -266,7 +266,7 @@ func (fc *felixConfig) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {
 	return &result, nil
 }
 
-// Return the config name from the field.  The field name is either specified in the
+// Return the config name from the field. The field name is either specified in the
 // configname tag, otherwise it just uses the struct field name.
 func (fc *felixConfig) getConfigName(field reflect.StructField) string {
 	name := field.Tag.Get("confignamev1")

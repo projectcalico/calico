@@ -19,8 +19,8 @@ import (
 	"os"
 
 	log "github.com/sirupsen/logrus"
-
 	"github.com/docopt/docopt-go"
+
 	"github.com/projectcalico/calico/calico_upgrade/pkg/commands"
 )
 
@@ -28,17 +28,22 @@ func main() {
 	doc := `Usage:
   calico-upgrade [options] <command> [<args>...]
 
-    validate  Validate the v1 formatted data, check that it can be migrated to
-              the v3 format, and output a full report of any migrated names,
-              migration errors, or migrated name conflicts.
-    start     Start the upgrade process.  This will validate the data, pause
-              Calico networking, and migrate the data from v1 to v3 format.
-              Once the data is migrated successfully, the calico/node
-              instances can be upgraded to v3.x.
-    complete  This completes the upgrade process by un-pausing Calico
-              networking.
-    abort     This aborts the upgrade process by un-pausing Calico
-              networking.
+    dryrun    Perform a dryrun of the data migration. This validate that the
+              v1 formatted data will be successfully converted and that the v3
+              datastore is in the correct state for the data migration. This
+              command outputs a full report of any migrated names, migration
+              errors, or migrated name conflicts. See Description section
+              below for details.
+    start     Start the upgrade process. This does the following:
+              -  performs a dryrun to verify the data can be migrated
+                 successfully
+              -  pauses Calico networking: this prevents new endpoints from
+                 being created, while allowing existing endpoints to remain
+                 networked
+              -  migrates the data from v1 to v3 format
+    complete  This resumes Calico networking for the v3.x nodes.
+    abort     This aborts the upgrade process by resuming Calico networking
+              for the v2.x nodes.
     version   Display the version of calico-upgrade.
 
 Options:
@@ -71,8 +76,8 @@ Description:
 		args := append([]string{command}, arguments["<args>"].([]string)...)
 
 		switch command {
-		case "validate":
-			commands.Validate(args)
+		case "dryrun":
+			commands.DryRun(args)
 		case "start":
 			commands.Start(args)
 		case "complete":

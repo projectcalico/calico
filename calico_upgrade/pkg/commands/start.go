@@ -22,7 +22,7 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
@@ -47,13 +47,12 @@ Options:
                                configuration in YAML or JSON format for
                                the Calico v3 API.
                                [default: ` + constants.DefaultConfigPathV1 + `]
-  --output-dir=<OUTPUTDIR>     Directory in which the data migration reports
-                               are written to.
+  --output-dir=<OUTPUTDIR>     Directory to store the data migration reports in.
                                [default: ` + constants.GetDefaultOutputDir() + `]
   --ignore-v3-data             Ignore any existing Calico data that is in the
-                               v3 format.  The migrated data will overwrite
+                               v3 format. The migrated data will overwrite
                                any common resources, and leave other resources
-                               unchanged.  If there is v3 data present, we
+                               unchanged. If there is v3 data present, we
                                recommend you remove all Calico data from the
                                v3 datastore before upgrading, however, this
                                option may be used if that is not possible, or
@@ -65,15 +64,16 @@ Description:
   Calico v3 data format required by Calico v3.0+.
 
   Before running this command, all calico/node instances should be running
-  the latest 2.x release.  This command will temporarily pause Calico
-  networking across your cluster which means no new endpoints can be created
-  until the upgrade is complete.  Note that existing endpoints will continue
-  to be networked with Calico during the upgrade process.
+  the latest 2.x release. This command temporarily pauses Calico networking
+  across your cluster which means no new endpoints can be created until the
+  upgrade is complete. Note that existing endpoints will continue to be
+  networked with Calico during the upgrade process.
 
   When this command completes successfully, upgrade all of your calico/node
-  instances to the required 3.x release.  Once each node is upgrade you can
-  complete the upgrade using the 'calico-update complete' command which
-  resumes Calico networking and allow new endpoints to be created.
+  instances and orchestrator plugins to the required 3.x release. Once each
+  node is upgraded you can complete the upgrade using the
+  'calico-update complete' command which resumes Calico networking and allows
+  new endpoints to be created.
 
   This command generates the following set of reports (if it contains no data
   an individual report is not generated).
@@ -81,7 +81,7 @@ Description:
 ` + constants.ReportHelp
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		fmt.Printf("Invalid option:\n  calico-upgrade %s\nUse flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
@@ -108,18 +108,18 @@ Description:
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
 
-	// Perform the data migration.  This may return OK, Fail, FailNeedsRetry or
+	// Perform the data migration. This may return OK, Fail, FailNeedsRetry or
 	// FailNeedsAbort.
 	data, res := migrate.Migrate(clientv3, clientv1, ignoreV3Data)
 
 	if res == migrate.ResultOK {
-		// We migrated the data successfully.  Include a report.
+		// We migrated the data successfully. Include a report.
 		printFinalMessage("Successfully migrated Calico v1 data to v3 format.\n" +
 			"Follow the upgrade remaining upgrade instructions to complete the upgrade.")
 		printAndOutputReport(output, data)
 	} else {
 		if data == nil || !data.HasErrors() {
-			// We failed to migrate the data and it is not due to conversion errors.  In this
+			// We failed to migrate the data and it is not due to conversion errors. In this
 			// case refer to previous messages.
 			printFinalMessage("Failed to migrate Calico v1 data to v3 format.\n" +
 				"See previous messages for details.")

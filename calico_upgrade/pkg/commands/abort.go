@@ -22,7 +22,7 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/commands/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 )
 
@@ -47,13 +47,13 @@ Options:
                                [default: ` + constants.DefaultConfigPathV1 + `]
 
 Description:
-  Abort an upgrade that was started using 'calico-upgrade start'.  In the event
-  of a failure that requires an explicit abort, the start command will indicate
-  that the abort command will need to be executed.
+  Abort an upgrade that was started using 'calico-upgrade start'. In the event
+  of a failure that requires an explicit abort, the start command indicates
+  that the abort command should be executed.
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calico-upgrade %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		fmt.Printf("Invalid option:\n  calico-upgrade %s\nUse flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
