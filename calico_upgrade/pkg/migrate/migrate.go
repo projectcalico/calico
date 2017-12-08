@@ -155,7 +155,8 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 		substatus("datastore is clean")
 	}
 
-	// Finally, check that we found some data - if there was no v1 dat athen
+	// Finally, check that we found some data - if there was no v1 data then
+	// fail the script.
 	if len(data.Resources) == 0 {
 		status("ERROR: no v1 resources detected: is the api configuration correctly configured?")
 		return nil, ResultFail
