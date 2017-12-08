@@ -38,16 +38,22 @@ func (_ Policy) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) 
 			Name: ap.Metadata.Name,
 		},
 		Value: &model.Policy{
-			Order:          ap.Spec.Order,
-			InboundRules:   rulesAPIV1ToBackend(ap.Spec.IngressRules),
-			OutboundRules:  rulesAPIV1ToBackend(ap.Spec.EgressRules),
-			Selector:       ap.Spec.Selector,
-			DoNotTrack:     ap.Spec.DoNotTrack,
-			Annotations:    ap.Metadata.Annotations,
-			PreDNAT:        ap.Spec.PreDNAT,
-			ApplyOnForward: ap.Spec.ApplyOnForward,
-			Types:          nil, // filled in below
+			Order:         ap.Spec.Order,
+			InboundRules:  rulesAPIV1ToBackend(ap.Spec.IngressRules),
+			OutboundRules: rulesAPIV1ToBackend(ap.Spec.EgressRules),
+			Selector:      ap.Spec.Selector,
+			DoNotTrack:    ap.Spec.DoNotTrack,
+			Annotations:   ap.Metadata.Annotations,
+			PreDNAT:       ap.Spec.PreDNAT,
+			Types:         nil, // filled in below
 		},
+	}
+
+	if ap.Spec.DoNotTrack || ap.Spec.PreDNAT {
+		// This case happens when there is a pre-existing policy in the datastore, from before
+		// the ApplyOnForward feature was available. DoNotTrack or PreDNAT policy applies to
+		// forward traffic by nature. So in this case we return ApplyOnForward flag as true.
+		d.Value.(*model.Policy).ApplyOnForward = true
 	}
 
 	if len(ap.Spec.Types) == 0 {
