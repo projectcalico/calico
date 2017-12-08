@@ -47,11 +47,10 @@ Options:
                                configuration in YAML or JSON format for
                                the Calico v3 API.
                                [default: ` + constants.DefaultConfigPathV1 + `]
-  --output-dir=<OUTPUTDIR>     Directory in which the data migration reports
-                               are written to.
+  --output-dir=<OUTPUTDIR>     Directory to store the data migration reports in.
                                [default: ` + constants.GetDefaultOutputDir() + `]
   --ignore-v3-data             Ignore any existing Calico data that is in the
-                               v3 format.  If there is v3 data present, we
+                               v3 format. If there is v3 data present, we
                                recommend you remove all Calico data from the
                                v3 datastore before upgrading, however, this
                                option may be used if that is not possible, or

@@ -16,9 +16,9 @@ package constants
 
 const (
 	DatastoreIntro = `Set the Calico datastore access information in the environment variables or
-or supply details in a config file.  If you are using config files, use the v1
+or supply details in a config file. If you are using config files, use the v1
 format of the config file for the V1_APICONFIG, and the v3 format of the
-config for the V3_APICONFIG.  If you are using environment variables, the v1
+config for the V3_APICONFIG. If you are using environment variables, the v1
 environments are all prefixed with "V1_"
 
 `
@@ -27,20 +27,20 @@ environments are all prefixed with "V1_"
 	ReportHelp = `
     ` + FileConvertedNames + `
       This contains a mapping between the v1 resource name and the v3 resource
-      name.  This will contain an entry for every v1 resource that was
+      name. This will contain an entry for every v1 resource that was
       migrated.
 
     ` + FileNameClashes + `
       This contains a list of resources that after conversion to v3 have
-      names that are identical to other converted resources.  This may occur
+      names that are identical to other converted resources. This may occur
       because name formats in Calico v3 are in some cases more restrictive
       than previous versions and the mapping used to convert a v1 name to a
-      v3 name is algorithmic.  Generally, name clashes should be rare.
+      v3 name is algorithmic. Generally, name clashes should be rare.
 
     ` + FileConversionErrors + `
-      This contains a full list of all of the errors converting the v1 data to
-      v3 format.  There may be multiple conversion errors for a single
-      resource.  Provided the v1 format data is correct, conversion errors
+      This contains a list of all of the errors converting the v1 data to
+      v3 format. There may be multiple conversion errors for a single
+      resource. Provided the v1 format data is correct, conversion errors
       should be rare.
 
     ` + FilePolicyController + `
@@ -51,12 +51,12 @@ environments are all prefixed with "V1_"
 
     ` + FileValidationErrors + `
       This contains a list of errors that occurred when validating the v3
-      resources that were otherwise successfully converted from v1.  These
+      resources that were otherwise successfully converted from v1. These
       errors may indicate an issue such as a migrated name that is too long
       and would need resolving by deleting/re-adding the resource with a
-      shorter name before attempting the upgrade.  Or these errors may
-      indicate an issue with the migration script itself.  If you believe the
-      script is at fault, it is recommended to raise a GitHub issue at
+      shorter name before attempting the upgrade. Or these errors may
+      indicate an issue with the migration script itself. If you believe the
+      script is at fault, please raise a GitHub issue at
          https://github.com/projectcalico/calico/issues
       and await a patch before continuing with the upgrade.
 `
