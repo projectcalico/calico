@@ -155,7 +155,7 @@ func releaseIPAddrByHandle(ctx context.Context, c client.Interface, handle strin
 // with some space. Stores the result in the host's config as its tunnel
 // address.
 func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, ipipCidrs []net.IPNet) {
-	handle := ipipCidrs[0].String() + ":" + nodename
+	handle := "ipipAddr:" + nodename
 	args := ipam.AutoAssignArgs{
 		Num4:      1,
 		Num6:      0,
