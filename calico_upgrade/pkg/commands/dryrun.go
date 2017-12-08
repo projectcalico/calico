@@ -112,7 +112,7 @@ Description:
 			// We failed to migrate the data and it appears to be due to conversion errors.
 			// In this case refer to the report for details.
 			printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
-				"See reports blow for details of any conversion errors.")
+				"See reports below for details of any conversion errors.")
 			printAndOutputReport(output, data)
 		}
 		os.Exit(1)
