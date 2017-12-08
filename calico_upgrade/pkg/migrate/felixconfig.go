@@ -52,13 +52,14 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 		return err
 	}
 
+	// At the point we perform the real migration the Ready flag will have been set
+	// to the required value (depending on the datastore type) - this migration will
+	// transfer the same value across.
 	clusterInfo := apiv3.NewClusterInformation()
 	clusterInfo.Name = "default"
 	if err = fc.parseFelixConfigV1IntoResourceV3(kvps, clusterInfo, data); err != nil {
 		return err
 	}
-	ready := clientv1.IsKDD()
-	clusterInfo.Spec.DatastoreReady = &ready
 
 	// Query all of the per-host felix config into a slice of KVPairs.
 	kvps, err = clientv1.List(model.HostConfigListOptions{})
@@ -93,9 +94,10 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	return nil
 }
 
-// This function convert array of v1 KVPairs into a single v3 resource Spec for felix
-// configuration (global or per host) or a clusterInfo.
-// If error, return field name, string value and error.
+// This function converts a slice of v1 KVPairs into the appropriate v3 values and
+// merges the results into a single v3 resource Spec for felix configuration (global
+// or per host) or a clusterInfo.
+// Conversion errors are added to the ConvertedData struct.
 func (fc *felixConfig) parseFelixConfigV1IntoResourceV3(
 	kvps []*model.KVPair,
 	res conversionv1v3.Resource,

@@ -155,10 +155,10 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 		substatus("datastore is clean")
 	}
 
-	// Finally, check that we found some data - if there was no v1 data then
+	// Finally, check that we found some data.  Note that  if there was no v1 data then
 	// fail the script.
 	if len(data.Resources) == 0 {
-		status("ERROR: no v1 resources detected: is the api configuration correctly configured?")
+		status("ERROR: no v1 resources detected: is the API configuration correctly configured?")
 		return nil, ResultFail
 	}
 
@@ -523,6 +523,7 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 clients.V1ClientInterface, re
 	globalBGPConfig.Name = "default"
 
 	log.Info("Converting BGP config -> BGPConfiguration(default)")
+	var setValue bool
 	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "AsNumber"}); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			return err
@@ -539,6 +540,7 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 clients.V1ClientInterface, re
 			return err
 		}
 		globalBGPConfig.Spec.ASNumber = &asNum
+		setValue = true
 	}
 
 	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "LogLevel"}); err != nil {
@@ -548,6 +550,7 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 clients.V1ClientInterface, re
 		log.Info("No global BGP log level configured")
 	} else if kvp.Value.(string) != "" {
 		globalBGPConfig.Spec.LogSeverityScreen = convertLogLevel(kvp.Value.(string))
+		setValue = true
 	}
 
 	if kvp, err := clientv1.Get(model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"}); err != nil {
@@ -558,8 +561,11 @@ func queryAndConvertGlobalBGPConfigV1ToV3(clientv1 clients.V1ClientInterface, re
 	} else if kvp.Value.(string) != "" {
 		nodeMeshEnabled := strings.ToLower(kvp.Value.(string)) == "true"
 		globalBGPConfig.Spec.NodeToNodeMeshEnabled = &nodeMeshEnabled
+		setValue = true
 	}
-	res.Resources = append(res.Resources, globalBGPConfig)
+	if setValue {
+		res.Resources = append(res.Resources, globalBGPConfig)
+	}
 	return nil
 }
 
