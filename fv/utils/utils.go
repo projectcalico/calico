@@ -61,10 +61,13 @@ func RunMayFail(command string, args ...string) error {
 
 var currentTestOutput = []string{}
 
+var LastRunOutput string
+
 func run(checkNoError bool, command string, args ...string) error {
 	outputBytes, err := Command(command, args...).CombinedOutput()
 	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
 	currentTestOutput = append(currentTestOutput, string(outputBytes))
+	LastRunOutput = string(outputBytes)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"command": command,
