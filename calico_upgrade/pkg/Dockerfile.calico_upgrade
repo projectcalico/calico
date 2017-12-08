@@ -1,7 +1,7 @@
 FROM alpine:3.4
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-ADD dist/calicoctl ./calicoctl
+ADD dist/calico-upgrade ./calico-upgrade
 
 ENV CALICO_CTL_CONTAINER=TRUE
 ENV PATH=$PATH:/
@@ -18,4 +18,4 @@ RUN apk add --no-cache --update wget openssl ca-certificates && \
   apk del openssl ca-certificates wget
 
 WORKDIR /root
-ENTRYPOINT ["/calicoctl"]
+ENTRYPOINT ["/calico-upgrade"]
