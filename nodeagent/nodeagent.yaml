@@ -11,13 +11,13 @@ spec:
     spec:
       initContainers:
       - name: flexvol-driver
-        image: quay.io/saurabh/flexvol:50cf999
+        image: quay.io/saurabh/flexvol:latest
         volumeMounts:
         - name: flexvol-driver-host
           mountPath: /host/driver
       containers:
       - name: nodeagent
-        image: quay.io/saurabh/nodeagent:latest
+        image: quay.io/saurabh/nodeagent:933707e
         imagePullPolicy: Always
         volumeMounts:
         - name: test-mgmt
@@ -28,12 +28,13 @@ spec:
         - name: test-mgmt
           hostPath:
             # directory location on host for the mgmt api
+            type: DirectoryOrCreate
             path: /var/run/flexvol/udsuspver
-            # this field is optional
-            # type: Socket 
         - name: test-workload
           hostPath:
+            type: DirectoryOrCreate
             path: /var/run/flexvol/nodeagent
         - name: flexvol-driver-host
           hostPath:
+            type: DirectoryOrCreate
             path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
