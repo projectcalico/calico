@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 ## Copies the flexvolume driver to the desired location on the host system
 
 set -o errexit
@@ -34,6 +34,11 @@ done
 
 if [ ! -f ${SRCDIR}/${IMAGE} ]; then
   echo "Image not present ${SRCDIR}/${IMAGE}"
+  exit 2
+fi
+
+if [ ! -d ${DSTDIR} ]; then
+  echo "Destination directory ${DSTDIR} not present!?"
   exit 2
 fi
 
