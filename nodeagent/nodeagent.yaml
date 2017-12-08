@@ -9,22 +9,31 @@ spec:
         app: nodeagent
         version: v1
     spec:
+      initContainers:
+      - name: flexvol-driver
+        image: quay.io/saurabh/flexvol:50cf999
+        volumeMounts:
+        - name: flexvol-driver-host
+          mountPath: /host/driver
       containers:
       - name: nodeagent
         image: quay.io/saurabh/nodeagent:latest
         imagePullPolicy: Always
         volumeMounts:
-        - mountPath: /tmp/udsuspver
-          name: test-mgmt
-        - mountPath: /tmp/nodeagent
-          name: test-workload
+        - name: test-mgmt
+          mountPath: /tmp/udsuspver
+        - name: test-workload
+          mountPath: /tmp/nodeagent
       volumes:
         - name: test-mgmt
           hostPath:
             # directory location on host for the mgmt api
-            path: /tmp/udsuspver
+            path: /var/run/flexvol/udsuspver
             # this field is optional
             # type: Socket 
         - name: test-workload
           hostPath:
-            path: /tmp/nodeagent
+            path: /var/run/flexvol/nodeagent
+        - name: flexvol-driver-host
+          hostPath:
+            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds

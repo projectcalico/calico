@@ -2,7 +2,7 @@
 ## Build the docker image for nodeagent (default)
 ## Invoke it from the base directory of the repo
 
-function usage() {
+usage() {
   [[ -n "${1}" ]] && echo "${1}"
 
   cat <<EOF
@@ -16,7 +16,6 @@ EOF
 }
 
 ROOT="$(pwd)"
-TARGET_DIR="${ROOT}/bin/"
 IMAGE="nodeagent"
 REG="quay.io"
 TAG=$(git show --format=%h --no-patch)
@@ -26,14 +25,15 @@ CLEAN_BUILD=0
 while getopts ct:i:r: arg; do
   case ${arg} in
      c) CLEAN_BUILD=1 ;;
-     t) TAG="${OPTARG}";;
-     i) IMAGE="${OPTARG}";;
-     r) REG="${OPTARG}";;
-     *) usage "Invalid option: -${OPTARG}";;
+     t) TAG="${OPTARG}" ;;
+     i) IMAGE="${OPTARG}" ;;
+     r) REG="${OPTARG}" ;;
+     *) usage "Invalid option: -${OPTARG}" ;;
   esac
 done
 
 DEBUG_IMAGE_NAME="${REG}/${USER}/${IMAGE}:${TAG}"
+TARGET_DIR="${ROOT}/bin/${IMAGE}"
 
 if [ $CLEAN_BUILD -eq 1 ]; then
   rm -rf ${TARGET_DIR}
