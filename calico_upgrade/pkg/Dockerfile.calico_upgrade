@@ -3,7 +3,7 @@ MAINTAINER Tom Denham <tom@projectcalico.org>
 
 ADD dist/calico-upgrade ./calico-upgrade
 
-ENV CALICO_CTL_CONTAINER=TRUE
+ENV CALICO_UPGRADE_CONTAINER=TRUE
 ENV PATH=$PATH:/
 
 # glibc and libltdl are needed by docker command line tool
