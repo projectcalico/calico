@@ -1,5 +1,5 @@
-hash: ad5b4d15b730b4b0f4fcb3be9ad71f89216b56c2e1ee27ecb60001a9a5b84ce3
-updated: 2017-12-03T20:35:27.841168863Z
+hash: bf679ef506400603ff7f79cd5fa2d450a52459a9bc12987a7fe3859caf9e4b73
+updated: 2017-12-08T11:31:56.38292149-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -48,7 +48,7 @@ imports:
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
 - name: github.com/fsnotify/fsnotify
-  version: 4da3e2cfbabc9f751898f250b49f2439785783a1
+  version: 9297c46340639aebbb6820f260c699465528fb60
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
@@ -102,7 +102,7 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hashicorp/hcl
-  version: 23c074d0eceb2b8a5bfdbb271ab780cde70f05a8
+  version: 1c284ec98f4b398443cbabb0d9197f7f4cc0077c
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -147,9 +147,9 @@ imports:
 - name: github.com/mitchellh/go-ps
   version: 4fdf99ab29366514c69ccccddab5dc58b8d84062
 - name: github.com/mitchellh/mapstructure
-  version: 06020f85339e21b2478f756a78e295255ffa4d6a
+  version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/olekukonko/tablewriter
-  version: 65fec0d89a572b4367094e2058d3ebe667de3b60
+  version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
 - name: github.com/onsi/ginkgo
   version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
@@ -213,7 +213,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: c07bf34a9a362e92e5e51853fd5fe03c27ecf333
+  version: 7fdfaa3a86b1f6de47000ae4772b87e8979cde6f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -247,7 +247,9 @@ imports:
   - lib/selector/tokenizer
   - lib/set
   - lib/testutils
+  - lib/upgrade/etcd/conversionv1v3
   - lib/validator
+  - lib/validator/v1
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
@@ -353,7 +355,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity
@@ -387,7 +389,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
+  version: 9b9dca205a15b6ce9ef10091f05d60a13fdcf418
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -414,7 +416,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 019ae5ada31de202164b118aee88ee2d14075c31
+  version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
