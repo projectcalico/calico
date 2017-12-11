@@ -26,14 +26,14 @@ import (
 )
 
 var (
-	cidr1     = net.MustParseCIDR("10.0.0.1/24")
-	cidr2     = net.MustParseCIDR("11.0.0.1/24")
-	cidr3     = net.MustParseCIDR("12.0.0.1/24")
-	cidr4     = net.MustParseCIDR("13.0.0.1/24")
-	cidr3Net  = net.MustParseCIDR("12.0.0.0/24")
-	cidr4Net  = net.MustParseCIDR("13.0.0.0/24")
-	cidr3Norm = (&cidr3Net).Network()
-	cidr4Norm = (&cidr4Net).Network()
+	cidr1    = net.MustParseCIDR("10.0.0.1/24")
+	cidr2    = net.MustParseCIDR("11.0.0.1/24")
+	cidr3    = net.MustParseCIDR("12.0.0.1/24")
+	cidr4    = net.MustParseCIDR("13.0.0.1/24")
+	cidr1Net = net.MustParseNetwork("10.0.0.0/24")
+	cidr2Net = net.MustParseNetwork("11.0.0.0/24")
+	cidr3Net = net.MustParseNetwork("12.0.0.0/24")
+	cidr4Net = net.MustParseNetwork("13.0.0.0/24")
 )
 
 var _ = DescribeTable("RulesAPIToBackend",
@@ -42,7 +42,7 @@ var _ = DescribeTable("RulesAPIToBackend",
 		Expect(output).To(ConsistOf(expected))
 	},
 	Entry("empty rule", api.Rule{}, model.Rule{}),
-	Entry("should normalise destination net fields",
+	Entry("should normalize source and destination net fields",
 		api.Rule{
 			Source: api.EntityRule{
 				Net:    &cidr1,
@@ -54,13 +54,13 @@ var _ = DescribeTable("RulesAPIToBackend",
 			},
 		},
 		model.Rule{
-			SrcNet:    &cidr1,
-			NotSrcNet: &cidr2,
-			DstNet:    cidr3Norm,
-			NotDstNet: cidr4Norm,
+			SrcNet:    &cidr1Net,
+			NotSrcNet: &cidr2Net,
+			DstNet:    &cidr3Net,
+			NotDstNet: &cidr4Net,
 		},
 	),
-	Entry("should normalise destination nets fields",
+	Entry("should normalize source and destination nets fields",
 		api.Rule{
 			Source: api.EntityRule{
 				Nets:    []*net.IPNet{&cidr1},
@@ -72,10 +72,10 @@ var _ = DescribeTable("RulesAPIToBackend",
 			},
 		},
 		model.Rule{
-			SrcNets:    []*net.IPNet{&cidr1},
-			NotSrcNets: []*net.IPNet{&cidr2},
-			DstNets:    []*net.IPNet{cidr3Norm},
-			NotDstNets: []*net.IPNet{cidr4Norm},
+			SrcNets:    []*net.IPNet{&cidr1Net},
+			NotSrcNets: []*net.IPNet{&cidr2Net},
+			DstNets:    []*net.IPNet{&cidr3Net},
+			NotDstNets: []*net.IPNet{&cidr4Net},
 		},
 	),
 )
@@ -96,12 +96,12 @@ var _ = DescribeTable("RulesBackendToAPI",
 		api.Rule{
 			Action: "allow",
 			Source: api.EntityRule{
-				Nets:    []*net.IPNet{&cidr1},
-				NotNets: []*net.IPNet{&cidr2},
+				Nets:    []*net.IPNet{&cidr1Net},
+				NotNets: []*net.IPNet{&cidr2Net},
 			},
 			Destination: api.EntityRule{
-				Nets:    []*net.IPNet{&cidr3},
-				NotNets: []*net.IPNet{&cidr4},
+				Nets:    []*net.IPNet{&cidr3Net},
+				NotNets: []*net.IPNet{&cidr4Net},
 			},
 		},
 	),
@@ -115,12 +115,12 @@ var _ = DescribeTable("RulesBackendToAPI",
 		api.Rule{
 			Action: "allow",
 			Source: api.EntityRule{
-				Nets:    []*net.IPNet{&cidr1},
-				NotNets: []*net.IPNet{&cidr2},
+				Nets:    []*net.IPNet{&cidr1Net},
+				NotNets: []*net.IPNet{&cidr2Net},
 			},
 			Destination: api.EntityRule{
-				Nets:    []*net.IPNet{&cidr3},
-				NotNets: []*net.IPNet{&cidr4},
+				Nets:    []*net.IPNet{&cidr3Net},
+				NotNets: []*net.IPNet{&cidr4Net},
 			},
 		},
 	),

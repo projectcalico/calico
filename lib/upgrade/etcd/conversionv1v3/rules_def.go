@@ -33,15 +33,25 @@ var numProtocol1 = numorstring.ProtocolFromInt(240)
 var icmpType1 = 100
 var icmpCode1 = 200
 
-var cidr1StrictMaskStr = "10.0.0.0/24"
+var cidr1StrictMaskStr = "192.168.0.128/25"
 var cidr2StrictMaskStr = "20.0.0.0/24"
-var cidr1Str = "10.0.0.1/24"
+var cidr3StrictMaskStr = "30.0.0.0/24"
+var cidr4StrictMaskStr = "40.0.0.0/24"
+var cidr1Str = "192.168.0.129/25"
 var cidr2Str = "20.0.0.2/24"
+var cidr3Str = "30.0.0.3/24"
+var cidr4Str = "40.0.0.4/24"
 var cidrv61Str = "abcd:5555::/120"
 var cidrv62Str = "abcd:2345::/120"
 
-var cidr1 = net.MustParseNetwork(cidr1Str)
-var cidr2 = net.MustParseNetwork(cidr2Str)
+var cidr1 = net.MustParseCIDR(cidr1Str)
+var cidr1Net = net.MustParseNetwork(cidr1Str)
+var cidr2 = net.MustParseCIDR(cidr2Str)
+var cidr2Net = net.MustParseNetwork(cidr2Str)
+var cidr3 = net.MustParseCIDR(cidr3Str)
+var cidr3Net = net.MustParseNetwork(cidr3Str)
+var cidr4 = net.MustParseCIDR(cidr4Str)
+var cidr4Net = net.MustParseNetwork(cidr4Str)
 var cidrv61 = net.MustParseNetwork(cidrv61Str)
 var cidrv62 = net.MustParseNetwork(cidrv62Str)
 
@@ -63,7 +73,17 @@ var V1InRule1 = apiv1.Rule{
 	Source: apiv1.EntityRule{
 		Tag:      "tag1",
 		Net:      &cidr1,
+		Nets:     []*net.IPNet{&cidr3, &cidr4},
+		NotNet:   &cidr2,
+		NotNets:  []*net.IPNet{&cidr1, &cidr3},
 		Selector: "label1 == 'value1' || bake == 'cake'",
+	},
+	Destination: apiv1.EntityRule{
+		Tag:     "kingindanorth",
+		Net:     &cidr2,
+		Nets:    []*net.IPNet{&cidr1, &cidr3},
+		NotNet:  &cidr1,
+		NotNets: []*net.IPNet{&cidr3, &cidr4},
 	},
 }
 
@@ -74,7 +94,15 @@ var V1ModelInRule1 = model.Rule{
 	ICMPType:    &icmpType1,
 	ICMPCode:    &icmpCode1,
 	SrcTag:      "tag1",
-	SrcNet:      &cidr1,
+	SrcNet:      &cidr1Net,
+	SrcNets:     []*net.IPNet{&cidr3Net, &cidr4Net},
+	NotSrcNet:   &cidr2Net,
+	NotSrcNets:  []*net.IPNet{&cidr1Net, &cidr3Net},
+	DstTag:      "kingindanorth",
+	DstNet:      &cidr2Net,
+	DstNets:     []*net.IPNet{&cidr1Net, &cidr3Net},
+	NotDstNet:   &cidr1Net,
+	NotDstNets:  []*net.IPNet{&cidr3Net, &cidr4Net},
 	SrcSelector: "label1 == 'value1' || bake == 'cake'",
 }
 
@@ -84,8 +112,14 @@ var V3InRule1 = apiv3.Rule{
 	Protocol:  &v3strProtocol1,
 	ICMP:      &v3icmp1,
 	Source: apiv3.EntityRule{
-		Nets:     []string{cidr1StrictMaskStr},
+		Nets:     []string{cidr3StrictMaskStr, cidr4StrictMaskStr, cidr1StrictMaskStr},
+		NotNets:  []string{cidr1StrictMaskStr, cidr3StrictMaskStr, cidr2StrictMaskStr},
 		Selector: "(label1 == 'value1' || bake == 'cake') && tag1 == ''",
+	},
+	Destination: apiv3.EntityRule{
+		Nets:     []string{cidr1StrictMaskStr, cidr3StrictMaskStr, cidr2StrictMaskStr},
+		NotNets:  []string{cidr3StrictMaskStr, cidr4StrictMaskStr, cidr1StrictMaskStr},
+		Selector: "kingindanorth == ''",
 	},
 }
 
@@ -142,7 +176,7 @@ var V1ModelEgressRule1 = model.Rule{
 	ICMPType:    &icmpType1,
 	ICMPCode:    &icmpCode1,
 	SrcTag:      "tag3",
-	SrcNet:      &cidr2,
+	SrcNet:      &cidr2Net,
 	SrcSelector: "all()",
 }
 
