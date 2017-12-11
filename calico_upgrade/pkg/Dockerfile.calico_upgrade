@@ -1,5 +1,4 @@
 FROM alpine:3.4
-MAINTAINER Tom Denham <tom@projectcalico.org>
 
 ADD dist/calico-upgrade ./calico-upgrade
 

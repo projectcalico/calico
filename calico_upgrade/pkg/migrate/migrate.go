@@ -125,26 +125,26 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 	status("Validating conversion of v1 data to v3")
 	data, err := queryAndConvertResources(clientv1)
 	if err != nil {
-		status("ERROR: unable to perform validation, please resolve errors and retry")
+		errorstatus("Unable to perform validation, please resolve errors and retry")
 		substatus("Cause: %v", err)
 		return nil, ResultFail
 	}
 	if data.HasErrors() {
-		status("ERROR: error converting data, check output for details and resolve issues before starting upgrade")
+		errorstatus("Error converting data, check output for details and resolve issues before starting upgrade")
 		return data, ResultFail
 	}
 	substatus("data conversion successful")
 
 	status("Validating the v3 datastore")
 	if clean, err := v3DatastoreIsClean(clientv3); err != nil {
-		status("ERROR: unable to validate the v3 datastore")
+		errorstatus("Unable to validate the v3 datastore")
 		substatus("Cause: %v", err)
 		return data, ResultFail
 	} else if !clean {
 		if ignoreV3Data {
 			substatus("v3 datastore is dirty, but '--ignore-v3-data' flag is set, so continuing with migration")
 		} else {
-			status("ERROR: the v3 datastore is not clean. We recommend that you remove any calico " +
+			errorstatus("The v3 datastore is not clean. We recommend that you remove any calico " +
 				"data before attempting the upgrade. If you want to keep the existing v3 data, you may use " +
 				"the '--ignore-v3-data' flag when running the 'start-upgrade' command to force the upgrade, in which " +
 				"case the v1 data will be converted and will overwrite matching entries in the v3 datastore.")
@@ -155,10 +155,10 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 		substatus("datastore is clean")
 	}
 
-	// Finally, check that we found some data.  Note that  if there was no v1 data then
+	// Finally, check that we found some data.  Note: if there was no v1 data then
 	// fail the script.
 	if len(data.Resources) == 0 {
-		status("ERROR: no v1 resources detected: is the API configuration correctly configured?")
+		errorstatus("No v1 resources detected: is the API configuration correctly configured?")
 		return nil, ResultFail
 	}
 
@@ -196,7 +196,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 
 		status("Pausing Calico networking")
 		if err := setReadyV1(clientv1, false); err != nil {
-			status("ERROR: unable to pause calico networking - no changes have been made. Retry the command.")
+			errorstatus("Unable to pause calico networking - no changes have been made. Retry the command.")
 			return nil, ResultFailNeedsRetry
 		}
 	}
@@ -209,7 +209,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 	status("Querying current v1 snapshot and converting to v3")
 	data, err := queryAndConvertResources(clientv1)
 	if err != nil {
-		status("ERROR: unable to convert the v1 snapshot to v3 - will attempt to abort upgrade")
+		errorstatus("Unable to convert the v1 snapshot to v3 - will attempt to abort upgrade")
 		substatus("cause: %v", err)
 		r := Abort(clientv1)
 		if r == ResultOK {
@@ -218,7 +218,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 		return nil, ResultFailNeedsAbort
 	}
 	if data.HasErrors() {
-		status("ERROR: error validating data - will attempt to abort upgrade")
+		errorstatus("Error validating data - will attempt to abort upgrade")
 		r := Abort(clientv1)
 		if r == ResultOK {
 			return nil, ResultFail
@@ -229,7 +229,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 
 	status("Storing v3 data")
 	if err = storeV3Resources(clientv3, data); err != nil {
-		status("ERROR: unable to store the v3 resources - will attempt to abort upgrade")
+		errorstatus("Unable to store the v3 resources - will attempt to abort upgrade")
 		substatus("cause: %v", err)
 		r := Abort(clientv1)
 		if r == ResultOK {
@@ -240,7 +240,7 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 
 	// And we also need to migrate the IPAM data.
 	if err = migrateIPAMData(clientv3, clientv1); err != nil {
-		status("ERROR: unable to migrate the v3 IPAM data - will attempt to abort upgrade")
+		errorstatus("Unable to migrate the v3 IPAM data - will attempt to abort upgrade")
 		substatus("cause: %v", err)
 		r := Abort(clientv1)
 		if r == ResultOK {
@@ -270,7 +270,7 @@ func Abort(clientv1 clients.V1ClientInterface) Result {
 		}
 	}
 	if err != nil {
-		status("ERROR: failed to abort upgrade. Retry command.")
+		errorstatus("Failed to abort upgrade. Retry command.")
 		substatus("cause: %v", err)
 		return ResultFailNeedsAbort
 	}
@@ -307,7 +307,7 @@ func Complete(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface) R
 		}
 	}
 	if err != nil {
-		status("ERROR: failed to complete upgrade. Retry command.")
+		errorstatus("Failed to complete upgrade. Retry command.")
 		substatus("cause: %v", err)
 		return ResultFailNeedsRetry
 	}
@@ -642,6 +642,18 @@ func convertLogLevel(logLevel string) string {
 	}
 }
 
+// Display a 79-char word wrapped error message.
+func errorstatus(format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	log.Error(strings.TrimSpace(msg))
+	if displayStatus {
+		lines := wordWrap("ERROR: "+msg, 79)
+		for _, line := range lines {
+			fmt.Println(line)
+		}
+	}
+}
+
 // Display a 79-char word wrapped status message.
 func status(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
@@ -800,7 +812,7 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 clients.V1ClientInter
 	substatus("listing and converting IPAM allocation blocks")
 	kvps, err := clientv1.List(model.BlockListOptions{})
 	if err != nil {
-		status("ERROR: unable to list IPAM allocation blocks")
+		errorstatus("Unable to list IPAM allocation blocks")
 		substatus("cause: %v", err)
 		return err
 	}
@@ -825,7 +837,7 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 clients.V1ClientInter
 	substatus("listing and converting IPAM affinity blocks")
 	kvps, err = clientv1.List(model.BlockAffinityListOptions{})
 	if err != nil {
-		status("ERROR: unable to list IPAM affinity blocks")
+		errorstatus("Unable to list IPAM affinity blocks")
 		substatus("cause: %v", err)
 		return err
 	}
@@ -840,7 +852,7 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 clients.V1ClientInter
 	substatus("listing IPAM handles")
 	kvps, err = clientv1.List(model.IPAMHandleListOptions{})
 	if err != nil {
-		status("ERROR: unable to list IPAM handles")
+		errorstatus("Unable to list IPAM handles")
 		substatus("cause: %v", err)
 		return err
 	}
@@ -850,7 +862,7 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 clients.V1ClientInter
 	substatus("storing IPAM data in v3 format")
 	for _, kvp := range kvps {
 		if err := applyToBackend(clientv3, kvp); err != nil {
-			status("ERROR: error writing IPAM data to v3 datastore")
+			errorstatus("Error writing IPAM data to v3 datastore")
 			return err
 		}
 	}
@@ -930,7 +942,7 @@ func wordWrapPart(text string, length int) []string {
 	var lines []string
 	line := words[0]
 	for _, word := range words[1:] {
-		if len(line) + 1 + len(word) > length {
+		if len(line)+1+len(word) > length {
 			lines = append(lines, line)
 			line = word
 		} else {

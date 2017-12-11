@@ -1,5 +1,4 @@
 FROM golang:1.7
-MAINTAINER Rob Brockbank <rob@tigera.io>
 
 # These are only required for running the tests in a container.
 RUN go get github.com/onsi/ginkgo/ginkgo

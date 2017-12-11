@@ -28,14 +28,14 @@ import (
 
 func DryRun(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calico-upgrade dryrun
+  calico-upgrade dry-run
       [--apiconfigv3=<V3_APICONFIG>]
       [--apiconfigv1=<V1_APICONFIG>]
       [--output-dir=<OUTPUTDIR>]
       [--ignore-v3-data]
 
 Example:
-  calico-upgrade dryrun --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
+  calico-upgrade dry-run --apiconfigv3=/path/to/v3/config --apiconfigv1=/path/to/v1/config
 
 Options:
   -h --help                    Show this screen.
@@ -58,7 +58,7 @@ Options:
                                updated by the upgrade.
 
 Description:
-  This command performs a dryrun of the data migration. This validate that
+  This command performs a dry-run of the data migration. This validates that
   the v1 formatted data will be successfully converted and that the v3
   datastore is in the correct state for the data migration.
 

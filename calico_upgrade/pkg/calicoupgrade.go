@@ -18,27 +18,28 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/commands"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 )
 
 func main() {
 	doc := `Usage:
   calico-upgrade [options] <command> [<args>...]
 
-    dryrun    Perform a dryrun of the data migration. This validate that the
+    dry-run   Perform a dry-run of the data migration. This validates that the
               v1 formatted data will be successfully converted and that the v3
               datastore is in the correct state for the data migration. This
               command outputs a full report of any migrated names, migration
               errors, or migrated name conflicts. See Description section
               below for details.
     start     Start the upgrade process. This does the following:
-              -  performs a dryrun to verify the data can be migrated
+              -  performs a dry-run to verify the data will be migrated
                  successfully
               -  pauses Calico networking: this prevents new endpoints from
-                 being created, while allowing existing endpoints to remain
+                 being created while allowing existing endpoints to remain
                  networked
               -  migrates the data from v1 to v3 format
     complete  This resumes Calico networking for the v3.x nodes.
@@ -59,6 +60,9 @@ Description:
 `
 	arguments, _ := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
 
+	log.AddHook(logutils.ContextHook{})
+	log.SetFormatter(&logutils.Formatter{})
+	log.SetLevel(log.PanicLevel)
 	if logLevel := arguments["--log-level"]; logLevel != nil {
 		parsedLogLevel, err := log.ParseLevel(logLevel.(string))
 		if err != nil {
@@ -76,7 +80,7 @@ Description:
 		args := append([]string{command}, arguments["<args>"].([]string)...)
 
 		switch command {
-		case "dryrun":
+		case "dry-run":
 			commands.DryRun(args)
 		case "start":
 			commands.Start(args)

@@ -95,9 +95,8 @@ var _ = Describe("Test felix configuration upgrade", func() {
 	globalCluster := apiv3.NewClusterInformation()
 	globalCluster.Name = "default"
 	globalCluster.Spec = apiv3.ClusterInformationSpec{
-		ClusterGUID:    "abcedfg",
-		ClusterType:    "Mesos,K8s",
-		DatastoreReady: &bool1,
+		ClusterGUID: "abcedfg",
+		ClusterType: "Mesos,K8s",
 	}
 
 	It("should handle different field types being assigned", func() {
