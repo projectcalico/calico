@@ -41,14 +41,13 @@ var policyTable = []struct {
 				Name: "nameyMcPolicyName",
 			},
 			Spec: apiv1.PolicySpec{
-				Order:          &order1,
-				IngressRules:   []apiv1.Rule{V1InRule1, V1InRule2},
-				EgressRules:    []apiv1.Rule{V1EgressRule1, V1EgressRule2},
-				Selector:       "calico/k8s_ns == 'default' || thing == 'value'",
-				DoNotTrack:     true,
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Types:          []apiv1.PolicyType{apiv1.PolicyTypeIngress},
+				Order:        &order1,
+				IngressRules: []apiv1.Rule{V1InRule1, V1InRule2},
+				EgressRules:  []apiv1.Rule{V1EgressRule1, V1EgressRule2},
+				Selector:     "calico/k8s_ns == 'default' || thing == 'value'",
+				DoNotTrack:   false, // DoNotTrack and PreDNAT can not both be true.
+				PreDNAT:      true,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
 		v1KVP: &model.KVPair{
@@ -60,7 +59,7 @@ var policyTable = []struct {
 				InboundRules:   []model.Rule{V1ModelInRule1, V1ModelInRule2},
 				OutboundRules:  []model.Rule{V1ModelEgressRule1, V1ModelEgressRule2},
 				Selector:       "calico/k8s_ns == 'default' || thing == 'value'",
-				DoNotTrack:     true,
+				DoNotTrack:     false,
 				PreDNAT:        true,
 				ApplyOnForward: true,
 				Types:          []string{"ingress"},
@@ -75,7 +74,7 @@ var policyTable = []struct {
 				Ingress:        []apiv3.Rule{V3InRule1, V3InRule2},
 				Egress:         []apiv3.Rule{V3EgressRule1, V3EgressRule2},
 				Selector:       "projectcalico.org/namespace == 'default' || thing == 'value'",
-				DoNotTrack:     true,
+				DoNotTrack:     false,
 				PreDNAT:        true,
 				ApplyOnForward: true,
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
@@ -89,14 +88,13 @@ var policyTable = []struct {
 				Name: "MaKe.-.MaKe",
 			},
 			Spec: apiv1.PolicySpec{
-				Order:          &order1,
-				IngressRules:   []apiv1.Rule{V1InRule2},
-				EgressRules:    []apiv1.Rule{V1EgressRule1},
-				Selector:       "thing == 'value'",
-				DoNotTrack:     true,
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Types:          []apiv1.PolicyType{apiv1.PolicyTypeIngress},
+				Order:        &order1,
+				IngressRules: []apiv1.Rule{V1InRule2},
+				EgressRules:  []apiv1.Rule{V1EgressRule1},
+				Selector:     "thing == 'value'",
+				DoNotTrack:   true,
+				PreDNAT:      false,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
 		v1KVP: &model.KVPair{
@@ -109,7 +107,7 @@ var policyTable = []struct {
 				OutboundRules:  []model.Rule{V1ModelEgressRule1},
 				Selector:       "thing == 'value'",
 				DoNotTrack:     true,
-				PreDNAT:        true,
+				PreDNAT:        false,
 				ApplyOnForward: true,
 				Types:          []string{"ingress"},
 			},
@@ -124,26 +122,67 @@ var policyTable = []struct {
 				Egress:         []apiv3.Rule{V3EgressRule1},
 				Selector:       "thing == 'value'",
 				DoNotTrack:     true,
-				PreDNAT:        true,
+				PreDNAT:        false,
 				ApplyOnForward: true,
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
 	},
 	{
-		description: "policy with ApplyOnForward set to it's zero value (missing), and PreDNAT and DoNotTrack set to true " +
+		description: "policy with PreDNAT set to true " +
 			"should convert ApplyOnForward to true in v3 API",
 		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "RAWR",
 			},
 			Spec: apiv1.PolicySpec{
+				Order:        &order1,
+				IngressRules: []apiv1.Rule{V1InRule2},
+				PreDNAT:      true,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
+			},
+		},
+		v1KVP: &model.KVPair{
+			Key: model.PolicyKey{
+				Name: "RAWR",
+			},
+			Value: &model.Policy{
 				Order:          &order1,
-				IngressRules:   []apiv1.Rule{V1InRule2},
-				DoNotTrack:     true,
+				InboundRules:   []model.Rule{V1ModelInRule2},
+				OutboundRules:  []model.Rule{},
+				DoNotTrack:     false,
 				PreDNAT:        true,
-				ApplyOnForward: false,
-				Types:          []apiv1.PolicyType{apiv1.PolicyTypeIngress},
+				ApplyOnForward: true,
+				Types:          []string{"ingress"},
+			},
+		},
+		v3API: apiv3.GlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{
+				Name: "rawr-03d81e1d",
+			},
+			Spec: apiv3.GlobalNetworkPolicySpec{
+				Order:          &order1,
+				Ingress:        []apiv3.Rule{V3InRule2},
+				Egress:         []apiv3.Rule{},
+				DoNotTrack:     false,
+				PreDNAT:        true,
+				ApplyOnForward: true, // notice this gets converted to true, because PreDNAT are true.
+				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			},
+		},
+	},
+	{
+		description: "policy with DoNotTrack set to true " +
+			"should convert ApplyOnForward to true in v3 API",
+		v1API: &apiv1.Policy{
+			Metadata: apiv1.PolicyMetadata{
+				Name: "RAWR",
+			},
+			Spec: apiv1.PolicySpec{
+				Order:        &order1,
+				IngressRules: []apiv1.Rule{V1InRule2},
+				DoNotTrack:   true,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
 		v1KVP: &model.KVPair{
@@ -155,8 +194,8 @@ var policyTable = []struct {
 				InboundRules:   []model.Rule{V1ModelInRule2},
 				OutboundRules:  []model.Rule{},
 				DoNotTrack:     true,
-				PreDNAT:        true,
-				ApplyOnForward: false,
+				PreDNAT:        false,
+				ApplyOnForward: true,
 				Types:          []string{"ingress"},
 			},
 		},
@@ -169,26 +208,25 @@ var policyTable = []struct {
 				Ingress:        []apiv3.Rule{V3InRule2},
 				Egress:         []apiv3.Rule{},
 				DoNotTrack:     true,
-				PreDNAT:        true,
-				ApplyOnForward: true, // notice this gets converted to true, because DoNotTrack and PreDNAT are true.
+				PreDNAT:        false,
+				ApplyOnForward: true, // notice this gets converted to true, because DoNotTrack are true.
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
 	},
 	{
-		description: "policy with ApplyOnForward set to it's zero value (missing), and PreDNAT and DoNotTrack both " +
+		description: "policy with PreDNAT and DoNotTrack both " +
 			"set to false should NOT convert ApplyOnForward to true in v3 API",
 		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "meow",
 			},
 			Spec: apiv1.PolicySpec{
-				Order:          &order1,
-				IngressRules:   []apiv1.Rule{V1InRule2},
-				DoNotTrack:     false,
-				PreDNAT:        false,
-				ApplyOnForward: true,
-				Types:          []apiv1.PolicyType{apiv1.PolicyTypeIngress},
+				Order:        &order1,
+				IngressRules: []apiv1.Rule{V1InRule2},
+				DoNotTrack:   false,
+				PreDNAT:      false,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
 		v1KVP: &model.KVPair{
@@ -201,7 +239,7 @@ var policyTable = []struct {
 				OutboundRules:  []model.Rule{},
 				DoNotTrack:     false,
 				PreDNAT:        false,
-				ApplyOnForward: true,
+				ApplyOnForward: false,
 				Types:          []string{"ingress"},
 			},
 		},
@@ -215,7 +253,7 @@ var policyTable = []struct {
 				Egress:         []apiv3.Rule{},
 				DoNotTrack:     false,
 				PreDNAT:        false,
-				ApplyOnForward: true, // notice this gets converted to true, because DoNotTrack and PreDNAT are true.
+				ApplyOnForward: false,
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
@@ -229,13 +267,12 @@ var policyTable = []struct {
 			Spec: apiv1.PolicySpec{
 				Order: &order1,
 				// Source Nets selector in V1InRule1 and V1EgressRule1 are non-strictly masked CIDRs.
-				IngressRules:   []apiv1.Rule{V1InRule1},
-				EgressRules:    []apiv1.Rule{V1EgressRule1},
-				Selector:       "thing == 'value'",
-				DoNotTrack:     true,
-				PreDNAT:        true,
-				ApplyOnForward: true,
-				Types:          []apiv1.PolicyType{apiv1.PolicyTypeIngress, apiv1.PolicyTypeEgress},
+				IngressRules: []apiv1.Rule{V1InRule1},
+				EgressRules:  []apiv1.Rule{V1EgressRule1},
+				Selector:     "thing == 'value'",
+				DoNotTrack:   true,
+				PreDNAT:      true,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress, apiv1.PolicyTypeEgress},
 			},
 		},
 		v1KVP: &model.KVPair{
