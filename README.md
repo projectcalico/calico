@@ -79,3 +79,11 @@ See `flexvol/udsver-mount.yaml` for a sample of how a workload will setup the fl
           flexVolume:
             driver: nodeagent/uds
 ```
+
+# How to setup the Node
+## Kubeadm
+1. Kubelet on each node must be started with the option --enable-controller-attach-detach=false.
+
+## GCE/GKE
+
+## AWS
