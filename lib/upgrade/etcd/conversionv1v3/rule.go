@@ -77,8 +77,8 @@ func ruleAPIToBackend(ar apiv1.Rule) model.Rule {
 		NotICMPType: notICMPType,
 
 		SrcTag:      ar.Source.Tag,
-		SrcNet:      ar.Source.Net,
-		SrcNets:     ar.Source.Nets,
+		SrcNet:      normalizeIPNet(ar.Source.Net),
+		SrcNets:     normalizeIPNets(ar.Source.Nets),
 		SrcSelector: ar.Source.Selector,
 		SrcPorts:    ar.Source.Ports,
 		DstTag:      ar.Destination.Tag,
@@ -88,8 +88,8 @@ func ruleAPIToBackend(ar apiv1.Rule) model.Rule {
 		DstPorts:    ar.Destination.Ports,
 
 		NotSrcTag:      ar.Source.NotTag,
-		NotSrcNet:      ar.Source.NotNet,
-		NotSrcNets:     ar.Source.NotNets,
+		NotSrcNet:      normalizeIPNet(ar.Source.NotNet),
+		NotSrcNets:     normalizeIPNets(ar.Source.NotNets),
 		NotSrcSelector: ar.Source.NotSelector,
 		NotSrcPorts:    ar.Source.NotPorts,
 		NotDstTag:      ar.Destination.NotTag,
@@ -136,6 +136,19 @@ func rulebackendToAPIv3(br model.Rule) apiv3.Rule {
 			Type: br.NotICMPType,
 		}
 	}
+
+	// Normalize the backend source Net/Nets/NotNet/NotNets
+	// This is because of a bug where we didn't normalize
+	// source (not)net(s) while converting API to backend in v1.
+	br.SrcNet = normalizeIPNet(br.SrcNet)
+	br.SrcNets = normalizeIPNets(br.SrcNets)
+	br.NotSrcNet = normalizeIPNet(br.NotSrcNet)
+	br.NotSrcNets = normalizeIPNets(br.NotSrcNets)
+	// Also normalize destination (Not)Net(s) for consistency.
+	br.DstNet = normalizeIPNet(br.DstNet)
+	br.DstNets = normalizeIPNets(br.DstNets)
+	br.NotDstNet = normalizeIPNet(br.NotDstNet)
+	br.NotDstNets = normalizeIPNets(br.NotDstNets)
 
 	srcNets := br.AllSrcNets()
 	var srcNetsStr []string
