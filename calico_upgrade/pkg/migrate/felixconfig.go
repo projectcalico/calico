@@ -38,6 +38,7 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	data *ConvertedData,
 ) error {
 	// Query all of the global config into a slice of KVPairs.
+	substatus("handling FelixConfiguration (global) resource")
 	kvps, err := clientv1.List(model.GlobalConfigListOptions{})
 	if err != nil {
 		return err
@@ -52,6 +53,7 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 		return err
 	}
 
+	substatus("handling ClusterInformation (global) resource")
 	// At the point we perform the real migration the Ready flag will have been set
 	// to the required value (depending on the datastore type) - this migration will
 	// transfer the same value across.
@@ -61,33 +63,38 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 		return err
 	}
 
-	// Query all of the per-host felix config into a slice of KVPairs.
-	kvps, err = clientv1.List(model.HostConfigListOptions{})
-	if err != nil {
-		return err
-	}
-
-	// Sort the configuration into slices of KVPairs for each node, converting the
-	// nodename as we go.
-	nodeKvps := make(map[string][]*model.KVPair, 0)
-	for _, kvp := range kvps {
-		// Extract the key, update it and store the updated key. Store in the node-specific
-		// bucket.
-		hk := kvp.Key.(model.HostConfigKey)
-		hk.Hostname = conversionv1v3.ConvertNodeName(hk.Hostname)
-		kvp.Key = hk
-
-		nodeKvps[hk.Hostname] = append(nodeKvps[hk.Hostname], kvp)
-	}
-
-	// For each node, get the felix config kvps and convert to v3 per-node
-	// FelixConfiguration resource.
-	for node, kvps := range nodeKvps {
-		// Convert to v3 resource.
-		nodeConfig := apiv3.NewFelixConfiguration()
-		nodeConfig.Name = fmt.Sprintf("node.%s", node)
-		if err := fc.parseFelixConfigV1IntoResourceV3(kvps, nodeConfig, data); err != nil {
+	if clientv1.IsKDD() {
+		substatus("skipping FelixConfiguration (per-node) resources - not supported")
+	} else {
+		// Query all of the per-host felix config into a slice of KVPairs.
+		substatus("handling FelixConfiguration (per-node) resources")
+		kvps, err = clientv1.List(model.HostConfigListOptions{})
+		if err != nil {
 			return err
+		}
+
+		// Sort the configuration into slices of KVPairs for each node, converting the
+		// nodename as we go.
+		nodeKvps := make(map[string][]*model.KVPair, 0)
+		for _, kvp := range kvps {
+			// Extract the key, update it and store the updated key. Store in the node-specific
+			// bucket.
+			hk := kvp.Key.(model.HostConfigKey)
+			hk.Hostname = conversionv1v3.ConvertNodeName(hk.Hostname)
+			kvp.Key = hk
+
+			nodeKvps[hk.Hostname] = append(nodeKvps[hk.Hostname], kvp)
+		}
+
+		// For each node, get the felix config kvps and convert to v3 per-node
+		// FelixConfiguration resource.
+		for node, kvps := range nodeKvps {
+			// Convert to v3 resource.
+			nodeConfig := apiv3.NewFelixConfiguration()
+			nodeConfig.Name = fmt.Sprintf("node.%s", node)
+			if err := fc.parseFelixConfigV1IntoResourceV3(kvps, nodeConfig, data); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -141,7 +148,7 @@ func (fc *felixConfig) parseFelixConfigV1IntoResourceV3(
 		// Get the v1 config value associated with the field.
 		configName := fc.getConfigName(field)
 		logCxt := logCxtRes.WithFields(log.Fields{
-			"field":  field.Name,
+			"field":      field.Name,
 			"configName": configName,
 		})
 		configStrValue, ok := configv1[configName]
