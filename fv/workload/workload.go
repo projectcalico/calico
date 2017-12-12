@@ -107,11 +107,11 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)
 	stderrReader := bufio.NewReader(w.errPipe)
-	namespacePath, err := stdoutReader.ReadString('\n')
-	Expect(err).NotTo(HaveOccurred())
-	w.namespacePath = strings.TrimSpace(namespacePath)
 
+	var errDone sync.WaitGroup
+	errDone.Add(1)
 	go func() {
+		defer errDone.Done()
 		for {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
@@ -121,6 +121,16 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 			log.Infof("Workload %s stderr: %s", name, strings.TrimSpace(string(line)))
 		}
 	}()
+
+	namespacePath, err := stdoutReader.ReadString('\n')
+	if err != nil {
+		// (Only) if we fail here, wait for the stderr to be output before returning.
+		defer errDone.Wait()
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	w.namespacePath = strings.TrimSpace(namespacePath)
+
 	go func() {
 		for {
 			line, err := stdoutReader.ReadString('\n')
