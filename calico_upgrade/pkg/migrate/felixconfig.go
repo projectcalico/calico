@@ -52,14 +52,15 @@ func (m *migrationHelper) queryAndConvertFelixConfigV1ToV3(
 	}
 
 	m.statusBullet("handling ClusterInformation (global) resource")
-	// At the point we perform the real migration the Ready flag will have been set
-	// to the required value (depending on the datastore type) - this migration will
-	// transfer the same value across.
 	clusterInfo := apiv3.NewClusterInformation()
 	clusterInfo.Name = "default"
 	if err = m.parseFelixConfigV1IntoResourceV3(kvps, clusterInfo, data); err != nil {
 		return fmt.Errorf("error converting ClusterInformation: %v", err)
 	}
+	// Update the ready flag in the resource based on the datastore type.  For KDD the ready
+	// flag should be true, for etcd it should be false.
+	ready := m.clientv1.IsKDD()
+	clusterInfo.Spec.DatastoreReady = &ready
 
 	if m.clientv1.IsKDD() {
 		m.statusBullet("skipping FelixConfiguration (per-node) resources - not supported")

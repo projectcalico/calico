@@ -21,9 +21,9 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
 )
 
 func DryRun(args []string) {

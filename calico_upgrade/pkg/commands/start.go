@@ -21,9 +21,9 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
 )
 
 func Start(args []string) {
@@ -120,10 +120,17 @@ Description:
 
 	// The start command is interactive to prevent accidentally kicking off the migration.
 	ch.NewLine()
-	ch.Msg("You are about to start the migration of Calico v1 data format to " +
-		"Calico v3 data format. During this time and until the upgrade is completed " +
-		"Calico networking will be paused - which means no new Calico networked " +
-		"endpoints can be created.")
+	if clientv1.IsKDD() {
+		ch.Msg("You are about to start the migration of Calico v1 data format to " +
+			"Calico v3 data format. No Calico configuration should be modified using " +
+			"calicoctl during this time.")
+	} else {
+		ch.Msg("You are about to start the migration of Calico v1 data format to " +
+			"Calico v3 data format. During this time and until the upgrade is completed " +
+			"Calico networking will be paused - which means no new Calico networked " +
+			"endpoints can be created. No Calico configuration should be modified using " +
+			"calicoctl during this time.")
+	}
 	ch.NewLine()
 	ch.ConfirmProceed()
 
@@ -132,7 +139,14 @@ Description:
 	if err == nil {
 		ch.Separator()
 		ch.Msg("Successfully migrated Calico v1 data to v3 format.")
-		ch.Msg("Follow the upgrade remaining upgrade instructions to complete the upgrade.")
+		ch.Msg("Follow the detailed upgrade instructions available in the release " +
+			"documentation to complete the upgrade.  This includes:")
+		ch.Bullet("upgrading your calico/node instances and orchestrator plugins (e.g. CNI) " +
+			"to the required v3.x release")
+		if !clientv1.IsKDD() {
+			ch.Bullet("running 'calico-upgrade complete' to complete the upgrade and " +
+				"resume Calico networking")
+		}
 		ch.NewLine()
 		ch.Msg("See report(s) below for details of the migrated data.")
 		printAndOutputReport(output, data)
