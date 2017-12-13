@@ -17,6 +17,7 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -41,6 +42,7 @@ const (
 	forceEnableReadyRetries = 30
 	maxApplyRetries         = 5
 	numAppliesPerUpdate     = 100
+	retryInterval           = 5 * time.Second
 )
 
 // DisplayStatusMessages is used to set whether the migration code should
@@ -155,9 +157,9 @@ func Validate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, i
 		substatus("datastore is clean")
 	}
 
-	// Finally, check that we found some data.  Note: if there was no v1 data then
-	// fail the script.
-	if len(data.Resources) == 0 {
+	// Finally, check that we found some data. For KDD if there were no resources
+	// then that's fine, otherwise we should fail.
+	if !clientv1.IsKDD() && len(data.Resources) == 0 {
 		errorstatus("No v1 resources detected: is the API configuration correctly configured?")
 		return nil, ResultFail
 	}
@@ -174,6 +176,12 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 	data, rc := Validate(clientv3, clientv1, ignoreV3Data)
 	if rc != ResultOK {
 		return data, rc
+	}
+
+	// If there are no resources to migrate then we can exit immediately.
+	if len(data.Resources) == 0 {
+		status("There is no v1 formatted data to migrate to v3")
+		return data, ResultOK
 	}
 
 	// Now set the Ready flag to False. This will stop Felix from making any data plane updates
@@ -239,7 +247,10 @@ func Migrate(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, ig
 	}
 
 	// And we also need to migrate the IPAM data.
-	if err = migrateIPAMData(clientv3, clientv1); err != nil {
+	status("Migrating IPAM data")
+	if clientv1.IsKDD() {
+		substatus("no data to migrate - not supported")
+	} else if err = migrateIPAMData(clientv3, clientv1); err != nil {
 		errorstatus("Unable to migrate the v3 IPAM data - will attempt to abort upgrade")
 		substatus("cause: %v", err)
 		r := Abort(clientv1)
@@ -353,7 +364,6 @@ func v3DatastoreIsClean(clientv3 clientv3.Interface) (bool, error) {
 func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedData, error) {
 	data := &ConvertedData{}
 
-	substatus("handling FelixConfiguration (global) resource")
 	// Query and convert global felix configuration and cluster info.
 	fc := &felixConfig{}
 	if err := fc.queryAndConvertFelixConfigV1ToV3(clientv1, data); err != nil {
@@ -366,14 +376,19 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 		return nil, err
 	}
 
-	substatus("handling BGPPeer (global) resources")
-	// Query and convert the BGPPeers
-	if err := queryAndConvertV1ToV3Resources(
-		clientv1, data,
-		model.GlobalBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
-	); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping BGPPeer (global) resources - these do not need migrating")
+	} else {
+		substatus("handling BGPPeer (global) resources")
+		// Query and convert the BGPPeers
+		if err := queryAndConvertV1ToV3Resources(
+			clientv1, data,
+			model.GlobalBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
+		); err != nil {
+			return nil, err
+		}
 	}
+
 	substatus("handling BGPPeer (node) resources")
 	if err := queryAndConvertV1ToV3Resources(
 		clientv1, data,
@@ -382,55 +397,79 @@ func queryAndConvertResources(clientv1 clients.V1ClientInterface) (*ConvertedDat
 		return nil, err
 	}
 
-	substatus("handling HostEndpoint resources")
-	// Query and convert the HostEndpoints
-	if err := queryAndConvertV1ToV3Resources(
-		clientv1, data,
-		model.HostEndpointListOptions{}, conversionv1v3.HostEndpoint{}, noFilter,
-	); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping HostEndpoint resources - not supported")
+	} else {
+		substatus("handling HostEndpoint resources")
+		// Query and convert the HostEndpoints
+		if err := queryAndConvertV1ToV3Resources(
+			clientv1, data,
+			model.HostEndpointListOptions{}, conversionv1v3.HostEndpoint{}, noFilter,
+		); err != nil {
+			return nil, err
+		}
 	}
 
-	substatus("handling IPPool resources")
-	// Query and convert the IPPools
-	if err := queryAndConvertV1ToV3Resources(
-		clientv1, data,
-		model.IPPoolListOptions{}, conversionv1v3.IPPool{}, noFilter,
-	); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping IPPool resources - these do not need migrating")
+	} else {
+		substatus("handling IPPool resources")
+		// Query and convert the IPPools
+		if err := queryAndConvertV1ToV3Resources(
+			clientv1, data,
+			model.IPPoolListOptions{}, conversionv1v3.IPPool{}, noFilter,
+		); err != nil {
+			return nil, err
+		}
 	}
 
-	substatus("handling Node resources")
-	// Query and convert the Nodes
-	if err := queryAndConvertV1ToV3Nodes(clientv1, data); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping Node resources - these do not need migrating")
+	} else {
+		substatus("handling Node resources")
+		// Query and convert the Nodes
+		if err := queryAndConvertV1ToV3Nodes(clientv1, data); err != nil {
+			return nil, err
+		}
 	}
 
-	substatus("handling GlobalNetworkPolicy resources")
-	// Query and convert the Policies
-	if err := queryAndConvertV1ToV3Resources(
-		clientv1, data,
-		model.PolicyListOptions{}, conversionv1v3.Policy{}, filterGNP,
-	); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping GlobalNetworkPolicy resources - these do not need migrating")
+	} else {
+		substatus("handling GlobalNetworkPolicy resources")
+		// Query and convert the Policies
+		if err := queryAndConvertV1ToV3Resources(
+			clientv1, data,
+			model.PolicyListOptions{}, conversionv1v3.Policy{}, filterGNP,
+		); err != nil {
+			return nil, err
+		}
 	}
 
-	substatus("handling Profile resources")
-	// Query and convert the Profiles
-	if err := queryAndConvertV1ToV3Resources(
-		clientv1, data,
-		model.ProfileListOptions{}, conversionv1v3.Profile{}, filterProfile,
-	); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping Profile resources - these do not need migrating")
+	} else {
+		substatus("handling Profile resources")
+		// Query and convert the Profiles
+		if err := queryAndConvertV1ToV3Resources(
+			clientv1, data,
+			model.ProfileListOptions{}, conversionv1v3.Profile{}, filterProfile,
+		); err != nil {
+			return nil, err
+		}
 	}
 
-	substatus("handling WorkloadEndpoint resources")
-	// Query and convert the WorkloadEndpoints
-	if err := queryAndConvertV1ToV3Resources(
-		clientv1, data,
-		model.WorkloadEndpointListOptions{}, conversionv1v3.WorkloadEndpoint{}, noFilter,
-	); err != nil {
-		return nil, err
+	if clientv1.IsKDD() {
+		substatus("skipping WorkloadEndpoint resources - these do not need migrating")
+	} else {
+		substatus("handling WorkloadEndpoint resources")
+		// Query and convert the WorkloadEndpoints
+		if err := queryAndConvertV1ToV3Resources(
+			clientv1, data,
+			model.WorkloadEndpointListOptions{}, conversionv1v3.WorkloadEndpoint{}, noFilter,
+		); err != nil {
+			return nil, err
+		}
 	}
 
 	return data, nil
@@ -688,15 +727,15 @@ func setReadyV1(clientv1 clients.V1ClientInterface, ready bool) error {
 	})
 	if err != nil {
 		if ready {
-			substatus("failed to enable Calico networking in the v1 configuration")
+			substatus("failed to resume Calico networking in the v1 configuration")
 		} else {
-			substatus("failed to disable Calico networking in the v1 configuration")
+			substatus("failed to pause Calico networking in the v1 configuration")
 		}
 	}
 	if ready {
-		substatus("successfully enabled Calico networking in the v1 configuration")
+		substatus("successfully resume Calico networking in the v1 configuration")
 	} else {
-		substatus("successfully disabled Calico networking in the v1 configuration")
+		substatus("successfully pause Calico networking in the v1 configuration")
 	}
 	return nil
 }
@@ -713,16 +752,16 @@ func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 		if err != nil {
 			log.WithError(err).Info("Hit error setting ready flag in v3 ClusterInformation")
 			if ready {
-				substatus("failed to enable Calico networking in the v3 configuration: %v", err)
+				substatus("failed to resume Calico networking in the v3 configuration: %v", err)
 			} else {
-				substatus("failed to disable Calico networking in the v3 configuration: %v", err)
+				substatus("failed to pause Calico networking in the v3 configuration: %v", err)
 			}
 			return err
 		}
 		if ready {
-			substatus("successfully enabled Calico networking in the v3 configuration (updated ClusterInformation)")
+			substatus("successfully resume Calico networking in the v3 configuration (updated ClusterInformation)")
 		} else {
-			substatus("successfully disabled Calico networking in the v3 configuration (updated ClusterInformation)")
+			substatus("successfully pause Calico networking in the v3 configuration (updated ClusterInformation)")
 		}
 		return nil
 	}
@@ -730,9 +769,9 @@ func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 		// ClusterInformation could not be queried.
 		if ready {
-			substatus("failed to enable Calico networking in the v3 configuration (unable to query ClusterInformation)")
+			substatus("failed to resume Calico networking in the v3 configuration (unable to query ClusterInformation)")
 		} else {
-			substatus("failed to disable Calico networking in the v3 configuration (unable to query ClusterInformation)")
+			substatus("failed to pause Calico networking in the v3 configuration (unable to query ClusterInformation)")
 		}
 		return err
 	}
@@ -744,16 +783,16 @@ func setReadyV3(clientv3 clientv3.Interface, ready bool) error {
 	_, err = clientv3.ClusterInformation().Create(context.Background(), c, options.SetOptions{})
 	if err != nil {
 		if ready {
-			substatus("failed to enable Calico networking in the v3 configuration (unable to create ClusterInformation)")
+			substatus("failed to resume Calico networking in the v3 configuration (unable to create ClusterInformation)")
 		} else {
-			substatus("failed to disable Calico networking in the v3 configuration (unable to create ClusterInformation)")
+			substatus("failed to pause Calico networking in the v3 configuration (unable to create ClusterInformation)")
 		}
 		return err
 	}
 	if ready {
-		substatus("successfully enabled Calico networking in the v1 configuration (created ClusterInformation)")
+		substatus("successfully resume Calico networking in the v1 configuration (created ClusterInformation)")
 	} else {
-		substatus("successfully disabled Calico networking in the v1 configuration (created ClusterInformation)")
+		substatus("successfully pause Calico networking in the v1 configuration (created ClusterInformation)")
 	}
 	return nil
 }
@@ -801,12 +840,6 @@ func migrateIPAMData(clientv3 clientv3.Interface, clientv1 clients.V1ClientInter
 	// -  Blocks
 	// -  BlockAffinity
 	// -  IPAMHandle
-	status("Migrating IPAM data")
-	if clientv1.IsKDD() {
-		substatus("no IPAM data migration required when using Kubernetes API as the datastore")
-		return nil
-	}
-
 	// AllocationBlocks need to have their host affinity updated to use the
 	// normalized node name.
 	substatus("listing and converting IPAM allocation blocks")
@@ -911,6 +944,10 @@ func applyToBackend(clientv3 clientv3.Interface, kvp *model.KVPair) error {
 			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); !ok {
 				break
 			}
+
+			// We hit a resource update conflict - pause for a short duration before
+			// retrying.
+			time.Sleep(time.Duration(float64(retryInterval) * (1 + (0.1 * rand.Float64()))))
 		}
 	}
 
