@@ -254,6 +254,17 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 	return &epIDs, nil
 }
 
+func GetHandleID(netName string, containerID string, workload string) (string, error) {
+	handleID := fmt.Sprintf("%s.%s", netName, containerID)
+	logrus.WithFields(logrus.Fields{
+		"Network":     netName,
+		"ContainerID": containerID,
+		"Workload":    workload,
+		"HandleID":    handleID,
+	}).Debug("Generated IPAM handle")
+	return handleID, nil
+}
+
 func CreateClient(conf types.NetConf) (client.Interface, error) {
 	if err := ValidateNetworkName(conf.Name); err != nil {
 		return nil, err

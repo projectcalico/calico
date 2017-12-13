@@ -94,9 +94,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
+	handleID, err := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+	if err != nil {
+		return err
+	}
+
 	logger := logrus.WithFields(logrus.Fields{
 		"Workload":    epIDs.WEPName,
 		"ContainerID": epIDs.ContainerID,
+		"HandleID":    handleID,
 	})
 
 	ipamArgs := ipamArgs{}
@@ -112,7 +118,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// The hostname will be defaulted to the actual hostname if conf.Nodename is empty
 		assignArgs := ipam.AssignIPArgs{
 			IP:       cnet.IP{IP: ipamArgs.IP},
-			HandleID: &epIDs.WEPName,
+			HandleID: &handleID,
 			Hostname: nodename,
 		}
 
@@ -168,11 +174,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stderr, "Calico CNI IPAM handle=%s\n", epIDs.WEPName)
+		fmt.Fprintf(os.Stderr, "Calico CNI IPAM handle=%s\n", handleID)
 		assignArgs := ipam.AutoAssignArgs{
 			Num4:      num4,
 			Num6:      num6,
-			HandleID:  &epIDs.WEPName,
+			HandleID:  &handleID,
 			Hostname:  nodename,
 			IPv4Pools: v4pools,
 			IPv6Pools: v6pools,
@@ -238,21 +244,45 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	logger := logrus.WithFields(logrus.Fields{
-		"Workload":    epIDs.WEPName,
-		"ContainerID": epIDs.ContainerID,
-	})
-
-	logger.Info("Releasing address using workloadID")
-	ctx := context.Background()
-	if err := calicoClient.IPAM().ReleaseByHandle(ctx, epIDs.WEPName); err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			logger.WithField("workloadId", epIDs.WEPName).Warn("Asked to release address but it doesn't exist. Ignoring")
-			return nil
-		}
+	handleID, err := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+	if err != nil {
 		return err
 	}
 
-	logger.Info("Released address using workloadID")
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+		"HandleID":    handleID,
+	})
+
+	logger.Info("Releasing address using handleID")
+	ctx := context.Background()
+	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			logger.WithError(err).Error("Failed to release address")
+			return err
+		}
+		logger.Warn("Asked to release address but it doesn't exist. Ignoring")
+	} else {
+		logger.Info("Released address using handleID")
+	}
+
+	// Calculate the workloadID to account for v2.x upgrades.
+	workloadID := epIDs.ContainerID
+	if epIDs.Orchestrator == "k8s" {
+		workloadID = fmt.Sprintf("%s.%s", epIDs.Namespace, epIDs.Pod)
+	}
+
+	logger.Info("Releasing address using workloadID")
+	if err := calicoClient.IPAM().ReleaseByHandle(ctx, workloadID); err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			logger.WithError(err).Error("Failed to release address")
+			return err
+		}
+		logger.WithField("workloadID", workloadID).Debug("Asked to release address but it doesn't exist. Ignoring")
+	} else {
+		logger.WithField("workloadID", workloadID).Info("Released address using workloadID")
+	}
+
 	return nil
 }

@@ -418,7 +418,8 @@ var _ = Describe("CalicoCni", func() {
 
 		checkIPAMReservation := func() {
 			// IPAM reservation should still be in place.
-			ipamIPs, err := calicoClient.IPAM().IPsByHandle(context.Background(), workloadName)
+			handleID, _ := utils.GetHandleID("net1", containerID, workloadName)
+			ipamIPs, err := calicoClient.IPAM().IPsByHandle(context.Background(), handleID)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 			ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
 				"There should be an IPAM handle for endpoint")

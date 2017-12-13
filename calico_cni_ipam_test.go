@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"os"
 
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/testutils"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var plugin = "calico-ipam"
@@ -242,6 +246,55 @@ var _ = Describe("Calico IPAM Tests", func() {
 		It("should exit successfully even if no address exists", func() {
 			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
 			Expect(exitCode).Should(Equal(0))
+		})
+
+		Context("when using old IPAM handle", func() {
+			It("should remove the old handle", func() {
+				// Create an IP using workload.
+				workload := "a"
+				assignArgs := ipam.AssignIPArgs{
+					IP:       cnet.MustParseIP("192.168.123.123"),
+					HandleID: &workload,
+				}
+				ctx := context.Background()
+				err := calicoClient.IPAM().AssignIP(ctx, assignArgs)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the new IP was set.
+				ips, err := calicoClient.IPAM().IPsByHandle(ctx, workload)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ips).To(HaveLen(1))
+
+				// Remove the IP and handle.
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(0))
+
+				// Verify that the workload handle is gone.
+				_, err = calicoClient.IPAM().IPsByHandle(ctx, workload)
+				Expect(err).To(HaveOccurred())
+
+				// Create an IP using the new network name and containerID
+				handleID := "net1.a"
+				assignArgs = ipam.AssignIPArgs{
+					IP:       cnet.MustParseIP("192.168.123.123"),
+					HandleID: &handleID,
+				}
+				err = calicoClient.IPAM().AssignIP(ctx, assignArgs)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Verify the new IP was set.
+				ips, err = calicoClient.IPAM().IPsByHandle(ctx, handleID)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ips).To(HaveLen(1))
+
+				// Remove the IP and handle.
+				result, _, _ = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(0))
+
+				// Verify that the handleID is gone.
+				_, err = calicoClient.IPAM().IPsByHandle(ctx, handleID)
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 })
