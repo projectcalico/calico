@@ -9,7 +9,7 @@ This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 in approximately 15 minutes. You can use this cluster for testing and
 development.
 
-To deploy a cluster suitable for production, refer to [Installation](https://docs.projectcalico.org/master/getting-started/kubernetes/installation/).
+To deploy a cluster suitable for production, refer to [Installation](/{{page.version}}/getting-started/kubernetes/installation/).
 
 
 ### Requirements
@@ -35,12 +35,6 @@ the host. Instead, continue directly to the
 
 1. As a regular user with sudo privileges, open a terminal on the host that 
    you installed kubeadm on. 
-
-1. Update your package definitions and upgrade your existing packages.
-
-   ```
-   sudo apt-get update && sudo apt-get upgrade
-   ```
    
 1. Initialize the master using the following command.
 
@@ -57,15 +51,15 @@ the host. Instead, continue directly to the
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
    ```
    
-1. Install Calico and a single node etcd with the following command.
+1. Install {{site.prodname}} and a single node etcd with the following command.
 
    ```
    kubectl apply -f \
-   https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
    ```
    
    > **Note**: You can also 
-   > [view the YAML in your browser](https://docs.projectcalico.org/v2.6/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml){:target="_blank"}.
+   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
    You should see the following output.
@@ -74,9 +68,8 @@ the host. Instead, continue directly to the
    configmap "calico-config" created
    daemonset "calico-etcd" created
    service "calico-etcd" created
-   daemonset "calico-node" created
+   daemonset "{{site.noderunning}}" created
    deployment "calico-kube-controllers" created
-   deployment "calico-policy-controller" created
    clusterrolebinding "calico-cni-plugin" created
    clusterrole "calico-cni-plugin" created
    serviceaccount "calico-cni-plugin" created
@@ -97,7 +90,7 @@ the host. Instead, continue directly to the
    NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
    kube-system  calico-etcd-x2482                          1/1    Running  0         2m
    kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m
-   kube-system  calico-node-24h85                          2/2    Running  0         2m
+   kube-system  {{site.noderunning}}-24h85                          2/2    Running  0         2m
    kube-system  etcd-jbaker-virtualbox                     1/1    Running  0         6m
    kube-system  kube-apiserver-jbaker-virtualbox           1/1    Running  0         6m
    kube-system  kube-controller-manager-jbaker-virtualbox  1/1    Running  0         6m
@@ -120,36 +113,6 @@ the host. Instead, continue directly to the
    ```
    node "<your-hostname>" untainted
    ```
-   
-1. Switch to a root shell.
-
-   ```
-   sudo -i
-   ```
-
-1. Scroll upward in your terminal to locate the `join` command
-   returned by `kubeadm init`. Copy the `join` command, paste it
-   in your shell prompt, and add `--skip-preflight-checks` to the end.
-   
-   **Syntax**:
-   ```
-   kubeadm join --token <token> <master-ip>:<master-port> \
-   --discovery-token-ca-cert-hash sha256:<hash> \
-   --skip-preflight-checks
-   ```
-   
-   **Example**:
-   ```
-   kubeadm join --token eea8bd.4d282767b6b962ca 10.0.2.15:6443 \
-   --discovery-token-ca-cert-hash sha256:0e6e73d52066326023432f417a566afad72667e6111d2236b69956b658773255
-   --skip-preflight-checks
-   ```
-   
-1. Exit the root shell.
-
-   ```
-   exit
-   ```
 
 1. Confirm that you now have a node in your cluster with the 
    following command.
@@ -166,17 +129,15 @@ the host. Instead, continue directly to the
    ```
    
 Congratulations! You now have a single-host Kubernetes cluster
-equipped with Calico.
+equipped with {{site.prodname}}.
 
 
 ### Next steps
 
-**[Secure a simple two-tier application using the Kubernetes `NetworkPolicy` API](tutorials/simple-policy)**
+**[Secure a simple application using the Kubernetes `NetworkPolicy` API](tutorials/simple-policy)**
 
 **[Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](tutorials/advanced-policy)**
 
 **[Create a user interface that shows blocked and allowed connections in real time](tutorials/stars-policy/)**
 
-**[Using the calicoctl CLI tool](https://docs.projectcalico.org/master/getting-started/kubernetes/tutorials/using-calicoctl)**
-
-**[Configure BGP to peer with your underlying infrastructure (private cloud only)](https://docs.projectcalico.org/master/usage/configuration/bgp)**
+**[Install and configure calicoctl](/{{page.version}}/usage/calicoctl/install)**

@@ -10,6 +10,16 @@ gems:
 url: https://docs.projectcalico.org
 
 prodname: Calico
+nodecontainer: calico/node
+noderunning: calico-node
+
+# Image names in case the host changes
+imageNames:
+  node: quay.io/calico/node
+  calicoctl: quay.io/calico/ctl
+  typha: quay.io/calico/typha
+  cni: quay.io/calico/cni
+  kubeControllers: quay.io/calico/kube-controllers
 
 exclude:
   - release-scripts

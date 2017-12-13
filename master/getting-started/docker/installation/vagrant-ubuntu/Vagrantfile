@@ -56,7 +56,7 @@ Vagrant.configure(2) do |config|
       # The docker provisioner installs docker.
       host.vm.provision :docker, images: [
           "busybox:latest",
-          "quay.io/calico/node:#{calico_node_ver}"
+          "{{site.imageNames["node"]}}:#{calico_node_ver}"
       ]
 
       # Calico uses etcd for calico and docker clustering. Install it on the first host only.

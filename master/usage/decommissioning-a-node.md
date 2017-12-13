@@ -2,13 +2,20 @@
 title: Decommissioning a Node
 ---
 
-### Why you might be interested in this guide
+### About decommissioning nodes
 
-- You are decomissioning a host running calico/node or removing it from your
+If you are running the [node controller]({{site.baseurl}}/{{page.version}}/reference/kube-controllers/configuration)
+or using the Kubernetes API datastore, you do not need to manually decommission nodes.
+
+In other configurations, you may need to manually decommission a node for one
+of the following reasons.
+
+- You are decommissioning a host running `{{site.nodecontainer}}` or removing it from your
   cluster.
-- You are renaming a Node.
+- You are renaming a node.
 - You are receiving an error about an IP address already in use.
 - Hosts are regularly added and removed from your cluster.
+
 
 ### Purpose of this page
 
@@ -18,13 +25,13 @@ information.
 
 ### Prerequisites
 
-- Prior to removing any Node resource from the datastore the calico/node
+- Prior to removing any Node resource from the datastore the `{{site.nodecontainer}}`
   container should be stopped on the corresponding host and it should be
   ensured that it will not be restarted.
 - You must have [calicoctl configured][calicoctl setup] and operational to run
   the commands listed here.
 
-### Removing a {{site.prodname}} Node resource
+### Removing a Node resource
 
 Removing a Node resource will also remove the Workload Endpoint, Host
 Endpoint, and IP Address resources and any other sub configuration items
@@ -39,18 +46,18 @@ associated with that Node.
 {: .alert .alert-danger}
 
 
-### Removing a single {{site.prodname}} Node resource
+### Removing a single Node resource
 
 See the example below for how to remove a node with the calicoctl command.
 
-> **Caution** See [Removing a {{site.prodname}} Node resource](#removing-a-calico-node-resource) above.
+> **Caution** See [Removing a Node resource](#removing-a-node-resource) above.
 {: .alert .alert-danger}
 
 ```
 calicoctl delete node <nodeName>
 ```
 
-### Removing multiple {{site.prodname}} Node resources
+### Removing multiple Node resources
 
 To remove several Nodes, a file can be created with several Node resources and
 then be passed to the `calicoctl delete` command with the `-f` flag.
@@ -72,7 +79,7 @@ Below is an example of how to create a file of Nodes and delete them.
 
 2. To delete the nodes listed in the file pass it like below.
 
-   > **Caution** See [Removing a {{site.prodname}} Node resource](#removing-a-calico-node-resource) above.
+   > **Caution** See [Removing a Node resource](#removing-a-node-resource) above.
    {: .alert .alert-danger}
 
    ```

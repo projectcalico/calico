@@ -15,7 +15,6 @@ import copy
 import netaddr
 import logging
 import yaml
-from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -30,6 +29,7 @@ POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
 
 
 _log = logging.getLogger(__name__)
+
 
 class MultiHostMainline(TestBase):
     host1 = None
@@ -80,41 +80,23 @@ class MultiHostMainline(TestBase):
 
             super(MultiHostMainline, self).tearDown()
 
-    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
     def test_tags(self):
-        profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
-        profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
-        # Make a new profiles dict where the two networks have each
-        # other in their tags list
-        self.new_profiles[0]['metadata']['tags'].append(profile1_tag)
-        self.new_profiles[1]['metadata']['tags'].append(profile0_tag)
-
+        # Update profiles so that they each include each other's labelsToApply.
+        _log.info("Profile 0 labelsToApply = %r", self.new_profiles[0]['spec']['labelsToApply'])
+        _log.info("Profile 1 labelsToApply = %r", self.new_profiles[1]['spec']['labelsToApply'])
+        self.new_profiles[0]['spec']['labelsToApply'].update(self.new_profiles[1]['spec']['labelsToApply'])
+        self.new_profiles[1]['spec']['labelsToApply'].update(self.new_profiles[0]['spec']['labelsToApply'])
+        _log.info("Merged profile 0 labelsToApply = %r", self.new_profiles[0]['spec']['labelsToApply'])
+        _log.info("Merged profile 1 labelsToApply = %r", self.new_profiles[1]['spec']['labelsToApply'])
         self._apply_new_profile(self.new_profiles, self.host1)
         # Check everything can contact everything else now
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
-
-    @skip("TODO: Review if there is a corresponding useful test now that tags have been removed")
-    def test_rules_tags(self):
-        profile0_tag = self.new_profiles[0]['metadata']['tags'][0]
-        profile1_tag = self.new_profiles[1]['metadata']['tags'][0]
-        rule0 = {'action': 'allow',
-                 'source':
-                     {'tag': profile1_tag}}
-        rule1 = {'action': 'allow',
-                 'source':
-                     {'tag': profile0_tag}}
-        self.new_profiles[0]['spec']['ingress'].append(rule0)
-        self.new_profiles[1]['spec']['ingress'].append(rule1)
-        self._apply_new_profile(self.new_profiles, self.host1)
-        # Check everything can contact everything else now
-        self.assert_connectivity(retries=3,
-                                 pass_list=self.n1_workloads + self.n2_workloads)
-    test_rules_tags.batchnumber = 2
+    test_tags.batchnumber = 5
 
     def test_rules_protocol_icmp(self):
-        rule = {'action': 'allow',
-                'protocol': 'icmp'}
+        rule = {'action': 'Allow',
+                'protocol': 'ICMP'}
         # The copy.deepcopy(rule) is needed to ensure that we don't
         # end up with a yaml document with a reference to the same
         # rule.  While this is probably legal, it isn't main line.
@@ -125,24 +107,26 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads,
                                  type_list=["icmp"])
+    test_rules_protocol_icmp.batchnumber = 1
 
     def test_rules_ip_addr(self):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
         for workload in self.n1_workloads:
             ip = workload.ip
-            rule = {'action': 'allow',
+            rule = {'action': 'Allow',
                     'source':
                         {'nets': ['%s/32' % ip]}}
             prof_n2['spec']['ingress'].append(rule)
         for workload in self.n2_workloads:
             ip = workload.ip
-            rule = {'action': 'allow',
+            rule = {'action': 'Allow',
                     'source':
                         {'nets': ['%s/32' % ip]}}
             prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_ip_addr.batchnumber = 1
 
     def test_rules_ip_net(self):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
@@ -150,17 +134,18 @@ class MultiHostMainline(TestBase):
         n2_ips = [workload.ip for workload in self.n2_workloads]
         n1_subnet = netaddr.spanning_cidr(n1_ips)
         n2_subnet = netaddr.spanning_cidr(n2_ips)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'nets': [str(n1_subnet)]}}
         prof_n2['spec']['ingress'].append(rule)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'nets': [str(n2_subnet)]}}
         prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_ip_net.batchnumber = 1
 
     def test_rules_source_ip_nets(self):
         # Add a rule to each profile that allows traffic from all the workloads in the *other*
@@ -168,15 +153,16 @@ class MultiHostMainline(TestBase):
         prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
         n1_ips = [str(workload.ip) + "/32" for workload in self.n1_workloads]
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n1_ips}}
         prof_n2['spec']['ingress'].append(rule)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n2_ips}}
         prof_n1['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_source_ip_nets.batchnumber = 4
 
     def test_rules_source_ip_nets_2(self):
         # Adjust each profile to allow traffic from all IPs in the other group but then exclude
@@ -188,13 +174,13 @@ class MultiHostMainline(TestBase):
         _log.info("Network 1 IPs: %s; Denied IPs: %s", n1_ips, n1_denied_ips)
 
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n1_ips,
                            'notNets': n1_denied_ips}}
         prof_n2['spec']['ingress'].append(rule)
         _log.info("Profile for network 2: %s", prof_n2)
 
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source': {'nets': n2_ips,
                            'notNets': n2_ips[:1]}}
         prof_n1['spec']['ingress'].append(rule)
@@ -213,6 +199,7 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n1_workloads[1:] + self.n2_workloads[1:])
         self.assert_connectivity(retries=2,
                                  pass_list=self.n2_workloads[1:] + self.n1_workloads[1:])
+    test_rules_source_ip_nets_2.batchnumber = 4
 
     def test_rules_dest_ip_nets(self):
         # Adjust the egress policies to drop all traffic
@@ -226,7 +213,7 @@ class MultiHostMainline(TestBase):
 
         # Add a destination whitelist to n2 that allows pods within it to reach other pods in n2.
         n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'destination': {'nets': n2_ips}}
         prof_n2['spec']['egress'] = [rule]
         self._apply_new_profile(self.new_profiles, self.host1)
@@ -237,10 +224,10 @@ class MultiHostMainline(TestBase):
         # Add some rules that have a single nets entry and multiple notNets entries.  These are
         # rendered a bit differently in Felix.
         n1_ips = [str(workload.ip) + "/32" for workload in self.n1_workloads]
-        rule1 = {'action': 'allow',
+        rule1 = {'action': 'Allow',
                  'destination': {'nets': n1_ips[0:1],
                                  'notNets': n1_ips[1:]}}
-        rule2 = {'action': 'allow',
+        rule2 = {'action': 'Allow',
                  'destination': {'nets': n1_ips[1:2],
                                  'notNets': n1_ips[:1]}}
         prof_n1['spec']['egress'] = [rule1, rule2]
@@ -248,25 +235,27 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads[:2],
                                  fail_list=self.n1_workloads[2:])
+    test_rules_dest_ip_nets.batchnumber = 5
 
     def test_rules_selector(self):
         self.new_profiles[0]['spec']['labelsToApply']['net'] = 'n1'
         self.new_profiles[1]['spec']['labelsToApply']['net'] = 'n2'
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'selector': 'net=="n2"'}}
         self.new_profiles[0]['spec']['ingress'].append(rule)
-        rule = {'action': 'allow',
+        rule = {'action': 'Allow',
                 'source':
                     {'selector': "net=='n1'"}}
         self.new_profiles[1]['spec']['ingress'].append(rule)
         self._apply_new_profile(self.new_profiles, self.host1)
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_selector.batchnumber = 5
 
     def test_rules_tcp_port(self):
-        rule = {'action': 'allow',
-                'protocol': 'tcp',
+        rule = {'action': 'Allow',
+                'protocol': 'TCP',
                 'destination':
                     {'ports': [80]}}
         # The copy.deepcopy(rule) is needed to ensure that we don't
@@ -282,10 +271,11 @@ class MultiHostMainline(TestBase):
                                  pass_list=self.n1_workloads,
                                  fail_list=self.n2_workloads,
                                  type_list=['icmp', 'udp'])
+    test_rules_tcp_port.batchnumber = 5
 
     def test_rules_udp_port(self):
-            rule = {'action': 'allow',
-                    'protocol': 'udp',
+            rule = {'action': 'Allow',
+                    'protocol': 'UDP',
                     'destination':
                         {'ports': [69]}}
             # The copy.deepcopy(rule) is needed to ensure that we don't
@@ -301,6 +291,7 @@ class MultiHostMainline(TestBase):
                                      pass_list=self.n1_workloads,
                                      fail_list=self.n2_workloads,
                                      type_list=['icmp', 'tcp'])
+    test_rules_udp_port.batchnumber = 5
 
     @staticmethod
     def _get_profiles(profiles):
@@ -412,7 +403,7 @@ class MultiHostMainline(TestBase):
         # a workloads own hostname does not work).
         if types is None:
             types = ['icmp', 'tcp', 'udp']
-        self.assert_connectivity(retries=2,
+        self.assert_connectivity(retries=10,
                                  pass_list=n1_workloads,
                                  fail_list=n2_workloads,
                                  type_list=types)
@@ -421,5 +412,3 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(pass_list=n2_workloads,
                                  fail_list=n1_workloads,
                                  type_list=types)
-
-MultiHostMainline.batchnumber = 5  # Adds a batch number for parallel testing

@@ -22,7 +22,7 @@ have no impact on any container traffic.
 
 To enable labels to be used in Policy selectors the flag
 `--use-docker-networking-container-labels` must be passed when starting
-calico/node with the `calicoctl node run` command.  All calico/node instances
+`{{site.nodecontainer}}` with the `calicoctl node run` command.  All `{{site.nodecontainer}}` instances
 should be started with the flag to avoid a mix of labels and profiles.
 
 ## Managing {{site.prodname}} policy for a network

@@ -4,7 +4,7 @@
 The {{site.prodname}} self-hosted installation consists of three objects in the `kube-system` Namespace:
 
 - A `ConfigMap` which contains the {{site.prodname}} configuration.
-- A `DaemonSet` which installs the `calico/node` pod and CNI plugin.
+- A `DaemonSet` which installs the `{{site.nodecontainer}}` pod and CNI plugin.
 - A `ReplicaSet` which installs the `calico/kube-policy-controller` pod.
 
 Install the {{site.prodname}} manifest:
@@ -18,10 +18,10 @@ You should see the pods start in the `kube-system` Namespace:
 ```shell
 $ kubectl get pods --namespace=kube-system
 NAME                             READY     STATUS    RESTARTS   AGE
-calico-node-1f4ih                2/2       Running   0          1m
-calico-node-hor7x                2/2       Running   0          1m
-calico-node-si5br                2/2       Running   0          1m
-calico-policy-controller-so4gl   1/1       Running   0          1m
+{{site.noderunning}}-1f4ih                2/2       Running   0          1m
+{{site.noderunning}}-hor7x                2/2       Running   0          1m
+{{site.noderunning}}-si5br                2/2       Running   0          1m
+calico-kube-controller-so4gl    1/1       Running   0          1m
   info: 1 completed object(s) was(were) not shown in pods list. Pass --show-all to see all objects.
 ```
 

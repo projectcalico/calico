@@ -15,19 +15,19 @@ deployments.
 The image is currently experimental and has some key limitations discussed below.
 However, it may provide a useful framework for future development.
 
-These instructions are focused around container-based deployments that use the
-calico/node container image.
+These instructions are focused on container-based deployments that use the
+`{{site.nodecontainer}}` container image.
 
 For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bird-rr-config).
 
-> **Note**: The API and behavior of the calico/routereflector is likely to change in
+> **Note**: The API and behavior of `calico/routereflector` is likely to change in
 > future releases.
 {: .alert .alert-info}
 
 
 #### Known limitations
 
--  The calico/routereflector instance will automatically peer with the {{site.prodname}}
+-  The `calico/routereflector` instance will automatically peer with the {{site.prodname}}
    nodes, but it currently has no mechanism to configure peerings with non-{{site.prodname}}
    BGP speakers (e.g. edge routers)
 -  There is no `calicoctl` integration or similar.
@@ -180,7 +180,7 @@ possible with this image to set up a cluster of route reflectors.
 
 #### Starting up the Route Reflector
 
-On your Route Reflector host, ensure you have [Docker v1.6][docker] or greater
+On your Route Reflector host, ensure you have [Docker v1.6](https://docs.docker.com/engine/installation/) or greater
 installed.
 
 You will need a kubeconfig file that you need to mount into the route reflector

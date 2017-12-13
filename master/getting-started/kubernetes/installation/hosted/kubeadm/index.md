@@ -64,7 +64,7 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 ## Using calicoctl in a kubeadm cluster
 
 The simplest way to use calicoctl in kubeadm is by running it as a pod.
-See [using calicoctl with Kubernetes](../../../tutorials/using-calicoctl#b-running-calicoctl-as-a-kubernetes-pod) for more information.
+See [Installing calicoctl as a container](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-container) for more information.
 
 ### Requirements / Limitations
 

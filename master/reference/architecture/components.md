@@ -1,8 +1,8 @@
 ---
-title: Anatomy of a calico-node container
+title: Anatomy of a {{site.nodecontainer}} container
 ---
 
-`calico/node` can be regarded as a helper container that bundles together the
+`{{site.nodecontainer}}` can be regarded as a helper container that bundles together the
 various components required for networking containers with Calico.  The key
 components are:
 
@@ -12,11 +12,11 @@ components are:
 
 In addition, we use runit for logging (`svlogd`) and init (`runsv`) services.
 
-The [calico repostiory](https://github.com/projectcalico/calico) contains the Dockerfile for `calico/node` along with various
+The [calico repostiory](https://github.com/projectcalico/calico) contains the Dockerfile for `{{site.nodecontainer}}` along with various
 configuration files that are used to configure and "glue" these components
 together.
 
-> **Note**: `calico/node` may be run in *policy only mode* in which Felix
+> **Note**: `{{site.nodecontainer}}` may be run in *policy only mode* in which Felix
 > runs, but both BIRD and confd are removed.  This provides policy management
 > without route distribution between hosts.  This mode can be enabled by
 > setting the environment variable `CALICO_NETWORKING=false` before starting
@@ -43,7 +43,7 @@ between hosts.  The routes that Felix programs into the kernel for endpoints
 are picked up by BIRD and distributed to BGP peers on the network, which
 provides inter-host routing.
 
-There are two BIRD processes running in the `calico-node` container.  One for
+There are two BIRD processes running in the `{{site.nodecontainer}}` container.  One for
 IPv4 (bird) and one for IPv6 (bird6).
 
 For more information on BIRD, please refer to the [BIRD internet routing daemon project](http://bird.network.cz/).

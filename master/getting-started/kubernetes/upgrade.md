@@ -2,17 +2,17 @@
 title: Upgrading Calico for Kubernetes
 ---
 
-This document covers upgrading the {{site.prodname}} components in a Kubernetes deployment.  This
-upgrade procedure is supported for {{site.prodname}} v1.6+.
+This document covers upgrading {{site.prodname}} in a Kubernetes deployment.  This
+upgrade procedure is supported for Calico v1.6+.
 
-It is possible to upgrade the {{site.prodname}} components on a single node without affecting connectivity or
+It is possible to upgrade {{site.prodname}} on a single node without affecting connectivity or
 network policy for any existing pods.  However, it is recommended that you do not deploy
 new pods to a node that is being upgraded.
 
 It is recommended to upgrade one node at a time, rendering each node as
-unscheduleable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubectl/v1.6/#cordon)
-before upgrading the node, and then make the node scheduleable after the upgrade is
-complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/v1.6/#uncordon).
+unschedulable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubectl/v1.8/#cordon)
+before upgrading the node, and then make the node schedulable after the upgrade is
+complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/v1.8/#uncordon).
 
 > **Note**: When upgrading to etcd v3, as long as the cluster is migrated with the
 `etcdctl migrate` command, the v2 data will remain untouched and the etcd v3
@@ -28,21 +28,21 @@ impact on {{site.prodname}}.
 
 > **Important**: If you are using the Kubernetes datastore and upgrading from
 > Calico v2.4.x or earlier to Calico v2.5.x or later, you must
-> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
+> [migrate your {{site.prodname}} configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
 > before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
 {: .alert .alert-danger}
 
 
-## Upgrading a Hosted Installation of Calico
+## Upgrading a Hosted Installation of {{site.prodname}}
 
 This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted) {{site.prodname}} installation.
 
 Note that while a self-hosted installation of {{site.prodname}} is typically done all at once (via calico.yaml), it is
 recommended to perform upgrades one component at a time.
 
-#### Upgrading the {{site.prodname}} Kubernetes controllers
+#### Upgrading the Kubernetes controllers
 
-In a self-hosted {{site.prodname}} installation, the calico/kube-controllers container is run as a deployment.  As such,
+In a self-hosted {{site.prodname}} installation, the `calico/kube-controllers` container is run as a deployment.  As such,
 it can be upgraded via the standard [deployment mechanism](http://kubernetes.io/docs/user-guide/deployments/#updating-a-deployment).
 
 To upgrade the controllers, simply apply changes to the deployment specification and Kubernetes will
@@ -57,9 +57,9 @@ kubectl apply -f new-controllers.yaml
 {: .alert .alert-info}
 
 
-#### Upgrading the {{site.prodname}} DaemonSet
+#### Upgrading the DaemonSet
 
-Upgrading the CNI plugin or calico/node image is done through a DaemonSet.  DaemonSets do not
+Upgrading the CNI plugin or `{{site.nodecontainer}}` image is done through a DaemonSet.  DaemonSets do not
 currently support an update operation, and as such must be updated manually.
 
 To upgrade the DaemonSet:
@@ -86,14 +86,15 @@ First make the node unschedulable:
 kubectl cordon node-01
 ```
 
-Delete the calico-node pod running on the cordoned node and wait for the
+Delete the `{{site.noderunning}}` pod running on the cordoned node and wait for the
 DaemonSet controller to deploy a replacement.
 
 ```
-kubectl delete pod -n kube-system calico-node-ajzy6e3t
+kubectl delete pod -n kube-system {{site.noderunning}}-ajzy6e3t
 ```
 
-Once the new calico-node Pod has started, make the node schedulable again.
+Once the new `{{site.noderunning}}` pod has started, make the node schedulable again.
+
 
 ```
 kubectl uncordon node-01
@@ -111,28 +112,28 @@ Most self-hosted {{site.prodname}} deployments use a ConfigMap for configuration
 components.
 
 To update the ConfigMap, make any desired changes and apply the new ConfigMap using
-kubectl.  You will need to restart the {{site.prodname}} Kubernetes controllers and each calico/node instance
+kubectl.  You will need to restart the {{site.prodname}} Kubernetes controllers and each `{{site.nodecontainer}}` instance
 as described above before new config is reflected.
 
-## Upgrading Components Individually
+## Upgrading components individually
 
 This section covers upgrading each component individually for use with custom configuration
 management tools.
 
-#### Upgrading the calico/node container
+#### Upgrading the {{site.nodecontainer}} container
 
-The calico/node container runs on each node in a Kubernetes cluster.  It runs Felix for policy
+The `{{site.nodecontainer}}` container runs on each node in a Kubernetes cluster.  It runs Felix for policy
 enforcement and BIRD for BGP networking (when enabled).
 
-To upgrade the calico/node container:
+To upgrade the `{{site.nodecontainer}}` container:
 
-- Pull the new version of the calico/node image to each node.  e.g `docker pull quay.io/calico/node:vA.B.C`
+- Pull the new version of the `{{site.nodecontainer}}` image to each node. For example: `docker pull {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}`.
 - Update the image in your process management to reference the new version.
-- Stop the running calico/node container, and start it with the newly pulled version.
+- Stop the running `{{site.noderunning}}` container, and start it with the newly pulled version.
 
-#### Upgrading the {{site.prodname}} CNI plugins
+#### Upgrading the CNI plugins
 
-The {{site.prodname}} CNI plugins (calico and calico-ipam) are typically installed in /opt/cni/bin, though
+The CNI plugins (`calico` and `calico-ipam`) are typically installed in /opt/cni/bin, though
 this can vary based on deployment.
 
 To upgrade the plugins, simply remove the existing binaries and replace them with the desired version.
@@ -141,15 +142,15 @@ To upgrade the CNI config (typically located in /etc/cni/net.d) simply make the 
 config file.  It will be picked up by the kubelet automatically for Kubernetes v1.4.0+.  For older versions
 of Kubernetes you must restart the kubelet for changes to be applied.
 
-#### Upgrading the {{site.prodname}} Kubernetes controllers
+#### Upgrading the Kubernetes controllers
 
-The calico/kube-controllers pod can be stopped and restarted without affecting connectivity or
-policy on existing pods.  New pods in existing Namespaces will correctly have
+The `calico/kube-controllers` pod can be stopped and restarted without affecting connectivity or
+policy on existing pods.  New pods in existing namespaces will correctly have
 existing policy applied even when the controller is not running.  However, when the
 controllers are not running:
 
-- New NetworkPolicies will not be applied.
-- New Pods in new Namespaces will not get network connectivity.
+- New network policies will not be applied.
+- New pods in new namespaces will not get network connectivity.
 - Label changes to existing pods will not be reflected in the applied policy.
 
 
@@ -158,7 +159,7 @@ controllers are not running:
 
 To upgrade the controllers:
 
-- Pull the new version of the calico/kube-controllers image to each node.
+- Pull the new version of the `calico/kube-controllers` image to each node.
 - Update the image in your process management to reference the new version.
 - Stop the running container, and start it with the newly pulled version.
 
@@ -175,12 +176,12 @@ in [upstream Kubernetes](https://github.com/kubernetes/kubernetes/pull/39164#iss
 To maintain behavior when upgrading, you should follow these steps prior to upgrading {{site.prodname}} to ensure your configured policy is
 enforced consistently throughout the upgrade process.
 
-- In any Namespace that previously did _not_ have a "DefaultDeny" annotation:
-  - Delete any NetworkPolicy objects in that Namespace.  After upgrade, these policies will become active and may block traffic that was previously allowed.
-- In any Namespace that previously had a "DefaultDeny" annotation:
-  - Create a NetworkPolicy which matches all pods but does not allow any traffic.  After upgrade, the Namespace annotation will have no effect, but this empty NetworkPolicy will provide the same behavior.
+- In any namespace that previously did _not_ have a "DefaultDeny" annotation:
+  - Delete any `NetworkPolicy` objects in that namespace.  After upgrade, these policies will become active and may block traffic that was previously allowed.
+- In any namespace that previously had a "DefaultDeny" annotation:
+  - Create a `NetworkPolicy` which matches all pods but does not allow any traffic.  After upgrade, the namespace annotation will have no effect, but this empty `NetworkPolicy` will provide the same behavior.
 
-Here is an example of a NetworkPolicy which selects all pods in the Namespace, but does not allow any traffic:
+Here is an example of a `NetworkPolicy` which selects all pods in the namespace, but does not allow any traffic:
 
 ```yaml
 kind: NetworkPolicy

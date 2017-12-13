@@ -19,7 +19,6 @@ import yaml
 from netaddr import IPAddress, IPNetwork
 from nose_parameterized import parameterized
 from time import sleep
-from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
@@ -343,11 +342,10 @@ class TestIPIP(TestBase):
 
             self._test_gce_int(with_ipip, backend, host1, host2, False)
 
-    #@parameterized.expand([
-    #    (False,),
-    #    (True,),
-    #])
-    @skip("Skipping until route reflector is updated with libcalico-go v3 support")
+    @parameterized.expand([
+        (False,),
+        (True,),
+    ])
     def test_gce_rr(self, with_ipip):
         """As test_gce except with a route reflector instead of mesh config."""
         with DockerHost('host1',

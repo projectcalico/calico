@@ -27,15 +27,15 @@ metadata:
     profile: profile1 
 spec:
   ingress:
-  - action: deny
+  - action: Deny
     source:
       nets:
       - 10.0.20.0/24
-  - action: allow
+  - action: Allow
     source:
       selector: profile == 'profile1'
   egress:
-  - action: allow 
+  - action: Allow 
 ```
 
 ### Definition 

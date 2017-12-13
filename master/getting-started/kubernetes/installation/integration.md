@@ -15,10 +15,8 @@ installation method.
 
 ## Requirements
 
-- An existing Kubernetes cluster running Kubernetes >= v1.1.  To use network policy, Kubernetes >= v1.3.0 is required.
-- An `etcd` cluster accessible by all nodes in the Kubernetes cluster
-  - {{site.prodname}} can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up.
-    A number of production users do share the etcd cluster between the two, but separating them gives better performance at high scale.
+- An existing Kubernetes cluster running Kubernetes >= v1.7.
+- An `etcd` cluster accessible by all nodes in the Kubernetes cluster. {{site.prodname}} can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up. A number of production users do share the etcd cluster between the two, but separating them gives better performance at high scale.
 
 > **Note**: {{site.prodname}} can also be installed
 > [without a dependency on etcd](hosted/kubernetes-datastore/),
@@ -30,50 +28,49 @@ installation method.
 
 There are three components of a {{site.prodname}} / Kubernetes integration.
 
-- The {{site.prodname}} per-node docker container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
-- The [cni-plugin](https://github.com/projectcalico/cni-plugin) network plugin binaries.
-  - This is the combination of two binary executables and a configuration file.
-- When using Kubernetes network policy, you must also deploy the {{site.prodname}} Kubernetes controllers.
+- The {{site.prodname}} per-node Docker container `{{site.nodecontainer}}`.
+- The [cni-plugin](https://github.com/projectcalico/cni-plugin) network plugin binaries. This is the combination of two binary executables and a configuration file.
+- The {{site.prodname}} Kubernetes controllers, which run in a single-instance pod.  These components monitor the Kubernetes API to keep {{site.prodname}} in sync.
 
-The `calico/node` docker container must be run on the Kubernetes master and each
+The `{{site.nodecontainer}}` docker container must be run on the Kubernetes master and each
 Kubernetes node in your cluster.  It contains the BGP agent necessary for {{site.prodname}} routing to occur,
 and the Felix agent which programs network policy rules.
 
 The `cni-plugin` plugin integrates directly with the Kubernetes `kubelet` process
 on each node to discover which pods have been created, and adds them to {{site.prodname}} networking.
 
-The `calico/kube-controllers` container runs as a pod on top of Kubernetes and implements
-the `NetworkPolicy` API.
+The `calico/kube-controllers` container runs as a pod on top of Kubernetes and keeps {{site.prodname}}
+in-sync with Kubernetes.
 
-## Installing `calico/node`
+## Installing {{site.nodecontainer}}
 
-### Run `calico/node` and configure the node.
+### Run {{site.nodecontainer}} and configure the node.
 
-The Kubernetes master and each Kubernetes node require the `calico/node` container.
-Each node must also be recorded in the Calico datastore.
+The Kubernetes master and each Kubernetes node require the `{{site.nodecontainer}}` container.
+Each node must also be recorded in the {{site.prodname}} datastore.
 
-The calico/node container can be run directly through docker, or it can be
+The `{{site.nodecontainer}}` container can be run directly through Docker, or it can be
 done using the `calicoctl` utility.
 
 ```
-# Download and install `calicoctl`
+# Download and install calicoctl
 wget {{site.data.versions[page.version].first.components.calicoctl.download_url}}
 sudo chmod +x calicoctl
 
-# Run the calico/node container
-sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
+# Run the {{site.nodecontainer}} container
+sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ```
 
 See the [`calicoctl node run` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/)
 for more information.
 
-### Example systemd unit file (calico-node.service)
+### Example systemd unit file ({{site.noderunning}}.service)
 
 If you're using systemd as your init system then the following service file can be used.
 
 ```bash
 [Unit]
-Description=calico node
+Description={{site.noderunning}}
 After=docker.service
 Requires=docker.service
 
@@ -81,7 +78,7 @@ Requires=docker.service
 User=root
 Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
-ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
+ExecStart=/usr/bin/docker run --net=host --privileged --name={{site.noderunning}} \
   -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
   -e NODENAME=${HOSTNAME} \
   -e IP= \
@@ -96,8 +93,8 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /run/docker/plugins:/run/docker/plugins \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
-  quay.io/calico/node:{{site.data.versions[page.version].first.title}}
-ExecStop=/usr/bin/docker rm -f calico-node
+  {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+ExecStop=/usr/bin/docker rm -f {{site.noderunning}}
 Restart=always
 RestartSec=10
 
@@ -108,7 +105,7 @@ WantedBy=multi-user.target
 Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
 > **Note**: To ensure reasonable dataplane programming latency on a system under load,
-> `calico/node` requires a CPU reservation of at least 0.25 cores with additional
+> `{{site.nodecontainer}}` requires a CPU reservation of at least 0.25 cores with additional
 > benefits up to 0.5 cores.
 {: .alert .alert-info}
 
@@ -119,7 +116,7 @@ The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ip
 
 ### Install the {{site.prodname}} plugins
 
-Download the binaries and make sure they're executable
+Download the binaries and make sure they're executable.
 
 ```bash
 wget -N -P /opt/cni/bin {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}
@@ -153,15 +150,15 @@ EOF
 ```
 
 Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
-Replace `</PATH/TO/KUBECONFIG>` with your kubeconfig file. See [kubernetes kubeconfig](http://kubernetes.io/docs/user-guide/kubeconfig-file/) for more information about kubeconfig.
+Replace `</PATH/TO/KUBECONFIG>` with your kubeconfig file. See [Kubernetes kubeconfig](http://kubernetes.io/docs/user-guide/kubeconfig-file/) for more information about kubeconfig.
 
 For more information on configuring the {{site.prodname}} CNI plugins, see the [configuration guide]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
 
-### Install standard CNI lo plugin
+### Install standard CNI loopback plugin
 
 In addition to the CNI plugin specified by the CNI config file, Kubernetes requires the standard CNI loopback plugin.
 
-Download the file `loopback` and copy it to CNI binary dir.
+Download the file `loopback` and copy it to the CNI binary directory.
 
 ```bash
 wget https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
@@ -171,9 +168,11 @@ sudo cp loopback /opt/cni/bin/
 
 ## Installing the {{site.prodname}} Kubernetes controllers
 
-The `calico/kube-controllers` container implements the Kubernetes `NetworkPolicy` API by watching the
-Kubernetes API for `Pod`, `Namespace`, and `NetworkPolicy` events and configuring {{site.prodname}} in response. It runs as
-a single pod managed by a Deployment.
+The `calico/kube-controllers` container keeps {{site.prodname}}'s datastore in-sync with Kubernetes.
+It runs as a single pod managed by a Deployment.
+
+> **Note**: The `calico/kube-controllers` container is required even if policy is not in use.
+{: .alert .alert-info}
 
 To install the controllers:
 
@@ -200,12 +199,12 @@ see the [configuration guide]({{site.baseur}}/{{page.version}}/reference/kube-co
 
 When installing {{site.prodname}} on Kubernetes clusters with RBAC enabled, it is necessary to provide {{site.prodname}} access to some Kubernetes
 APIs.  To do this, subjects and roles must be configured in the Kubernetes API and {{site.prodname}} components must be provided with the appropriate
-tokens or certificates to presnt which identify it as the configured API user.
+tokens or certificates to present which identify it as the configured API user.
 
 Detailed instructions for configuring Kubernetes RBAC are outside the scope of this document.  For more information,
 please see the [upstream Kubernetes documentation](https://kubernetes.io/docs/admin/authorization/rbac/) on the topic.
 
-The following yaml file defines the necessary API permissions required by {{site.prodname}}
+The following YAML file defines the necessary API permissions required by {{site.prodname}}
 when using the etcd datastore.
 
 ```
@@ -216,11 +215,11 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 ## Configuring Kubernetes
 
-### Configuring the Kubelet
+### Configuring the kubelet
 
-The Kubelet needs to be configured to use the {{site.prodname}} network plugin when starting pods.
+The kubelet needs to be configured to use the {{site.prodname}} network plugin when starting pods.
 
-The `kubelet` can be configured to use {{site.prodname}} by starting it with the following options
+The kubelet can be configured to use {{site.prodname}} by starting it with the following options
 
 - `--network-plugin=cni`
 - `--cni-conf-dir=/etc/cni/net.d`
@@ -229,7 +228,7 @@ The `kubelet` can be configured to use {{site.prodname}} by starting it with the
 For Kubernetes versions prior to v1.4.0, the `cni-conf-dir` and `cni-bin-dir` options are
 not supported.  Use `--network-plugin-dir=/etc/cni/net.d` instead.
 
-See the [`kubelet` documentation](http://kubernetes.io/docs/admin/kubelet/)
+See the [kubelet reference documentation](https://kubernetes.io/docs/reference/generated/kubelet/)
 for more details.
 
 ### Configuring the kube-proxy
@@ -245,5 +244,5 @@ there are two ways to enable this behavior.
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
 - Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
 
-See the [kube-proxy documentation](http://kubernetes.io/docs/admin/kube-proxy/)
+See the [kube-proxy reference documentation](http://kubernetes.io/docs/admin/kube-proxy/)
 for more details.

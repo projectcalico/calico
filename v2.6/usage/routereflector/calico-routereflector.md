@@ -181,7 +181,7 @@ possible with this image to set up a cluster of route reflectors.
 
 #### Starting up the Route Reflector
 
-On your Route Reflector host, ensure you have [Docker v1.6][docker] or greater
+On your Route Reflector host, ensure you have [Docker v1.6](https://docs.docker.com/engine/installation/) or greater
 installed.
 
 You will need a kubeconfig file that you need to mount into the route reflector

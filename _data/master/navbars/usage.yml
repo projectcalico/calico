@@ -7,11 +7,17 @@ toc:
   path: /usage/
 - title: calicoctl
   section:
-  - title: Installing and Configuring calicoctl
-    path: /usage/calicoctl/install-and-configuration
-  - title: calico/ctl container
-    path: /usage/calicoctl/container
-- title: Running Calico with an init system
+  - title: Installing calicoctl
+    path: /usage/calicoctl/install
+  - title: Configuring calicoctl
+    section:
+    - title: Overview
+      path: /usage/calicoctl/configure/
+    - title: etcd datastore options
+      path: /usage/calicoctl/configure/etcd
+    - title: Kubernetes API datastore options
+      path: /usage/calicoctl/configure/kdd
+- title: Running calico/node with an init system
   path: /usage/configuration/as-service
 - title: Configuring BGP Peers
   path: /usage/configuration/bgp

@@ -23,8 +23,8 @@ steps on every agent in the cluster:
 1. Run etcd (in proxy mode)
 2. Configure docker with a cluster store
 3. Install {{site.prodname}} CNI binaries and configs (for Unified Containerizer networking)
-4. Run calico-libnetwork (for Docker Containerizer networking)
-5. Run calico-node.
+4. Run `calico-libnetwork` (for Docker Containerizer networking)
+5. Run `{{site.noderunning}}`.
 
 The framework is flexible, allowing users to enable, disable, or customize each step.
 Below, we'll see what each step does, and how it can be modified.
@@ -115,9 +115,9 @@ be restarted to pick up the change. The Framework then performs the following st
 
 4. Restart the slave process with `systemctl restart dcos-mesos-slave`
 
-### Run {{site.prodname}} Node
+### Run {{site.nodecontainer}}
 
-This task ensures the {{site.prodname}}'s core process `calico/node` is running.
+This task ensures the {{site.prodname}}'s core process `{{site.nodecontainer}}` is running.
 
 ## Next Steps: Installing
 

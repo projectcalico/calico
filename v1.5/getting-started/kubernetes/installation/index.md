@@ -179,7 +179,7 @@ The `kubelet` can be configured to use Calico by starting it with the following 
 - `--network-plugin=cni`
 - `--network-plugin-dir=/etc/cni/net.d`
 
-See the [`kubelet` documentation](http://kubernetes.io/docs/admin/kubelet/)
+See the [`kubelet` documentation](https://kubernetes.io/docs/reference/generated/kubelet/)
 for more details.
 
 #### Example systemd unit file (kubelet.service)

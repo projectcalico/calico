@@ -22,6 +22,7 @@ packet.
 | 9000 | 9000 | 8980 | 8950 |
 | 1460 (GCE) | 1460 | 1440 | 1410 |
 | 9001 (AWS Jumbo) | 9001 | 8981 | 8951 |
+| 1450 (OpenStack VXLAN) | 1450 | 1430 | 1400 |
 
 #### Default MTU sizes
 
@@ -78,7 +79,7 @@ the specified MTU.
 #### Setting MTU through Felix Environment variable
 
 Passing in the environment variable `FELIX_IPINIPMTU` when running the
-calico/node container will set the MTU for Felix to use.
+`{{site.nodecontainer}}` container will set the MTU for Felix to use.
 
 #### Setting the MTU with calicoctl
 
@@ -105,4 +106,4 @@ $ calicoctl replace -f felix.yaml
 
 When using self-hosted manifests with Kubernetes, the MTU should be set by
 updating the {{site.prodname}} manifest, applying the manifest with those changes, and
-then restarting each of the calico-node pods.
+then restarting each of the `{{site.noderunning}}` pods.
