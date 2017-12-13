@@ -15,8 +15,11 @@
 package migrate
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -26,10 +29,12 @@ import (
 
 var _ = Describe("Test felix configuration upgrade", func() {
 	// Define some common values
-	int1 := int(12345)
+	seconds1 := metav1.Duration{Duration: time.Duration(12.345 * float64(time.Second))}
+	millis1 := metav1.Duration{Duration: time.Duration(50.325 * float64(time.Millisecond))}
 	bool1 := false
 	uint1 := uint32(1313)
-	int2 := int(12222)
+	seconds2 := metav1.Duration{Duration: time.Duration(32.222 * float64(time.Second))}
+	millis2 := metav1.Duration{Duration: time.Duration(10.754 * float64(time.Millisecond))}
 	bool2 := true
 	uint2 := uint32(1414)
 	perNodeFelixKey := model.ResourceKey{
@@ -40,11 +45,12 @@ var _ = Describe("Test felix configuration upgrade", func() {
 	perNodeFelix := apiv3.NewFelixConfiguration()
 	perNodeFelix.Name = "node.mynode"
 	perNodeFelix.Spec = apiv3.FelixConfigurationSpec{
-		RouteRefreshIntervalSecs: &int1,
-		InterfacePrefix:          "califoobar",
-		IPIPEnabled:              &bool1,
-		IptablesMarkMask:         &uint1,
-		FailsafeInboundHostPorts: &[]apiv3.ProtoPort{},
+		RouteRefreshInterval:      &seconds1,
+		IptablesLockProbeInterval: &millis1,
+		InterfacePrefix:           "califoobar",
+		IPIPEnabled:               &bool1,
+		IptablesMarkMask:          &uint1,
+		FailsafeInboundHostPorts:  &[]apiv3.ProtoPort{},
 		FailsafeOutboundHostPorts: &[]apiv3.ProtoPort{
 			{
 				Protocol: "TCP",
@@ -68,11 +74,12 @@ var _ = Describe("Test felix configuration upgrade", func() {
 	globalFelix := apiv3.NewFelixConfiguration()
 	globalFelix.Name = "default"
 	globalFelix.Spec = apiv3.FelixConfigurationSpec{
-		RouteRefreshIntervalSecs: &int2,
-		InterfacePrefix:          "califoobar",
-		IPIPEnabled:              &bool2,
-		IptablesMarkMask:         &uint2,
-		FailsafeInboundHostPorts: &[]apiv3.ProtoPort{
+		RouteRefreshInterval:      &seconds2,
+		IptablesLockProbeInterval: &millis2,
+		InterfacePrefix:           "califoobar",
+		IPIPEnabled:               &bool2,
+		IptablesMarkMask:          &uint2,
+		FailsafeInboundHostPorts:  &[]apiv3.ProtoPort{
 			{
 				Protocol: "TCP",
 				Port:     1234,
