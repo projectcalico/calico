@@ -59,28 +59,41 @@ Description:
 	}
 	cfv3 := parsedArgs["--apiconfigv3"].(string)
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
+	ch := &cliHelper{}
 
 	// Obtain the v1 and v3 clients.
 	clientv3, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
-		printFinalMessage("Failed to complete the upgrade.\n"+
-			"Error accessing the Calico API: %v", err)
+		ch.Separator()
+		ch.Msg("Failed to complete the upgrade.")
+		ch.Bullet(fmt.Sprintf("Error accessing the Calico API: %v", err))
+		ch.NewLine()
 		os.Exit(1)
 	}
 
-	// Ensure the migration code displays messages (this is basically indicating that it
-	// is being called from the calico-upgrade script).
-	migrate.DisplayStatusMessages(true)
-	migrate.Interactive(true)
+	m := migrate.New(clientv3, clientv1, ch)
 
-	// Perform the final stage of the upgrade.
-	res := migrate.Complete(clientv3, clientv1)
-	if res == migrate.ResultOK {
-		// We completed successfully.
-		printFinalMessage("Successfully completed the upgrade process.")
-	} else {
-		printFinalMessage("Failed to complete the upgrade - please retry the command.\n" +
-			"The previous messages may contain more details.")
-		os.Exit(1)
+	// The complete command is interactive to prevent accidentally kicking off the complete.
+	ch.NewLine()
+	ch.Msg("You are about to complete the upgrade process to Calico v3. " +
+		"At this point, the v1 format data should have been successfully converted " +
+		"to v3 format, and all calico/node instances and orchestrator plugins " +
+		"(e.g. CNI) should be running Calico v3.x.")
+	ch.NewLine()
+	ch.ConfirmProceed()
+
+	// Perform the data migration.
+	err = m.Complete()
+	if err == nil {
+		ch.Separator()
+		ch.Msg("Successfully completed the upgrade process.")
+		ch.NewLine()
+		return
 	}
+
+	ch.Separator()
+	ch.Msg("Failed to complete the upgrade process.")
+	ch.Bullet(err.Error())
+	ch.NewLine()
+	os.Exit(1)
 }
