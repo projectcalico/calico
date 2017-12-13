@@ -43,43 +43,43 @@ type FelixConfigurationSpec struct {
 	IPv6Support    *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
 	IgnoreLooseRPF *bool `json:"ignoreLooseRPF,omitempty"`
 
-	// RouterefreshInterval is the period, in seconds, at which Felix re-checks the routes
+	// RouterefreshInterval is the period at which Felix re-checks the routes
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
-	// Set to 0 to disable route refresh. [Default: 90]
-	RouteRefreshIntervalSecs *int `json:"routeRefreshIntervalSecs,omitempty" confignamev1:"RouteRefreshInterval"`
-	// IptablesRefreshInterval is the period, in seconds, at which Felix re-checks the IP sets
+	// Set to 0 to disable route refresh. [Default: 90s]
+	RouteRefreshInterval *metav1.Duration `json:"routeRefreshInterval,omitempty" configv1timescale:"seconds"`
+	// IptablesRefreshInterval is the period at which Felix re-checks the IP sets
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.
 	// Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the
 	// other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel
 	// version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value
-	// to reduce Felix CPU usage. [Default: 10]
-	IptablesRefreshIntervalSecs *int `json:"iptablesRefreshIntervalSecs,omitempty" confignamev1:"IptablesRefreshInterval"`
-	// IptablesPostWriteCheckIntervalSecs is the period, in seconds, after Felix has done a write
+	// to reduce Felix CPU usage. [Default: 10s]
+	IptablesRefreshInterval *metav1.Duration `json:"iptablesRefreshInterval,omitempty" configv1timescale:"seconds"`
+	// IptablesPostWriteCheckInterval is the period after Felix has done a write
 	// to the dataplane that it schedules an extra read back in order to check the write was not
 	// clobbered by another process. This should only occur if another application on the system
-	// doesn’t respect the iptables lock. [Default: 1]
-	IptablesPostWriteCheckIntervalSecs *int `json:"iptablesPostWriteCheckIntervalSecs,omitempty"`
+	// doesn’t respect the iptables lock. [Default: 1s]
+	IptablesPostWriteCheckInterval *metav1.Duration `json:"iptablesPostWriteCheckInterval,omitempty" configv1timescale:"seconds" confignamev1:"IptablesPostWriteCheckIntervalSecs"`
 	// IptablesLockFilePath is the location of the iptables lock file. You may need to change this
 	// if the lock file is not in its standard location (for example if you have mapped it into Felix’s
 	// container at a different path). [Default: /run/xtables.lock]
 	IptablesLockFilePath string `json:"iptablesLockFilePath,omitempty"`
-	// IptablesLockTimeoutSecs is the time, in seconds, that Felix will wait for the iptables lock,
+	// IptablesLockTimeout is the time that Felix will wait for the iptables lock,
 	// or 0, to disable. To use this feature, Felix must share the iptables lock file with all other
 	// processes that also take the lock. When running Felix inside a container, this requires the
 	// /run directory of the host to be mounted into the calico/node or calico/felix container.
-	// [Default: 0 disabled]
-	IptablesLockTimeoutSecs *int `json:"iptablesLockTimeoutSecs,omitempty"`
-	// IptablesLockProbeIntervalMillis is the time, in milliseconds, that Felix will wait between
+	// [Default: 0s disabled]
+	IptablesLockTimeout *metav1.Duration `json:"iptablesLockTimeout,omitempty" configv1timescale:"seconds" confignamev1:"IptablesLockTimeoutSecs"`
+	// IptablesLockProbeInterval is the time that Felix will wait between
 	// attempts to acquire the iptables lock if it is not available. Lower values make Felix more
-	// responsive when the lock is contended, but use more CPU. [Default: 50]
-	IptablesLockProbeIntervalMillis *int `json:"iptablesLockProbeIntervalMillis,omitempty"`
-	// IpsetsRefreshIntervalSecs is the period, in seconds, at which Felix re-checks all iptables
+	// responsive when the lock is contended, but use more CPU. [Default: 50ms]
+	IptablesLockProbeInterval *metav1.Duration `json:"iptablesLockProbeInterval,omitempty" configv1timescale:"milliseconds" confignamev1:"IptablesLockProbeIntervalMillis"`
+	// IpsetsRefreshInterval is the period at which Felix re-checks all iptables
 	// state to ensure that no other process has accidentally broken Calico’s rules. Set to 0 to
-	// disable iptables refresh. [Default: 90]
-	IpsetsRefreshIntervalSecs *int `json:"ipsetsRefreshIntervalSecs,omitempty" confignamev1:"IpsetsRefreshInterval"`
-	MaxIpsetSize              *int `json:"maxIpsetSize,omitempty"`
+	// disable iptables refresh. [Default: 90s]
+	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
+	MaxIpsetSize          *int `json:"maxIpsetSize,omitempty"`
 
-	NetlinkTimeoutSecs *int `json:"netlinkTimeoutSecs,omitempty"`
+	NetlinkTimeout *metav1.Duration `json:"netlinkTimeout,omitempty" configv1timescale:"seconds" confignamev1:"NetlinkTimeoutSecs"`
 
 	// MetadataAddr is the IP address or domain name of the server that can answer VM queries for
 	// cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in
@@ -135,14 +135,14 @@ type FelixConfigurationSpec struct {
 	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
 	IPIPMTU *int `json:"ipipMTU,omitempty" confignamev1:"IpInIpMtu"`
 
-	// ReportingIntervalSecs is the interval at which Felix reports its status into the datastore or 0 to disable.
-	// Must be non-zero in OpenStack deployments. [Default: 30]
-	ReportingIntervalSecs *int `json:"reportingIntervalSecs,omitempty"`
-	// ReportingTTLSecs is the time-to-live setting for process-wide status reports. [Default: 90]
-	ReportingTTLSecs *int `json:"reportingTTLSecs,omitempty"`
+	// ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable.
+	// Must be non-zero in OpenStack deployments. [Default: 30s]
+	ReportingInterval *metav1.Duration `json:"reportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"ReportingIntervalSecs"`
+	// ReportingTTL is the time-to-live setting for process-wide status reports. [Default: 90s]
+	ReportingTTL *metav1.Duration `json:"reportingTTL,omitempty" configv1timescale:"seconds" confignamev1:"ReportingTTLSecs"`
 
 	EndpointReportingEnabled   *bool `json:"endpointReportingEnabled,omitempty"`
-	EndpointReportingDelaySecs *int  `json:"endpointReportingDelaySecs,omitempty"`
+	EndpointReportingDelay     *metav1.Duration  `json:"endpointReportingDelay,omitempty" configv1timescale:"seconds" confignamev1:"EndpointReportingDelaySecs"`
 
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
@@ -180,15 +180,15 @@ type FelixConfigurationSpec struct {
 	// UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage
 	// server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
 	UsageReportingEnabled *bool `json:"usageReportingEnabled,omitempty"`
-	// UsageReportingInitialDelaySecs controls the minimum delay (in seconds) before Felix makes a report. [Default: 300]
-	UsageReportingInitialDelaySecs *int `json:"usageReportingInitialDelaySecs,omitempty"`
-	// UsageReportingIntervalSecs controls the interval (in seconds) at which Felix makes reports. [Default: 86400]
-	UsageReportingIntervalSecs *int `json:"usageReportingIntervalSecs,omitempty"`
+	// UsageReportingInitialDelay controls the minimum delay before Felix makes a report. [Default: 300s]
+	UsageReportingInitialDelay *metav1.Duration `json:"usageReportingInitialDelay,omitempty" configv1timescale:"seconds" confignamev1:"UsageReportingInitialDelaySecs"`
+	// UsageReportingInterval controls the interval at which Felix makes reports. [Default: 86400s]
+	UsageReportingInterval *metav1.Duration `json:"usageReportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"UsageReportingIntervalSecs"`
 
-	DebugMemoryProfilePath              string `json:"debugMemoryProfilePath,omitempty"`
-	DebugDisableLogDropping             *bool  `json:"debugDisableLogDropping,omitempty"`
-	DebugSimulateCalcGraphHangAfterSecs *int   `json:"debugSimulateCalcGraphHangAfterSecs,omitempty" confignamev1:"DebugSimulateCalcGraphHangAfter"`
-	DebugSimulateDataplaneHangAfterSecs *int   `json:"debugSimulateDataplaneHangAfterSecs,omitempty" confignamev1:"DebugSimualteDataplaneHangAfter"`
+	DebugMemoryProfilePath          string `json:"debugMemoryProfilePath,omitempty"`
+	DebugDisableLogDropping         *bool  `json:"debugDisableLogDropping,omitempty"`
+	DebugSimulateCalcGraphHangAfter *metav1.Duration   `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`
+	DebugSimulateDataplaneHangAfter *metav1.Duration   `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
 }
 
 // ProtoPort is combination of protocol and port, both must be specified.

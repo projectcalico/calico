@@ -16,9 +16,11 @@ package updateprocessors_test
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -183,10 +185,11 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		cc := updateprocessors.NewFelixConfigUpdateProcessor()
 		By("converting a per-node felix KVPair with certain values and checking for the correct number of fields")
 		res := apiv3.NewFelixConfiguration()
-		int1 := int(12345)
+		duration := metav1.Duration{Duration: time.Duration(1 * time.Minute)}
 		bool1 := false
 		uint1 := uint32(1313)
-		res.Spec.RouteRefreshIntervalSecs = &int1
+		res.Spec.RouteRefreshInterval = &duration
+		res.Spec.IptablesLockProbeInterval = &duration
 		res.Spec.InterfacePrefix = "califoobar"
 		res.Spec.IPIPEnabled = &bool1
 		res.Spec.IptablesMarkMask = &uint1
@@ -206,12 +209,13 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			},
 		}
 		expected := map[string]interface{}{
-			"RouteRefreshInterval":      "12345",
-			"InterfacePrefix":           "califoobar",
-			"IpInIpEnabled":             "false",
-			"IptablesMarkMask":          "1313",
-			"FailsafeInboundHostPorts":  "none",
-			"FailsafeOutboundHostPorts": "tcp:1234,udp:22,tcp:65535",
+			"RouteRefreshInterval":            "60.000",
+			"IptablesLockProbeIntervalMillis": "60000.000",
+			"InterfacePrefix":                 "califoobar",
+			"IpInIpEnabled":                   "false",
+			"IptablesMarkMask":                "1313",
+			"FailsafeInboundHostPorts":        "none",
+			"FailsafeOutboundHostPorts":       "tcp:1234,udp:22,tcp:65535",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,
