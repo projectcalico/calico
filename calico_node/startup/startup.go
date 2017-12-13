@@ -925,74 +925,58 @@ func (_ ClientV1) Blah() (string, bool, error) {
 
 // ensureMigrated ensures any data migration needed is done.
 func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface) error {
-	_, cv1, err := clients.LoadClients("", "")
-	if err != nil {
+	_, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err == nil {
+		// Nothing to do ClusterInformation exists so data has already been migrated
+		return nil
+	} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+		// The error indicates a problem with accessing the resource
 		return err
-	}
+	} else {
+		_, cv1, err := clients.LoadClients("", "")
+		if err != nil {
+			return err
+		}
+		v, err := getV2ClusterVersion(cv1)
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				return nil
+			} else {
+				return err
+			}
+		}
 
-	switch v, ver := getClusterVersion(ctx, c, cv1); v {
-	case VUnknown:
-		// Unknown if the datastore has not been initialized (or problem accessing it)
-		// TODO: I know we don't want to make extra connections to the datastore but
-		// is there some connection test we should do here? -Erik
-		return nil
-	case V2PreV264:
-		return fmt.Errorf("Unable to migrate version %s to v3", ver)
-	case V2PostV264:
-		// Do migration
-		return nil
-	case V3orGreater:
-		// Already at the right version, nothing to do
-		return nil
+		if canMigrate(v) {
+			// Do migration
+			return nil
+		}
 	}
 	return nil
 }
 
-type VerClass int
-
-const (
-	VUnknown    VerClass = iota
-	V1                   = iota
-	V2PreV264            = iota
-	V2PostV264           = iota
-	V3orGreater          = iota
-)
-
 // Check the passed interfaces to determine the Version to decide if any
 // migration is needed
-func getClusterVersion(ctx context.Context, c client.Interface, cv1 clients.V1ClientInterface) (VerClass, string) {
-	ci, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-	if err != nil {
-		kv, err := cv1.Get(model.GlobalConfigKey{Name: "CalicoVersion"})
-		v := kv.Value.(string)
-		if err != nil {
-			return VUnknown, ""
-		} else {
-			vtrimmed := v
-			if "v" == v[:1] {
-				vtrimmed = v[1:]
-			}
-			sv, err := semver.NewVersion(vtrimmed)
-			sv2 := semver.New("2")
-			sv264 := semver.New("2.6.4")
-			if err != nil {
-				return VUnknown, v
-			} else if sv.LessThan(*sv2) {
-				log.WithField("ClusterVersion", sv).Debug("Determined Cluster version pre v2")
-				return V1, v
-			} else if sv.LessThan(*sv264) {
-				log.WithField("ClusterVersion", sv).Debug("Determined Cluster version pre v2.6.4")
-				return V2PreV264, v
-			} else if sv264.LessThan(*sv) {
-				log.WithField("ClusterVersion", sv).Debug("Determined Cluster version post v2.6.4")
-				return V2PostV264, v
-			} else {
-				return VUnknown, v
-			}
-		}
+func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
+	if kv, err := cv1.Get(model.GlobalConfigKey{Name: "CalicoVersion"}); err == nil {
+		return kv.Value.(string), nil
 	} else {
-		return V3orGreater, ci.Spec.CalicoVersion
+		return "", err
 	}
+}
+
+func canMigrate(v string) bool {
+	if "v" == v[:1] {
+		v = v[1:]
+	}
+	sv, err := semver.NewVersion(v)
+	sv264 := semver.New("2.6.4")
+	if err != nil {
+		return false
+	} else if sv.LessThan(*sv264) {
+		return false
+	}
+
+	return true
 }
 
 // terminate prints a terminate message and exists with status 1.
