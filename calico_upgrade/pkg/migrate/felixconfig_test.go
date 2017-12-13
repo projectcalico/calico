@@ -100,7 +100,7 @@ var _ = Describe("Test felix configuration upgrade", func() {
 	}
 
 	It("should handle different field types being assigned", func() {
-		client := fakeClient{}
+		clientv1 := fakeClientV1{}
 
 		By("using an update processor to create v1 KVPairs from per-node FelixConfiguration")
 		cp := updateprocessors.NewFelixConfigUpdateProcessor()
@@ -109,7 +109,7 @@ var _ = Describe("Test felix configuration upgrade", func() {
 			Value: perNodeFelix,
 		})
 		Expect(err).NotTo(HaveOccurred())
-		client.kvps = kvps
+		clientv1.kvps = kvps
 
 		By("using an update processor to create v1 KVPairs from global FelixConfiguration")
 		cp = updateprocessors.NewFelixConfigUpdateProcessor()
@@ -118,7 +118,7 @@ var _ = Describe("Test felix configuration upgrade", func() {
 			Value: globalFelix,
 		})
 		Expect(err).NotTo(HaveOccurred())
-		client.kvps = append(client.kvps, kvps...)
+		clientv1.kvps = append(clientv1.kvps, kvps...)
 
 		By("using an update processor to create v1 KVPairs from global ClusterInformation")
 		cp = updateprocessors.NewClusterInfoUpdateProcessor()
@@ -127,12 +127,12 @@ var _ = Describe("Test felix configuration upgrade", func() {
 			Value: globalCluster,
 		})
 		Expect(err).NotTo(HaveOccurred())
-		client.kvps = append(client.kvps, kvps...)
+		clientv1.kvps = append(clientv1.kvps, kvps...)
 
 		// Convert the data back to a set of resources.
-		data := &ConvertedData{}
-		fc := &felixConfig{}
-		err = fc.queryAndConvertFelixConfigV1ToV3(client, data)
+		data := &MigrationData{}
+		mh := &migrationHelper{clientv1: clientv1}
+		err = mh.queryAndConvertFelixConfigV1ToV3(data)
 		Expect(err).NotTo(HaveOccurred())
 		By("Checking total conversion is 3")
 		Expect(data.Resources).To(HaveLen(3))
@@ -145,16 +145,16 @@ var _ = Describe("Test felix configuration upgrade", func() {
 	})
 })
 
-type fakeClient struct {
+type fakeClientV1 struct {
 	kdd  bool
 	kvps []*model.KVPair
 }
 
-func (fc fakeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
+func (fc fakeClientV1) Apply(d *model.KVPair) (*model.KVPair, error) {
 	return nil, nil
 }
 
-func (fc fakeClient) Get(k model.Key) (*model.KVPair, error) {
+func (fc fakeClientV1) Get(k model.Key) (*model.KVPair, error) {
 	ks := k.String()
 	for _, kvp := range fc.kvps {
 		if kvp.Key.String() == ks {
@@ -164,7 +164,7 @@ func (fc fakeClient) Get(k model.Key) (*model.KVPair, error) {
 	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 }
 
-func (fc fakeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
+func (fc fakeClientV1) List(l model.ListInterface) ([]*model.KVPair, error) {
 	r := []*model.KVPair{}
 	for _, kvp := range fc.kvps {
 		p, _ := model.KeyToDefaultPath(kvp.Key)
@@ -175,6 +175,6 @@ func (fc fakeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 	return r, nil
 }
 
-func (fc fakeClient) IsKDD() bool {
+func (fc fakeClientV1) IsKDD() bool {
 	return fc.kdd
 }

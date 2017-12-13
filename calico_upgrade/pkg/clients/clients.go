@@ -76,7 +76,7 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", v1ApiConfig.Spec.DatastoreType)
 	}
 
-	// Create the backend etcdv2 client (v1 API).  We wrap this in the compat module to handle
+	// Create the backend etcdv2 client (v1 API). We wrap this in the compat module to handle
 	// multi-key backed resources.
 	ev1, err := etcdv2.NewEtcdClient(&v1ApiConfig.Spec.EtcdConfig)
 	if err != nil {
@@ -117,7 +117,7 @@ func loadClientConfigV1(filename string) (*apiv1.CalicoAPIConfig, error) {
 func loadClientConfigFromBytesV1(b []byte) (*apiv1.CalicoAPIConfig, error) {
 	var c apiv1.CalicoAPIConfig
 
-	// Default the backend type to be etcd v2.  This will be overridden if
+	// Default the backend type to be etcd v2. This will be overridden if
 	// explicitly specified in the file.
 	log.Info("Loading config from JSON or YAML data")
 	c = apiv1.CalicoAPIConfig{
