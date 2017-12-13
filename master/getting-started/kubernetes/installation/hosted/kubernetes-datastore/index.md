@@ -32,7 +32,7 @@ You must have a Kubernetes cluster, which meets the following requirements:
 
 > **Important**: If you are using the Kubernetes API datastore and upgrading
 > from Calico v2.4.x or earlier to Calico v2.5.x or later, you must
-> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
+> [migrate your Calico configuration data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate)
 > before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
 {: .alert .alert-danger}
 

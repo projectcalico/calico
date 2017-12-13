@@ -8,7 +8,7 @@ v2.6:
     - [#418](https://github.com/projectcalico/cni-plugin/pull/418): If the [CNI-plugin](https://github.com/projectcalico/cni-plugin) fails to re-network an existing endpoint, it no longer releases the IP allocations to the pool that are still attached to the endpoint. (@fasaxc)
     - [#408](https://github.com/projectcalico/cni-plugin/pull/408): The [CNI-plugin](https://github.com/projectcalico/cni-plugin) no longer throws file exists while programming route (@gunjan5)
 
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://docs.projectcalico.org/v2.6/getting-started/kubernetes/upgrade/migrate">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
   components:
     felix:
       version: 2.6.2
@@ -61,7 +61,7 @@ v2.6:
 
     - networking-calico master has been released, as 1.4.3, so as to provide support for OpenStack Ocata and later.
 
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://docs.projectcalico.org/v2.6/getting-started/kubernetes/upgrade/migrate">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
 
   components:
     felix:
@@ -108,7 +108,7 @@ v2.6:
 
     Calico v2.6.0 was released with the wrong version of Felix, which meant that egress network policy did not function as expected. Calico v2.6.1 includes the correct version.
 
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://docs.projectcalico.org/v2.6/getting-started/kubernetes/upgrade/migrate">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
 
   components:
     felix:
@@ -247,7 +247,7 @@ v2.6:
 
     Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
 
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://docs.projectcalico.org/v2.6/getting-started/kubernetes/upgrade/migrate">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
 
   components:
     felix:
@@ -293,7 +293,7 @@ v2.6:
 
     Detailed release notes can be found on [GitHub](https://github.com/projectcalico/calico/releases).
 
-    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
+    <div class="alert alert-danger" role="alert"><b>Important</b>: If you are using the Kubernetes datastore and upgrading from Calico v2.4.x or earlier to Calico v2.5.x or later, you must <a href="https://docs.projectcalico.org/v2.6/getting-started/kubernetes/upgrade/migrate">migrate your Calico configuration data</a> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.</div>
 
   components:
     felix:

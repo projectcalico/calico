@@ -46,7 +46,15 @@ toc:
   - title: Troubleshooting / FAQ
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
-    path: /getting-started/kubernetes/upgrade
+    section:
+    - title: Overview
+      path: /getting-started/kubernetes/upgrade/
+    - title: Convert policies
+      path: /getting-started/kubernetes/upgrade/convert
+    - title: Migrate data
+      path: /getting-started/kubernetes/upgrade/migrate
+    - title: Upgrade components
+      path: /getting-started/kubernetes/upgrade/upgrade
 
 - title: OpenShift
   section:
