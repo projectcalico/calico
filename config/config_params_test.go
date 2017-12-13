@@ -56,10 +56,10 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"IptablesPostWriteCheckIntervalSecs": "IptablesPostWriteCheckInterval",
 		"NetlinkTimeoutSecs":                 "NetlinkTimeout",
 		"ReportingIntervalSecs":              "ReportingInterval",
-		"ReportingTTLSecs":					  "ReportingTTL",
+		"ReportingTTLSecs":                   "ReportingTTL",
 		"UsageReportingInitialDelaySecs":     "UsageReportingInitialDelay",
 		"UsageReportingIntervalSecs":         "UsageReportingInterval",
-		"EndpointReportingDelaySecs":		  "EndpointReportingDelay",
+		"EndpointReportingDelaySecs":         "EndpointReportingDelay",
 	}
 	fcFieldNameToCP := map[string]string{}
 	for k, v := range cpFieldNameToFC {
