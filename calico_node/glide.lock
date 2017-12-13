@@ -1,5 +1,5 @@
-hash: 66c27050d15dca6d1059568ca1468cde1fecc7bd8a07a9527f06587a785e5364
-updated: 2017-12-13T14:08:09.827223306-06:00
+hash: 0121ca43e560822dc8a834de9f17e95fe24c07a9809a693bffce481c2f2608fe
+updated: 2017-12-13T15:23:27.600915295-06:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -21,12 +21,17 @@ imports:
   version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
   subpackages:
   - auth/authpb
+  - client
   - clientv3
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
+  - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
+  - pkg/types
+  - version
 - name: github.com/coreos/go-semver
   version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
@@ -154,6 +159,15 @@ imports:
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
+- name: github.com/projectcalico/calico
+  version: d2c3c4b1d1a23137c433d312e19ff40be8da1d4d
+  subpackages:
+  - calico_upgrade
+  - calico_upgrade/pkg/clients
+  - calico_upgrade/pkg/clients/v1/compat
+  - calico_upgrade/pkg/clients/v1/etcdv2
+  - calico_upgrade/pkg/constants
+  - pkg/clients
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -228,6 +242,10 @@ imports:
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+- name: github.com/ugorji/go
+  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  subpackages:
+  - codec
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:

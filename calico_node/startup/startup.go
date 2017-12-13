@@ -28,8 +28,10 @@ import (
 
 	"github.com/projectcalico/calico/calico_node/calicoclient"
 	"github.com/projectcalico/calico/calico_node/startup/autodetection"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -98,9 +100,11 @@ func main() {
 		log.Info("Skipping datastore connection test")
 	}
 
-	if err := ensureMigrated(ctx, cfg, cli); err != nil {
-		log.WithError(err).Errorf("Failed to migrate")
-		terminate()
+	if cfg.Spec.DatastoreType != apiconfig.Kubernetes {
+		if err := ensureMigrated(ctx, cfg, cli); err != nil {
+			log.WithError(err).Errorf("Failed to migrate")
+			terminate()
+		}
 	}
 
 	// Query the current Node resources.  We update our node resource with
@@ -921,25 +925,25 @@ func (_ ClientV1) Blah() (string, bool, error) {
 
 // ensureMigrated ensures any data migration needed is done.
 func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface) error {
-	var cv1 ClientV1
+	_, cv1, err := clients.LoadClients("", "")
+	if err != nil {
+		return err
+	}
 
-	// Only run this migration if using KDD
-	if cfg.Spec.DatastoreType != apiconfig.Kubernetes {
-		switch v, ver := getClusterVersion(ctx, c, cv1); v {
-		case VUnknown:
-			// Unknown if the datastore has not been initialized (or problem accessing it)
-			// TODO: I know we don't want to make extra connections to the datastore but
-			// is there some connection test we should do here? -Erik
-			return nil
-		case V2PreV264:
-			return fmt.Errorf("Unable to migrate version %s to v3", ver)
-		case V2PostV264:
-			// Do migration
-			return nil
-		case V3orGreater:
-			// Already at the right version, nothing to do
-			return nil
-		}
+	switch v, ver := getClusterVersion(ctx, c, cv1); v {
+	case VUnknown:
+		// Unknown if the datastore has not been initialized (or problem accessing it)
+		// TODO: I know we don't want to make extra connections to the datastore but
+		// is there some connection test we should do here? -Erik
+		return nil
+	case V2PreV264:
+		return fmt.Errorf("Unable to migrate version %s to v3", ver)
+	case V2PostV264:
+		// Do migration
+		return nil
+	case V3orGreater:
+		// Already at the right version, nothing to do
+		return nil
 	}
 	return nil
 }
@@ -956,12 +960,12 @@ const (
 
 // Check the passed interfaces to determine the Version to decide if any
 // migration is needed
-func getClusterVersion(ctx context.Context, c client.Interface, cv1 ClientV1) (VerClass, string) {
+func getClusterVersion(ctx context.Context, c client.Interface, cv1 clients.V1ClientInterface) (VerClass, string) {
 	ci, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		//v, set, err := cv1.Config().GetFelixConfig("CalicoVersion", "")
-		v, set, err := cv1.Blah()
-		if err != nil || !set {
+		kv, err := cv1.Get(model.GlobalConfigKey{Name: "CalicoVersion"})
+		v := kv.Value.(string)
+		if err != nil {
 			return VUnknown, ""
 		} else {
 			vtrimmed := v
