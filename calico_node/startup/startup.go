@@ -15,12 +15,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/calico_node/calicoclient"
 	"github.com/projectcalico/calico/calico_node/startup/autodetection"
@@ -29,12 +33,12 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/libcalico-go/lib/migrate"
+	"github.com/projectcalico/libcalico-go/lib/migrate/clients"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -94,6 +98,13 @@ func main() {
 		log.Info("Datastore is ready")
 	} else {
 		log.Info("Skipping datastore connection test")
+	}
+
+	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
+		if err := ensureMigrated(ctx, cfg, cli); err != nil {
+			log.WithError(err).Errorf("Failed to migrate")
+			terminate()
+		}
 	}
 
 	// Query the current Node resources.  We update our node resource with
@@ -901,6 +912,27 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 				log.WithField("DefaultEndpointToHostAction", felixNodeCfg.Spec.DefaultEndpointToHostAction).Debug("Host Felix value already assigned")
 			}
 		}
+	}
+
+	return nil
+}
+
+// ensureMigrated ensures any data migration needed is done.
+func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) error {
+	_, cv1, err := clients.LoadClients("", "")
+	if err != nil {
+		return err
+	}
+	m := migrate.New(cv3, cv1, nil)
+	if yes, err := m.ShouldMigrate(); err == nil {
+		if yes {
+			_, err = m.Migrate()
+			if err != nil {
+				return errors.New(fmt.Sprintf("Migration failed: %v", err))
+			}
+		}
+	} else {
+		return err
 	}
 
 	return nil
