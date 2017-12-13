@@ -1,0 +1,23 @@
+package: github.com/projectcalico/calico/calico_upgrade
+import:
+- package: github.com/sirupsen/logrus
+  version: ^1.0.3
+- package: github.com/projectcalico/libcalico-go
+  version: master
+- package: github.com/coreos/etcd
+  version: v3.2.7
+- package: github.com/spf13/pflag
+  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+- package: golang.org/x/sys
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
+  subpackages:
+  - unix
+  - windows
+- package: k8s.io/code-generator
+  version: release-1.8
+- package: k8s.io/gengo
+  version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
+- package: golang.org/x/crypto
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  subpackages:
+  - ssh/terminal
