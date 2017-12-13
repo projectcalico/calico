@@ -23,9 +23,10 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/compat"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients/v1/etcdv2"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients/v1/compat"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients/v1/etcdv2"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients/v1/k8s"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -41,6 +42,14 @@ type V1ClientInterface interface {
 	IsKDD() bool
 }
 
+// LoadClients loads the v3 and v1 clients required for the migration.
+// v3Config and v1Config are the full file paths to the v3 APIConfig
+// and the v1 APIConfig respectively.  If either are blank, then this
+// loads config from the environments.
+//
+// If using Kubernetes API as the datastore, only the v3Config, or
+// v3 environments need to be specified.  The v1 client uses identical
+// configuration for this datastore type.
 func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterface, error) {
 	// If the v3Config or v1Config are the default paths, and those files do not exist, then
 	// switch to using environments by settings the path to an empty string.
@@ -60,32 +69,49 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 	}
 
 	// Load the v3 client config - either from file or environments.
-	v3ApiConfig, err := apiconfig.LoadClientConfig(v3Config)
+	apiConfigv3, err := apiconfig.LoadClientConfig(v3Config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
 	}
 
-	// Kubernetes is not yet supported.
-	if v3ApiConfig.Spec.DatastoreType == apiconfig.Kubernetes {
-		return nil, nil, errors.New("upgrade script is not yet supported for KDD")
-	}
+	var apiConfigv1 *apiv1.CalicoAPIConfig
+	var bv1 V1ClientInterface
+	if apiConfigv3.Spec.DatastoreType == apiconfig.Kubernetes {
+		log.Info("v3 API is using Kubernetes API - use same for v1")
+		kc := &apiv1.KubeConfig{
+			Kubeconfig:               apiConfigv3.Spec.Kubeconfig,
+			K8sAPIEndpoint:           apiConfigv3.Spec.K8sAPIEndpoint,
+			K8sKeyFile:               apiConfigv3.Spec.K8sKeyFile,
+			K8sCertFile:              apiConfigv3.Spec.K8sCertFile,
+			K8sCAFile:                apiConfigv3.Spec.K8sCAFile,
+			K8sAPIToken:              apiConfigv3.Spec.K8sAPIToken,
+			K8sInsecureSkipTLSVerify: apiConfigv3.Spec.K8sInsecureSkipTLSVerify,
+		}
 
-	// Grab the Calico v1 API config (which must be specified).
-	v1ApiConfig, err := loadClientConfigV1(v1Config)
-	if v1ApiConfig.Spec.DatastoreType != apiv1.EtcdV2 {
-		return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", v1ApiConfig.Spec.DatastoreType)
-	}
+		// Create the backend etcdv2 client (v1 API). We wrap this in the compat module to handle
+		// multi-key backed resources.
+		bv1, err = k8s.NewKubeClient(kc)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error with apiconfigv1: %v", err)
+		}
+	} else {
+		// Grab the Calico v1 API config (which must be specified).
+		apiConfigv1, err = loadClientConfigV1(v1Config)
+		if apiConfigv1.Spec.DatastoreType != apiv1.EtcdV2 {
+			return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", apiConfigv1.Spec.DatastoreType)
+		}
 
-	// Create the backend etcdv2 client (v1 API). We wrap this in the compat module to handle
-	// multi-key backed resources.
-	ev1, err := etcdv2.NewEtcdClient(&v1ApiConfig.Spec.EtcdConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error with apiconfigv1: %v", err)
+		// Create the backend etcdv2 client (v1 API). We wrap this in the compat module to handle
+		// multi-key backed resources.
+		ev1, err := etcdv2.NewEtcdClient(&apiConfigv1.Spec.EtcdConfig)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error with apiconfigv1: %v", err)
+		}
+		bv1 = compat.NewAdaptor(ev1)
 	}
-	bv1 := compat.NewAdaptor(ev1)
 
 	// Create the front end v3 client.
-	cv3, err := clientv3.New(*v3ApiConfig)
+	cv3, err := clientv3.New(*apiConfigv3)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
 	}

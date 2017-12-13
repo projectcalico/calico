@@ -27,7 +27,7 @@ import (
 
 	"errors"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -83,6 +83,7 @@ type migrationHelper struct {
 
 // Error types encountered during validation and migration.
 type ErrorType int
+
 const (
 	ErrorGeneric ErrorType = iota
 	ErrorConvertingData
@@ -90,9 +91,9 @@ const (
 )
 
 type MigrationError struct {
-	Err                error
-	Type               ErrorType
-	NeedsAbort         bool
+	Err        error
+	Type       ErrorType
+	NeedsAbort bool
 }
 
 func (m MigrationError) Error() string {
