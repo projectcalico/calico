@@ -23,25 +23,21 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
 )
 
-type felixConfig struct{}
-
 // Query the v1 format of GlobalConfigList and convert to the v3 format of
 // FelixConfiguration and ClusterInformation.
-func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
-	clientv1 clients.V1ClientInterface,
-	data *ConvertedData,
+func (m *migrationHelper) queryAndConvertFelixConfigV1ToV3(
+	data *MigrationData,
 ) error {
 	// Query all of the global config into a slice of KVPairs.
-	substatus("handling FelixConfiguration (global) resource")
-	kvps, err := clientv1.List(model.GlobalConfigListOptions{})
+	m.statusBullet("handling FelixConfiguration (global) resource")
+	kvps, err := m.clientv1.List(model.GlobalConfigListOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("error querying FelixConfiguration: %v", err)
 	}
 
 	// Parse the separate KVPairs into a global FelixConfiguration resource and a
@@ -49,28 +45,28 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 	// flag to true, otherwise to false.
 	globalConfig := apiv3.NewFelixConfiguration()
 	globalConfig.Name = "default"
-	if err := fc.parseFelixConfigV1IntoResourceV3(kvps, globalConfig, data); err != nil {
-		return err
+	if err := m.parseFelixConfigV1IntoResourceV3(kvps, globalConfig, data); err != nil {
+		return fmt.Errorf("error converting FelixConfiguration: %v", err)
 	}
 
-	substatus("handling ClusterInformation (global) resource")
+	m.statusBullet("handling ClusterInformation (global) resource")
 	// At the point we perform the real migration the Ready flag will have been set
 	// to the required value (depending on the datastore type) - this migration will
 	// transfer the same value across.
 	clusterInfo := apiv3.NewClusterInformation()
 	clusterInfo.Name = "default"
-	if err = fc.parseFelixConfigV1IntoResourceV3(kvps, clusterInfo, data); err != nil {
-		return err
+	if err = m.parseFelixConfigV1IntoResourceV3(kvps, clusterInfo, data); err != nil {
+		return fmt.Errorf("error converting ClusterInformation: %v", err)
 	}
 
-	if clientv1.IsKDD() {
-		substatus("skipping FelixConfiguration (per-node) resources - not supported")
+	if m.clientv1.IsKDD() {
+		m.statusBullet("skipping FelixConfiguration (per-node) resources - not supported")
 	} else {
 		// Query all of the per-host felix config into a slice of KVPairs.
-		substatus("handling FelixConfiguration (per-node) resources")
-		kvps, err = clientv1.List(model.HostConfigListOptions{})
+		m.statusBullet("handling FelixConfiguration (per-node) resources")
+		kvps, err = m.clientv1.List(model.HostConfigListOptions{})
 		if err != nil {
-			return err
+			return fmt.Errorf("error querying FelixConfiguration: %v", err)
 		}
 
 		// Sort the configuration into slices of KVPairs for each node, converting the
@@ -92,8 +88,8 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 			// Convert to v3 resource.
 			nodeConfig := apiv3.NewFelixConfiguration()
 			nodeConfig.Name = fmt.Sprintf("node.%s", node)
-			if err := fc.parseFelixConfigV1IntoResourceV3(kvps, nodeConfig, data); err != nil {
-				return err
+			if err := m.parseFelixConfigV1IntoResourceV3(kvps, nodeConfig, data); err != nil {
+				return fmt.Errorf("error converting FelixConfiguration: %v", err)
 			}
 		}
 	}
@@ -104,11 +100,11 @@ func (fc *felixConfig) queryAndConvertFelixConfigV1ToV3(
 // This function converts a slice of v1 KVPairs into the appropriate v3 values and
 // merges the results into a single v3 resource Spec for felix configuration (global
 // or per host) or a clusterInfo.
-// Conversion errors are added to the ConvertedData struct.
-func (fc *felixConfig) parseFelixConfigV1IntoResourceV3(
+// Conversion errors are added to the MigrationData struct.
+func (m *migrationHelper) parseFelixConfigV1IntoResourceV3(
 	kvps []*model.KVPair,
 	res conversionv1v3.Resource,
-	data *ConvertedData,
+	data *MigrationData,
 ) error {
 	logCxtRes := log.WithFields(log.Fields{
 		"kind": res.GetObjectKind().GroupVersionKind().Kind,
@@ -146,7 +142,7 @@ func (fc *felixConfig) parseFelixConfigV1IntoResourceV3(
 		fieldValue := specValue.Field(i)
 
 		// Get the v1 config value associated with the field.
-		configName := fc.getConfigName(field)
+		configName := m.getConfigName(field)
 		logCxt := logCxtRes.WithFields(log.Fields{
 			"field":      field.Name,
 			"configName": configName,
@@ -171,7 +167,7 @@ func (fc *felixConfig) parseFelixConfigV1IntoResourceV3(
 				continue
 			}
 
-			vProtoPort, err := fc.parseProtoPort(configStrValue)
+			vProtoPort, err := m.parseProtoPort(configStrValue)
 			if err != nil {
 				logCxt.WithError(err).Info("Failed to parse field")
 				data.ConversionErrors = append(data.ConversionErrors, ConversionError{
@@ -275,11 +271,11 @@ func (fc *felixConfig) parseFelixConfigV1IntoResourceV3(
 	return nil
 }
 
-func (fc *felixConfig) parseProtoPortFailed(msg string) error {
+func (m *migrationHelper) parseProtoPortFailed(msg string) error {
 	return errors.New(fmt.Sprintf("failed to parse ProtoPort-%s", msg))
 }
 
-func (fc *felixConfig) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {
+func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {
 	var result []apiv3.ProtoPort
 	for _, portStr := range strings.Split(raw, ",") {
 		portStr = strings.Trim(portStr, " ")
@@ -289,7 +285,7 @@ func (fc *felixConfig) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {
 
 		parts := strings.Split(portStr, ":")
 		if len(parts) > 2 {
-			return nil, fc.parseProtoPortFailed("ports should be <protocol>:<number> or <number>")
+			return nil, m.parseProtoPortFailed("ports should be <protocol>:<number> or <number>")
 		}
 		protocolStr := "TCP"
 		if len(parts) > 1 {
@@ -297,15 +293,15 @@ func (fc *felixConfig) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {
 			portStr = parts[1]
 		}
 		if protocolStr != "TCP" && protocolStr != "UDP" {
-			return nil, fc.parseProtoPortFailed("unknown protocol: " + protocolStr)
+			return nil, m.parseProtoPortFailed("unknown protocol: " + protocolStr)
 		}
 
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
-			return nil, fc.parseProtoPortFailed("ports should be integers")
+			return nil, m.parseProtoPortFailed("ports should be integers")
 		}
 		if port < 0 || port > 65535 {
-			err = fc.parseProtoPortFailed("ports must be in range 0-65535")
+			err = m.parseProtoPortFailed("ports must be in range 0-65535")
 			return nil, err
 		}
 		result = append(result, apiv3.ProtoPort{
@@ -319,7 +315,7 @@ func (fc *felixConfig) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {
 
 // Return the config name from the field. The field name is either specified in the
 // configname tag, otherwise it just uses the struct field name.
-func (fc *felixConfig) getConfigName(field reflect.StructField) string {
+func (m *migrationHelper) getConfigName(field reflect.StructField) string {
 	name := field.Tag.Get("confignamev1")
 	if name == "" {
 		name = field.Name
