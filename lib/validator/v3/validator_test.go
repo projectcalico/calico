@@ -473,6 +473,11 @@ func init() {
 					{InternalIP: ipv6_1, ExternalIP: ipv6_2},
 				},
 			}, true),
+		Entry("should accept workload endpoint with mixed-case ContainerID",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali012371237",
+				ContainerID:   "Cath01234-G",
+			}, true),
 		Entry("should reject workload endpoint with no config", api.WorkloadEndpointSpec{}, false),
 		Entry("should reject workload endpoint with IPv4 networks that contain >1 address",
 			api.WorkloadEndpointSpec{
@@ -500,6 +505,21 @@ func init() {
 				InterfaceName: "cali012371237",
 				IPNetworks:    []string{netv6_1},
 				IPNATs:        []api.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
+			}, false),
+		Entry("should reject workload endpoint containerID that starts with a dash",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali0134",
+				ContainerID:   "-abcdefg",
+			}, false),
+		Entry("should reject workload endpoint containerID that ends with a dash",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali0134",
+				ContainerID:   "abcdeSg-",
+			}, false),
+		Entry("should reject workload endpoint containerID that contains a period",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali0134",
+				ContainerID:   "abcde-j.g",
 			}, false),
 
 		// (API) HostEndpointSpec

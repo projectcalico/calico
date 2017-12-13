@@ -36,9 +36,9 @@ import (
 // will be escaped to a double-dash (--) in the constructed name.
 //
 // List queries allow for prefix lists (for non-KDD), the client should verify that
-// then items returned in the list match the supplied identifiers using the
+// the items returned in the list match the supplied identifiers using the
 // NameMatches() method.  This is necessary because a prefix match may return endpoints
-// that do not exactly match the required identifiers.  For example , suppose you are
+// that do not exactly match the required identifiers.  For example, suppose you are
 // querying endpoints with node=node1, orch=k8s, pod=pod and endpoints is wild carded:
 // -  The name prefix would be `node1-k8s-pod-`
 // -  A list query using that prefix would also return endpoints with, for example,
