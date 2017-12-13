@@ -77,13 +77,7 @@ spec:
       hostNetwork: true
       serviceAccountName: calico-node
       tolerations:
-        # Allow the pod to run on the master.  This is required for
-        # the master to communicate with pods.
-        - key: node-role.kubernetes.io/master
-          effect: NoSchedule
-        # Mark the pod as a critical add-on for rescheduling.
-        - key: "CriticalAddonsOnly"
-          operator: "Exists"
+        - operator: "Exists"
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0

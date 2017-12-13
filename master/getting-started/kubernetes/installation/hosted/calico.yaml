@@ -102,15 +102,14 @@ spec:
         k8s-app: calico-node
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
       serviceAccountName: calico-node
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
+      tolerations:
+        - operator: "Exists"
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -268,9 +267,6 @@ metadata:
     k8s-app: calico-kube-controllers
   annotations:
     scheduler.alpha.kubernetes.io/critical-pod: ''
-    scheduler.alpha.kubernetes.io/tolerations: |
-      [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-       {"key":"CriticalAddonsOnly", "operator":"Exists"}]
 spec:
   # The controllers can only have a single active instance.
   replicas: 1
@@ -287,6 +283,8 @@ spec:
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
       serviceAccountName: calico-kube-controllers
+      tolerations:
+        - operator: "Exists"
       containers:
         - name: calico-kube-controllers
           image: {{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
