@@ -20,22 +20,22 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
+
+	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/cni/pkg/skel"
+	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/vishvananda/netlink"
 
 	log "github.com/sirupsen/logrus"
 
-	"strings"
-
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ipam"
-	"github.com/containernetworking/cni/pkg/ns"
-	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/vishvananda/netlink"
 )
 
 func Min(a, b int) int {
@@ -169,6 +169,18 @@ func GetIdentifiers(args *skel.CmdArgs) (workloadID string, orchestratorID strin
 		orchestratorID = "cni"
 	}
 	return workloadID, orchestratorID, nil
+}
+
+func GetHandleID(netName string, containerID string, workload string) (string, error) {
+	handleID := fmt.Sprintf("%s.%s", netName, containerID)
+	log.WithFields(log.Fields{
+		"Network":     netName,
+		"ContainerID": containerID,
+		"Workload":    workload,
+		"HandleID":    handleID,
+	}).Debug("Generated IPAM handle")
+
+	return handleID, nil
 }
 
 func PopulateEndpointNets(endpoint *api.WorkloadEndpoint, result *current.Result) error {

@@ -101,7 +101,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	logger := utils.CreateContextLogger(workloadID)
+
+	handleID, err := utils.GetHandleID(conf.Name, args.ContainerID, workloadID)
+	if err != nil {
+		return err
+	}
+	logger := log.WithFields(log.Fields{
+		"workloadID": workloadID,
+		"handleID":   handleID,
+	})
 
 	ipamArgs := ipamArgs{}
 	if err = types.LoadArgs(args.Args, &ipamArgs); err != nil {
@@ -113,7 +121,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
 
 		// The hostname will be defaulted to the actual hostname if conf.Nodename is empty
-		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: nodename}
+		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &handleID, Hostname: nodename}
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		err := calicoClient.IPAM().AssignIP(assignArgs)
 		if err != nil {
@@ -169,7 +177,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		assignArgs := client.AutoAssignArgs{
 			Num4:      num4,
 			Num6:      num6,
-			HandleID:  &workloadID,
+			HandleID:  &handleID,
 			Hostname:  nodename,
 			IPv4Pools: v4pools,
 			IPv6Pools: v6pools,
@@ -222,24 +230,44 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// Release the IP address by using the handle - which is workloadID.
 	workloadID, _, err := utils.GetIdentifiers(args)
 	if err != nil {
 		return err
 	}
 
-	logger := utils.CreateContextLogger(workloadID)
-
-	logger.Info("Releasing address using workloadID")
-	if err := calicoClient.IPAM().ReleaseByHandle(workloadID); err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			logger.WithField("workloadId", workloadID).Warn("Asked to release address but it doesn't exist. Ignoring")
-			return nil
-		}
+	// Release the IP address by using the handleID.
+	handleID, err := utils.GetHandleID(conf.Name, args.ContainerID, workloadID)
+	if err != nil {
 		return err
 	}
 
-	logger.Info("Released address using workloadID")
-	return nil
+	logger := log.WithFields(log.Fields{
+		"workloadID": workloadID,
+		"handleID":   handleID,
+	})
 
+	logger.Info("Releasing address using handleID")
+	if err := calicoClient.IPAM().ReleaseByHandle(handleID); err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			logger.WithError(err).Error("Failed to release address")
+			return err
+		}
+		logger.Warn("Asked to release address but it doesn't exist. Ignoring")
+	} else {
+		logger.Info("Released address using handleID")
+	}
+
+	// We also need to handle the old way by workloadID, to not leak IPs in existing installs.
+	logger.Info("Releasing address using workloadID")
+	if err := calicoClient.IPAM().ReleaseByHandle(workloadID); err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			logger.WithError(err).Error("Failed to release address")
+			return err
+		}
+		logger.Debug("Asked to release address but it doesn't exist. Ignoring")
+	} else {
+		logger.Info("Released address using workloadID")
+	}
+
+	return nil
 }
