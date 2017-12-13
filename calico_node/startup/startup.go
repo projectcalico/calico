@@ -22,6 +22,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/calico/calico_node/calicoclient"
 	"github.com/projectcalico/calico/calico_node/startup/autodetection"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -33,8 +37,6 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -94,6 +96,11 @@ func main() {
 		log.Info("Datastore is ready")
 	} else {
 		log.Info("Skipping datastore connection test")
+	}
+
+	if err := ensureMigrated(ctx, cfg, cli); err != nil {
+		log.WithError(err).Errorf("Failed to migrate")
+		terminate()
 	}
 
 	// Query the current Node resources.  We update our node resource with
@@ -904,6 +911,84 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	}
 
 	return nil
+}
+
+type ClientV1 string
+
+func (_ ClientV1) Blah() (string, bool, error) {
+	return "v2.6.1", true, nil
+}
+
+// ensureMigrated ensures any data migration needed is done.
+func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface) error {
+	var cv1 ClientV1
+
+	// Only run this migration if using KDD
+	if cfg.Spec.DatastoreType != apiconfig.Kubernetes {
+		switch v, ver := getClusterVersion(ctx, c, cv1); v {
+		case VUnknown:
+			// Unknown if the datastore has not been initialized (or problem accessing it)
+			// TODO: I know we don't want to make extra connections to the datastore but
+			// is there some connection test we should do here? -Erik
+			return nil
+		case V2PreV264:
+			return fmt.Errorf("Unable to migrate version %s to v3", ver)
+		case V2PostV264:
+			// Do migration
+			return nil
+		case V3orGreater:
+			// Already at the right version, nothing to do
+			return nil
+		}
+	}
+	return nil
+}
+
+type VerClass int
+
+const (
+	VUnknown    VerClass = iota
+	V1                   = iota
+	V2PreV264            = iota
+	V2PostV264           = iota
+	V3orGreater          = iota
+)
+
+// Check the passed interfaces to determine the Version to decide if any
+// migration is needed
+func getClusterVersion(ctx context.Context, c client.Interface, cv1 ClientV1) (VerClass, string) {
+	ci, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		//v, set, err := cv1.Config().GetFelixConfig("CalicoVersion", "")
+		v, set, err := cv1.Blah()
+		if err != nil || !set {
+			return VUnknown, ""
+		} else {
+			vtrimmed := v
+			if "v" == v[:1] {
+				vtrimmed = v[1:]
+			}
+			sv, err := semver.NewVersion(vtrimmed)
+			sv2 := semver.New("2")
+			sv264 := semver.New("2.6.4")
+			if err != nil {
+				return VUnknown, v
+			} else if sv.LessThan(*sv2) {
+				log.WithField("ClusterVersion", sv).Debug("Determined Cluster version pre v2")
+				return V1, v
+			} else if sv.LessThan(*sv264) {
+				log.WithField("ClusterVersion", sv).Debug("Determined Cluster version pre v2.6.4")
+				return V2PreV264, v
+			} else if sv264.LessThan(*sv) {
+				log.WithField("ClusterVersion", sv).Debug("Determined Cluster version post v2.6.4")
+				return V2PostV264, v
+			} else {
+				return VUnknown, v
+			}
+		}
+	} else {
+		return V3orGreater, ci.Spec.CalicoVersion
+	}
 }
 
 // terminate prints a terminate message and exists with status 1.
