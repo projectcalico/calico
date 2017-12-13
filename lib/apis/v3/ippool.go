@@ -14,7 +14,11 @@
 
 package v3
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
+)
 
 const (
 	KindIPPool     = "IPPool"
@@ -45,6 +49,10 @@ type IPPoolSpec struct {
 	NATOutgoing bool `json:"natOutgoing,omitempty"`
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
+
+	// Deprecated: this field is only used for APIv1 backwards compatibility.
+	// Setting this field is not allowed, this field is for internal use only.
+	IPIP *apiv1.IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
 }
 
 type IPIPMode string

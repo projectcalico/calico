@@ -41,7 +41,7 @@ var validatorSecondary *validator.Validate
 var validatorTertiary *validator.Validate
 
 // Maximum size of annotations.
-const totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB`
+const totalAnnotationSizeLimitB int64 = 256 * (1 << 10) // 256 kB
 
 var (
 	nameLabelFmt     = "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
@@ -140,6 +140,7 @@ func init() {
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
 	registerFieldValidator("portName", validatePortName)
+	registerFieldValidator("mustBeNil", validateMustBeNil)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -231,6 +232,11 @@ func validatePortName(v *validator.Validate, topStruct reflect.Value, currentStr
 	s := field.String()
 	log.Debugf("Validate port name: %s", s)
 	return len(s) != 0 && len(k8svalidation.IsValidPortName(s)) == 0
+}
+
+func validateMustBeNil(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	log.WithField("field", field.String()).Debugf("Validate field must be nil")
+	return field.IsNil()
 }
 
 func validateIPVersion(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {

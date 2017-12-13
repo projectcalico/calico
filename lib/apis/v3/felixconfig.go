@@ -77,7 +77,7 @@ type FelixConfigurationSpec struct {
 	// state to ensure that no other process has accidentally broken Calico’s rules. Set to 0 to
 	// disable iptables refresh. [Default: 90s]
 	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
-	MaxIpsetSize          *int `json:"maxIpsetSize,omitempty"`
+	MaxIpsetSize          *int             `json:"maxIpsetSize,omitempty"`
 
 	NetlinkTimeout *metav1.Duration `json:"netlinkTimeout,omitempty" configv1timescale:"seconds" confignamev1:"NetlinkTimeoutSecs"`
 
@@ -141,8 +141,8 @@ type FelixConfigurationSpec struct {
 	// ReportingTTL is the time-to-live setting for process-wide status reports. [Default: 90s]
 	ReportingTTL *metav1.Duration `json:"reportingTTL,omitempty" configv1timescale:"seconds" confignamev1:"ReportingTTLSecs"`
 
-	EndpointReportingEnabled   *bool `json:"endpointReportingEnabled,omitempty"`
-	EndpointReportingDelay     *metav1.Duration  `json:"endpointReportingDelay,omitempty" configv1timescale:"seconds" confignamev1:"EndpointReportingDelaySecs"`
+	EndpointReportingEnabled *bool            `json:"endpointReportingEnabled,omitempty"`
+	EndpointReportingDelay   *metav1.Duration `json:"endpointReportingDelay,omitempty" configv1timescale:"seconds" confignamev1:"EndpointReportingDelaySecs"`
 
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
@@ -185,10 +185,10 @@ type FelixConfigurationSpec struct {
 	// UsageReportingInterval controls the interval at which Felix makes reports. [Default: 86400s]
 	UsageReportingInterval *metav1.Duration `json:"usageReportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"UsageReportingIntervalSecs"`
 
-	DebugMemoryProfilePath          string `json:"debugMemoryProfilePath,omitempty"`
-	DebugDisableLogDropping         *bool  `json:"debugDisableLogDropping,omitempty"`
-	DebugSimulateCalcGraphHangAfter *metav1.Duration   `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`
-	DebugSimulateDataplaneHangAfter *metav1.Duration   `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
+	DebugMemoryProfilePath          string           `json:"debugMemoryProfilePath,omitempty"`
+	DebugDisableLogDropping         *bool            `json:"debugDisableLogDropping,omitempty"`
+	DebugSimulateCalcGraphHangAfter *metav1.Duration `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`
+	DebugSimulateDataplaneHangAfter *metav1.Duration `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
 }
 
 // ProtoPort is combination of protocol and port, both must be specified.

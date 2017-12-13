@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -30,7 +31,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"k8s.io/apimachinery/pkg/fields"
 )
 
 // customK8sResourceClient implements the K8sResourceClient interface and provides a generic
@@ -47,6 +47,13 @@ type customK8sResourceClient struct {
 	k8sListType         reflect.Type
 	namespaced          bool
 	resourceKind        string
+	versionconverter    VersionConverter
+}
+
+// VersionConverter converts v1 or v3 k8s resources into v3 resources.
+// For a v3 resource, the conversion should be a no-op.
+type VersionConverter interface {
+	ConvertFromK8s(Resource) (Resource, error)
 }
 
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
@@ -210,6 +217,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		logContext.WithError(err).Info("Error getting resource")
 		return nil, K8sErrorToCalico(err, key)
 	}
+
 	return c.convertResourceToKVPair(resOut)
 }
 
@@ -319,6 +327,7 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 	toKVPair := func(r Resource) (*model.KVPair, error) {
 		return c.convertResourceToKVPair(r)
 	}
+
 	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
 }
 
@@ -348,6 +357,17 @@ func (c *customK8sResourceClient) nameToKey(name string) (model.Key, error) {
 }
 
 func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KVPair, error) {
+	var err error
+
+	// If the resource has a VersionConverter defined then pass the resource through
+	// the VersionConverter to convert the resource version from v1 to v3.
+	// No-op for a v3 resource.
+	if c.versionconverter != nil {
+		if r, err = c.versionconverter.ConvertFromK8s(r); err != nil {
+			return nil, fmt.Errorf("error converting resource from v1 to v3: %s", err)
+		}
+	}
+
 	r.GetObjectKind().SetGroupVersionKind(c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind())
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{

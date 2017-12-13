@@ -15,13 +15,15 @@
 package resources
 
 import (
+	"fmt"
 	"reflect"
-
-	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 )
 
 const (
@@ -41,7 +43,36 @@ func NewIPPoolClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceCli
 			Kind:       apiv3.KindIPPool,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.IPPoolList{}),
-		resourceKind: apiv3.KindIPPool,
+		k8sListType:      reflect.TypeOf(apiv3.IPPoolList{}),
+		resourceKind:     apiv3.KindIPPool,
+		versionconverter: IPPoolv1v3Converter{},
 	}
+}
+
+// IPPoolv1v3Converter implements VersionConverter interface.
+type IPPoolv1v3Converter struct{}
+
+// ConvertFromK8s converts v1 IPPool Resource to v3 IPPool resource
+func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
+	ipp, ok := inRes.(*apiv3.IPPool)
+	if !ok {
+		return nil, fmt.Errorf("invalid type conversion")
+	}
+
+	// If IPIP field is not nil, then it means the resource has v1 IPIP data
+	// and we must convert it to v3equivalent data.
+	if ipp.Spec.IPIP != nil {
+		if !ipp.Spec.IPIP.Enabled {
+			ipp.Spec.IPIPMode = apiv3.IPIPModeNever
+		} else if ipp.Spec.IPIP.Mode == ipip.CrossSubnet {
+			ipp.Spec.IPIPMode = apiv3.IPIPModeCrossSubnet
+		} else {
+			ipp.Spec.IPIPMode = apiv3.IPIPModeAlways
+		}
+
+		// Set IPIP to nil since we've already converted v1 IPIP fields to v3.
+		ipp.Spec.IPIP = nil
+	}
+
+	return ipp, nil
 }
