@@ -1,6 +1,5 @@
 .PHONY: all binary test clean help
 default: help
-all: test                                            ## Run all the tests
 test: test-containerized                             ## Run all the tests
 all: dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe test-containerized
 
@@ -12,7 +11,7 @@ CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 ###############################################################################
 # Version directory
 CALICO_UPGR_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
-VERSIONS_FILE?=$(CALICO_UPGR_DIR)/../_data/versions.yml
+VERSIONS_FILE?=$(CALICO_UPGR_DIR)../_data/versions.yml
 
 ###############################################################################
 # Determine whether there's a local yaml installed or use dockerized version.
@@ -210,14 +209,13 @@ st: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd
 ## contain calico-upgrade and a v2.x and current v3.x versions of calicoctl.
 .PHONY: st
 testenv: dist/calico-upgrade dist/calicoctl dist/calicoctlv2 run-etcd
-	docker run --net=host --privileged \
+	-docker run --net=host --privileged \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           --rm -ti \
 	           -v $(SOURCE_DIR):/code \
 	           --name=testenv \
 	           calico/test \
 	           sh
-	docker exec -it --name=testenv sh
 
 dist/calicoctl:
 	-docker rm -f calicoctl

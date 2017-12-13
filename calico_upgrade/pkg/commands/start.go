@@ -91,54 +91,102 @@ Description:
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
 	output := parsedArgs["--output-dir"].(string)
 	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
+	ch := &cliHelper{}
 
 	// Obtain the v1 and v3 clients.
 	clientv3, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
-		printFinalMessage("Failed to start the upgrade.\n"+
-			"Error accessing the Calico API: %v", err)
+		ch.Separator()
+		ch.Msg("Failed to start the upgrade.")
+		ch.Bullet(fmt.Sprintf("Error accessing the Calico API: %v", err))
+		ch.NewLine()
 		os.Exit(1)
 	}
 
-	// Ensure the migration code displays messages (this is basically indicating that it
-	// is being called from the calico-upgrade script).
-	migrate.DisplayStatusMessages(true)
-	migrate.Interactive(true)
+	m := migrate.New(clientv3, clientv1, ch)
 
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
 
-	// Perform the data migration. This may return OK, Fail, FailNeedsRetry or
-	// FailNeedsAbort.
-	data, res := migrate.Migrate(clientv3, clientv1, ignoreV3Data)
+	// Perform the validation. If this fails it will sys exit with a non-zero rc.
+	data := validate(m, ch, output, ignoreV3Data)
+	if len(data.Resources) == 0 {
+		// For non-KDD this will be an error case and so we won't hit this.
+		ch.Msg("There is no data requiring conversion. You may proceed with the upgrade without " +
+			"migrating the data.")
+		ch.NewLine()
+		return
+	}
 
-	if res == migrate.ResultOK {
-		// We migrated the data successfully. Include a report.
-		printFinalMessage("Successfully migrated Calico v1 data to v3 format.\n" +
-			"Follow the upgrade remaining upgrade instructions to complete the upgrade.")
+	// The start command is interactive to prevent accidentally kicking off the migration.
+	ch.NewLine()
+	ch.Msg("You are about to start the migration of Calico v1 data format to " +
+		"Calico v3 data format. During this time and until the upgrade is completed " +
+		"Calico networking will be paused - which means no new Calico networked " +
+		"endpoints can be created.")
+	ch.NewLine()
+	ch.ConfirmProceed()
+
+	// Perform the data migration.
+	data, err = m.Migrate()
+	if err == nil {
+		ch.Separator()
+		ch.Msg("Successfully migrated Calico v1 data to v3 format.")
+		ch.Msg("Follow the upgrade remaining upgrade instructions to complete the upgrade.")
+		ch.NewLine()
+		ch.Msg("See report(s) below for details of the migrated data.")
 		printAndOutputReport(output, data)
-	} else {
-		if data == nil || !data.HasErrors() {
-			// We failed to migrate the data and it is not due to conversion errors. In this
-			// case refer to previous messages.
-			printFinalMessage("Failed to migrate Calico v1 data to v3 format.\n" +
-				"See previous messages for details.")
-		} else {
-			// We failed to migrate the data and it appears to be due to conversion errors.
-			// In this case refer to the report for details.
-			printFinalMessage("Failed to migrate Calico v1 data to v3 format.\n" +
-				"See reports below for details of any conversion errors.")
-			printAndOutputReport(output, data)
-		}
+		ch.NewLine()
+		return
+	}
 
-		// If we need to retry or we still need to abort then notify the user with an extra
-		// message.
-		if res == migrate.ResultFailNeedsRetry {
-			fmt.Println("\n\nPlease retry the command.")
-		} else if res == migrate.ResultFailNeedsAbort {
-			fmt.Println("\n\nPlease run the `calico-upgrade abort` command to ensure Calico networking is resumed.")
-		}
-
+	// We failed to migrate. Make sure we tell the user if the error indicates
+	// that an Abort is required.
+	ch.Separator()
+	ch.Msg("Failed to migrate Calico v1 data to v3 format.")
+	me, ok := err.(migrate.MigrationError)
+	if !ok {
+		// We should never hit this since the errors should always be of type
+		// MigrationError - but better to handle nicely.
+		ch.Bullet(fmt.Sprintf("unexpected error: %v", err))
+		ch.NewLine()
 		os.Exit(1)
 	}
+
+	canRetry := true
+	switch me.Type {
+	case migrate.ErrorGeneric:
+		ch.Bullet(err.Error())
+	case migrate.ErrorConvertingData:
+		ch.Bullet(err.Error())
+		ch.Msg("Conversion errors should have been resolved during validation.  This suggests " +
+			"another user is either attempting to upgrade at the same time or is modifying " +
+			"Calico configuration during the upgrade.")
+		ch.NewLine()
+		ch.Msg("See report(s) below for details of the converted data.")
+		printAndOutputReport(output, data)
+	case migrate.ErrorMigratingData:
+		ch.Bullet(fmt.Sprintf(err.Error()))
+		ch.NewLine()
+		ch.Msg("Please note that the migration script may have written data into the " +
+			"v3 datastore. We recommend that you remove the Calico data from the v3 " +
+			"datastore before proceeding.")
+		canRetry = false
+	}
+
+	if me.NeedsAbort && !clientv1.IsKDD() {
+		ch.NewLine()
+		ch.Msg("IMPORTANT NOTE: The command was unable to abort the migration leaving Calico networking " +
+			"in a paused state (no new endpoints will be able to be deployed). Please run the " +
+			"abort command to resume normal service.")
+		ch.Msg("See previous output for additional details.")
+		canRetry = false
+	}
+
+	if canRetry {
+		ch.NewLine()
+		ch.Msg("Please resolve the errors and retry the command.")
+	}
+	ch.NewLine()
+	os.Exit(1)
 }

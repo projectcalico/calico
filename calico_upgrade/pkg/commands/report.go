@@ -56,17 +56,9 @@ func ensureDirectory(output string) {
 	}
 }
 
-// printFinalMessage displays the final message for a command. It adds a large
-// banner to make it stand out.
-func printFinalMessage(reportFormat string, parms ...interface{}) {
-	fmt.Println("\n*******************************************************************************\n")
-	fmt.Printf(reportFormat, parms...)
-	fmt.Println("\n")
-}
-
 // printAndOutputReport writes out a set of report files and outputs the
 // files to screen.
-func printAndOutputReport(output string, data *migrate.ConvertedData) {
+func printAndOutputReport(output string, data *migrate.MigrationData) {
 	fmt.Println("Reports:")
 	if len(data.NameConversions) != 0 {
 		fp := filepath.Join(output, constants.FileConvertedNames)

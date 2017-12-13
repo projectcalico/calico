@@ -78,43 +78,74 @@ Description:
 	cfv1 := parsedArgs["--apiconfigv1"].(string)
 	output := parsedArgs["--output-dir"].(string)
 	ignoreV3Data := parsedArgs["--ignore-v3-data"].(bool)
+	ch := &cliHelper{}
 
 	// Obtain the v1 and v3 clients.
 	clientv3, clientv1, err := clients.LoadClients(cfv3, cfv1)
 	if err != nil {
-		printFinalMessage("Failed to validate v1 to v3 conversion.\n"+
-			"Error accessing the Calico API: %v", err)
+		ch.Separator()
+		ch.Msg("Failed to validate v1 to v3 conversion.")
+		ch.Bullet(fmt.Sprintf("Error accessing the Calico API: %v", err))
+		ch.NewLine()
 		os.Exit(1)
 	}
 
-	// Ensure the migration code displays messages (this is basically indicating that it
-	// is being called from the calico-upgrade script).
-	migrate.DisplayStatusMessages(true)
+	m := migrate.New(clientv3, clientv1, ch)
 
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
 
-	// Perform the data validation. The validation result can only be OK or Fail. The
-	// Fail case may or may not have associated conversion data.
-	data, res := migrate.Validate(clientv3, clientv1, ignoreV3Data)
-	if res == migrate.ResultOK {
-		// We validated the data successfully. Include a report.
-		printFinalMessage("Successfully validated v1 to v3 conversion.\n" +
-			"See reports below for details of the conversion.")
-		printAndOutputReport(output, data)
+	// Perform the validation.
+	data := validate(m, ch, output, ignoreV3Data)
+	if len(data.Resources) == 0 {
+		// For non-KDD this will be an error case and so we won't hit this.
+		ch.Msg("There is no data requiring conversion. You may proceed with the upgrade without " +
+			"migrating the data.")
 	} else {
-		if data == nil || !data.HasErrors() {
-			// We failed to migrate the data and it is not due to conversion errors. In this
-			// case refer to previous messages.
-			printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
-				"See previous messages for details.")
-		} else {
-			// We failed to migrate the data and it appears to be due to conversion errors.
-			// In this case refer to the report for details.
-			printFinalMessage("Failed to validate v1 to v3 conversion.\n" +
-				"See reports below for details of any conversion errors.")
-			printAndOutputReport(output, data)
-		}
-		os.Exit(1)
+		ch.Msg("See report(s) below for details of the conversion.")
+		printAndOutputReport(output, data)
 	}
+	ch.NewLine()
+}
+
+// validate performs the migration validation that is shared by both the dry-run
+// command and the start command. Returns true if there is data to migrate, false
+// otherwise.
+func validate(m migrate.Interface, ch *cliHelper, output string, ignoreV3Data bool) *migrate.MigrationData {
+	// Validate the conversion and that the destination is empty.
+	data, cerr := m.ValidateConversion()
+	clean, derr := m.IsDestinationEmpty()
+
+	// If we didn't hit any conversion errors and the destination is clean (or the --ignore-v3-data
+	// option is set), then the validation was successful.
+	if cerr == nil && derr == nil && (clean || ignoreV3Data) {
+		ch.Separator()
+		ch.Msg("Successfully validated v1 to v3 conversion.")
+		return data
+	}
+
+	// We hit an error in one of the validations. Output final messages to include details of
+	// both validations.
+	ch.Separator()
+	ch.Msg("Failed to validate v1 to v3 conversion.")
+	if data != nil && data.HasErrors() {
+		ch.Bullet("errors converting data, see report(s) below for details")
+	} else if cerr != nil {
+		ch.Bullet(cerr.Error())
+	}
+	if !clean && !ignoreV3Data {
+		ch.Bullet("The v3 datastore is not clean. We recommend that you remove any calico " +
+			"data before attempting the upgrade. If you want to keep the existing v3 data, you may use " +
+			"the '--ignore-v3-data' flag when running the 'start-upgrade' command to force the upgrade, in which " +
+			"case the v1 data will be converted and will overwrite matching entries in the v3 datastore.")
+	} else if derr != nil {
+		ch.Bullet(derr.Error())
+	}
+	// Include the report for any errors.
+	if data != nil && data.HasErrors() {
+		printAndOutputReport(output, data)
+	}
+	ch.NewLine()
+	os.Exit(1)
+	return nil
 }
