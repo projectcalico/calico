@@ -15,12 +15,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/calico_node/calicoclient"
 	"github.com/projectcalico/calico/calico_node/startup/autodetection"
@@ -33,8 +37,8 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 const (
@@ -94,6 +98,13 @@ func main() {
 		log.Info("Datastore is ready")
 	} else {
 		log.Info("Skipping datastore connection test")
+	}
+
+	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
+		if err := ensureKDDMigrated(cfg, cli); err != nil {
+			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
+			terminate()
+		}
 	}
 
 	// Query the current Node resources.  We update our node resource with
@@ -899,6 +910,29 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 				log.WithField("DefaultEndpointToHostAction", felixNodeCfg.Spec.DefaultEndpointToHostAction).Debug("Host Felix value already assigned")
 			}
 		}
+	}
+
+	return nil
+}
+
+// ensureKDDMigrated ensures any data migration needed is done.
+func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) error {
+	cv1, err := clients.LoadKDDClientV1FromAPIConfigV3(cfg)
+	if err != nil {
+		return err
+	}
+	m := migrator.New(cv3, cv1, nil)
+	yes, err := m.ShouldMigrate()
+	if err != nil {
+		return err
+	} else if yes {
+		log.Infof("Running migration")
+		if _, err = m.Migrate(); err != nil {
+			return errors.New(fmt.Sprintf("Migration failed: %v", err))
+		}
+		log.Infof("Migration successful")
+	} else {
+		log.Debugf("Migration is not needed")
 	}
 
 	return nil

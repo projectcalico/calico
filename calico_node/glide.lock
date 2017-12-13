@@ -1,5 +1,5 @@
 hash: 66c27050d15dca6d1059568ca1468cde1fecc7bd8a07a9527f06587a785e5364
-updated: 2017-12-14T10:21:50.183392259-08:00
+updated: 2017-12-14T21:34:49.926815073-06:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -21,12 +21,21 @@ imports:
   version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
   subpackages:
   - auth/authpb
+  - client
   - clientv3
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
+  - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
+  - pkg/types
+  - version
+- name: github.com/coreos/go-semver
+  version: 1817cd4bea52af76542157eeabd74b057d1a199e
+  subpackages:
+  - semver
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
@@ -159,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: bf4a2268435d606f4b2b9d7b4fd22dfa1dc06a10
+  version: 278192116f1b88406ec4f14f2b3c39149213bdce
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -194,6 +203,14 @@ imports:
   - lib/selector/tokenizer
   - lib/set
   - lib/testutils
+  - lib/upgrade/converters
+  - lib/upgrade/migrator
+  - lib/upgrade/migrator/clients
+  - lib/upgrade/migrator/clients/v1/compat
+  - lib/upgrade/migrator/clients/v1/etcdv2
+  - lib/upgrade/migrator/clients/v1/k8s
+  - lib/upgrade/migrator/clients/v1/k8s/custom
+  - lib/upgrade/migrator/clients/v1/k8s/resources
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
@@ -224,6 +241,10 @@ imports:
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+- name: github.com/ugorji/go
+  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  subpackages:
+  - codec
 - name: golang.org/x/crypto
   version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
   subpackages:
