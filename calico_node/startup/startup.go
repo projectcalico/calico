@@ -812,8 +812,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			newFelixConf := api.NewFelixConfiguration()
 			newFelixConf.Name = globalFelixConfigName
-			interval := 0
-			newFelixConf.Spec.ReportingIntervalSecs = &interval
+			newFelixConf.Spec.ReportingInterval = &metav1.Duration{Duration: 0}
 			newFelixConf.Spec.LogSeverityScreen = defaultLogSeverity
 			_, err = c.FelixConfigurations().Create(ctx, newFelixConf, options.SetOptions{})
 			if err != nil {
@@ -830,12 +829,11 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 		}
 	} else {
 		updateNeeded := false
-		if felixConf.Spec.ReportingIntervalSecs == nil {
-			interval := 0
-			felixConf.Spec.ReportingIntervalSecs = &interval
+		if felixConf.Spec.ReportingInterval == nil {
+			felixConf.Spec.ReportingInterval = &metav1.Duration{Duration: 0}
 			updateNeeded = true
 		} else {
-			log.WithField("ReportingIntervalSecs", felixConf.Spec.ReportingIntervalSecs).Debug("Global Felix value already assigned")
+			log.WithField("ReportingInterval", felixConf.Spec.ReportingInterval).Debug("Global Felix value already assigned")
 		}
 
 		if felixConf.Spec.LogSeverityScreen == "" {
