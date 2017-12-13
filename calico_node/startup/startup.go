@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/calico_node/calicoclient"
 	"github.com/projectcalico/calico/calico_node/startup/autodetection"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -937,6 +938,7 @@ func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c clien
 		if err != nil {
 			return err
 		}
+		// Grab the version from the clientv1
 		v, err := getV2ClusterVersion(cv1)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -946,8 +948,12 @@ func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c clien
 			}
 		}
 
+		// Migrate only if it is possible to migrate from the current version
 		if canMigrate(v) {
-			// Do migration
+			_, r := migrate.Migrate(c, cv1, false) // Do migration
+			if r != ResultOk {
+				return fmt.Errors("Migration failed")
+			}
 			return nil
 		}
 	}
@@ -964,6 +970,8 @@ func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
 	}
 }
 
+// Checks the version string passed in if it possible to migrate from that
+// version
 func canMigrate(v string) bool {
 	if "v" == v[:1] {
 		v = v[1:]
