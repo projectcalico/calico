@@ -918,12 +918,6 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	return nil
 }
 
-type ClientV1 string
-
-func (_ ClientV1) Blah() (string, bool, error) {
-	return "v2.6.1", true, nil
-}
-
 // ensureMigrated ensures any data migration needed is done.
 func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface) error {
 	_, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
@@ -961,7 +955,7 @@ func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c clien
 }
 
 // Check the passed interfaces to determine the Version to decide if any
-// migration is needed
+// migration is needed.
 func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
 	if kv, err := cv1.Get(model.GlobalConfigKey{Name: "CalicoVersion"}); err == nil {
 		return kv.Value.(string), nil
@@ -971,7 +965,7 @@ func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
 }
 
 // Checks the version string passed in if it possible to migrate from that
-// version
+// version.
 func canMigrate(v string) bool {
 	if "v" == v[:1] {
 		v = v[1:]
