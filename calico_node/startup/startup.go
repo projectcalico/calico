@@ -567,7 +567,7 @@ func getIPv6Pool() string {
 		final := fmt.Sprint(buf.String())
 		return final
 	} else {
-		warning("Unable to fetch fe80: IPv6 address, Is IPv6 enabled on the host ?")
+		log.Error("Unable to fetch fe80: IPv6 address, Is IPv6 enabled on the host ?")
 		final := ""
 		return final
 	}
