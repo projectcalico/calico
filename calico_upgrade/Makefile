@@ -1,8 +1,8 @@
 .PHONY: all binary test clean help
 default: help
-all: test                                            ## Run all the tests
 test: test-containerized                             ## Run all the tests
 all: dist/calico-upgrade dist/calico-upgrade-darwin-amd64 dist/calico-upgrade-windows-amd64.exe test-containerized
+deepcopy-gen: .deepcopy_gen
 
 ###############################################################################
 # Go Build versions
@@ -56,14 +56,26 @@ CALICO_UPGRADE_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
-PACKAGE_NAME?=github.com/projectcalico/calico/calico_upgrade
+CALICO_UPGRADE_PKG?=github.com/projectcalico/calico/calico_upgrade
 
 CALICO_UPGRADE_VERSION ?= $(GIT_VERSION)
-LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/commands.VERSION=$(CALICO_UPGRADE_VERSION) \
-	-X $(PACKAGE_NAME)/pkg/commands.BUILD_DATE=$(CALICO_UPGRADE_BUILD_DATE) \
-	-X $(PACKAGE_NAME)/pkg/commands.GIT_REVISION=$(CALICO_UPGRADE_GIT_REVISION) -s -w"
+LDFLAGS=-ldflags "-X $(CALICO_UPGRADE_PKG)/$(CALICO_UPGRADE_DIR)/commands.VERSION=$(CALICO_UPGRADE_VERSION) \
+	-X $(CALICO_UPGRADE_PKG)/$(CALICO_UPGRADE_DIR)/commands.BUILD_DATE=$(CALICO_UPGRADE_BUILD_DATE) \
+	-X $(CALICO_UPGRADE_PKG)/$(CALICO_UPGRADE_DIR)/commands.GIT_REVISION=$(CALICO_UPGRADE_GIT_REVISION) -s -w"
 
-LIBCALICOGO_PATH?=none
+###############################################################################
+# Used by deepcopy-gen
+BINDIR             ?= bin
+TOP_SRC_DIR        ?= pkg
+DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
+  docker run --rm \
+      --net=host \
+      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+      -v $(HOME)/.glide:/home/user/.glide:rw \
+      -v $(CURDIR):/go/src/$(CALICO_UPGRADE_PKG):rw \
+      -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
+      -w /go/src/$(CALICO_UPGRADE_PKG) \
+      $(CALICO_BUILD)
 
 calico/upgrade: $(UPGRADE_CONTAINER_CREATED)      ## Create the calico/upgrade image
 
@@ -78,16 +90,13 @@ vendor: glide.yaml
 	mkdir -p $(HOME)/.glide
 
 	# To build without Docker just run "glide install -strip-vendor"
-	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
-          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
-	fi; \
-  docker run --rm \
-    -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
-    -v $(HOME)/.glide:/home/user/.glide:rw \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) /bin/sh -c ' \
-		  cd /go/src/$(PACKAGE_NAME) && \
-      glide install -strip-vendor'
+	docker run --rm \
+	  -v $(CURDIR):/go/src/$(CALICO_UPGRADE_PKG):rw $$EXTRA_DOCKER_BIND \
+	  -v $(HOME)/.glide:/home/user/.glide:rw \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  $(CALICO_BUILD) /bin/sh -c ' \
+	    cd /go/src/$(CALICO_UPGRADE_PKG) && \
+	    glide install -strip-vendor'
 
 # build calico_upgrade image
 $(UPGRADE_CONTAINER_CREATED): pkg/Dockerfile.calico_upgrade dist/calico-upgrade
@@ -125,12 +134,12 @@ binary-containerized: $(CALICO_UPGRADE_FILES) vendor
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
 	  -e CALICO_UPGRADE_VERSION=$(CALICO_UPGRADE_VERSION) \
 	  -e CALICO_UPGRADE_BUILD_DATE=$(CALICO_UPGRADE_BUILD_DATE) -e CALICO_UPGRADE_GIT_REVISION=$(CALICO_UPGRADE_GIT_REVISION) \
-	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
-	  -v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
+	  -v $(CURDIR):/go/src/$(CALICO_UPGRADE_PKG):ro \
+	  -v $(CURDIR)/dist:/go/src/$(CALICO_UPGRADE_PKG)/dist \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
 	  $(CALICO_BUILD) sh -c '\
-	    cd /go/src/$(PACKAGE_NAME) && \
+	    cd /go/src/$(CALICO_UPGRADE_PKG) && \
 	    make OS=$(OS) ARCH=$(ARCH) \
 	         CALICO_UPGRADE_VERSION=$(CALICO_UPGRADE_VERSION)  \
 	         CALICO_UPGRADE_BUILD_DATE=$(CALICO_UPGRADE_BUILD_DATE) CALICO_UPGRADE_GIT_REVISION=$(CALICO_UPGRADE_GIT_REVISION) \
@@ -138,7 +147,7 @@ binary-containerized: $(CALICO_UPGRADE_FILES) vendor
 
 .PHONY: install
 install:
-	CGO_ENABLED=0 go install $(PACKAGE_NAME)/calico_upgrade
+	CGO_ENABLED=0 go install $(CALICO_UPGRADE_PKG)/calico_upgrade
 
 ###############################################################################
 # calico-upgrade UTs
@@ -166,9 +175,9 @@ ut: dist/calico-upgrade
 PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
 test-containerized: dist/calico-upgrade
-	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	docker run --rm -v $(CURDIR):/go/src/$(CALICO_UPGRADE_PKG):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make ut'
+    $(CALICO_BUILD) sh -c 'cd /go/src/$(CALICO_UPGRADE_PKG) && make ut'
 
 ## Perform static checks on the code. The golint checks are allowed to fail, the others must pass.
 .PHONY: static-checks
@@ -176,9 +185,9 @@ static-checks: vendor
 	# vet and errcheck are disabled since they find problems...
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
+		-v $(CURDIR):/go/src/$(CALICO_UPGRADE_PKG) \
 		$(CALICO_BUILD) sh -c '\
-			cd /go/src/$(PACKAGE_NAME) && \
+			cd /go/src/$(CALICO_UPGRADE_PKG) && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
 
 
@@ -306,9 +315,31 @@ endif
 	@echo "docker push quay.io/$(UPGRADE_CONTAINER_NAME):latest"
 
 ## Clean enough that a new release build will be clean
-clean: clean-calico-upgrade
+clean: clean-calico-upgrade clean-deepcopy-gen
 	find . -name '*.created' -exec rm -f {} +
 	rm -rf dist build certs *.tar vendor
+
+.deepcopy_gen_exes: $(BINDIR)/deepcopy-gen
+	touch $@
+
+clean-deepcopy-gen:
+	rm -f .deepcopy_gen
+	find $(TOP_SRC_DIR) -name zz_generated* -exec rm {} \;
+
+$(BINDIR)/deepcopy-gen:
+	$(DOCKER_GO_BUILD) \
+		sh -c 'go build -o $@ $(CALICO_UPGRADE_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
+
+# Regenerate all files if the gen exe(s) changed
+.deepcopy_gen: .deepcopy_gen_exes
+	# Generate deep copies
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(BINDIR)/deepcopy-gen \
+			--v 1 --logtostderr \
+			--go-header-file "./docs/boilerplate.go.txt" \
+			--input-dirs "$(CALICO_UPGRADE_PKG)/pkg/clients/v1/k8s/custom" \
+			--bounding-dirs "github.com/projectcalico/calico/calico_upgrade" \
+			--output-file-base zz_generated.deepcopy'
 
 .PHONY: help
 ## Display this help text

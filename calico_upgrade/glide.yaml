@@ -13,6 +13,10 @@ import:
   subpackages:
   - unix
   - windows
+- package: k8s.io/code-generator
+  version: release-1.8
+- package: k8s.io/gengo
+  version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
 - package: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:

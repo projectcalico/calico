@@ -1,5 +1,5 @@
-hash: 36518e5da82e6a453d5addc4105442006ae11796adbfde6d859b9c2b49d5baae
-updated: 2017-12-07T16:27:06.873824-08:00
+hash: 4bf51e16c3e94efca847d15767aea12ff020db9efaad030de221b0172f0d11c3
+updated: 2017-12-13T02:40:52.3397228Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -170,7 +170,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 7fdfaa3a86b1f6de47000ae4772b87e8979cde6f
+  version: 1a9d6a77ced471bf664302c91cbab3fd89d5e612
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -328,7 +328,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 - name: k8s.io/api
-  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
+  version: 9b9dca205a15b6ce9ef10091f05d60a13fdcf418
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -355,7 +355,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 019ae5ada31de202164b118aee88ee2d14075c31
+  version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -452,6 +452,10 @@ imports:
   - util/homedir
   - util/integer
   - util/jsonpath
+- name: k8s.io/code-generator
+  version: 25fd8c8ddbf75b223882df4479f8b8e615da05ae
+- name: k8s.io/gengo
+  version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
 - name: k8s.io/kube-openapi
   version: 868f2f29720b192240e18284659231b440f9cda5
   subpackages:

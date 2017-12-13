@@ -21,3 +21,4 @@ nosetests.xml
 testfile.yaml
 vendor
 calico-upgrade-report
+.deepcopy_gen_exes
