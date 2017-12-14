@@ -1,5 +1,5 @@
-hash: fab2ac9f10cc19500c9dfdfb8042bea768647f22fa5186c2eca573de7f0f987f
-updated: 2017-12-12T10:11:19.612907669-06:00
+hash: 6ed265db48db37a941ce03e6fff4fb08fc6b59d33adadddaff6e41da4f65c3fc
+updated: 2017-12-13T17:09:25.000645565-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -48,7 +48,7 @@ imports:
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
 - name: github.com/fsnotify/fsnotify
-  version: 9297c46340639aebbb6820f260c699465528fb60
+  version: 4da3e2cfbabc9f751898f250b49f2439785783a1
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
@@ -102,10 +102,11 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hashicorp/hcl
-  version: 1c284ec98f4b398443cbabb0d9197f7f4cc0077c
+  version: 23c074d0eceb2b8a5bfdbb271ab780cde70f05a8
   subpackages:
   - hcl/ast
   - hcl/parser
+  - hcl/printer
   - hcl/scanner
   - hcl/strconv
   - hcl/token
@@ -117,7 +118,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: fd11e200c8b2e4d23c31945e330b2768b83d46f5
+  version: 44a06e2aa6498efd310189187ee24a56e9ef8b09
   subpackages:
   - client/v2
   - models
@@ -147,9 +148,9 @@ imports:
 - name: github.com/mitchellh/go-ps
   version: 4fdf99ab29366514c69ccccddab5dc58b8d84062
 - name: github.com/mitchellh/mapstructure
-  version: d2dd0262208475919e1a362f675cfc0e7c10e905
+  version: 06020f85339e21b2478f756a78e295255ffa4d6a
 - name: github.com/olekukonko/tablewriter
-  version: a7a4c189eb47ed33ce7b35f2880070a0c82a67d4
+  version: 65fec0d89a572b4367094e2058d3ebe667de3b60
 - name: github.com/onsi/ginkgo
   version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
@@ -172,7 +173,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: c1fb6682134d162f37c13f42e7157653a7de7d2b
   subpackages:
   - format
   - internal/assertion
@@ -213,7 +214,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 0dd1677894b40aba3232f81187963e3f6875c156
+  version: bf4a2268435d606f4b2b9d7b4fd22dfa1dc06a10
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -277,7 +278,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/sirupsen/logrus
-  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/afero
   version: 8d919cbe7e2627e417f3e45c3c0e489a5b7e2536
   subpackages:
@@ -289,15 +290,15 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/spf13/viper
-  version: 4dddf7c62e16bce5807744018f5b753bfe21bbd2
+  version: 1a0c4a370c3e8286b835467d2dfcdaf636c3538b
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: f67b75edbf5e3bb7dfe70bb788610693a71be3d1
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
@@ -355,7 +356,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
   subpackages:
   - internal
   - internal/app_identity
@@ -389,7 +390,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 4df58c811fe2e65feb879227b2b245e4dc26e7ad
+  version: 9b9dca205a15b6ce9ef10091f05d60a13fdcf418
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -416,7 +417,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 019ae5ada31de202164b118aee88ee2d14075c31
+  version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
   subpackages:
   - pkg/api/equality
   - pkg/api/errors

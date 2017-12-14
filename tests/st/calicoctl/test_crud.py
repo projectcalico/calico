@@ -540,6 +540,16 @@ class TestCalicoctlCommands(TestBase):
         rev2 = rc.decoded
         self.assertNotEqual(rev1['metadata']['resourceVersion'], rev2['metadata']['resourceVersion'])
 
+        # Apply an update to the felix configuration with a large duration.
+        rc = calicoctl("apply", data=felixconfig_name1_rev3)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get felixconfig %s -o yaml" % name(felixconfig_name1_rev3))
+        rc.assert_no_error()
+        rev3 = rc.decoded
+        self.assertEqual(rev3['spec']['netlinkTimeout'], '2m5s')
+        self.assertEqual(rev3['spec']['reportingTTL'], '2h45m10s')
+
         # Delete the resource by name (i.e. without using a resource version).
         rc = calicoctl("delete felixconfig %s" % name(rev2))
         rc.assert_no_error()
