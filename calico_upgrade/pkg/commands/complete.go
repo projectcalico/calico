@@ -22,8 +22,8 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
+	"github.com/projectcalico/libcalico-go/lib/migrate"
+	"github.com/projectcalico/libcalico-go/lib/migrate/clients"
 )
 
 func Complete(args []string) {
