@@ -30,6 +30,11 @@ rules:
       - patch
   - apiGroups: [""]
     resources:
+      - services
+    verbs:
+      - get
+  - apiGroups: [""]
+    resources:
       - nodes
     verbs:
       - get
