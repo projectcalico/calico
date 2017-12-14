@@ -48,14 +48,18 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"IpInIpTunnelAddr",
 	}
 	cpFieldNameToFC := map[string]string{
-		"RouteRefreshInterval":            "RouteRefreshIntervalSecs",
-		"IpInIpEnabled":                   "IPIPEnabled",
-		"IpInIpMtu":                       "IPIPMTU",
-		"Ipv6Support":                     "IPv6Support",
-		"IpsetsRefreshInterval":           "IpsetsRefreshIntervalSecs",
-		"IptablesRefreshInterval":         "IptablesRefreshIntervalSecs",
-		"DebugSimulateCalcGraphHangAfter": "DebugSimulateCalcGraphHangAfterSecs",
-		"DebugSimulateDataplaneHangAfter": "DebugSimulateDataplaneHangAfterSecs",
+		"IpInIpEnabled":                      "IPIPEnabled",
+		"IpInIpMtu":                          "IPIPMTU",
+		"Ipv6Support":                        "IPv6Support",
+		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
+		"IptablesLockProbeIntervalMillis":    "IptablesLockProbeInterval",
+		"IptablesPostWriteCheckIntervalSecs": "IptablesPostWriteCheckInterval",
+		"NetlinkTimeoutSecs":                 "NetlinkTimeout",
+		"ReportingIntervalSecs":              "ReportingInterval",
+		"ReportingTTLSecs":                   "ReportingTTL",
+		"UsageReportingInitialDelaySecs":     "UsageReportingInitialDelay",
+		"UsageReportingIntervalSecs":         "UsageReportingInterval",
+		"EndpointReportingDelaySecs":         "EndpointReportingDelay",
 	}
 	fcFieldNameToCP := map[string]string{}
 	for k, v := range cpFieldNameToFC {
