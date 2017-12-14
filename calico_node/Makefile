@@ -456,27 +456,27 @@ add-ssl-hostname:
 .PHONY: run-etcd
 run-etcd:
 	@-docker rm -f calico-etcd
-	docker run --detach \
+	until docker run --detach \
 	-p 2379:2379 \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--listen-client-urls "http://0.0.0.0:2379"; do echo retrying; done
 
 ## Etcd is used by the STs
 .PHONY: run-etcd-host
 run-etcd-host:
 	@-docker rm -f calico-etcd
-	docker run --detach \
+	until docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--listen-client-urls "http://0.0.0.0:2379"; do echo retrying; done
 
 ## Kubernetes apiserver used for tests
 run-k8s-apiserver: stop-k8s-apiserver run-etcd vendor
-	docker run \
+	until docker run \
 		--net=host --name st-apiserver \
 		--detach \
 		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
@@ -488,7 +488,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd vendor
 			--authorization-mode=RBAC \
 			--service-cluster-ip-range=10.101.0.0/16 \
 			--v=10 \
-			--logtostderr=true
+			--logtostderr=true; do echo retrying; done
 
 	# Wait until we can configure a cluster role binding which allows anonymous auth.
 	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
@@ -666,7 +666,7 @@ $(RELEASE_DIR_IMAGES)/calico-node.tar:
 
 $(RELEASE_DIR_IMAGES)/calico-typha.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/typha:$(TYPHA_VER)
+	until docker pull calico/typha:$(TYPHA_VER); do echo retrying; done
 	docker save --output $@ calico/typha:$(TYPHA_VER)
 
 $(RELEASE_DIR_IMAGES)/calico-cni.tar:
@@ -676,7 +676,7 @@ $(RELEASE_DIR_IMAGES)/calico-cni.tar:
 
 $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
+	until docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER); do echo retrying; done
 	docker save --output $@ calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
 
 $(RELEASE_DIR_BIN)/%:
