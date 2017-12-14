@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -101,7 +102,7 @@ func main() {
 		log.Info("Skipping datastore connection test")
 	}
 
-	if cfg.Spec.DatastoreType != apiconfig.Kubernetes {
+	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
 		if err := ensureMigrated(ctx, cfg, cli); err != nil {
 			log.WithError(err).Errorf("Failed to migrate")
 			terminate()
@@ -943,19 +944,18 @@ func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c clien
 		}
 
 		// Migrate only if it is possible to migrate from the current version
-		if canMigrate(v) {
-			_, r := migrate.Migrate(c, cv1, false) // Do migration
-			if r != ResultOk {
-				return fmt.Errors("Migration failed")
-			}
-			return nil
+		if !canMigrate(v) {
+			return errors.New(fmt.Sprintf("Migration to v3 requires a base of Calico v2.6.4+, currently at %s", v))
 		}
+		_, r := migrate.Migrate(c, cv1, false) // Do migration
+		if r != migrate.ResultOK {
+			return errors.New("Migration failed")
+		}
+		return nil
 	}
-	return nil
 }
 
-// Check the passed interfaces to determine the Version to decide if any
-// migration is needed.
+// getV2ClusterVersion reads the CalicoVersion from the v1 client interface.
 func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
 	if kv, err := cv1.Get(model.GlobalConfigKey{Name: "CalicoVersion"}); err == nil {
 		return kv.Value.(string), nil
@@ -964,21 +964,22 @@ func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
 	}
 }
 
-// Checks the version string passed in if it possible to migrate from that
-// version.
+// canMigrate returns true if the given version can be upgraded, otherwise
+// returns false.
 func canMigrate(v string) bool {
-	if "v" == v[:1] {
-		v = v[1:]
-	}
-	sv, err := semver.NewVersion(v)
-	sv264 := semver.New("2.6.4")
+	sv, err := semver.NewVersion(strings.TrimPrefix(v, "v"))
+	// Using 2.6.3 for the comparison point because '2.6.4-rc1' is LessThan
+	// '2.6.4', and we want the -rc1 to be upgradeable.
+	sv263 := semver.New("2.6.3")
 	if err != nil {
+		log.Warnf("Error converting version %s: %v", v, err)
 		return false
-	} else if sv.LessThan(*sv264) {
-		return false
+	} else if sv263.LessThan(*sv) {
+		return true
 	}
+	log.Warnf("Cannot migrate from version %s", v)
+	return false
 
-	return true
 }
 
 // terminate prints a terminate message and exists with status 1.
