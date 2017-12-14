@@ -213,7 +213,7 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 	-docker rm -f calico-$(@F)
 	# Latest libnetwork-plugin binaries are stored in automated builds of calico/libnetwork-plugin.
 	# To get them, we pull that image, then copy the binaries out to our host
-	docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
+	until docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME); do echo retrying; done
 	docker create --name calico-$(@F) $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker cp calico-$(@F):/$(@F) $(@D)
 	-docker rm -f calico-$(@F)
@@ -495,13 +495,13 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd vendor
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	# from the manifest crds.yaml
-	docker run \
+	until docker run \
 		--net=host \
 		--rm \
 		-v  $(CRD_PATH):/manifests \
 		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
 		--server=http://localhost:8080 \
-		apply -f /manifests/crds.yaml
+		apply -f /manifests/crds.yaml; do echo retrying; done
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -533,19 +533,19 @@ node-fv:
 PHONY: node-test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
 node-test-containerized: vendor run-etcd-host run-k8s-apiserver
-	docker run --rm \
+	until docker run --rm \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	-v $(VERSIONS_FILE):/versions.yaml:ro \
 	-e VERSIONS_FILE=/versions.yaml \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	--net=host \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'; do echo retrying; done
 
 .PHONY: node-test-at
 ## Run calico/node docker-image acceptance tests
 node-test-at:
-	docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
+	until docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
         -e CALICO_BGP_DAEMON_VER=$(GOBGPD_VER) \
         -e CALICO_FELIX_VER=$(FELIX_VER) \
         -e CONFD_VER=$(CONFD_VER) \
@@ -553,7 +553,7 @@ node-test-at:
 	wget -q -O /tmp/goss \
 	https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
 	chmod +rx /tmp/goss && \
-	/tmp/goss --gossfile /tmp/goss.yaml validate'
+	/tmp/goss --gossfile /tmp/goss.yaml validate'; do echo retrying; done
 
 # This depends on clean to ensure that dependent images get untagged and repulled
 # THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
@@ -594,8 +594,8 @@ release: clean
 	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME):$(CALICO_VER)
 
 	# Check that the images container the right sub-components
-	docker run $(NODE_CONTAINER_NAME) calico-felix --version
-	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
+	until docker run $(NODE_CONTAINER_NAME) calico-felix --version; do echo retrying; done
+	until docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v; do echo retrying; done
 
 	@echo "# See RELEASING.md for detailed instructions."
 	@echo "# Now push release images."
