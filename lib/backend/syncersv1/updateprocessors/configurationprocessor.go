@@ -234,7 +234,9 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 				case v1.Duration:
 					switch fieldInfo.Tag.Get("configv1timescale") {
 					case "milliseconds":
-						value = fmt.Sprintf("%.3f", float64(vt.Duration/time.Millisecond))
+						ms := vt.Duration / time.Millisecond
+						nMs := vt.Duration % time.Millisecond
+						value = fmt.Sprintf("%.3f", float64(ms) + float64(nMs)/1e6)
 					default:
 						value = fmt.Sprintf("%.3f", vt.Seconds())
 					}
