@@ -20,6 +20,8 @@ import (
 	"regexp"
 	"strings"
 
+	validator "gopkg.in/go-playground/validator.v8"
+
 	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
@@ -31,7 +33,6 @@ import (
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"gopkg.in/go-playground/validator.v8"
 )
 
 var validate *validator.Validate

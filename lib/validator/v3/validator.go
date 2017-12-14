@@ -21,8 +21,9 @@ import (
 	"regexp"
 	"strings"
 
+	validator "gopkg.in/go-playground/validator.v8"
+
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/go-playground/validator.v8"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
@@ -51,7 +52,7 @@ var (
 	// more restrictive naming requirements.
 	nameRegex = regexp.MustCompile("^" + nameSubdomainFmt + "$")
 
-	containerIDFmt = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+	containerIDFmt   = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
 	containerIDRegex = regexp.MustCompile("^" + containerIDFmt + "$")
 
 	// NetworkPolicy names must either be a simple DNS1123 label format (nameLabelFmt), or

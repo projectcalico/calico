@@ -236,7 +236,7 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 					case "milliseconds":
 						ms := vt.Duration / time.Millisecond
 						nMs := vt.Duration % time.Millisecond
-						value = fmt.Sprintf("%.3f", float64(ms) + float64(nMs)/1e6)
+						value = fmt.Sprintf("%.3f", float64(ms)+float64(nMs)/1e6)
 					default:
 						value = fmt.Sprintf("%.3f", vt.Seconds())
 					}
