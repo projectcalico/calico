@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/yaml"
 )
 
@@ -58,7 +58,7 @@ func ensureDirectory(output string) {
 
 // printAndOutputReport writes out a set of report files and outputs the
 // files to screen.
-func printAndOutputReport(output string, data *migrate.MigrationData) {
+func printAndOutputReport(output string, data *migrator.MigrationData) {
 	fmt.Println("Reports:")
 	if len(data.NameConversions) != 0 {
 		fp := filepath.Join(output, constants.FileConvertedNames)

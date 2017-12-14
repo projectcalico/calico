@@ -22,8 +22,8 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 func Abort(args []string) {
@@ -81,7 +81,7 @@ Description:
 		os.Exit(0)
 	}
 
-	m := migrate.New(clientv3, clientv1, ch)
+	m := migrator.New(clientv3, clientv1, ch)
 
 	// The abort command is interactive to prevent accidentally kicking off the abort.
 	ch.NewLine()

@@ -22,8 +22,8 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 func DryRun(args []string) {
@@ -90,7 +90,7 @@ Description:
 		os.Exit(1)
 	}
 
-	m := migrate.New(clientv3, clientv1, ch)
+	m := migrator.New(clientv3, clientv1, ch)
 
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
@@ -111,7 +111,7 @@ Description:
 // validate performs the migration validation that is shared by both the dry-run
 // command and the start command. Returns true if there is data to migrate, false
 // otherwise.
-func validate(m migrate.Interface, ch *cliHelper, output string, ignoreV3Data bool) *migrate.MigrationData {
+func validate(m migrator.Interface, ch *cliHelper, output string, ignoreV3Data bool) *migrator.MigrationData {
 	// Validate the conversion and that the destination is empty.
 	data, cerr := m.ValidateConversion()
 	clean, derr := m.IsDestinationEmpty()
