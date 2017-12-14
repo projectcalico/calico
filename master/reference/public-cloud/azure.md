@@ -35,4 +35,4 @@ Azure does not allow BGP, IPIP traffic, and traffic with unknown source IPs.
 [AzureUDRCreate]: https://docs.microsoft.com/en-us/azure/virtual-network/create-user-defined-route-portal
 [Canal]: https://github.com/projectcalico/canal
 [CanalGuide]: https://github.com/projectcalico/canal/blob/master/k8s-install/README.md
-[PolicyMode]: {{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/#2-calico-policy-only-with-user-supplied-networking
+[PolicyMode]: {{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/#policy-only
