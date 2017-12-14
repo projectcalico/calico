@@ -189,7 +189,7 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FIL
 	$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon -v
 	$(NODE_CONTAINER_BIN_DIR)/confd --version
 	$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin -v
-	until docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR); echo retrying; done
+	until docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR) ; do echo retrying; done
 	touch $@
 
 # Get felix binaries
