@@ -119,13 +119,13 @@ vendor: glide.yaml
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
-  docker run --rm \
+	until docker run --rm \
     -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
     -v $(HOME)/.glide:/home/user/.glide:rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     $(CALICO_BUILD) /bin/sh -c ' \
 		  cd /go/src/$(PACKAGE_NAME) && \
-      glide install -strip-vendor'
+      glide install -strip-vendor'; do echo "Trying glide again."; done
 
 
 # Download calicoctl v1.0.2 from releases.  Used for STs (testing pre/post v1.1.0 data model)
@@ -189,7 +189,7 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FIL
 	$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon -v
 	$(NODE_CONTAINER_BIN_DIR)/confd --version
 	$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin -v
-	docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
+	until docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR); echo retrying; done
 	touch $@
 
 # Get felix binaries
