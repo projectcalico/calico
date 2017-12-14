@@ -534,6 +534,11 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 		structLevel.ReportError(reflect.ValueOf(h.InterfaceName),
 			"InterfaceName", "", reason("no interface or expected IPs have been specified"))
 	}
+	// A host endpoint must have a nodename specified.
+	if h.Node == "" {
+		structLevel.ReportError(reflect.ValueOf(h.Node),
+			"InterfaceName", "", reason("no node has been specified"))
+	}
 }
 
 func validateIPPoolSpec(v *validator.Validate, structLevel *validator.StructLevel) {
