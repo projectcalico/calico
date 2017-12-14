@@ -17,11 +17,12 @@ package constants
 import (
 	"os"
 	"path/filepath"
+	"github.com/projectcalico/libcalico-go/lib/migrate/clients"
 )
 
 const (
-	DefaultConfigPathV1 = "/etc/calico/apiconfigv1.cfg"
-	DefaultConfigPathV3 = "/etc/calico/apiconfigv3.cfg"
+	DefaultConfigPathV1 = clients.DefaultConfigPathV1
+	DefaultConfigPathV3 = clients.DefaultConfigPathV3
 
 	FileConvertedNames   = "convertednames"
 	FileNameClashes      = "nameclashes"
