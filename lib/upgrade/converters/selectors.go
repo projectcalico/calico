@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package conversionv1v3
+package converters
 
 import (
 	"strings"

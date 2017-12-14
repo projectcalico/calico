@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package conversionv1v3_test
+package converters_test
 
 import (
 	"testing"
@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -322,7 +322,7 @@ func TestCanConvertV1ToV3WorkloadEndpoint(t *testing.T) {
 		t.Run(entry.description, func(t *testing.T) {
 			RegisterTestingT(t)
 
-			w := conversionv1v3.WorkloadEndpoint{}
+			w := converters.WorkloadEndpoint{}
 
 			// Test and assert v1 API to v1 backend logic.
 			v1KVPResult, err := w.APIV1ToBackendV1(entry.v1API)
@@ -349,7 +349,7 @@ func TestBadK8sWorkloadID(t *testing.T) {
 	t.Run("Test invalid k8s workloadID (no dot in name) fails to convert", func(t *testing.T) {
 		RegisterTestingT(t)
 
-		w := conversionv1v3.WorkloadEndpoint{}
+		w := converters.WorkloadEndpoint{}
 		wepBackendV1 := &model.KVPair{
 			Key: model.WorkloadEndpointKey{
 				Hostname:       "TestNode",
