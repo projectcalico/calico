@@ -186,11 +186,15 @@ spec:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
         # Mark the pod as a critical add-on for rescheduling.
-        - key: "CriticalAddonsOnly"
-          operator: "Exists"
+        - key: CriticalAddonsOnly
+          operator: Exists
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 1
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
