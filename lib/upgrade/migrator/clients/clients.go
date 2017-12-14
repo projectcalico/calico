@@ -23,16 +23,20 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients/v1/compat"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients/v1/etcdv2"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients/v1/k8s"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients/v1/compat"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients/v1/etcdv2"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients/v1/k8s"
+)
+
+const (
+	DefaultConfigPathV1 = "/etc/calico/apiconfigv1.cfg"
+	DefaultConfigPathV3 = "/etc/calico/apiconfigv3.cfg"
 )
 
 type V1ClientInterface interface {
@@ -54,14 +58,14 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 	// If the v3Config or v1Config are the default paths, and those files do not exist, then
 	// switch to using environments by settings the path to an empty string.
 	if _, err := os.Stat(v3Config); err != nil {
-		if v3Config != constants.DefaultConfigPathV3 {
+		if v3Config != DefaultConfigPathV3 {
 			return nil, nil, fmt.Errorf("Error reading apiconfigv3 file: %s\n", v3Config)
 		}
 		log.Infof("Config file: %s cannot be read - reading config from environment", v3Config)
 		v3Config = ""
 	}
 	if _, err := os.Stat(v1Config); err != nil {
-		if v1Config != constants.DefaultConfigPathV1 {
+		if v1Config != DefaultConfigPathV1 {
 			return nil, nil, fmt.Errorf("Error reading apiconfigv1 file: %s\n", v1Config)
 		}
 		log.Infof("Config file: %s cannot be read - reading config from environment", v1Config)

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package migrate
+package migrator
 
 import (
 	"context"
@@ -27,7 +27,6 @@ import (
 
 	"errors"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -35,7 +34,8 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 	validatorv3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
 
@@ -103,7 +103,7 @@ func (m MigrationError) Error() string {
 // MigrationData includes details about data migrated using the migration helper.
 type MigrationData struct {
 	// The converted resources
-	Resources []conversionv1v3.Resource
+	Resources []converters.Resource
 
 	// The converted resource names
 	NameConversions []NameConversion
@@ -139,7 +139,7 @@ type ConversionError struct {
 	KeyV1   model.Key
 	ValueV1 interface{}
 	KeyV3   model.Key
-	ValueV3 conversionv1v3.Resource
+	ValueV3 converters.Resource
 }
 
 // NameConversion contains details about name/id conversions.
@@ -391,7 +391,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling BGPPeer (global) resources")
 		// Query and convert the BGPPeers
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.GlobalBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
+			data, model.GlobalBGPPeerListOptions{}, converters.BGPPeer{}, noFilter,
 		); err != nil {
 			return nil, err
 		}
@@ -399,7 +399,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 
 	m.statusBullet("handling BGPPeer (node) resources")
 	if err := m.queryAndConvertV1ToV3Resources(
-		data, model.NodeBGPPeerListOptions{}, conversionv1v3.BGPPeer{}, noFilter,
+		data, model.NodeBGPPeerListOptions{}, converters.BGPPeer{}, noFilter,
 	); err != nil {
 		return nil, err
 	}
@@ -410,7 +410,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling HostEndpoint resources")
 		// Query and convert the HostEndpoints
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.HostEndpointListOptions{}, conversionv1v3.HostEndpoint{}, noFilter,
+			data, model.HostEndpointListOptions{}, converters.HostEndpoint{}, noFilter,
 		); err != nil {
 			return nil, err
 		}
@@ -422,7 +422,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling IPPool resources")
 		// Query and convert the IPPools
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.IPPoolListOptions{}, conversionv1v3.IPPool{}, noFilter,
+			data, model.IPPoolListOptions{}, converters.IPPool{}, noFilter,
 		); err != nil {
 			return nil, err
 		}
@@ -444,7 +444,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling GlobalNetworkPolicy resources")
 		// Query and convert the Policies
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.PolicyListOptions{}, conversionv1v3.Policy{}, filterGNP,
+			data, model.PolicyListOptions{}, converters.Policy{}, filterGNP,
 		); err != nil {
 			return nil, err
 		}
@@ -456,7 +456,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling Profile resources")
 		// Query and convert the Profiles
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.ProfileListOptions{}, conversionv1v3.Profile{}, filterProfile,
+			data, model.ProfileListOptions{}, converters.Profile{}, filterProfile,
 		); err != nil {
 			return nil, err
 		}
@@ -468,7 +468,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling WorkloadEndpoint resources")
 		// Query and convert the WorkloadEndpoints
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.WorkloadEndpointListOptions{}, conversionv1v3.WorkloadEndpoint{}, noFilter,
+			data, model.WorkloadEndpointListOptions{}, converters.WorkloadEndpoint{}, noFilter,
 		); err != nil {
 			return nil, err
 		}
@@ -482,7 +482,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 func (m *migrationHelper) queryAndConvertV1ToV3Resources(
 	data *MigrationData,
 	listInterface model.ListInterface,
-	converter conversionv1v3.Converter,
+	converter converters.Converter,
 	filterOut policyCtrlFilterOut,
 ) error {
 	// Start by listing the results from the v1 client.
@@ -614,9 +614,9 @@ func (m *migrationHelper) queryAndConvertGlobalBGPConfigV1ToV3(data *MigrationDa
 func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error {
 	// Start by querying the nodes and converting them, we don't add the nodes to the list
 	// of results just yet.
-	var nodes []conversionv1v3.Resource
+	var nodes []converters.Resource
 	err := m.queryAndConvertV1ToV3Resources(
-		data, model.NodeListOptions{}, conversionv1v3.Node{}, noFilter,
+		data, model.NodeListOptions{}, converters.Node{}, noFilter,
 	)
 	if err != nil {
 		return err
@@ -636,7 +636,7 @@ func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error 
 	addrs := map[string]string{}
 	for _, kvp := range kvps {
 		k := kvp.Key.(model.HostConfigKey)
-		addrs[conversionv1v3.ConvertNodeName(k.Hostname)] = kvp.Value.(string)
+		addrs[converters.ConvertNodeName(k.Hostname)] = kvp.Value.(string)
 	}
 
 	// Update the node resources to include the tunnel addresses.
@@ -785,7 +785,7 @@ func (m *migrationHelper) setReadyV3(ready bool) error {
 }
 
 // resourceToKey creates a model.Key from a v3 resource.
-func resourceToKey(r conversionv1v3.Resource) model.Key {
+func resourceToKey(r converters.Resource) model.Key {
 	return model.ResourceKey{
 		Kind:      r.GetObjectKind().GroupVersionKind().Kind,
 		Name:      r.GetObjectMeta().GetName(),
@@ -846,7 +846,7 @@ func (m *migrationHelper) migrateIPAMData() error {
 		}
 
 		if node != "" {
-			aff := "host:" + conversionv1v3.ConvertNodeName(node)
+			aff := "host:" + converters.ConvertNodeName(node)
 			ab.Affinity = &aff
 		}
 		kvpsv3 = append(kvpsv3, kvp)
@@ -863,7 +863,7 @@ func (m *migrationHelper) migrateIPAMData() error {
 	}
 	for _, kvp := range kvps {
 		k := kvp.Key.(model.BlockAffinityKey)
-		k.Host = conversionv1v3.ConvertNodeName(k.Host)
+		k.Host = converters.ConvertNodeName(k.Host)
 		kvp.Key = k
 		kvpsv3 = append(kvpsv3, kvp)
 	}

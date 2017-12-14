@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package migrate
+package migrator
 
 import (
 	"errors"
@@ -27,7 +27,7 @@ import (
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 )
 
 // Query the v1 format of GlobalConfigList and convert to the v3 format of
@@ -79,7 +79,7 @@ func (m *migrationHelper) queryAndConvertFelixConfigV1ToV3(
 			// Extract the key, update it and store the updated key. Store in the node-specific
 			// bucket.
 			hk := kvp.Key.(model.HostConfigKey)
-			hk.Hostname = conversionv1v3.ConvertNodeName(hk.Hostname)
+			hk.Hostname = converters.ConvertNodeName(hk.Hostname)
 			kvp.Key = hk
 
 			nodeKvps[hk.Hostname] = append(nodeKvps[hk.Hostname], kvp)
@@ -106,7 +106,7 @@ func (m *migrationHelper) queryAndConvertFelixConfigV1ToV3(
 // Conversion errors are added to the MigrationData struct.
 func (m *migrationHelper) parseFelixConfigV1IntoResourceV3(
 	kvps []*model.KVPair,
-	res conversionv1v3.Resource,
+	res converters.Resource,
 	data *MigrationData,
 ) error {
 	logCxtRes := log.WithFields(log.Fields{
@@ -190,7 +190,8 @@ func (m *migrationHelper) parseFelixConfigV1IntoResourceV3(
 			configStrValue = convertLogLevel(configStrValue)
 		}
 
-		_, ok = fieldValue.Interface().(*metav1.Duration); if ok {
+		_, ok = fieldValue.Interface().(*metav1.Duration)
+		if ok {
 			if duration, err := strconv.ParseFloat(configStrValue, 64); err != nil {
 				logCxt.WithError(err).Info("Failed to parse float for Duration field")
 				data.ConversionErrors = append(data.ConversionErrors, ConversionError{
@@ -198,7 +199,7 @@ func (m *migrationHelper) parseFelixConfigV1IntoResourceV3(
 					KeyV1:   keysv1[configName],
 					ValueV1: configStrValue,
 					KeyV3:   resourceToKey(res),
-			    })
+				})
 			} else {
 				switch field.Tag.Get("configv1timescale") {
 				case "milliseconds":
