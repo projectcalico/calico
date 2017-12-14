@@ -119,13 +119,13 @@ vendor: glide.yaml
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
-  docker run --rm \
+	until docker run --rm \
     -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
     -v $(HOME)/.glide:/home/user/.glide:rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     $(CALICO_BUILD) /bin/sh -c ' \
 		  cd /go/src/$(PACKAGE_NAME) && \
-      glide install -strip-vendor'
+      glide install -strip-vendor'; do echo "Trying glide again."; done
 
 
 # Download calicoctl v1.0.2 from releases.  Used for STs (testing pre/post v1.1.0 data model)
@@ -137,7 +137,7 @@ dist/calicoctl-v1.0.2:
 # variables.  These are used for the STs.
 dist/calicoctl:
 	-docker rm -f calicoctl
-	docker pull $(CTL_CONTAINER_NAME)
+	until docker pull $(CTL_CONTAINER_NAME); do echo retrying; done
 	docker create --name calicoctl $(CTL_CONTAINER_NAME)
 	docker cp calicoctl:calicoctl dist/calicoctl && \
 	  test -e dist/calicoctl && \
@@ -145,7 +145,7 @@ dist/calicoctl:
 	-docker rm -f calicoctl
 dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
-	docker pull calico/cni:$(CNI_VER)
+	until docker pull calico/cni:$(CNI_VER); do echo retrying; done
 	docker create --name calico-cni calico/cni:$(CNI_VER)
 	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
 	  test -e dist/calico-cni-plugin && \
@@ -189,7 +189,7 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FIL
 	$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon -v
 	$(NODE_CONTAINER_BIN_DIR)/confd --version
 	$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin -v
-	docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
+	until docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR) ; do echo retrying; done
 	touch $@
 
 # Get felix binaries
@@ -213,7 +213,7 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 	-docker rm -f calico-$(@F)
 	# Latest libnetwork-plugin binaries are stored in automated builds of calico/libnetwork-plugin.
 	# To get them, we pull that image, then copy the binaries out to our host
-	docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
+	until docker pull $(LIBNETWORK_PLUGIN_CONTAINER_NAME); do echo retrying; done
 	docker create --name calico-$(@F) $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
 	docker cp calico-$(@F):/$(@F) $(@D)
 	-docker rm -f calico-$(@F)
@@ -223,7 +223,7 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 	-docker rm -f calico-confd
 	# Latest confd binaries are stored in automated builds of calico/confd.
 	# To get them, we create (but don't start) a container from that image.
-	docker pull $(CONFD_CONTAINER_NAME)
+	until docker pull $(CONFD_CONTAINER_NAME); do echo retrying; done
 	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
@@ -341,11 +341,11 @@ certs/.certificates.created:
 	touch certs/.certificates.created
 
 busybox.tar:
-	docker pull busybox:latest
+	until docker pull busybox:latest; do echo retrying; done
 	docker save --output busybox.tar busybox:latest
 
 routereflector.tar:
-	docker pull calico/routereflector:$(RR_VER)
+	until docker pull calico/routereflector:$(RR_VER); do echo retrying; done
 	docker save --output routereflector.tar calico/routereflector:$(RR_VER)
 
 workload.tar:
@@ -456,27 +456,27 @@ add-ssl-hostname:
 .PHONY: run-etcd
 run-etcd:
 	@-docker rm -f calico-etcd
-	docker run --detach \
+	until docker run --detach \
 	-p 2379:2379 \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--listen-client-urls "http://0.0.0.0:2379"; do echo retrying; done
 
 ## Etcd is used by the STs
 .PHONY: run-etcd-host
 run-etcd-host:
 	@-docker rm -f calico-etcd
-	docker run --detach \
+	until docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
-	--listen-client-urls "http://0.0.0.0:2379"
+	--listen-client-urls "http://0.0.0.0:2379"; do echo retrying; done
 
 ## Kubernetes apiserver used for tests
 run-k8s-apiserver: stop-k8s-apiserver run-etcd vendor
-	docker run \
+	until docker run \
 		--net=host --name st-apiserver \
 		--detach \
 		gcr.io/google_containers/hyperkube-amd64:${K8S_VERSION} \
@@ -488,20 +488,20 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd vendor
 			--authorization-mode=RBAC \
 			--service-cluster-ip-range=10.101.0.0/16 \
 			--v=10 \
-			--logtostderr=true
+			--logtostderr=true; do echo retrying; done
 
 	# Wait until we can configure a cluster role binding which allows anonymous auth.
 	while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do echo "Trying to create ClusterRoleBinding"; sleep 2; done
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	# from the manifest crds.yaml
-	docker run \
+	until docker run \
 		--net=host \
 		--rm \
 		-v  $(CRD_PATH):/manifests \
 		lachlanevenson/k8s-kubectl:${K8S_VERSION} \
 		--server=http://localhost:8080 \
-		apply -f /manifests/crds.yaml
+		apply -f /manifests/crds.yaml; do echo retrying; done
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -533,19 +533,19 @@ node-fv:
 PHONY: node-test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
 node-test-containerized: vendor run-etcd-host run-k8s-apiserver
-	docker run --rm \
+	until docker run --rm \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	-v $(VERSIONS_FILE):/versions.yaml:ro \
 	-e VERSIONS_FILE=/versions.yaml \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	--net=host \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'; do echo retrying; done
 
 .PHONY: node-test-at
 ## Run calico/node docker-image acceptance tests
 node-test-at:
-	docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
+	until docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
         -e CALICO_BGP_DAEMON_VER=$(GOBGPD_VER) \
         -e CALICO_FELIX_VER=$(FELIX_VER) \
         -e CONFD_VER=$(CONFD_VER) \
@@ -553,7 +553,7 @@ node-test-at:
 	wget -q -O /tmp/goss \
 	https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
 	chmod +rx /tmp/goss && \
-	/tmp/goss --gossfile /tmp/goss.yaml validate'
+	/tmp/goss --gossfile /tmp/goss.yaml validate'; do echo retrying; done
 
 # This depends on clean to ensure that dependent images get untagged and repulled
 # THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
@@ -594,8 +594,8 @@ release: clean
 	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME):$(CALICO_VER)
 
 	# Check that the images container the right sub-components
-	docker run $(NODE_CONTAINER_NAME) calico-felix --version
-	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
+	until docker run $(NODE_CONTAINER_NAME) calico-felix --version; do echo retrying; done
+	until docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v; do echo retrying; done
 
 	@echo "# See RELEASING.md for detailed instructions."
 	@echo "# Now push release images."
@@ -666,17 +666,17 @@ $(RELEASE_DIR_IMAGES)/calico-node.tar:
 
 $(RELEASE_DIR_IMAGES)/calico-typha.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/typha:$(TYPHA_VER)
+	until docker pull calico/typha:$(TYPHA_VER); do echo retrying; done
 	docker save --output $@ calico/typha:$(TYPHA_VER)
 
 $(RELEASE_DIR_IMAGES)/calico-cni.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/cni:$(CNI_VER)
+	until docker pull calico/cni:$(CNI_VER); do echo retrying; done
 	docker save --output $@ calico/cni:$(CNI_VER)
 
 $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
+	until docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER); do echo retrying; done
 	docker save --output $@ calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
 
 $(RELEASE_DIR_BIN)/%:
