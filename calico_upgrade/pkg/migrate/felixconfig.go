@@ -20,8 +20,10 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -185,6 +187,27 @@ func (m *migrationHelper) parseFelixConfigV1IntoResourceV3(
 			// The log level fields need to have their value converted to the appropriate v3 value,
 			// but other than that are treated as normal string fields.
 			configStrValue = convertLogLevel(configStrValue)
+		}
+
+		_, ok = fieldValue.Interface().(*metav1.Duration); if ok {
+			if duration, err := strconv.ParseFloat(configStrValue, 64); err != nil {
+				logCxt.WithError(err).Info("Failed to parse float for Duration field")
+				data.ConversionErrors = append(data.ConversionErrors, ConversionError{
+					Cause:   fmt.Errorf("failed to parse float for Duration field: %v", err),
+					KeyV1:   keysv1[configName],
+					ValueV1: configStrValue,
+					KeyV3:   resourceToKey(res),
+			    })
+			} else {
+				switch field.Tag.Get("configv1timescale") {
+				case "milliseconds":
+					fieldValue.Set(reflect.ValueOf(&metav1.Duration{Duration: time.Duration(duration * float64(time.Millisecond))}))
+				default:
+					fieldValue.Set(reflect.ValueOf(&metav1.Duration{Duration: time.Duration(duration * float64(time.Second))}))
+				}
+				setField = true
+				continue
+			}
 		}
 
 		// Set the field value based on the field type.
