@@ -45,6 +45,8 @@ import (
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncserver"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 const usage = `Typha, Calico's fan-out proxy.
@@ -147,6 +149,7 @@ func (t *TyphaDaemon) LoadConfiguration() {
 	// loop until the datastore is ready.
 	log.Infof("Loading configuration...")
 	var configParams *config.Config
+	var datastoreConfig apiconfig.CalicoAPIConfig
 configRetry:
 	for {
 		// Load locally-defined config, including the datastore connection
@@ -177,20 +180,21 @@ configRetry:
 			continue configRetry
 		}
 
-		// We should now have enough config to connect to the datastore.
-		datastoreConfig := configParams.DatastoreConfig()
-
-		t.DatastoreClient, err = t.NewClientV3(datastoreConfig)
-		if err != nil {
-			log.WithError(err).Error("Failed to connect to datastore")
-			time.Sleep(1 * time.Second)
-			continue configRetry
-		}
-
+		// Validate the config params
 		err = configParams.Validate()
 		if err != nil {
 			log.WithError(err).Error(
 				"Failed to parse/validate configuration from datastore.")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+
+		// We should now have enough config to connect to the datastore.
+		datastoreConfig = configParams.DatastoreConfig()
+
+		t.DatastoreClient, err = t.NewClientV3(datastoreConfig)
+		if err != nil {
+			log.WithError(err).Error("Failed to connect to datastore")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -205,34 +209,74 @@ configRetry:
 	t.BuildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
-	// Ensure that, as soon as we are able to connect to the datastore at all, it is
-	// initialized; otherwise the Syncer may spin, looking for non-existent resources.
-	//
-	// But, do this in a background goroutine so as not to block Typha overall; specifically, we
-	// want Typha to report itself as live even if there is an initial problem connecting to the
-	// datastore.
-	//
-	// Note that Typha should cope with intermittent loss of connectivity to the datastore,
-	// because - apart from this EnsureInitialized call here - all of its interaction with the
-	// datastore is via a Syncer, and the Syncer is designed to handle HTTP request errors by
-	// reconnecting.
-	go func() {
+	if datastoreConfig.Spec.DatastoreType == apiconfig.Kubernetes {
+		// Special case: for KDD v2.x to v3.x upgrade, we need to ensure that the datastore migration has
+		// completed before we start serving requests.  Otherwise, we might serve partially-migrated data to
+		// Felix.
+
+		// Start by loading the v1 and v3 KDD client.
+		var civ1 clients.V1ClientInterface
+		var civ3 clientv3.Interface
+		var err error
 		for {
-			var err error
-			func() { // Closure to avoid leaking the defer.
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				err = t.DatastoreClient.EnsureInitialized(ctx, "", "typha")
-			}()
+			civ3, err = clientv3.New(datastoreConfig)
 			if err != nil {
-				log.WithError(err).Error("Failed to ensure datastore was initialized")
+				log.WithError(err).Error("Failed to connect to Kubernetes datastore (Calico v3 API)")
 				time.Sleep(1 * time.Second)
 				continue
 			}
-
 			break
 		}
-	}()
+		for {
+			civ1, err = clients.LoadKDDClientV1FromAPIConfigV3(&datastoreConfig)
+			if err != nil {
+				log.WithError(err).Error("Failed to connect to Kubernetes datastore (Calico v1 API)")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			break
+		}
+
+		// Use the migration helper to determine if need to perform a migration, and if so
+		// perform the migration.
+		mh := migrator.New(civ3, civ1, nil)
+		for {
+			if migrate, err := mh.ShouldMigrate(); err != nil {
+				log.WithError(err).Error("Failed to determine migration requirements")
+				time.Sleep(1 * time.Second)
+				continue
+			} else if migrate {
+				log.Info("Need to migrate Kubernetes v1 configuration to v3")
+				if _, err := mh.Migrate(); err != nil {
+					log.WithError(err).Error("Failed to migrate Kubernetes v1 configuration to v3")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				log.Info("Successfully migrated Kubernetes v1 configuration to v3")
+			}
+		}
+	}
+
+	// Ensure that, as soon as we are able to connect to the datastore at all, it is initialized.
+	// Note: we block further start-up while we do this, which means, if we're stuck here for long enough,
+	// the liveness healthcheck will time out and start to fail.  That's fairly reasonable, being stuck here
+	// likely means we have some persistent datastore connection issue and restarting Typha may solve that.
+	for {
+		var err error
+		func() { // Closure to avoid leaking the defer.
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			err = t.DatastoreClient.EnsureInitialized(ctx, "", "typha")
+		}()
+		if err != nil {
+			log.WithError(err).Error("Failed to initialize datastore")
+			time.Sleep(1 * time.Second)
+			log.WithError(err).Info("Trying to initialize the datastore...")
+			continue
+		}
+
+		break
+	}
 	t.ConfigParams = configParams
 }
 
