@@ -137,7 +137,7 @@ dist/calicoctl-v1.0.2:
 # variables.  These are used for the STs.
 dist/calicoctl:
 	-docker rm -f calicoctl
-	docker pull $(CTL_CONTAINER_NAME)
+	until docker pull $(CTL_CONTAINER_NAME); do echo retrying; done
 	docker create --name calicoctl $(CTL_CONTAINER_NAME)
 	docker cp calicoctl:calicoctl dist/calicoctl && \
 	  test -e dist/calicoctl && \
@@ -145,7 +145,7 @@ dist/calicoctl:
 	-docker rm -f calicoctl
 dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
-	docker pull calico/cni:$(CNI_VER)
+	until docker pull calico/cni:$(CNI_VER); do echo retrying; done
 	docker create --name calico-cni calico/cni:$(CNI_VER)
 	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
 	  test -e dist/calico-cni-plugin && \
@@ -223,7 +223,7 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 	-docker rm -f calico-confd
 	# Latest confd binaries are stored in automated builds of calico/confd.
 	# To get them, we create (but don't start) a container from that image.
-	docker pull $(CONFD_CONTAINER_NAME)
+	until docker pull $(CONFD_CONTAINER_NAME); do echo retrying; done
 	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
@@ -341,11 +341,11 @@ certs/.certificates.created:
 	touch certs/.certificates.created
 
 busybox.tar:
-	docker pull busybox:latest
+	until docker pull busybox:latest; do echo retrying; done
 	docker save --output busybox.tar busybox:latest
 
 routereflector.tar:
-	docker pull calico/routereflector:$(RR_VER)
+	until docker pull calico/routereflector:$(RR_VER); do echo retrying; done
 	docker save --output routereflector.tar calico/routereflector:$(RR_VER)
 
 workload.tar:
@@ -671,7 +671,7 @@ $(RELEASE_DIR_IMAGES)/calico-typha.tar:
 
 $(RELEASE_DIR_IMAGES)/calico-cni.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)
-	docker pull calico/cni:$(CNI_VER)
+	until docker pull calico/cni:$(CNI_VER); do echo retrying; done
 	docker save --output $@ calico/cni:$(CNI_VER)
 
 $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar:
