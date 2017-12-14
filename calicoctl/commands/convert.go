@@ -28,7 +28,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/v1resourceloader"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
-	conversion "github.com/projectcalico/libcalico-go/lib/upgrade/etcd/conversionv1v3"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
 
@@ -130,7 +130,7 @@ Description:
 }
 
 // convertResource converts v1 resource into a v3 resource.
-func convertResource(v1resource unversioned.Resource) (conversion.Resource, error) {
+func convertResource(v1resource unversioned.Resource) (converters.Resource, error) {
 	// Get the type converter for the v1 resource.
 	convRes, err := getTypeConverter(v1resource.GetTypeMetadata().Kind)
 	if err != nil {
@@ -153,22 +153,22 @@ func convertResource(v1resource unversioned.Resource) (conversion.Resource, erro
 }
 
 // getTypeConverter returns a type specific converter for a given v1 resource.
-func getTypeConverter(resKind string) (conversion.Converter, error) {
+func getTypeConverter(resKind string) (converters.Converter, error) {
 	switch strings.ToLower(resKind) {
 	case "node":
-		return conversion.Node{}, nil
+		return converters.Node{}, nil
 	case "hostendpoint":
-		return conversion.HostEndpoint{}, nil
+		return converters.HostEndpoint{}, nil
 	case "workloadendpoint":
-		return conversion.WorkloadEndpoint{}, nil
+		return converters.WorkloadEndpoint{}, nil
 	case "profile":
-		return conversion.Profile{}, nil
+		return converters.Profile{}, nil
 	case "policy":
-		return conversion.Policy{}, nil
+		return converters.Policy{}, nil
 	case "ippool":
-		return conversion.IPPool{}, nil
+		return converters.IPPool{}, nil
 	case "bgppeer":
-		return conversion.BGPPeer{}, nil
+		return converters.BGPPeer{}, nil
 
 	default:
 		return nil, fmt.Errorf("conversion for the resource type '%s' is not supported", resKind)
