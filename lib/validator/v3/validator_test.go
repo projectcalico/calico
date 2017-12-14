@@ -198,6 +198,7 @@ func init() {
 						Port:     1234,
 					},
 				},
+				Node: "node01",
 			},
 			true,
 		),
@@ -206,6 +207,20 @@ func init() {
 				InterfaceName: "eth0",
 				Ports: []api.EndpointPort{
 					{
+						Protocol: protoTCP,
+						Port:     1234,
+					},
+				},
+				Node: "node01",
+			},
+			false,
+		),
+		Entry("should reject HostEndpointSpec with a missing node",
+			api.HostEndpointSpec{
+				InterfaceName: "eth0",
+				Ports: []api.EndpointPort{
+					{
+						Name:     "a-valid-port",
 						Protocol: protoTCP,
 						Port:     1234,
 					},
@@ -228,6 +243,7 @@ func init() {
 						Port:     5456,
 					},
 				},
+				Node: "node01",
 			},
 			true,
 		),
@@ -523,39 +539,46 @@ func init() {
 			}, false),
 
 		// (API) HostEndpointSpec
-		Entry("should accept host endpoint with interface",
+		Entry("should accept host endpoint with interface and node",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
+				Node:          "node01",
 			}, true),
 		Entry("should accept host endpoint with expected IPs",
 			api.HostEndpointSpec{
 				ExpectedIPs: []string{ipv4_1, ipv6_1},
+				Node:        "node01",
 			}, true),
 		Entry("should accept host endpoint with interface and expected IPs",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
 				ExpectedIPs:   []string{ipv4_1, ipv6_1},
+				Node:          "node01",
 			}, true),
 		Entry("should reject host endpoint with no config", api.HostEndpointSpec{}, false),
 		Entry("should reject host endpoint with blank interface an no IPs",
 			api.HostEndpointSpec{
 				InterfaceName: "",
 				ExpectedIPs:   []string{},
+				Node:          "node01",
 			}, false),
 		Entry("should accept host endpoint with prefixed profile name",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
 				Profiles:      []string{"knp.default.fun", "knp.default.funner.11234-a"},
+				Node:          "node01",
 			}, true),
 		Entry("should accept host endpoint without prefixed profile name",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
 				Profiles:      []string{"fun-funner1234"},
+				Node:          "node01",
 			}, true),
 		Entry("should reject host endpoint with no prefix and dots at the start of the name",
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
 				Profiles:      []string{".fun"},
+				Node:          "node01",
 			}, false),
 
 		// (API) IPPool
