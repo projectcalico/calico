@@ -21,9 +21,9 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
 	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
 )
 
 func Complete(args []string) {
@@ -69,6 +69,14 @@ Description:
 		ch.Bullet(fmt.Sprintf("Error accessing the Calico API: %v", err))
 		ch.NewLine()
 		os.Exit(1)
+	}
+
+	if clientv1.IsKDD() {
+		ch.Separator()
+		ch.Msg("It is not necessary to complete the upgrade when using Kubernetes API " +
+			"as the datastore.  No action was taken.")
+		ch.NewLine()
+		os.Exit(0)
 	}
 
 	m := migrate.New(clientv3, clientv1, ch)

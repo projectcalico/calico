@@ -23,7 +23,7 @@ import (
 const (
 	lineLength = 79
 	sepChar    = '-'
-	bullet     = "*  "
+	bullet     = " * "
 )
 
 // cliHelper contains common methods for writing/reading from the CLI.
