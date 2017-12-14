@@ -140,14 +140,26 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	}
 }
 
+// Make best effort to release IPAM assigned IP address.
+// Log, but otherwise ignore errors.
+func releaseIPAddrByHandle(ctx context.Context, c client.Interface, handle string, ipv4Addr string) {
+	err := c.IPAM().ReleaseByHandle(ctx, handle)
+	if err != nil {
+		log.WithError(err).WithField("IP", ipv4Addr).Error("Error releasing IP address on failure")
+	} else {
+		log.WithField("IP", ipv4Addr).Debug("Released IP address")
+	}
+}
+
 // assignHostTunnelAddr claims an IPIP-enabled IP address from the first pool
 // with some space. Stores the result in the host's config as its tunnel
 // address.
 func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, ipipCidrs []net.IPNet) {
+	handle := "ipipAddr:" + nodename
 	args := ipam.AutoAssignArgs{
 		Num4:      1,
 		Num6:      0,
-		HandleID:  nil,
+		HandleID:  &handle,
 		Attrs:     nil,
 		Hostname:  nodename,
 		IPv4Pools: ipipCidrs,
@@ -155,11 +167,11 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 
 	ipv4Addrs, _, err := c.IPAM().AutoAssign(ctx, args)
 	if err != nil {
-		log.WithError(err).Fatal("Unable to autoassign an address for IPIP")
+		log.WithError(err).Fatal("Unable to auto-assign an address for IPIP")
 	}
 
 	if len(ipv4Addrs) == 0 {
-		log.Fatal("Unable to autoassign an address for IPIP - pools are likely exhausted.")
+		log.Fatal("Unable to auto-assign an address for IPIP - pools are likely exhausted.")
 	}
 
 	var updateError error
@@ -167,6 +179,7 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	for i := 0; i < 5; i++ {
 		node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 		if err != nil {
+			releaseIPAddrByHandle(ctx, c, handle, ipv4Addrs[0].String())
 			log.WithError(err).Fatalf("Unable to retrieve IPIP tunnel address for cleanup. Error getting node '%s'", nodename)
 		}
 
@@ -186,14 +199,10 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	// Check to see if there was still an error after the retry loop,
 	// and release the IP if there was an error.
 	if updateError != nil {
-		// We hit an error, so release the IP address before exiting.
-		_, err := c.IPAM().ReleaseIPs(ctx, []net.IP{ipv4Addrs[0]})
-		if err != nil {
-			log.WithError(err).WithField("IP", ipv4Addrs[0].String()).Errorf("Error releasing IP address on faiure")
-		}
+		releaseIPAddrByHandle(ctx, c, handle, ipv4Addrs[0].String())
 
 		// Log the error and exit with exit code 1.
-		log.WithError(err).WithField("IP", ipv4Addrs[0].String()).Fatal("Unable to set IPIP tunnel address")
+		log.WithError(updateError).WithField("IP", ipv4Addrs[0].String()).Fatal("Unable to set IPIP tunnel address")
 	}
 
 	log.WithField("IP", ipv4Addrs[0].String()).Info("Set IPIP tunnel address")
