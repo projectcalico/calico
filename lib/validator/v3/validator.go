@@ -51,6 +51,9 @@ var (
 	// more restrictive naming requirements.
 	nameRegex = regexp.MustCompile("^" + nameSubdomainFmt + "$")
 
+	containerIDFmt = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+	containerIDRegex = regexp.MustCompile("^" + containerIDFmt + "$")
+
 	// NetworkPolicy names must either be a simple DNS1123 label format (nameLabelFmt), or
 	// must be the standard name format (nameRegex) prefixed with "knp.default".
 	networkPolicyNameRegex = regexp.MustCompile("^((" + nameLabelFmt + ")|(knp\\.default\\.(" + nameSubdomainFmt + ")))$")
@@ -131,6 +134,7 @@ func init() {
 	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("datastoreType", validateDatastoreType)
 	registerFieldValidator("name", validateName)
+	registerFieldValidator("containerID", validateContainerID)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("labels", validateLabels)
 	registerFieldValidator("ipVersion", validateIPVersion)
@@ -226,6 +230,12 @@ func validateName(v *validator.Validate, topStruct reflect.Value, currentStructO
 	s := field.String()
 	log.Debugf("Validate name: %s", s)
 	return nameRegex.MatchString(s)
+}
+
+func validateContainerID(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate containerID: %s", s)
+	return containerIDRegex.MatchString(s)
 }
 
 func validatePortName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {

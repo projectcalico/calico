@@ -43,7 +43,7 @@ type WorkloadEndpointSpec struct {
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
 	// The container ID.
-	ContainerID string `json:"containerID,omitempty" validate:"omitempty,name"`
+	ContainerID string `json:"containerID,omitempty" validate:"omitempty,containerID"`
 	// The Pod name.
 	Pod string `json:"pod,omitempty" validate:"omitempty,name"`
 	// The Endpoint name.
