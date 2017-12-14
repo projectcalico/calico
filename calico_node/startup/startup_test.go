@@ -698,6 +698,28 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 	)
 })
 
+var _ = Describe("UT for checking the version for migration.", func() {
+
+	DescribeTable("Checking canMigrate.",
+		func(ver string, result bool) {
+			Expect(canMigrate(ver)).To(Equal(result))
+		},
+
+		Entry("Expect v2.6.4 to migrate", "v2.6.4", true),
+		Entry("Expect v2.6.4-rc1 to migrate", "v2.6.4-rc1", true),
+		Entry("Expect v2.6.5 to migrate", "v2.6.5", true),
+		Entry("Expect v2.6.5-rc1 to migrate", "v2.6.5-rc1", true),
+		Entry("Expect v2.7.0 to migrate", "v2.7.0", true),
+		Entry("Expect v2.7.0-rc1 to migrate", "v2.7.0-rc1", true),
+		Entry("Expect v2.6.3 to not migrate", "v2.6.3", false),
+		Entry("Expect v2.6.3-rc1 to not migrate", "v2.6.3-rc1", false),
+		Entry("Expect v2.6.x-deadbeef to not migrate", "v2.6.x-deadbeef", false),
+		Entry("Expect master to not migrate", "master", false),
+		Entry("Expect garbage to not migrate", "garbage", false),
+		Entry("Expect 1.2.3.4.5 to not migrate", "1.2.3.4.5", false),
+	)
+})
+
 var _ = Describe("FV tests against K8s API server.", func() {
 	It("should not throw an error when multiple Nodes configure the same global CRD value.", func() {
 		ctx := context.Background()

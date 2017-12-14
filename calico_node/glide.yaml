@@ -15,4 +15,7 @@ import:
   - lib/numorstring
 - package: github.com/coreos/etcd
   version: v3.2.7
-
+- package: github.com/projectcalico/calico/calico_upgrade
+  version: d2c3c4b1d1a23137c433d312e19ff40be8da1d4d
+  subpackages:
+  - pkg/clients

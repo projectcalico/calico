@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,10 +23,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/calico/calico_node/calicoclient"
 	"github.com/projectcalico/calico/calico_node/startup/autodetection"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/clients"
+	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -33,8 +41,6 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -94,6 +100,13 @@ func main() {
 		log.Info("Datastore is ready")
 	} else {
 		log.Info("Skipping datastore connection test")
+	}
+
+	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
+		if err := ensureMigrated(ctx, cfg, cli); err != nil {
+			log.WithError(err).Errorf("Failed to migrate")
+			terminate()
+		}
 	}
 
 	// Query the current Node resources.  We update our node resource with
@@ -904,6 +917,69 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	}
 
 	return nil
+}
+
+// ensureMigrated ensures any data migration needed is done.
+func ensureMigrated(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface) error {
+	_, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err == nil {
+		// Nothing to do ClusterInformation exists so data has already been migrated
+		return nil
+	} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+		// The error indicates a problem with accessing the resource
+		return err
+	} else {
+		_, cv1, err := clients.LoadClients("", "")
+		if err != nil {
+			return err
+		}
+		// Grab the version from the clientv1
+		v, err := getV2ClusterVersion(cv1)
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				return nil
+			} else {
+				return err
+			}
+		}
+
+		// Migrate only if it is possible to migrate from the current version
+		if !canMigrate(v) {
+			return errors.New(fmt.Sprintf("Migration to v3 requires a base of Calico v2.6.4+, currently at %s", v))
+		}
+		_, r := migrate.Migrate(c, cv1, false) // Do migration
+		if r != migrate.ResultOK {
+			return errors.New("Migration failed")
+		}
+		return nil
+	}
+}
+
+// getV2ClusterVersion reads the CalicoVersion from the v1 client interface.
+func getV2ClusterVersion(cv1 clients.V1ClientInterface) (string, error) {
+	if kv, err := cv1.Get(model.GlobalConfigKey{Name: "CalicoVersion"}); err == nil {
+		return kv.Value.(string), nil
+	} else {
+		return "", err
+	}
+}
+
+// canMigrate returns true if the given version can be upgraded, otherwise
+// returns false.
+func canMigrate(v string) bool {
+	sv, err := semver.NewVersion(strings.TrimPrefix(v, "v"))
+	// Using 2.6.3 for the comparison point because '2.6.4-rc1' is LessThan
+	// '2.6.4', and we want the -rc1 to be upgradeable.
+	sv263 := semver.New("2.6.3")
+	if err != nil {
+		log.Warnf("Error converting version %s: %v", v, err)
+		return false
+	} else if sv263.LessThan(*sv) {
+		return true
+	}
+	log.Warnf("Cannot migrate from version %s", v)
+	return false
+
 }
 
 // terminate prints a terminate message and exists with status 1.
