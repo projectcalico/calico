@@ -173,7 +173,7 @@ static-checks: vendor
 SOURCE_DIR?=$(dir $(lastword $(MAKEFILE_LIST)))
 SOURCE_DIR:=$(abspath $(SOURCE_DIR))
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
-ST_TO_RUN?=tests/st/calicoctl/test_crud.py
+ST_TO_RUN?=tests/st/calicoctl/
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 
@@ -189,6 +189,7 @@ st: dist/calicoctl run-etcd-host
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           --rm -t \
 	           -v $(SOURCE_DIR):/code \
+	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           calico/test$(ARCHTAG) \
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 
