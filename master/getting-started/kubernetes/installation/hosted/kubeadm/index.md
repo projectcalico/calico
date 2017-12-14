@@ -2,76 +2,65 @@
 title: kubeadm Hosted Install
 ---
 
-This document outlines how to install Calico on a kubeadm cluster.
-If you have already built your cluster with kubeadm, please review the
-[Requirements / Limitations](#requirements--limitations) at the bottom of
-this page. It is likely you will need to recreate your cluster with the
-`--pod-network-cidr` and `--service-cidr` arguments to kubeadm.
+This document outlines how to install {{site.prodname}} on a cluster initialized with 
+[kubeadm](http://kubernetes.io/docs/getting-started-guides/kubeadm/).  {{site.prodname}}
+is compatible with kubeadm-created clusters, as long as the [requirements](#requirements) are met. 
 
-## Installation
+## Requirements
 
-You can easily create a cluster compatible with these manifests by following [the official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
+For {{site.prodname}} to be compatible with your kubeadm-created cluster:
 
-Calico installations require kubeadm initialized clusters to have set a `--pod-network-cidr`
-which should match the value set by `CALICO_IPV4POOL_CIDR` in the manifest:
+* It must be running at least Kubernetes v1.7
 
-```yaml
-- name: CALICO_IPV4POOL_CIDR
-  value: "192.168.0.0/16"
-```
+* There should be no other CNI network configurations installed in /etc/cni/net.d (or equivalent directory)
 
-This value can be changed to any CIDR that does not overlap the cluster's service CIDR.
-The manifests are currently setup to use the CIDR `192.168.0.0/16` so you would initialize
-the cluster with the following command:
+* The kubeadm flag `--pod-network-cidr` must be set when creating the cluster with `kubeadm init` 
+  and the CIDR(s) specified with the flag must match {{site.prodname}}'s IP pools. The default 
+  IP pool configured in {{site.prodname}}'s manifests is `192.168.0.0/16`
 
-```shell
-kubeadm init --pod-network-cidr=192.168.0.0/16
-```
+* The CIDR specified with the kubeadm flag `--service-cidr` must not overlap with 
+  {{site.prodname}}'s IP pools
+  
+  * The default CIDR for `--service-cidr` is `10.96.0.0/12`
+  
+  * The default IP pool configured in {{site.prodname}}'s manifests is `192.168.0.0/16`
 
-### etcd datastore
+You can create a cluster compatible with these manifests by following [the official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
-Users who have deployed their own etcd cluster outside of kubeadm should
-use the [Calico only manifest](../hosted) instead, as it does not deploy its
-own etcd.
+## Installing {{site.prodname}} with a Kubernetes-hosted etcd
 
-To install this Calico and a single node etcd on a run the following command:
+As a non-production quick start, to install {{site.prodname}} with a single-node dedicated etcd cluster,
+running as a Kubernetes pod:
 
-> **Note**: The following manifest requires Kubernetes 1.7.0 or later.
-{: .alert .alert-info}
+1. Ensure your cluster meets the [requirements](#requirements) (or recreate it if not).
 
-```shell
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
-```
+2. Apply the single-node etcd manifest:
+   
+   ```shell
+   kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
+   ```
+   
+   > **Note**: You can also 
+   > [view the YAML in your browser](1.7/calico.yaml){:target="_blank"}.
+   {: .alert .alert-info}
 
->[Click here to view the above yaml directly.](1.7/calico.yaml)
+## Installing with an existing etcd datastore
 
-### Kubernetes datastore
+To install {{site.prodname}}, configured to use an etcd that you have already set-up:
 
-To install Calico configured to use the Kubernetes API as its sole data source, run the following commands:
+1. Ensure your cluster meets the [requirements](#requirements) (or recreate it if not).
 
-> **Note**: The following manifests require Kubernetes 1.7.0 or later.
-{: .alert .alert-info}
+2. Follow [the main etcd datastore instructions](../hosted). 
 
-```shell
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
-```
+## Kubernetes datastore
 
->[Click here to view the above RBAC yaml directly.](../rbac-kdd.yaml)
->
->[Click here to view the above Calico yaml directly.](../kubernetes-datastore/calico-networking/1.7/calico.yaml)
+To install {{site.prodname}}, configured to use the Kubernetes API as its sole data source:
+
+1. Ensure your cluster meets the [requirements](#requirements) (or recreate it if not).
+
+2. Follow [the main Kubernetes datastore instructions](../kubernetes-datastore). 
 
 ## Using calicoctl in a kubeadm cluster
 
 The simplest way to use calicoctl in kubeadm is by running it as a pod.
 See [Installing calicoctl as a container](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-container) for more information.
-
-### Requirements / Limitations
-
-* This install assumes no other pod network configurations have been installed
-  in /etc/cni/net.d (or equivilent directory).
-* The CIDR(s) specified with the kubeadm flag `--pod-network-cidr` must match the Calico IP Pools to have Network
-  Policy function correctly. The default is `192.168.0.0/16`.
-* The CIDR specified with the kubeadm flag `--service-cidr` should not overlap with the Calico IP Pool.
-  * The default CIDR for `--service-cidr` is `10.96.0.0/12`.
-  * The calico.yaml(s) linked sets the Calico IP Pool to `192.168.0.0/16`.
