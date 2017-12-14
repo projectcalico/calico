@@ -22,8 +22,8 @@ import (
 	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calico_upgrade/pkg/constants"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate"
-	"github.com/projectcalico/calico/calico_upgrade/pkg/migrate/clients"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 func Start(args []string) {
@@ -103,7 +103,7 @@ Description:
 		os.Exit(1)
 	}
 
-	m := migrate.New(clientv3, clientv1, ch)
+	m := migrator.New(clientv3, clientv1, ch)
 
 	// Ensure we are able to write the output report to the designated output directory.
 	ensureDirectory(output)
@@ -154,11 +154,11 @@ Description:
 		return
 	}
 
-	// We failed to migrate. Make sure we tell the user if the error indicates
+	// We failed to migrator. Make sure we tell the user if the error indicates
 	// that an Abort is required.
 	ch.Separator()
 	ch.Msg("Failed to migrate Calico v1 data to v3 format.")
-	me, ok := err.(migrate.MigrationError)
+	me, ok := err.(migrator.MigrationError)
 	if !ok {
 		// We should never hit this since the errors should always be of type
 		// MigrationError - but better to handle nicely.
@@ -169,9 +169,9 @@ Description:
 
 	canRetry := true
 	switch me.Type {
-	case migrate.ErrorGeneric:
+	case migrator.ErrorGeneric:
 		ch.Bullet(err.Error())
-	case migrate.ErrorConvertingData:
+	case migrator.ErrorConvertingData:
 		ch.Bullet(err.Error())
 		ch.Msg("Conversion errors should have been resolved during validation.  This suggests " +
 			"another user is either attempting to upgrade at the same time or is modifying " +
@@ -179,7 +179,7 @@ Description:
 		ch.NewLine()
 		ch.Msg("See report(s) below for details of the converted data.")
 		printAndOutputReport(output, data)
-	case migrate.ErrorMigratingData:
+	case migrator.ErrorMigratingData:
 		ch.Bullet(fmt.Sprintf(err.Error()))
 		ch.NewLine()
 		ch.Msg("Please note that the migration script may have written data into the " +
