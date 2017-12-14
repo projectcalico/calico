@@ -185,11 +185,12 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		cc := updateprocessors.NewFelixConfigUpdateProcessor()
 		By("converting a per-node felix KVPair with certain values and checking for the correct number of fields")
 		res := apiv3.NewFelixConfiguration()
-		duration := metav1.Duration{Duration: time.Duration(1 * time.Minute)}
+		duration1 := metav1.Duration{Duration: time.Duration(12.345 * float64(time.Second))}
+		duration2 := metav1.Duration{Duration: time.Duration(54.321 * float64(time.Millisecond))}
 		bool1 := false
 		uint1 := uint32(1313)
-		res.Spec.RouteRefreshInterval = &duration
-		res.Spec.IptablesLockProbeInterval = &duration
+		res.Spec.RouteRefreshInterval = &duration1
+		res.Spec.IptablesLockProbeInterval = &duration2
 		res.Spec.InterfacePrefix = "califoobar"
 		res.Spec.IPIPEnabled = &bool1
 		res.Spec.IptablesMarkMask = &uint1
@@ -209,8 +210,8 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			},
 		}
 		expected := map[string]interface{}{
-			"RouteRefreshInterval":            "60.000",
-			"IptablesLockProbeIntervalMillis": "60000.000",
+			"RouteRefreshInterval":            "12.345",
+			"IptablesLockProbeIntervalMillis": "54.321",
 			"InterfacePrefix":                 "califoobar",
 			"IpInIpEnabled":                   "false",
 			"IptablesMarkMask":                "1313",
