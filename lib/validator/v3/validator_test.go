@@ -647,6 +647,11 @@ func init() {
 		Entry("should accept it when the IPIP field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
 		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &apiv1.IPIPConfiguration{Enabled: true, Mode: ipip.Always}}, false),
 
+		// (API) NatOutgoing APIv1 backwards compatibility. Read-only field NatOutgoingV1
+		Entry("should accept NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: false}, true),
+		Entry("should accept it when the NATOutgoingV1 field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
+		Entry("should reject NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: true}, false),
+
 		// (API) ICMPFields
 		Entry("should accept ICMP with no config", api.ICMPFields{}, true),
 		Entry("should accept ICMP with type with min value", api.ICMPFields{Type: &V0}, true),
