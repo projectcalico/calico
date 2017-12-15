@@ -33,7 +33,7 @@ type reporterState struct {
 	// The health indicators that this reporter reports.
 	reports HealthReport
 
-	// Expiry time for this reporter's reports.
+	// Expiry time for this reporter's reports.  Zero means that reports never expire.
 	timeout time.Duration
 
 	// The most recent report.
@@ -54,6 +54,12 @@ type HealthAggregator struct {
 
 	// Map from reporter name to corresponding state.
 	reporters map[string]*reporterState
+
+	// HTTP server mux.  This is where we register handlers for particular URLs.
+	httpServeMux *http.ServeMux
+
+	// HTTP server.  Non-nil when there should be a server running.
+	httpServer *http.Server
 }
 
 // RegisterReporter registers a reporter with a HealthAggregator.  The aggregator uses NAME to
@@ -85,7 +91,30 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 }
 
 func NewHealthAggregator() *HealthAggregator {
-	return &HealthAggregator{mutex: &sync.Mutex{}, reporters: map[string]*reporterState{}}
+	aggregator := &HealthAggregator{
+		mutex:        &sync.Mutex{},
+		reporters:    map[string]*reporterState{},
+		httpServeMux: http.NewServeMux(),
+	}
+	aggregator.httpServeMux.HandleFunc("/readiness", func(rsp http.ResponseWriter, req *http.Request) {
+		log.Debug("GET /readiness")
+		status := StatusBad
+		if aggregator.Summary().Ready {
+			log.Debug("Felix is ready")
+			status = StatusGood
+		}
+		rsp.WriteHeader(status)
+	})
+	aggregator.httpServeMux.HandleFunc("/liveness", func(rsp http.ResponseWriter, req *http.Request) {
+		log.Debug("GET /liveness")
+		status := StatusBad
+		if aggregator.Summary().Live {
+			log.Debug("Felix is live")
+			status = StatusGood
+		}
+		rsp.WriteHeader(status)
+	})
+	return aggregator
 }
 
 // Summary calculates the current overall health for a HealthAggregator.
@@ -106,14 +135,14 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		// Reset Live to false if that reporter is registered to report liveness and hasn't
 		// recently said that it is live.
 		if summary.Live && reporter.reports.Live && (!reporter.latest.Live ||
-			(time.Since(reporter.timestamp) > reporter.timeout)) {
+			(reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)) {
 			summary.Live = false
 		}
 
 		// Reset Ready to false if that reporter is registered to report readiness and
 		// hasn't recently said that it is ready.
 		if summary.Ready && reporter.reports.Ready && (!reporter.latest.Ready ||
-			(time.Since(reporter.timestamp) > reporter.timeout)) {
+			(reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)) {
 			summary.Ready = false
 		}
 	}
@@ -139,31 +168,43 @@ const (
 // http://*:PORT/readiness respectively.  A GET request on those URLs returns StatusGood or
 // StatusBad, according to the current overall liveness or readiness.  These endpoints are designed
 // for use by Kubernetes liveness and readiness probes.
-func (aggregator *HealthAggregator) ServeHTTP(port int) {
-
-	log.WithField("port", port).Info("Starting health endpoints")
-	http.HandleFunc("/readiness", func(rsp http.ResponseWriter, req *http.Request) {
-		log.Debug("GET /readiness")
-		status := StatusBad
-		if aggregator.Summary().Ready {
-			log.Debug("Felix is ready")
-			status = StatusGood
+func (aggregator *HealthAggregator) ServeHTTP(enabled bool, port int) {
+	aggregator.mutex.Lock()
+	defer aggregator.mutex.Unlock()
+	if enabled {
+		if aggregator.httpServer != nil {
+			log.WithField("port", port).Info("Health enabled.  Server is already running.")
+			return
 		}
-		rsp.WriteHeader(status)
-	})
-	http.HandleFunc("/liveness", func(rsp http.ResponseWriter, req *http.Request) {
-		log.Debug("GET /liveness")
-		status := StatusBad
-		if aggregator.Summary().Live {
-			log.Debug("Felix is live")
-			status = StatusGood
+		log.WithField("port", port).Info("Health enabled.  Starting server.")
+		aggregator.httpServer = &http.Server{
+			Addr:    fmt.Sprintf(":%v", port),
+			Handler: aggregator.httpServeMux,
 		}
-		rsp.WriteHeader(status)
-	})
-	for {
-		err := http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
-		log.WithError(err).Error(
-			"Readiness endpoint failed, trying to restart it...")
-		time.Sleep(1 * time.Second)
+		go func() {
+			for {
+				server := aggregator.getHTTPServer()
+				if server == nil {
+					// HTTP serving is now disabled.
+					break
+				}
+				err := server.ListenAndServe()
+				log.WithError(err).Error(
+					"Health endpoint failed, trying to restart it...")
+				time.Sleep(1 * time.Second)
+			}
+		}()
+	} else {
+		if aggregator.httpServer != nil {
+			log.Info("Health disabled.  Stopping server.")
+			aggregator.httpServer.Close()
+			aggregator.httpServer = nil
+		}
 	}
+}
+
+func (aggregator *HealthAggregator) getHTTPServer() *http.Server {
+	aggregator.mutex.Lock()
+	defer aggregator.mutex.Unlock()
+	return aggregator.httpServer
 }
