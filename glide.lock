@@ -1,5 +1,5 @@
-hash: 73720978f3346daf0ff03b086be67fd891ba718dc0f465204c90d540869dcf8b
-updated: 2017-12-14T08:41:52.839402817-08:00
+hash: 819908344e25e7408c3092e12810a3d19d89cdedf135ae90fa2379392247fb62
+updated: 2017-12-15T07:32:07.8969251Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -26,8 +26,16 @@ imports:
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
+  - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
+  - pkg/types
+  - version
+- name: github.com/coreos/go-semver
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  subpackages:
+  - semver
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
@@ -168,7 +176,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: bf4a2268435d606f4b2b9d7b4fd22dfa1dc06a10
+  version: 278192116f1b88406ec4f14f2b3c39149213bdce
   subpackages:
   - lib
   - lib/apiconfig
@@ -203,6 +211,14 @@ imports:
   - lib/selector/tokenizer
   - lib/set
   - lib/testutils
+  - lib/upgrade/converters
+  - lib/upgrade/migrator
+  - lib/upgrade/migrator/clients
+  - lib/upgrade/migrator/clients/v1/compat
+  - lib/upgrade/migrator/clients/v1/etcdv2
+  - lib/upgrade/migrator/clients/v1/k8s
+  - lib/upgrade/migrator/clients/v1/k8s/custom
+  - lib/upgrade/migrator/clients/v1/k8s/resources
   - lib/validator/v1
   - lib/validator/v3
   - lib/watch
@@ -216,13 +232,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -235,6 +251,10 @@ imports:
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+- name: github.com/ugorji/go
+  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  subpackages:
+  - codec
 - name: github.com/Workiva/go-datastructures
   version: af7475fb23e7561c87e7c1d17c12f46d732379bb
   subpackages:

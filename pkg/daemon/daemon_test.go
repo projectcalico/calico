@@ -32,6 +32,8 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/config"
 	"github.com/projectcalico/typha/pkg/syncclient"
@@ -46,6 +48,7 @@ var _ = Describe("Daemon", func() {
 	var d *TyphaDaemon
 	var datastore *mockDatastore
 	var newClientErr error
+	var flagMutex sync.Mutex
 	var earlyLoggingConfigured, loggingConfigured bool
 
 	BeforeEach(func() {
@@ -61,6 +64,8 @@ var _ = Describe("Daemon", func() {
 		}
 		d.ConfigureLogging = func(config *config.Config) {
 			Expect(config).ToNot(BeNil())
+			flagMutex.Lock()
+			defer flagMutex.Unlock()
 			loggingConfigured = true
 		}
 	})
@@ -87,6 +92,8 @@ var _ = Describe("Daemon", func() {
 
 	Describe("with a config file loaded", func() {
 		var configFile *os.File
+		var cxt context.Context
+		var cancelFunc context.CancelFunc
 
 		BeforeEach(func() {
 			var err error
@@ -99,12 +106,12 @@ var _ = Describe("Daemon", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			d.ParseCommandLineArgs([]string{"-c", configFile.Name()})
+
+			cxt, cancelFunc = context.WithTimeout(context.Background(), 10*time.Second)
 		})
-		JustBeforeEach(func() {
-			d.LoadConfiguration()
-			Expect(loggingConfigured).To(BeTrue())
-		})
+
 		AfterEach(func() {
+			cancelFunc()
 			err := os.Remove(configFile.Name())
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -113,12 +120,67 @@ var _ = Describe("Daemon", func() {
 			downSecs  = 2
 			checkTime = "2s"
 		)
-		downSecsStr := strconv.Itoa(downSecs)
 
-		It("should load the configuration and connect to the datastore", func() {
-			Eventually(datastore.getNumInitCalls).Should(Equal(1))
-			Consistently(datastore.getNumInitCalls, checkTime, "1s").Should(Equal(1))
+		Describe("with datastore up", func() {
+			JustBeforeEach(func() {
+				err := d.LoadConfiguration(cxt)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(loggingConfigured).To(BeTrue())
+			})
+
+			It("should load the configuration and connect to the datastore", func() {
+				Eventually(datastore.getNumInitCalls).Should(Equal(1))
+				Consistently(datastore.getNumInitCalls, checkTime, "1s").Should(Equal(1))
+			})
+
+			It("should create the server components", func() {
+				d.CreateServer()
+				Expect(d.SyncerToValidator).ToNot(BeNil())
+				Expect(d.Syncer).ToNot(BeNil())
+				Expect(d.SyncerToValidator).ToNot(BeNil())
+				Expect(d.ValidatorToCache).ToNot(BeNil())
+				Expect(d.Validator).ToNot(BeNil())
+				Expect(d.Cache).ToNot(BeNil())
+				Expect(d.Server).ToNot(BeNil())
+			})
+
+			It("should start a working server", func() {
+				// Bypass the config validation to tell the server to pick a random port (so we won't clash)
+				d.ConfigParams.ServerPort = syncserver.PortRandom
+				d.CreateServer()
+
+				// Start the server with a context that we can cancel.
+				cxt, cancelFn := context.WithCancel(context.Background())
+				defer cancelFn()
+				d.Start(cxt)
+
+				// Get the chosen port then start a real client in a context we can cancel.
+				port := d.Server.Port()
+				cbs := fvtests.NewRecorder()
+				client := syncclient.New(
+					fmt.Sprintf("127.0.0.1:%d", port),
+					"",
+					"",
+					"",
+					cbs,
+					nil,
+				)
+				clientCxt, clientCancelFn := context.WithCancel(context.Background())
+				defer func() {
+					clientCancelFn()
+					client.Finished.Wait()
+				}()
+				err := client.Start(clientCxt)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Send in an update at the top of the processing pipeline.
+				d.SyncerToValidator.OnStatusUpdated(bapi.InSync)
+				// It should make it all the way through to our recorder.
+				Eventually(cbs.Status).Should(Equal(bapi.InSync))
+			})
 		})
+
+		downSecsStr := strconv.Itoa(downSecs)
 
 		Describe("with datastore down for "+downSecsStr+"s", func() {
 			BeforeEach(func() {
@@ -126,7 +188,21 @@ var _ = Describe("Daemon", func() {
 				defer datastore.mutex.Unlock()
 				datastore.failInit = true
 			})
+
 			JustBeforeEach(func() {
+				// Kick off LoadConfiguration in a background thread since it will block trying to initialize the
+				// datastore.
+				go func() {
+					defer GinkgoRecover()
+					defer cancelFunc()
+					d.LoadConfiguration(cxt)
+				}()
+				Eventually(func() bool {
+					flagMutex.Lock()
+					defer flagMutex.Unlock()
+					return loggingConfigured
+				}).Should(BeTrue())
+
 				time.Sleep(downSecs * time.Second)
 			})
 
@@ -145,56 +221,10 @@ var _ = Describe("Daemon", func() {
 				})
 
 				It("should initialize the datastore", func() {
-					Eventually(datastore.getNumInitCalls).Should(Equal(numFailedInitCalls + 1))
+					Eventually(datastore.getNumInitCalls, checkTime).Should(Equal(numFailedInitCalls + 1))
 					Consistently(datastore.getNumInitCalls, checkTime, "1s").Should(Equal(numFailedInitCalls + 1))
 				})
 			})
-		})
-
-		It("should create the server components", func() {
-			d.CreateServer()
-			Expect(d.SyncerToValidator).ToNot(BeNil())
-			Expect(d.Syncer).ToNot(BeNil())
-			Expect(d.SyncerToValidator).ToNot(BeNil())
-			Expect(d.ValidatorToCache).ToNot(BeNil())
-			Expect(d.Validator).ToNot(BeNil())
-			Expect(d.Cache).ToNot(BeNil())
-			Expect(d.Server).ToNot(BeNil())
-		})
-
-		It("should start a working server", func() {
-			// Bypass the config validation to tell the server to pick a random port (so we won't clash)
-			d.ConfigParams.ServerPort = syncserver.PortRandom
-			d.CreateServer()
-
-			// Start the server with a context that we can cancel.
-			cxt, cancelFn := context.WithCancel(context.Background())
-			defer cancelFn()
-			d.Start(cxt)
-
-			// Get the chosen port then start a real client in a context we can cancel.
-			port := d.Server.Port()
-			cbs := fvtests.NewRecorder()
-			client := syncclient.New(
-				fmt.Sprintf("127.0.0.1:%d", port),
-				"",
-				"",
-				"",
-				cbs,
-				nil,
-			)
-			clientCxt, clientCancelFn := context.WithCancel(context.Background())
-			defer func() {
-				clientCancelFn()
-				client.Finished.Wait()
-			}()
-			err := client.Start(clientCxt)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Send in an update at the top of the processing pipeline.
-			d.SyncerToValidator.OnStatusUpdated(bapi.InSync)
-			// It should make it all the way through to our recorder.
-			Eventually(cbs.Status).Should(Equal(bapi.InSync))
 		})
 	})
 })
@@ -206,7 +236,7 @@ type mockDatastore struct {
 	failInit     bool
 }
 
-func (b *mockDatastore) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+func (b *mockDatastore) SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	b.syncerCalled = true
@@ -223,11 +253,77 @@ func (b *mockDatastore) EnsureInitialized(ctx context.Context, version, clusterT
 	return nil
 }
 
+// Nodes returns an interface for managing node resources.
+func (b *mockDatastore) Nodes() clientv3.NodeInterface {
+	panic("not implemented")
+}
+
+// GlobalNetworkPolicies returns an interface for managing global network policy resources.
+func (b *mockDatastore) GlobalNetworkPolicies() clientv3.GlobalNetworkPolicyInterface {
+	panic("not implemented")
+}
+
+// NetworkPolicies returns an interface for managing namespaced network policy resources.
+func (b *mockDatastore) NetworkPolicies() clientv3.NetworkPolicyInterface {
+	panic("not implemented")
+}
+
+// IPPools returns an interface for managing IP pool resources.
+func (b *mockDatastore) IPPools() clientv3.IPPoolInterface {
+	panic("not implemented")
+}
+
+// Profiles returns an interface for managing profile resources.
+func (b *mockDatastore) Profiles() clientv3.ProfileInterface {
+	panic("not implemented")
+}
+
+// HostEndpoints returns an interface for managing host endpoint resources.
+func (b *mockDatastore) HostEndpoints() clientv3.HostEndpointInterface {
+	panic("not implemented")
+}
+
+// WorkloadEndpoints returns an interface for managing workload endpoint resources.
+func (b *mockDatastore) WorkloadEndpoints() clientv3.WorkloadEndpointInterface {
+	panic("not implemented")
+}
+
+// BGPPeers returns an interface for managing BGP peer resources.
+func (b *mockDatastore) BGPPeers() clientv3.BGPPeerInterface {
+	panic("not implemented")
+}
+
+// IPAM returns an interface for managing IP address assignment and releasing.
+func (b *mockDatastore) IPAM() ipam.Interface {
+	panic("not implemented")
+}
+
+// BGPConfigurations returns an interface for managing the BGP configuration resources.
+func (b *mockDatastore) BGPConfigurations() clientv3.BGPConfigurationInterface {
+	panic("not implemented")
+}
+
+// FelixConfigurations returns an interface for managing the Felix configuration resources.
+func (b *mockDatastore) FelixConfigurations() clientv3.FelixConfigurationInterface {
+	panic("not implemented")
+}
+
+// ClusterInformation returns an interface for managing the cluster information resource.
+func (b *mockDatastore) ClusterInformation() clientv3.ClusterInformationInterface {
+	panic("not implemented")
+}
+
+func (b *mockDatastore) Backend() bapi.Client {
+	panic("not implemented")
+}
+
 func (b *mockDatastore) getNumInitCalls() int {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 	return b.initCalled
 }
+
+var _ RealClientV3 = (*mockDatastore)(nil)
 
 type dummySyncer struct {
 }
