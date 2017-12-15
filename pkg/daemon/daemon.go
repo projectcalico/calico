@@ -37,6 +37,8 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
@@ -45,8 +47,6 @@ import (
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncserver"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
-	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 const usage = `Typha, Calico's fan-out proxy.
@@ -89,10 +89,10 @@ func New() *TyphaDaemon {
 	return &TyphaDaemon{
 		NewClientV3: func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error) {
 			client, err := clientv3.New(config)
-			if err == nil {
-				return ClientV3Shim{client.(RealClientV3)}, nil
+			if err != nil {
+				return nil, err
 			}
-			return nil, err
+			return ClientV3Shim{client.(RealClientV3)}, nil
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
@@ -102,7 +102,7 @@ func New() *TyphaDaemon {
 func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) {
 	t.DoEarlyRuntimeSetup()
 	t.ParseCommandLineArgs(nil)
-	t.LoadConfiguration()
+	t.LoadConfiguration(cxt)
 	t.CreateServer()
 	t.Start(cxt)
 	t.WaitAndShutDown(cxt)
@@ -143,7 +143,7 @@ func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
 
 // LoadConfiguration uses the command-line configuration and environment variables to load our configuration.
 // It initializes the datastore connection.
-func (t *TyphaDaemon) LoadConfiguration() {
+func (t *TyphaDaemon) LoadConfiguration(ctx context.Context) error {
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
@@ -152,6 +152,10 @@ func (t *TyphaDaemon) LoadConfiguration() {
 	var datastoreConfig apiconfig.CalicoAPIConfig
 configRetry:
 	for {
+		if ctx.Err() != nil {
+			log.WithError(ctx.Err()).Warn("Context canceled.")
+			return ctx.Err()
+		}
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
@@ -214,20 +218,15 @@ configRetry:
 		// completed before we start serving requests.  Otherwise, we might serve partially-migrated data to
 		// Felix.
 
-		// Start by loading the v1 and v3 KDD client.
+		// Get a v1 client, so we can check if there's any data there to migrate.
+		log.Info("Using Kubernetes APi datastore, checking if we need to migrate v1 -> v3")
 		var civ1 clients.V1ClientInterface
-		var civ3 clientv3.Interface
 		var err error
 		for {
-			civ3, err = clientv3.New(datastoreConfig)
-			if err != nil {
-				log.WithError(err).Error("Failed to connect to Kubernetes datastore (Calico v3 API)")
-				time.Sleep(1 * time.Second)
-				continue
+			if ctx.Err() != nil {
+				log.WithError(ctx.Err()).Warn("Context canceled.")
+				return ctx.Err()
 			}
-			break
-		}
-		for {
 			civ1, err = clients.LoadKDDClientV1FromAPIConfigV3(&datastoreConfig)
 			if err != nil {
 				log.WithError(err).Error("Failed to connect to Kubernetes datastore (Calico v1 API)")
@@ -239,8 +238,12 @@ configRetry:
 
 		// Use the migration helper to determine if need to perform a migration, and if so
 		// perform the migration.
-		mh := migrator.New(civ3, civ1, nil)
+		mh := migrator.New(t.DatastoreClient, civ1, nil)
 		for {
+			if ctx.Err() != nil {
+				log.WithError(ctx.Err()).Warn("Context canceled.")
+				return ctx.Err()
+			}
 			if migrate, err := mh.ShouldMigrate(); err != nil {
 				log.WithError(err).Error("Failed to determine migration requirements")
 				time.Sleep(1 * time.Second)
@@ -253,6 +256,8 @@ configRetry:
 					continue
 				}
 				log.Info("Successfully migrated Kubernetes v1 configuration to v3")
+			} else {
+				log.Info("Migration not required.")
 			}
 		}
 	}
@@ -262,22 +267,28 @@ configRetry:
 	// the liveness healthcheck will time out and start to fail.  That's fairly reasonable, being stuck here
 	// likely means we have some persistent datastore connection issue and restarting Typha may solve that.
 	for {
+		if ctx.Err() != nil {
+			log.WithError(ctx.Err()).Warn("Context canceled.")
+			return ctx.Err()
+		}
 		var err error
 		func() { // Closure to avoid leaking the defer.
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			log.Info("Initializing the datastore (if needed).")
+			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			err = t.DatastoreClient.EnsureInitialized(ctx, "", "typha")
 		}()
 		if err != nil {
 			log.WithError(err).Error("Failed to initialize datastore")
 			time.Sleep(1 * time.Second)
-			log.WithError(err).Info("Trying to initialize the datastore...")
 			continue
 		}
+		log.Info("Datastore initialized.")
 
 		break
 	}
 	t.ConfigParams = configParams
+	return nil
 }
 
 // CreateServer creates and configures (but does not start) the server components.
@@ -289,7 +300,7 @@ func (t *TyphaDaemon) CreateServer() {
 
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
 	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
-	t.Syncer = t.DatastoreClient.Syncer(t.SyncerToValidator)
+	t.Syncer = t.DatastoreClient.SyncerByIface(t.SyncerToValidator)
 	log.Debugf("Created Syncer: %#v", t.Syncer)
 
 	// Create the validator, which sits between the syncer and the cache.
@@ -370,28 +381,24 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 	}
 }
 
-// ClientV3Shim adapts the real v3 client interface to our mockable interface.
+// ClientV3Shim wraps a real client, allowing its syncer to be mocked.
 type ClientV3Shim struct {
-	C RealClientV3
+	RealClientV3
 }
 
-func (s ClientV3Shim) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
-	return s.C.EnsureInitialized(ctx, calicoVersion, clusterType)
-}
-
-func (s ClientV3Shim) Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return s.C.Backend().Syncer(callbacks)
+func (s ClientV3Shim) SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	return s.Backend().Syncer(callbacks)
 }
 
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
 type DatastoreClient interface {
-	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
-	Syncer(callbacks bapi.SyncerCallbacks) bapi.Syncer
+	clientv3.Interface
+	SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
-// RealClientV3 is the subset of the clientv3.Interface that we care about.
+// RealClientV3 is the real API of the V3 client, including the semi-private API that we use to get the backend.
 type RealClientV3 interface {
-	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
+	clientv3.Interface
 	Backend() bapi.Client
 }
 
