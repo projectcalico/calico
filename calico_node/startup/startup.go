@@ -14,7 +14,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -39,7 +42,7 @@ import (
 
 const (
 	DEFAULT_IPV4_POOL_CIDR              = "192.168.0.0/16"
-	DEFAULT_IPV6_POOL_CIDR              = "fd80:24e2:f998:72d6::/64"
+	DEFAULT_IPV6_POOL_CIDR              = ""
 	DEFAULT_IPV4_POOL_NAME              = "default-ipv4-ippool"
 	DEFAULT_IPV6_POOL_NAME              = "default-ipv6-ippool"
 	AUTODETECTION_METHOD_FIRST          = "first-found"
@@ -539,6 +542,37 @@ func configureASNumber(node *api.Node) {
 	}
 }
 
+// getIPv6Pool return a random generated ULA IPv6 prefix generated following rfc4193#section-3.2.2
+// The Pool is generated with a concatenation of Unix timestamps + fe80:: base IPv6 hased with SHA-1
+func getIPv6Pool() string {
+	adm := os.Getenv("IP_AUTODETECTION_METHOD")
+	cidr := autoDetectCIDR(adm, 6)
+	eui := cidr.String()
+	if eui != "" {
+		date := fmt.Sprint(time.Now().Unix())
+		d := []byte(date)
+		h := sha1.New()
+		h.Write(d)
+		h.Write([]byte(strings.Replace(eui, ":", "", -1)))
+		sum := hex.EncodeToString(h.Sum(nil))
+		// IPv6 Random Pool generation
+		buf := &bytes.Buffer{}
+		buf.WriteString("fd")
+		buf.WriteString(sum[30:32])
+		buf.WriteString(":")
+		buf.WriteString(sum[32:36])
+		buf.WriteString(":")
+		buf.WriteString(sum[36:40])
+		buf.WriteString(":0000::/64")
+		final := fmt.Sprint(buf.String())
+		return final
+	} else {
+		log.Error("Unable to fetch fe80: IPv6 address, Is IPv6 enabled on the host ?")
+		final := ""
+		return final
+	}
+}
+
 // configureIPPools ensures that default IP pools are created (unless explicitly
 // requested otherwise).
 func configureIPPools(ctx context.Context, client client.Interface) {
@@ -595,7 +629,7 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 
 	// Read IPV6 CIDR from env if set and parse then check it for errors
 	if ipv6Pool == "" {
-		ipv6Pool = DEFAULT_IPV6_POOL_CIDR
+		ipv6Pool = getIPv6Pool()
 	}
 	_, ipv6Cidr, err := cnet.ParseCIDR(ipv6Pool)
 	if err != nil || ipv6Cidr.Version() != 6 {
