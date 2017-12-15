@@ -46,7 +46,21 @@ toc:
   - title: Troubleshooting / FAQ
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
-    path: /getting-started/kubernetes/upgrade
+    section:
+    - title: Overview
+      path: /getting-started/kubernetes/upgrade/
+    - title: Install and configure calico-upgrade
+      path: /getting-started/kubernetes/upgrade/setup
+    - title: Test the migration
+      path: /getting-started/kubernetes/upgrade/test
+    - title: Migrate your data
+      path: /getting-started/kubernetes/upgrade/migrate
+    - title: Upgrade components
+      path: /getting-started/kubernetes/upgrade/upgrade
+    - title: Convert your calicoctl manifests
+      path: /getting-started/kubernetes/upgrade/convert
+    - title: Troubleshooting
+      path: /getting-started/kubernetes/upgrade/troubleshooting
 
 - title: OpenShift
   section:
