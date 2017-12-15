@@ -451,9 +451,8 @@ var _ = Describe("health tests", func() {
 			Consistently(typhaReady, "10s", "1s").ShouldNot(BeGood())
 		})
 
-		It("typha should report live", func() {
-			Eventually(typhaLiveness, "5s", "100ms").Should(BeGood())
-			Consistently(typhaLiveness, "10s", "1s").Should(BeGood())
+		It("typha should not report live", func() {
+			Consistently(typhaLiveness(), "10s", "1s").ShouldNot(BeGood())
 		})
 	})
 })

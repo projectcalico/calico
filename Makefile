@@ -49,7 +49,7 @@ ARCH?=amd64
 ifeq ($(ARCH),amd64)
 	ARCHTAG?=
 	GO_BUILD_VER?=v0.9
-	FV_TYPHAIMAGE?=calico/typha:v0.6.0-alpha1-17-gc6c5726
+	FV_TYPHAIMAGE?=calico/typha:v0.6.0-beta1-16-g512a0f2
 endif
 
 ifeq ($(ARCH),ppc64le)
