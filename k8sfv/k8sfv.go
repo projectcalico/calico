@@ -171,7 +171,7 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		err = calicoClient.EnsureInitialized(
 			ctx,
-			"test-version",
+			"v3.0.0-test",
 			"felix-fv,typha", // Including typha to prevent config churn
 		)
 

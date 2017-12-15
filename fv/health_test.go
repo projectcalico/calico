@@ -188,7 +188,7 @@ var _ = BeforeSuite(func() {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		err = calicoClient.EnsureInitialized(
 			ctx,
-			"test-version",
+			"v3.0.0-test",
 			"felix-fv,typha", // Including typha in clusterType to prevent config churn
 		)
 

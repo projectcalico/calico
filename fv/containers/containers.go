@@ -458,7 +458,7 @@ func mustInitDatastore(client client.Interface) {
 		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 		err := client.EnsureInitialized(
 			ctx,
-			"test-version",
+			"v3.0.0-test",
 			"felix-fv",
 		)
 		log.WithError(err).Info("EnsureInitialized result")
