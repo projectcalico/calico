@@ -146,6 +146,7 @@ func init() {
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
 	registerFieldValidator("portName", validatePortName)
 	registerFieldValidator("mustBeNil", validateMustBeNil)
+	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -248,6 +249,11 @@ func validatePortName(v *validator.Validate, topStruct reflect.Value, currentStr
 func validateMustBeNil(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	log.WithField("field", field.String()).Debugf("Validate field must be nil")
 	return field.IsNil()
+}
+
+func validateMustBeFalse(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	log.WithField("field", field.String()).Debugf("Validate field must be false")
+	return !field.Bool()
 }
 
 func validateIPVersion(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {

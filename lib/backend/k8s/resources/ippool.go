@@ -74,5 +74,11 @@ func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 		ipp.Spec.IPIP = nil
 	}
 
+	// Take a logical OR of the v1 NATOutgoing field with the v3 NATOutgoing.
+	ipp.Spec.NATOutgoing = ipp.Spec.NATOutgoingV1 || ipp.Spec.NATOutgoing
+
+	// Set v1 NatOutgoing to false since we've already converted it to v3 NatOutgoing.
+	ipp.Spec.NATOutgoingV1 = false
+
 	return ipp, nil
 }
