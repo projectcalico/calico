@@ -1,5 +1,5 @@
 hash: 24ba71445fe98111b7f2e2362019852ce8ed1d38b5efbe6ee3e49f098fe95a7d
-updated: 2017-11-30T14:32:21.758634427-08:00
+updated: 2017-12-15T15:17:43.74922996-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,7 +11,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: 694728c496e22dfa5719c78ff23cc982e15bcb2f
+  version: 1e1dbb23924672c6cd72c62ee0db2b45f778da71
   subpackages:
   - client
   - pkg/pathutil
@@ -76,7 +76,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -135,7 +135,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d5ff4aa493340f0239d9b9e557e11603b3f84532
+  version: da7b693f04138e96c3d3a4300cbd038b8eaac404
   subpackages:
   - lib
   - lib/api
