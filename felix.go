@@ -144,6 +144,22 @@ func main() {
 	buildInfoLogCxt.Info("Felix starting up")
 	log.Infof("Command line arguments: %v", arguments)
 
+	// Health monitoring, for liveness and readiness endpoints.  The following loop can take a
+	// while before the datastore reports itself as ready - for example when there is data that
+	// needs to be migrated from a previous version - and we still want to Felix to report
+	// itself as live (but not ready) while we are waiting for that.  So we create the
+	// aggregator upfront and will start serving health status over HTTP as soon as we see _any_
+	// config that indicates that.
+	healthAggregator := health.NewHealthAggregator()
+
+	const healthName = "felix-startup"
+
+	// Register this function as a reporter of liveness and readiness, with no timeout.
+	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
+
+	// Make an initial report that says we're live but not yet ready.
+	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
@@ -181,6 +197,10 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+
+		// Each time round this loop, check that we're serving health reports if we should
+		// be, or cancel any existing server if we should not be serving any more.
+		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
 
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
@@ -231,6 +251,12 @@ configRetry:
 		break configRetry
 	}
 
+	// We're now both live and ready.
+	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+
+	// Enable or disable the health HTTP server according to coalesced config.
+	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
+
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
 	logutils.ConfigureLogging(configParams)
@@ -238,9 +264,6 @@ configRetry:
 	// again.
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
-
-	// Health monitoring, for liveness and readiness endpoints.
-	healthAggregator := health.NewHealthAggregator()
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
@@ -411,11 +434,6 @@ configRetry:
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
 		go servePrometheusMetrics(configParams)
-	}
-
-	if configParams.HealthEnabled {
-		log.WithField("port", configParams.HealthPort).Info("Health enabled.  Starting server.")
-		go healthAggregator.ServeHTTP(configParams.HealthPort)
 	}
 
 	// On receipt of SIGUSR1, write out heap profile.
