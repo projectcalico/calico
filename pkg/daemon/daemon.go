@@ -99,13 +99,17 @@ func New() *TyphaDaemon {
 	}
 }
 
-func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) {
+func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) error {
 	t.DoEarlyRuntimeSetup()
 	t.ParseCommandLineArgs(nil)
-	t.LoadConfiguration(cxt)
+	err := t.LoadConfiguration(cxt)
+	if err != nil { // Should only happen if context is canceled.
+		return err
+	}
 	t.CreateServer()
 	t.Start(cxt)
 	t.WaitAndShutDown(cxt)
+	return nil
 }
 
 // DoEarlyRuntimeSetup does early runtime/logging configuration that needs to happen before we do any work.
@@ -152,9 +156,9 @@ func (t *TyphaDaemon) LoadConfiguration(ctx context.Context) error {
 	var datastoreConfig apiconfig.CalicoAPIConfig
 configRetry:
 	for {
-		if ctx.Err() != nil {
-			log.WithError(ctx.Err()).Warn("Context canceled.")
-			return ctx.Err()
+		if err := ctx.Err(); err != nil {
+			log.WithError(err).Warn("Context canceled.")
+			return err
 		}
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
@@ -188,14 +192,13 @@ configRetry:
 		err = configParams.Validate()
 		if err != nil {
 			log.WithError(err).Error(
-				"Failed to parse/validate configuration from datastore.")
+				"Failed to parse/validate configuration.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
 
 		// We should now have enough config to connect to the datastore.
 		datastoreConfig = configParams.DatastoreConfig()
-
 		t.DatastoreClient, err = t.NewClientV3(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to datastore")
@@ -214,18 +217,18 @@ configRetry:
 		"Successfully loaded configuration.")
 
 	if datastoreConfig.Spec.DatastoreType == apiconfig.Kubernetes {
-		// Special case: for KDD v2.x to v3.x upgrade, we need to ensure that the datastore migration has
-		// completed before we start serving requests.  Otherwise, we might serve partially-migrated data to
+		// Special case: for KDD v1 datamodel to v3 datamodel upgrade, we need to ensure that the datastore migration
+		// has completed before we start serving requests.  Otherwise, we might serve partially-migrated data to
 		// Felix.
 
 		// Get a v1 client, so we can check if there's any data there to migrate.
-		log.Info("Using Kubernetes APi datastore, checking if we need to migrate v1 -> v3")
+		log.Info("Using Kubernetes API datastore, checking if we need to migrate v1 -> v3")
 		var civ1 clients.V1ClientInterface
 		var err error
 		for {
-			if ctx.Err() != nil {
-				log.WithError(ctx.Err()).Warn("Context canceled.")
-				return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				log.WithError(err).Warn("Context canceled.")
+				return err
 			}
 			civ1, err = clients.LoadKDDClientV1FromAPIConfigV3(&datastoreConfig)
 			if err != nil {
@@ -240,9 +243,9 @@ configRetry:
 		// perform the migration.
 		mh := migrator.New(t.DatastoreClient, civ1, nil)
 		for {
-			if ctx.Err() != nil {
-				log.WithError(ctx.Err()).Warn("Context canceled.")
-				return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				log.WithError(err).Warn("Context canceled.")
+				return err
 			}
 			if migrate, err := mh.ShouldMigrate(); err != nil {
 				log.WithError(err).Error("Failed to determine migration requirements")
@@ -256,9 +259,9 @@ configRetry:
 					continue
 				}
 				log.Info("Successfully migrated Kubernetes v1 configuration to v3")
-			} else {
-				log.Info("Migration not required.")
 			}
+			log.Info("Migration not required.")
+			break
 		}
 	}
 
@@ -267,9 +270,9 @@ configRetry:
 	// the liveness healthcheck will time out and start to fail.  That's fairly reasonable, being stuck here
 	// likely means we have some persistent datastore connection issue and restarting Typha may solve that.
 	for {
-		if ctx.Err() != nil {
-			log.WithError(ctx.Err()).Warn("Context canceled.")
-			return ctx.Err()
+		if err := ctx.Err(); err != nil {
+			log.WithError(err).Warn("Context canceled.")
+			return err
 		}
 		var err error
 		func() { // Closure to avoid leaking the defer.

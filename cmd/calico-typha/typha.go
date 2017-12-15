@@ -17,6 +17,8 @@ package main
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/typha/pkg/daemon"
 )
 
@@ -45,5 +47,6 @@ import (
 // daemon.
 func main() {
 	typha := daemon.New()
-	typha.InitializeAndServeForever(context.Background())
+	err := typha.InitializeAndServeForever(context.Background())
+	logrus.WithError(err).Panic("InitializeAndServeForever returned")
 }
