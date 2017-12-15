@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 var etcdContainer *containers.Container
@@ -453,6 +454,40 @@ var _ = Describe("health tests", func() {
 
 		It("typha should not report live", func() {
 			Consistently(typhaLiveness(), "10s", "1s").ShouldNot(BeGood())
+		})
+	})
+
+	Describe("with datastore not ready", func() {
+		BeforeEach(func() {
+			info, err := calicoClient.ClusterInformation().Get(
+				context.Background(),
+				"default",
+				options.GetOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			log.Infof("info = %#v", info)
+			notReady := false
+			info.Spec.DatastoreReady = &notReady
+			_, err = calicoClient.ClusterInformation().Update(
+				context.Background(),
+				info,
+				options.SetOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			startFelix("", "", "")
+		})
+
+		AfterEach(func() {
+			felixContainer.Stop()
+		})
+
+		It("felix should not report ready", func() {
+			Consistently(felixReady, "10s", "1s").ShouldNot(BeGood())
+		})
+
+		It("felix should report live", func() {
+			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
+			Consistently(felixLiveness, "10s", "1s").Should(BeGood())
 		})
 	})
 })
