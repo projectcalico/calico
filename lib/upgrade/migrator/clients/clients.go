@@ -78,29 +78,16 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
 	}
 
-	var apiConfigv1 *apiv1.CalicoAPIConfig
 	var bv1 V1ClientInterface
 	if apiConfigv3.Spec.DatastoreType == apiconfig.Kubernetes {
 		log.Info("v3 API is using Kubernetes API - use same for v1")
-		kc := &apiv1.KubeConfig{
-			Kubeconfig:               apiConfigv3.Spec.Kubeconfig,
-			K8sAPIEndpoint:           apiConfigv3.Spec.K8sAPIEndpoint,
-			K8sKeyFile:               apiConfigv3.Spec.K8sKeyFile,
-			K8sCertFile:              apiConfigv3.Spec.K8sCertFile,
-			K8sCAFile:                apiConfigv3.Spec.K8sCAFile,
-			K8sAPIToken:              apiConfigv3.Spec.K8sAPIToken,
-			K8sInsecureSkipTLSVerify: apiConfigv3.Spec.K8sInsecureSkipTLSVerify,
-		}
-
-		// Create the backend etcdv2 client (v1 API). We wrap this in the compat module to handle
-		// multi-key backed resources.
-		bv1, err = k8s.NewKubeClient(kc)
+		bv1, err = LoadKDDClientV1FromAPIConfigV3(apiConfigv3)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error with apiconfigv1: %v", err)
 		}
 	} else {
 		// Grab the Calico v1 API config (which must be specified).
-		apiConfigv1, err = loadClientConfigV1(v1Config)
+		apiConfigv1, err := loadClientConfigV1(v1Config)
 		if apiConfigv1.Spec.DatastoreType != apiv1.EtcdV2 {
 			return nil, nil, fmt.Errorf("expecting apiconfigv1 datastore to be 'etcdv2', got '%s'", apiConfigv1.Spec.DatastoreType)
 		}
@@ -120,6 +107,27 @@ func LoadClients(v3Config, v1Config string) (clientv3.Interface, V1ClientInterfa
 		return nil, nil, fmt.Errorf("error with apiconfigv3: %v", err)
 	}
 	return cv3, bv1, nil
+}
+
+// LoadKDDClientV1FromAPIConfigV3 loads the KDD v1 client given the
+// v3 API Config (since the v1 and v3 client use the same access information).
+func LoadKDDClientV1FromAPIConfigV3(apiConfigv3 *apiconfig.CalicoAPIConfig) (V1ClientInterface, error) {
+	if apiConfigv3.Spec.DatastoreType != apiconfig.Kubernetes {
+		return nil, fmt.Errorf("not valid for this datastore type: %s", apiConfigv3.Spec.DatastoreType)
+	}
+	kc := &apiv1.KubeConfig{
+		Kubeconfig:               apiConfigv3.Spec.Kubeconfig,
+		K8sAPIEndpoint:           apiConfigv3.Spec.K8sAPIEndpoint,
+		K8sKeyFile:               apiConfigv3.Spec.K8sKeyFile,
+		K8sCertFile:              apiConfigv3.Spec.K8sCertFile,
+		K8sCAFile:                apiConfigv3.Spec.K8sCAFile,
+		K8sAPIToken:              apiConfigv3.Spec.K8sAPIToken,
+		K8sInsecureSkipTLSVerify: apiConfigv3.Spec.K8sInsecureSkipTLSVerify,
+	}
+
+	// Create the backend etcdv2 client (v1 API). We wrap this in the compat module to handle
+	// multi-key backed resources.
+	return k8s.NewKubeClient(kc)
 }
 
 // loadClientConfigV1 loads the ClientConfig from the specified file (if specified)

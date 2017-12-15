@@ -51,7 +51,7 @@ var (
 	// more restrictive naming requirements.
 	nameRegex = regexp.MustCompile("^" + nameSubdomainFmt + "$")
 
-	containerIDFmt = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
+	containerIDFmt   = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
 	containerIDRegex = regexp.MustCompile("^" + containerIDFmt + "$")
 
 	// NetworkPolicy names must either be a simple DNS1123 label format (nameLabelFmt), or
