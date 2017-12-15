@@ -289,10 +289,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		go servePrometheusMetrics(t.ConfigParams)
 	}
 
-	if t.ConfigParams.HealthEnabled {
-		log.WithField("port", t.ConfigParams.HealthPort).Info("Health enabled.  Starting server.")
-		go t.healthAggregator.ServeHTTP(t.ConfigParams.HealthPort)
-	}
+	go t.healthAggregator.ServeHTTP(t.ConfigParams.HealthEnabled, t.ConfigParams.HealthPort)
 }
 
 // WaitAndShutDown waits for OS signals or context.Done() and exits as appropriate.
