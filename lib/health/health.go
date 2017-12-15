@@ -33,7 +33,7 @@ type reporterState struct {
 	// The health indicators that this reporter reports.
 	reports HealthReport
 
-	// Expiry time for this reporter's reports.
+	// Expiry time for this reporter's reports.  Zero means that reports never expire.
 	timeout time.Duration
 
 	// The most recent report.
@@ -106,14 +106,14 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		// Reset Live to false if that reporter is registered to report liveness and hasn't
 		// recently said that it is live.
 		if summary.Live && reporter.reports.Live && (!reporter.latest.Live ||
-			(time.Since(reporter.timestamp) > reporter.timeout)) {
+			(reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)) {
 			summary.Live = false
 		}
 
 		// Reset Ready to false if that reporter is registered to report readiness and
 		// hasn't recently said that it is ready.
 		if summary.Ready && reporter.reports.Ready && (!reporter.latest.Ready ||
-			(time.Since(reporter.timestamp) > reporter.timeout)) {
+			(reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)) {
 			summary.Ready = false
 		}
 	}
