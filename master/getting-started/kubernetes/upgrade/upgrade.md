@@ -1,74 +1,58 @@
 ---
-title: Upgrading Calico components
+title: Upgrading Calico 
 no_canonical: true
 ---
   
 
-1. Upgrade each component to the latest v3.0.x release.
+## About upgrading {{site.prodname}}
 
-   - If you are running with a full node-to-node mesh then you will need to update one 
-     node at a time to minimize the effect of any route flaps.
-     
-   - If you are running with one or more route reflectors or using Calico for policy only 
-     then you should be able to do a rolling update with multiple nodes upgrading at 
-     the same time.
+Once you have migrated the {{site.prodname}} data to the etcdv3 server, you can upgrade 
+{{site.prodname}}. The procedure varies according to how you originally installed {{site.prodname}}.
 
-   > **Note**: While Calico installs typically require just a single command and YAML file,
-   > we recommend upgrading components one at a time. 
-   {: .alert .alert-info}
+- [Upgrading a self-hosted installation](#upgrading-a-self-hosted-installation)
 
-1. [Visit the v3.0 installation documentation to locate and download the v3.0 manifest appropriate to your configuration](/master/getting-started/kubernetes/installation/hosted/).
+- [Upgrading a custom installation](#upgrading-a-custom-installation)
 
-1. Copy the `calico/kube-controllers` deployment section and paste it into a new file called `new-controllers.yaml`.
+Once you have upgraded {{site.prodname}}, you can [complete the upgrade](#completing-the-upgrade)
 
-1. Use the following command to upgrade the `calico/kube-controllers`.
 
-   ```
-   kubectl apply -f new-controllers.yaml
-   ```
+## Upgrading a self-hosted installation
 
-   > **Note**: The deployment must use `.spec.strategy.type==Recreate` to
-   > ensure that at most one instance of the controller is running at a time.
-   {: .alert .alert-info}
+1. [Refer to the v3.0 documentation and obtain the manifest that matches your installation
+   method.](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/)
 
-1. Copy the Calico DaemonSet section and paste it into a new file called `calico-node.yaml`.
-
-1. Use the following command to upgrade `calico/node`.
+1. Use the following command to initiate a rolling update, after replacing `<v3-manifest>` with
+   the name of the manifest file obtained in the previous step.
 
    ```
-   kubectl apply -f new-controllers.yaml
+   kubectl apply -f <v3-manifest>
    ```
-
-1. Perform the following steps on each node one at a time.
-
-1. First make the node unschedulable:
+1. Check the status of the upgrade as follows.
 
    ```
-   kubectl cordon node-01
+   kubectl rollout status ds/calico-node -n kube-system
    ```
+   
+   For more information about this, refer to the [Kubernetes documentation](https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/#step-4-watching-the-rolling-update-status)
+   
+1. After waiting some time and ensuring that the upgrade succeeded and no problems ensued,
+   continue to [Completing the upgrade](#completing-the-upgrade).
 
-1. Delete the calico-node pod running on the cordoned node and wait for the
-   DaemonSet controller to deploy a replacement.
-
-   ```
-   kubectl delete pod -n kube-system calico-node-ajzy6e3t
-   ```
-
-1. Once the new calico-node Pod has started, make the node schedulable again.
-
-   ```
-   kubectl uncordon node-01
-`  ```
+   If an error occurs during the upgrade, refer to [Downgrading Calico](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
 
 
-   > **Note**: You may want to pre-fetch the new Docker image to ensure the new
-   > node image is started within BIRD's graceful restart period of 90 seconds.
-   {: .alert .alert-info}
+## Upgrading a custom installation
 
-     
+_Docs for this coming soon!_
+
+## Completing the upgrade
+
 1. When all of your calico/node instances and orchestrator plugins are running v3.0.x 
    then complete the upgrade by running `calico-upgrade complete`. After this, you can
-   once again add endpoints. 
+   once again schedule pods and make changes to configuration and policy. 
+
+   If you experience errors after running `calico-upgrade complete`, such as an inability
+   to schedule pods, [downgrade Calico as soon as possible](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    
 1. Remove any existing `calicoctl` instances and install the new `calicoctl`.
 

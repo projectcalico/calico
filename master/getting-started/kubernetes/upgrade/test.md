@@ -3,20 +3,39 @@ title: Testing the data migration
 no_canonical: true
 ---
 
-1. Run `calico-upgrade dry-run` to validate the migration.
+1. To launch a test run of the data migration, use the `dry-run` command.
 
-   > **Note**: By default, `calico-upgrade` creates a directory called `calico-upgrade-report` 
-   > in the current working directory to store its report files. If you want it to write
-   > its files to a different location, include a `--output-dir` flag in your command and 
-   > specify the alternate path.
-   {: .alert .alert-info}
+   **Syntax**
+   ```
+   calico-upgrade[-darwin-amd64|-windows-amd64.exe] dry-run [--output-dir=path/directory] [--apiconfigv1 path/file] [--apiconfigv3 path/file]
+   ```
+   
+   **Reference**
+   
+   | Flag | Discussion 
+   | ---- | ---------- 
+   | <code>&#8209;&#8209;output&#8209;dir</code> | By default, `calico-upgrade` creates a directory called `calico-upgrade-report` in the current working directory to store its report files. If you want it to write its files to a different location, include a `--output-dir` flag in your command and specify the alternate path. 
+   | <code>&#8209;&#8209;apiconfigv1</code> | By default, `calico-upgrade` looks for the etcdv2 configuration file at `/etc/calico/apiconfigv1.cfg`. If you have a configuration file in a different place or if it has a different name, include the `--apiconfigv1` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag. 
+   | <code>&#8209;&#8209;apiconfigv3</code> | By default, `calico-upgrade` looks for the etcdv3 configuration file at `/etc/calico/apiconfigv3.cfg`. If you have a configuration file in a different place or if it has a different name, include the `--apiconfigv3` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
+   
+   **Example**
+   ```
+   calico-upgrade-darwin-amd64 dry-run --output-dir=temp --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
+   ```
+
 
 1. If you get the message `Successfully validated v1 to v3 conversion`, continue to
    [Migrate your data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate).
 
    Otherwise, check the generated reports and resolve any issues that are causing
-   errors. In some cases this may require adding and deleting an entry 
-   to modify its name (e.g. if the migrated name is too long, or there are 
-   clashing names in the migrated config). Once you have resolved the issues, return
-   again to step 1 in this procedure. 
+   errors. 
    
+   - **Validation errors**: {{site.prodname}} {{site.data.versions[page.version].first.title}}
+     features stricter validation than previous versions. For example, it checks that names
+     don't exceed the maximum length and that they don't conflict with each other. If you run 
+     into an error of this kind, you can change the name as needed and restart the test.
+     
+   - **Other errors**: if you receive any other errors, especially if they pertain to a 
+     workload endpoint, contact Tigera for assistance. 
+   
+

@@ -1,35 +1,49 @@
 ---
-title: Migrating data from etcdv2 to etcdv3
+title: Migrating Calico data
 no_canonical: true
 ---
 
 > **Important**: Once you begin the migration, stop using `calicoctl` or 
-> otherwise modifying the etcdv2 datastore. Such changes are unlikely to 
-> be migrated to the new datastore.
+> otherwise modifying the etcdv2 datastore. Any changes to etcdv2
+> data will not be migrated to the new datastore.
 {: .alert .alert-danger}
 
-1. Run `calico-upgrade start` to start the v1 to v3 data migration. This begins 
-   an interactive session. While existing connectivity will continue as before,
-   you cannot add any new endpoints until the migration and upgrade complete.
+
+1. To begin an interactive data migration session, use the `start` command. While 
+   existing connectivity will continue as before, you cannot add any new endpoints 
+   until the migration and upgrade complete.
+
+   **Syntax**
+   ```
+   calico-upgrade[-darwin-amd64|-windows-amd64.exe] start [--apiconfigv1 path/file] [--apiconfigv3 path/file]
+   ```
+   
+   **Reference**
+   
+   | Flag | Discussion 
+   | ---- | ---------- 
+   | <code>&#8209;&#8209;apiconfigv1</code> | By default, `calico-upgrade` looks for the etcdv2 configuration file at `/etc/calico/apiconfigv1.cfg`. If you have a configuration file in a different place or if it has a different name, include the `--apiconfigv1` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
+   | <code>&#8209;&#8209;apiconfigv3</code> | By default, `calico-upgrade` looks for the etcdv3 configuration file at `/etc/calico/apiconfigv3.cfg`. If you have a configuration file in a different place or if it has a different name, include the `--apiconfigv3` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
+   
+   **Example**
+   ```
+   calico-upgrade-darwin-amd64 start --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
+   ```
 
 1. Check the generated reports for details of conversions.
 
-   - If this errors, read logs carefully for any user action.  The script will 
-     always try to leave the system in a sensible state (by aborting the upgrade 
-     in the event of a failure part way through) - but there may be times where 
-     the abort fails (e.g. transient connectivity issue).  The instructions will 
-     indicate if the `calico-upgrade abort` script needs to be re-run.
+   - **Errors**: If the `start` command returns one or more errors, review the 
+     logs carefully. If it fails partway through, it will attempt to abort the
+     process. In rare circumstances, such as due to transient connectivity
+     issues, it may be unable to abort. In this case, it may instruct you to
+     manually run the `calico-upgrade abort` command.
 
-   - If this fails part way through then some v3 data may have been written to 
-     etcdv3.  When re-attempting the upgrade, the validation will fail due to v3 
-     config being present.  You can either remove all v3 config prior to retrying 
-     the upgrade, or use the `--ignore-v3-data` option on the upgrade command to force 
-     the upgrade. However, it is possible that the v3 datastore could end up with 
-     stray data in this situation.
-     
-   - After this is started the `calico/node` pods may be restarted by Kubernetes and 
-     enter the `CrashLoopBackOff` state. This is expected behavior. They will remain 
-     this way until the upgrade is complete.
+   - **Failures**: If the migration fails to complete, the etcdv3 datastore may
+     contain some of your data. This will cause future attempts to run the 
+     `calico-upgrade start` command to fail. You must either [manually remove this 
+     data from the etcdv3 datastore](/{{page.version}}/getting-started/kubernetes/upgrade/delete) 
+     before trying again or include the `--ignore-v3-data` flag with the 
+     `calico-upgrade start` command.
 
 1. Once you have succeeded in migrating your data from etcdv2 to etcdv3, continue 
    to [Upgrading](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade).
