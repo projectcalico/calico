@@ -259,6 +259,7 @@ configRetry:
 					continue
 				}
 				log.Info("Successfully migrated Kubernetes v1 configuration to v3")
+				break
 			}
 			log.Info("Migration not required.")
 			break
