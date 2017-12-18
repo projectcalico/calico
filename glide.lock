@@ -1,5 +1,5 @@
-hash: 819908344e25e7408c3092e12810a3d19d89cdedf135ae90fa2379392247fb62
-updated: 2017-12-15T07:32:07.8969251Z
+hash: bcec49541fdfbdf8cf2a4d960fd712085066d2b9dcf112e1ed0b43afd83e4d9b
+updated: 2017-12-18T00:36:12.20661173Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: 1817cd4bea52af76542157eeabd74b057d1a199e
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -176,7 +176,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 278192116f1b88406ec4f14f2b3c39149213bdce
+  version: 63aca6ef49bdbe39d1688297d4660307d6959435
   subpackages:
   - lib
   - lib/apiconfig
@@ -238,7 +238,7 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: f98634e408857669d61064b283c4cde240622865
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -261,7 +261,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
