@@ -16,6 +16,7 @@ package converters
 
 import (
 	"fmt"
+	"net"
 
 	log "github.com/sirupsen/logrus"
 
@@ -114,7 +115,8 @@ func (_ Node) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 			if bv.BGPIPv4Net != nil {
 				// Stored network is normalised, so copy across the
 				// IP separately.
-				apiNode.Spec.BGP.IPv4Address = bv.BGPIPv4Net.String()
+				ipAndNet := net.IPNet{IP: bv.BGPIPv4Addr.IP, Mask: bv.BGPIPv4Net.Mask}
+				apiNode.Spec.BGP.IPv4Address = ipAndNet.String()
 			} else {
 				// No network is stored, assume a full masked network.
 				apiNode.Spec.BGP.IPv4Address = bv.BGPIPv4Addr.Network().String()
@@ -127,8 +129,8 @@ func (_ Node) BackendV1ToAPIV3(d *model.KVPair) (Resource, error) {
 			if bv.BGPIPv6Net != nil {
 				// Stored network is normalised, so copy across the
 				// IP separately.
-				apiNode.Spec.BGP.IPv6Address = bv.BGPIPv6Net.String()
-				//apiNode.Spec.BGP.IPv6Address.IP = bv.BGPIPv6Addr.IP
+				ipAndNet := net.IPNet{IP: bv.BGPIPv6Addr.IP, Mask: bv.BGPIPv6Net.Mask}
+				apiNode.Spec.BGP.IPv6Address = ipAndNet.String()
 			} else {
 				// No network is stored, assume a full masked network.
 				apiNode.Spec.BGP.IPv6Address = bv.BGPIPv6Addr.Network().String()

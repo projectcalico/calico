@@ -29,10 +29,14 @@ import (
 )
 
 var asn, _ = numorstring.ASNumberFromString("1")
-var netv4 = cnet.MustParseNetwork("192.168.1.1/32")
-var netv6 = cnet.MustParseCIDR("fed::/64")
-var ipv4Addr = cnet.MustParseIP("192.168.1.1")
-var ipv6Addr = cnet.MustParseIP("fed::")
+var ipv4String = "192.168.1.1/24"
+var ipv4IPNet = cnet.MustParseCIDR(ipv4String)
+var ipv4IPNetMask = ipv4IPNet.Network()
+var ipv4IP = cnet.MustParseIP("192.168.1.1")
+var ipv6String = "fed::5/64"
+var ipv6IPNet = cnet.MustParseCIDR(ipv6String)
+var ipv6IPNetMask = ipv6IPNet.Network()
+var ipv6IP = cnet.MustParseIP("fed::5")
 
 var nodeTable = []struct {
 	description string
@@ -49,8 +53,8 @@ var nodeTable = []struct {
 			Spec: apiv1.NodeSpec{
 				BGP: &apiv1.NodeBGPSpec{
 					ASNumber:    &asn,
-					IPv4Address: &netv4,
-					IPv6Address: &netv6,
+					IPv4Address: &ipv4IPNet,
+					IPv6Address: &ipv6IPNet,
 				},
 			},
 		},
@@ -60,10 +64,10 @@ var nodeTable = []struct {
 			},
 			Value: &model.Node{
 				BGPASNumber: &asn,
-				BGPIPv4Addr: &ipv4Addr,
-				BGPIPv4Net:  &netv4,
-				BGPIPv6Addr: &ipv6Addr,
-				BGPIPv6Net:  &netv6,
+				BGPIPv4Addr: &ipv4IP,
+				BGPIPv4Net:  ipv4IPNetMask,
+				BGPIPv6Addr: &ipv6IP,
+				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
 		v3API: apiv3.Node{
@@ -73,8 +77,8 @@ var nodeTable = []struct {
 			Spec: apiv3.NodeSpec{
 				BGP: &apiv3.NodeBGPSpec{
 					ASNumber:    &asn,
-					IPv4Address: "192.168.1.1/32",
-					IPv6Address: "fed::/64",
+					IPv4Address: ipv4String,
+					IPv6Address: ipv6String,
 				},
 			},
 		},
@@ -88,8 +92,8 @@ var nodeTable = []struct {
 			Spec: apiv1.NodeSpec{
 				BGP: &apiv1.NodeBGPSpec{
 					ASNumber:    &asn,
-					IPv4Address: &netv4,
-					IPv6Address: &netv6,
+					IPv4Address: &ipv4IPNet,
+					IPv6Address: &ipv6IPNet,
 				},
 			},
 		},
@@ -99,10 +103,10 @@ var nodeTable = []struct {
 			},
 			Value: &model.Node{
 				BGPASNumber: &asn,
-				BGPIPv4Addr: &ipv4Addr,
-				BGPIPv4Net:  &netv4,
-				BGPIPv6Addr: &ipv6Addr,
-				BGPIPv6Net:  &netv6,
+				BGPIPv4Addr: &ipv4IP,
+				BGPIPv4Net:  ipv4IPNetMask,
+				BGPIPv6Addr: &ipv6IP,
+				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
 		v3API: apiv3.Node{
@@ -112,8 +116,8 @@ var nodeTable = []struct {
 			Spec: apiv3.NodeSpec{
 				BGP: &apiv3.NodeBGPSpec{
 					ASNumber:    &asn,
-					IPv4Address: "192.168.1.1/32",
-					IPv6Address: "fed::/64",
+					IPv4Address: ipv4String,
+					IPv6Address: ipv6String,
 				},
 			},
 		},
@@ -126,7 +130,7 @@ var nodeTable = []struct {
 			},
 			Spec: apiv1.NodeSpec{
 				BGP: &apiv1.NodeBGPSpec{
-					IPv6Address: &netv6,
+					IPv6Address: &ipv6IPNet,
 				},
 			},
 		},
@@ -135,8 +139,8 @@ var nodeTable = []struct {
 				Hostname: "my-node",
 			},
 			Value: &model.Node{
-				BGPIPv6Addr: &ipv6Addr,
-				BGPIPv6Net:  &netv6,
+				BGPIPv6Addr: &ipv6IP,
+				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
 		v3API: apiv3.Node{
@@ -145,7 +149,7 @@ var nodeTable = []struct {
 			},
 			Spec: apiv3.NodeSpec{
 				BGP: &apiv3.NodeBGPSpec{
-					IPv6Address: "fed::/64",
+					IPv6Address: ipv6String,
 				},
 			},
 		},
@@ -158,7 +162,7 @@ var nodeTable = []struct {
 			},
 			Spec: apiv1.NodeSpec{
 				BGP: &apiv1.NodeBGPSpec{
-					IPv4Address: &netv4,
+					IPv4Address: &ipv4IPNet,
 				},
 			},
 		},
@@ -167,8 +171,8 @@ var nodeTable = []struct {
 				Hostname: "my-node",
 			},
 			Value: &model.Node{
-				BGPIPv4Addr: &ipv4Addr,
-				BGPIPv4Net:  &netv4,
+				BGPIPv4Addr: &ipv4IP,
+				BGPIPv4Net:  ipv4IPNetMask,
 			},
 		},
 		v3API: apiv3.Node{
@@ -177,7 +181,7 @@ var nodeTable = []struct {
 			},
 			Spec: apiv3.NodeSpec{
 				BGP: &apiv3.NodeBGPSpec{
-					IPv4Address: "192.168.1.1/32",
+					IPv4Address: ipv4String,
 				},
 			},
 		},
@@ -190,7 +194,7 @@ var nodeTable = []struct {
 			},
 			Spec: apiv1.NodeSpec{
 				BGP: &apiv1.NodeBGPSpec{
-					IPv4Address: &netv4,
+					IPv4Address: &ipv4IPNet,
 				},
 				OrchRefs: []apiv1.OrchRef{
 					{Orchestrator: "orch1"},
@@ -203,8 +207,8 @@ var nodeTable = []struct {
 				Hostname: "my-node",
 			},
 			Value: &model.Node{
-				BGPIPv4Addr: &ipv4Addr,
-				BGPIPv4Net:  &netv4,
+				BGPIPv4Addr: &ipv4IP,
+				BGPIPv4Net:  ipv4IPNetMask,
 				OrchRefs: []model.OrchRef{
 					{Orchestrator: "orch1"},
 					{Orchestrator: "orch2", NodeName: "orch2NodeName"},
@@ -217,7 +221,7 @@ var nodeTable = []struct {
 			},
 			Spec: apiv3.NodeSpec{
 				BGP: &apiv3.NodeBGPSpec{
-					IPv4Address: "192.168.1.1/32",
+					IPv4Address: ipv4String,
 				},
 				OrchRefs: []apiv3.OrchRef{
 					{Orchestrator: "orch1"},
@@ -296,8 +300,8 @@ func TestFailToConvertInvalidKVToAPIV3Node(t *testing.T) {
 		resource := &model.KVPair{
 			Key: model.IPPoolKey{},
 			Value: &model.Node{
-				BGPIPv4Addr: &ipv4Addr,
-				BGPIPv4Net:  &netv4,
+				BGPIPv4Addr: &ipv4IP,
+				BGPIPv4Net:  ipv4IPNetMask,
 			},
 		}
 		p := Node{}
@@ -332,8 +336,8 @@ var nodeKVtoV3Table = []struct {
 			},
 			Value: &model.Node{
 				BGPASNumber: &asn,
-				BGPIPv4Addr: &ipv4Addr,
-				BGPIPv6Addr: &ipv6Addr,
+				BGPIPv4Addr: &ipv4IP,
+				BGPIPv6Addr: &ipv6IP,
 			},
 		},
 		v3API: apiv3.Node{
@@ -345,7 +349,7 @@ var nodeKVtoV3Table = []struct {
 					ASNumber:    &asn,
 					IPv4Address: "192.168.1.1/32",
 					// Note this is /128 instead of /64
-					IPv6Address: "fed::/128",
+					IPv6Address: "fed::5/128",
 				},
 			},
 		},
