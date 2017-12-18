@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	matchBlock = regexp.MustCompile("^/?/calico/ipam/v2/assignment/ipv./block/([^/]+)$")
+	matchBlock = regexp.MustCompile("^/?calico/ipam/v2/assignment/ipv./block/([^/]+)$")
 	typeBlock  = reflect.TypeOf(AllocationBlock{})
 )
 
