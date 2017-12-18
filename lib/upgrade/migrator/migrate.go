@@ -952,7 +952,7 @@ func (m *migrationHelper) migrateIPAMData() error {
 
 	// Create/Apply the converted entries into the v3 datastore.
 	m.statusBullet("storing IPAM data in v3 format")
-	for _, kvp := range kvps {
+	for _, kvp := range kvpsv3 {
 		if err := m.applyToBackend(kvp); err != nil {
 			m.statusError("Error writing IPAM data to v3 datastore")
 			return fmt.Errorf("error storing converted IPAM data: %v", err)

@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	matchHandle = regexp.MustCompile("^/?/calico/ipam/v2/handle/([^/]+)$")
+	matchHandle = regexp.MustCompile("^/?calico/ipam/v2/handle/([^/]+)$")
 	typeHandle  = reflect.TypeOf(IPAMHandle{})
 )
 
@@ -68,7 +68,7 @@ func (options IPAMHandleListOptions) defaultPathRoot() string {
 
 func (options IPAMHandleListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get IPAM handle key from %s", path)
-	r := matchBlock.FindAllStringSubmatch(path, -1)
+	r := matchHandle.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		log.Debugf("%s didn't match regex", path)
 		return nil
