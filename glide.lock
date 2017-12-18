@@ -1,5 +1,5 @@
-hash: 24d7ae9a28f37c7a4c51db3f80c9051a485f015aa0789e40d9623443240f66bb
-updated: 2017-12-14T09:27:59.218854661-08:00
+hash: 075884526819a19610845a240be72609b3ac14763da6a212ffde1a6e2b40e4a1
+updated: 2017-12-18T01:05:02.645268002Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -193,7 +193,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: bf4a2268435d606f4b2b9d7b4fd22dfa1dc06a10
+  version: 63aca6ef49bdbe39d1688297d4660307d6959435
   subpackages:
   - lib
   - lib/apiconfig
@@ -232,7 +232,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: d86a4fb3a57aa992a1521a07b06ff7349f511de8
+  version: 87db62901b2754f9e0f390f64b1aef16f44d60a3
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -247,13 +247,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: f98634e408857669d61064b283c4cde240622865
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -267,7 +267,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: f67b75edbf5e3bb7dfe70bb788610693a71be3d1
+  version: 3ff4c2196115d804aa1c747781ad2b2a5c73e140
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -275,7 +275,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
