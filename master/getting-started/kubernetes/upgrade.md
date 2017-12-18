@@ -1,5 +1,5 @@
 ---
-redirect_to: master/getting-started/kubernetes/upgrade/
+redirect_to: /master/getting-started/kubernetes/upgrade/
 ---
 
 <!--- Page was deleted, now it just performs a redirect

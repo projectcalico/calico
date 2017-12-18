@@ -55,12 +55,14 @@ toc:
       path: /getting-started/kubernetes/upgrade/test
     - title: Migrate your data
       path: /getting-started/kubernetes/upgrade/migrate
-    - title: Upgrade components
+    - title: Upgrade Calico
       path: /getting-started/kubernetes/upgrade/upgrade
-    - title: Convert your calicoctl manifests
+    - title: Converting your calicoctl manifests
       path: /getting-started/kubernetes/upgrade/convert
-    - title: Troubleshooting
-      path: /getting-started/kubernetes/upgrade/troubleshooting
+    - title: Deleting old data
+      path: /getting-started/kubernetes/upgrade/delete
+    - title: Downgrading Calico
+      path: /getting-started/kubernetes/upgrade/downgrade
 
 - title: OpenShift
   section:
