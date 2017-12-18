@@ -26,8 +26,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  repo: https://github.com/neiljerram/libcalico-go
-  version: stoppable-health
+  version: 63aca6ef49bdbe39d1688297d4660307d6959435
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -44,7 +43,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: d86a4fb3a57aa992a1521a07b06ff7349f511de8
+  version: 87db62901b2754f9e0f390f64b1aef16f44d60a3
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
