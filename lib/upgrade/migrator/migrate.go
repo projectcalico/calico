@@ -388,6 +388,16 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 	}
 
 	if m.clientv1.IsKDD() {
+		m.statusBullet("skipping Node resources - these do not need migrating")
+	} else {
+		m.statusBullet("handling Node resources")
+		// Query and convert the Nodes
+		if err := m.queryAndConvertV1ToV3Nodes(data); err != nil {
+			return nil, err
+		}
+	}
+
+	if m.clientv1.IsKDD() {
 		m.statusBullet("skipping BGPPeer (global) resources - these do not need migrating")
 	} else {
 		m.statusBullet("handling BGPPeer (global) resources")
@@ -426,16 +436,6 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		if err := m.queryAndConvertV1ToV3Resources(
 			data, model.IPPoolListOptions{}, converters.IPPool{}, noFilter,
 		); err != nil {
-			return nil, err
-		}
-	}
-
-	if m.clientv1.IsKDD() {
-		m.statusBullet("skipping Node resources - these do not need migrating")
-	} else {
-		m.statusBullet("handling Node resources")
-		// Query and convert the Nodes
-		if err := m.queryAndConvertV1ToV3Nodes(data); err != nil {
 			return nil, err
 		}
 	}
@@ -616,7 +616,6 @@ func (m *migrationHelper) queryAndConvertGlobalBGPConfigV1ToV3(data *MigrationDa
 func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error {
 	// Start by querying the nodes and converting them, we don't add the nodes to the list
 	// of results just yet.
-	var nodes []converters.Resource
 	err := m.queryAndConvertV1ToV3Resources(
 		data, model.NodeListOptions{}, converters.Node{}, noFilter,
 	)
@@ -641,18 +640,18 @@ func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error 
 		addrs[converters.ConvertNodeName(k.Hostname)] = kvp.Value.(string)
 	}
 
-	// Update the node resources to include the tunnel addresses.
-	for _, node := range nodes {
-		nr := node.(*apiv3.Node)
-		addr := addrs[nr.Name]
-		if addr == "" || nr.Spec.BGP == nil {
-			continue
+	// Update the node resources to include the tunnel addresses.  Loop through the converted
+	// resources and modify any node that has a corresponding tunnel address (it's a pointer
+	// so we can adjust the in-situ resource).
+	for _, r := range data.Resources {
+		if nr, ok := r.(*apiv3.Node); ok {
+			addr := addrs[nr.Name]
+			if addr == "" || nr.Spec.BGP == nil {
+				continue
+			}
+			nr.Spec.BGP.IPv4IPIPTunnelAddr = addr
 		}
-		nr.Spec.BGP.IPv4IPIPTunnelAddr = addr
 	}
-
-	// Now the nodes are updated, append them to the full list of results.
-	data.Resources = append(data.Resources, nodes...)
 
 	return nil
 }
