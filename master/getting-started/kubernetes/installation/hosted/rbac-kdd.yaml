@@ -50,8 +50,10 @@ rules:
       - watch
   - apiGroups: ["crd.projectcalico.org"]
     resources:
+      - globalfelixconfigs
       - felixconfigurations
       - bgppeers
+      - globalbgpconfigs
       - bgpconfigurations
       - ippools
       - globalnetworkpolicies
