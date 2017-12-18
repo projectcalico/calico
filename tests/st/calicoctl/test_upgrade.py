@@ -17,6 +17,7 @@ import os
 import random
 
 import yaml
+import json
 from nose_parameterized import parameterized
 
 from tests.st.utils.utils import calicoctl, \
@@ -65,28 +66,29 @@ tests = [
 ]
 random.shuffle(tests)
 
-
-@parameterized(tests)
-def test_converter(testname, fail_expected, error_text=None):
+def _test_converter(testname, fail_expected, error_text=None, format="yaml"):
     """
     Convert a v1 object to v3, then apply the result and read it back.
     """
-    test_converter.__name__ = testname
     # Let's start every test afresh
     wipe_etcd(get_ip())
     testdata = data[testname]
 
     # Convert data to V3 API using the tool under test
-    rc = calicoctl("convert", data=testdata)
+    rc = calicoctl("convert -o %s" % format, data=testdata, format=format)
     if not fail_expected:
         logger.debug("Trying to convert manifest from V1 to V3")
         rc.assert_no_error()
-        # Get the converted yaml and clean it up (remove fields we don't care about)
-        converted_data = clean_calico_data(yaml.safe_load(rc.output))
+        if format == "yaml":
+            parsed_output = yaml.safe_load(rc.output)
+        else:
+            parsed_output = json.loads(rc.output)
+        # Get the converted data and clean it up (remove fields we don't care about)
+        converted_data = clean_calico_data(parsed_output)
         original_resource = rc
 
         # Apply the converted data
-        rc = calicoctl("create", data=original_resource.output)
+        rc = calicoctl("create", data=original_resource.output, format=format)
         logger.debug("Trying to create resource using converted manifest")
         rc.assert_no_error()
         rc = calicoctl("get %s %s -o yaml" % (converted_data['kind'], name(converted_data)))
@@ -99,6 +101,22 @@ def test_converter(testname, fail_expected, error_text=None):
                 extra_keys_to_remove=['projectcalico.org/orchestrator', 'namespace']
             )
         )
-        original_resource.assert_data(cleaned_output)
+        original_resource.assert_data(cleaned_output, format=format)
     else:
         rc.assert_error(error_text)
+
+@parameterized(tests)
+def test_converter_yaml(testname, fail_expected, error_text=None):
+    """
+    Convert a v1 object to v3, then apply the result and read it back.
+    """
+    test_converter_yaml.__name__ = "yaml_" +testname
+    _test_converter(testname, fail_expected, error_text=error_text, format="yaml")
+
+@parameterized(tests)
+def test_converter_json(testname, fail_expected, error_text=None):
+    """
+    Convert a v1 object to v3, then apply the result and read it back.
+    """
+    test_converter_json.__name__ = "json_" + testname
+    _test_converter(testname, fail_expected, error_text=error_text, format="json")
