@@ -21,8 +21,10 @@ import:
   version: ^1.1.0
   subpackages:
   - gexec
+- package: github.com/prometheus/procfs
+  version: f98634e408857669d61064b283c4cde240622865
 - package: github.com/projectcalico/libcalico-go
-  version: f2f6115910c93430d8d333f7b89421ab1691ff0f
+  version: a06c8bdc578a0d64fd12fbb5a70bcc8fad53e501
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -43,6 +45,8 @@ import:
   - fv
   - fv.containers
 - package: github.com/coreos/etcd
-  version: v3.2.7
+  version: v3.3.0
 - package: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
+- package: golang.org/x/net
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
