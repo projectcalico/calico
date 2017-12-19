@@ -8,9 +8,9 @@ no_canonical: true
 ## Prerequisites
 
 - {{site.prodname}} {{site.data.versions[page.version].first.title}} supports upgrades from 
-  {{site.prodname}} [v2.6.4](https://github.com/projectcalico/calico/releases/tag/v2.6.4) or 
+  {{site.prodname}} [v2.6.4](https://github.com/projectcalico/calico/releases) or 
   later. You must [upgrade](/v2.6/getting-started/kubernetes/upgrade) to a tagged release of 
-  {{site.prodname}} [v2.6.4](https://github.com/projectcalico/calico/releases/tag/v2.6.4) or 
+  {{site.prodname}} [v2.6.4](https://github.com/projectcalico/calico/releases) or 
   later before you can upgrade to {{site.prodname}} {{site.data.versions[page.version].first.title}}. 
 
 - An [etcdv3 cluster](https://coreos.com/etcd/docs/latest/). 
