@@ -65,7 +65,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Kubernetes will have a profile for each of the namespaces that is configured.
 			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				expectedCacheSize += 5
+				expectedCacheSize += 6
 				syncTester.ExpectCacheSize(expectedCacheSize)
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
@@ -101,6 +101,10 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						InboundRules:  []model.Rule{{Action: "allow"}},
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
+				})
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
+					Value: "10.10.10.1",
 				})
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
@@ -145,19 +149,19 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					model.GlobalConfigKey{Name: "ClusterGUID"},
 					MatchRegexp("[a-f0-9]{32}"),
 				)
-				expectedCacheSize += 2
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
+					Value: "10.10.10.1",
+				})
+				expectedCacheSize += 3
 			}
 
 			// The HostIP will be added for the IPv4 address
-			expectedCacheSize += 2
+			expectedCacheSize += 1
 			ip := net.MustParseIP("1.2.3.4")
 			syncTester.ExpectData(model.KVPair{
 				Key:   model.HostIPKey{Hostname: "127.0.0.1"},
 				Value: &ip,
-			})
-			syncTester.ExpectData(model.KVPair{
-				Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
-				Value: "10.10.10.1",
 			})
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
