@@ -191,6 +191,10 @@ configRetry:
 			continue configRetry
 		}
 
+		// Each time round this loop, check that we're serving health reports if we should
+		// be, or cancel any existing server if we should not be serving any more.
+		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
+
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
 		datastoreConfig := configParams.DatastoreConfig()
