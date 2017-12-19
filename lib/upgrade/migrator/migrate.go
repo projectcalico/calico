@@ -509,6 +509,7 @@ func (m *migrationHelper) queryAndConvertV1ToV3Resources(
 		if filterOut(kvp.Key) {
 			log.Infof("Filter out Policy Controller created resource: %s", kvp.Key)
 			data.HandledByPolicyCtrl = append(data.HandledByPolicyCtrl, kvp.Key)
+			continue
 		}
 
 		r, err := converter.BackendV1ToAPIV3(kvp)
