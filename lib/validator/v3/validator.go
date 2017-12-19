@@ -707,9 +707,9 @@ func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel)
 	ns := structLevel.CurrentStruct.Interface().(api.NodeSpec)
 
 	if ns.BGP != nil {
-		if ns.BGP.IPv4Address == "" && ns.BGP.IPv6Address == "" {
+		if ns.BGP.IPv4Address == "" && ns.BGP.IPv6Address == "" && ns.BGP.IPv4IPIPTunnelAddr == "" {
 			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address),
-				"BGP.IPv4Address", "", reason("no BGP IP address and subnet specified"))
+				"BGP", "", reason("BGP IP or IPv4IPIPTunnelAddr should be set"))
 		}
 	}
 }
