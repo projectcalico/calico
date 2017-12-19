@@ -199,10 +199,13 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 		}
 	}
 
-	// If any of the BGP configuration is present, then set the BGP struct in the Spec, and
-	// set the IPv4 IPIP tunnel address.
-	if bgpSpec.IPv4Address != "" || bgpSpec.IPv6Address != "" || bgpSpec.ASNumber != nil {
-		bgpSpec.IPv4IPIPTunnelAddr = getTunIp(k8sNode)
+	if k8sNode.Spec.PodCIDR != "" {
+		// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod
+		// CIDR.
+		bgpSpec.IPv4IPIPTunnelAddr = getTunnelIp(k8sNode)
+		calicoNode.Spec.BGP = bgpSpec
+	} else if bgpSpec.IPv4Address != "" || bgpSpec.IPv6Address != "" || bgpSpec.ASNumber != nil {
+		log.Warnf("Node %s does not have podCIDR to use to calculate the IPIP Tunnel Address", k8sNode.Name)
 		calicoNode.Spec.BGP = bgpSpec
 	}
 
@@ -255,12 +258,7 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 
 // Calculate the IPIP Tunnel IP address to use for a given Node.  We use the first IP in the
 // node CIDR for our tunnel address.
-func getTunIp(n *kapiv1.Node) string {
-	if n.Spec.PodCIDR == "" {
-		log.Warnf("Node %s does not have podCIDR to use to calculate the IPIP Tunnel Address", n.Name)
-		return ""
-	}
-
+func getTunnelIp(n *kapiv1.Node) string {
 	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
 	if err != nil {
 		log.Warnf("Invalid podCIDR for HostConfig: %s, %s", n.Name, n.Spec.PodCIDR)
