@@ -170,6 +170,16 @@ func main() {
 	var numClientsCreated int
 configRetry:
 	for {
+		if numClientsCreated > 60 {
+			// We don't have a way to close datastore connection so, if we reconnected after
+			// a failure to load config, restart felix to avoid leaking connections.
+			// Use Panic to flush the log buffer.  Use defer to control the exit RC.
+			func() { // closure avoids a linter false positive.
+				defer os.Exit(configChangedRC)
+				log.Panic("Restarting to avoid leaking datastore connections")
+			}()
+		}
+
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
