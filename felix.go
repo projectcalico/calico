@@ -148,7 +148,7 @@ func main() {
 	const healthName = "felix-startup"
 
 	// Register this function as a reporter of liveness and readiness, with no timeout.
-	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: false}, 0)
+	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
 	// Make an initial report that says we're live but not yet ready.
 	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
