@@ -77,6 +77,28 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(asn.String()).To(Equal("2546"))
 	})
 
+	It("should parse a k8s Node to a Calico Node with podCIDR but no BGP config", func() {
+		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
+		node := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNode",
+				Labels:          l,
+				ResourceVersion: "1234",
+			},
+			Status: k8sapi.NodeStatus{},
+			Spec: k8sapi.NodeSpec{
+				PodCIDR: "10.0.0.0/24",
+			},
+		}
+
+		n, err := K8sNodeToCalico(&node)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Ensure we got the correct values.
+		ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+		Expect(ipInIpAddr).To(Equal("10.0.0.1"))
+	})
+
 	It("Should parse and remove BGP info when given Calico Node with empty BGP spec", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		k8sNode := &k8sapi.Node{

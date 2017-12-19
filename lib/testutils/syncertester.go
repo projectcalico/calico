@@ -196,8 +196,8 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 
 // ExpectCacheSize verifies that the cache size is as expected.
 func (st *SyncerTester) ExpectCacheSize(size int) {
-	Eventually(st.CacheSnapshot, 6*time.Second, 500*time.Millisecond).Should(HaveLen(size))
-	Consistently(st.CacheSnapshot).Should(HaveLen(size), "Cache size incorrect")
+	EventuallyWithOffset(1, st.CacheSnapshot, 6*time.Second, 500*time.Millisecond).Should(HaveLen(size))
+	ConsistentlyWithOffset(1, st.CacheSnapshot).Should(HaveLen(size), "Cache size incorrect")
 }
 
 // ExpectData verifies that a KVPair is in the cache.  If a Revision is not supplied, then
