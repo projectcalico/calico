@@ -22,7 +22,7 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: f58e21ead99b6da5b01074873e099b97ef017ca7
+  version: f2f6115910c93430d8d333f7b89421ab1691ff0f
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
@@ -38,7 +38,7 @@ import:
   - tools/clientcmd
 - package: github.com/mcuadros/go-version
 - package: github.com/projectcalico/felix
-  version: 357cdd9e7fc181f56c6c197201aa39a6b0ba83c2
+  version: fa15f1776244d1db9e30fcd99f51b8b99be509c8
   subpackages:
   - fv
   - fv.containers
