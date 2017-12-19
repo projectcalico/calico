@@ -1,5 +1,5 @@
-hash: 66c27050d15dca6d1059568ca1468cde1fecc7bd8a07a9527f06587a785e5364
-updated: 2017-12-14T21:34:49.926815073-06:00
+hash: 03287b060b417c3af37abc6e653b65118c1a43ad488dee5e964d76c5ea897c82
+updated: 2017-12-19T01:20:52.063740679Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 1817cd4bea52af76542157eeabd74b057d1a199e
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -117,7 +117,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
   subpackages:
   - pbutil
 - name: github.com/onsi/ginkgo
@@ -142,7 +142,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c1fb6682134d162f37c13f42e7157653a7de7d2b
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 278192116f1b88406ec4f14f2b3c39149213bdce
+  version: f2f6115910c93430d8d333f7b89421ab1691ff0f
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -218,17 +218,17 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
+  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -246,7 +246,7 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/crypto
-  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -272,7 +272,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 1d2aa6dbdea45adaaebb9905d0666e4537563829
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
   - unix
   - windows
