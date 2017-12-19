@@ -167,6 +167,7 @@ func main() {
 	var backendClient bapi.Client
 	var configParams *config.Config
 	var typhaAddr string
+	var numClientsCreated int
 configRetry:
 	for {
 		// Load locally-defined config, including the datastore connection
@@ -211,15 +212,23 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig, hostConfig, err := loadConfigFromDatastore(
-			ctx, backendClient, configParams.FelixHostname)
-		if err != nil {
-			log.WithError(err).Error("Failed to get config from datastore")
-			time.Sleep(1 * time.Second)
-			continue configRetry
+		numClientsCreated++
+		for {
+			globalConfig, hostConfig, err := loadConfigFromDatastore(
+				ctx, backendClient, configParams.FelixHostname)
+			if err == ErrNotReady {
+				log.Warn("Waiting for datastore to be initialized (or migrated)")
+				time.Sleep(1 * time.Second)
+				continue
+			} else if err != nil {
+				log.WithError(err).Error("Failed to get config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+			configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
+			configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
+			break
 		}
-		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
-		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
 		configParams.Validate()
 		if configParams.Err != nil {
 			log.WithError(configParams.Err).Error(
@@ -239,6 +248,7 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+		numClientsCreated++
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
 		typhaAddr, err = discoverTyphaAddr(configParams)
@@ -249,6 +259,14 @@ configRetry:
 		}
 
 		break configRetry
+	}
+
+	if numClientsCreated > 2 {
+		// We don't have a way to close datastore connection so, if we reconnected after
+		// a failure to load config, restart felix to avoid leaking connections.
+		// Use Panic to flush the log buffer.  Use defer to control the exit RC.
+		defer os.Exit(configChangedRC)
+		log.Panic("Restarting to avoid leaking datastore connections")
 	}
 
 	// We're now both live and ready.
@@ -578,6 +596,10 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt.Fatal("Exiting immediately")
 }
 
+var (
+	ErrNotReady = errors.New("datastore is not ready or has not been initialised")
+)
+
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, hostname string,
 ) (globalConfig, hostConfig map[string]string, err error) {
@@ -604,7 +626,7 @@ func loadConfigFromDatastore(
 	}
 	if !ready {
 		// The ClusterInformation struct should contain the ready flag, if it is not set, abort.
-		err = errors.New("datastore is not ready or has not been initialised")
+		err = ErrNotReady
 		return
 	}
 	err = getAndMergeConfig(
