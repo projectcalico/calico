@@ -129,5 +129,7 @@ The full list of possible configuration file options and environment variables f
 >   useful if the non-prefixed names clash with existing environment variables.
 {: .alert .alert-info}
 
+## Next steps
+
 After configuring `calico-upgrade` to communicate with the existing etcdv2 instance
 and the target etcdv3 cluster, continue to [Testing the data migration](/{{page.version}}/getting-started/kubernetes/upgrade/test).
