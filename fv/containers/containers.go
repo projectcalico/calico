@@ -180,8 +180,10 @@ func (c *Container) GetHostname() string {
 
 func (c *Container) GetPIDs(processName string) []int {
 	out, err := c.ExecOutput("pgrep", fmt.Sprintf("^%s$", processName))
-	Expect(err).NotTo(HaveOccurred())
-	Expect(out).NotTo(BeEmpty())
+	if err != nil {
+		log.WithError(err).Warn("pgrep failed, assuming no PIDs")
+		return nil
+	}
 	var pids []int
 	for _, line := range strings.Split(out, "\n") {
 		if line == "" {
