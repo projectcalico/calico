@@ -17,6 +17,8 @@ import:
 - package: github.com/projectcalico/go-json
   subpackages:
   - json
+- package: golang.org/x/net
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
 - package: golang.org/x/sys
   version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
@@ -28,7 +30,7 @@ import:
   - ssh/terminal
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: c63959043fbfe61db5795781c7a6c848cf2cbe0d
+  version: a06c8bdc578a0d64fd12fbb5a70bcc8fad53e501
   subpackages:
   - lib/apis/v3
   - lib/clientv3
@@ -46,4 +48,6 @@ import:
 - package: google.golang.org/grpc
   version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
 - package: github.com/coreos/etcd
-  version: v3.2.7
+  version: v3.3.0
+- package: github.com/prometheus/procfs
+  version: f98634e408857669d61064b283c4cde240622865
