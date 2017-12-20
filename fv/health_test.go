@@ -36,13 +36,9 @@ package fv_test
 
 import (
 	"context"
-	"crypto/tls"
-	"errors"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -50,170 +46,22 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/k8sapiserver"
 	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var etcdContainer *containers.Container
-var apiServerContainer *containers.Container
-var k8sAPIEndpoint string
-var badK8sAPIEndpoint string
-var k8sCertFilename string
-var calicoClient client.Interface
-var k8sClient *kubernetes.Clientset
-
-var (
-	// This transport is based on  http.DefaultTransport, with InsecureSkipVerify set.
-	insecureTransport = &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:        100,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	insecureHTTPClient = http.Client{
-		Transport: insecureTransport,
-	}
-)
-
-var _ = BeforeSuite(func() {
-	log.Info(">>> BeforeSuite <<<")
-	var err error
-
-	// Start etcd, which will back the k8s API server.
-	etcdContainer = containers.RunEtcd()
-	Expect(etcdContainer).NotTo(BeNil())
-
-	// Start the k8s API server.
-	//
-	// The clients in this test - Felix, Typha and the test code itself - all connect
-	// anonymously to the API server, because (a) they aren't running in pods in a proper
-	// Kubernetes cluster, and (b) they don't provide client TLS certificates, and (c) they
-	// don't use any of the other non-anonymous mechanisms that Kubernetes supports.  But, as of
-	// 1.6, the API server doesn't allow anonymous users with the default "AlwaysAllow"
-	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
-	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
-	// "cluster-admin" role).
-	apiServerContainer = containers.Run("apiserver",
-		containers.RunOpts{AutoRemove: true},
-		utils.Config.K8sImage,
-		"/hyperkube", "apiserver",
-		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
-		"--service-cluster-ip-range=10.101.0.0/16",
-		//"-v=10",
-		"--authorization-mode=RBAC",
-	)
-	Expect(apiServerContainer).NotTo(BeNil())
-
-	// Allow anonymous connections to the API server.  We also use this command to wait
-	// for the API server to be up.
-	Eventually(func() (err error) {
-		err = apiServerContainer.ExecMayFail(
-			"kubectl", "create", "clusterrolebinding",
-			"anonymous-admin",
-			"--clusterrole=cluster-admin",
-			"--user=system:anonymous",
-		)
-		if err != nil {
-			log.Info("Waiting for API server to accept cluster role binding")
-		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-
-	// Copy CRD registration manifest into the API server container, and apply it.
-	err = apiServerContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
-	Expect(err).NotTo(HaveOccurred())
-	err = apiServerContainer.ExecMayFail("kubectl", "apply", "-f", "/crds.yaml")
-	Expect(err).NotTo(HaveOccurred())
-
-	k8sAPIEndpoint = fmt.Sprintf("https://%s:6443", apiServerContainer.IP)
-	badK8sAPIEndpoint = fmt.Sprintf("https://%s:1234", apiServerContainer.IP)
-	Eventually(func() (err error) {
-		var resp *http.Response
-		resp, err = insecureHTTPClient.Get(k8sAPIEndpoint + "/apis/crd.projectcalico.org/v1/globalfelixconfigs")
-		if resp.StatusCode != 200 {
-			err = errors.New(fmt.Sprintf("Bad status (%v) for CRD GET request", resp.StatusCode))
-		}
-		if err != nil || resp.StatusCode != 200 {
-			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
-		}
-		resp.Body.Close()
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-	log.Info("API server is up.")
-
-	// Get the API server's cert, which we need to pass to Felix/Typha
-	k8sCertFilename = "/tmp/" + apiServerContainer.Name + ".crt"
-	Eventually(func() (err error) {
-		cmd := utils.Command("docker", "cp",
-			apiServerContainer.Name+":/var/run/kubernetes/apiserver.crt",
-			k8sCertFilename,
-		)
-		err = cmd.Run()
-		if err != nil {
-			log.WithError(err).Warn("Waiting for API cert to appear")
-		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-
-	Eventually(func() (err error) {
-		calicoClient, err = client.New(apiconfig.CalicoAPIConfig{
-			Spec: apiconfig.CalicoAPIConfigSpec{
-				DatastoreType: apiconfig.Kubernetes,
-				KubeConfig: apiconfig.KubeConfig{
-					K8sAPIEndpoint:           k8sAPIEndpoint,
-					K8sInsecureSkipTLSVerify: true,
-				},
-			},
-		})
-		if err != nil {
-			log.WithError(err).Warn("Waiting to create Calico client")
-			return
-		}
-
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		err = calicoClient.EnsureInitialized(
-			ctx,
-			"v3.0.0-test",
-			"felix-fv,typha", // Including typha in clusterType to prevent config churn
-		)
-
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-
-	Eventually(func() (err error) {
-		k8sClient, err = kubernetes.NewForConfig(&rest.Config{
-			Transport: insecureTransport,
-			Host:      "https://" + apiServerContainer.IP + ":6443",
-		})
-		if err != nil {
-			log.WithError(err).Warn("Waiting to create k8s client")
-		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-})
-
-var _ = AfterSuite(func() {
-	apiServerContainer.Stop()
-	etcdContainer.Stop()
-})
-
 var _ = Describe("health tests", func() {
+
+	var k8sAPIServer *k8sapiserver.Server
+
+	BeforeEach(func() {
+		k8sAPIServer = k8sapiserver.SetUp()
+	})
+
 	var felixContainer *containers.Container
 	var felixReady, felixLiveness func() int
 
@@ -255,17 +103,17 @@ var _ = Describe("health tests", func() {
 				},
 			}
 			var err error
-			pod, err = k8sClient.CoreV1().Pods("default").Create(pod)
+			pod, err = k8sAPIServer.Client.CoreV1().Pods("default").Create(pod)
 			Expect(err).NotTo(HaveOccurred())
 			pod.Status.PodIP = "10.0.0.1"
-			_, err = k8sClient.CoreV1().Pods("default").UpdateStatus(pod)
+			_, err = k8sAPIServer.Client.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 			podsToCleanUp = append(podsToCleanUp, testPodName)
 		}
 
 		AfterEach(func() {
 			for _, name := range podsToCleanUp {
-				err := k8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+				err := k8sAPIServer.Client.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
 			podsToCleanUp = nil
@@ -337,7 +185,7 @@ var _ = Describe("health tests", func() {
 			"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
 			"-e", "K8S_API_ENDPOINT="+endpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-			"-v", k8sCertFilename+":/tmp/apiserver.crt",
+			"-v", k8sAPIServer.CertFileName+":/tmp/apiserver.crt",
 			utils.Config.TyphaImage,
 			"calico-typha")
 		Expect(typhaContainer).NotTo(BeNil())
@@ -359,10 +207,10 @@ var _ = Describe("health tests", func() {
 			"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
 			"-e", "FELIX_DebugSimulateCalcGraphHangAfter="+calcGraphHangTime,
 			"-e", "FELIX_DebugSimulateDataplaneHangAfter="+dataplaneHangTime,
-			"-e", "K8S_API_ENDPOINT="+k8sAPIEndpoint,
+			"-e", "K8S_API_ENDPOINT="+k8sAPIServer.Endpoint,
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-e", "FELIX_TYPHAADDR="+typhaAddr,
-			"-v", k8sCertFilename+":/tmp/apiserver.crt",
+			"-v", k8sAPIServer.CertFileName+":/tmp/apiserver.crt",
 			"calico/felix:latest",
 		)
 		Expect(felixContainer).NotTo(BeNil())
@@ -417,7 +265,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with Felix and Typha running", func() {
 		BeforeEach(func() {
-			startTypha(k8sAPIEndpoint)
+			startTypha(k8sAPIServer.Endpoint)
 			startFelix(typhaContainer.IP+":5473", "", "")
 		})
 
@@ -441,7 +289,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with typha connected to bad API endpoint", func() {
 		BeforeEach(func() {
-			startTypha(badK8sAPIEndpoint)
+			startTypha(k8sAPIServer.BadEndpoint)
 		})
 
 		AfterEach(func() {
@@ -459,7 +307,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with datastore not ready", func() {
 		BeforeEach(func() {
-			info, err := calicoClient.ClusterInformation().Get(
+			info, err := k8sAPIServer.CalicoClient.ClusterInformation().Get(
 				context.Background(),
 				"default",
 				options.GetOptions{},
@@ -468,7 +316,7 @@ var _ = Describe("health tests", func() {
 			log.Infof("info = %#v", info)
 			notReady := false
 			info.Spec.DatastoreReady = &notReady
-			_, err = calicoClient.ClusterInformation().Update(
+			_, err = k8sAPIServer.CalicoClient.ClusterInformation().Update(
 				context.Background(),
 				info,
 				options.SetOptions{},
