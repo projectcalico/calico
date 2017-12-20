@@ -167,8 +167,16 @@ func main() {
 	var backendClient bapi.Client
 	var configParams *config.Config
 	var typhaAddr string
+	var numClientsCreated int
 configRetry:
 	for {
+		if numClientsCreated > 60 {
+			// If we're in a restart loop, periodically exit (so we can be restarted) since
+			// - it may solve the problem if there's something wrong with our process
+			// - it prevents us from leaking connections to the datastore.
+			exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
+		}
+
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
@@ -211,15 +219,23 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig, hostConfig, err := loadConfigFromDatastore(
-			ctx, backendClient, configParams.FelixHostname)
-		if err != nil {
-			log.WithError(err).Error("Failed to get config from datastore")
-			time.Sleep(1 * time.Second)
-			continue configRetry
+		numClientsCreated++
+		for {
+			globalConfig, hostConfig, err := loadConfigFromDatastore(
+				ctx, backendClient, configParams.FelixHostname)
+			if err == ErrNotReady {
+				log.Warn("Waiting for datastore to be initialized (or migrated)")
+				time.Sleep(1 * time.Second)
+				continue
+			} else if err != nil {
+				log.WithError(err).Error("Failed to get config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+			configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
+			configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
+			break
 		}
-		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
-		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
 		configParams.Validate()
 		if configParams.Err != nil {
 			log.WithError(configParams.Err).Error(
@@ -239,6 +255,7 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+		numClientsCreated++
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
 		typhaAddr, err = discoverTyphaAddr(configParams)
@@ -249,6 +266,12 @@ configRetry:
 		}
 
 		break configRetry
+	}
+
+	if numClientsCreated > 2 {
+		// We don't have a way to close datastore connection so, if we reconnected after
+		// a failure to load config, restart felix to avoid leaking connections.
+		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 	}
 
 	// We're now both live and ready.
@@ -553,11 +576,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 			time.Sleep(2 * time.Second)
 
 			if reason == reasonConfigChanged {
-				// We want to exit with a specific RC, but if we call Fatal() it will exit for us
-				// with the wrong RC. We need to call Fatal or Panic to force the log to be flushed
-				// so call Panic() but use defer to force an exit before the stack trace is printed.
-				defer os.Exit(configChangedRC)
-				logCxt.Panic("Exiting for config change")
+				exitWithCustomRC(configChangedRC, "Exiting for config change")
 				return
 			}
 
@@ -577,6 +596,20 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 
 	logCxt.Fatal("Exiting immediately")
 }
+
+func exitWithCustomRC(rc int, message string) {
+	// To ensure that the logs get flushed, we need to exit with Panic() or Fatal().
+	// However, Fatal() doesn't let us set a custom RC.  To work around that, we create a panic,
+	// but then intercept it and exit with the desired RC.
+	log.WithField("rc", rc).Info("Exiting with custom RC")
+	defer os.Exit(rc)
+	log.Panic(message)
+	panic(message) // defensive.
+}
+
+var (
+	ErrNotReady = errors.New("datastore is not ready or has not been initialised")
+)
 
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, hostname string,
@@ -604,7 +637,7 @@ func loadConfigFromDatastore(
 	}
 	if !ready {
 		// The ClusterInformation struct should contain the ready flag, if it is not set, abort.
-		err = errors.New("datastore is not ready or has not been initialised")
+		err = ErrNotReady
 		return
 	}
 	err = getAndMergeConfig(

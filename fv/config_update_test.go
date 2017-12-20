@@ -137,7 +137,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	shouldExitAfterADelay := func() {
 		Consistently(getFelixPIDs, "1s", "100ms").Should(ContainElement(felixPID))
-		Eventually(getFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixPID))
+		Eventually(getFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
 	}
 
 	Context("after updating config that should trigger a restart", func() {
