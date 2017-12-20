@@ -50,7 +50,7 @@ in the cluster in order to work around two limitations in DC/OS 1.8:
 
 1. [Mesos-Agents require a restart to detect newly added CNI networks](https://issues.apache.org/jira/browse/MESOS-6567).
 2. [DC/OS does not configure Docker with a Cluster-Store](https://dcosjira.atlassian.net/browse/DCOS-155)
-a [requirement for Multi-host docker networking](https://docs.docker.com/engine/userguide/networking/get-started-overlay/#/overlay-networking-with-an-external-key-value-store).
+a requirement for Multi-host docker networking.
 
 Because of these two limitations, {{site.prodname}}-DC/OS will restart each agent process
 and restart each docker daemon. Learn how to handle this installation steps manually
