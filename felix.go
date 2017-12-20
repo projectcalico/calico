@@ -171,13 +171,10 @@ func main() {
 configRetry:
 	for {
 		if numClientsCreated > 60 {
-			// We don't have a way to close datastore connection so, if we reconnected after
-			// a failure to load config, restart felix to avoid leaking connections.
-			// Use Panic to flush the log buffer.  Use defer to control the exit RC.
-			func() { // closure avoids a linter false positive.
-				defer os.Exit(configChangedRC)
-				log.Panic("Restarting to avoid leaking datastore connections")
-			}()
+			// If we're in a restart loop, periodically exit (so we can be restarted) since
+			// - it may solve the problem if there's something wrong with our process
+			// - it prevents us from leaking connections to the datastore.
+			exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 		}
 
 		// Load locally-defined config, including the datastore connection
@@ -274,9 +271,7 @@ configRetry:
 	if numClientsCreated > 2 {
 		// We don't have a way to close datastore connection so, if we reconnected after
 		// a failure to load config, restart felix to avoid leaking connections.
-		// Use Panic to flush the log buffer.  Use defer to control the exit RC.
-		defer os.Exit(configChangedRC)
-		log.Panic("Restarting to avoid leaking datastore connections")
+		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 	}
 
 	// We're now both live and ready.
@@ -581,11 +576,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 			time.Sleep(2 * time.Second)
 
 			if reason == reasonConfigChanged {
-				// We want to exit with a specific RC, but if we call Fatal() it will exit for us
-				// with the wrong RC. We need to call Fatal or Panic to force the log to be flushed
-				// so call Panic() but use defer to force an exit before the stack trace is printed.
-				defer os.Exit(configChangedRC)
-				logCxt.Panic("Exiting for config change")
+				exitWithCustomRC(configChangedRC, "Exiting for config change")
 				return
 			}
 
@@ -604,6 +595,16 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	}
 
 	logCxt.Fatal("Exiting immediately")
+}
+
+func exitWithCustomRC(rc int, message string) {
+	// To ensure that the logs get flushed, we need to exit with Panic() or Fatal().
+	// However, Fatal() doesn't let us set a custom RC.  To work around that, we create a panic,
+	// but then intercept it and exit with the desired RC.
+	log.WithField("rc", rc).Info("Exiting with custom RC")
+	defer os.Exit(rc)
+	log.Panic(message)
+	panic(message) // defensive.
 }
 
 var (
