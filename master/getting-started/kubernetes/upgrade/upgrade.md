@@ -27,13 +27,23 @@ Once you have upgraded {{site.prodname}}, you can [complete the upgrade](#comple
    ```
    kubectl apply -f <v3-manifest>
    ```
-1. Check the status of the upgrade as follows.
+1. Watch the status of the upgrade as follows.
 
    ```
-   kubectl rollout status ds/calico-node -n kube-system
+   watch kubectl get pods -n kube-system
    ```
    
-   For more information about this, refer to the [Kubernetes documentation](https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/#step-4-watching-the-rolling-update-status)
+   Verify that the status of all {{site.prodname}} pods indicate `Running`.
+
+   ```
+   calico-kube-controllers-6d4b9d6b5b-wlkfj   1/1       Running   0          3m
+   calico-node-hvvg8                          1/2       Running   0          3m
+   calico-node-vm8kh                          1/2       Running   0          3m
+   calico-node-w92wk                          1/2       Running   0          3m
+   ```
+
+   > **Note**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
+   {: .alert .alert-info}
    
 1. After waiting some time and ensuring that the upgrade succeeded and no problems ensued,
    continue to [Completing the upgrade](#completing-the-upgrade).
