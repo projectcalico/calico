@@ -148,7 +148,7 @@ func main() {
 	const healthName = "felix-startup"
 
 	// Register this function as a reporter of liveness and readiness, with no timeout.
-	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: false}, 0)
+	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
 	// Make an initial report that says we're live but not yet ready.
 	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
@@ -190,6 +190,10 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+
+		// Each time round this loop, check that we're serving health reports if we should
+		// be, or cancel any existing server if we should not be serving any more.
+		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
 
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.

@@ -225,13 +225,6 @@ var _ = Describe("health tests", func() {
 	// describeCommonFelixTests creates specs for Felix tests that are common between the
 	// two scenarios below (with and without Typha).
 	describeCommonFelixTests := func() {
-		Describe("with no per-node config in datastore", func() {
-			It("should not open port due to lack of config", func() {
-				// With no config, Felix won't even open the socket.
-				Consistently(felixReady, "5s", "1s").Should(BeErr())
-			})
-		})
-
 		Describe("with per-node config in datastore", func() {
 			BeforeEach(createPerNodeConfig)
 			AfterEach(removePerNodeConfig)
