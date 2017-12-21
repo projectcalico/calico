@@ -1,6 +1,5 @@
 ---
 title: 'Ubuntu Packaged Install Instructions'
-redirect_from: latest/getting-started/openstack/installation/ubuntu
 ---
 
 For this version of Calico, with OpenStack on Ubuntu Trusty or Xenial, we

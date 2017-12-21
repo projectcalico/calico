@@ -1,6 +1,5 @@
 ---
 title: Kubernetes Datastore
-redirect_from: latest/getting-started/kubernetes/installation/hosted/kubernetes-datastore/index
 ---
 
 This document describes how to install Calico on Kubernetes in a mode that does not require access to an etcd cluster.

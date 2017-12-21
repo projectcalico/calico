@@ -1,5 +1,6 @@
 ---
 title: Downgrading Calico
+redirect_from: latest/getting-started/kubernetes/upgrade/downgrade
 no_canonical: true
 ---
 

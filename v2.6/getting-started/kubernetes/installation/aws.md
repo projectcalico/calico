@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico and Kubernetes on AWS
-redirect_from: latest/getting-started/kubernetes/installation/aws
 ---
 
 There are a number of solutions for deploying Calico and Kubernetes on AWS.  We recommend taking

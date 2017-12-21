@@ -1,5 +1,6 @@
 ---
 title: Installing and configuring calico-upgrade
+redirect_from: latest/getting-started/kubernetes/upgrade/setup
 no_canonical: true
 ---
 

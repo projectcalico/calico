@@ -1,6 +1,5 @@
 ---
 title: Creating Users and Roles in etcd
-redirect_from: latest/reference/advanced/etcd-rbac/users-and-roles
 ---
 
 Providing role based access control within etcd requires the following:

@@ -1,6 +1,5 @@
 ---
 title: Basic Network Isolation
-redirect_from: latest/getting-started/rkt/tutorials/basic
 no-canonical: true
 ---
 

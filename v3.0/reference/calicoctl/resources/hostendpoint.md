@@ -1,5 +1,6 @@
 ---
 title: Host Endpoint Resource (HostEndpoint)
+redirect_from: latest/reference/calicoctl/resources/hostendpoint
 ---
 
 A host endpoint resource (`HostEndpoint`) represents an interface attached to a host that is running {{site.prodname}}.

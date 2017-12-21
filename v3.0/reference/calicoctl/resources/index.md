@@ -1,5 +1,6 @@
 ---
 title: Resource Definitions
+redirect_from: latest/reference/calicoctl/resources/index
 ---
 
 This section describes the set of valid resource types that can be managed

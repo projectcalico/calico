@@ -1,5 +1,6 @@
 ---
 title: Running calico/node with an init system
+redirect_from: latest/usage/configuration/as-service
 ---
 
 This guide explains how to run `calico/node` with an init system like

@@ -1,6 +1,5 @@
 ---
 title: 'Upgrade Procedure (OpenStack)'
-redirect_from: latest/getting-started/openstack/upgrade
 ---
 
 This document details the procedure for upgrading a Calico-based

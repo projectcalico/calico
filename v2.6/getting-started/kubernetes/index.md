@@ -1,6 +1,5 @@
 ---
 title: Quickstart for Calico on Kubernetes
-redirect_from: latest/getting-started/kubernetes/
 ---
 
 

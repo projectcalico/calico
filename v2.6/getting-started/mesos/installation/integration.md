@@ -1,6 +1,5 @@
 ---
 title: Integration Guide
-redirect_from: latest/getting-started/mesos/installation/integration
 ---
 
 This guide explains how to integrate Calico networking and policy on an existing

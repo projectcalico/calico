@@ -1,6 +1,5 @@
 ---
 title: About Calico
-redirect_from: latest/introduction/index.html
 ---
 
 Calico provides secure network connectivity for 

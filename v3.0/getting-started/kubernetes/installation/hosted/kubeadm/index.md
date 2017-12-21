@@ -1,5 +1,6 @@
 ---
 title: kubeadm Hosted Install
+redirect_from: latest/getting-started/kubernetes/installation/hosted/kubeadm/index
 ---
 
 This document outlines how to install {{site.prodname}} on a cluster initialized with 
