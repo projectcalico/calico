@@ -21,7 +21,7 @@ spec:
   asNumber: 63400
 ```
 
-### BGP Peer Definition
+### BGP Configuration Definition
 
 #### Metadata
 
