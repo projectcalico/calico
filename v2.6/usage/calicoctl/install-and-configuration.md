@@ -1,5 +1,6 @@
 ---
 title: Installing and Configuring calicoctl
+no_canonical: true
 ---
 
 This document outlines how to install and configure calicoctl which is the

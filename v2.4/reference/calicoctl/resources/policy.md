@@ -1,5 +1,6 @@
 ---
 title: Policy Resource (policy)
+no_canonical: true
 ---
 
 A Policy resource (policy) represents an ordered set of rules which are applied

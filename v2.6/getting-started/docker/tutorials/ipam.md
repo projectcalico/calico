@@ -1,5 +1,6 @@
 ---
 title: IPAM
+no_canonical: true
 ---
 
 With the release of Docker 1.10, support has been added to allow users to

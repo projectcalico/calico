@@ -1,5 +1,6 @@
 ---
 title: Network Policy (Universal Containerizer)
+no_canonical: true
 ---
 
 This document will demonstrate how to manipulate policy for {{site.prodname}} using

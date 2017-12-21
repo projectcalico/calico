@@ -1,5 +1,6 @@
 ---
 title: Calico with Docker
+no_canonical: true
 ---
 
 {{site.prodname}} implements a Docker network plugin that can be used to provide routing and advanced network policy for Docker containers.

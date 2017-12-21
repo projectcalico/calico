@@ -1,5 +1,6 @@
 ---
 title: Integration Guide
+no_canonical: true
 ---
 
 {{site.prodname}} introduces IP-per-container & fine-grained security policies to Mesos, while

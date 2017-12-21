@@ -1,5 +1,6 @@
 ---
 title: Verifying your Calico on OpenStack deployment
+no_canonical: true
 ---
 
 This document takes you through the steps you can perform to verify that

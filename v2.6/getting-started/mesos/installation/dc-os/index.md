@@ -1,5 +1,6 @@
 ---
 title: Overview of Calico for DC/OS
+no_canonical: true
 ---
 
 The following information details Calico's installation and runtime dependencies

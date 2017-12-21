@@ -1,6 +1,7 @@
 ---
 title: Chef Trial Install
-...
+no_canonical: true
+---
 
 > **WARNING**
 >

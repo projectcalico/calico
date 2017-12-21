@@ -1,5 +1,6 @@
 ---
 title: Integration Guide
+no_canonical: true
 ---
 
 This guide explains how to integrate Calico networking and policy on an existing

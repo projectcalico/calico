@@ -1,5 +1,6 @@
 ---
 title: 'Ubuntu Packaged Install Instructions'
+no_canonical: true
 ---
 
 For this version of Calico, with OpenStack on Ubuntu Trusty or Xenial, we

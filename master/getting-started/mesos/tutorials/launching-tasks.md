@@ -1,5 +1,6 @@
 ---
 title: Launching Tasks
+no_canonical: true
 ---
 
 The following information describes how to launch {{site.prodname}} networked tasks in Mesos

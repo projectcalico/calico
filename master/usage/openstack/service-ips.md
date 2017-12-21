@@ -1,5 +1,6 @@
 ---
 title: Service IPs
+no_canonical: true
 ---
 
 {{site.prodname}} supports two approaches for assigning a service IP to a 

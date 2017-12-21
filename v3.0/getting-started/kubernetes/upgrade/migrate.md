@@ -1,7 +1,6 @@
 ---
 title: Migrating Calico data
 redirect_from: latest/getting-started/kubernetes/upgrade/migrate
-no_canonical: true
 ---
 
 > **Important**: Once you begin the migration, stop using `calicoctl` or 
