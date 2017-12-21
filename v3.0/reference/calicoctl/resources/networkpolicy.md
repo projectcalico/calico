@@ -1,5 +1,6 @@
 ---
 title: Network Policy Resource (NetworkPolicy)
+redirect_from: latest/reference/calicoctl/resources/networkpolicy
 no_canonical: true
 ---
 

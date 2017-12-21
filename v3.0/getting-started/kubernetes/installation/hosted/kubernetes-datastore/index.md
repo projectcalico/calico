@@ -1,5 +1,6 @@
 ---
 title: Kubernetes API datastore
+redirect_from: latest/getting-started/kubernetes/installation/hosted/kubernetes-datastore/index
 ---
 
 This document describes how to install {{site.prodname}} on Kubernetes without a separate etcd cluster.

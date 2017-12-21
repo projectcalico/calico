@@ -1,5 +1,6 @@
 ---
 title: Migrating Calico data
+redirect_from: latest/getting-started/kubernetes/upgrade/migrate
 no_canonical: true
 ---
 

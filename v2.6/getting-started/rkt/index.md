@@ -1,6 +1,5 @@
 ---
 title: Calico with rkt
-redirect_from: latest/getting-started/rkt/index
 no-canonical: true
 ---
 

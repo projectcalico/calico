@@ -1,6 +1,5 @@
 ---
 title: calicoctl ipam
-redirect_from: latest/reference/calicoctl/commands/ipam/show
 ---
 
 This section describes the `calicoctl ipam show` command.

@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico 
+redirect_from: latest/getting-started/kubernetes/upgrade/upgrade
 no_canonical: true
 ---
 

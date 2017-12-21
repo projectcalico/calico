@@ -1,5 +1,6 @@
 ---
 title: Using calicoctl in Kubernetes
+redirect_from: latest/getting-started/kubernetes/tutorials/using-calicoctl
 ---
 
 `calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects

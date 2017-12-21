@@ -1,5 +1,6 @@
 ---
 title: Deleting old data
+redirect_from: latest/getting-started/kubernetes/upgrade/delete
 no_canonical: true
 ---
 

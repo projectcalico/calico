@@ -1,5 +1,6 @@
 ---
 title: Deploying Calico and Kubernetes on Azure
+redirect_from: latest/getting-started/kubernetes/installation/azure
 ---
 
 There are a number of solutions for deploying Calico and Kubernetes on Azure.  We recommend taking

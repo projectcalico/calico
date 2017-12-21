@@ -1,6 +1,5 @@
 ---
 title: Logging
-redirect_from: latest/usage/troubleshooting/logging
 ---
 
 ## The calico-node container

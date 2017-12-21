@@ -1,6 +1,5 @@
 ---
 title: Troubleshooting Calico for rkt
-redirect_from: latest/getting-started/rkt/troubleshooting
 no-canonical: true
 ---
 

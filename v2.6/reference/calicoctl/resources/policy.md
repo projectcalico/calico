@@ -1,6 +1,5 @@
 ---
 title: Policy Resource (policy)
-redirect_from: latest/reference/calicoctl/resources/policy
 ---
 
 A Policy resource (policy) represents an ordered set of rules which are applied

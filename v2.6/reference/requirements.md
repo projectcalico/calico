@@ -1,6 +1,5 @@
 ---
 title: Calico System Requirements
-redirect_from: latest/reference/requirements
 ---
 
 Depending on the Calico functionality you are using, there are some requirements your system needs to meet in order for Calico to work properly.

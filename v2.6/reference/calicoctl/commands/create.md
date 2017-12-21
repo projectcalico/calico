@@ -1,6 +1,5 @@
 ---
 title: calicoctl create
-redirect_from: latest/reference/calicoctl/commands/create
 ---
 
 This sections describes the `calicoctl create` command.

@@ -11,7 +11,7 @@ v3.0:
     
     ##### Migration and upgrade from v2.6.4
     
-    - This version of Calico supports [migration and upgrade](/{{page.version}}/getting-started/kubernetes/upgrade/) from Calico v2.6.4. 
+    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/) from Calico v2.6.4. 
     
     ##### calicoctl enhancements
 
@@ -417,8 +417,8 @@ master:
      calico/cni:
       version: master
       url: ""
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.0/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
      calico-bird:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1

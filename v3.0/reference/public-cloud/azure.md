@@ -1,5 +1,6 @@
 ---
 title: Deploying Calico on Azure
+redirect_from: latest/reference/public-cloud/azure
 no_canonical: true
 ---
 

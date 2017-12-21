@@ -1,6 +1,5 @@
 ---
 title: Running the Calico rkt tutorials on CoreOS Container Linux using Vagrant and VirtualBox
-redirect_from: latest/getting-started/rkt/installation/vagrant-coreos/index
 no-canonical: true
 ---
 

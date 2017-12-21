@@ -1,5 +1,6 @@
 ---
 title: Global Network Policy Resource (GlobalNetworkPolicy)
+redirect_from: latest/reference/calicoctl/resources/globalnetworkpolicy
 no_canonical: true
 ---
 

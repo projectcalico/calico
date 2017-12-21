@@ -1,5 +1,6 @@
 ---
 title: Testing the data migration
+redirect_from: latest/getting-started/kubernetes/upgrade/test
 no_canonical: true
 ---
 
