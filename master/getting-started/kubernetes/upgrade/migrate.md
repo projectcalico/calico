@@ -8,7 +8,6 @@ no_canonical: true
 > data will not be migrated to the new datastore.
 {: .alert .alert-danger}
 
-
 1. To begin an interactive data migration session, use the `start` command. While 
    existing connectivity will continue as before, you cannot add any new endpoints 
    until the migration and upgrade complete.
@@ -22,8 +21,8 @@ no_canonical: true
    
    | Flag | Discussion 
    | ---- | ---------- 
-   | <code>&#8209;&#8209;apiconfigv1</code> | By default, `calico-upgrade` looks for the etcdv2 configuration file at `/etc/calico/apiconfigv1.cfg`. If you have a configuration file in a different place or if it has a different name, include the `--apiconfigv1` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
-   | <code>&#8209;&#8209;apiconfigv3</code> | By default, `calico-upgrade` looks for the etcdv3 configuration file at `/etc/calico/apiconfigv3.cfg`. If you have a configuration file in a different place or if it has a different name, include the `--apiconfigv3` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
+   | <code>&#8209;&#8209;apiconfigv1</code> | By default, `calico-upgrade` looks for the etcdv2 configuration file at `/etc/calico/apiconfigv1.cfg`. If you have a configuration file in a different location or if it has a different name, include the `--apiconfigv1` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
+   | <code>&#8209;&#8209;apiconfigv3</code> | By default, `calico-upgrade` looks for the etcdv3 configuration file at `/etc/calico/apiconfigv3.cfg`. If you have a configuration file in a different location or if it has a different name, include the `--apiconfigv3` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
    
    **Example**
    ```
@@ -44,6 +43,8 @@ no_canonical: true
      data from the etcdv3 datastore](/{{page.version}}/getting-started/kubernetes/upgrade/delete) 
      before trying again or include the `--ignore-v3-data` flag with the 
      `calico-upgrade start` command.
+     
+## Next steps
 
-1. Once you have succeeded in migrating your data from etcdv2 to etcdv3, continue 
-   to [Upgrading](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade).
+Once you have succeeded in migrating your data from etcdv2 to etcdv3, continue 
+to [Upgrading](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade).
