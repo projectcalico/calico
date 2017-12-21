@@ -40,10 +40,28 @@ configured with VXLAN.
 ### Setting MTU for workload network interfaces
 
 It is the job of the network plugin to create new interfaces, the current
-major plugins are CNI and libnetwork.  Currently Docker and the Mesos Docker
-Containerizer integration use libnetwork which does **not** support setting MTU.
-CNI which is used by Kubernetes and the Mesos Unified Containerizer support
+major plugins are CNI and libnetwork. Currently Docker and the Mesos Docker
+Containerizer integration use libnetwork.
+
+CNI, which is used by Kubernetes and the Mesos Unified Containerizer, supports
 configuring the MTU through the CNI configuration file.
+
+The user will also want to configure Calico's IP-in-IP interface MTU when
+IP-in-IP is enabled on the cluster. Refer to the MTU table at the top of the page
+to choose the value that matches your environment.
+
+> **Note**: The MTU on existing workloads will not be updated with these
+changes.  To have all workloads use the new MTU, they must be restarted.
+{: .alert .alert-info}
+
+#### MTU configuration with libnetwork
+
+The MTU of the veth pairs created by the Calico libnetwork plugin can be configured
+by setting the `CALICO_LIBNETWORK_VETH_MTU` environment variable on the `calico-libnetwork`
+process.
+
+This should either be set on the standalone `calico-libnetwork` service, or on the
+`calico/node` container as a whole.
 
 #### MTU configuration with CNI
 
@@ -64,10 +82,6 @@ Example CNI configuration
 }
 ```
 
-> **Note**: The MTU on existing workloads will not be updated with this
-change.  To have all workloads use the new MTU, they must be restarted.
-{: .alert .alert-info}
-
 
 ### Setting MTU for tunnel network interfaces
 
@@ -76,12 +90,12 @@ configured by setting a Felix environment variable or using calicoctl to set
 the proper configuration variable.  Felix will set the tunnel interfaces to
 the specified MTU.
 
-#### Setting MTU through Felix Environment variable
+#### Setting tunnel MTU through Felix Environment variable
 
 Passing in the environment variable `FELIX_IPINIPMTU` when running the
-calico/node container will set the MTU for Felix to use.
+`calico/node` container will set the MTU for Felix to use.
 
-#### Setting the MTU with calicoctl
+#### Setting the tunnel MTU with calicoctl
 
 To set the IP-in-IP MTU value for all calico nodes in your cluster, use the
 following command to set the global config value.
