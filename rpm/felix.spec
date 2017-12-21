@@ -151,13 +151,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Thu Dec 21 2017 Neil Jerram <neil@tigera.io> 2.6.3-1
+* Wed Dec 20 2017 Neil Jerram <neil@tigera.io> 2.6.3-1
   - Felix 2.6.3 (from Git commit 7f8f06c).
     [Changes recorded in 2.6.3 tag]
     * Update Typha liveness test - https://github.com/projectcalico/felix/pull/1654
     * Felix now restarts when config is deleted - https://github.com/projectcalico/felix/pull/1645
     * Handle config changes for ClusterGUID, ClusterType, CalicoVersion: https://github.com/projectcalico/felix/pull/1631
-    
+
     The DockerHub and Quay.io `calico/felix` images have been updated. The `calico/node` image based on this release will follow shortly.
     [Changes recorded in 2.6.3-rc3 tag]
     - Fixing up liveness checks (#1662)
@@ -175,11 +175,11 @@ rm -rf $RPM_BUILD_ROOT
     [Changes recorded in 2.6.0 tag]
     By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
     v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
-    
+
     In addition, libcalico-go now supports a new `Types` field which
     specifies whether a rule should apply to `ingress`, `egress` or
     both types of traffic.
-    
+
     - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
     - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
     - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)

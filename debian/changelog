@@ -5,7 +5,7 @@ felix (2.6.3~__STREAM__) __STREAM__; urgency=low
     * Update Typha liveness test - https://github.com/projectcalico/felix/pull/1654
     * Felix now restarts when config is deleted - https://github.com/projectcalico/felix/pull/1645
     * Handle config changes for ClusterGUID, ClusterType, CalicoVersion: https://github.com/projectcalico/felix/pull/1631
-    
+
     The DockerHub and Quay.io `calico/felix` images have been updated. The `calico/node` image based on this release will follow shortly.
     [Changes recorded in 2.6.3-rc3 tag]
     - Fixing up liveness checks (#1662)
@@ -23,17 +23,17 @@ felix (2.6.3~__STREAM__) __STREAM__; urgency=low
     [Changes recorded in 2.6.0 tag]
     By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
     v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
-    
+
     In addition, libcalico-go now supports a new `Types` field which
     specifies whether a rule should apply to `ingress`, `egress` or
     both types of traffic.
-    
+
     - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
     - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
     - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)
     - Adding support for ppc64le. [#1516](https://github.com/projectcalico/felix/pull/1516)
 
- -- Neil Jerram <neil@tigera.io>  Thu, 21 Dec 2017 16:12:12 +0000
+ -- Neil Jerram <neil@tigera.io>  Wed, 20 Dec 2017 15:27:33 -0800
 
 felix (2.6.0~rc2~__STREAM__) __STREAM__; urgency=low
 
