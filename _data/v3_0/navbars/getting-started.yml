@@ -45,6 +45,24 @@ toc:
       path: /getting-started/kubernetes/tutorials/advanced-policy
   - title: Troubleshooting / FAQ
     path: /getting-started/kubernetes/troubleshooting
+  - title: Upgrade
+    section:
+    - title: Overview
+      path: /getting-started/kubernetes/upgrade/
+    - title: Install and configure calico-upgrade
+      path: /getting-started/kubernetes/upgrade/setup
+    - title: Test the migration
+      path: /getting-started/kubernetes/upgrade/test
+    - title: Migrate your data
+      path: /getting-started/kubernetes/upgrade/migrate
+    - title: Upgrade Calico
+      path: /getting-started/kubernetes/upgrade/upgrade
+    - title: Converting your calicoctl manifests
+      path: /getting-started/kubernetes/upgrade/convert
+    - title: Deleting old data
+      path: /getting-started/kubernetes/upgrade/delete
+    - title: Downgrading Calico
+      path: /getting-started/kubernetes/upgrade/downgrade
     
 - title: OpenShift
   section:
