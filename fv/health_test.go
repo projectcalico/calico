@@ -103,6 +103,7 @@ var _ = Describe("health tests", func() {
 			AfterEach(removePerNodeConfig)
 
 			It("should never be ready, then die", func() {
+				Eventually(felixReady, "1s", "100ms").ShouldNot(BeGood())
 				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
 				Eventually(felixContainer.Stopped, "5s").Should(BeTrue())
 			})
