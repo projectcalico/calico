@@ -26,7 +26,7 @@ cd SPECS
 cp -a ${repo}/rpm/$spec .
 
 # Infer the version that the spec wants to build.
-version=`grep Version: $spec | awk '{print $2;}'`
+version=`grep Version: $spec | head -1 | awk '{print $2;}'`
 
 # Link patches into ../SOURCES.
 cd ../SOURCES
