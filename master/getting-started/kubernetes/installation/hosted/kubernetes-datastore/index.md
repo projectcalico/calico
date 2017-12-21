@@ -24,18 +24,6 @@ You must have a Kubernetes cluster, which meets the following requirements:
   - If using kubeadm, by passing `--pod-network-cidr=192.168.0.0/16` to `kubeadm`.
   - Otherwise, by passing `--cluster-cidr=192.168.0.0/16` directly to the controller manager.
 
-> **Note**: If you are upgrading from Calico v2.1, the cluster-cidr
-> selected for your controller manager should remain
-> unchanged from the v2.1 install (the v2.1 manifests default to
-> `10.244.0.0/16`).
-{: .alert .alert-info}
-
-> **Important**: If you are using the Kubernetes API datastore and upgrading
-> from Calico v2.4.x or earlier to Calico v2.5.x or later, you must
-> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
-> before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
-{: .alert .alert-danger}
-
 
 ## Installation
 

@@ -61,7 +61,7 @@ and your datastore type.
    > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
    {: .alert .alert-success}
 
-1. 1. Use the following command to confirm that {{site.noderunning}} has upgraded to v3.0.x.
+1. Use the following command to confirm that {{site.noderunning}} has upgraded to v3.0.x.
 
    ```
    kubectl exec -n kube-system calico-node-hvvg8 versions
