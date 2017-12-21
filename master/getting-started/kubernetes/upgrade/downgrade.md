@@ -3,20 +3,53 @@ title: Downgrading Calico
 no_canonical: true
 ---
 
-Under some circumstances, you may need to perform a downgrade and return your
-cluster to the previous version of {{site.prodname}}. You may need to do this
-before running `calico-upgrade complete` or afterwards. If you need to downgrade 
-your cluster after running `calico-upgrade complete`, you should do so as soon
-as possible to avoid an outage. Any pods created after `calico-upgrade complete`
-and before downgrading will lose networking.
+## About downgrading {{site.prodname}}
 
-## Downgrading a self-hosted installation
+Under some circumstances, you may need to perform a downgrade and return your
+cluster to the previous version of {{site.prodname}}. If you need to downgrade
+you should do so as soon as possible to avoid an outage.
+
+> **Important**: After downgrading or aborting the migration it is necessary
+> to delete the previously migrated
+> [etcd](delete#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade)
+> or [Kubernetes API](delete#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade)
+> data before re-running the migration.
+{: .alert .alert-info}
+
+The downgrade procedure varies according to how you originally installed
+{{site.prodname}} and your datastore type.
+
+- Follow the steps to [Downgrade a self-hosted installation that uses the etcd
+  datastore](#downgrading-a-self-hosted-installation-that-uses-the-etcd-datastore)
+  when migration has been done and the {{site.prodname}} components have been
+  upgraded.
+  > **Important**: Any pods created after `calico-upgrade complete` and
+  > before downgrading will lose networking.
+  {: .alert .alert-danger}
+
+- To [Downgrade a self-hosted installation that uses the
+  Kubernetes API datastore](#downgrading-a-self-hosted-installation-that-uses-the-kubernetes-api-datastore)
+  follow these steps.
+
+
+- [Downgrading a custom installation](#downgrading-a-custom-installation)
+
+## Downgrading a self-hosted installation that uses the etcd datastore
 
 If you have upgraded {{site.prodname}} by deploying the latest manifest,
 follow the steps here to downgrade.
 
-1. Follow the steps in [Aborting the upgrade](#aborting-the-upgrade)
-   before downgrading the {{site.prodname}} components.
+1. Remove any upgraded `calicoctl` instances and install the previous `calicoctl`.
+
+> **Important**: Do not use versions of `calicoctl` v3.0+ after aborting the upgrade.
+> Doing so may result in unexpected behavior and data.
+{: .alert .alert-danger}
+
+1. Use the following command to re-enable the previous {{site.prodname}} components.
+
+   ```
+   calico-upgrade abort
+   ```
 
 1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 
@@ -25,39 +58,30 @@ follow the steps here to downgrade.
    kubectl rollout undo deployment/calico-kube-controllers -n kube-system
    ```
 
-1. Watch the status of the downgrade as follows.
+1. Watch the status of the downgrade as follows. When it reports complete and
+   successful, {{site.prodname}} is downgraded to the previous version.
 
    ```
-   watch kubectl get pods -n kube-system
+   kubectl rollout status deployment/calico-kube-controllers -n kube-system
+   kubectl rollout status ds/calico-node -n kube-system
    ```
-   
-   Verify that the status of all {{site.prodname}} pods indicate `Running`.
+
+## Downgrading a self-hosted installation that uses the Kubernetes API datastore
+
+1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 
    ```
-   calico-kube-controllers-6d4b9d6b5b-wlkfj   1/1       Running   0          3m
-   calico-node-hvvg8                          2/2       Running   0          3m
-   calico-node-vm8kh                          2/2       Running   0          3m
-   calico-node-w92wk                          2/2       Running   0          3m
+   kubectl rollout undo ds/calico-node -n kube-system
+   ```
+
+1. Watch the status of the downgrade as follows. When it reports complete and
+   a successful, {{site.prodname}} is downgraded to the previous version.
+
+   ```
+   kubectl rollout status ds/calico-node -n kube-system
    ```
 
 ## Downgrading a custom installation
 
 _Docs for this coming soon!_
 
-## Aborting the upgrade
-
-If you have not upgraded the {{site.prodname}} components then follow
-the steps here to abort the upgrade and continue using your currently deployed
-version of {{site.prodname}}.
-
-1. Abort the upgrade by running.
-
-   ```
-   calico-upgrade abort
-   ```
-
-1. Remove any upgraded `calicoctl` instances and install the previous `calicoctl`.
-
-> **Important**: Do not use versions of `calicoctl` v3.0+ after aborting the upgrade.
-> Doing so may result in unexpected behavior and data.
-{: .alert .alert-danger}

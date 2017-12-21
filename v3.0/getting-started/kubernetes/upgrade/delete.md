@@ -14,8 +14,12 @@ following conditions.
   
 - [A data migration attempt failed partway through, leaving the etcdv3 datastore
   with some, but not all of your etcvd2 data](#deleting-calico-data-from-etcdv3-after-a-partial-migration).
-  
-  
+
+- [You are using the Kubernetes API datastore and upgraded to Calico v3.0 but
+  then downgraded to v2.6.4. You want to clean the Calico v3.0 data out of
+  the Kubernetes API datastore. If you plan to attempt another upgrade to
+  Calico v3.0, this is required.](#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade).
+
 ## Deleting Calico data from etcdv2 after a successful migration and upgrade
 
 ### Prerequisite
@@ -104,4 +108,55 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 ### Next steps
 
 Return to [Migrate your data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate)
+to try again.
+
+## Deleting Calico data from the Kubernetes API datastore after a downgrade
+
+### Prerequisites
+
+- This procedure requires kubectl.
+- This procedure should only be done if you have upgraded to v3.0+ and then
+  downgraded to your previous version.
+
+### Deleting Calico data from the Kubernetes API datastore
+
+1. Check that the data exists in the Kubernetes API datastore. Issue the
+   following.
+
+   ```
+   kubectl get crd
+   ```
+
+1. Verify the output contains lines with the following:
+   - `bgpconfigurations.crd.projectcalico.org`
+   - `felixconfigurations.crd.projectcalico.org`
+   - `clusterinformations.crd.projectcalico.org`
+   - `networkpolicies.crd.projectcalico.org`
+
+
+1. Issue the following commands to delete the {{site.prodname}} data.
+
+   ```
+   kubectl delete crd bgpconfigurations.crd.projectcalico.org
+   kubectl delete crd felixconfigurations.crd.projectcalico.org
+   kubectl delete crd clusterinformations.crd.projectcalico.org
+   kubectl delete crd networkpolicies.crd.projectcalico.org
+   ```
+
+   It returns the number of keys it deleted.
+
+1. Issue the following command to confirm that the {{site.prodname}} data was deleted.
+   Verify the output does not contain the `crd`s deleted above.
+
+   ```
+   kubectl get crd
+   ```
+
+1. Congratulations! You've cleaned {{site.prodname}}'s Kuberentes API
+   datastore upgraded data.
+
+### Next steps
+
+Return to [Upgrading a self-hosted installation that uses the Kubernetes API
+datastore](upgrade#upgrading-a-self-hosted-installation-that-uses-the-kubernetes-api-datastore)
 to try again.
