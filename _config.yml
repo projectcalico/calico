@@ -21,6 +21,7 @@ imageNames:
   cni: quay.io/calico/cni
   kubeControllers: quay.io/calico/kube-controllers
   calico-upgrade: quay.io/calico/upgrade
+  calico-node: quay.io/calico/node
 
 exclude:
   - release-scripts
