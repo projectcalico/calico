@@ -75,6 +75,9 @@ const (
 	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
 	// lower occupancy.
 	defaultGCPercent = 20
+
+	// Startup loop health name.
+	startupHealthName = "felix-startup"
 )
 
 // main is the entry point to the calico-felix binary.
@@ -145,13 +148,8 @@ func main() {
 	// config that indicates that.
 	healthAggregator := health.NewHealthAggregator()
 
-	const healthName = "felix-startup"
-
 	// Register this function as a reporter of liveness and readiness, with no timeout.
-	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
-
-	// Make an initial report that says we're live but not yet ready.
-	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+	healthAggregator.RegisterReporter(startupHealthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
@@ -162,6 +160,9 @@ func main() {
 	var typhaAddr string
 configRetry:
 	for {
+		// Make an initial report that says we're live but not yet ready.
+		healthAggregator.Report(startupHealthName, &health.HealthReport{Live: true, Ready: false})
+
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
@@ -205,7 +206,7 @@ configRetry:
 			continue configRetry
 		}
 		globalConfig, hostConfig := loadConfigFromDatastore(datastore,
-			configParams.FelixHostname)
+			configParams.FelixHostname, healthAggregator)
 		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
 		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
 		configParams.Validate()
@@ -240,7 +241,7 @@ configRetry:
 	}
 
 	// We're now both live and ready.
-	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+	healthAggregator.Report(startupHealthName, &health.HealthReport{Live: true, Ready: true})
 
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
@@ -665,7 +666,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt.Fatal("Exiting immediately")
 }
 
-func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
+func loadConfigFromDatastore(datastore bapi.Client, hostname string, healthAggregator *health.HealthAggregator) (globalConfig, hostConfig map[string]string) {
 	for {
 		log.Info("Waiting for the datastore to be ready")
 		if kv, err := datastore.Get(model.ReadyFlagKey{}); err != nil {
@@ -674,6 +675,12 @@ func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConf
 			continue
 		} else if kv.Value != true {
 			log.Warning("Global datastore 'Ready' flag set to false, waiting...")
+
+			// In order to make upgrade to v3.0.0 as smooth as possible, when the datastore is not
+			// ready we report that we _are_ ready to Kubernetes.  This makes sure that the
+			// rolling upgrade proceeds correctly.
+			healthAggregator.Report(startupHealthName, &health.HealthReport{Live: true, Ready: true})
+
 			time.Sleep(1 * time.Second)
 			continue
 		}

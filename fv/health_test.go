@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/api/v1"
 
+	"time"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/k8sapiserver"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -53,6 +55,12 @@ var _ = Describe("health tests", func() {
 
 	BeforeEach(func() {
 		k8sAPIServer = k8sapiserver.SetUp(config.K8sVersion)
+	})
+
+	JustBeforeEach(func() {
+		// Since we added liveness reporting to Felix's config loading loop, Felix can flap its
+		// liveness/readiness during its initial loading.  This sleep bypasses that.
+		time.Sleep(1 * time.Second)
 	})
 
 	var felixContainer *containers.Container
@@ -102,10 +110,9 @@ var _ = Describe("health tests", func() {
 			})
 			AfterEach(removePerNodeConfig)
 
-			It("should never be ready, then die", func() {
-				Eventually(felixReady, "1s", "100ms").ShouldNot(BeGood())
-				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
-				Eventually(felixContainer.Stopped, "5s").Should(BeTrue())
+			It("should die", func() {
+				Eventually(felixReady, "5s", "100ms").ShouldNot(BeGood())
+				Eventually(felixContainer.Stopped, "10s").Should(BeTrue())
 			})
 		})
 
@@ -130,7 +137,7 @@ var _ = Describe("health tests", func() {
 			AfterEach(removePerNodeConfig)
 
 			It("should delay readiness", func() {
-				Consistently(felixReady, "5s", "100ms").ShouldNot(BeGood())
+				Consistently(felixReady, "3s", "100ms").ShouldNot(BeGood())
 				Eventually(felixReady, "10s", "100ms").Should(BeGood())
 				Consistently(felixReady, "10s", "1s").Should(BeGood())
 			})
