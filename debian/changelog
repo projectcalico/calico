@@ -1,3 +1,22 @@
+felix (3.0.0~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.0.0 (from Git commit 0fc6d7f).
+    [Changes recorded in 3.0.0 tag]
+    This Felix release is part of the broader Calico 3.0.0 release.
+    Significant Felix changes, since 3.0.0-beta1, are as follows.
+
+    - Enable Calico-Felix for Windows - https://github.com/projectcalico/felix/pull/1638
+    - Always return a slice from GetPIDs - https://github.com/projectcalico/felix/pull/1664
+    - Avoid reconnecting just to check the ready flag - https://github.com/projectcalico/felix/pull/1661
+    - Report health before datastore is ready - https://github.com/projectcalico/felix/pull/1652
+    - Fix that felix didn't restart when config was deleted - https://github.com/projectcalico/felix/pull/1645
+    - Fix config batcher - unset dirty flag after flush: https://github.com/projectcalico/felix/pull/1634
+    - Explicitly allow IPIP packets from/to Calico hosts - https://github.com/projectcalico/felix/pull/1558
+    - Make it optional to auto-remove containers and add support for restarting stopped ones - https://github.com/projectcalico/felix/pull/1571
+    - Fix that the allow action override options didn't apply in all cases -  https://github.com/projectcalico/felix/pull/1628
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 22 Dec 2017 14:09:33 +0000
+
 felix (3.0.0~beta1~__STREAM__) __STREAM__; urgency=low
 
   * Felix 3.0.0-beta1 (from Git commit c92d138).

@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        3.0.0
-Release:        0.1.beta1%{?dist}
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,22 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Dec 22 2017 Neil Jerram <neil@tigera.io> 3.0.0-1
+  - Felix 3.0.0 (from Git commit 0fc6d7f).
+    [Changes recorded in 3.0.0 tag]
+    This Felix release is part of the broader Calico 3.0.0 release.
+    Significant Felix changes, since 3.0.0-beta1, are as follows.
+
+    - Enable Calico-Felix for Windows - https://github.com/projectcalico/felix/pull/1638
+    - Always return a slice from GetPIDs - https://github.com/projectcalico/felix/pull/1664
+    - Avoid reconnecting just to check the ready flag - https://github.com/projectcalico/felix/pull/1661
+    - Report health before datastore is ready - https://github.com/projectcalico/felix/pull/1652
+    - Fix that felix didn't restart when config was deleted - https://github.com/projectcalico/felix/pull/1645
+    - Fix config batcher - unset dirty flag after flush: https://github.com/projectcalico/felix/pull/1634
+    - Explicitly allow IPIP packets from/to Calico hosts - https://github.com/projectcalico/felix/pull/1558
+    - Make it optional to auto-remove containers and add support for restarting stopped ones - https://github.com/projectcalico/felix/pull/1571
+    - Fix that the allow action override options didn't apply in all cases -  https://github.com/projectcalico/felix/pull/1628
+
 * Mon Nov 20 2017 Neil Jerram <neil@tigera.io> 3.0.0-0.1.beta1
   - Felix 3.0.0-beta1 (from Git commit c92d138).
     [Changes recorded in 3.0.0-beta1 tag]
@@ -194,11 +210,11 @@ rm -rf $RPM_BUILD_ROOT
     [Changes recorded in 2.6.0 tag]
     By upgrading libcalico-go to v1.7.0, we add support for Kubernetes'
     v1.8.0 NetworkPolicy with Egress rule and IPBlock functionality.
-    
+
     In addition, libcalico-go now supports a new `Types` field which
     specifies whether a rule should apply to `ingress`, `egress` or
     both types of traffic.
-    
+
     - Allow Policy to explicitly govern ingress and/or egress [#1557](https://github.com/projectcalico/felix/pull/1557)
     - Add read/write timeout options for Typha connection. [#1538](https://github.com/projectcalico/felix/pull/1538)
     - Fix OpenStack detection heuristic to ignore 'none'. [#1556](https://github.com/projectcalico/felix/pull/1556)
