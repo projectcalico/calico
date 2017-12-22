@@ -1,5 +1,6 @@
 ---
 title: Configuring Systems for use with Calico
+no_canonical: true
 ---
 
 When running Calico with OpenStack, you also need to configure various

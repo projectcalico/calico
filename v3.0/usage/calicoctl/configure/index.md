@@ -1,7 +1,6 @@
 ---
 title: Configuring calicoctl
 redirect_from: latest/usage/calicoctl/configure/index
-no_canonical: true
 ---
 
 ### About configuring calicoctl

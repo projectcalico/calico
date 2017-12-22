@@ -1,5 +1,6 @@
 ---
 title: DevStack plugin for Calico
+no_canonical: true
 ---
 
 The networking-calico project provides a DevStack plugin.  The following

@@ -1,5 +1,6 @@
 ---
 title: Detailed Semantics
+no_canonical: true
 ---
 
 A {{site.prodname}} network is a Neutron network (either provider or tenant) whose

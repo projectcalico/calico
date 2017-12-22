@@ -1,5 +1,6 @@
 ---
 title: calico/ctl container
+no_canonical: true
 ---
 
 With each release of calicoctl the docker container `calico/ctl` is released to

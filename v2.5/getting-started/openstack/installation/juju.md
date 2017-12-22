@@ -1,5 +1,6 @@
 ---
 title: Juju Install
+no_canonical: true
 ---
 
 You can use Ubuntu's [Juju Charms](https://jujucharms.com/) to quickly deploy a

@@ -1,7 +1,6 @@
 ---
 title: Installing calicoctl
 redirect_from: latest/usage/calicoctl/install
-no_canonical: true
 ---
 
 ## About installing calicoctl

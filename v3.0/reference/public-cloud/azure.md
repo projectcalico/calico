@@ -1,7 +1,6 @@
 ---
 title: Deploying Calico on Azure
 redirect_from: latest/reference/public-cloud/azure
-no_canonical: true
 ---
 
 {{site.prodname}} in [Microsoft Azure][Azure]{:target="_blank"} is supported in [policy-only][PolicyMode] mode. {{site.prodname}} IPAM needs to be configured in host-local mode and used in conjunction with Kubernetes pod CIDR assignments. Additional option would be to use [Canal][Canal] - {{site.prodname}} with flannel networking.

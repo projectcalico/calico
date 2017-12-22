@@ -1,5 +1,6 @@
 ---
 title: Connectivity in OpenStack
+no_canonical: true
 ---
 
 An OpenStack deployment is of limited use if its VMs cannot reach and be

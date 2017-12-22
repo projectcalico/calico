@@ -1,5 +1,6 @@
 ---
 title: Calicoctl Configuration Overview 
+no_canonical: true
 ---
 
 The `calicoctl` command line tool needs to be configured with details of

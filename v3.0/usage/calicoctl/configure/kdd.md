@@ -1,7 +1,6 @@
 ---
 title: Configuring calicoctl to connect to the Kubernetes API datastore
 redirect_from: latest/usage/calicoctl/configure/kdd
-no_canonical: true
 ---
 
 

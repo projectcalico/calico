@@ -1,5 +1,6 @@
 ---
 title:  Requirements
+no_canonical: true
 ---
 
 The following information details basic prerequisites that must be met

@@ -1,5 +1,6 @@
 ---
 title: How Calico Interprets Neutron API Calls
+no_canonical: true
 ---
 
 When running in an OpenStack deployment, Calico receives and interprets
