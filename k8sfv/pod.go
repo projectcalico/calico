@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	log "github.com/sirupsen/logrus"
@@ -122,8 +123,16 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		log.WithField("veth", veth).Debug("Created veth pair")
 
 		// Move the pod end of the pair into the namespace, and set it up.
+		linkByNameRetries := 3
+	retry:
 		podIf, err := netlink.LinkByName(veth.PeerName)
 		log.WithField("podIf", podIf).Debug("Pod end")
+		if (err != nil) && linkByNameRetries > 0 {
+			log.WithField("name", veth.PeerName).WithError(err).Info("LinkByName failed, retrying...")
+			linkByNameRetries--
+			time.Sleep(500 * time.Millisecond)
+			goto retry
+		}
 		panicIfError(err)
 		err = netlink.LinkSetNsFd(podIf, int(podNamespace.Fd()))
 		panicIfError(err)
