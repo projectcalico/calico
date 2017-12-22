@@ -157,9 +157,6 @@ func main() {
 	// Register this function as a reporter of liveness and readiness, with no timeout.
 	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
-	// Make an initial report that says we're live but not yet ready.
-	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
-
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
@@ -176,6 +173,9 @@ configRetry:
 			// - it prevents us from leaking connections to the datastore.
 			exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
 		}
+
+		// Make an initial report that says we're live but not yet ready.
+		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
 
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
@@ -226,6 +226,7 @@ configRetry:
 			if err == ErrNotReady {
 				log.Warn("Waiting for datastore to be initialized (or migrated)")
 				time.Sleep(1 * time.Second)
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 				continue
 			} else if err != nil {
 				log.WithError(err).Error("Failed to get config from datastore")
