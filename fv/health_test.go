@@ -35,7 +35,7 @@ import (
 
 type EnvConfig struct {
 	K8sVersion   string `default:"1.7.5"`
-	TyphaVersion string `default:"latest"`
+	TyphaVersion string `default:"v0.5.4"`
 }
 
 var config EnvConfig
