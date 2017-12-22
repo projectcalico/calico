@@ -52,14 +52,10 @@ and your datastore type.
    Verify that the status of all {{site.prodname}} pods indicate `Running`.
 
    ```
-   calico-kube-controllers-6d4b9d6b5b-wlkfj   1/1       Running   0          3m
-   calico-node-hvvg8                          1/2       Running   0          3m
-   calico-node-vm8kh                          1/2       Running   0          3m
-   calico-node-w92wk                          1/2       Running   0          3m
+   calico-node-hvvg8                          2/2       Running   0          3m
+   calico-node-vm8kh                          2/2       Running   0          3m
+   calico-node-w92wk                          2/2       Running   0          3m
    ```
-
-   > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
-   {: .alert .alert-success}
 
 1. Use the following command to confirm that {{site.noderunning}} has upgraded to v3.0.x.
 
