@@ -8,17 +8,17 @@ redirect_from: latest/getting-started/kubernetes/upgrade/delete
 You may need or wish to manually delete Calico data from your etcd datastore under the
 following conditions.
   
-- [You succeeded in migrating your data and upgrading to Calico v3.0. After
+- [**etcd**: You succeeded in migrating your data and upgrading to Calico v3.0. After
   running Calico for some time and experiencing no errors, you want to delete
-  the old Calico data from the etcdv2 datastore](#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade).
+  the old Calico data from the etcdv2 datastore.](#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade)
   
-- [A data migration attempt failed partway through, leaving the etcdv3 datastore
-  with some, but not all of your etcvd2 data](#deleting-calico-data-from-etcdv3-after-a-partial-migration).
+- [**etcd**: A data migration attempt failed partway through, leaving the etcdv3 datastore
+  with some, but not all of your etcvd2 data.](#deleting-calico-data-from-etcdv3-after-a-partial-migration)
 
-- [You are using the Kubernetes API datastore and upgraded to Calico v3.0 but
-  then downgraded to v2.6.4. You want to clean the Calico v3.0 data out of
+- [**Kubernetes API datastore**: You are using the Kubernetes API datastore and upgraded 
+  to Calico v3.0 but then downgraded to v2.6.5. You want to clean the Calico v3.0 data out of
   the Kubernetes API datastore. If you plan to attempt another upgrade to
-  Calico v3.0, this is required.](#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade).
+  Calico v3.0, this is required](#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade)
 
 ## Deleting Calico data from etcdv2 after a successful migration and upgrade
 
@@ -152,8 +152,8 @@ to try again.
    kubectl get crd
    ```
 
-1. Congratulations! You've cleaned {{site.prodname}}'s Kuberentes API
-   datastore upgraded data.
+1. Congratulations! You've cleaned {{site.prodname}}'s Kubernetes API
+   datastore.
 
 ### Next steps
 
