@@ -1,17 +1,42 @@
 v3.0:
-- title: v3.0.0
+- title: v3.0.1
   note: |
-    21 December 2017
+    22 December 2017
 
     #### What's new
+
+    > **Important** This release includes breaking changes introduced as part of Calico v3.0.
+    > If you are upgrading a previous Calico deployment to Calico v3.0 you
+    > must follow this one-time migration process as part of the
+    > [upgrade process](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/).
+    > Please carefully review the upgrade process before attempting to upgrade
+    > to Calico v3.0.
+    {: .alert .alert-danger}
+
+    ##### Migration and upgrade from v2.6.5
+    
+    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/)
+      from Calico v2.6.5. 
+
+    - The Calico resource model has been updated. This change requires that Calico
+      manifests must be converted to the new model using the `calicoctl convert` command.
+
+    > **Important**: Before upgrading to v3.0.1 you must be running the Calico
+    > components released with Calico v2.6.5.
+    {: .alert .alert-danger}
+
+    > **Important**: If you are using the etcd datastore and upgrading, you
+    > must migrate your Calico data during the
+    > [upgrade process](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/).
+    {: .alert .alert-danger}
     
     ##### Support for etcdv3
 
     - Calico now stores its data in [etcd version 3](https://coreos.com/blog/etcd3-a-new-etcd.html).
     
-    ##### Migration and upgrade from v2.6.4
-    
-    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/) from Calico v2.6.4. 
+    ##### Support for Windows policy-only mode
+
+    - Felix now compiles and runs on Windows in policy-only mode. [felix #1638](https://github.com/projectcalico/felix/pull/1638) (@nwoodmsft)
     
     ##### calicoctl enhancements
 
@@ -94,8 +119,6 @@ v3.0:
 
     ##### Other changes
     
-    - Felix now compiles and runs on Windows in policy-only mode. [felix #1638](https://github.com/projectcalico/felix/pull/1638) (@nwoodmsft)
-    
     - Calico now works with Kubernetes network services proxy with IPVS/LVS. Calico enforces 
       network policies with kube-proxy running in IPVS mode for Kubernetes clusters. Currently 
       only workload ingress policy is supported.
@@ -124,6 +147,54 @@ v3.0:
     - **Route reflectors cannot be clustered**: We plan to resume support for
       this in a future release.
 
+  components:
+    felix:
+      version: 3.0.1
+      url: https://github.com/projectcalico/felix/releases/tag/3.0.1
+    typha:
+      version: v0.6.0
+      url: https://github.com/projectcalico/typha/releases/tag/v0.6.0
+    calicoctl:
+      version: v2.0.0
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.0.0
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.0.0/calicoctl
+    calico/node:
+      version: v3.0.1
+      url: https://github.com/projectcalico/calico/releases/tag/v3.0.1
+    calico/cni:
+      version: v2.0.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.0.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
+    calico/kube-controllers:
+      version: v2.0.0
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0
+    confd:
+      version: v1.0.0
+      url: https://github.com/projectcalico/confd/releases/tag/v1.0.0
+    calico-bird:
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
+    calico/routereflector:
+      version: v0.5.0
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    networking-calico:
+      version: 1.4.3
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
+
+- title: v3.0.0
+  note: |
+    21 December 2017
+
+    #### What's new
+    v3.0.0 has an issue with rolling upgrades from v2.6. We recommend moving to v3.0.1.
+    
   components:
     felix:
       version: 3.0.0
