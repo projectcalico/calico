@@ -558,17 +558,22 @@ release-once-tagged:
 	@echo "Will now build release artifacts..."
 	@echo
 	$(MAKE) bin/calico-felix calico/felix
-	docker tag calico/felix calico/felix:$(VERSION)
+	docker tag calico/felix:latest quay.io/calico/felix:latest
+	docker tag calico/felix:latest calico/felix:$(VERSION)
 	docker tag calico/felix:$(VERSION) quay.io/calico/felix:$(VERSION)
 	@echo
 	@echo "Checking built felix has correct version..."
-	@if docker run quay.io/calico/felix:$(VERSION) calico-felix --version | grep -q '$(VERSION)$$'; \
-	then \
-	  echo "Check successful."; \
-	else \
-	  echo "Incorrect version in docker image!"; \
-	  false; \
-	fi
+	@result=true; \
+	for img in calico/felix:latest quay.io/calico/felix:latest calico/felix:$(VERSION) quay.io/calico/felix:$(VERSION); do \
+	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
+	  then \
+	    echo "Check successful. ($$img)"; \
+	  else \
+	    echo "Incorrect version in docker image $$img!"; \
+	    result=false; \
+	  fi \
+	done; \
+	$$result
 	@echo
 	@echo "Felix release artifacts have been built:"
 	@echo
