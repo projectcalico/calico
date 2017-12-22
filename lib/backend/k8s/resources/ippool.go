@@ -60,7 +60,7 @@ func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 	}
 
 	// If IPIP field is not nil, then it means the resource has v1 IPIP data
-	// and we must convert it to v3equivalent data.
+	// and we must convert it to v3 equivalent data.
 	if ipp.Spec.IPIP != nil {
 		if !ipp.Spec.IPIP.Enabled {
 			ipp.Spec.IPIPMode = apiv3.IPIPModeNever
