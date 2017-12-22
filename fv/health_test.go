@@ -47,6 +47,8 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"time"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/k8sapiserver"
 	"github.com/projectcalico/felix/fv/utils"
@@ -60,6 +62,12 @@ var _ = Describe("health tests", func() {
 
 	BeforeEach(func() {
 		k8sAPIServer = k8sapiserver.SetUp()
+	})
+
+	JustBeforeEach(func() {
+		// Felix can now flap ready/non-ready while loading its config.  Delay until that
+		// is done.
+		time.Sleep(1 * time.Second)
 	})
 
 	var felixContainer *containers.Container
@@ -329,8 +337,9 @@ var _ = Describe("health tests", func() {
 			felixContainer.Stop()
 		})
 
-		It("felix should not report ready", func() {
-			Consistently(felixReady, "10s", "1s").ShouldNot(BeGood())
+		It("felix should report ready", func() {
+			Eventually(felixReady, "5s", "100ms").Should(BeGood())
+			Consistently(felixReady, "10s", "1s").Should(BeGood())
 		})
 
 		It("felix should report live", func() {
