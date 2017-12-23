@@ -1,3 +1,11 @@
+felix (2.6.4~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.6.4 (from Git commit c299bcc).
+    [Changes recorded in 2.6.4 tag]
+    - Report ready to kubernetes when the ready flag is false. #1676
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 22 Dec 2017 17:01:53 -0800
+
 felix (2.6.3~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.6.3 (from Git commit 7f8f06c).
