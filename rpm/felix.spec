@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.6.3
+Version:        2.6.4
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -151,6 +151,11 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Dec 22 2017 Neil Jerram <neil@tigera.io> 2.6.4-1
+  - Felix 2.6.4 (from Git commit c299bcc).
+    [Changes recorded in 2.6.4 tag]
+    - Report ready to kubernetes when the ready flag is false. #1676
+
 * Wed Dec 20 2017 Neil Jerram <neil@tigera.io> 2.6.3-1
   - Felix 2.6.3 (from Git commit 7f8f06c).
     [Changes recorded in 2.6.3 tag]
