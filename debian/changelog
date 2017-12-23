@@ -1,3 +1,11 @@
+felix (3.0.1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.0.1 (from Git commit 757dc44).
+    [Changes recorded in 3.0.1 tag]
+    - Report ready while waiting for the ready flag. #1677
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 22 Dec 2017 16:38:11 -0800
+
 felix (3.0.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix 3.0.0 (from Git commit 0fc6d7f).
