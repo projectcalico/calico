@@ -41,15 +41,14 @@ follow the steps here to downgrade.
 
 1. Remove any upgraded `calicoctl` instances and install the previous `calicoctl`.
 
-> **Important**: Do not use versions of `calicoctl` v3.0+ after aborting the upgrade.
-> Doing so may result in unexpected behavior and data.
-{: .alert .alert-danger}
-
 1. Use the following command to re-enable the previous {{site.prodname}} components.
 
    ```
    calico-upgrade abort
    ```
+   > **Important**: Do not use versions of `calicoctl` v3.0+ after aborting the upgrade.
+   > Doing so may result in unexpected behavior and data.
+   {: .alert .alert-danger}
 
 1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 

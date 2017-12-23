@@ -39,9 +39,9 @@ target etcdv3 cluster. The host must be AMD64 and running one of the following:
 You must configure `calico-upgrade` so that it can connect to both of the
 following:
 
-- [The existing etcdv2 datastore used by Calico v2.6.4 or later](#configuring-calico-upgrade-to-connect-to-the-etcdv2-datastore)
+- [The existing etcdv2 datastore used by Calico v2.6.5](#configuring-calico-upgrade-to-connect-to-the-etcdv2-datastore)
 
-- [The etcdv3 cluster you plan to use for Calico v3.0.0](#configuring-calico-upgrade-to-connect-to-the-etcdv3-cluster)
+- [The etcdv3 cluster you plan to use for Calico v3.0](#configuring-calico-upgrade-to-connect-to-the-etcdv3-cluster)
 
 
 ### Configuring calico-upgrade to connect to the etcdv2 datastore
