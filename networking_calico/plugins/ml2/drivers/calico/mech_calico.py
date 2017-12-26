@@ -46,7 +46,11 @@ except ImportError:
     # Ocata and earlier.
     from neutron.db.l3_db import FloatingIP
 from neutron.db import models_v2
-from neutron.plugins.ml2 import driver_api as api
+try:
+    from neutron_lib.plugins.ml2 import api
+except ImportError:
+    # Neutron code prior to a2c36d7e (10th November 2017).
+    from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from sqlalchemy import exc as sa_exc
 
