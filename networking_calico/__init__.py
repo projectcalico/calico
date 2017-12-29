@@ -12,7 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import logging
 import pbr.version
+
+
+logging.basicConfig(level=logging.INFO,
+                    format='LOG: %(filename)s:%(lineno)d: %(message)s')
 
 
 __version__ = pbr.version.VersionInfo(

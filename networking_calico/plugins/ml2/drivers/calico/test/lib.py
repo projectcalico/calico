@@ -361,6 +361,7 @@ class Lib(object):
 
             # Remember this thread.
             self.threads.append(thread)
+            _log.info("New thread %s", thread)
 
             # Also return it.
             return thread
@@ -399,7 +400,9 @@ class Lib(object):
         _log.info("Clean up remaining green threads...")
 
         for thread in self.threads:
+            _log.info("Kill thread %s", thread)
             thread.kill()
+        _log.info("All threads killed")
 
         # Stop hooking eventlet.
         self.tearDown_eventlet()

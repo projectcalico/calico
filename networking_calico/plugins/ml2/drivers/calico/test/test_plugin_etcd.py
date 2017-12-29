@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2015 Metaswitch Networks
+# Copyright 2015, 2018 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,9 +28,8 @@ import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 
-from networking_calico import common
 from networking_calico import datamodel_v1
-from networking_calico.etcdutils import ResyncRequired
+from networking_calico import datamodel_v3
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import t_etcd
@@ -39,41 +38,31 @@ _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
 
 
-class TestPluginEtcd(lib.Lib, unittest.TestCase):
-    # Tests for the Calico mechanism driver.  This covers the mainline function
-    # and the periodic resync thread.
+class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
     def setUp(self):
         """Setup before each test case."""
-        # Do common plugin test setup.
-        lib.m_compat.cfg.CONF.core_plugin = 'ml2'
-        super(TestPluginEtcd, self).setUp()
+        super(_TestEtcdBase, self).setUp()
 
         # Start with an empty etcd database.
         self.etcd_data = {}
 
-        # Mock out the status updating thread.  These tests were originally
-        # written before that was added and they do not support the interleaved
-        # requests from the status thread.  The status-reporting thread is
-        # tested separately.
-        self.driver._status_updating_thread = mock.Mock(
-            spec=self.driver._status_updating_thread
-        )
-
-        # Mock out config.
-        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
-        lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
-        lib.m_compat.cfg.CONF.calico.etcd_key_file = None
-        lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
-
-        # Hook the (mock) etcd client.
+        # Hook the (mock) etcdv2 client.
         lib.m_etcd.Client.reset_mock()
         self.client = lib.m_etcd.Client.return_value
         self.client.read.side_effect = self.etcd_read
         self.client.write.side_effect = self.check_etcd_write
         self.client.delete.side_effect = self.check_etcd_delete
+
+        # Hook the (mock) etcdv3 client.
+        datamodel_v3._client = self.clientv3 = mock.Mock()
+        self.clientv3.put.side_effect = self.check_etcd_write
+        self.clientv3.delete.side_effect = self.etcd3_delete
+        self.clientv3.get.side_effect = self.etcd3_get
+        self.clientv3.get_prefix.side_effect = self.etcd3_get_prefix
+        self.clientv3.status.return_value = {
+            'header': {'revision': '10'},
+        }
 
         # Start with an empty set of recent writes and deletes.
         self.recent_writes = {}
@@ -103,12 +92,37 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Confirm that, if prevIndex is provided, its value is not None.
         self.assertTrue(kwargs.get('prevIndex', 0) is not None)
 
+        # Check if this key is already in etcd.  If it is, and if it represents
+        # a Calico v3 resource, we want to check that its metadata is not
+        # changed by the new write.
+        existing_v3_metadata = None
+        if key in self.etcd_data:
+            try:
+                existing = json.loads(self.etcd_data[key])
+                existing_v3_metadata = existing.get('metadata')
+            except ValueError:
+                pass
+
         _log.info("etcd write: %s = %s", key, value)
         self.etcd_data[key] = value
         try:
             self.recent_writes[key] = json.loads(value)
         except ValueError:
             self.recent_writes[key] = value
+
+        if 'metadata' in self.recent_writes[key]:
+            # If this is an update, check that the metadata is unchanged.
+            if existing_v3_metadata:
+                self.assertEqual(existing_v3_metadata,
+                                 self.recent_writes[key]['metadata'])
+            # Now delete not-easily-predictable metadata fields from the data
+            # that test code checks against.
+            if 'creationTimestamp' in self.recent_writes[key]['metadata']:
+                del self.recent_writes[key]['metadata']['creationTimestamp']
+            if 'uid' in self.recent_writes[key]['metadata']:
+                del self.recent_writes[key]['metadata']['uid']
+
+        return True
 
     def check_etcd_delete(self, key, **kwargs):
         """Print each etcd delete as it occurs."""
@@ -137,6 +151,40 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.assertEqual(expected, self.recent_deletes)
         self.recent_deletes = set()
 
+    def etcd3_get(self, key, metadata=False):
+        self.maybe_reset_etcd()
+        if key in self.etcd_data:
+            value = self.etcd_data[key]
+        else:
+            raise lib.m_etcd.EtcdKeyNotFound()
+
+        # Print and return the result.
+        _log.info("etcd3 get: %s; value: %s", key, value)
+        if metadata:
+            item = {'key': key, 'mod_revision': '10'}
+            return [(value, item)]
+        else:
+            return [value]
+
+    def etcd3_get_prefix(self, prefix):
+        self.maybe_reset_etcd()
+        results = []
+        for key, value in self.etcd_data.items():
+            if key.startswith(prefix):
+                result = (value, {'mod_revision': 0, 'key': key})
+                results.append(result)
+
+        # Print and return the result.
+        _log.info("etcd3 get_prefix: %s; results: %s", prefix, results)
+        return results
+
+    def etcd3_delete(self, key, **kwargs):
+        try:
+            self.check_etcd_delete(key, **kwargs)
+            return True
+        except lib.EtcdKeyNotFound:
+            return False
+
     def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
                   timeout=None):
         """Read from the accumulated etcd database."""
@@ -148,9 +196,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             eventlet.sleep(30)
             self.driver.db.create_or_update_agent = mock.Mock()
 
-        self.etcd_data[datamodel_v1.FELIX_STATUS_DIR + "/vm1/status"] = {
-            "time": "2015-08-14T10:37:54"
-        }
+        self.etcd_data[datamodel_v1.FELIX_STATUS_DIR + "/vm1/status"] = \
+            json.dumps({
+                "time": "2015-08-14T10:37:54"
+            })
 
         # Prepare a read result object.
         read_result = mock.Mock()
@@ -195,6 +244,70 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         return read_result
 
+
+class TestPluginEtcd(_TestEtcdBase):
+    # Tests for the Calico mechanism driver.  This covers the mainline function
+    # and the periodic resync thread.
+
+    def setUp(self):
+        """Setup before each test case."""
+        # Do common plugin test setup.
+        lib.m_compat.cfg.CONF.core_plugin = 'ml2'
+        super(TestPluginEtcd, self).setUp()
+
+        # Mock out the status updating thread.  These tests were originally
+        # written before that was added and they do not support the interleaved
+        # requests from the status thread.  The status-reporting thread is
+        # tested separately.
+        self.driver._status_updating_thread = mock.Mock(
+            spec=self.driver._status_updating_thread
+        )
+
+        # Mock out config.
+        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
+        lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_key_file = None
+        lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
+
+    sg_default_key_v3 = (
+        '/calico/resources/v3/projectcalico.org/profiles/' +
+        'openstack-sg-SGID-default')
+    sg_default_value_v3 = {
+        'apiVersion': 'projectcalico.org/v3',
+        'kind': 'Profile',
+        'metadata': {'name': 'openstack-sg-SGID-default'},
+        'spec': {'egress': [{'action': 'Allow',
+                             'ipVersion': 4},
+                            {'action': 'Allow',
+                             'ipVersion': 6}],
+                 'ingress': [{'action': 'Allow',
+                              'ipVersion': 4,
+                              'source': {'selector': 'has(SGID-default)'}},
+                             {'action': 'Allow',
+                              'ipVersion': 6,
+                              'source': {
+                                  'selector': 'has(SGID-default)'}}],
+                 'labelsToApply': {'SGID-default': ''}}}
+
+    initial_etcd3_writes = {
+        '/calico/resources/v3/projectcalico.org/clusterinformations/default': {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'ClusterInformation',
+            'metadata': {'name': 'default'},
+            'spec': {'clusterGUID': 'uuid-start-no-ports',
+                     'clusterType': 'openstack',
+                     'datastoreReady': True}},
+        '/calico/resources/v3/projectcalico.org/felixconfigurations/default': {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'FelixConfiguration',
+            'metadata': {'name': 'default'},
+            'spec': {'endpointReportingEnabled': True,
+                     'interfacePrefix': 'tap'}},
+        sg_default_key_v3: sg_default_value_v3
+    }
+
     def test_start_no_ports(self):
         """Startup with no ports or existing etcd data."""
         # Allow the etcd transport's resync thread to run. The last thing it
@@ -204,27 +317,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.give_way()
             self.simulated_time_advance(31)
 
-        self.assertEtcdWrites({
-            '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/config/EndpointReportingEnabled': True,
-            '/calico/v1/config/ClusterGUID': 'uuid-start-no-ports',
-            '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
-                "outbound_rules": [{"dst_ports": ["1:65535"],
-                                    "dst_net": "0.0.0.0/0",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "dst_net": "::/0",
-                                    "ip_version": 6}],
-                "inbound_rules": [{"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 4},
-                                  {"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-            ["SGID-default"]
-        })
+        self.assertEtcdWrites(self.initial_etcd3_writes)
 
     def test_etcd_reset(self):
         for n in range(1, 20):
@@ -243,51 +336,85 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.give_way()
             self.simulated_time_advance(31)
 
-        expected_writes = {
-            '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/config/EndpointReportingEnabled': True,
-            '/calico/v1/config/ClusterGUID': 'uuid-start-two-ports',
-            '/calico/v1/Ready': True,
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
-            'endpoint/DEADBEEF-1234-5678':
-                {"name": "tapDEADBEEF-12",
-                 "profile_ids": ["openstack-sg-SGID-default"],
-                 "mac": "00:11:22:33:44:55",
-                 "ipv4_gateway": "10.65.0.1",
-                 "ipv4_nat": [{'int_ip': '10.65.0.2',
-                               'ext_ip': u'192.168.0.1'}],
-                 "ipv4_nets": ["10.65.0.2/32"],
-                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-                 "state": "active",
-                 "ipv6_subnet_ids": [],
-                 "ipv6_nets": []},
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-2/'
-            'endpoint/FACEBEEF-1234-5678':
-                {"name": "tapFACEBEEF-12",
-                 "profile_ids": ["openstack-sg-SGID-default"],
-                 "mac": "00:11:22:33:44:66",
-                 "ipv4_gateway": "10.65.0.1",
-                 "ipv4_nets": ["10.65.0.3/32"],
-                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-                 "state": "active",
-                 "ipv6_subnet_ids": [],
-                 "ipv6_nets": []},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules':
-                {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "dst_net": "0.0.0.0/0",
-                                     "ip_version": 4},
-                                    {"dst_ports": ["1:65535"],
-                                     "dst_net": "::/0",
-                                     "ip_version": 6}],
-                 "inbound_rules": [{"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-                ["SGID-default"]
-        }
+        ep_deadbeef_key_v1 = (
+            '/calico/v1/host/felix-host-1/workload/openstack/instance-1/' +
+            'endpoint/DEADBEEF-1234-5678')
+        ep_facebeef_key_v1 = (
+            '/calico/v1/host/felix-host-1/workload/openstack/instance-2/' +
+            'endpoint/FACEBEEF-1234-5678')
+        ep_deadbeef_key_v3 = (
+            '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
+            'openstack/felix--host--1-openstack-' +
+            'instance--1-DEADBEEF--1234--5678')
+        ep_facebeef_key_v3 = (
+            '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
+            'openstack/felix--host--1-openstack-' +
+            'instance--2-FACEBEEF--1234--5678')
+        ep_deadbeef_value_v1 = {
+            "name": "tapDEADBEEF-12",
+            "profile_ids": ["openstack-sg-SGID-default"],
+            "mac": "00:11:22:33:44:55",
+            "ipv4_gateway": "10.65.0.1",
+            "ipv4_nat": [{'int_ip': '10.65.0.2',
+                          'ext_ip': u'192.168.0.1'}],
+            "ipv4_nets": ["10.65.0.2/32"],
+            "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
+            "state": "active",
+            "ipv6_subnet_ids": [],
+            "ipv6_nets": []}
+        ep_facebeef_value_v1 = {
+            "name": "tapFACEBEEF-12",
+            "profile_ids": ["openstack-sg-SGID-default"],
+            "mac": "00:11:22:33:44:66",
+            "ipv4_gateway": "10.65.0.1",
+            "ipv4_nets": ["10.65.0.3/32"],
+            "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
+            "state": "active",
+            "ipv6_subnet_ids": [],
+            "ipv6_nets": []}
+        ep_deadbeef_value_v3 = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'WorkloadEndpoint',
+            'metadata': {'name': 'felix--host--1-openstack-instance' +
+                         '--1-DEADBEEF--1234--5678',
+                         'namespace': 'openstack'},
+            'spec': {'endpoint': 'DEADBEEF-1234-5678',
+                     'interfaceName': 'tapDEADBEEF-12',
+                     'ipNATs': [{'externalIP': '192.168.0.1',
+                                 'internalIP': '10.65.0.2'}],
+                     'ipNetworks': ['10.65.0.2/32'],
+                     'ipv4Gateway': '10.65.0.1',
+                     'mac': '00:11:22:33:44:55',
+                     'node': 'felix-host-1',
+                     'orchestrator': 'openstack',
+                     'profiles': ['openstack-sg-SGID-default'],
+                     'workload': 'instance-1'}}
+        ep_facebeef_value_v3 = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'WorkloadEndpoint',
+            'metadata': {'name': 'felix--host--1-openstack-instance' +
+                         '--2-FACEBEEF--1234--5678',
+                         'namespace': 'openstack'},
+            'spec': {'endpoint': 'FACEBEEF-1234-5678',
+                     'interfaceName': 'tapFACEBEEF-12',
+                     'ipNetworks': ['10.65.0.3/32'],
+                     'ipv4Gateway': '10.65.0.1',
+                     'mac': '00:11:22:33:44:66',
+                     'node': 'felix-host-1',
+                     'orchestrator': 'openstack',
+                     'profiles': ['openstack-sg-SGID-default'],
+                     'workload': 'instance-2'}}
+
+        expected_writes = copy.deepcopy(self.initial_etcd3_writes)
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-start-two-ports'
+        expected_writes.update({
+            ep_deadbeef_key_v3: ep_deadbeef_value_v3,
+            ep_facebeef_key_v3: ep_facebeef_value_v3,
+            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
+            ep_facebeef_key_v1: ep_facebeef_value_v1,
+        })
         self.assertEtcdWrites(expected_writes)
 
         # Allow it to run again, this time auditing against the etcd data that
@@ -304,9 +431,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             side_effect = self.port_query
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
-        self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/'
-                                    'openstack/instance-1/endpoint/'
-                                    'DEADBEEF-1234-5678']))
+        self.assertEtcdDeletes(set([ep_deadbeef_key_v1, ep_deadbeef_key_v3]))
         self.osdb_ports = [lib.port2]
 
         # Do another resync - expect no changes to the etcd data.
@@ -318,37 +443,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         # Add lib.port1 back again.
         self.osdb_ports = [lib.port1, lib.port2]
         self.driver.create_port_postcommit(context)
-        expected_writes = {
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
-            'endpoint/DEADBEEF-1234-5678':
-                {"name": "tapDEADBEEF-12",
-                 "profile_ids": ["openstack-sg-SGID-default"],
-                 "mac": "00:11:22:33:44:55",
-                 "ipv4_gateway": "10.65.0.1",
-                 "ipv4_nat": [{'int_ip': '10.65.0.2',
-                               'ext_ip': u'192.168.0.1'}],
-                 "ipv4_nets": ["10.65.0.2/32"],
-                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-                 "state": "active",
-                 "ipv6_subnet_ids": [],
-                 "ipv6_nets": []},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules':
-                {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "dst_net": "0.0.0.0/0",
-                                     "ip_version": 4},
-                                    {"dst_ports": ["1:65535"],
-                                     "dst_net": "::/0",
-                                     "ip_version": 6}],
-                 "inbound_rules": [{"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-                ["SGID-default"]
-        }
-        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdWrites({
+            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
+            ep_deadbeef_key_v3: ep_deadbeef_value_v3,
+            self.sg_default_key_v3: self.sg_default_value_v3,
+        })
         self.assertEtcdDeletes(set())
 
         # Migrate port1 to a different host.
@@ -357,25 +456,23 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         context._port['binding:host_id'] = 'new-host'
         self.osdb_ports[0]['binding:host_id'] = 'new-host'
         self.driver.update_port_postcommit(context)
-        del expected_writes['/calico/v1/host/felix-host-1/workload/openstack/'
-                            'instance-1/endpoint/DEADBEEF-1234-5678']
-        expected_writes['/calico/v1/host/new-host/workload/openstack/'
-                        'instance-1/endpoint/DEADBEEF-1234-5678'] = {
-            "name": "tapDEADBEEF-12",
-            "profile_ids": ["openstack-sg-SGID-default"],
-            "mac": "00:11:22:33:44:55",
-            "ipv4_gateway": "10.65.0.1",
-            "ipv4_nat": [{'int_ip': '10.65.0.2', 'ext_ip': u'192.168.0.1'}],
-            "ipv4_nets": ["10.65.0.2/32"],
-            "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-            "state": "active",
-            "ipv6_subnet_ids": [],
-            "ipv6_nets": []
-        }
-        self.assertEtcdWrites(expected_writes)
-        self.assertEtcdDeletes(set(['/calico/v1/host/felix-host-1/workload/'
-                                    'openstack/instance-1/endpoint/'
-                                    'DEADBEEF-1234-5678']))
+
+        self.assertEtcdDeletes(set([ep_deadbeef_key_v1, ep_deadbeef_key_v3]))
+        ep_deadbeef_key_v1 = ep_deadbeef_key_v1.replace('felix-host-1',
+                                                        'new-host')
+        ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace('felix--host--1',
+                                                        'new--host')
+        ep_deadbeef_value_v3['metadata']['name'] = \
+            ep_deadbeef_value_v3['metadata']['name'].replace('felix--host--1',
+                                                             'new--host')
+        ep_deadbeef_value_v3['spec']['node'] = \
+            ep_deadbeef_value_v3['spec']['node'].replace('felix-host-1',
+                                                         'new-host')
+        self.assertEtcdWrites({
+            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
+            ep_deadbeef_key_v3: ep_deadbeef_value_v3,
+            self.sg_default_key_v3: self.sg_default_value_v3,
+        })
 
         # Now resync again, moving self.osdb_ports to move port 1 back to the
         # old host felix-host-1.  The effect will be as though we've
@@ -384,58 +481,65 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         _log.info("Resync with existing etcd data")
         self.osdb_ports[0]['binding:host_id'] = 'felix-host-1'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
-        expected_writes = {
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
-            'endpoint/DEADBEEF-1234-5678':
-                {"name": "tapDEADBEEF-12",
-                 "profile_ids": ["openstack-sg-SGID-default"],
-                 "mac": "00:11:22:33:44:55",
-                 "ipv4_gateway": "10.65.0.1",
-                 "ipv4_nat": [{'int_ip': '10.65.0.2',
-                               'ext_ip': u'192.168.0.1'}],
-                 "ipv4_nets": ["10.65.0.2/32"],
-                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-                 "state": "active",
-                 "ipv6_subnet_ids": [],
-                 "ipv6_nets": []}
-        }
 
-        self.assertEtcdWrites(expected_writes)
-        self.assertEtcdDeletes(set(['/calico/v1/host/new-host/workload/'
-                                    'openstack/instance-1/endpoint/'
-                                    'DEADBEEF-1234-5678']))
+        self.assertEtcdDeletes(set([ep_deadbeef_key_v1, ep_deadbeef_key_v3]))
+        ep_deadbeef_key_v1 = ep_deadbeef_key_v1.replace('new-host',
+                                                        'felix-host-1')
+        ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace('new--host',
+                                                        'felix--host--1')
+        ep_deadbeef_value_v3['metadata']['name'] = \
+            ep_deadbeef_value_v3['metadata']['name'].replace('new--host',
+                                                             'felix--host--1')
+        ep_deadbeef_value_v3['spec']['node'] = \
+            ep_deadbeef_value_v3['spec']['node'].replace('new-host',
+                                                         'felix-host-1')
+        self.assertEtcdWrites({
+            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
+            ep_deadbeef_key_v3: ep_deadbeef_value_v3,
+        })
 
         # Add another port with an IPv6 address.
         context._port = copy.deepcopy(lib.port3)
         self.osdb_ports.append(context._port)
         self.driver.create_port_postcommit(context)
-        expected_writes = {
+
+        ep_hello_key_v1 = (
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
-            'endpoint/HELLO-1234-5678':
-                {"name": "tapHELLO-1234-",
-                 "profile_ids": ["openstack-sg-SGID-default"],
-                 "mac": "00:11:22:33:44:66",
-                 "ipv6_gateway": "2001:db8:a41:2::1",
-                 "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
-                 "ipv6_nets": ["2001:db8:a41:2::12/128"],
-                 "state": "active",
-                 "ipv4_nets": [],
-                 "ipv4_subnet_ids": []},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules':
-                {"outbound_rules": [{"dst_ports": ["1:65535"],
-                                     "dst_net": "0.0.0.0/0",
-                                     "ip_version": 4},
-                                    {"dst_ports": ["1:65535"],
-                                     "dst_net": "::/0",
-                                     "ip_version": 6}],
-                 "inbound_rules": [{"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-                ["SGID-default"]
+            'endpoint/HELLO-1234-5678')
+        ep_hello_key_v3 = (
+            '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
+            'openstack/felix--host--2-openstack-' +
+            'instance--3-HELLO--1234--5678')
+        ep_hello_value_v1 = {
+            "name": "tapHELLO-1234-",
+            "profile_ids": ["openstack-sg-SGID-default"],
+            "mac": "00:11:22:33:44:66",
+            "ipv6_gateway": "2001:db8:a41:2::1",
+            "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
+            "ipv6_nets": ["2001:db8:a41:2::12/128"],
+            "state": "active",
+            "ipv4_nets": [],
+            "ipv4_subnet_ids": []}
+        ep_hello_value_v3 = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'WorkloadEndpoint',
+            'metadata': {'name': 'felix--host--2-openstack-instance' +
+                         '--3-HELLO--1234--5678',
+                         'namespace': 'openstack'},
+            'spec': {'endpoint': 'HELLO-1234-5678',
+                     'interfaceName': 'tapHELLO-1234-',
+                     'ipNetworks': ['2001:db8:a41:2::12/128'],
+                     'ipv6Gateway': '2001:db8:a41:2::1',
+                     'mac': '00:11:22:33:44:66',
+                     'node': 'felix-host-2',
+                     'orchestrator': 'openstack',
+                     'profiles': ['openstack-sg-SGID-default'],
+                     'workload': 'instance-3'}}
+
+        expected_writes = {
+            ep_hello_key_v1: ep_hello_value_v1,
+            ep_hello_key_v3: ep_hello_value_v3,
+            self.sg_default_key_v3: self.sg_default_value_v3,
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
@@ -536,15 +640,24 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             None,
             'rule'
         )
-        self.assertEtcdWrites({
-            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
-                {"outbound_rules": [],
-                 "inbound_rules": [{"dst_ports": ["5060:5061"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4}]},
-            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
-                ["SG-1"]
-        })
+
+        sg_1_key_v3 = (
+            '/calico/resources/v3/projectcalico.org/profiles/' +
+            'openstack-sg-SG-1')
+        sg_1_value_v3 = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'Profile',
+            'metadata': {'name': 'openstack-sg-SG-1'},
+            'spec': {'egress': [],
+                     'ingress': [{
+                         'action': 'Allow',
+                         'destination': {'ports': ['5060:5061']},
+                         'ipVersion': 4,
+                         'source': {'selector': 'has(SGID-default)'}
+                     }],
+                     'labelsToApply': {'SG-1': ''}}}
+
+        self.assertEtcdWrites({sg_1_key_v3: sg_1_value_v3})
 
         # Now change the security group for that port.
         context.original = copy.deepcopy(context._port)
@@ -555,25 +668,13 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'port_id': 'HELLO-1234-5678', 'security_group_id': 'SG-1'
         })
         self.driver.update_port_postcommit(context)
+
+        ep_hello_value_v1['profile_ids'] = ["openstack-sg-SG-1"]
+        ep_hello_value_v3['spec']['profiles'] = ["openstack-sg-SG-1"]
         expected_writes = {
-            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
-            'endpoint/HELLO-1234-5678':
-                {"name": "tapHELLO-1234-",
-                 "profile_ids": ["openstack-sg-SG-1"],
-                 "mac": "00:11:22:33:44:66",
-                 "ipv6_gateway": "2001:db8:a41:2::1",
-                 "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
-                 "ipv6_nets": ["2001:db8:a41:2::12/128"],
-                 "state": "active",
-                 "ipv4_nets": [],
-                 "ipv4_subnet_ids": []},
-            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
-                {"outbound_rules": [],
-                 "inbound_rules": [{"dst_ports": ["5060:5061"],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4}]},
-            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
-                ["SG-1"]
+            ep_hello_key_v1: ep_hello_value_v1,
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3
         }
         self.assertEtcdWrites(expected_writes)
 
@@ -621,16 +722,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         )
 
         # Expect an etcd write
-        expected_writes = {
-            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
-                {"outbound_rules": [],
-                 "inbound_rules": [{"dst_ports": [5060],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4}]},
-            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
-                ["SG-1"]
-        }
-        self.assertEtcdWrites(expected_writes)
+        sg_1_value_v3['spec']['ingress'][0]['destination']['ports'] = [5060]
+        self.assertEtcdWrites({
+            sg_1_key_v3: sg_1_value_v3
+        })
 
         # Resync with only the last port.  Expect the first two ports to be
         # cleaned up.
@@ -639,10 +734,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
-            'endpoint/DEADBEEF-1234-5678',
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-2/'
-            'endpoint/FACEBEEF-1234-5678'
+            ep_deadbeef_key_v1,
+            ep_facebeef_key_v1,
+            ep_deadbeef_key_v3,
+            ep_facebeef_key_v3,
         ]))
 
         # Change a small amount of information about the port and the security
@@ -675,25 +770,21 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         ]
         _log.info("Resync with edited data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+
+        ep_hello_value_v1['ipv4_nets'] = ["10.65.0.188/32"]
+        ep_hello_value_v1['ipv4_subnet_ids'] = ["subnet-id-10.65.0--24"]
+        ep_hello_value_v1['ipv4_gateway'] = "10.65.0.1"
+        ep_hello_value_v1['ipv6_nets'] = []
+        ep_hello_value_v1['ipv6_subnet_ids'] = []
+        del ep_hello_value_v1['ipv6_gateway']
+        ep_hello_value_v3['spec']['ipNetworks'] = ["10.65.0.188/32"]
+        ep_hello_value_v3['spec']['ipv4Gateway'] = "10.65.0.1"
+        del ep_hello_value_v3['spec']['ipv6Gateway']
+        sg_1_value_v3['spec']['ingress'][0]['destination']['ports'] = [5070]
         expected_writes = {
-            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
-            'endpoint/HELLO-1234-5678':
-                {"name": "tapHELLO-1234-",
-                 "profile_ids": ["openstack-sg-SG-1"],
-                 "mac": "00:11:22:33:44:66",
-                 "ipv6_subnet_ids": [],
-                 "ipv6_nets": [],
-                 "state": "active",
-                 "ipv4_gateway": "10.65.0.1",
-                 "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-                 "ipv4_nets": ["10.65.0.188/32"]},
-            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
-                {"outbound_rules": [],
-                 "inbound_rules": [{"dst_ports": [5070],
-                                    "src_tag": "SGID-default",
-                                    "ip_version": 4}]},
-            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
-                ["SG-1"]
+            ep_hello_key_v1: ep_hello_value_v1,
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3,
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
@@ -744,27 +835,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.give_way()
             self.simulated_time_advance(31)
 
-        self.assertEtcdWrites({
-            '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/config/EndpointReportingEnabled': True,
-            '/calico/v1/config/ClusterGUID': 'uuid-subnet-hooks',
-            '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
-                "outbound_rules": [{"dst_ports": ["1:65535"],
-                                    "dst_net": "0.0.0.0/0",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "dst_net": "::/0",
-                                    "ip_version": 6}],
-                "inbound_rules": [{"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 4},
-                                  {"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-            ["SGID-default"]
-        })
+        expected_writes = copy.deepcopy(self.initial_etcd3_writes)
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-subnet-hooks'
+        self.assertEtcdWrites(expected_writes)
 
         # Define two subnets.
         subnet1 = {'network_id': 'net-id-1',
@@ -839,34 +914,18 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             self.etcd_data = {}
             self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
 
-        self.assertEtcdWrites({
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-subnet-hooks-2'
+        expected_writes.update({
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
                 'network_id': 'net-id-2',
                 'cidr': '10.28.0.0/24',
                 'gateway_ip': '10.28.0.1',
                 'host_routes': [],
                 'dns_servers': ['172.18.10.55']},
-            '/calico/v1/Ready': True,
-            '/calico/v1/config/ClusterGUID': 'uuid-subnet-hooks-2',
-            '/calico/v1/config/EndpointReportingEnabled': True,
-            '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
-                'inbound_rules': [{'dst_ports': ['1:65535'],
-                                   'ip_version': 4,
-                                   'src_tag': 'SGID-default'},
-                                  {'dst_ports': ['1:65535'],
-                                   'ip_version': 6,
-                                   'src_tag': 'SGID-default'}],
-                'outbound_rules': [{'dst_net': '0.0.0.0/0',
-                                    'dst_ports': ['1:65535'],
-                                    'ip_version': 4},
-                                   {'dst_net': '::/0',
-                                    'dst_ports': ['1:65535'],
-                                    'ip_version': 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags': [
-                'SGID-default'
-            ]
         })
+        self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
         # Do a resync where we simulate having missed a dynamic update that
@@ -937,35 +996,24 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
             "protocol": "icmp",
-        }), {
-            'ip_version': 4,
-            'protocol': 'icmp',
-            'src_net': '0.0.0.0/0',
-        })
+        }), {'action': 'Allow', 'ipVersion': 4, 'protocol': 'ICMP'})
         # Type/code wildcarded, same as above.
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
             "protocol": "icmp",
             "port_range_min": -1,
             "port_range_max": -1,
-        }), {
-            'ip_version': 4,
-            'protocol': 'icmp',
-            'src_net': '0.0.0.0/0',
-        })
+        }), {'action': 'Allow', 'ipVersion': 4, 'protocol': 'ICMP'})
         # Type and code.
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
             "protocol": "icmp",
             "port_range_min": 123,
             "port_range_max": 100,
-        }), {
-            'ip_version': 4,
-            'protocol': 'icmp',
-            'src_net': '0.0.0.0/0',
-            'icmp_type': 123,
-            'icmp_code': 100,
-        })
+        }), {'icmp': {'code': 100, 'type': 123},
+             'protocol': 'ICMP',
+             'ipVersion': 4,
+             'action': 'Allow'})
         # Numeric type.
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
             "ethertype": "IPv4",
@@ -973,9 +1021,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             "direction": "egress",
             "remote_group_id": "foobar",
         }), {
-            'ip_version': 4,
+            'ipVersion': 4,
             'protocol': 123,
-            'dst_tag': "foobar"
+            'destination': {'selector': 'has(foobar)'},
+            'action': 'Allow',
         })
         # Type and code, IPv6.
         self.assertNeutronToEtcd(_neutron_rule_from_dict({
@@ -984,11 +1033,10 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             "port_range_min": 123,
             "port_range_max": 100,
         }), {
-            'ip_version': 6,
-            'protocol': 'icmpv6',
-            'src_net': '::/0',
-            'icmp_type': 123,
-            'icmp_code': 100,
+            'ipVersion': 6,
+            'protocol': 'ICMPv6',
+            'icmp': {'type': 123, 'code': 100},
+            'action': 'Allow',
         })
 
     def test_not_master_does_not_resync(self):
@@ -1042,61 +1090,39 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(exp_etcd_rule, etcd_rule)
 
-        # Check felix is happy with generated rule.
-        if neutron_rule["direction"] == "ingress":
-            rules = {"inbound_rules": [etcd_rule],
-                     "outbound_rules": []}
-        else:
-            rules = {"outbound_rules": [etcd_rule],
-                     "inbound_rules": []}
-        common.validate_profile("profile_id", rules)
-
     def test_profile_prefixing(self):
         """Startup with existing profile data from another orchestrator."""
 
         # Check that we don't delete the other orchestrator's profile data.
         self.etcd_data = {
-            '/calico/v1/policy/profile/SGID-default/rules': {
-                "outbound_rules": [{"dst_ports": ["1:65535"],
-                                    "dst_net": "0.0.0.0/0",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "dst_net": "::/0",
-                                    "ip_version": 6}],
-                "inbound_rules": [{"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 4},
-                                  {"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
-            ["SGID-default"]
-        }
+            '/calico/resources/v3/projectcalico.org/profiles/' +
+            'mesos-profile-1': json.dumps({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'Profile',
+                'metadata': {'name': 'mesos-profile-1'},
+                'spec': {'egress': [{'action': 'Allow',
+                                     'ipVersion': 4},
+                                    {'action': 'Allow',
+                                     'ipVersion': 6}],
+                         'ingress': [{'action': 'Allow',
+                                      'ipVersion': 4,
+                                      'source': {
+                                          'selector': 'has(SGID-default)'}},
+                                     {'action': 'Allow',
+                                      'ipVersion': 6,
+                                      'source': {
+                                          'selector': 'has(SGID-default)'}}],
+                         'labelsToApply': {'SGID-default': ''}}}
+            )}
         with lib.FixedUUID('uuid-profile-prefixing'):
             self.give_way()
             self.simulated_time_advance(31)
 
-        self.assertEtcdWrites({
-            '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/config/EndpointReportingEnabled': True,
-            '/calico/v1/config/ClusterGUID': 'uuid-profile-prefixing',
-            '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
-                "outbound_rules": [{"dst_ports": ["1:65535"],
-                                    "dst_net": "0.0.0.0/0",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "dst_net": "::/0",
-                                    "ip_version": 6}],
-                "inbound_rules": [{"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 4},
-                                  {"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-            ["SGID-default"]
-        })
+        expected_writes = copy.deepcopy(self.initial_etcd3_writes)
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-profile-prefixing'
+        self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
     def test_old_openstack_data(self):
@@ -1104,49 +1130,38 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Check that we clean it up.
         self.etcd_data = {
-            '/calico/v1/policy/profile/openstack-sg-OLD/rules': {
-                "outbound_rules": [{"dst_ports": ["1:65535"],
-                                    "dst_net": "0.0.0.0/0",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "dst_net": "::/0",
-                                    "ip_version": 6}],
-                "inbound_rules": [{"dst_ports": ["1:65535"],
-                                   "src_tag": "OLD",
-                                   "ip_version": 4},
-                                  {"dst_ports": ["1:65535"],
-                                   "src_tag": "OLD",
-                                   "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-OLD/tags': ["OLD"]
-        }
+            '/calico/resources/v3/projectcalico.org/profiles/' +
+            'openstack-sg-OLD': json.dumps({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'Profile',
+                'metadata': {'name': 'openstack-sg-OLD'},
+                'spec': {'egress': [{'action': 'Allow',
+                                     'ipVersion': 4},
+                                    {'action': 'Allow',
+                                     'ipVersion': 6}],
+                         'ingress': [{'action': 'Allow',
+                                      'ipVersion': 4,
+                                      'source': {
+                                          'selector':
+                                          'has(openstack-sg-OLD)'}},
+                                     {'action': 'Allow',
+                                      'ipVersion': 6,
+                                      'source': {
+                                          'selector':
+                                          'has(openstack-sg-OLD)'}}],
+                         'labelsToApply': {'openstack-sg-OLD': ''}}}
+            )}
         with lib.FixedUUID('uuid-old-data'):
             self.give_way()
             self.simulated_time_advance(31)
 
-        self.assertEtcdWrites({
-            '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/config/EndpointReportingEnabled': True,
-            '/calico/v1/config/ClusterGUID': 'uuid-old-data',
-            '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
-                "outbound_rules": [{"dst_ports": ["1:65535"],
-                                    "dst_net": "0.0.0.0/0",
-                                    "ip_version": 4},
-                                   {"dst_ports": ["1:65535"],
-                                    "dst_net": "::/0",
-                                    "ip_version": 6}],
-                "inbound_rules": [{"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 4},
-                                  {"dst_ports": ["1:65535"],
-                                   "src_tag": "SGID-default",
-                                   "ip_version": 6}]},
-            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
-            ["SGID-default"]
-        })
+        expected_writes = copy.deepcopy(self.initial_etcd3_writes)
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-old-data'
+        self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set([
-            '/calico/v1/policy/profile/openstack-sg-OLD/tags',
-            '/calico/v1/policy/profile/openstack-sg-OLD/rules'
+            '/calico/resources/v3/projectcalico.org/profiles/openstack-sg-OLD'
         ]))
 
 
@@ -1186,9 +1201,9 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.driver._status_updating_thread(1)
 
     @mock.patch("networking_calico.plugins.ml2.drivers.calico.t_etcd."
-                "CalicoEtcdWatcher",
+                "StatusWatcher",
                 autospec=True)
-    def test_status_thread_mainline(self, m_CalicoEtcdWatcher):
+    def test_status_thread_mainline(self, m_StatusWatcher):
         self.driver.transport.is_master = True
         count = [0]
 
@@ -1208,7 +1223,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             with mock.patch("eventlet.sleep") as m_sleep:
                 m_sleep.side_effect = maybe_end_loop
                 self.driver._status_updating_thread(0)
-        m_watcher = m_CalicoEtcdWatcher.return_value
+        m_watcher = m_StatusWatcher.return_value
         self.assertEqual(
             [
                 mock.call(m_watcher.loop),
@@ -1353,7 +1368,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.assertEqual([mock.call(("host", "port"))], m_queue.put.mock_calls)
 
 
-class TestCalicoEtcdWatcher(unittest.TestCase):
+class TestStatusWatcher(_TestEtcdBase):
     def setUp(self):
         # Mock out config.
         lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
@@ -1361,74 +1376,103 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         lib.m_compat.cfg.CONF.calico.etcd_key_file = None
         lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
+        super(TestStatusWatcher, self).setUp()
         self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
-        self.watcher = t_etcd.CalicoEtcdWatcher(self.driver)
-        lib.m_etcd.Client.reset_mock()
+        self.watcher = t_etcd.StatusWatcher(self.driver)
 
     def test_tls(self):
         lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
         lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
-        self.watcher = t_etcd.CalicoEtcdWatcher(self.driver)
-        self.assertEqual([mock.call(ca_cert='ca-cert-file',
-                                    cert=('cert-file', 'key-file'),
-                                    host='localhost',
-                                    port=4001,
-                                    protocol='https',
-                                    expected_cluster_id=None)],
-                         lib.m_etcd.Client.mock_calls)
+        self.watcher = t_etcd.StatusWatcher(self.driver)
 
     def test_snapshot(self):
-        m_response = mock.Mock()
+        # Populate initial status tree data, for initial snapshot testing.
 
-        m_node_to_ignore = mock.Mock()
-        m_node_to_ignore.key = "/calico/felix/v1/host/hostname/" \
-                               "last_reported_status"
-        m_node_to_ignore.value = '{"uptime": 10, "first_update": true}'
+        felix_status_key = '/calico/felix/v1/host/hostname/status'
+        felix_last_reported_status_key = \
+            '/calico/felix/v1/host/hostname/last_reported_status'
+        ep_on_that_host_key = ('/calico/felix/v1/host/hostname/workload/' +
+                               'openstack/wlid/endpoint/ep1')
+        ep_on_unknown_host_key = ('/calico/felix/v1/host/unknown/workload/' +
+                                  'openstack/wlid/endpoint/ep2')
 
-        m_status_node = mock.Mock()
-        m_status_node.key = "/calico/felix/v1/host/hostname/status"
-        m_status_node.value = '{"uptime": 10, "first_update": true}'
+        self.etcd_data = {
+            # An agent status key to ignore.
+            felix_last_reported_status_key: json.dumps({
+                "uptime": 10,
+                "first_update": True}),
+            # An agent status key to take notice of.
+            felix_status_key: json.dumps({
+                "uptime": 10,
+                "first_update": True}),
+            # A port status key to take notice of.
+            ep_on_that_host_key: '{"status": "up"}',
+            # A port status key to ignore.
+            ep_on_unknown_host_key: '{"status": "up"}',
+        }
 
-        m_port_status_node = mock.Mock()
-        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
-                                 "openstack/wlid/endpoint/ep1"
-        m_port_status_node.value = '{"status": "up"}'
+        # Arrange that the first watch call, on that status tree, will stop the
+        # watcher.
+        def _iterator():
+            _log.info("Stop watcher now")
+            self.watcher.stop()
+            yield None
 
-        m_port_status_node_ignored = mock.Mock()
-        m_port_status_node_ignored.key = "/calico/felix/v1/host/unknown/" \
-                                         "workload/openstack/wlid/endpoint/ep2"
-        m_port_status_node_ignored.value = '{"status": "up"}'
+        def _cancel():
+            pass
 
-        m_response.leaves = [
-            m_node_to_ignore,
-            m_status_node,
-            m_port_status_node,
-            m_port_status_node_ignored,
-        ]
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
 
-        self.watcher._on_snapshot_loaded(m_response)
+        # Start the watcher.  It will do initial snapshot processing, then stop
+        # when it tries to watch for further changes.
+        self.watcher.loop()
+
         self.driver.on_felix_alive.assert_called_once_with("hostname",
                                                            new=True)
-        self.assertEqual(
-            [
-                mock.call("hostname", "ep1", {"status": "up"}),
-                mock.call("unknown", "ep2", None),
-            ],
-            self.driver.on_port_status_changed.mock_calls)
+        self.driver.on_port_status_changed.assert_has_calls([
+            mock.call("unknown", "ep2", {"status": "up"}),
+            mock.call("hostname", "ep1", {"status": "up"}),
+        ], any_order=True)
 
-        # Snapshot 2: should figure out that an endpoint has been removed.
-        m_response.leaves = [
-            m_node_to_ignore,
-            m_status_node,
-        ]
+        # Start the watcher again, with the same etcd data.  We should see the
+        # same status callbacks.
+        self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
-        self.watcher._on_snapshot_loaded(m_response)
-        self.assertEqual(
-            [
-                mock.call("hostname", "ep1", None),
-            ],
-            self.driver.on_port_status_changed.mock_calls)
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
+        self.watcher.loop()
+        self.driver.on_felix_alive.assert_called_once_with("hostname",
+                                                           new=True)
+        self.driver.on_port_status_changed.assert_has_calls([
+            mock.call("unknown", "ep2", {"status": "up"}),
+            mock.call("hostname", "ep1", {"status": "up"}),
+        ], any_order=True)
+
+        # Resync after deleting the unknown host endpoint.  We should see that
+        # endpoint reported with status None.
+        del self.etcd_data[ep_on_unknown_host_key]
+        self.driver.on_felix_alive.reset_mock()
+        self.driver.on_port_status_changed.reset_mock()
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
+        self.watcher.loop()
+        self.driver.on_felix_alive.assert_called_once_with("hostname",
+                                                           new=True)
+        self.driver.on_port_status_changed.assert_has_calls([
+            mock.call("unknown", "ep2", None),
+            mock.call("hostname", "ep1", {"status": "up"}),
+        ], any_order=True)
+
+        # Resync after deleting the Felix status.  We should see the other
+        # endpoint reported with status None.
+        del self.etcd_data[felix_status_key]
+        self.driver.on_felix_alive.reset_mock()
+        self.driver.on_port_status_changed.reset_mock()
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
+        self.watcher.loop()
+        self.driver.on_felix_alive.assert_not_called()
+        self.driver.on_port_status_changed.assert_has_calls([
+            mock.call("hostname", "ep1", None),
+        ], any_order=True)
 
     def test_endpoint_status_add_delete(self):
         m_port_status_node = self._add_test_endpoint()
@@ -1463,37 +1507,10 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
                                  "openstack/wlid/endpoint"
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
-        self.assertEqual({}, self.watcher._endpoints_by_host)
-
-    def test_on_per_host_dir_delete(self):
-        self._add_test_endpoint()
-
-        # Then delete its workload directory
-        self.watcher._on_per_host_dir_delete(mock.Mock(), "hostname")
-        # And one we didn't know about
-        self.watcher._on_per_host_dir_delete(mock.Mock(), "other")
-        self.assertEqual({}, self.watcher._endpoints_by_host)
         self.assertEqual(
-            [
-                mock.call("hostname", "ep1", {"status": "up"}),
-                mock.call("hostname", "ep1", None),
-            ],
+            [],
             self.driver.on_port_status_changed.mock_calls)
-
-    def test_on_per_workload_dir_delete(self):
-        self._add_test_endpoint()
-
-        # Then delete its workload directory
-        self.watcher._on_per_host_dir_delete(mock.Mock(), "hostname", "wlid")
-        # And one we didn't know about
-        self.watcher._on_per_host_dir_delete(mock.Mock(), "other", "wlid")
         self.assertEqual({}, self.watcher._endpoints_by_host)
-        self.assertEqual(
-            [
-                mock.call("hostname", "ep1", {"status": "up"}),
-                mock.call("hostname", "ep1", None),
-            ],
-            self.driver.on_port_status_changed.mock_calls)
 
     def _add_test_endpoint(self):
         # Add a workload to be deleted
@@ -1535,13 +1552,6 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
                 mock.call("hostname", "epid", None),
             ],
             self.driver.on_port_status_changed.mock_calls)
-
-    def test_force_resync(self):
-        m_response = mock.Mock()
-        m_response.action = "delete"
-        m_response.key = "/calico/felix/v1/host/"
-        self.assertRaises(ResyncRequired, self.watcher._force_resync,
-                          m_response, foo="bar")
 
 
 def _neutron_rule_from_dict(overrides):
