@@ -65,12 +65,6 @@ type ResourceListObject interface {
 	v1.ListMetaAccessor
 }
 
-// Composition of resource and listResource
-type resourceObj struct {
-	ResourceObject
-	ResourceListObject
-}
-
 type ResourceActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceObject, error)
 type ResourceListActionCommand func(context.Context, client.Interface, ResourceObject) (ResourceListObject, error)
 
