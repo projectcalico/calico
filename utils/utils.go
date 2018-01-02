@@ -77,7 +77,10 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *api.Workl
 func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 	// Only try to delete the device if a namespace was passed in.
 	if args.Netns != "" {
-		logger.Debug("Checking namespace & device exist.")
+		logger.WithFields(logrus.Fields{
+			"netns": args.Netns,
+			"iface": args.IfName,
+		}).Debug("Checking namespace & device exist.")
 		devErr := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 			_, err := netlink.LinkByName(args.IfName)
 			return err
@@ -94,7 +97,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 				return err
 			}
 		} else {
-			logger.Info("veth does not exist, no need to clean up.")
+			logger.WithField("ifName", args.IfName).Info("veth does not exist, no need to clean up.")
 		}
 	}
 

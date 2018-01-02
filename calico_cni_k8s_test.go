@@ -1406,22 +1406,22 @@ var _ = Describe("CalicoCni", func() {
 				})
 			})
 
-			PContext("Create a container then send another ADD for the same container but with a different interface", func() {
+			Context("Create a container then send another ADD for the same container but with a different interface", func() {
 				netconf := fmt.Sprintf(`
 				{
-				"cniVersion": "%s",
-				"name": "net10",
-				"type": "calico",
-				"etcd_endpoints": "http://%s:2379",
-				"datastore_type": "%s",
-				"log_level": "debug",
-			 	"ipam": {
-			    		"type": "calico-ipam"
-			        	},
-				"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-				"policy": {"type": "k8s"}
+				  "cniVersion": "%s",
+				  "name": "net10",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "datastore_type": "%s",
+				  "log_level": "debug",
+			 	  "ipam": {
+				    "type": "calico-ipam"
+				  },
+				  "kubernetes": {
+				    "k8s_api_root": "http://127.0.0.1:8080"
+				  },
+				  "policy": {"type": "k8s"}
 				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 				It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the container", func() {
@@ -1458,6 +1458,13 @@ var _ = Describe("CalicoCni", func() {
 					// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
 					containerID, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
+					// Make sure the pod gets cleaned up, whether we fail or not.
+					expectedIfaceName := "eth0"
+					defer func() {
+						_, err := testutils.DeleteContainerWithIdAndIfaceName(
+							netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID, expectedIfaceName)
+						Expect(err).ShouldNot(HaveOccurred())
+					}()
 					Eventually(session).Should(gexec.Exit())
 
 					result, err := testutils.GetResultForCurrent(session, cniVersion)
@@ -1465,7 +1472,7 @@ var _ = Describe("CalicoCni", func() {
 						log.Fatalf("Error getting result from the session: %v\n", err)
 					}
 
-					log.Printf("Unmarshalled result from first ADD: %v\n", result)
+					log.Printf("First container, unmarshalled result: %v\n", result)
 
 					// The endpoint is created in etcd
 					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -1480,10 +1487,10 @@ var _ = Describe("CalicoCni", func() {
 						ContainerID:  containerID,
 					}
 
-					wrkload, err := ids.CalculateWorkloadEndpointName(false)
+					wepName, err := ids.CalculateWorkloadEndpointName(false)
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
+					Expect(endpoints.Items[0].Name).Should(Equal(wepName))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
 						"projectcalico.org/namespace":    "test",
@@ -1494,9 +1501,14 @@ var _ = Describe("CalicoCni", func() {
 
 					// Try to create the same container but with a different endpoint (container interface name 'eth1'),
 					// so CNI receives the ADD for the same containerID but different endpoint.
-					session, _, _, _, err = testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth1", contNs)
+					session, _, _, _, err = testutils.RunCNIPluginWithId(
+						netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth1", contNs)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit())
+
+					// If the above command succeeds, the CNI plugin will have renamed the container side of the
+					// veth to "eth1".  We need to clean it up under the correct name, or we'll leak it.
+					expectedIfaceName = "eth1"
 
 					// The endpoint is created in etcd
 					endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -1505,7 +1517,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Returned endpoint should still have the same fields even after calling the CNI plugin with a different interface name.
 					// Calico CNI currently only supports one endpoint (interface) per pod.
-					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
+					Expect(endpoints.Items[0].Name).Should(Equal(wepName))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
 						"projectcalico.org/namespace":    "test",
@@ -1540,6 +1552,11 @@ var _ = Describe("CalicoCni", func() {
 					// Now since we can't use the same container namespace for the second container, we need to create a new one.
 					contNs2, err := ns.NewNS()
 					Expect(err).NotTo(HaveOccurred())
+					containerID2 := "random-cid"
+					defer func() {
+						_, err := testutils.DeleteContainerWithId(netconf, contNs2.Path(), name2, testutils.K8S_TEST_NS, containerID2)
+						Expect(err).ShouldNot(HaveOccurred())
+					}()
 
 					err = contNs2.Do(func(_ ns.NetNS) error {
 						lo, err := netlink.LinkByName("lo")
@@ -1551,8 +1568,8 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
-					containerID2 := "random-cid"
-					session2, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name2, testutils.K8S_TEST_NS, "", containerID2, "eth0", contNs2)
+					session2, _, _, _, err := testutils.RunCNIPluginWithId(
+						netconf, name2, testutils.K8S_TEST_NS, "", containerID2, "eth0", contNs2)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session2).Should(gexec.Exit())
 
@@ -1561,7 +1578,7 @@ var _ = Describe("CalicoCni", func() {
 						log.Fatalf("Error getting result from the session: %v\n", err)
 					}
 
-					log.Printf("Unmarshalled result from first ADD: %v\n", result)
+					log.Printf("Second container: unmarshalled result: %v\n", result)
 
 					// Make sure BOTH of the endpoints are there in etcd
 					endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -1595,13 +1612,6 @@ var _ = Describe("CalicoCni", func() {
 
 					// Assert this WEP has the new containerID for the second pod.
 					Expect(ep.Spec.ContainerID).Should(Equal(containerID2))
-
-					// Delete both pods.
-					_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID)
-					Expect(err).ShouldNot(HaveOccurred())
-
-					_, err = testutils.DeleteContainerWithId(netconf, contNs2.Path(), name2, testutils.K8S_TEST_NS, containerID2)
-					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
 		})

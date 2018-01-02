@@ -411,6 +411,10 @@ func DeleteContainer(netconf, netnspath, podName, podNamespace string) (exitCode
 }
 
 func DeleteContainerWithId(netconf, netnspath, podName, podNamespace, containerId string) (exitCode int, err error) {
+	return DeleteContainerWithIdAndIfaceName(netconf, netnspath, podName, podNamespace, containerId, "eth0")
+}
+
+func DeleteContainerWithIdAndIfaceName(netconf, netnspath, podName, podNamespace, containerId, ifaceName string) (exitCode int, err error) {
 	netnsname := path.Base(netnspath)
 	container_id := netnsname[:10]
 	if containerId != "" {
@@ -426,12 +430,12 @@ func DeleteContainerWithId(netconf, netnspath, podName, podNamespace, containerI
 		"CNI_COMMAND=DEL",
 		fmt.Sprintf("CNI_CONTAINERID=%s", container_id),
 		fmt.Sprintf("CNI_NETNS=%s", netnspath),
-		"CNI_IFNAME=eth0",
+		"CNI_IFNAME=" + ifaceName,
 		fmt.Sprintf("CNI_PATH=%s", os.Getenv("DIST")),
 		k8sEnv,
 	}
 
-	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
+	log.Debugf("Deleting container with ID %v CNI plugin with the following env vars: %v", containerId, env)
 
 	// Run the CNI plugin passing in the supplied netconf
 	subProcess := exec.Command(fmt.Sprintf("%s/%s", os.Getenv("DIST"), os.Getenv("PLUGIN")), netconf)
