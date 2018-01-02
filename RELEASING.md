@@ -76,6 +76,11 @@ To build Debian and RPM packages for a release:
 
       FORCE_VERSION=<new version> make deb rpm
 
-  to rebuild packages with those changes in.
+  to rebuild packages with those changes in.  (Where `<new version>` is exactly
+  the same as when you ran `make release VERSION=<new version>` above.)
 
 - Once the changes are approved and any testing looks good, merge the PR.
+
+Tigera note: the wider Calico process release, including how to publish those
+packages, is now documented in
+[Confluence](https://tigera.atlassian.net/wiki/spaces/ENG/pages/17039710/Release+Process).
