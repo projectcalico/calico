@@ -55,8 +55,19 @@ func main() {
 	var namespace ns.NetNS
 	if interfaceName != "" {
 		// Create a new network namespace for the workload.
-		namespace, err = ns.NewNS()
-		panicIfError(err)
+		attempts := 0
+		for {
+			namespace, err = ns.NewNS()
+			if err == nil {
+				break
+			}
+			log.WithError(err).Error("Failed to create namespace")
+			attempts++
+			time.Sleep(1 * time.Second)
+			if attempts > 30 {
+				log.WithError(err).Panic("Giving up after multiple retries")
+			}
+		}
 		log.WithField("namespace", namespace).Debug("Created namespace")
 
 		// Create a veth pair.
