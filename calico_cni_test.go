@@ -71,7 +71,7 @@ var _ = Describe("CalicoCni", func() {
 				// Profile is created with correct details
 				profile, err := calicoClient.Profiles().Get(ctx, "net1", options.GetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
-				Expect(profile.Labels).Should(Equal(map[string]string{"net1": ""}))
+				Expect(profile.Spec.LabelsToApply).Should(Equal(map[string]string{"net1": ""}))
 				Expect(profile.Spec.Egress).Should(Equal([]api.Rule{{Action: "Allow"}}))
 				Expect(profile.Spec.Ingress).Should(Equal([]api.Rule{{Action: "Allow", Source: api.EntityRule{Selector: "has(net1)"}}}))
 
