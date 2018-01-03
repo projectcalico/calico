@@ -16,6 +16,7 @@ package migrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -25,8 +26,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
-
-	"errors"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -45,6 +44,9 @@ const (
 	maxApplyRetries         = 5
 	numAppliesPerUpdate     = 100
 	retryInterval           = 5 * time.Second
+
+	// The minimum version to upgrade from. This should not include the leading 'v'.
+	minUpgradeVersion = "2.6.5"
 )
 
 // Interface is the migration interface used for migrating data from version
@@ -53,6 +55,7 @@ type Interface interface {
 	ValidateConversion() (*MigrationData, error)
 	IsDestinationEmpty() (bool, error)
 	ShouldMigrate() (bool, error)
+	CanMigrate() error
 	Migrate() (*MigrationData, error)
 	Abort() error
 	Complete() error
@@ -658,51 +661,101 @@ func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error 
 }
 
 // ShouldMigrate checks version information and reports if migration is needed
-// and is possible.
+// and is possible.  This checks both the v3 and v1 versions and indicates no migration
+// if the v3 data is present and indicates a version of v3.0+.  This method is used for
+// automated KDD migrations where aborted upgrades use rollback to revert the previous
+// system state.  The rollback will remove the v3 data thus allowing aborted upgrades
+// to be retried.  See also CanMigrate below.
+//
+// If neither the v1 nor v3 versions are present, then no migration is required.
 func (m *migrationHelper) ShouldMigrate() (bool, error) {
 	ci, err := m.clientv3.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
 	if err == nil {
 		if yes, err := versionRequiresMigration(ci.Spec.CalicoVersion); err != nil {
-			log.Errorf("Could not parse CalicoVersion %s in ClusterInformation: %v", ci.Spec.CalicoVersion, err)
-			return true, err
+			log.Errorf("Unexpected CalicoVersion '%s' in ClusterInformation: %v", ci.Spec.CalicoVersion, err)
+			return true, fmt.Errorf("unexpected CalicoVersion '%s' in ClusterInformation: %v", ci.Spec.CalicoVersion, err)
 		} else if yes {
-			log.Debugf("ClusterInformation contained CalicoVersion %s and indicates migration is needed", ci.Spec.CalicoVersion)
+			log.Debugf("ClusterInformation contained CalicoVersion '%s' and indicates migration is needed", ci.Spec.CalicoVersion)
 			return true, nil
 		}
-		log.Debugf("ClusterInformation contained CalicoVersion %s and indicates migration is not needed", ci.Spec.CalicoVersion)
+		log.Debugf("ClusterInformation contained CalicoVersion '%s' and indicates migration is not needed", ci.Spec.CalicoVersion)
 		return false, nil
 	} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 		// The error indicates a problem with accessing the resource
-		return false, err
+		return false, fmt.Errorf("unable to query ClusterInformation to determine Calico version: %v", err)
 	}
-	// The resource does not exist from the clientv3 so we need to check the
-	// clientv1 version.
 
-	// Grab the version from the clientv1
+	// The resource does not exist from the clientv3 so we need to check the
+	// clientv1 version.  Grab the version from the clientv1.
 	v, err := m.getV1ClusterVersion()
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			log.Debugf("CalicoVersion does exist in the v1 or v3 data, no migration needed")
 			// The resource does not exist in the clientv1 (or in the clientv3)
 			// so no migration is needed because it seems that this is an
-			// unitialized datastore.
+			// uninitialized datastore.
 			return false, nil
 		}
 
 		// The error indicates a problem accessing the resource.
-		return false, err
+		return false, fmt.Errorf("unable to query global Felix configuration to determine Calico version: %v", err)
 	}
 
-	// Migrate only if it is possible to migrate from the current version
+	// Migrate only if it is possible to migrate from the current version.
 	if yes, err := versionRequiresMigration(v); err != nil {
-		log.Errorf("Unable to migrate version %s: %v", v, err)
-		return false, fmt.Errorf("Unable to migrate version %s: %v", v, err)
+		// Hit an error parsing the version, or we determined that the version is not
+		// valid to migrate from.
+		log.Errorf("Unable to migrate data from version '%s': %v", v, err)
+		return false, fmt.Errorf("unable to migrate data from version '%s': %v", v, err)
 	} else if !yes {
-		log.Errorf("Migration to v3 requires a base of Calico v2.6.4+, currently at %s", v)
-		return false, errors.New(fmt.Sprintf("Migration to v3 requires a base of Calico v2.6.4+, currently at %s", v))
+		// Version indicates that migration is not required - however, we should never have a
+		// v3.0+ version in the v1 API data which suggests a modified/hacked set up which we
+		// cannot migrate from.
+		log.Errorf("Unexpected version in the global Felix configuration, currently at %s", v)
+		return false, errors.New(fmt.Sprintf("unexpected Calico version '%s': migration to v3 should be from a tagged "+
+			"release of Calico v%s+", v, minUpgradeVersion))
 	}
-	log.Debugf("GlobalConfig contained CalicoVersion %s and indicates migration is needed", v)
+	log.Debugf("GlobalConfig contained CalicoVersion '%s' and indicates migration is needed", v)
 	return true, nil
+}
+
+// CanMigrate checks version information and reports if migration is possible (nil error).
+// This differs from ShouldMigrate in that it only checks the v1 API - thus allowing aborted
+// upgrades to be retried when the v3 data has not been removed.  This method is used by
+// the calico-upgrade script which performs additional checks to verify that the v3
+// datastore is clean.  If the v1 version is not present, this is considered an error case.
+func (m *migrationHelper) CanMigrate() error {
+	m.status("Checking Calico version is suitable for migration")
+	v, err := m.getV1ClusterVersion()
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			m.statusBullet("no version found in the v1 API datastore")
+			return errors.New("unable to determine the Calico API version: no version information found - this may be " +
+				"due to a misconfiguration of the v1 API datastore access details")
+		}
+
+		// The error indicates a problem accessing the resource.
+		m.statusBullet("unable to query Calico version in the v1 API datastore: %v", err)
+		return err
+	}
+
+	// Migrate only if it is possible to migrate from the current version.
+	m.statusBullet("determined Calico version of: %s", v)
+	if yes, err := versionRequiresMigration(v); err != nil {
+		// Hit an error parsing the version, or we determined that the version is not
+		// valid to migrate from.
+		m.statusBullet("unable to parse version")
+		return fmt.Errorf("unable to migrate data from version '%s': %v", v, err)
+	} else if !yes {
+		// Version indicates that migration is not required - however, we should never have a
+		// v3.0+ version in the v1 API data which suggests a modified/hacked set up which we
+		// cannot migrate from.
+		m.statusBullet("unexpected version in the v1 API datastore: should not have a version v3.0+")
+		return errors.New(fmt.Sprintf("unexpected Calico version '%s': migration to v3 should be from a tagged "+
+			"release of Calico v%s+", v, minUpgradeVersion))
+	}
+	m.statusBullet("the v1 API data can be migrated to the v3 API")
+	return nil
 }
 
 // getV1ClusterVersion reads the CalicoVersion from the v1 client interface.
@@ -721,8 +774,8 @@ func (m *migrationHelper) getV1ClusterVersion() (string, error) {
 func versionRequiresMigration(v string) (bool, error) {
 	sv, err := semver.NewVersion(strings.TrimPrefix(v, "v"))
 	if err != nil {
-		log.Warnf("Unable to parse Calico version %s: %v", v, err)
-		return false, fmt.Errorf("Error converting version %s", v)
+		log.Warnf("unable to parse Calico version %s: %v", v, err)
+		return false, errors.New("unable to parse the version")
 	}
 
 	if sv.Major >= 3 {
@@ -730,19 +783,22 @@ func versionRequiresMigration(v string) (bool, error) {
 		// No need to migrate 3.0 or greater
 		return false, nil
 	}
+	// Omit the pre-release from the comparison - we allow pre-releases to enable testing
+	// of the upgrade.
+	sv.PreRelease = semver.PreRelease("")
 
-	// Using 2.6.3 for the comparison point because '2.6.4-rc1' is LessThan
-	// '2.6.4', and we want the -rc1 to be upgradeable.
-	sv263 := semver.New("2.6.3")
-	if sv263.LessThan(*sv) {
-		// Version is greater than or equal to 2.6.4 and less than 3.0
+	// Compare the parsed version against the minimum required version.
+	svMin := semver.New(minUpgradeVersion)
+	if sv.Compare(*svMin) >= 0 {
+		// Version is greater than or equal to the minimum upgrade version, and less than 3.0
 		return true, nil
 	}
 
-	// Version is less than 2.6.4 (including pre-releases). This is an
+	// Version is less than the minimum required version (including pre-releases). This is an
 	// error case and we cannot allow upgrade to continue.
-	log.Infof("Cannot migrate from version %s", v)
-	return false, fmt.Errorf("Migration to v3 requires a base of Calico v2.6.4+, currently at %s", v)
+	log.Infof("cannot migrate from version %s: migration to v3 requires a tagged release of "+
+		"Calico v%s+", v, minUpgradeVersion)
+	return false, fmt.Errorf("migration to v3 requires a tagged release of Calico v%s+", minUpgradeVersion)
 }
 
 // convertLogLevel converts the v1 log level to the equivalent v3 log level. We
