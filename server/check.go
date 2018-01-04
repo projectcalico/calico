@@ -15,23 +15,28 @@
 package server
 
 import (
-	authz "github.com/projectcalico/app-policy/proto"
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/genproto/googleapis/rpc/code"
 )
+var OK = code.Code_value["OK"]
+var PERMISSION_DENIED = code.Code_value["PERMISSION_DENIED"]
 
 // Check a list of policies and return OK if the check passes, or PERMISSION_DENIED if the check fails.
 // Note, if no policy matches, the default is PERMISSION_DENIED.
-func checkPolicies(policies []api.GlobalNetworkPolicy, req *authz.Request) (status authz.Response_Status_Code) {
+func checkPolicies(policies []api.GlobalNetworkPolicy, req *authz.CheckRequest) (s status.Status) {
+	s = status.Status{}
 	if len(policies) == 0 {
 		log.Debug("0 active policies, allow request.")
-		status = authz.Response_Status_OK
+		s.Code = OK
 		return
 	}
 	// If there are active policies, the default is deny if no rules match.
-	status = authz.Response_Status_PERMISSION_DENIED
+	s.Code = PERMISSION_DENIED
 	for i, p := range policies {
 		action := checkPolicy(p.Spec, req)
 		log.Debugf("Policy %d returned action %s", i, action)
@@ -39,10 +44,10 @@ func checkPolicies(policies []api.GlobalNetworkPolicy, req *authz.Request) (stat
 		case api.Pass:
 			continue
 		case api.Allow:
-			status = authz.Response_Status_OK
+			s.Code = OK
 			break
 		case api.Log, api.Deny:
-			status = authz.Response_Status_PERMISSION_DENIED
+			s.Code = PERMISSION_DENIED
 			break
 		}
 	}
@@ -50,7 +55,7 @@ func checkPolicies(policies []api.GlobalNetworkPolicy, req *authz.Request) (stat
 }
 
 // checkPolicy checks if the policy matches the request data, and returns the action.
-func checkPolicy(policy api.GlobalNetworkPolicySpec, req *authz.Request) (action api.Action) {
+func checkPolicy(policy api.GlobalNetworkPolicySpec, req *authz.CheckRequest) (action api.Action) {
 	// Note that we support only Ingress policy for this prototype.
 	for _, r := range policy.Ingress {
 		if match(r, req) {

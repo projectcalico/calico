@@ -22,8 +22,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"fmt"
 
-	authz "github.com/projectcalico/app-policy/proto"
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	"github.com/projectcalico/app-policy/server"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -139,13 +140,17 @@ func runClient(arguments map[string]interface{}) {
 	}
 	defer conn.Close()
 	client := authz.NewAuthorizationClient(conn)
-	req := authz.Request{
-		Subject: &authz.Request_Subject{
-			ServiceAccount: arguments["<account>"].(string),
-			Namespace:      arguments["<namespace>"].(string)}}
+	req := authz.CheckRequest{
+		Attributes: &authz.AttributeContext{
+			Source: &authz.AttributeContext_Peer{
+				Principal: fmt.Sprintf("spiffe://cluster.local/ns/%s/sa/%s",
+					arguments["<namespace>"].(string), arguments["<account>"].(string)),
+			},
+		},
+	}
 	if arguments["--method"].(bool) {
-		req.Action = &authz.Request_Action{
-			Http: &authz.HTTPRequest{
+		req.Attributes.Request.Request = &authz.AttributeContext_Request_HttpRequest{
+			HttpRequest: &authz.AttributeContext_HTTPRequest{
 				Method: arguments["<method>"].(string),
 			},
 		}

@@ -15,7 +15,7 @@
 package server
 
 import (
-	authz "github.com/projectcalico/app-policy/proto"
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -25,6 +25,9 @@ import (
 	"golang.org/x/net/context"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/genproto/googleapis/rpc/code"
+
 )
 
 type (
@@ -50,9 +53,9 @@ func NewServer(config apiconfig.CalicoAPIConfig, nodeName string) (*auth_server,
 	return &auth_server{nodeName, q}, nil
 }
 
-func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Response, error) {
+func (as *auth_server) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	log.Debugf("Check(%v, %v)", ctx, req)
-	resp := authz.Response{Status: &authz.Response_Status{Code: authz.Response_Status_INTERNAL}}
+	resp := authz.CheckResponse{Status: &status.Status{Code: code.Code_value["INTERNAL"]}}
 	cid, err := getContainerFromContext(ctx)
 	if err != nil {
 		log.Errorf("Failed to get container ID. %v", err)
@@ -67,8 +70,8 @@ func (as *auth_server) Check(ctx context.Context, req *authz.Request) (*authz.Re
 		log.Errorf("Failed to get policies. %v", err)
 		return &resp, nil
 	}
-	status := checkPolicies(policies, req)
-	resp.Status.Code = status
+	st := checkPolicies(policies, req)
+	resp.Status = &st
 	log.WithFields(log.Fields{
 		"Request":  req,
 		"Response": resp,

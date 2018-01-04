@@ -15,7 +15,10 @@
 package server
 
 import (
-	authz "github.com/projectcalico/app-policy/proto"
+	"regexp"
+	"fmt"
+
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -23,39 +26,65 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const SPIFFE_ID_PATTERN = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
+var spiffeIdRegExp *regexp.Regexp
+
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
-func match(rule api.Rule, req *authz.Request) bool {
+func match(rule api.Rule, req *authz.CheckRequest) bool {
 	log.Debugf("Checking rule %v on request %v", rule, req)
-	return matchSubject(rule.Source, req.GetSubject()) && matchAction(rule, req.GetAction())
+	attr := req.GetAttributes()
+	return matchPeer(rule.Source, attr.GetSource()) && matchRequest(rule, attr.GetRequest())
 }
 
-func matchSubject(er api.EntityRule, subj *authz.Request_Subject) bool {
-	return matchServiceAccounts(er.ServiceAccounts, subj)
+func matchPeer(er api.EntityRule, peer *authz.AttributeContext_Peer) bool {
+	return matchServiceAccounts(er.ServiceAccounts, peer)
 }
 
-func matchAction(rule api.Rule, act *authz.Request_Action) bool {
+func matchRequest(rule api.Rule, req *authz.AttributeContext_Request) bool {
 	log.WithFields(log.Fields{
-		"action": act,
-	}).Debug("Matching action.")
-	return matchHTTP(rule.HTTP, act.GetHttp())
+		"request": req,
+	}).Debug("Matching request.")
+	return matchHTTP(rule.HTTP, req.GetHttpRequest())
 }
 
-func matchServiceAccounts(saMatch *api.ServiceAccountMatch, subj *authz.Request_Subject) bool {
-	accountName := subj.GetServiceAccount()
-	namespace := subj.GetNamespace()
-	labels := subj.GetServiceAccountLabels()
+func matchServiceAccounts(saMatch *api.ServiceAccountMatch, peer *authz.AttributeContext_Peer) bool {
+	principle := peer.GetPrincipal()
+	labels := peer.GetLabels()
 	log.WithFields(log.Fields{
-		"account":   accountName,
-		"namespace": namespace,
+		"peer":   principle,
 		"labels":    labels,
 		"rule":      saMatch},
 	).Debug("Matching service account.")
+	accountName, _, err := parseSpiffeId(principle)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"principle": principle,
+			"msg": err,
+		}).Warn("Unable to parse authenticated principle as SPIFFE ID.")
+		return false
+	}
 	if saMatch == nil {
 		log.Debug("nil ServiceAccountMatch.  Return true.")
 		return true
 	}
 	return matchServiceAccountName(saMatch.Names, accountName) &&
 		matchServiceAccountLabels(saMatch.Selector, labels)
+}
+
+
+// Parse an Istio SPIFFE ID and extract the service account name and namespace.
+func parseSpiffeId(id string) (string, string, error) {
+	// Init the regexp the first time this is called, and store it in the package namespace.
+	if spiffeIdRegExp == nil {
+		// We drop the returned error here, since we are compiling
+		spiffeIdRegExp, _ = regexp.Compile(SPIFFE_ID_PATTERN)
+	}
+	match := spiffeIdRegExp.FindStringSubmatch(id)
+	if match == nil {
+		return "", "", fmt.Errorf("expected match %s, got %s", SPIFFE_ID_PATTERN, id)
+	} else {
+		return match[1], match[0], nil
+	}
 }
 
 func matchServiceAccountName(names []string, name string) bool {
@@ -86,7 +115,7 @@ func matchServiceAccountLabels(selectorStr string, labels map[string]string) boo
 
 }
 
-func matchHTTP(rule *api.HTTPRule, req *authz.HTTPRequest) bool {
+func matchHTTP(rule *api.HTTPRule, req *authz.AttributeContext_HTTPRequest) bool {
 	log.WithFields(log.Fields{
 		"rule": rule,
 	}).Debug("Matching HTTP.")

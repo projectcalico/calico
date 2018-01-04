@@ -25,3 +25,13 @@ import:
   version: release-1.8
   subpackages:
   - pkg/util/validation
+- package: github.com/envoyproxy/data-plane-api
+  version: master
+  subpackages:
+  - api/auth
+- package: github.com/google/protobuf
+  version: v3.5.0.1
+- package: github.com/lyft/protoc-gen-validate
+  version: v0.0.5
+- package: github.com/googleapis/googleapis
+- package: google.golang.org/genproto/googleapis/
