@@ -13,6 +13,11 @@ any policy.
 For `calicoctl` commands that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
 
+> **Important**: When rendering security rules on other hosts, Calico uses the
+> `expectedIPs` field to resolve label selectors to IP addresses. If the `expectedIPs` field
+> is omitted then security rules that use labels will fail to match this endpoint.
+{: .alert .alert-danger}
+
 ### Sample YAML
 
 ```yaml
