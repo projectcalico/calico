@@ -331,8 +331,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			profile := &api.Profile{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   conf.Name,
-					Labels: map[string]string{conf.Name: ""},
+					Name: conf.Name,
 				},
 				Spec: api.ProfileSpec{
 					Egress:        []api.Rule{{Action: api.Allow}},
