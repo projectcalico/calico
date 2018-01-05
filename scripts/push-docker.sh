@@ -21,6 +21,9 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
+# Ensure proto deps are installed
+make proto
+
 # Collect artifacts for pushing
 CGO_ENABLED=0 GOOS=linux go build -o docker/dikastes
 
