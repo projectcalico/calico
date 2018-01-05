@@ -195,16 +195,30 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 	// Check to see if the resourceVersion is specified in the resource object.
 	rv := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
 
+	// Copy the resource to prevent modifying the input resource metadata.
+	resource = resource.DeepCopyObject().(ResourceObject)
+
 	// If the resourceVersion is specified then we use it to try and update the resource.
 	// Do not attempt to retry if the resource version is specified.
 	if rv != "" {
+		// Clean out the resource version to always get the latest revision.
+		resource.(ResourceObject).GetObjectMeta().SetResourceVersion("")
 		// Validate the metadata is not changed for the the resource.
 		ro, err := rh.get(ctx, client, resource)
 		if err != nil {
 			return ro, err
 		}
-		// Set the specific resource version we are attempting to update.
-		ro.GetObjectMeta().SetResourceVersion(rv)
+		// Check that the resource version is the latest
+		if rv != ro.GetObjectMeta().GetResourceVersion() {
+			id := fmt.Sprintf("%s(%s)", ro.GetObjectKind().GroupVersionKind().GroupKind().Kind, ro.GetObjectMeta().GetName())
+			if ro.GetObjectMeta().GetNamespace() != "" {
+				id = fmt.Sprintf("%s(%s/%s)", ro.GetObjectKind().GroupVersionKind().GroupKind().Kind, ro.GetObjectMeta().GetNamespace(), ro.GetObjectMeta().GetName())
+			}
+			return ro, cerrors.ErrorResourceUpdateConflict{
+				Err:        fmt.Errorf(fmt.Sprintf("Resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes.", rv, ro.GetObjectMeta().GetResourceVersion())),
+				Identifier: id,
+			}
+		}
 		resource = mergeMetadataForUpdate(ro, resource)
 
 		return rh.update(ctx, client, resource)
