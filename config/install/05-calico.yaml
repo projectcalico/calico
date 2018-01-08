@@ -22,7 +22,6 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: calico-node
-  namespace: kube-system
 rules:
   - apiGroups: [""]
     resources:
@@ -43,6 +42,7 @@ rules:
       - get
       - list
       - watch
+      - patch
   - apiGroups: [""]
     resources:
       - nodes
@@ -51,6 +51,16 @@ rules:
       - list
       - update
       - watch
+  - apiGroups: [""]
+    resources:
+      - services
+    verbs:
+      - get
+  - apiGroups: [""]
+    resources:
+      - endpoints
+    verbs:
+      - get
   - apiGroups: [""]
     resources:
       - serviceaccounts
@@ -67,8 +77,10 @@ rules:
       - watch
   - apiGroups: ["crd.projectcalico.org"]
     resources:
+      - globalfelixconfigs
       - felixconfigurations
       - bgppeers
+      - globalbgpconfigs
       - bgpconfigurations
       - ippools
       - globalnetworkpolicies
@@ -183,7 +195,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:v3.0.0-beta1-118-gec79ef6
+          image: quay.io/calico/node:v3.0.1
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -258,7 +270,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:latest
+          image: quay.io/calico/cni:v2.0.0
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
@@ -409,40 +421,6 @@ spec:
     kind: NetworkPolicy
     plural: networkpolicies
     singular: networkpolicy
-
----
-# TODO (spikecurtis): Remove these
----
-
-apiVersion: apiextensions.k8s.io/v1beta1
-description: Calico Global Felix Configuration
-kind: CustomResourceDefinition
-metadata:
-   name: globalfelixconfigs.crd.projectcalico.org
-spec:
-  scope: Cluster
-  group: crd.projectcalico.org
-  version: v1
-  names:
-    kind: GlobalFelixConfig
-    plural: globalfelixconfigs
-    singular: globalfelixconfig
-
----
-
-apiVersion: apiextensions.k8s.io/v1beta1
-description: Calico Global BGP Configuration
-kind: CustomResourceDefinition
-metadata:
-  name: globalbgpconfigs.crd.projectcalico.org
-spec:
-  scope: Cluster
-  group: crd.projectcalico.org
-  version: v1
-  names:
-    kind: GlobalBGPConfig
-    plural: globalbgpconfigs
-    singular: globalbgpconfig
 
 ---
 
