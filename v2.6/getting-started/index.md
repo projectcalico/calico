@@ -11,6 +11,7 @@ your own servers, a quick set-up in a virtualized environment using Vagrant and
 a number of cloud services.
 
 - [Calico with Kubernetes](kubernetes)
+- [Calico with Openshift](openshift/installation)
 - [Calico with Mesos](mesos)
   - [Calico with DC/OS](mesos/installation/dc-os)
 - [Calico with Docker](docker)
