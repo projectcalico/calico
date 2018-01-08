@@ -35,7 +35,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. | string | |
+| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. Subnet length must be `/26` or less for IPv4 and `/122` or less for IPv6. Must not overlap with the Link Local range `169.254.0.0/16` or `fe80::/10`. | string | |
 | ipipMode | The IPIP mode defining when IPIP will be used. | Always, CrossSubnet, Never | string| `Never` |
 | natOutgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
 | disabled | When set to true, Calico IPAM will not assign addresses from this pool. | true, false | boolean | `false` |

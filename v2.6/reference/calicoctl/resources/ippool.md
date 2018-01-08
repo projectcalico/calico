@@ -29,7 +29,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema |
 |-------------|-----------------------------|-------------------|--------|
-| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. | string |
+| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. Subnet length must be `/26` or less for IPv4 and `/122` or less for IPv6. Must not overlap with the Link Local range `169.254.0.0/16` or `fe80::/10`. | string |
 
 #### Spec
 
