@@ -121,7 +121,7 @@ The two methods are:
     [leaf/spine](http://bradhedlund.com/2012/10/24/video-a-basic-introduction-to-the-leafspine-data-center-networking-fabric-design/)
     architecture, or via a set of spine switches, each of which is also
     a unique AS. We'll refer to this as the *AS per rack* model. This
-    model is detailed in [this IETF working group draft](https://tools.ietf.org/html/draft-ietf-rtgwg-bgp-routing-large-dc).
+    model is detailed in [IETF RFC 7938](https://tools.ietf.org/search/rfc7938).
 2.  A BGP fabric where each of the compute servers is a unique AS, and
     the TOR switches make up a transit AS. We'll refer to this as the
     *AS per server* model.
@@ -191,9 +191,7 @@ The designs discussed below address these considerations.
 
 ### The *AS Per Rack* model
 
-This model is the closest to the model suggested by the [IETF's Routing
-Area Working Group draft on BGP use in data
-centers](https://tools.ietf.org/html/draft-ietf-rtgwg-bgp-routing-large-dc).
+This model is the closest to the model suggested by [IETF RFC 7938](https://tools.ietf.org/search/rfc7938).
 
 As mentioned earlier, there are two versions of this model, one with an
 set of Ethernet planes interconnecting the ToR switches, and the other
@@ -260,8 +258,7 @@ routes external to the rack.
 ### The *AS per Compute Server* model
 
 This model takes the concept of an AS per rack to its logical
-conclusion. In the earlier referenced [IETF
-draft](https://tools.ietf.org/html/draft-ietf-rtgwg-bgp-routing-large-dc)
+conclusion. In the earlier referenced [IETF RFC 7938](https://tools.ietf.org/search/rfc7938)
 the assumption in the overall model is that the ToR is first tier
 aggregating and routing element. In Calico, the ToR, if it is an L3
 router, is actually the second tier. Remember, in Calico, the compute

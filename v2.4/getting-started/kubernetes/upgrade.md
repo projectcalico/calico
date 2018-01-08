@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico for Kubernetes
+no_canonical: true
 ---
 
 This document covers upgrading the Calico components in a Kubernetes deployment.  This
