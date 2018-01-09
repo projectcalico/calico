@@ -340,7 +340,7 @@ spec:
       serviceAccountName: istio-pilot-service-account
       containers:
       - name: discovery
-        image: quay.io/calico/istio-pilot:latest
+        image: quay.io/calico/istio-pilot:20171130234734
         imagePullPolicy: Always
         args: ["discovery", "-v", "2", "--admission-service", "istio-pilot-external"]
         ports:
@@ -422,7 +422,7 @@ spec:
       serviceAccountName: istio-ingress-service-account
       containers:
       - name: istio-ingress
-        image: quay.io/calico/istio-proxy_debug:latest
+        image: quay.io/calico/istio-proxy_debug:20171130234734
         args:
         - proxy
         - ingress
@@ -504,7 +504,7 @@ spec:
       serviceAccountName: istio-egress-service-account
       containers:
       - name: proxy
-        image: quay.io/calico/istio-proxy_debug:latest
+        image: quay.io/calico/istio-proxy_debug:20171130234734
         imagePullPolicy: IfNotPresent
         args:
         - proxy
@@ -560,7 +560,7 @@ spec:
       serviceAccountName: istio-ca-service-account
       containers:
       - name: istio-ca
-        image: quay.io/calico/istio-ca:latest
+        image: quay.io/calico/istio-ca:20171130235454
         imagePullPolicy: IfNotPresent
 
 ##########################
