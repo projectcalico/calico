@@ -3,21 +3,28 @@ title: Configuring Felix
 ---
 
 Configuration for Felix is read from one of four possible locations, in
-order, as follows.
+order, as follows. 
 
 1.  Environment variables.
 2.  The Felix configuration file.
-3.  Host specific configuration in etcd.
-4.  Global configuration in etcd.
+3.  Host-specific `FelixConfiguration` resources.
+4.  The global `FelixConfiguration` resource (`default`).
 
 The value of any configuration parameter is the value read from the
-*first* location containing a value. If not set in any of these
-locations, most configuration parameters have defaults, and it should be
-rare to have to explicitly set them.
+*first* location containing a value. For example, if an environment variable 
+contains a value, it takes top precedence.
+
+If not set in any of these locations, most configuration parameters have 
+defaults, and it should be rare to have to explicitly set them.
 
 The full list of parameters which can be set is as follows.
 
-#### Global configuration
+> **Note**: The following tables detail the configuration file and 
+> environment variable parameters. For `FelixConfiguration` resource settings, 
+> refer to [Felix Configuration Resource](../calicoctl/resources/felixconfig).
+{: .alert .alert-info}
+
+#### General configuration
 
 | Configuration parameter           | Environment variable                    | Description  | Schema |
 | --------------------------------- | --------------------------------------- | -------------| ------ |
@@ -59,7 +66,7 @@ The Kubernetes datastore driver reads its configuration from Kubernetes-provided
 | Configuration parameter              | Environment variable                       | Description | Schema |
 | ------------------------------------ | ------------------------------------------ | ----------- | ------ |
 | `DefaultEndpointToHostAction`        | `FELIX_DEFAULTENDPOINTTOHOSTACTION`        | This parameter controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy). By default {{site.prodname}} blocks traffic from workload endpoints to the host itself with an iptables `Drop` action. If you want to allow some or all traffic from endpoint to host, set this parameter to `Return` or `Accept`.  Use `Return` if you have your own rules in the iptables "INPUT" chain; {{site.prodname}} will insert its rules at the top of that chain, then `Return` packets to the "INPUT" chain once it has completed processing workload endpoint egress policy. Use `Accept` to unconditionally accept packets from workloads after processing workload endpoint egress policy. [Default: `Drop`] | `Drop`, `Return`, `Accept` |
-| `ignoreLooseRPF`                     | `FELIX_IGNORELOOSERPF`                     | Set to `true` to allow Felix to run on systems with loose reverse path forwarding (RPF). **Warning**: {{site.prodname}} relies on "strict" RPF checking being enabled to prevent workloads, such as VMs and privileged containers, from spoofing their IP addresses and impersonating other workloads (or hosts). Only enable this flag if you need to run with "loose" RPF and you either trust your workloads or have another mechanism in place to prevent spoofing. | `true`,`false` |
+| `IgnoreLooseRPF`                     | `FELIX_IGNORELOOSERPF`                     | Set to `true` to allow Felix to run on systems with loose reverse path forwarding (RPF). **Warning**: {{site.prodname}} relies on "strict" RPF checking being enabled to prevent workloads, such as VMs and privileged containers, from spoofing their IP addresses and impersonating other workloads (or hosts). Only enable this flag if you need to run with "loose" RPF and you either trust your workloads or have another mechanism in place to prevent spoofing. | `true`,`false` |
 | `InterfaceExclude`                   | `FELIX_INTERFACEEXCLUDE`                   | A comma-separated list of interface names that should be excluded when Felix is resolving host endpoints. The default value ensures that Felix ignores Kubernetes' internal `kube-ipvs0` device. [Default: `kube-ipvs0`] | string |
 | `IptablesFilterAllowAction`          | `FELIX_IPTABLESALLOWACTION`                | This parameter controls what happens to traffic that is allowed by a Felix policy chain in the iptables filter table (i.e., a normal policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing. [Default: `Accept`]  | `Accept`, `Return` |
 | `IptablesMangleAllowAction`          | `FELIX_IPTABLESALLOWACTION`                | This parameter controls what happens to traffic that is allowed by a Felix policy chain in the iptables mangle table (i.e., a pre-DNAT policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing. [Default: `Accept`]  | `Accept`, `Return` |
