@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
 	k8sapi "k8s.io/api/core/v1"
-	extensions "k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -432,20 +432,20 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	})
 
 	It("should handle a basic NetworkPolicy", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-syncer-basic-net-policy",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -458,7 +458,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		res := c.clientSet.ExtensionsV1beta1().RESTClient().
+		res := c.clientSet.NetworkingV1().RESTClient().
 			Post().
 			Resource("networkpolicies").
 			Namespace("default").
@@ -467,7 +467,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			res := c.clientSet.ExtensionsV1beta1().RESTClient().
+			res := c.clientSet.NetworkingV1().RESTClient().
 				Delete().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -496,8 +496,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	defer func() {
 		log.Warnf("[TEST] Waiting for policies to tear down")
 		It("should clean up all policies", func() {
-			nps := extensions.NetworkPolicyList{}
-			err := c.clientSet.ExtensionsV1beta1().RESTClient().
+			nps := networkingv1.NetworkPolicyList{}
+			err := c.clientSet.NetworkingV1().RESTClient().
 				Get().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -510,8 +510,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				if len(nps.Items) == 0 {
 					return
 				}
-				nps := extensions.NetworkPolicyList{}
-				err := c.clientSet.ExtensionsV1beta1().RESTClient().
+				nps := networkingv1.NetworkPolicyList{}
+				err := c.clientSet.NetworkingV1().RESTClient().
 					Get().
 					Resource("networkpolicies").
 					Namespace("default").

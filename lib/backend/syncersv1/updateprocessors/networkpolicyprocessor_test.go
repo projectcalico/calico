@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	kapiv1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -265,24 +265,24 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 // and no selectors.
 var protocol = kapiv1.ProtocolTCP
 var port = intstr.FromInt(80)
-var np1 = v1beta1.NetworkPolicy{
+var np1 = networkingv1.NetworkPolicy{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "test.policy",
 		Namespace: "default",
 	},
-	Spec: v1beta1.NetworkPolicySpec{
+	Spec: networkingv1.NetworkPolicySpec{
 		PodSelector: metav1.LabelSelector{},
-		Egress: []v1beta1.NetworkPolicyEgressRule{
-			v1beta1.NetworkPolicyEgressRule{
-				Ports: []v1beta1.NetworkPolicyPort{
-					v1beta1.NetworkPolicyPort{
+		Egress: []networkingv1.NetworkPolicyEgressRule{
+			networkingv1.NetworkPolicyEgressRule{
+				Ports: []networkingv1.NetworkPolicyPort{
+					networkingv1.NetworkPolicyPort{
 						Protocol: &protocol,
 						Port:     &port,
 					},
 				},
 			},
 		},
-		PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeEgress},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 	},
 }
 
@@ -315,7 +315,7 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
 
 	DescribeTable("NetworkPolicy update processor + conversion tests",
-		func(np v1beta1.NetworkPolicy, expected []*model.KVPair) {
+		func(np networkingv1.NetworkPolicy, expected []*model.KVPair) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
 			c := conversion.Converter{}
 			kvp, err := c.K8sNetworkPolicyToCalico(&np)

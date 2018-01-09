@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
 	kapiv1 "k8s.io/api/core/v1"
-	extensions "k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -425,25 +425,25 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a basic k8s NetworkPolicy to a NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
 		portFoo := intstr.FromString("foo")
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{Port: &port80},
 							{Port: &portFoo},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -455,7 +455,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -508,16 +508,16 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -542,14 +542,14 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a default-deny egress NetworkPolicy", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 			},
 		}
 
@@ -586,21 +586,21 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with multiple peers", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -618,7 +618,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -656,25 +656,25 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a k8s NetworkPolicy with a DoesNotExist expression ", func() {
 		port80 := intstr.FromInt(80)
 		portFoo := intstr.FromString("foo")
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{Port: &port80},
 							{Port: &portFoo},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -685,7 +685,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -743,18 +743,18 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		eighty := intstr.FromInt(80)
 		ninety := intstr.FromInt(90)
 
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{
 								Port:     &ninety,
 								Protocol: &udp,
@@ -764,7 +764,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 								Protocol: &tcp,
 							},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -782,7 +782,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -829,14 +829,14 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with empty podSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -861,18 +861,18 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with a namespaceSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -884,7 +884,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -911,18 +911,18 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
@@ -931,7 +931,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -957,12 +957,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchExpressions: []metav1.LabelSelectorRequirement{
 						{
@@ -972,7 +972,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -999,16 +999,16 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a NetworkPolicy with Ports only", func() {
 		protocol := kapiv1.ProtocolTCP
 		port := intstr.FromInt(80)
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{
 								Protocol: &protocol,
 								Port:     &port,
@@ -1016,7 +1016,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -1046,16 +1046,16 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a NetworkPolicy with Ports only (egress)", func() {
 		protocol := kapiv1.ProtocolTCP
 		port := intstr.FromInt(80)
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Egress: []extensions.NetworkPolicyEgressRule{
+				Egress: []networkingv1.NetworkPolicyEgressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{
 								Protocol: &protocol,
 								Port:     &port,
@@ -1063,7 +1063,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 			},
 		}
 
@@ -1091,18 +1091,18 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with an Ingress rule with an IPBlock Peer", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
-								IPBlock: &extensions.IPBlock{
+								IPBlock: &networkingv1.IPBlock{
 									CIDR:   "192.168.0.0/16",
 									Except: []string{"192.168.3.0/24", "192.168.4.0/24"},
 								},
@@ -1110,7 +1110,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -1138,18 +1138,18 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with an Egress rule with an IPBlock Peer", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Egress: []extensions.NetworkPolicyEgressRule{
+				Egress: []networkingv1.NetworkPolicyEgressRule{
 					{
-						To: []extensions.NetworkPolicyPeer{
+						To: []networkingv1.NetworkPolicyPeer{
 							{
-								IPBlock: &extensions.IPBlock{
+								IPBlock: &networkingv1.IPBlock{
 									CIDR:   "192.168.0.0/16",
 									Except: []string{"192.168.3.0/24", "192.168.4.0/24", "192.168.5.0/24"},
 								},
@@ -1157,7 +1157,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 			},
 		}
 
@@ -1191,16 +1191,16 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		eighty := intstr.FromInt(80)
 		ninety := intstr.FromInt(90)
 
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Egress: []extensions.NetworkPolicyEgressRule{
+				Egress: []networkingv1.NetworkPolicyEgressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{
 								Port:     &ninety,
 								Protocol: &udp,
@@ -1210,9 +1210,9 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 								Protocol: &tcp,
 							},
 						},
-						To: []extensions.NetworkPolicyPeer{
+						To: []networkingv1.NetworkPolicyPeer{
 							{
-								IPBlock: &extensions.IPBlock{
+								IPBlock: &networkingv1.IPBlock{
 									CIDR:   "192.168.0.0/16",
 									Except: []string{"192.168.3.0/24", "192.168.4.0/24", "192.168.5.0/24"},
 								},
@@ -1220,7 +1220,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 			},
 		}
 
@@ -1259,18 +1259,18 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a NetworkPolicy with both an Egress and an Ingress rule", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
-								IPBlock: &extensions.IPBlock{
+								IPBlock: &networkingv1.IPBlock{
 									CIDR:   "192.168.0.0/16",
 									Except: []string{"192.168.3.0/24", "192.168.4.0/24"},
 								},
@@ -1278,11 +1278,11 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				Egress: []extensions.NetworkPolicyEgressRule{
+				Egress: []networkingv1.NetworkPolicyEgressRule{
 					{
-						To: []extensions.NetworkPolicyPeer{
+						To: []networkingv1.NetworkPolicyPeer{
 							{
-								IPBlock: &extensions.IPBlock{
+								IPBlock: &networkingv1.IPBlock{
 									CIDR:   "10.10.0.0/16",
 									Except: []string{"192.168.13.0/24", "192.168.14.0/24", "192.168.15.0/24"},
 								},
@@ -1290,7 +1290,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 					},
 				},
-				PolicyTypes: []extensions.PolicyType{extensions.PolicyTypeEgress, extensions.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -1333,24 +1333,24 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
 		port80 := intstr.FromInt(80)
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{Port: &port80},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1398,12 +1398,12 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
@@ -1431,21 +1431,21 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	})
 
 	It("should parse a NetworkPolicy with multiple peers", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1503,18 +1503,18 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 		eighty := intstr.FromInt(80)
 		ninety := intstr.FromInt(90)
 
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{
 								Port:     &ninety,
 								Protocol: &udp,
@@ -1524,7 +1524,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 								Protocol: &tcp,
 							},
 						},
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -1588,12 +1588,12 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	})
 
 	It("should parse a NetworkPolicy with empty podSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
 			},
 		}
@@ -1619,18 +1619,18 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	})
 
 	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						From: []extensions.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
@@ -1664,12 +1664,12 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	})
 
 	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchExpressions: []metav1.LabelSelectorRequirement{
 						{
@@ -1705,16 +1705,16 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	It("should parse a NetworkPolicy with Ports only", func() {
 		protocol := kapiv1.ProtocolTCP
 		port := intstr.FromInt(80)
-		np := extensions.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
 				Namespace: "default",
 			},
-			Spec: extensions.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				Ingress: []extensions.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []extensions.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{
 								Protocol: &protocol,
 								Port:     &port,
