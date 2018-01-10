@@ -41,7 +41,7 @@ subjects:
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: calico-node
+  name: {{site.noderunning}}
 rules:
   - apiGroups: [""]
     resources:
@@ -55,12 +55,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
-  name: calico-node
+  name: {{site.noderunning}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: calico-node
+  name: {{site.noderunning}}
 subjects:
 - kind: ServiceAccount
-  name: calico-node
+  name: {{site.noderunning}}
   namespace: kube-system

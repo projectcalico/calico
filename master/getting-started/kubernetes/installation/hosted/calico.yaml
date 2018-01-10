@@ -88,14 +88,14 @@ data:
 kind: DaemonSet
 apiVersion: extensions/v1beta1
 metadata:
-  name: calico-node
+  name: {{site.noderunning}}
   namespace: kube-system
   labels:
-    k8s-app: calico-node
+    k8s-app: {{site.noderunning}}
 spec:
   selector:
     matchLabels:
-      k8s-app: calico-node
+      k8s-app: {{site.noderunning}}
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -103,7 +103,7 @@ spec:
   template:
     metadata:
       labels:
-        k8s-app: calico-node
+        k8s-app: {{site.noderunning}}
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
         scheduler.alpha.kubernetes.io/tolerations: |
@@ -111,15 +111,15 @@ spec:
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
-      serviceAccountName: calico-node
+      serviceAccountName: {{site.noderunning}}
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       containers:
-        # Runs calico/node container on each Kubernetes node.  This
+        # Runs {{site.nodecontainer}} container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
-        - name: calico-node
+        - name: {{site.noderunning}}
           image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
             # The location of the Calico etcd cluster.
@@ -345,5 +345,5 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: calico-node
+  name: {{site.noderunning}}
   namespace: kube-system
