@@ -5,10 +5,12 @@ PROTOC_IMPORTS =  -I $(ENVOY_API) \
                   -I vendor/github.com/gogo/protobuf/protobuf \
                   -I vendor/github.com/gogo/protobuf \
                   -I vendor/github.com/lyft/protoc-gen-validate\
-                  -I vendor/github.com/googleapis/googleapis
+                  -I vendor/github.com/googleapis/googleapis\
+                  -I proto\
+                  -I ./
 PROTOC_MAPPINGS = Mgoogle/protobuf/struct.proto=github.com/golang/protobuf/ptypes/struct,Mgoogle/protobuf/timestamp.proto=github.com/golang/protobuf/ptypes/timestamp,Mapi/address.proto=github.com/envoyproxy/data-plane-api/api,Mgoogle/protobuf/wrappers.proto=github.com/golang/protobuf/ptypes/wrappers,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto
 
-proto: $(EXT_AUTH).pb.go $(ADDRESS).pb.go
+proto: $(EXT_AUTH).pb.go $(ADDRESS).pb.go proto/felixbackend.pb.go proto/policysync.pb.go
 
 $(EXT_AUTH).pb.go: $(EXT_AUTH).proto
 	protoc $(PROTOC_IMPORTS) $(EXT_AUTH).proto --go_out=plugins=grpc,$(PROTOC_MAPPINGS):$(ENVOY_API)
@@ -18,3 +20,6 @@ $(ADDRESS).pb.go: $(ADDRESS).proto
 
 $(EXT_AUTH).proto $(ADDRESS).proto:
 	glide install
+
+proto/felixbackend.pb.go proto/policysync.pb.go: proto/felixbackend.proto proto/policysync.proto
+	protoc $(PROTOC_IMPORTS) proto/*.proto --go_out=plugins=grpc,$(PROTOC_MAPPINGS):proto

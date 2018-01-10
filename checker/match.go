@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,54 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package server
+package checker
 
 import (
-	"regexp"
 	"fmt"
+	"regexp"
 
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
 	log "github.com/sirupsen/logrus"
 )
 
 const SPIFFE_ID_PATTERN = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
+
 var spiffeIdRegExp *regexp.Regexp
 
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
-func match(rule api.Rule, req *authz.CheckRequest) bool {
+func match(rule *proto.Rule, req *authz.CheckRequest) bool {
 	log.Debugf("Checking rule %v on request %v", rule, req)
 	attr := req.GetAttributes()
-	return matchPeer(rule.Source, attr.GetSource()) && matchRequest(rule, attr.GetRequest())
+	return matchSource(rule, attr.GetSource()) && matchRequest(rule, attr.GetRequest())
 }
 
-func matchPeer(er api.EntityRule, peer *authz.AttributeContext_Peer) bool {
-	return matchServiceAccounts(er.ServiceAccounts, peer)
+func matchSource(r *proto.Rule, peer *authz.AttributeContext_Peer) bool {
+	// TODO IPSets
+	return matchServiceAccounts(r.GetSrcServiceAccount(), peer)
 }
 
-func matchRequest(rule api.Rule, req *authz.AttributeContext_Request) bool {
+func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
 	log.WithFields(log.Fields{
 		"request": req,
 	}).Debug("Matching request.")
-	return matchHTTP(rule.HTTP, req.GetHttp())
+	return matchHTTP(rule.GetHttp(), req.GetHttp())
 }
 
-func matchServiceAccounts(saMatch *api.ServiceAccountMatch, peer *authz.AttributeContext_Peer) bool {
+func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.AttributeContext_Peer) bool {
 	principle := peer.GetPrincipal()
 	labels := peer.GetLabels()
 	log.WithFields(log.Fields{
 		"peer":   principle,
-		"labels":    labels,
-		"rule":      saMatch},
+		"labels": labels,
+		"rule":   saMatch},
 	).Debug("Matching service account.")
 	accountName, _, err := parseSpiffeId(principle)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"principle": principle,
-			"msg": err,
+			"msg":       err,
 		}).Warn("Unable to parse authenticated principle as SPIFFE ID.")
 		return false
 	}
@@ -67,10 +69,9 @@ func matchServiceAccounts(saMatch *api.ServiceAccountMatch, peer *authz.Attribut
 		log.Debug("nil ServiceAccountMatch.  Return true.")
 		return true
 	}
-	return matchServiceAccountName(saMatch.Names, accountName) &&
-		matchServiceAccountLabels(saMatch.Selector, labels)
+	return matchServiceAccountName(saMatch.GetNames(), accountName) &&
+		matchServiceAccountLabels(saMatch.GetLabelSelector(), labels)
 }
-
 
 // Parse an Istio SPIFFE ID and extract the service account name and namespace.
 func parseSpiffeId(id string) (string, string, error) {
@@ -115,7 +116,7 @@ func matchServiceAccountLabels(selectorStr string, labels map[string]string) boo
 
 }
 
-func matchHTTP(rule *api.HTTPRule, req *authz.AttributeContext_HTTPRequest) bool {
+func matchHTTP(rule *proto.HTTPSelector, req *authz.AttributeContext_HTTPRequest) bool {
 	log.WithFields(log.Fields{
 		"rule": rule,
 	}).Debug("Matching HTTP.")
@@ -123,7 +124,7 @@ func matchHTTP(rule *api.HTTPRule, req *authz.AttributeContext_HTTPRequest) bool
 		log.Debug("nil HTTPRule.  Return true")
 		return true
 	}
-	return matchHTTPMethods(rule.Methods, req.GetMethod())
+	return matchHTTPMethods(rule.GetMethods(), req.GetMethod())
 }
 
 func matchHTTPMethods(methods []string, reqMethod string) bool {
