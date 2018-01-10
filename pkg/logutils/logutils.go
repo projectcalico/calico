@@ -115,7 +115,7 @@ func ConfigureLogging(configParams *config.Config) {
 	if configParams.LogSeverityScreen != "" {
 		screenDest := NewStreamDestination(
 			logLevelScreen,
-			os.Stderr,
+			os.Stdout,
 			make(chan QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
 		)
