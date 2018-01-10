@@ -147,14 +147,14 @@ spec:
 kind: DaemonSet
 apiVersion: extensions/v1beta1
 metadata:
-  name: calico-node
+  name: {{site.noderunning}}
   namespace: kube-system
   labels:
-    k8s-app: calico-node
+    k8s-app: {{site.noderunning}}
 spec:
   selector:
     matchLabels:
-      k8s-app: calico-node
+      k8s-app: {{site.noderunning}}
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -162,7 +162,7 @@ spec:
   template:
     metadata:
       labels:
-        k8s-app: calico-node
+        k8s-app: {{site.noderunning}}
       annotations:
         # Mark this pod as a critical add-on; when enabled, the critical add-on scheduler
         # reserves resources for critical add-on pods so that they can be rescheduled after
@@ -187,10 +187,10 @@ spec:
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       containers:
-        # Runs calico/node container on each Kubernetes node.  This
+        # Runs {{site.nodecontainer}} container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
-        - name: calico-node
+        - name: {{site.noderunning}}
           image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
             # The location of the Calico etcd cluster.

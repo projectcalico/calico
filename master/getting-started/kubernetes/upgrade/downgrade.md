@@ -54,7 +54,7 @@ follow the steps here to downgrade.
 1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 
    ```
-   kubectl rollout undo ds/calico-node -n kube-system
+   kubectl rollout undo ds/{{site.noderunning}} -n kube-system
    kubectl rollout undo deployment/calico-kube-controllers -n kube-system
    ```
 
@@ -63,7 +63,7 @@ follow the steps here to downgrade.
 
    ```
    kubectl rollout status deployment/calico-kube-controllers -n kube-system
-   kubectl rollout status ds/calico-node -n kube-system
+   kubectl rollout status ds/{{site.noderunning}} -n kube-system
    ```
 
 ## Downgrading a self-hosted installation that uses the Kubernetes API datastore
@@ -71,14 +71,14 @@ follow the steps here to downgrade.
 1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 
    ```
-   kubectl rollout undo ds/calico-node -n kube-system
+   kubectl rollout undo ds/{{site.noderunning}} -n kube-system
    ```
 
 1. Watch the status of the downgrade as follows. When it reports complete and
    a successful, {{site.prodname}} is downgraded to the previous version.
 
    ```
-   kubectl rollout status ds/calico-node -n kube-system
+   kubectl rollout status ds/{{site.noderunning}} -n kube-system
    ```
 
 ## Downgrading a custom installation
