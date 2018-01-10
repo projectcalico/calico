@@ -26,7 +26,7 @@ import:
   subpackages:
   - pkg/util/validation
 - package: github.com/envoyproxy/data-plane-api
-  version: master
+  version: 28d28198e583aec75b6242ee02682654197b745e
   subpackages:
   - api/auth
 - package: github.com/google/protobuf

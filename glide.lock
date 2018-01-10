@@ -1,5 +1,5 @@
-hash: cefb389e240136809c3c52792f61156363785c851495245277e681592cc89993
-updated: 2018-01-04T15:49:05.349344949-08:00
+hash: f4a30c327b461f0d94f728cf0dc228793b00cc66a734b3c2834e8a5e0ef5fc0f
+updated: 2018-01-10T15:29:42.927949068-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -39,7 +39,7 @@ imports:
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
 - name: github.com/envoyproxy/data-plane-api
-  version: 5d682c18402477e8ff30826e9276b48f0ee948f9
+  version: 28d28198e583aec75b6242ee02682654197b745e
   subpackages:
   - api/auth
 - name: github.com/ghodss/yaml
@@ -130,7 +130,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 682a72b15c65d79722aaac157128d974bb627918
+  version: 5894886f322904dfa21686ea45d9b7677c077076
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -169,7 +169,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: 879c5887cd475cd7864858769793b2ceb0d44feb
+  version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
@@ -260,7 +260,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 9b9dca205a15b6ce9ef10091f05d60a13fdcf418
+  version: 389dfa299845bcf399c16af89987e8775718ea48
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -287,7 +287,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
+  version: bc110fd540ab678abbf2bc71d9ce908eb9325ef6
   subpackages:
   - pkg/api/equality
   - pkg/api/errors

@@ -149,8 +149,8 @@ func runClient(arguments map[string]interface{}) {
 		},
 	}
 	if arguments["--method"].(bool) {
-		req.Attributes.Request.Request = &authz.AttributeContext_Request_HttpRequest{
-			HttpRequest: &authz.AttributeContext_HTTPRequest{
+		req.Attributes.Request = &authz.AttributeContext_Request{
+			Http: &authz.AttributeContext_HTTPRequest{
 				Method: arguments["<method>"].(string),
 			},
 		}

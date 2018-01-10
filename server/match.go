@@ -44,7 +44,7 @@ func matchRequest(rule api.Rule, req *authz.AttributeContext_Request) bool {
 	log.WithFields(log.Fields{
 		"request": req,
 	}).Debug("Matching request.")
-	return matchHTTP(rule.HTTP, req.GetHttpRequest())
+	return matchHTTP(rule.HTTP, req.GetHttp())
 }
 
 func matchServiceAccounts(saMatch *api.ServiceAccountMatch, peer *authz.AttributeContext_Peer) bool {
