@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -427,14 +427,14 @@ var _ = Describe("kube-controllers FV tests", func() {
 				"labelK": "labelV",
 			}
 
-			np := &v1beta1.NetworkPolicy{
+			np := &networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        policyName,
 					Namespace:   policyNamespace,
 					Annotations: policyAnnotations,
 					Labels:      policyLabels,
 				},
-				Spec: v1beta1.NetworkPolicySpec{
+				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"fools": "gold",
@@ -442,7 +442,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 					},
 				},
 			}
-			err := k8sClient.ExtensionsV1beta1().RESTClient().
+			err := k8sClient.NetworkingV1().RESTClient().
 				Post().
 				Resource("networkpolicies").
 				Namespace("default").
@@ -492,7 +492,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 		It("should delete policies when they are deleted from the Kubernetes API", func() {
 			By("deleting the policy", func() {
-				err := k8sClient.ExtensionsV1beta1().RESTClient().
+				err := k8sClient.NetworkingV1().RESTClient().
 					Delete().
 					Resource("networkpolicies").
 					Namespace("default").
@@ -522,23 +522,23 @@ var _ = Describe("kube-controllers FV tests", func() {
 			policyName = "jelly"
 			genPolicyName = "knp.default." + policyName
 			policyNamespace = "default"
-			var np *v1beta1.NetworkPolicy
-			np = &v1beta1.NetworkPolicy{
+			var np *networkingv1.NetworkPolicy
+			np = &networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      policyName,
 					Namespace: policyNamespace,
 				},
-				Spec: v1beta1.NetworkPolicySpec{
+				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"fools": "gold",
 						},
 					},
-					Egress: []v1beta1.NetworkPolicyEgressRule{
+					Egress: []networkingv1.NetworkPolicyEgressRule{
 						{
-							To: []v1beta1.NetworkPolicyPeer{
+							To: []networkingv1.NetworkPolicyPeer{
 								{
-									IPBlock: &v1beta1.IPBlock{
+									IPBlock: &networkingv1.IPBlock{
 										CIDR:   "192.168.0.0/16",
 										Except: []string{"192.168.3.0/24"},
 									},
@@ -546,11 +546,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 							},
 						},
 					},
-					PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeEgress},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 				},
 			}
 
-			err := k8sClient.ExtensionsV1beta1().RESTClient().
+			err := k8sClient.NetworkingV1().RESTClient().
 				Post().
 				Resource("networkpolicies").
 				Namespace("default").

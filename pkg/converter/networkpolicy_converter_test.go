@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/tools/cache"
 
 	. "github.com/onsi/ginkgo"
@@ -35,24 +35,24 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 	It("should parse a basic NetworkPolicy", func() {
 		port80 := intstr.FromInt(80)
-		np := v1beta1.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Ingress: []v1beta1.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						Ports: []v1beta1.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{Port: &port80},
 						},
-						From: []v1beta1.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -64,7 +64,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 						},
 					},
 				},
-				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -113,16 +113,16 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
-		np := v1beta1.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -166,14 +166,14 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	})
 
 	It("should parse a NetworkPolicy with an empty podSelector", func() {
-		np := v1beta1.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{},
-				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -216,19 +216,19 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	})
 
 	It("should parse a NetworkPolicy with an empty namespaceSelector", func() {
-		np := v1beta1.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []v1beta1.NetworkPolicyIngressRule{
-					v1beta1.NetworkPolicyIngressRule{
-						From: []v1beta1.NetworkPolicyPeer{
-							v1beta1.NetworkPolicyPeer{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
+					networkingv1.NetworkPolicyIngressRule{
+						From: []networkingv1.NetworkPolicyPeer{
+							networkingv1.NetworkPolicyPeer{
 								NamespaceSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{},
 								},
@@ -236,7 +236,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 						},
 					},
 				},
-				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeIngress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			},
 		}
 
@@ -283,12 +283,12 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 	It("should handle cache.DeletedFinalStateUnknown conversion", func() {
 		np := cache.DeletedFinalStateUnknown{
 			Key: "cache.DeletedFinalStateUnknown",
-			Obj: &v1beta1.NetworkPolicy{
+			Obj: &networkingv1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "testPolicy",
 					Namespace: "default",
 				},
-				Spec: v1beta1.NetworkPolicySpec{
+				Spec: networkingv1.NetworkPolicySpec{
 					PodSelector: metav1.LabelSelector{},
 				},
 			},
@@ -354,24 +354,24 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 
 	It("should parse a NetworkPolicy with an Egress rule", func() {
 		port80 := intstr.FromInt(80)
-		np := v1beta1.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"label":  "value",
 						"label2": "value2",
 					},
 				},
-				Egress: []v1beta1.NetworkPolicyEgressRule{
+				Egress: []networkingv1.NetworkPolicyEgressRule{
 					{
-						Ports: []v1beta1.NetworkPolicyPort{
+						Ports: []networkingv1.NetworkPolicyPort{
 							{Port: &port80},
 						},
-						To: []v1beta1.NetworkPolicyPeer{
+						To: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
@@ -383,7 +383,7 @@ var _ = Describe("NetworkPolicy conversion tests", func() {
 						},
 					},
 				},
-				PolicyTypes: []v1beta1.PolicyType{v1beta1.PolicyTypeEgress},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 			},
 		}
 
@@ -439,18 +439,18 @@ var _ = Describe("Kubernetes 1.7 NetworkPolicy conversion tests", func() {
 	It("should parse a k8s v1.7 NetworkPolicy with an ingress rule", func() {
 		// <= v1.7 didn't include a polityTypes field, so it always comes back as an
 		// empty list.
-		np := v1beta1.NetworkPolicy{
+		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
-				Ingress: []v1beta1.NetworkPolicyIngressRule{
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
 					{
-						From: []v1beta1.NetworkPolicyPeer{
+						From: []networkingv1.NetworkPolicyPeer{
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{

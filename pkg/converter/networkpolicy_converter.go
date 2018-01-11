@@ -21,7 +21,7 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -36,14 +36,14 @@ func NewPolicyConverter() Converter {
 
 // Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	np, ok := k8sObj.(*v1beta1.NetworkPolicy)
+	np, ok := k8sObj.(*networkingv1.NetworkPolicy)
 
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
 		}
-		np, ok = tombstone.Obj.(*v1beta1.NetworkPolicy)
+		np, ok = tombstone.Obj.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return nil, fmt.Errorf("tombstone contained object that is not a NetworkPolicy %+v", k8sObj)
 		}
