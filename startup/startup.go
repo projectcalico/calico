@@ -164,6 +164,10 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, node *api.Node
 }
 
 func configureLogging() {
+	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
+	// fluentd's default configuration.
+	log.SetOutput(os.Stdout)
+
 	// Set log formatting.
 	log.SetFormatter(&logutils.Formatter{})
 
