@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,6 +58,9 @@ const logQueueSize = 100
 // if it is enabled by either the TYPHA_EARLYLOGSEVERITYSCREEN or TYPHA_LOGSEVERITYSCREEN
 // environment variable.
 func ConfigureEarlyLogging() {
+	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
+	log.SetOutput(os.Stdout)
+
 	// Replace logrus' formatter with a custom one using our time format,
 	// shared with the Python code.
 	log.SetFormatter(&Formatter{})
@@ -115,7 +118,7 @@ func ConfigureLogging(configParams *config.Config) {
 	if configParams.LogSeverityScreen != "" {
 		screenDest := NewStreamDestination(
 			logLevelScreen,
-			os.Stderr,
+			os.Stdout,
 			make(chan QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
 		)
