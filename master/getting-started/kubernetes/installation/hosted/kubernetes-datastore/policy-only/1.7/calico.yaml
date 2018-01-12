@@ -243,9 +243,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            # No IP address needed.
-            - name: IP
-              value: ""
             - name: FELIX_HEALTHENABLED
               value: "true"
           securityContext:
