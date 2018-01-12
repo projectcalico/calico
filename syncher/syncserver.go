@@ -43,13 +43,14 @@ func (s *syncClient) Sync(cxt context.Context, store *policystore.PolicyStore) {
 	client := proto.NewPolicySyncClient(conn)
 	stream, err := client.Sync(cxt, &proto.SyncRequest{})
 	if err != nil {
-		log.Fatal("failed to Sync with server: %v", err)
+		log.Fatalf("failed to Sync with server: %v", err)
 	}
 	for {
 		update, err := stream.Recv()
 		if err != nil {
-			log.Fatal("connection to Policy Sync server broken: %v", err)
+			log.Fatalf("connection to Policy Sync server broken: %v", err)
 		}
+		log.WithFields(log.Fields{"proto": update.String()}).Debug("Received sync API Update")
 		store.Write(func(ps *policystore.PolicyStore) { processUpdate(ps, update) })
 	}
 	// Note that as written, this function will never return. It only ends when the connection is torn down, which
@@ -83,11 +84,15 @@ func processUpdate(store *policystore.PolicyStore, update *proto.ToDataplane) {
 }
 
 func processInSync(store *policystore.PolicyStore, inSync *proto.InSync) {
-	// TODO (spikecurtis): disallow requests until policy is synced?
+	// TODO (spikecurtis): disallow requests until policy is synced
+	log.Debug("Processing InSync")
 	return
 }
 
 func processIPSetUpdate(store *policystore.PolicyStore, update *proto.IPSetUpdate) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing IPSetUpdate")
 	s := store.IPSetByID[update.Id]
 	if s == nil {
 		s = policystore.NewIPSet(update.Type)
@@ -98,6 +103,9 @@ func processIPSetUpdate(store *policystore.PolicyStore, update *proto.IPSetUpdat
 }
 
 func processIPSetDeltaUpdate(store *policystore.PolicyStore, update *proto.IPSetDeltaUpdate) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing IPSetDeltaUpdate")
 	s := store.IPSetByID[update.Id]
 	if s == nil {
 		log.Fatalf("Unknown IPSet id: %v", update.Id)
@@ -111,10 +119,16 @@ func processIPSetDeltaUpdate(store *policystore.PolicyStore, update *proto.IPSet
 }
 
 func processIPSetRemove(store *policystore.PolicyStore, update *proto.IPSetRemove) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing IPSetRemove")
 	delete(store.IPSetByID, update.Id)
 }
 
 func processActiveProfileUpdate(store *policystore.PolicyStore, update *proto.ActiveProfileUpdate) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing ActiveProfileUpdate")
 	if update.Id == nil {
 		log.Fatal("got ActiveProfileUpdate with nil ProfileID")
 	}
@@ -122,6 +136,9 @@ func processActiveProfileUpdate(store *policystore.PolicyStore, update *proto.Ac
 }
 
 func processActiveProfileRemove(store *policystore.PolicyStore, update *proto.ActiveProfileRemove) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing ActiveProfileRemove")
 	if update.Id == nil {
 		log.Fatal("got ActiveProfileRemove with nil ProfileID")
 	}
@@ -129,6 +146,9 @@ func processActiveProfileRemove(store *policystore.PolicyStore, update *proto.Ac
 }
 
 func processActivePolicyUpdate(store *policystore.PolicyStore, update *proto.ActivePolicyUpdate) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing ActivePolicyUpdate")
 	if update.Id == nil {
 		log.Fatal("got ActivePolicyUpdate with nil PolicyID")
 	}
@@ -136,6 +156,9 @@ func processActivePolicyUpdate(store *policystore.PolicyStore, update *proto.Act
 }
 
 func processActivePolicyRemove(store *policystore.PolicyStore, update *proto.ActivePolicyRemove) {
+	log.WithFields(log.Fields{
+		"id": update.Id,
+	}).Debug("Processing ActivePolicyRemove")
 	if update.Id == nil {
 		log.Fatal("got ActivePolicyRemove with nil PolicyID")
 	}
@@ -148,7 +171,7 @@ func processWorkloadEndpointUpdate(store *policystore.PolicyStore, update *proto
 		"orchestrator_id": update.GetId().GetOrchestratorId(),
 		"workload_id":     update.GetId().GetWorkloadId(),
 		"endpoint_id":     update.GetId().GetEndpointId(),
-	}).Info("Got WorkloadEndpointUpdate")
+	}).Info("Processing WorkloadEndpointUpdate")
 	store.Endpoint = update.Endpoint
 }
 
@@ -158,6 +181,6 @@ func processWorkloadEndpointRemove(store *policystore.PolicyStore, update *proto
 		"orchestrator_id": update.GetId().GetOrchestratorId(),
 		"workload_id":     update.GetId().GetWorkloadId(),
 		"endpoint_id":     update.GetId().GetEndpointId(),
-	}).Warning("Got WorkloadEndpointRemove")
+	}).Warning("Processing WorkloadEndpointRemove")
 	store.Endpoint = nil
 }

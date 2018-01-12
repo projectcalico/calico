@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/projectcalico/app-policy/proto"
+	"github.com/prometheus/common/log"
 )
 
 type PolicyStore struct {
@@ -43,13 +44,20 @@ func NewPolicyStore() *PolicyStore {
 // Write to/update the PolicyStore, handling locking logic.
 // writeFn is the logic that actually does the update.
 func (s *PolicyStore) Write(writeFn func(store *PolicyStore)) {
+	// TODO (spikecurtis) create a correlator that can be tracked for logging.
+	log.Debug("About to write lock PolicyStore")
 	s.RWMutex.Lock()
+	log.Debug("PolicyStore write locked")
 	writeFn(s)
 	s.RWMutex.Unlock()
+	log.Debug("PolicyStore write unlocked")
 }
 
 func (s *PolicyStore) Read(readFn func(store *PolicyStore)) {
+	log.Debug("About to read lock PolicyStore")
 	s.RWMutex.RLock()
+	log.Debug("PolicyStore read locked")
 	readFn(s)
 	s.RWMutex.RUnlock()
+	log.Debug("PolicyStore read unlocked")
 }
