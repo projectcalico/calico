@@ -43,7 +43,7 @@ You can apply host endpoint policies to three types of traffic:
 same host.
 
 Set the `applyOnForward` flag to `true` to apply a policy to forwarded traffic.
-See [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#spec).
+See [GlobalNetworkPolicy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy#spec).
 
 > **Note**: Both traffic forwarded between host endpoints and traffic forwarded 
 > between a host endpoint and a workload endpoint on the same host is regarded as
@@ -177,7 +177,7 @@ connectivity to a host:
     allowing traffic out to etcd's ports on any interface.
     
 -   Depending on your network, they may not cover all the ports that are
-    required; for example, your network may reply on allowing ICMP,
+    required; for example, your network may rely on allowing ICMP,
     or DHCP.
 
 Therefore, we recommend creating a failsafe {{site.prodname}} security policy that
@@ -253,7 +253,7 @@ Once you have such a policy in place, you may want to disable the
 
 For each host endpoint that you want {{site.prodname}} to secure, you'll need to
 create a host endpoint object in etcd.  Use the `calicoctl create` command
-to create a host endpoint resource (hostEndpoint).
+to create a host endpoint resource (`HostEndpoint`).
 
 There are two ways to specify the interface that a host endpoint should
 refer to. You can either specify the name of the interface or its
@@ -388,12 +388,23 @@ To avoid completely cutting off a host via incorrect or malformed
 policy, {{site.prodname}} has a failsafe mechanism that keeps various pinholes open
 in the firewall.
 
-By default, {{site.prodname}} keeps port 22 inbound open on *all* host endpoints,
-which allows access to ssh; as well as inbound and outbound communications to
-ports 2379, 2380 (etcd's default ports), and to ports 6666, 6667 (etcd's ports
-as deployed by {{site.prodname}}'s self-hosted Kubernetes manifests).
+By default, {{site.prodname}} keeps the following ports open on *all* host endpoints:
+
+| Port   | Protocol | Direction           |              Purpose                           |
+|--------|----------|---------------------|------------------------------------------------|
+|   22   |   TCP    |  Inbound            |             SSH access                         |
+|   53   |   UDP    |  Outbound           |             DNS queries                        |
+|   67   |   UDP    |  Outbound           |             DHCP access                        |
+|   68   |   UDP    |  Inbound            |             DHCP access                        |
+|   179  |   TCP    |  Inbound & Outbound |             BGP access (Calico networking)     |
+|   2379 |   TCP    |  Inbound & Outbound |             etcd access                        |
+|   2380 |   TCP    |  Inbound & Outbound |             etcd access                        |
+|   6666 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
+|   6667 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
+
 
 The lists of failsafe ports can be configured via the configuration parameters
+`FailsafeInboundHostPorts` and `FailsafeOutboundHostPorts`
 described in [Configuring
 Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration).  They
 can be disabled by setting each configuration value to "none".
