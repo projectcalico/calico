@@ -24,12 +24,19 @@ EOF
     sleep 1
 }
 
+function assert_namespace_exists {
+    NS_NAME=$1
+
+    # prepend "kns." to the namespace to ensure this a k8s namespace
+    docker exec -e ETCDCTL_API=3 st-etcd etcdctl get /calico --prefix | grep -q kns.${NS_NAME}
+}
+
 # Create a kubeconfig to be used for the test.
 cat >${PWD}/st-kubeconfig.yaml <<EOF
 apiVersion: v1
 kind: Config
 clusters:
-- name: test 
+- name: test
   cluster:
     insecure-skip-tls-verify: true
     server: https://${K8S_IP}:6443
@@ -38,7 +45,7 @@ users:
 contexts:
 - name: test-context
   context:
-    cluster: test  
+    cluster: test
     user: calico
 current-context: test-context
 EOF
@@ -63,7 +70,7 @@ NS_NAME=chocolate
 create_namespace ${NS_NAME}
 
 # Check for that namespace in etcd.
-docker exec st-etcd etcdctl ls --recursive /calico | grep ${NS_NAME}
+assert_namespace_exists ${NS_NAME}
 
 for n in `seq 0 9`; do
 
@@ -83,6 +90,6 @@ for n in `seq 0 9`; do
     create_namespace testns${n}
 
     # Check for that namespace in etcd.
-    docker exec st-etcd etcdctl ls --recursive /calico | grep testns${n}
+    assert_namespace_exists testns${n}
 
 done
