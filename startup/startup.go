@@ -127,6 +127,8 @@ func main() {
 		configureASNumber(node)
 	}
 
+	configureNodeRef(node)
+
 	// Check expected filesystem
 	ensureFilesystemAsExpected()
 
@@ -151,6 +153,20 @@ func main() {
 
 	// Tell the user what the name of the node is.
 	log.Infof("Using node name: %s", nodeName)
+}
+
+// configureNodeRef will attempt to discover the cluster type it is running on, check to ensure we
+// have not already set it on this Node, and set it if need be.
+func configureNodeRef(node *api.Node) {
+	orchestrator := "k8s"
+	nodeRef := ""
+
+	// Sort out what type of cluster we're running on.
+	if nodeRef = os.Getenv("CALICO_K8S_NODE_REF"); nodeRef == "" {
+		return
+	}
+
+	node.Spec.OrchRefs = []api.OrchRef{api.OrchRef{NodeName: nodeRef, Orchestrator: orchestrator}}
 }
 
 // CreateOrUpdate creates the Node if ResourceVersion is not specified,
