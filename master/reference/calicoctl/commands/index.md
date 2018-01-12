@@ -25,6 +25,7 @@ Usage:
               name.
     get       Get a resource identified by file, stdin or resource type and 
               name.
+    convert   Convert config files between different API versions.
     ipam      IP address management.
     node      Calico node management.
     version   Display the version of calicoctl.
@@ -54,13 +55,14 @@ organized by top level command.
 -  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get)
 -  [calicoctl ipam]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam)
 -  [calicoctl node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node)
+-  [calicoctl convert]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/convert)
 -  [calicoctl version]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/version)
 
 ## Modifying low-level component configurations
 
-In order to update low-level Felix or BGP settings:
-1. optionally `get` the appropriate resource and store the yaml output in a file
-1. optionally modify the resource using your favorite editor
-1. `replace` the resource
+In order to update low-level Felix or BGP settings (`FelixConfiguration` and `BGPConfiguration` resource types):
+1. Get the appropriate resource and store the yaml output in a file using `calicoctl get <resource type> <resource name> -o yaml --export > config.yaml`.
+1. Modify the saved resource file.
+1. Update the resource using `apply` or `replace` command: `calicoctl replace -f config.yaml`.
 
 See [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration) for more details.

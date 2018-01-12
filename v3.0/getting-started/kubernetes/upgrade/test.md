@@ -21,7 +21,7 @@ calico-upgrade[-darwin-amd64|-windows-amd64.exe] dry-run [--output-dir=path/dire
    
 **Example**
 ```
-calico-upgrade-darwin-amd64 dry-run --output-dir=temp --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
+calico-upgrade dry-run --output-dir=temp --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
 ```
 
 ## Next steps

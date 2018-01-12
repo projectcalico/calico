@@ -26,7 +26,7 @@ redirect_from: latest/getting-started/kubernetes/upgrade/migrate
    
    **Example**
    ```
-   calico-upgrade-darwin-amd64 start --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
+   calico-upgrade start --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
    ```
 
 1. Check the generated reports for details of conversions.
