@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -115,12 +116,33 @@ func main() {
 	// BGP related details to the Node.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
 		// Configure and verify the node IP addresses and subnets.
-		checkConflicts := configureIPsAndSubnets(node)
+		checkConflicts, err := configureIPsAndSubnets(node)
+		if err != nil {
+			clearv4 := os.Getenv("IP") == "autodetect"
+			clearv6 := os.Getenv("IP6") == "autodetect"
+			if node.ResourceVersion != "" {
+				// If we're auto-detecting an IP on an existing node and hit an error, clear the previous
+				// IP addresses from the node since they are no longer valid.
+				clearNodeIPs(ctx, cli, node, clearv4, clearv6)
+			}
+			terminate()
+		}
 
 		// If we report an IP change (v4 or v6) we should verify there are no
 		// conflicts between Nodes.
 		if checkConflicts && os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
-			checkConflictingNodes(ctx, cli, node)
+			v4conflict, v6conflict, err := checkConflictingNodes(ctx, cli, node)
+			if err != nil {
+				// If we've auto-detected a new IP address for an existing node that now conflicts, clear the old IP address(es)
+				// from the node in the datastore. This frees the address in case it needs to be used for another node.
+				clearv4 := (os.Getenv("IP") == "autodetect") && v4conflict
+				clearv6 := (os.Getenv("IP6") == "autodetect") && v6conflict
+				if node.ResourceVersion != "" {
+					clearNodeIPs(ctx, cli, node, clearv4, clearv6)
+				}
+
+				terminate()
+			}
 		}
 
 		// Configure the node AS number.
@@ -177,6 +199,29 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, node *api.Node
 	}
 
 	return client.Nodes().Create(ctx, node, options.SetOptions{})
+}
+
+func clearNodeIPs(ctx context.Context, client client.Interface, node *api.Node, clearv4, clearv6 bool) {
+	if clearv4 {
+		log.WithField("IP", node.Spec.BGP.IPv4Address).Info("Clearing out-of-date IPv4 address from this node")
+		node.Spec.BGP.IPv4Address = ""
+	}
+	if clearv6 {
+		log.WithField("IP", node.Spec.BGP.IPv6Address).Info("Clearing out-of-date IPv6 address from this node")
+		node.Spec.BGP.IPv6Address = ""
+	}
+
+	// If the BGP spec is empty, then set it to nil.
+	if node.Spec.BGP != nil && reflect.DeepEqual(*node.Spec.BGP, api.NodeBGPSpec{}) {
+		node.Spec.BGP = nil
+	}
+
+	if clearv4 || clearv6 {
+		_, err := client.Nodes().Update(ctx, node, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).Warnf("Failed to clear node addresses")
+		}
+	}
 }
 
 func configureLogging() {
@@ -300,7 +345,7 @@ func getNode(ctx context.Context, client client.Interface, nodeName string) *api
 
 // configureIPsAndSubnets updates the supplied node resource with IP and Subnet
 // information to use for BGP.  This returns true if we detect a change in Node IP address.
-func configureIPsAndSubnets(node *api.Node) bool {
+func configureIPsAndSubnets(node *api.Node) (bool, error) {
 	// If the node resource currently has no BGP configuration, add an empty
 	// set of configuration as it makes the processing below easier, and we
 	// must end up configuring some BGP fields before we complete.
@@ -328,7 +373,7 @@ func configureIPsAndSubnets(node *api.Node) bool {
 		} else if node.Spec.BGP.IPv4Address == "" {
 			// No IPv4 address is configured, but we always require one, so exit.
 			log.Warn("Couldn't autodetect an IPv4 address. If auto-detecting, choose a different autodetection method. Otherwise provide an explicit address.")
-			terminate()
+			return false, fmt.Errorf("Failed to autodetect an IPv4 address")
 		} else {
 			// No IPv4 autodetected, but a previous one was configured.
 			// Tell the user we are leaving the value unchanged.  We
@@ -353,7 +398,7 @@ func configureIPsAndSubnets(node *api.Node) bool {
 		} else if node.Spec.BGP.IPv6Address == "" {
 			// No IPv6 address is configured, but we have requested one, so exit.
 			log.Warn("Couldn't autodetect an IPv6 address. If auto-detecting, choose a different autodetection method. Otherwise provide an explicit address.")
-			terminate()
+			return false, fmt.Errorf("Failed to autodetect an IPv6 address")
 		} else {
 			// No IPv6 autodetected, but a previous one was configured.
 			// Tell the user we are leaving the value unchanged.  We
@@ -371,14 +416,14 @@ func configureIPsAndSubnets(node *api.Node) bool {
 	// Detect if we've seen the IP address change, and flag that we need to check for conflicting Nodes
 	if oldIpv4 == "" || node.Spec.BGP.IPv4Address != oldIpv4 {
 		log.Info("Node IPv4 changed, will check for conflicts")
-		return true
+		return true, nil
 	}
 	if (oldIpv6 == "" && node.Spec.BGP.IPv6Address != "") || (oldIpv6 != "" && node.Spec.BGP.IPv6Address != oldIpv6) {
 		log.Info("Node IPv6 changed, will check for conflicts")
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
 }
 
 // fetchAndValidateIPAndNetwork fetches and validates the IP configuration from
@@ -715,12 +760,13 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 
 // checkConflictingNodes checks whether any other nodes have been configured
 // with the same IP addresses.
-func checkConflictingNodes(ctx context.Context, client client.Interface, node *api.Node) {
+func checkConflictingNodes(ctx context.Context, client client.Interface, node *api.Node) (v4conflict, v6conflict bool, retErr error) {
 	// Get the full set of nodes.
 	var nodes []api.Node
 	if nodeList, err := client.Nodes().List(ctx, options.ListOptions{}); err != nil {
 		log.WithError(err).Errorf("Unable to query node confguration")
-		terminate()
+		retErr = err
+		return
 	} else {
 		nodes = nodeList.Items
 	}
@@ -728,15 +774,16 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 	ourIPv4, _, err := cnet.ParseCIDROrIP(node.Spec.BGP.IPv4Address)
 	if err != nil && node.Spec.BGP.IPv4Address != "" {
 		log.WithError(err).Errorf("Error parsing IPv4 CIDR '%s' for node '%s'", node.Spec.BGP.IPv4Address, node.Name)
-		terminate()
+		retErr = err
+		return
 	}
 	ourIPv6, _, err := cnet.ParseCIDROrIP(node.Spec.BGP.IPv6Address)
 	if err != nil && node.Spec.BGP.IPv6Address != "" {
 		log.WithError(err).Errorf("Error parsing IPv6 CIDR '%s' for node '%s'", node.Spec.BGP.IPv6Address, node.Name)
-		terminate()
+		retErr = err
+		return
 	}
 
-	errored := false
 	for _, theirNode := range nodes {
 		if theirNode.Spec.BGP == nil {
 			// Skip nodes that don't have BGP configured.  We know
@@ -748,13 +795,15 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 		theirIPv4, _, err := cnet.ParseCIDROrIP(theirNode.Spec.BGP.IPv4Address)
 		if err != nil && theirNode.Spec.BGP.IPv4Address != "" {
 			log.WithError(err).Errorf("Error parsing IPv4 CIDR '%s' for node '%s'", theirNode.Spec.BGP.IPv4Address, theirNode.Name)
-			terminate()
+			retErr = err
+			return
 		}
 
 		theirIPv6, _, err := cnet.ParseCIDROrIP(theirNode.Spec.BGP.IPv6Address)
 		if err != nil && theirNode.Spec.BGP.IPv6Address != "" {
 			log.WithError(err).Errorf("Error parsing IPv6 CIDR '%s' for node '%s'", theirNode.Spec.BGP.IPv6Address, theirNode.Name)
-			terminate()
+			retErr = err
+			return
 		}
 
 		// If this is our node (based on the name), check if the IP
@@ -777,18 +826,17 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 		// This is an error condition.
 		if theirIPv4.IP != nil && ourIPv4.IP != nil && theirIPv4.IP.Equal(ourIPv4.IP) {
 			log.Warnf("Calico node '%s' is already using the IPv4 address %s.", theirNode.Name, ourIPv4.String())
-			errored = true
+			retErr = fmt.Errorf("IPv4 address conflict")
+			v4conflict = true
 		}
 
 		if theirIPv6.IP != nil && ourIPv6.IP != nil && theirIPv6.IP.Equal(ourIPv6.IP) {
 			log.Warnf("Calico node '%s' is already using the IPv6 address %s.", theirNode.Name, ourIPv6.String())
-			errored = true
+			retErr = fmt.Errorf("IPv6 address conflict")
+			v6conflict = true
 		}
 	}
-
-	if errored {
-		terminate()
-	}
+	return
 }
 
 // Checks that the filesystem is as expected and fix it if possible
