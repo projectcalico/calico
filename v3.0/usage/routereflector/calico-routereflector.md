@@ -196,6 +196,7 @@ apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: bgppeer-global
+spec:
   peerIP: <IP_RR>
   asNumber: <AS_NUM>
 EOF
