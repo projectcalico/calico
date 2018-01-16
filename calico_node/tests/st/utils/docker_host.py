@@ -136,6 +136,7 @@ class DockerHost(object):
             log_and_run("docker run %s "
                         "calico/dind:latest "
                         "--iptables=false "
+                        "--storage-driver=aufs "
                         "%s" %
                         (docker_args, additional_docker_options))
 
