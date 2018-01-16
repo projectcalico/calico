@@ -159,7 +159,7 @@ bin/etcdctl:
 	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VER)/etcd-$(ETCD_VER)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VER)-linux-$(ARCH)/etcdctl 
 
 bin/calicoctl:
-	-docker rm -f calico/ctl
+	-docker rm -f calico-ctl
 	# Latest calicoctl binaries are stored in automated builds of calico/ctl.
 	# To get them, we create (but don't start) a container from that image.
 	docker pull $(CALICOCTL_CONTAINER_NAME)
