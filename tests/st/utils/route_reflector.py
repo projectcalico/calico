@@ -50,7 +50,7 @@ class RouteReflectorCluster(object):
                 #
                 # See https://github.com/projectcalico/calico-bird/tree/feature-ipinip/build_routereflector
                 # for details.
-                rr_ver = os.getenv("RR_VER", "latest")
+		rr_container_name = os.getenv("RR_CONTAINER_NAME", "calico/routereflector:latest")
                 if os.getenv("ETCD_SCHEME", None) == "https":
                     # Etcd is running with SSL/TLS, pass the key values
                     rr.execute("docker run --privileged --net=host -d "
@@ -60,9 +60,9 @@ class RouteReflectorCluster(object):
                                "-e ETCD_CERT_FILE=%s "
                                "-e ETCD_KEY_FILE=%s "
                                "-v %s/certs:%s/certs "
-                               "calico/routereflector:%s" %
+                               "%s" %
                                (ip_env, ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
-                                ETCD_KEY, CHECKOUT_DIR, CHECKOUT_DIR, rr_ver))
+                                ETCD_KEY, CHECKOUT_DIR, CHECKOUT_DIR, rr_container_name))
                     rr.execute(r'curl --cacert %s --cert %s --key %s '
                                r'-L https://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
                                r'-XPUT -d value="{'
@@ -76,7 +76,7 @@ class RouteReflectorCluster(object):
                     rr.execute("docker run --privileged --net=host -d "
                            "--name rr %s "
                            "-e ETCD_ENDPOINTS=http://%s:2379 "
-                           "calico/routereflector:%s" % (ip_env, get_ip(), rr_ver))
+                           "%s" % (ip_env, get_ip(), rr_container_name))
                     rr.execute(r'curl -L http://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
                                r'-XPUT -d value="{'
                                  r'\"ip\":\"%s\",'
