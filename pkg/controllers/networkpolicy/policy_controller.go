@@ -113,7 +113,7 @@ func NewPolicyController(extensionsClient *rest.RESTClient, calicoClient *client
 					log.Infof("Assuming we're responsible for policy %s", policyName)
 					m[policyName] = policy
 				}
-			} else if policyName == "kube-controllers-no-match" {
+			} else if policyName == "k8s-policy-no-match" {
 				// Older versions of the controller programmed this policy, but we don't
 				// want it around any more.  TODO: Remove this section once we don't care about
 				// upgrade from the Python controller.
