@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,7 +206,7 @@ func (buf *EventSequencer) flushConfigUpdate() {
 	}
 	if globalChanged || hostChanged {
 		rawConfig := buf.config.RawValues()
-		log.WithField("merged", rawConfig).Warn("Config changed. Sending ConfigUpdate message.")
+		log.WithField("merged", rawConfig).Info("Config changed. Sending ConfigUpdate message.")
 		buf.Callback(&proto.ConfigUpdate{
 			Config: rawConfig,
 		})

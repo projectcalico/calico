@@ -15,18 +15,41 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
+
+type EnvConfig struct {
+	EtcdImage  string `default:"quay.io/coreos/etcd"`
+	K8sImage   string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
+	TyphaImage string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
+}
+
+var Config EnvConfig
+
+func init() {
+	err := envconfig.Process("fv", &Config)
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("config", Config).Info("Loaded config")
+}
+
+var Ctx = context.Background()
+
+var NoOptions = options.SetOptions{}
 
 func Run(command string, args ...string) {
 	_ = run(true, command, args...)
@@ -38,14 +61,18 @@ func RunMayFail(command string, args ...string) error {
 
 var currentTestOutput = []string{}
 
+var LastRunOutput string
+
 func run(checkNoError bool, command string, args ...string) error {
 	outputBytes, err := Command(command, args...).CombinedOutput()
 	currentTestOutput = append(currentTestOutput, fmt.Sprintf("Command: %v %v\n", command, args))
 	currentTestOutput = append(currentTestOutput, string(outputBytes))
+	LastRunOutput = string(outputBytes)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"command": command,
-			"args":    args}).WithError(err).Warning("Command failed")
+			"args":    args,
+			"output":  string(outputBytes)}).WithError(err).Warning("Command failed")
 	}
 	if checkNoError {
 		Expect(err).NotTo(HaveOccurred())
@@ -84,11 +111,11 @@ func Command(name string, args ...string) *exec.Cmd {
 	return exec.Command(name, args...)
 }
 
-func GetEtcdClient(etcdIP string) *client.Client {
-	client, err := client.New(api.CalicoAPIConfig{
-		Spec: api.CalicoAPIConfigSpec{
-			DatastoreType: api.EtcdV2,
-			EtcdConfig: api.EtcdConfig{
+func GetEtcdClient(etcdIP string) client.Interface {
+	client, err := client.New(apiconfig.CalicoAPIConfig{
+		Spec: apiconfig.CalicoAPIConfigSpec{
+			DatastoreType: apiconfig.EtcdV3,
+			EtcdConfig: apiconfig.EtcdConfig{
 				EtcdEndpoints: "http://" + etcdIP + ":2379",
 			},
 		},

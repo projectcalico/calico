@@ -29,9 +29,8 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 type Workload struct {
@@ -91,7 +90,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v %v",
+		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v '%v' '%v' '%v'",
 			w.Name,
 			udpArg,
 			w.InterfaceName,
@@ -108,11 +107,11 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)
 	stderrReader := bufio.NewReader(w.errPipe)
-	namespacePath, err := stdoutReader.ReadString('\n')
-	Expect(err).NotTo(HaveOccurred())
-	w.namespacePath = strings.TrimSpace(namespacePath)
 
+	var errDone sync.WaitGroup
+	errDone.Add(1)
 	go func() {
+		defer errDone.Done()
 		for {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
@@ -122,6 +121,16 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 			log.Infof("Workload %s stderr: %s", name, strings.TrimSpace(string(line)))
 		}
 	}()
+
+	namespacePath, err := stdoutReader.ReadString('\n')
+	if err != nil {
+		// (Only) if we fail here, wait for the stderr to be output before returning.
+		defer errDone.Wait()
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	w.namespacePath = strings.TrimSpace(namespacePath)
+
 	go func() {
 		for {
 			line, err := stdoutReader.ReadString('\n')
@@ -136,12 +145,12 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	log.WithField("workload", w).Info("Workload now running")
 
 	wep := api.NewWorkloadEndpoint()
-	wep.Metadata.Name = w.Name
-	wep.Metadata.Workload = w.Name
-	wep.Metadata.Orchestrator = "felixfv"
-	wep.Metadata.Node = w.C.Hostname
-	wep.Metadata.Labels = map[string]string{"name": w.Name}
-	wep.Spec.IPNetworks = []net.IPNet{net.MustParseNetwork(w.IP + "/32")}
+	wep.Labels = map[string]string{"name": w.Name}
+	wep.Spec.Node = w.C.Hostname
+	wep.Spec.Orchestrator = "felixfv"
+	wep.Spec.Workload = w.Name
+	wep.Spec.Endpoint = w.Name
+	wep.Spec.IPNetworks = []string{w.IP + "/32"}
 	wep.Spec.InterfaceName = w.InterfaceName
 	wep.Spec.Profiles = []string{"default"}
 	w.WorkloadEndpoint = wep
@@ -149,13 +158,14 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	return
 }
 
-func (w *Workload) IPNet() *net.IPNet {
-	ipNet := net.MustParseCIDR(w.IP + "/32")
-	return &ipNet
+func (w *Workload) IPNet() string {
+	return w.IP + "/32"
 }
 
-func (w *Workload) Configure(client *client.Client) {
-	_, err := client.WorkloadEndpoints().Apply(w.WorkloadEndpoint)
+func (w *Workload) Configure(client client.Interface) {
+	wep := w.WorkloadEndpoint
+	wep.Namespace = "fv"
+	_, err := client.WorkloadEndpoints().Create(utils.Ctx, w.WorkloadEndpoint, utils.NoOptions)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -387,4 +397,8 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
 	}
 	return result
+}
+
+func (c *ConnectivityChecker) CheckConnectivity() {
+	EventuallyWithOffset(1, c.ActualConnectivity(), "10s", "100ms").Should(Equal(c.ExpectedConnectivity()))
 }

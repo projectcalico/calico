@@ -15,7 +15,6 @@
 package intdataplane
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -24,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -76,7 +74,7 @@ var (
 			"values indicate we're doing more batching to try to keep up.",
 	})
 
-	processStartTime time.Duration
+	processStartTime time.Time
 )
 
 func init() {
@@ -86,7 +84,7 @@ func init() {
 	prometheus.MustRegister(summaryBatchSize)
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
-	processStartTime = monotime.Now()
+	processStartTime = time.Now()
 }
 
 type Config struct {
@@ -572,7 +570,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	datastoreInSync := false
 
 	processMsgFromCalcGraph := func(msg interface{}) {
-		log.WithField("msg", msgStringer{msg: msg}).Infof(
+		log.WithField("msg", proto.MsgStringer{Msg: msg}).Infof(
 			"Received %T update from calculation graph", msg)
 		d.recordMsgStat(msg)
 		for _, mgr := range d.allManagers {
@@ -580,7 +578,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}
 		switch msg.(type) {
 		case *proto.InSync:
-			log.WithField("timeSinceStart", monotime.Since(processStartTime)).Info(
+			log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 				"Datastore in sync, flushing the dataplane for the first time...")
 			datastoreInSync = true
 		}
@@ -690,13 +688,13 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					beingThrottled = false
 				}
 				log.Info("Applying dataplane updates")
-				applyStart := monotime.Now()
+				applyStart := time.Now()
 
 				// Actually apply the changes to the dataplane.
 				d.apply()
 
 				// Record stats.
-				applyTime := monotime.Since(applyStart)
+				applyTime := time.Since(applyStart)
 				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
@@ -708,7 +706,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 				if !d.doneFirstApply {
 					log.WithField(
-						"secsSinceStart", monotime.Since(processStartTime).Seconds(),
+						"secsSinceStart", time.Since(processStartTime).Seconds(),
 					).Info("Completed first update to dataplane.")
 					d.doneFirstApply = true
 					if d.config.PostInSyncCallback != nil {
@@ -927,7 +925,7 @@ func (d *InternalDataplane) loopReportingStatus() {
 	// Wait before first report so that we don't check in if we're in a tight cyclic restart.
 	time.Sleep(10 * time.Second)
 	for {
-		uptimeSecs := monotime.Since(processStartTime).Seconds()
+		uptimeSecs := time.Since(processStartTime).Seconds()
 		d.fromDataplane <- &proto.ProcessStatusUpdate{
 			IsoTimestamp: time.Now().UTC().Format(time.RFC3339),
 			Uptime:       uptimeSecs,
@@ -942,42 +940,6 @@ type iptablesTable interface {
 	UpdateChains([]*iptables.Chain)
 	RemoveChains([]*iptables.Chain)
 	RemoveChainByName(name string)
-}
-
-// msgStringer wraps an API message to customise how we stringify it.  For example, it truncates
-// the lists of members in the (potentially very large) IPSetsUpdate messages.
-type msgStringer struct {
-	msg interface{}
-}
-
-func (m msgStringer) String() string {
-	if log.GetLevel() < log.DebugLevel && m.msg != nil {
-		const truncateAt = 10
-		switch msg := m.msg.(type) {
-		case *proto.IPSetUpdate:
-			if len(msg.Members) < truncateAt {
-				return fmt.Sprintf("%v", msg)
-			}
-			return fmt.Sprintf("id:%#v members(%d):%#v(truncated)",
-				msg.Id, len(msg.Members), msg.Members[:truncateAt])
-		case *proto.IPSetDeltaUpdate:
-			if len(msg.AddedMembers) < truncateAt && len(msg.RemovedMembers) < truncateAt {
-				return fmt.Sprintf("%v", msg)
-			}
-			addedNum := truncateAt
-			removedNum := truncateAt
-			if len(msg.AddedMembers) < addedNum {
-				addedNum = len(msg.AddedMembers)
-			}
-			if len(msg.RemovedMembers) < removedNum {
-				removedNum = len(msg.RemovedMembers)
-			}
-			return fmt.Sprintf("id:%#v addedMembers(%d):%#v(truncated) removedMembers(%d):%#v(truncated)",
-				msg.Id, len(msg.AddedMembers), msg.AddedMembers[:addedNum],
-				len(msg.RemovedMembers), msg.RemovedMembers[:removedNum])
-		}
-	}
-	return fmt.Sprintf("%v", m.msg)
 }
 
 func (d *InternalDataplane) reportHealth() {

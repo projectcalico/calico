@@ -23,9 +23,10 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/metrics"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -65,7 +66,7 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	var (
 		etcd                 *containers.Container
 		felix                *containers.Container
-		client               *client.Client
+		client               client.Interface
 		metricsPortReachable func() bool
 	)
 
@@ -106,11 +107,11 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 
 		BeforeEach(func() {
 			hostEp := api.NewHostEndpoint()
-			hostEp.Metadata.Name = "host-endpoint-1"
-			hostEp.Metadata.Node = felix.Hostname
-			hostEp.Metadata.Labels = map[string]string{"host-endpoint": "true"}
+			hostEp.Name = "host-endpoint-1"
+			hostEp.Labels = map[string]string{"host-endpoint": "true"}
+			hostEp.Spec.Node = felix.Hostname
 			hostEp.Spec.InterfaceName = "eth0"
-			_, err := client.HostEndpoints().Create(hostEp)
+			_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -121,21 +122,21 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 		Context("with pre-DNAT policy defined", func() {
 
 			BeforeEach(func() {
-				policy := api.NewPolicy()
-				policy.Metadata.Name = "pre-dnat-policy-1"
+				policy := api.NewGlobalNetworkPolicy()
+				policy.Name = "pre-dnat-policy-1"
 				policy.Spec.PreDNAT = true
 				policy.Spec.ApplyOnForward = true
 				protocol := numorstring.ProtocolFromString("tcp")
 				allowMetricsPortRule := api.Rule{
-					Action:   "allow",
+					Action:   api.Allow,
 					Protocol: &protocol,
 					Destination: api.EntityRule{
 						Ports: []numorstring.Port{numorstring.SinglePort(uint16(metrics.Port))},
 					},
 				}
-				policy.Spec.IngressRules = []api.Rule{allowMetricsPortRule}
+				policy.Spec.Ingress = []api.Rule{allowMetricsPortRule}
 				policy.Spec.Selector = "host-endpoint=='true'"
-				_, err := client.Policies().Create(policy)
+				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

@@ -21,10 +21,94 @@ import (
 	"reflect"
 	"time"
 
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
+
+var _ = Describe("FelixConfig vs ConfigParams parity", func() {
+	var fcFields map[string]reflect.StructField
+	var cpFields map[string]reflect.StructField
+	cpFieldsToIgnore := []string{
+		"sourceToRawConfig",
+		"rawValues",
+		"Err",
+		"numIptablesBitsAllocated",
+
+		// Moved to ClusterInformation
+		"ClusterGUID",
+		"ClusterType",
+		"CalicoVersion",
+
+		// Moved to Node.
+		"IpInIpTunnelAddr",
+	}
+	cpFieldNameToFC := map[string]string{
+		"IpInIpEnabled":                      "IPIPEnabled",
+		"IpInIpMtu":                          "IPIPMTU",
+		"Ipv6Support":                        "IPv6Support",
+		"IptablesLockTimeoutSecs":            "IptablesLockTimeout",
+		"IptablesLockProbeIntervalMillis":    "IptablesLockProbeInterval",
+		"IptablesPostWriteCheckIntervalSecs": "IptablesPostWriteCheckInterval",
+		"NetlinkTimeoutSecs":                 "NetlinkTimeout",
+		"ReportingIntervalSecs":              "ReportingInterval",
+		"ReportingTTLSecs":                   "ReportingTTL",
+		"UsageReportingInitialDelaySecs":     "UsageReportingInitialDelay",
+		"UsageReportingIntervalSecs":         "UsageReportingInterval",
+		"EndpointReportingDelaySecs":         "EndpointReportingDelay",
+	}
+	fcFieldNameToCP := map[string]string{}
+	for k, v := range cpFieldNameToFC {
+		fcFieldNameToCP[v] = k
+	}
+
+	BeforeEach(func() {
+		fcFields = fieldsByName(v3.FelixConfigurationSpec{})
+		cpFields = fieldsByName(Config{})
+		for _, name := range cpFieldsToIgnore {
+			delete(cpFields, name)
+		}
+	})
+
+	It("FelixConfigurationSpec should contain all Config fields", func() {
+		for n, f := range cpFields {
+			mappedName := cpFieldNameToFC[n]
+			if mappedName != "" {
+				n = mappedName
+			}
+			if strings.HasPrefix(n, "Debug") {
+				continue
+			}
+			if strings.Contains(string(f.Tag), "local") {
+				continue
+			}
+			Expect(fcFields).To(HaveKey(n))
+		}
+	})
+	It("Config should contain all FelixConfigurationSpec fields", func() {
+		for n := range fcFields {
+			mappedName := fcFieldNameToCP[n]
+			if mappedName != "" {
+				n = mappedName
+			}
+			Expect(cpFields).To(HaveKey(n))
+		}
+	})
+})
+
+func fieldsByName(example interface{}) map[string]reflect.StructField {
+	fields := map[string]reflect.StructField{}
+	t := reflect.TypeOf(example)
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		fields[f.Name] = f
+	}
+	return fields
+}
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
@@ -102,17 +186,17 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogSeverityFile", "LogSeverityFile", "debug", "DEBUG"),
 	Entry("LogSeverityFile", "LogSeverityFile", "warning", "WARNING"),
 	Entry("LogSeverityFile", "LogSeverityFile", "error", "ERROR"),
-	Entry("LogSeverityFile", "LogSeverityFile", "critical", "CRITICAL"),
+	Entry("LogSeverityFile", "LogSeverityFile", "fatal", "FATAL"),
 
 	Entry("LogSeverityScreen", "LogSeverityScreen", "debug", "DEBUG"),
 	Entry("LogSeverityScreen", "LogSeverityScreen", "warning", "WARNING"),
 	Entry("LogSeverityScreen", "LogSeverityScreen", "error", "ERROR"),
-	Entry("LogSeverityScreen", "LogSeverityScreen", "critical", "CRITICAL"),
+	Entry("LogSeverityScreen", "LogSeverityScreen", "fatal", "FATAL"),
 
 	Entry("LogSeveritySys", "LogSeveritySys", "debug", "DEBUG"),
 	Entry("LogSeveritySys", "LogSeveritySys", "warning", "WARNING"),
 	Entry("LogSeveritySys", "LogSeveritySys", "error", "ERROR"),
-	Entry("LogSeveritySys", "LogSeveritySys", "critical", "CRITICAL"),
+	Entry("LogSeveritySys", "LogSeveritySys", "fatal", "FATAL"),
 
 	Entry("IpInIpEnabled", "IpInIpEnabled", "true", true),
 	Entry("IpInIpEnabled", "IpInIpEnabled", "y", true),
@@ -174,11 +258,15 @@ var _ = DescribeTable("Config parsing",
 			{Protocol: "tcp", Port: 1},
 			{Protocol: "udp", Port: 2},
 		}),
-
 	Entry("FailsafeInboundHostPorts bad syntax -> defaulted", "FailsafeInboundHostPorts", "foo:1",
 		[]ProtoPort{
 			{Protocol: "tcp", Port: 22},
 			{Protocol: "udp", Port: 68},
+			{Protocol: "tcp", Port: 179},
+			{Protocol: "tcp", Port: 2379},
+			{Protocol: "tcp", Port: 2380},
+			{Protocol: "tcp", Port: 6666},
+			{Protocol: "tcp", Port: 6667},
 		},
 		true,
 	),
@@ -186,6 +274,11 @@ var _ = DescribeTable("Config parsing",
 		[]ProtoPort{
 			{Protocol: "tcp", Port: 22},
 			{Protocol: "udp", Port: 68},
+			{Protocol: "tcp", Port: 179},
+			{Protocol: "tcp", Port: 2379},
+			{Protocol: "tcp", Port: 2380},
+			{Protocol: "tcp", Port: 6666},
+			{Protocol: "tcp", Port: 6667},
 		},
 		true,
 	),
@@ -197,16 +290,22 @@ var _ = DescribeTable("Config parsing",
 		[]ProtoPort{
 			{Protocol: "tcp", Port: 22},
 			{Protocol: "udp", Port: 68},
+			{Protocol: "tcp", Port: 179},
+			{Protocol: "tcp", Port: 2379},
+			{Protocol: "tcp", Port: 2380},
+			{Protocol: "tcp", Port: 6666},
+			{Protocol: "tcp", Port: 6667},
 		},
 	),
 	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "",
 		[]ProtoPort{
-			{Protocol: "tcp", Port: 2379},
-			{Protocol: "tcp", Port: 2380},
-			{Protocol: "tcp", Port: 4001},
-			{Protocol: "tcp", Port: 7001},
 			{Protocol: "udp", Port: 53},
 			{Protocol: "udp", Port: 67},
+			{Protocol: "tcp", Port: 179},
+			{Protocol: "tcp", Port: 2379},
+			{Protocol: "tcp", Port: 2380},
+			{Protocol: "tcp", Port: 6666},
+			{Protocol: "tcp", Port: 6667},
 		},
 	),
 )

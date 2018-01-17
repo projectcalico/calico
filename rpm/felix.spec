@@ -2,8 +2,8 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.7.0
-Release:        0.1.pre2%{?dist}
+Version:        3.0.1
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,65 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Dec 22 2017 Neil Jerram <neil@tigera.io> 3.0.1-1
+  - Felix 3.0.1 (from Git commit 757dc44).
+    [Changes recorded in 3.0.1 tag]
+    - Report ready while waiting for the ready flag. #1677
+
+* Fri Dec 22 2017 Neil Jerram <neil@tigera.io> 3.0.0-1
+  - Felix 3.0.0 (from Git commit 0fc6d7f).
+    [Changes recorded in 3.0.0 tag]
+    This Felix release is part of the broader Calico 3.0.0 release.
+    Significant Felix changes, since 3.0.0-beta1, are as follows.
+
+    - Enable Calico-Felix for Windows - https://github.com/projectcalico/felix/pull/1638
+    - Always return a slice from GetPIDs - https://github.com/projectcalico/felix/pull/1664
+    - Avoid reconnecting just to check the ready flag - https://github.com/projectcalico/felix/pull/1661
+    - Report health before datastore is ready - https://github.com/projectcalico/felix/pull/1652
+    - Fix that felix didn't restart when config was deleted - https://github.com/projectcalico/felix/pull/1645
+    - Fix config batcher - unset dirty flag after flush: https://github.com/projectcalico/felix/pull/1634
+    - Explicitly allow IPIP packets from/to Calico hosts - https://github.com/projectcalico/felix/pull/1558
+    - Make it optional to auto-remove containers and add support for restarting stopped ones - https://github.com/projectcalico/felix/pull/1571
+    - Fix that the allow action override options didn't apply in all cases -  https://github.com/projectcalico/felix/pull/1628
+
+* Mon Nov 20 2017 Neil Jerram <neil@tigera.io> 3.0.0-0.1.beta1
+  - Felix 3.0.0-beta1 (from Git commit c92d138).
+    [Changes recorded in 3.0.0-beta1 tag]
+    - Improve the performance of dockerd during iptables_lock_test.
+    - Allow override of etcd image in FVs
+    - Rev go-build to v0.9 to pick up go 1.9.2.
+    - Remove monotime dependency.
+    - Adjust timeouts and parallel executions in FVs.
+    - Update libcalico to get namespace selector support
+
+* Tue Nov 07 2017 Neil Jerram <neil@tigera.io> 3.0.0-0.1.alpha1
+  - Felix 3.0.0-alpha1 (from Git commit 2af37a9).
+    [Changes recorded in 3.0.0-alpha1 tag]
+    [Changes recorded in 3.0.0-alpha1-rc1 tag]
+    - Added support for ApplyOnForward flag.
+    - Implement named ports index and rule conversion.
+    - Implement IP set rendering for IP, port.
+    - Implement named port rule rendering.
+    - Minor fixes to named port calculations.
+    - Combine selectors in more cases, add UT and clean-ups.
+    - Bring calc graph diagram up to date.
+    - Move calc graph test models to own file.
+    - Add named port calc graph FV tests.
+    - Add more named ports calc graph FVs.
+    - Add calc graph FVs for named port label inheritance.
+    - Add UT for named ports on host endpoints.
+    - Add some named ports tests with negated ports and selectors.
+    - Start adding tests for named port rule rendering.
+    - More rule rendering UTs.
+    - Add support for selecting source port in FV framework.
+    - Add named ports source port tests.
+    - Support workload ingress policy for kube-proxy running in ipvs mode.
+    - Make topology set-up common across FV tests.
+    - Add test that confuses TCP and UDP named ports.
+    - Move UDP conntrack clear into Port.CanConnectTo().
+    - Rev libcalico-go to pick up resync loop fix.
+    - DatastoreType etcdv2 -> etcdv3
+
 * Mon Oct 16 2017 Neil Jerram <neil@tigera.io> 2.7.0-0.1.pre2
   - Felix 2.7.0-pre2 (from Git commit 942db10).
     [Changes recorded in 2.7.0-pre2 tag]

@@ -29,9 +29,8 @@ import (
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -64,7 +63,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	var (
 		etcd   *containers.Container
 		felix  *containers.Container
-		client *client.Client
+		client client.Interface
 		w      [4]*workload.Workload
 		cc     *workload.ConnectivityChecker
 	)
@@ -86,14 +85,14 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
-		defaultProfile.Metadata.Name = "default"
-		defaultProfile.Metadata.Tags = []string{"default"}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{
-			Action: "allow",
-			Source: api.EntityRule{Tag: "default"},
+		defaultProfile.Name = "default"
+		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{
+			Action: api.Allow,
+			Source: api.EntityRule{Selector: "default == ''"},
 		}}
-		_, err := client.Profiles().Create(defaultProfile)
+		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create some workloads, using that profile.
@@ -197,9 +196,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		})
 	})
 
-	createPolicy := func(policy *api.Policy) {
+	createPolicy := func(policy *api.NetworkPolicy) {
 		log.WithField("policy", dumpPolicy(policy)).Info("Creating policy")
-		_, err := client.Policies().Create(policy)
+		_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 	}
 
@@ -213,8 +212,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		//
 		// useDestSel if set, adds a destination selector (picking out w[0]) to the rule.
 		func(negated bool, applyRulesAt ingressEgress, numNumericPorts int, useDestSel bool) {
-			pol := api.NewPolicy()
-			pol.Metadata.Name = "policy-1"
+			pol := api.NewNetworkPolicy()
+			pol.Namespace = "fv"
+			pol.Name = "policy-1"
 			ports := []numorstring.Port{
 				numorstring.NamedPort(sharedPortName),
 			}
@@ -232,7 +232,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			}
 			protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoStruct,
 			}
 			if testSourcePorts {
@@ -247,16 +247,16 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			if applyRulesAt == applyAtW0 {
 				pol.Spec.Selector = w[0].NameSelector()
 				if testSourcePorts {
-					pol.Spec.EgressRules = rules
+					pol.Spec.Egress = rules
 				} else {
-					pol.Spec.IngressRules = rules
+					pol.Spec.Ingress = rules
 				}
 			} else {
 				pol.Spec.Selector = fmt.Sprintf("!(%s)", w[0].NameSelector())
 				if testSourcePorts {
-					pol.Spec.IngressRules = rules
+					pol.Spec.Ingress = rules
 				} else {
-					pol.Spec.EgressRules = rules
+					pol.Spec.Egress = rules
 				}
 			}
 
@@ -373,7 +373,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	Describe("with a policy that combines named ports and selectors", func() {
-		var policy *api.Policy
+		var policy *api.NetworkPolicy
 		var oppositeDir, sameDir string
 		if testSourcePorts {
 			oppositeDir = "destination"
@@ -384,8 +384,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		}
 
 		BeforeEach(func() {
-			policy = api.NewPolicy()
-			policy.Metadata.Name = "policy-1"
+			policy = api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
 
 			entityRule := api.EntityRule{
 				Ports: []numorstring.Port{
@@ -400,7 +401,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			protoStruct := numorstring.ProtocolFromString(protocol)
 			apiRule := api.Rule{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoStruct,
 			}
 			if testSourcePorts {
@@ -408,7 +409,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			} else {
 				apiRule.Destination = entityRule
 			}
-			policy.Spec.IngressRules = []api.Rule{
+			policy.Spec.Ingress = []api.Rule{
 				apiRule,
 			}
 			policy.Spec.Selector = "all()"
@@ -445,9 +446,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Source.NotSelector = w[2].NameSelector()
 				} else {
-					policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Destination.NotSelector = w[2].NameSelector()
 				}
 			})
 
@@ -473,11 +474,11 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with only a negative "+sameDir+" selector, removing w[2]", func() {
 			BeforeEach(func() {
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.Selector = ""
-					policy.Spec.IngressRules[0].Source.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Source.Selector = ""
+					policy.Spec.Ingress[0].Source.NotSelector = w[2].NameSelector()
 				} else {
-					policy.Spec.IngressRules[0].Destination.Selector = ""
-					policy.Spec.IngressRules[0].Destination.NotSelector = w[2].NameSelector()
+					policy.Spec.Ingress[0].Destination.Selector = ""
+					policy.Spec.Ingress[0].Destination.NotSelector = w[2].NameSelector()
 				}
 			})
 
@@ -528,9 +529,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					NotSelector: w[2].NameSelector(),
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 
@@ -540,15 +541,15 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with "+oppositeDir+" CIDRs, allowing only w[0] and w[1]", func() {
 			BeforeEach(func() {
 				rule := api.EntityRule{
-					Nets: []*net.IPNet{
+					Nets: []string{
 						w[0].IPNet(),
 						w[1].IPNet(),
 					},
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 
@@ -558,15 +559,15 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with negated "+oppositeDir+" CIDRs, allowing only w[0] and w[1]", func() {
 			BeforeEach(func() {
 				rule := api.EntityRule{
-					NotNets: []*net.IPNet{
+					NotNets: []string{
 						w[2].IPNet(),
 						w[3].IPNet(),
 					},
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 
@@ -576,19 +577,19 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		Describe("with positive and negative "+oppositeDir+" CIDRs, allowing only w[0] and w[1]", func() {
 			BeforeEach(func() {
 				rule := api.EntityRule{
-					Nets: []*net.IPNet{
+					Nets: []string{
 						w[0].IPNet(),
 						w[1].IPNet(),
 						w[2].IPNet(), // Allowed here but excluded below.
 					},
-					NotNets: []*net.IPNet{
+					NotNets: []string{
 						w[2].IPNet(),
 					},
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Destination = rule
+					policy.Spec.Ingress[0].Destination = rule
 				} else {
-					policy.Spec.IngressRules[0].Source = rule
+					policy.Spec.Ingress[0].Source = rule
 				}
 			})
 			It("should have expected connectivity", expectW2AndW3Blocked)
@@ -596,17 +597,17 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 		Describe("with all positive CIDRs replacing the selector", func() {
 			BeforeEach(func() {
-				nets := []*net.IPNet{
+				nets := []string{
 					w[0].IPNet(),
 					w[1].IPNet(),
 					w[2].IPNet(),
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.Selector = ""
-					policy.Spec.IngressRules[0].Source.Nets = nets
+					policy.Spec.Ingress[0].Source.Selector = ""
+					policy.Spec.Ingress[0].Source.Nets = nets
 				} else {
-					policy.Spec.IngressRules[0].Destination.Selector = ""
-					policy.Spec.IngressRules[0].Destination.Nets = nets
+					policy.Spec.Ingress[0].Destination.Selector = ""
+					policy.Spec.Ingress[0].Destination.Nets = nets
 				}
 			})
 
@@ -614,14 +615,14 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			Describe("with negative destination nets blocking w[2] and w[3]", func() {
 				BeforeEach(func() {
-					nets := []*net.IPNet{
+					nets := []string{
 						w[2].IPNet(),
 						w[3].IPNet(),
 					}
 					if testSourcePorts {
-						policy.Spec.IngressRules[0].Source.NotNets = nets
+						policy.Spec.Ingress[0].Source.NotNets = nets
 					} else {
-						policy.Spec.IngressRules[0].Destination.NotNets = nets
+						policy.Spec.Ingress[0].Destination.NotNets = nets
 					}
 				})
 
@@ -656,9 +657,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					numorstring.SinglePort(4000),
 				}
 				if testSourcePorts {
-					policy.Spec.IngressRules[0].Source.NotPorts = ports
+					policy.Spec.Ingress[0].Source.NotPorts = ports
 				} else {
-					policy.Spec.IngressRules[0].Destination.NotPorts = ports
+					policy.Spec.Ingress[0].Destination.NotPorts = ports
 				}
 			})
 
@@ -688,11 +689,11 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	var (
 		etcd              *containers.Container
 		felix             *containers.Container
-		client            *client.Client
+		client            client.Interface
 		nginx             *workload.Workload
 		nginxClient       *workload.Workload
-		defaultDenyPolicy *api.Policy
-		allowHTTPPolicy   *api.Policy
+		defaultDenyPolicy *api.NetworkPolicy
+		allowHTTPPolicy   *api.NetworkPolicy
 		cc                *workload.ConnectivityChecker
 	)
 
@@ -701,11 +702,11 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 
 		// Create a namespace profile and write to the datastore.
 		defaultProfile := api.NewProfile()
-		defaultProfile.Metadata.Name = "k8s_ns.test"
-		defaultProfile.Metadata.Labels = map[string]string{"name": "test"}
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
-		_, err := client.Profiles().Create(defaultProfile)
+		defaultProfile.Name = "kns.test"
+		defaultProfile.Labels = map[string]string{"name": "test"}
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create nginx workload.
@@ -717,9 +718,8 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			"80,81",
 			"tcp",
 		)
-		nginx.WorkloadEndpoint.Metadata.Labels = map[string]string{
-			"calico/k8s_ns": "test",
-			"name":          "nginx",
+		nginx.WorkloadEndpoint.Labels = map[string]string{
+			"name": "nginx",
 		}
 		nginx.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
 			{
@@ -728,7 +728,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 				Protocol: numorstring.ProtocolFromString("tcp"),
 			},
 		}
-		nginx.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
+		nginx.WorkloadEndpoint.Spec.Profiles = []string{"kns.test"}
 		nginx.DefaultPort = "80"
 		nginx.Configure(client)
 
@@ -741,24 +741,26 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 			"1000",
 			"tcp",
 		)
-		nginxClient.WorkloadEndpoint.Spec.Profiles = []string{"k8s_ns.test"}
+		nginxClient.WorkloadEndpoint.Spec.Profiles = []string{"kns.test"}
 		nginxClient.Configure(client)
 
 		// Create a default deny policy (but we don't actually write it to the datastore yet).
-		defaultDenyPolicy = api.NewPolicy()
-		defaultDenyPolicy.Metadata.Name = "knp.default.test.default-deny"
+		defaultDenyPolicy = api.NewNetworkPolicy()
+		defaultDenyPolicy.Namespace = "fv"
+		defaultDenyPolicy.Name = "knp.default.default-deny"
 		thousand := 1000.0
 		defaultDenyPolicy.Spec.Order = &thousand
-		defaultDenyPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		defaultDenyPolicy.Spec.Selector = "name == 'nginx'"
 		defaultDenyPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
 		// Create a policy that opens up the HTTP named port (but we don't actually write it to the
 		// datastore yet).
-		allowHTTPPolicy = api.NewPolicy()
-		allowHTTPPolicy.Metadata.Name = "knp.default.test.access-nginx"
+		allowHTTPPolicy = api.NewNetworkPolicy()
+		allowHTTPPolicy.Namespace = "fv"
+		allowHTTPPolicy.Name = "knp.default.access-nginx"
 		protoStruct := numorstring.ProtocolFromString("tcp")
 		apiRule := api.Rule{
-			Action:   "allow",
+			Action:   api.Allow,
 			Protocol: &protoStruct,
 			Destination: api.EntityRule{
 				Ports: []numorstring.Port{
@@ -766,11 +768,11 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 				},
 			},
 		}
-		allowHTTPPolicy.Spec.IngressRules = []api.Rule{
+		allowHTTPPolicy.Spec.Ingress = []api.Rule{
 			apiRule,
 		}
 		allowHTTPPolicy.Spec.Order = &thousand
-		allowHTTPPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		allowHTTPPolicy.Spec.Selector = "name == 'nginx'"
 		allowHTTPPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
 		cc = &workload.ConnectivityChecker{}
@@ -804,14 +806,14 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		// Then we add an (ingress) default deny policy, which should cut it off again.
 		// It's important to check this before applying the allow policy to check that the correct
 		// policy is opening up the port.
-		_, err := client.Policies().Apply(defaultDenyPolicy)
+		_, err := client.NetworkPolicies().Create(utils.Ctx, defaultDenyPolicy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 		cc.ResetExpectations()
 		cc.ExpectNone(nginxClient, nginx.Port(80))
 		cc.ExpectNone(nginxClient, nginx.Port(81))
 		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
 
-		_, err = client.Policies().Apply(allowHTTPPolicy)
+		_, err = client.NetworkPolicies().Create(utils.Ctx, allowHTTPPolicy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 		cc.ResetExpectations()
 		cc.ExpectSome(nginxClient, nginx.Port(80))
@@ -825,11 +827,11 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	var (
 		etcd                        *containers.Container
 		felix                       *containers.Container
-		client                      *client.Client
+		client                      client.Interface
 		targetTCPWorkload           *workload.Workload
 		targetUDPWorkload           *workload.Workload
 		clientWorkload              *workload.Workload
-		allowConfusedProtocolPolicy *api.Policy
+		allowConfusedProtocolPolicy *api.NetworkPolicy
 		udpCC                       *workload.ConnectivityChecker
 		tcpCC                       *workload.ConnectivityChecker
 	)
@@ -839,10 +841,10 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 
 		// Create a profile that opens up traffic by default.
 		defaultProfile := api.NewProfile()
-		defaultProfile.Metadata.Name = "open"
-		defaultProfile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-		defaultProfile.Spec.IngressRules = []api.Rule{{Action: "allow"}}
-		_, err := client.Profiles().Create(defaultProfile)
+		defaultProfile.Name = "open"
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		createTarget := func(ip, protocol string) *workload.Workload {
@@ -855,9 +857,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 				"80,81",
 				protocol,
 			)
-			w.WorkloadEndpoint.Metadata.Labels = map[string]string{
-				"calico/k8s_ns": "test",
-				"name":          "nginx",
+			w.WorkloadEndpoint.Labels = map[string]string{
+				"name": "nginx",
 			}
 			w.WorkloadEndpoint.Spec.Ports = []api.EndpointPort{
 				{
@@ -892,13 +893,14 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		clientWorkload.Configure(client)
 
 		// Create a policy that tries to open up the TCP named port over UDP and vice/versa.
-		allowConfusedProtocolPolicy = api.NewPolicy()
-		allowConfusedProtocolPolicy.Metadata.Name = "knp.default.test.confused"
+		allowConfusedProtocolPolicy = api.NewNetworkPolicy()
+		allowConfusedProtocolPolicy.Namespace = "fv"
+		allowConfusedProtocolPolicy.Name = "knp.default.confused"
 		protoUDPStruct := numorstring.ProtocolFromString("udp")
 		protoTCPStruct := numorstring.ProtocolFromString("tcp")
-		allowConfusedProtocolPolicy.Spec.IngressRules = []api.Rule{
+		allowConfusedProtocolPolicy.Spec.Ingress = []api.Rule{
 			{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoTCPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
@@ -907,7 +909,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 				},
 			},
 			{
-				Action:   "allow",
+				Action:   api.Allow,
 				Protocol: &protoUDPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
@@ -916,7 +918,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 				},
 			},
 		}
-		allowConfusedProtocolPolicy.Spec.Selector = "calico/k8s_ns == 'test' && name == 'nginx'"
+		allowConfusedProtocolPolicy.Spec.Selector = "name == 'nginx'"
 		allowConfusedProtocolPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
 		udpCC = &workload.ConnectivityChecker{Protocol: "udp"}
@@ -954,7 +956,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
 
 		// Then the connectivity should be broken by adding the confused policy.
-		_, err := client.Policies().Apply(allowConfusedProtocolPolicy)
+		_, err := client.NetworkPolicies().Create(utils.Ctx, allowConfusedProtocolPolicy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 		tcpCC.ResetExpectations()
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(80))
@@ -967,9 +969,9 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	})
 })
 
-func dumpPolicy(pol *api.Policy) string {
+func dumpPolicy(pol *api.NetworkPolicy) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
-	polDump := fmt.Sprintf("Active policy:\n\tMetadata: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
-		pol.Metadata, pol.Spec, string(jsonPol))
+	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
+		pol.Name, pol.Spec, string(jsonPol))
 	return polDump
 }

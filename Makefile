@@ -45,21 +45,22 @@
 # The build architecture is select by setting the ARCH variable.
 # For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
 # When ARCH is undefined it defaults to amd64.
-ifdef ARCH
-	ARCHTAG:=-$(ARCH)
-endif
 ARCH?=amd64
-ARCHTAG?=
-
 ifeq ($(ARCH),amd64)
-GO_BUILD_VER:=v0.6
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.9
+	FV_TYPHAIMAGE?=calico/typha:v0.6.0-beta1-16-g512a0f2
 endif
 
 ifeq ($(ARCH),ppc64le)
-GO_BUILD_VER:=latest
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 
 help:
 	@echo "Felix Makefile"
@@ -189,6 +190,9 @@ k8sfv-test: calico/felix k8sfv-test-existing-felix
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
 k8sfv-test-existing-felix: bin/k8sfv.test
+	FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
+	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	k8sfv/run-test
 
 PROMETHEUS_DATA_DIR := $$HOME/prometheus-data
@@ -288,18 +292,24 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # our glide.yaml.  If there area any changes, this updates glide.lock
 # as a side effect.  Unless you're adding/updating a dependency, you probably
 # want to use the vendor target to install the versions from glide.lock.
+VENDOR_REMADE := false
 .PHONY: update-vendor
-update-vendor:
+update-vendor glide.lock:
 	mkdir -p $$HOME/.glide
 	$(DOCKER_GO_BUILD) glide up --strip-vendor
 	touch vendor/.up-to-date
+	# Optimization: since glide up does the job of glide install, flag to the
+	# vendor target that it doesn't need to do anything.
+	$(eval VENDOR_REMADE := true)
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
-	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
-	touch vendor/.up-to-date
+	if ! $(VENDOR_REMADE); then \
+	  mkdir -p $$HOME/.glide && \
+	  $(DOCKER_GO_BUILD) glide install --strip-vendor && \
+	  touch vendor/.up-to-date; \
+	fi
 
 # Linker flags for building Felix.
 #
@@ -353,6 +363,15 @@ dist/calico-felix/calico-felix: bin/calico-felix
 	mkdir -p dist/calico-felix/
 	cp bin/calico-felix dist/calico-felix/calico-felix
 
+# Cross-compile Felix for Windows
+bin/calico-felix.exe: $(FELIX_GO_FILES) vendor/.up-to-date
+	@echo Building felix for Windows...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+           sh -c 'GOOS=windows go build -v -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
+		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program" || \
+		( echo "Error: $@ was not statically linked"; false ) )'
+
 # Install or update the tools used by the build
 .PHONY: update-tools
 update-tools:
@@ -393,7 +412,10 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	-docker tag calico/felix$(ARCHTAG) calico/felix
 	for t in $(FV_TESTS); do \
 	    cd $(TOPDIR)/`dirname $$t` && \
-	    $(TOPDIR)/bin/ginkgo -slowSpecThreshold 40 -p ./`basename $$t` || exit; \
+	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
+	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)
@@ -436,12 +458,12 @@ static-checks:
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv $(GINKGO_OPTIONS)
+	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_OPTIONS)
 
 .PHONY: ut-watch
 ut-watch: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv $(GINKGO_OPTIONS)
+	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_OPTIONS)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
@@ -536,17 +558,22 @@ release-once-tagged:
 	@echo "Will now build release artifacts..."
 	@echo
 	$(MAKE) bin/calico-felix calico/felix
-	docker tag calico/felix calico/felix:$(VERSION)
+	docker tag calico/felix:latest quay.io/calico/felix:latest
+	docker tag calico/felix:latest calico/felix:$(VERSION)
 	docker tag calico/felix:$(VERSION) quay.io/calico/felix:$(VERSION)
 	@echo
 	@echo "Checking built felix has correct version..."
-	@if docker run quay.io/calico/felix:$(VERSION) calico-felix --version | grep -q '$(VERSION)$$'; \
-	then \
-	  echo "Check successful."; \
-	else \
-	  echo "Incorrect version in docker image!"; \
-	  false; \
-	fi
+	@result=true; \
+	for img in calico/felix:latest quay.io/calico/felix:latest calico/felix:$(VERSION) quay.io/calico/felix:$(VERSION); do \
+	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
+	  then \
+	    echo "Check successful. ($$img)"; \
+	  else \
+	    echo "Incorrect version in docker image $$img!"; \
+	    result=false; \
+	  fi \
+	done; \
+	$$result
 	@echo
 	@echo "Felix release artifacts have been built:"
 	@echo

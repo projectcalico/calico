@@ -19,16 +19,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"runtime/debug"
-	"runtime/pprof"
-	"strings"
 	"syscall"
 	"time"
 
@@ -44,19 +40,20 @@ import (
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/extdataplane"
-	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/intdataplane"
-	"github.com/projectcalico/felix/ipsets"
+	dp "github.com/projectcalico/felix/dataplane"
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/statusrep"
 	"github.com/projectcalico/felix/usagerep"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
+	errors2 "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
@@ -76,6 +73,13 @@ const (
 	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
 	// lower occupancy.
 	defaultGCPercent = 20
+
+	// String sent on the failure report channel to indicate we're shutting down for config
+	// change.
+	reasonConfigChanged = "config changed"
+	// Process return code used to report a config change.  This is the same as the code used
+	// by SIGHUP, which means that the wrapper script also restarts Felix on a SIGHUP.
+	configChangedRC = 129
 )
 
 // main is the entry point to the calico-felix binary.
@@ -112,6 +116,8 @@ func main() {
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
 
+	ctx := context.Background()
+
 	if os.Getenv("GOGC") == "" {
 		// Tune the GC to trade off a little extra CPU usage for significantly lower
 		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
@@ -138,15 +144,39 @@ func main() {
 	buildInfoLogCxt.Info("Felix starting up")
 	log.Infof("Command line arguments: %v", arguments)
 
+	// Health monitoring, for liveness and readiness endpoints.  The following loop can take a
+	// while before the datastore reports itself as ready - for example when there is data that
+	// needs to be migrated from a previous version - and we still want to Felix to report
+	// itself as live (but not ready) while we are waiting for that.  So we create the
+	// aggregator upfront and will start serving health status over HTTP as soon as we see _any_
+	// config that indicates that.
+	healthAggregator := health.NewHealthAggregator()
+
+	const healthName = "felix-startup"
+
+	// Register this function as a reporter of liveness and readiness, with no timeout.
+	healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
+
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
 	log.Infof("Loading configuration...")
-	var datastore bapi.Client
+	var backendClient bapi.Client
 	var configParams *config.Config
 	var typhaAddr string
+	var numClientsCreated int
 configRetry:
 	for {
+		if numClientsCreated > 60 {
+			// If we're in a restart loop, periodically exit (so we can be restarted) since
+			// - it may solve the problem if there's something wrong with our process
+			// - it prevents us from leaking connections to the datastore.
+			exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
+		}
+
+		// Make an initial report that says we're live but not yet ready.
+		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+
 		// Load locally-defined config, including the datastore connection
 		// parameters. First the environment variables.
 		configParams = config.New()
@@ -176,19 +206,37 @@ configRetry:
 			continue configRetry
 		}
 
+		// Each time round this loop, check that we're serving health reports if we should
+		// be, or cancel any existing server if we should not be serving any more.
+		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
+
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
 		datastoreConfig := configParams.DatastoreConfig()
-		datastore, err = backend.NewClient(datastoreConfig)
+		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
-			log.WithError(err).Error("Failed to connect to datastore")
+			log.WithError(err).Error("Failed to create datastore client")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig, hostConfig := loadConfigFromDatastore(datastore,
-			configParams.FelixHostname)
-		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
-		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
+		numClientsCreated++
+		for {
+			globalConfig, hostConfig, err := loadConfigFromDatastore(
+				ctx, backendClient, configParams.FelixHostname)
+			if err == ErrNotReady {
+				log.Warn("Waiting for datastore to be initialized (or migrated)")
+				time.Sleep(1 * time.Second)
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+				continue
+			} else if err != nil {
+				log.WithError(err).Error("Failed to get config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+			configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
+			configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
+			break
+		}
 		configParams.Validate()
 		if configParams.Err != nil {
 			log.WithError(configParams.Err).Error(
@@ -202,12 +250,13 @@ configRetry:
 		// config.  We don't need to re-load the configuration _again_ because the
 		// calculation graph will spot if the config has changed since we were initialised.
 		datastoreConfig = configParams.DatastoreConfig()
-		datastore, err = backend.NewClient(datastoreConfig)
+		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to (re)connect to datastore")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+		numClientsCreated++
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
 		typhaAddr, err = discoverTyphaAddr(configParams)
@@ -220,6 +269,18 @@ configRetry:
 		break configRetry
 	}
 
+	if numClientsCreated > 2 {
+		// We don't have a way to close datastore connection so, if we reconnected after
+		// a failure to load config, restart felix to avoid leaking connections.
+		exitWithCustomRC(configChangedRC, "Restarting to avoid leaking datastore connections")
+	}
+
+	// We're now both live and ready.
+	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+
+	// Enable or disable the health HTTP server according to coalesced config.
+	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthPort)
+
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
 	logutils.ConfigureLogging(configParams)
@@ -228,104 +289,23 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
-	// Health monitoring, for liveness and readiness endpoints.
-	healthAggregator := health.NewHealthAggregator()
-
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
-	var dpDriver dataplaneDriver
+	var dpDriver dp.DataplaneDriver
 	var dpDriverCmd *exec.Cmd
-	if configParams.UseInternalDataplaneDriver {
-		log.Info("Using internal dataplane driver.")
-		// Dedicated mark bits for accept and pass actions.  These are long lived bits
-		// that we use for communicating between chains.
-		markAccept := configParams.NextIptablesMark()
-		markPass := configParams.NextIptablesMark()
-		// Short-lived mark bits for local calculations within a chain.
-		markScratch0 := configParams.NextIptablesMark()
-		markScratch1 := configParams.NextIptablesMark()
-		log.WithFields(log.Fields{
-			"acceptMark":   markAccept,
-			"passMark":     markPass,
-			"scratch0Mark": markScratch0,
-			"scratch1Mark": markScratch1,
-		}).Info("Calculated iptables mark bits")
-		dpConfig := intdataplane.Config{
-			IfaceMonitorConfig: ifacemonitor.Config{
-				InterfaceExcludes: configParams.InterfaceExcludes(),
-			},
-			RulesConfig: rules.Config{
-				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
-				IPSetConfigV4: ipsets.NewIPVersionConfig(
-					ipsets.IPFamilyV4,
-					rules.IPSetNamePrefix,
-					rules.AllHistoricIPSetNamePrefixes,
-					rules.LegacyV4IPSetNames,
-				),
-				IPSetConfigV6: ipsets.NewIPVersionConfig(
-					ipsets.IPFamilyV6,
-					rules.IPSetNamePrefix,
-					rules.AllHistoricIPSetNamePrefixes,
-					nil,
-				),
-
-				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),
-				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
-				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
-
-				IptablesMarkAccept:   markAccept,
-				IptablesMarkPass:     markPass,
-				IptablesMarkScratch0: markScratch0,
-				IptablesMarkScratch1: markScratch1,
-
-				IPIPEnabled:       configParams.IpInIpEnabled,
-				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
-
-				IptablesLogPrefix:         configParams.LogPrefix,
-				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
-				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
-				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
-
-				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
-				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
-
-				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
-			},
-			IPIPMTU:                        configParams.IpInIpMtu,
-			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
-			RouteRefreshInterval:           configParams.RouteRefreshInterval,
-			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
-			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
-			IptablesInsertMode:             configParams.ChainInsertMode,
-			IptablesLockFilePath:           configParams.IptablesLockFilePath,
-			IptablesLockTimeout:            configParams.IptablesLockTimeoutSecs,
-			IptablesLockProbeInterval:      configParams.IptablesLockProbeIntervalMillis,
-			MaxIPSetSize:                   configParams.MaxIpsetSize,
-			IgnoreLooseRPF:                 configParams.IgnoreLooseRPF,
-			IPv6Enabled:                    configParams.Ipv6Support,
-			StatusReportingInterval:        configParams.ReportingIntervalSecs,
-
-			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
-
-			PostInSyncCallback: func() { dumpHeapMemoryProfile(configParams) },
-			HealthAggregator:   healthAggregator,
-
-			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
-		}
-		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
-		intDP.Start()
-		dpDriver = intDP
-	} else {
-		log.WithField("driver", configParams.DataplaneDriver).Info(
-			"Using external dataplane driver.")
-		dpDriver, dpDriverCmd = extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
-	}
+	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
 	failureReportChan := make(chan string)
-	dpConnector := newConnector(configParams, datastore, dpDriver, failureReportChan)
+	var connToUsageRepUpdChan chan map[string]string
+	if configParams.UsageReportingEnabled {
+		// Make a channel for the connector to use to send updates to the usage reporter.
+		// (Otherwise, we pass in a nil channel, which disables such updates.)
+		connToUsageRepUpdChan = make(chan map[string]string, 1)
+	}
+	dpConnector := newConnector(configParams, connToUsageRepUpdChan, backendClient, dpDriver, failureReportChan)
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -361,7 +341,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		syncer = datastore.Syncer(syncerToValidator)
+		syncer = backendClient.Syncer(syncerToValidator)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 
@@ -405,13 +385,13 @@ configRetry:
 			}
 		}()
 
-		go usagerep.PeriodicallyReportUsage(
-			24*time.Hour,
-			configParams.ClusterGUID,
-			configParams.ClusterType,
-			configParams.CalicoVersion,
+		usageRep := usagerep.New(
+			configParams.UsageReportingInitialDelaySecs,
+			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
+			connToUsageRepUpdChan,
 		)
+		go usageRep.PeriodicallyReportUsage(context.Background())
 	} else {
 		// Usage reporting disabled, but we still want a stats collector for the
 		// felix_cluster_* metrics.  Register a no-op function as the callback.
@@ -480,60 +460,12 @@ configRetry:
 		go servePrometheusMetrics(configParams)
 	}
 
-	if configParams.HealthEnabled {
-		log.WithField("port", configParams.HealthPort).Info("Health enabled.  Starting server.")
-		go healthAggregator.ServeHTTP(configParams.HealthPort)
-	}
-
 	// On receipt of SIGUSR1, write out heap profile.
-	usr1SignalChan := make(chan os.Signal, 1)
-	signal.Notify(usr1SignalChan, syscall.SIGUSR1)
-	go func() {
-		for {
-			<-usr1SignalChan
-			dumpHeapMemoryProfile(configParams)
-		}
-	}()
+	logutils.DumpHeapMemoryOnSignal(configParams)
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
-}
-
-func dumpHeapMemoryProfile(configParams *config.Config) {
-	// If a memory profile file name is configured, dump a heap memory profile.  If the
-	// configured filename includes "<timestamp>", that will be replaced with a stamp indicating
-	// the current time.
-	memProfFileName := configParams.DebugMemoryProfilePath
-	if memProfFileName != "" {
-		logCxt := log.WithField("file", memProfFileName)
-		logCxt.Info("Asked to create a memory profile.")
-
-		// If the configured file name includes "<timestamp>", replace that with the current
-		// time.
-		if strings.Contains(memProfFileName, "<timestamp>") {
-			timestamp := time.Now().Format("2006-01-02-15:04:05")
-			memProfFileName = strings.Replace(memProfFileName, "<timestamp>", timestamp, 1)
-			logCxt = log.WithField("file", memProfFileName)
-		}
-
-		// Open a file with that name.
-		memProfFile, err := os.Create(memProfFileName)
-		if err != nil {
-			logCxt.WithError(err).Fatal("Could not create memory profile file")
-			memProfFile = nil
-		} else {
-			defer memProfFile.Close()
-			logCxt.Info("Writing memory profile...")
-			// The initial resync uses a lot of scratch space so now is
-			// a good time to force a GC and return any RAM that we can.
-			debug.FreeOSMemory()
-			if err := pprof.WriteHeapProfile(memProfFile); err != nil {
-				logCxt.WithError(err).Fatal("Could not write memory profile")
-			}
-			logCxt.Info("Finished writing memory profile")
-		}
-	}
 }
 
 func servePrometheusMetrics(configParams *config.Config) {
@@ -560,9 +492,11 @@ func servePrometheusMetrics(configParams *config.Config) {
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {
-	// Ask the runtime to tell us if we get a term signal.
-	termSignalChan := make(chan os.Signal, 1)
-	signal.Notify(termSignalChan, syscall.SIGTERM)
+	// Ask the runtime to tell us if we get a term/int signal.
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM)
+	signal.Notify(signalChan, syscall.SIGINT)
+	signal.Notify(signalChan, syscall.SIGHUP)
 
 	// Start a background thread to tell us when the dataplane driver stops.
 	// If the driver stops unexpectedly, we'll terminate this process.
@@ -581,15 +515,20 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 
 	// Wait for one of the channels to give us a reason to shut down.
 	driverAlreadyStopped := driverCmd == nil
-	receivedSignal := false
+	receivedFatalSignal := false
 	var reason string
 	select {
 	case <-driverStoppedC:
 		reason = "Driver stopped"
 		driverAlreadyStopped = true
-	case sig := <-termSignalChan:
-		reason = fmt.Sprintf("Received OS signal %v", sig)
-		receivedSignal = true
+	case sig := <-signalChan:
+		if sig == syscall.SIGHUP {
+			log.Warning("Received a SIGHUP, treating as a request to reload config")
+			reason = reasonConfigChanged
+		} else {
+			reason = fmt.Sprintf("Received OS signal %v", sig)
+			receivedFatalSignal = true
+		}
 	case reason = <-failureReportChan:
 	}
 	logCxt := log.WithField("reason", reason)
@@ -628,82 +567,176 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		}
 	}
 
-	if !receivedSignal {
+	if !receivedFatalSignal {
 		// We're exiting due to a failure or a config change, wait
 		// a couple of seconds to ensure that we don't go into a tight
-		// restart loop (which would make the init daemon give up trying
-		// to restart us).
-		logCxt.Info("Shutdown wasn't caused by signal, pausing to avoid tight restart loop")
+		// restart loop (which would make the init daemon in calico/node give
+		// up trying to restart us).
+		logCxt.Info("Sleeping to avoid tight restart loop.")
 		go func() {
 			time.Sleep(2 * time.Second)
+
+			if reason == reasonConfigChanged {
+				exitWithCustomRC(configChangedRC, "Exiting for config change")
+				return
+			}
+
 			logCxt.Fatal("Exiting.")
 		}()
-		// But, if we get a signal while we're waiting quit immediately.
-		<-termSignalChan
+
+		for {
+			sig := <-signalChan
+			if sig == syscall.SIGHUP {
+				logCxt.Warning("Ignoring SIGHUP because we're already shutting down")
+				continue
+			}
+			logCxt.WithField("signal", sig).Fatal(
+				"Signal received while shutting down, exiting immediately")
+		}
 	}
 
 	logCxt.Fatal("Exiting immediately")
 }
 
-func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
-	for {
-		log.Info("Waiting for the datastore to be ready")
-		if kv, err := datastore.Get(model.ReadyFlagKey{}); err != nil {
-			log.WithError(err).Error("Failed to read global datastore 'Ready' flag, will retry...")
-			time.Sleep(1 * time.Second)
-			continue
-		} else if kv.Value != true {
-			log.Warning("Global datastore 'Ready' flag set to false, waiting...")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		log.Info("Loading global config from datastore")
-		kvs, err := datastore.List(model.GlobalConfigListOptions{})
-		if err != nil {
-			log.WithError(err).Error("Failed to load config from datastore")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		globalConfig = make(map[string]string)
-		for _, kv := range kvs {
-			key := kv.Key.(model.GlobalConfigKey)
-			value := kv.Value.(string)
-			globalConfig[key.Name] = value
-		}
-
-		log.Infof("Loading per-host config from datastore; hostname=%v", hostname)
-		kvs, err = datastore.List(
-			model.HostConfigListOptions{Hostname: hostname})
-		if err != nil {
-			log.WithError(err).Error("Failed to load config from datastore")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		hostConfig = make(map[string]string)
-		for _, kv := range kvs {
-			key := kv.Key.(model.HostConfigKey)
-			value := kv.Value.(string)
-			hostConfig[key.Name] = value
-		}
-		log.Info("Loaded config from datastore")
-		break
-	}
-	return globalConfig, hostConfig
+func exitWithCustomRC(rc int, message string) {
+	// To ensure that the logs get flushed, we need to exit with Panic() or Fatal().
+	// However, Fatal() doesn't let us set a custom RC.  To work around that, we create a panic,
+	// but then intercept it and exit with the desired RC.
+	log.WithField("rc", rc).Info("Exiting with custom RC")
+	defer os.Exit(rc)
+	log.Panic(message)
+	panic(message) // defensive.
 }
 
-type dataplaneDriver interface {
-	SendMessage(msg interface{}) error
-	RecvMessage() (msg interface{}, err error)
+var (
+	ErrNotReady = errors.New("datastore is not ready or has not been initialised")
+)
+
+func loadConfigFromDatastore(
+	ctx context.Context, client bapi.Client, hostname string,
+) (globalConfig, hostConfig map[string]string, err error) {
+
+	// The configuration is split over 3 different resource types and 4 different resource
+	// instances in the v3 data model:
+	// -  ClusterInformation (global): name "default"
+	// -  FelixConfiguration (global): name "default"
+	// -  FelixConfiguration (per-host): name "node.<hostname>"
+	// -  Node (per-host): name: <hostname>
+	// Get the global values and host specific values separately.  We re-use the updateprocessor
+	// logic to convert the single v3 resource to a set of v1 key/values.
+	hostConfig = make(map[string]string)
+	globalConfig = make(map[string]string)
+	var ready bool
+	err = getAndMergeConfig(
+		ctx, client, globalConfig,
+		apiv3.KindClusterInformation, "default",
+		updateprocessors.NewClusterInfoUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+	if !ready {
+		// The ClusterInformation struct should contain the ready flag, if it is not set, abort.
+		err = ErrNotReady
+		return
+	}
+	err = getAndMergeConfig(
+		ctx, client, globalConfig,
+		apiv3.KindFelixConfiguration, "default",
+		updateprocessors.NewFelixConfigUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+	err = getAndMergeConfig(
+		ctx, client, hostConfig,
+		apiv3.KindFelixConfiguration, "node."+hostname,
+		updateprocessors.NewFelixConfigUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+	err = getAndMergeConfig(
+		ctx, client, hostConfig,
+		apiv3.KindNode, hostname,
+		updateprocessors.NewFelixNodeUpdateProcessor(),
+		&ready,
+	)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+// getAndMergeConfig gets the v3 resource configuration extracts the separate config values
+// (where each configuration value is stored in a field of the v3 resource Spec) and merges into
+// the supplied map, as required by our v1-style configuration loader.
+func getAndMergeConfig(
+	ctx context.Context, client bapi.Client, config map[string]string,
+	kind string, name string,
+	configConverter watchersyncer.SyncerUpdateProcessor,
+	ready *bool,
+) error {
+	logCxt := log.WithFields(log.Fields{"kind": kind, "name": name})
+
+	cfg, err := client.Get(ctx, model.ResourceKey{
+		Kind:      kind,
+		Name:      name,
+		Namespace: "",
+	}, "")
+	if err != nil {
+		switch err.(type) {
+		case errors2.ErrorResourceDoesNotExist:
+			logCxt.Info("No config of this type")
+			return nil
+		default:
+			logCxt.WithError(err).Info("Failed to load config from datastore")
+			return err
+		}
+	}
+
+	// Re-use the update processor logic implemented for the Syncer.  We give it a v3 config
+	// object in a KVPair and it uses the annotations defined on it to split it into v1-style
+	// KV pairs.  Log any errors - but don't fail completely to avoid cyclic restarts.
+	v1kvs, err := configConverter.Process(cfg)
+	if err != nil {
+		logCxt.WithError(err).Error("Failed to convert configuration")
+	}
+
+	// Loop through the converted values and update our config map with values from either the
+	// Global or Host configs.
+	for _, v1KV := range v1kvs {
+		if _, ok := v1KV.Key.(model.ReadyFlagKey); ok {
+			logCxt.WithField("ready", v1KV.Value).Info("Loaded ready flag")
+			if v1KV.Value == true {
+				*ready = true
+			}
+		} else if v1KV.Value != nil {
+			switch k := v1KV.Key.(type) {
+			case model.GlobalConfigKey:
+				config[k.Name] = v1KV.Value.(string)
+			case model.HostConfigKey:
+				config[k.Name] = v1KV.Value.(string)
+			default:
+				logCxt.WithField("KV", v1KV).Debug("Skipping config - not required for initial loading")
+			}
+		}
+	}
+	return nil
 }
 
 type DataplaneConnector struct {
 	config                     *config.Config
+	configUpdChan              chan<- map[string]string
 	ToDataplane                chan interface{}
 	StatusUpdatesFromDataplane chan interface{}
 	InSync                     chan bool
 	failureReportChan          chan<- string
-	dataplane                  dataplaneDriver
+	dataplane                  dp.DataplaneDriver
 	datastore                  bapi.Client
 	statusReporter             *statusrep.EndpointStatusReporter
 
@@ -717,11 +750,14 @@ type Startable interface {
 }
 
 func newConnector(configParams *config.Config,
+	configUpdChan chan<- map[string]string,
 	datastore bapi.Client,
-	dataplane dataplaneDriver,
-	failureReportChan chan<- string) *DataplaneConnector {
+	dataplane dp.DataplaneDriver,
+	failureReportChan chan<- string,
+) *DataplaneConnector {
 	felixConn := &DataplaneConnector{
 		config:                     configParams,
+		configUpdChan:              configUpdChan,
 		datastore:                  datastore,
 		ToDataplane:                make(chan interface{}),
 		StatusUpdatesFromDataplane: make(chan interface{}),
@@ -798,6 +834,8 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatus
 	}
 }
 
+var handledConfigChanges = set.From("CalicoVersion", "ClusterGUID", "ClusterType")
+
 func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 	defer func() {
 		fc.shutDownProcess("Failed to send messages to dataplane")
@@ -815,20 +853,56 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				fc.InSync <- true
 			}
 		case *proto.ConfigUpdate:
-			logCxt := log.WithFields(log.Fields{
-				"old": config,
-				"new": msg.Config,
-			})
-			logCxt.Info("Possible config update")
-			if config != nil && !reflect.DeepEqual(msg.Config, config) {
-				logCxt.Warn("Felix configuration changed. Need to restart.")
-				fc.shutDownProcess("config changed")
-			} else if config == nil {
-				logCxt.Info("Config resolved.")
-				config = make(map[string]string)
-				for k, v := range msg.Config {
-					config[k] = v
+			if config != nil {
+				log.WithFields(log.Fields{
+					"old": config,
+					"new": msg.Config,
+				}).Info("Config updated, checking whether we need to restart")
+				restartNeeded := false
+				for kNew, vNew := range msg.Config {
+					logCxt := log.WithFields(log.Fields{"key": kNew, "new": vNew})
+					if vOld, prs := config[kNew]; !prs {
+						logCxt = logCxt.WithField("updateType", "add")
+					} else if vNew != vOld {
+						logCxt = logCxt.WithFields(log.Fields{"old": vOld, "updateType": "update"})
+					} else {
+						continue
+					}
+					if handledConfigChanges.Contains(kNew) {
+						logCxt.Info("Config change can be handled without restart")
+						continue
+					}
+					logCxt.Warning("Config change requires restart")
+					restartNeeded = true
 				}
+				for kOld, vOld := range config {
+					logCxt := log.WithFields(log.Fields{"key": kOld, "old": vOld, "updateType": "delete"})
+					if _, prs := msg.Config[kOld]; prs {
+						// Key was present in the message so we've handled above.
+						continue
+					}
+					if handledConfigChanges.Contains(kOld) {
+						logCxt.Info("Config change can be handled without restart")
+						continue
+					}
+					logCxt.Warning("Config change requires restart")
+					restartNeeded = true
+				}
+
+				if restartNeeded {
+					fc.shutDownProcess("config changed")
+				}
+			}
+
+			// Take a copy of the config to compare against next time.
+			config = make(map[string]string)
+			for k, v := range msg.Config {
+				config[k] = v
+			}
+
+			if fc.configUpdChan != nil {
+				// Send the config over to the usage reporter.
+				fc.configUpdChan <- config
 			}
 		case *calc.DatastoreNotReady:
 			log.Warn("Datastore became unready, need to restart.")

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,8 @@
 package logutils
 
 import (
-	"io"
-	"log/syslog"
 	"os"
-	"path"
 
-	"github.com/mipearson/rfw"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -52,6 +48,9 @@ const logQueueSize = 100
 // if it is enabled by either the FELIX_EARLYLOGSEVERITYSCREEN or FELIX_LOGSEVERITYSCREEN
 // environment variable.
 func ConfigureEarlyLogging() {
+	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
+	log.SetOutput(os.Stdout)
+
 	// Replace logrus' formatter with a custom one using our time format,
 	// shared with the Python code.
 	log.SetFormatter(&logutils.Formatter{})
@@ -107,58 +106,27 @@ func ConfigureLogging(configParams *config.Config) {
 	// Screen target.
 	var dests []*logutils.Destination
 	if configParams.LogSeverityScreen != "" {
-		screenDest := logutils.NewStreamDestination(
-			logLevelScreen,
-			os.Stderr,
-			make(chan logutils.QueuedLog, logQueueSize),
-			configParams.DebugDisableLogDropping,
-			counterLogErrors,
-		)
-		dests = append(dests, screenDest)
+		dests = append(dests, getScreenDestination(configParams, logLevelScreen))
 	}
 
 	// File target.  We record any errors so we can log them out below after finishing set-up
 	// of the logger.
 	var fileDirErr, fileOpenErr error
 	if configParams.LogSeverityFile != "" && configParams.LogFilePath != "" {
-		fileDirErr = os.MkdirAll(path.Dir(configParams.LogFilePath), 0755)
-		var rotAwareFile io.Writer
-		rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
-		if fileDirErr == nil && fileOpenErr == nil {
-			fileDest := logutils.NewStreamDestination(
-				logLevelFile,
-				rotAwareFile,
-				make(chan logutils.QueuedLog, logQueueSize),
-				configParams.DebugDisableLogDropping,
-				counterLogErrors,
-			)
-			dests = append(dests, fileDest)
+		var destination *logutils.Destination
+		destination, fileDirErr, fileOpenErr = getFileDestination(configParams, logLevelFile)
+		if fileDirErr == nil && fileOpenErr == nil && destination != nil {
+			dests = append(dests, destination)
 		}
 	}
 
 	// Syslog target.  Again, we record the error if we fail to connect to syslog.
 	var sysErr error
 	if configParams.LogSeveritySys != "" {
-		// Set net/addr to "" so we connect to the system syslog server rather
-		// than a remote one.
-		net := ""
-		addr := ""
-		// The priority parameter is a combination of facility and default
-		// severity.  We want to log with the standard LOG_USER facility; the
-		// severity is actually irrelevant because the hook always overrides
-		// it.
-		priority := syslog.LOG_USER | syslog.LOG_INFO
-		tag := "calico-felix"
-		w, sysErr := syslog.Dial(net, addr, priority, tag)
-		if sysErr == nil {
-			syslogDest := logutils.NewSyslogDestination(
-				logLevelSyslog,
-				w,
-				make(chan logutils.QueuedLog, logQueueSize),
-				configParams.DebugDisableLogDropping,
-				counterLogErrors,
-			)
-			dests = append(dests, syslogDest)
+		var destination *logutils.Destination
+		destination, sysErr = getSyslogDestination(configParams, logLevelSyslog)
+		if sysErr == nil && destination != nil {
+			dests = append(dests, destination)
 		}
 	}
 
@@ -191,4 +159,14 @@ func ConfigureLogging(configParams *config.Config) {
 			"Failed to connect to syslog. To prevent this error, either set config " +
 				"parameter LogSeveritySys=none or configure a local syslog service.")
 	}
+}
+
+func getScreenDestination(configParams *config.Config, logLevel log.Level) *logutils.Destination {
+	return logutils.NewStreamDestination(
+		logLevel,
+		os.Stdout,
+		make(chan logutils.QueuedLog, logQueueSize),
+		configParams.DebugDisableLogDropping,
+		counterLogErrors,
+	)
 }

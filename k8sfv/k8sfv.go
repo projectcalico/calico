@@ -15,8 +15,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
@@ -28,8 +30,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
-	capi "github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
 // Global config - these are set by arguments on the ginkgo command line.
@@ -131,8 +133,6 @@ var _ = AfterSuite(func() {
 
 func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 
-	initializeCalicoDeployment(k8sServerEndpoint)
-
 	config, err := clientcmd.NewNonInteractiveClientConfig(*api.NewConfig(),
 		"",
 		&clientcmd.ConfigOverrides{
@@ -153,29 +153,32 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 		panic(err)
 	}
 
-	return
-}
-
-func initializeCalicoDeployment(k8sServerEndpoint string) {
-	// Create client into the Kubernetes datastore.
-	c, err := client.New(capi.CalicoAPIConfig{
-		Spec: capi.CalicoAPIConfigSpec{
-			DatastoreType: capi.Kubernetes,
-			KubeConfig: capi.KubeConfig{
-				K8sAPIEndpoint:           k8sServerEndpoint,
-				K8sInsecureSkipTLSVerify: true,
+	Eventually(func() (err error) {
+		calicoClient, err := client.New(apiconfig.CalicoAPIConfig{
+			Spec: apiconfig.CalicoAPIConfigSpec{
+				DatastoreType: apiconfig.Kubernetes,
+				KubeConfig: apiconfig.KubeConfig{
+					K8sAPIEndpoint:           k8sServerEndpoint,
+					K8sInsecureSkipTLSVerify: true,
+				},
 			},
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
+		})
+		if err != nil {
+			log.WithError(err).Warn("Waiting to create Calico client")
+			return
+		}
 
-	// Establish the other global config that Calico requires.
-	err = c.EnsureInitialized()
-	if err != nil {
-		panic(err)
-	}
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		err = calicoClient.EnsureInitialized(
+			ctx,
+			"v3.0.0-test",
+			"felix-fv,typha", // Including typha to prevent config churn
+		)
+
+		return
+	}, "60s", "2s").ShouldNot(HaveOccurred())
+
+	return
 }
 
 func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
@@ -191,13 +194,18 @@ func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 	}
 	log.Info("Done")
 
+	Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
+		BeNumerically("==", 1000),
+		"Addition of pods wasn't reflected in Felix metrics",
+	)
+
 	return nil
 }
 
 func cleanupAll(clientset *kubernetes.Clientset, nsPrefix string) {
+	defer cleanupAllNamespaces(clientset, nsPrefix)
+	defer cleanupAllNodes(clientset)
 	cleanupAllPods(clientset, nsPrefix)
-	cleanupAllNodes(clientset)
-	cleanupAllNamespaces(clientset, nsPrefix)
 }
 
 func panicIfError(err error) {

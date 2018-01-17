@@ -79,13 +79,13 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 		for nsName, maturity := range nsMaturity {
 			if maturity == changeFrom[ii] {
 				nsMaturity[nsName] = changeTo[ii]
-				ns_in, err := clientset.Namespaces().Get(nsName, v1.GetOptions{})
+				ns_in, err := clientset.CoreV1().Namespaces().Get(nsName, v1.GetOptions{})
 				log.WithField("ns_in", ns_in).Debug("Namespace retrieved")
 				if err != nil {
 					panic(err)
 				}
 				ns_in.ObjectMeta.Labels["maturity"] = changeTo[ii]
-				ns_out, err := clientset.Namespaces().Update(ns_in)
+				ns_out, err := clientset.CoreV1().Namespaces().Update(ns_in)
 				log.WithField("ns_out", ns_out).Debug("Updated namespace")
 			}
 		}
