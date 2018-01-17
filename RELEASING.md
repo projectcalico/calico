@@ -80,7 +80,3 @@ To build Debian and RPM packages for a release:
   the same as when you ran `make release VERSION=<new version>` above.)
 
 - Once the changes are approved and any testing looks good, merge the PR.
-
-Tigera note: the wider Calico process release, including how to publish those
-packages, is now documented in
-[Confluence](https://tigera.atlassian.net/wiki/spaces/ENG/pages/17039710/Release+Process).
