@@ -337,15 +337,17 @@ HOST_CHECKOUT_DIR?=$(shell pwd)
 
 # curl should failed on 404
 CURL=curl -sSf
-## Generate the keys and certificates for running etcd with SSL.
-ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
-certs/.certificates.created:
+
+certs/cfssl certs/cfssljson:
 	mkdir -p certs
 	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssl" -o certs/cfssl
 	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssljson" -o certs/cfssljson
 	chmod a+x certs/cfssl
 	chmod a+x certs/cfssljson
 
+## Generate the keys and certificates for running etcd with SSL.
+ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
+certs/.certificates.created: certs/cfssl certs/cfssljson
 	certs/cfssl gencert -initca tests/st/ssl-config/ca-csr.json | certs/cfssljson -bare certs/ca
 	certs/cfssl gencert \
 	  -ca certs/ca.pem \
