@@ -14,6 +14,8 @@ toc:
     section:
     - title: Overview
       path: /reference/calicoctl/commands/
+    - title: get
+      path: /reference/calicoctl/commands/get
     - title: create
       path: /reference/calicoctl/commands/create
     - title: replace
@@ -22,8 +24,8 @@ toc:
       path: /reference/calicoctl/commands/apply
     - title: delete
       path: /reference/calicoctl/commands/delete
-    - title: get
-      path: /reference/calicoctl/commands/get
+    - title: convert
+      path: /reference/calicoctl/commands/convert
     - title: ipam
       section:
       - title: Overview
