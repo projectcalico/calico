@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 
-	extensions "k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -179,8 +179,8 @@ func (c *networkPolicyClient) Get(ctx context.Context, key model.Key, revision s
 		policyName := strings.TrimPrefix(k.Name, conversion.K8sNetworkPolicyNamePrefix)
 
 		// Get the NetworkPolicy from the API and convert it.
-		networkPolicy := extensions.NetworkPolicy{}
-		err = c.clientSet.Extensions().RESTClient().
+		networkPolicy := networkingv1.NetworkPolicy{}
+		err = c.clientSet.NetworkingV1().RESTClient().
 			Get().
 			Resource("networkpolicies").
 			Namespace(k.Namespace).
@@ -245,8 +245,8 @@ func (c *networkPolicyClient) List(ctx context.Context, list model.ListInterface
 	}
 
 	// List all of the k8s NetworkPolicy objects in all Namespaces.
-	networkPolicies := extensions.NetworkPolicyList{}
-	req := c.clientSet.Extensions().RESTClient().
+	networkPolicies := networkingv1.NetworkPolicyList{}
+	req := c.clientSet.NetworkingV1().RESTClient().
 		Get().
 		Resource("networkpolicies")
 	if l.Namespace != "" {
@@ -305,7 +305,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 	}).Info("Watching two resources at individual revisions")
 
 	k8sWatchClient := cache.NewListWatchFromClient(
-		c.clientSet.ExtensionsV1beta1().RESTClient(),
+		c.clientSet.NetworkingV1().RESTClient(),
 		"networkpolicies",
 		resl.Namespace,
 		fields.Everything())
@@ -314,7 +314,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 		return nil, K8sErrorToCalico(err, list)
 	}
 	converter := func(r Resource) (*model.KVPair, error) {
-		np, ok := r.(*extensions.NetworkPolicy)
+		np, ok := r.(*networkingv1.NetworkPolicy)
 		if !ok {
 			return nil, errors.New("NetworkPolicy conversion with incorrect k8s resource type")
 		}
