@@ -36,7 +36,7 @@ import (
 const usage = `Dikastes - the decider.
 
 Usage:
-  dikastes server [-t <token>|--kube <kubeconfig>] [options]
+  dikastes server [options]
   dikastes client <namespace> <account> [--method <method>] [options]
 
 Options:
