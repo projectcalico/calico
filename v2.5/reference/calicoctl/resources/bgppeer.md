@@ -1,5 +1,6 @@
 ---
 title: BGP Peer Resource (bgpPeer)
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgppeer'
 ---
 
 A BGP Peer resource (bgpPeer) represents a remote BGP peer with which the node(s) in a Calico 

@@ -1,6 +1,6 @@
 ---
 title: Supported Platforms
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/reference/supported-platforms'
 ---
 
 Calico version {{ page.version }} has supported integration with the following platforms.

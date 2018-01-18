@@ -1,5 +1,6 @@
 ---
 title: IPv6 Support
+canonical_url: 'https://docs.projectcalico.org/v3.0/usage/ipv6'
 ---
 
 {{site.prodname}} supports connectivity over IPv6, between compute hosts, and

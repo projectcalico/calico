@@ -1,6 +1,6 @@
 ---
 title: Calico with rkt
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/rkt/'
 ---
 
 Calico supports networking and network policy in a pure rkt container environment.

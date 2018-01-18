@@ -1,6 +1,6 @@
 ---
 title: Red Hat Enterprise Linux 7 Packaged Install Instructions
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/redhat'
 ---
 
 For this version of {{site.prodname}}, with OpenStack on RHEL 7 or CentOS 7, we recommend

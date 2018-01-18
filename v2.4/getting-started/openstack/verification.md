@@ -1,6 +1,6 @@
 ---
 title: Verifying your Calico on OpenStack deployment
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/verification'
 ---
 
 This document takes you through the steps you can perform to verify that

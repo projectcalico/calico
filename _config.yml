@@ -6,6 +6,7 @@ permalink:     /:title.html
 
 gems:
   - jekyll-redirect-from
+  - jekyll-seo-tag
 
 url: https://docs.projectcalico.org
 

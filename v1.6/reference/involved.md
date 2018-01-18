@@ -1,5 +1,6 @@
 ---
 title: Getting Involved
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/involved'
 ---
 
 Calico is an open source project, and we'd love you to get involved.

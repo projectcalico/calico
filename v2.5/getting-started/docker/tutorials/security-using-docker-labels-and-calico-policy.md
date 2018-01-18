@@ -1,6 +1,6 @@
 ---
 title: Security using Docker Labels and Calico Policy
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy'
 ---
 
 ## Background

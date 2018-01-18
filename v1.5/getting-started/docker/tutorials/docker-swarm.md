@@ -1,5 +1,6 @@
 ---
 Title: Runing Calico on a Docker Swarm
+canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/tutorials/docker-swarm'
 ---
 
 The following tutorial provides instructions for configuring a Docker Swarm

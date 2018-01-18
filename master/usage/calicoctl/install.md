@@ -1,6 +1,6 @@
 ---
 title: Installing calicoctl
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v3.0/usage/calicoctl/install'
 ---
 
 ## About installing calicoctl

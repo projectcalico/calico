@@ -1,5 +1,6 @@
 ---
 title: # Running the Calico tutorials on GCE
+canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/installation/gce'
 ---
 
 Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you

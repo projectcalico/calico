@@ -1,6 +1,6 @@
 ---
 title: Launching Tasks
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/launching-tasks'
 ---
 
 The following information describes how to launch {{site.prodname}} networked tasks in Mesos

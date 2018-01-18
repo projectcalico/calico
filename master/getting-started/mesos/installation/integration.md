@@ -1,6 +1,6 @@
 ---
 title: Integration Guide
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/integration'
 ---
 
 This guide explains how to integrate {{site.prodname}} networking and policy on an existing

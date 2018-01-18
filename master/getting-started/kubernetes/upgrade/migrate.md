@@ -1,6 +1,6 @@
 ---
 title: Migrating Calico data
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/migrate'
 ---
 
 > **Important**: Once you begin the migration, stop using `calicoctl` or 

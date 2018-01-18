@@ -1,6 +1,6 @@
 ---
 title: Chef Trial Install
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/chef'
 ---
 
 > **WARNING**

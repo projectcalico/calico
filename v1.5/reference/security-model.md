@@ -1,5 +1,6 @@
 ---
 title: Security Policy Model
+canonical_url: 'https://docs.projectcalico.org/v1.6/reference/security-model'
 ---
 
 Calico applies security policy to **endpoints**. Calico policy is
