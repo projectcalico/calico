@@ -183,6 +183,8 @@ $(NODE_CONTAINER_NAME): $(NODE_CONTAINER_CREATED)
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	# Check versions of the Calico binaries that will be in calico-node.tar.
+	# Since the binaries are built for Linux, run them in a container to allow the
+	# make target to be run on different platforms (e.g. MacOS).
 	docker run --rm $(NODE_CONTAINER_NAME) /bin/sh -c "\
 	  echo calico-felix --version; /bin/calico-felix --version; \
 	  echo bird --version;         /bin/bird --version; \
@@ -202,11 +204,15 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile$(ARCHTAG) $(NODE_CON
 	# Check versions of the binaries that we're going to use to build calico/node.
 	# startup: doesn't support --version or -v
 	# allocate-ipip-addr: doesn't support --version or -v
-	$(NODE_CONTAINER_BIN_DIR)/calico-felix --version
-	$(NODE_CONTAINER_BIN_DIR)/bird --version
-	$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon -v
-	$(NODE_CONTAINER_BIN_DIR)/confd --version
-	$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin -v
+	# Since the binaries are built for Linux, run them in a container to allow the
+	# make target to be run on different platforms (e.g. MacOS).
+	docker run --rm -v $(CURDIR)/$(NODE_CONTAINER_BIN_DIR):/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
+	  echo; echo calico-felix --version; /go/bin/calico-felix --version; \
+	  echo; echo bird --version;         /go/bin/bird --version; \
+	  echo; echo calico-bgp-daemon -v;   /go/bin/calico-bgp-daemon -v; \
+	  echo; echo confd --version;        /go/bin/confd --version; \
+	  echo; echo libnetwork-plugin -v;   /go/bin/libnetwork-plugin -v; echo;\
+	"
 	docker build --pull -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR) -f $(NODE_CONTAINER_DIR)/Dockerfile$(ARCHTAG)
 	touch $@
 
@@ -405,10 +411,12 @@ st-checks:
 .PHONY: st
 st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
 	# Check versions of Calico binaries that ST execution will use.
-	dist/calicoctl --version
-	dist/calicoctl-v1.0.2 --version
-	dist/calico-cni-plugin -v
-	dist/calico-ipam-plugin -v
+	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
+	  echo; echo calicoctl --version;        /go/bin/calicoctl --version; \
+	  echo; echo calicoctl-v1.0.2 --version; /go/bin/calicoctl-v1.0.2 --version; \
+	  echo; echo calico-cni-plugin -v;       /go/bin/calico-cni-plugin -v; \
+	  echo; echo calico-ipam-plugin -v;      /go/bin/calico-ipam-plugin -v; echo; \
+	"
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
