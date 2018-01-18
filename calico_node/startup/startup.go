@@ -65,6 +65,8 @@ var exitFunction = os.Exit
 // -  Creating default IP Pools for quick-start use
 
 func main() {
+	// Casey: Adding a new line to trigger tests.
+
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	configureLogging()
 
