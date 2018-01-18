@@ -51,7 +51,7 @@ Running the following command creates a NetworkPolicy which implements a default
 ```
 kubectl create -f - <<EOF
 kind: NetworkPolicy
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 metadata:
   name: default-deny
   namespace: policy-demo
@@ -89,7 +89,7 @@ Create a network policy `access-nginx` with the following contents:
 ```
 kubectl create -f - <<EOF
 kind: NetworkPolicy
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 metadata:
   name: access-nginx
   namespace: policy-demo
