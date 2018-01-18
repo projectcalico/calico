@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -55,7 +55,7 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 	policyConverter := converter.NewPolicyConverter()
 
 	// Create a NetworkPolicy watcher.
-	listWatcher := cache.NewListWatchFromClient(clientset.Extensions().RESTClient(), "networkpolicies", "", fields.Everything())
+	listWatcher := cache.NewListWatchFromClient(clientset.NetworkingV1().RESTClient(), "networkpolicies", "", fields.Everything())
 
 	// Function returns map of policyName:policy stored by policy controller
 	// in datastore.
@@ -91,7 +91,7 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1beta1.NetworkPolicy{}, 0, cache.ResourceEventHandlerFuncs{
+	_, informer := cache.NewIndexerInformer(listWatcher, &networkingv1.NetworkPolicy{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			log.Debugf("Got ADD event for network policy: %#v", obj)
 			policy, err := policyConverter.Convert(obj)

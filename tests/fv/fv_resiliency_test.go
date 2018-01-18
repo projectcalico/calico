@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -78,13 +78,13 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		policyName = "jelly"
 		genPolicyName = "knp.default." + policyName
 		policyNamespace = "default"
-		var np *v1beta1.NetworkPolicy
-		np = &v1beta1.NetworkPolicy{
+		var np *networkingv1.NetworkPolicy
+		np = &networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      policyName,
 				Namespace: policyNamespace,
 			},
-			Spec: v1beta1.NetworkPolicySpec{
+			Spec: networkingv1.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						"fools": "gold",
@@ -92,7 +92,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 				},
 			},
 		}
-		err = k8sClient.ExtensionsV1beta1().RESTClient().
+		err = k8sClient.NetworkingV1().RESTClient().
 			Post().
 			Resource("networkpolicies").
 			Namespace(policyNamespace).
@@ -134,7 +134,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			Skip("TODO: improve FV framework to handle pod restart")
 			// Delete the Policy.
 			testutils.Stop(calicoEtcd)
-			err := k8sClient.ExtensionsV1beta1().RESTClient().
+			err := k8sClient.NetworkingV1().RESTClient().
 				Delete().
 				Resource("networkpolicies").
 				Namespace(policyNamespace).
