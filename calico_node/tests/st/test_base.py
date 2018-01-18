@@ -190,7 +190,7 @@ class TestBase(TestCase):
 
     @debug_failures
     def assert_ip_connectivity(self, workload_list, ip_pass_list,
-                               ip_fail_list=None, type_list=None):
+                               ip_fail_list=None, type_list=None, retries=0):
         """
         Assert partial connectivity graphs between workloads and given ips.
 
@@ -215,19 +215,19 @@ class TestBase(TestCase):
         for workload in workload_list:
             for ip in ip_pass_list:
                 if 'icmp' in type_list:
-                    conn_check_list.append((workload, ip, 'icmp', True, 0))
+                    conn_check_list.append((workload, ip, 'icmp', True, retries))
                 if 'tcp' in type_list:
-                    conn_check_list.append((workload, ip, 'tcp', True, 0))
+                    conn_check_list.append((workload, ip, 'tcp', True, retries))
                 if 'udp' in type_list:
-                    conn_check_list.append((workload, ip, 'udp', True, 0))
+                    conn_check_list.append((workload, ip, 'udp', True, retries))
 
             for ip in ip_fail_list:
                 if 'icmp' in type_list:
-                    conn_check_list.append((workload, ip, 'icmp', False, 0))
+                    conn_check_list.append((workload, ip, 'icmp', False, retries))
                 if 'tcp' in type_list:
-                    conn_check_list.append((workload, ip, 'tcp', False, 0))
+                    conn_check_list.append((workload, ip, 'tcp', False, retries))
                 if 'udp' in type_list:
-                    conn_check_list.append((workload, ip, 'udp', False, 0))
+                    conn_check_list.append((workload, ip, 'udp', False, retries))
 
         # Empirically, 18 threads works well on my machine!
         check_pool = ThreadPool(18)
