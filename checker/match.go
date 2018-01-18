@@ -57,7 +57,7 @@ func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.Att
 		"labels": labels,
 		"rule":   saMatch},
 	).Debug("Matching service account.")
-	accountName, _, err := parseSpiffeId(principle)
+	accountName, namespace, err := parseSpiffeId(principle)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"principle": principle,
@@ -65,6 +65,10 @@ func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.Att
 		}).Warn("Unable to parse authenticated principle as SPIFFE ID.")
 		return false
 	}
+	log.WithFields(log.Fields{
+		"name":      accountName,
+		"namespace": namespace,
+	}).Debug("Parsed SPIFFE ID.")
 	if saMatch == nil {
 		log.Debug("nil ServiceAccountMatch.  Return true.")
 		return true
@@ -74,7 +78,7 @@ func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.Att
 }
 
 // Parse an Istio SPIFFE ID and extract the service account name and namespace.
-func parseSpiffeId(id string) (string, string, error) {
+func parseSpiffeId(id string) (name, namespace string, err error) {
 	// Init the regexp the first time this is called, and store it in the package namespace.
 	if spiffeIdRegExp == nil {
 		// We drop the returned error here, since we are compiling
@@ -82,13 +86,19 @@ func parseSpiffeId(id string) (string, string, error) {
 	}
 	match := spiffeIdRegExp.FindStringSubmatch(id)
 	if match == nil {
-		return "", "", fmt.Errorf("expected match %s, got %s", SPIFFE_ID_PATTERN, id)
+		err = fmt.Errorf("expected match %s, got %s", SPIFFE_ID_PATTERN, id)
 	} else {
-		return match[1], match[0], nil
+		name = match[2]
+		namespace = match[1]
 	}
+	return
 }
 
 func matchServiceAccountName(names []string, name string) bool {
+	log.WithFields(log.Fields{
+		"names": names,
+		"name":  name,
+	}).Debug("Matching service account name")
 	if len(names) == 0 {
 		log.Debug("No service account names on rule.")
 		return true
