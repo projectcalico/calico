@@ -143,3 +143,54 @@ var _ = Describe("Health", func() {
 		})
 	})
 })
+
+var _ = Describe("Health timeouts", func() {
+
+	var (
+		aggregator *health.HealthAggregator
+	)
+
+	notifySource := func(source string) func() {
+		return func() {
+			switch source {
+			case SOURCE1:
+				aggregator.Report(source, &health.HealthReport{Ready: true})
+			case SOURCE2:
+				aggregator.Report(source, &health.HealthReport{Live: true, Ready: true})
+			}
+		}
+	}
+
+	BeforeEach(func() {
+		aggregator = health.NewHealthAggregator()
+		// One reporter with 100ms timeout.
+		aggregator.RegisterReporter(SOURCE1, &health.HealthReport{Ready: true}, 100*time.Millisecond)
+		// One reporter with zero timeout, which means its reports do not expire.
+		aggregator.RegisterReporter(SOURCE2, &health.HealthReport{Live: true, Ready: true}, 0)
+	})
+
+	Context("with ready reports", func() {
+
+		BeforeEach(func() {
+			notifySource(SOURCE1)()
+			notifySource(SOURCE2)()
+		})
+
+		It("is ready and live", func() {
+			Expect(aggregator.Summary().Ready).To(BeTrue())
+			Expect(aggregator.Summary().Live).To(BeTrue())
+		})
+
+		Context("after waiting past one reporter's timeout", func() {
+
+			BeforeEach(func() { time.Sleep(200 * time.Millisecond) })
+
+			It("is still live but not ready", func() {
+				// Because one of the readiness reporters has expired.
+				Expect(aggregator.Summary().Ready).To(BeFalse())
+				// Because the liveness reporter has no timeout.
+				Expect(aggregator.Summary().Live).To(BeTrue())
+			})
+		})
+	})
+})
