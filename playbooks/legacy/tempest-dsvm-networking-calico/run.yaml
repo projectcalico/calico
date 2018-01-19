@@ -1,0 +1,75 @@
+- hosts: all
+  name: Autoconverted job legacy-tempest-dsvm-networking-calico from old job gate-tempest-dsvm-networking-calico
+  tasks:
+
+    - name: Ensure legacy workspace directory
+      file:
+        path: '{{ ansible_user_dir }}/workspace'
+        state: directory
+
+    - shell:
+        cmd: |
+          set -e
+          set -x
+          cat > clonemap.yaml << EOF
+          clonemap:
+            - name: openstack-infra/devstack-gate
+              dest: devstack-gate
+          EOF
+          /usr/zuul-env/bin/zuul-cloner -m clonemap.yaml --cache-dir /opt/git \
+              git://git.openstack.org \
+              openstack-infra/devstack-gate
+        executable: /bin/bash
+        chdir: '{{ ansible_user_dir }}/workspace'
+      environment: '{{ zuul | zuul_legacy_vars }}'
+
+    - shell:
+        cmd: |
+          set -e
+          set -x
+          cat << 'EOF' >>"/tmp/dg-local.conf"
+          [[local|localrc]]
+          enable_plugin networking-calico git://git.openstack.org/openstack/networking-calico
+
+          EOF
+        executable: /bin/bash
+        chdir: '{{ ansible_user_dir }}/workspace'
+      environment: '{{ zuul | zuul_legacy_vars }}'
+
+    - shell:
+        cmd: |
+          set -e
+          set -x
+          export PYTHONUNBUFFERED=true
+          export DEVSTACK_GATE_NEUTRON=1
+          export DEVSTACK_GATE_TEMPEST=1
+          export BRANCH_OVERRIDE=default
+          if [ "$BRANCH_OVERRIDE" != "default" ] ; then
+              export OVERRIDE_ZUUL_BRANCH=$BRANCH_OVERRIDE
+          fi
+          export PROJECTS="openstack/networking-calico $PROJECTS"
+
+          # Keep localrc to be able to set some vars in pre_test_hook
+          export KEEP_LOCALRC=1
+
+          function pre_test_hook {
+              if [ -f $BASE/new/networking-calico/devstack/pre_test_hook.sh ] ; then
+                  . $BASE/new/networking-calico/devstack/pre_test_hook.sh
+              fi
+          }
+          export -f pre_test_hook
+
+          function post_test_hook {
+              if [ -f $BASE/new/networking-calico/devstack/post_test_hook.sh ] ; then
+                  . $BASE/new/networking-calico/devstack/post_test_hook.sh
+              fi
+          }
+          export -f post_test_hook
+
+          export DEVSTACK_GATE_SETTINGS=/opt/stack/new/networking-calico/devstack/devstackgaterc
+
+          cp devstack-gate/devstack-vm-gate-wrap.sh ./safe-devstack-vm-gate-wrap.sh
+          ./safe-devstack-vm-gate-wrap.sh
+        executable: /bin/bash
+        chdir: '{{ ansible_user_dir }}/workspace'
+      environment: '{{ zuul | zuul_legacy_vars }}'
