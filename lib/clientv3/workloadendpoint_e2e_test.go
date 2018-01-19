@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -123,11 +123,14 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
 			By("Creating a new WorkloadEndpoint with namespace1/name1/spec1_1 - name gets assigned automatically")
-			res1, outError := c.WorkloadEndpoints().Create(ctx, &apiv3.WorkloadEndpoint{
+			wepToCreate := &apiv3.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1},
 				Spec:       spec1_1,
-			}, options.SetOptions{})
+			}
+			wepToCreateCopy := wepToCreate.DeepCopy()
+			res1, outError := c.WorkloadEndpoints().Create(ctx, wepToCreate, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(wepToCreate).To(Equal(wepToCreateCopy), "Create() unexpectedly modified input")
 			testutils.ExpectResource(res1, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
 			Expect(res1.Labels[apiv3.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
 			Expect(res1.Labels[apiv3.LabelNamespace]).To(Equal(res1.Namespace))
@@ -193,8 +196,11 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 			By("Updating WorkloadEndpoint name1 with spec1_2")
 			res1.Spec = spec1_2
-			res1, outError = c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
+			res1Copy := res1.DeepCopy()
+			res1Out, outError := c.WorkloadEndpoints().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
+			res1 = res1Out
 			testutils.ExpectResource(res1, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2)
 			Expect(res1.Labels[apiv3.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
 			Expect(res1.Labels[apiv3.LabelNamespace]).To(Equal(res1.Namespace))

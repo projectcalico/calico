@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,18 +89,24 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkPolicy(default." + name1 + ")"))
 
 			By("Attempting to creating a new GlobalNetworkPolicy with name1/spec1 and a non-empty ResourceVersion")
-			_, outError = c.GlobalNetworkPolicies().Create(ctx, &apiv3.GlobalNetworkPolicy{
+			polToCreate := &apiv3.GlobalNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "12345"},
 				Spec:       spec1,
-			}, options.SetOptions{})
+			}
+			polToCreateCopy := polToCreate.DeepCopy()
+			_, outError = c.GlobalNetworkPolicies().Create(ctx, polToCreate, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
+			Expect(polToCreate).To(Equal(polToCreateCopy), "Create() unexpectedly modified input policy")
 
 			By("Creating a new GlobalNetworkPolicy with name1/spec1")
-			res1, outError := c.GlobalNetworkPolicies().Create(ctx, &apiv3.GlobalNetworkPolicy{
+			polToCreate = &apiv3.GlobalNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
-			}, options.SetOptions{})
+			}
+			polToCreateCopy = polToCreate.DeepCopy()
+			res1, outError := c.GlobalNetworkPolicies().Create(ctx, polToCreate, options.SetOptions{})
+			Expect(polToCreate).To(Equal(polToCreateCopy), "Create() unexpectedly modified input policy")
 			Expect(outError).NotTo(HaveOccurred())
 			spec1.Types = types1
 			testutils.ExpectResource(res1, apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec1)
@@ -157,9 +163,12 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 
 			By("Updating GlobalNetworkPolicy name1 with spec2")
 			res1.Spec = spec2
-			res1, outError = c.GlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
+			res1Copy := res1.DeepCopy()
+			res1out, outError := c.GlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
 			testutils.ExpectResource(res1, apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, name1, spec2)
+			res1 = res1out
 
 			By("Attempting to update the GlobalNetworkPolicy without a Creation Timestamp")
 			res, outError = c.GlobalNetworkPolicies().Update(ctx, &apiv3.GlobalNetworkPolicy{
