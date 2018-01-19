@@ -41,6 +41,9 @@ year=$(date +'%Y')
 copyright_re="Copyright \(c\) .*${year}.* ${copyright_owner}\. All rights reserved\."
 
 for filename in $changed_go_files; do
+  if [ "$filename" == "lib/apis/v3/zz_generated.deepcopy.go" ]; then
+    continue
+  fi
   if [ -e "${filename}" ] && ! grep -q -E "$copyright_re" "${filename}"; then
     echo "  Changed file is missing Tigera copyright:" ${filename}
     copyright_check_failed=true
