@@ -389,6 +389,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Updating per-endpoint chains.")
 			if oldWorkload != nil && oldWorkload.Name != workload.Name {
 				logCxt.Debug("Interface name changed, cleaning up old state")
+				m.ruleRenderer.CleanupEndPoint(oldWorkload.Name)
 				m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
@@ -465,6 +466,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 			if oldWorkload != nil {
+				m.ruleRenderer.CleanupEndPoint(oldWorkload.Name)
 				// Remove any routes from the routing table.  The RouteTable will
 				// remove any conntrack entries as a side-effect.
 				logCxt.Info("Workload removed, deleting old state.")

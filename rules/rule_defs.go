@@ -75,9 +75,14 @@ const (
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
 	ChainDispatchToHostEndpointForward   = ChainNamePrefix + "to-hep-forward"
 	ChainDispatchFromHostEndPointForward = ChainNamePrefix + "from-hep-forward"
+	ChainDispatchSetEndPointMark         = ChainNamePrefix + "set-endpoint-mark"
+	ChainDispatchFromEndPointMark        = ChainNamePrefix + "from-endpoint-mark"
 
-	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
-	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
+	ChainForwardCheck = ChainNamePrefix + "forward-check"
+
+	WorkloadToEndpointPfx      = ChainNamePrefix + "tw-"
+	WorkloadFromEndpointPfx    = ChainNamePrefix + "fw-"
+	WorkloadSetEndPointMarkPfx = ChainNamePrefix + "sepm-"
 
 	HostToEndpointPfx          = ChainNamePrefix + "th-"
 	HostFromEndpointPfx        = ChainNamePrefix + "fh-"
@@ -174,11 +179,13 @@ type RuleRenderer interface {
 
 	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*iptables.Chain
+
+	CleanupEndPoint(ifaceName string)
 }
 
 type DefaultRuleRenderer struct {
 	Config
-
+	epmm               *EndPointMarkManager
 	inputAcceptActions []iptables.Action
 	filterAllowAction  iptables.Action
 	mangleAllowAction  iptables.Action
@@ -205,6 +212,7 @@ type Config struct {
 	IptablesMarkPass     uint32
 	IptablesMarkScratch0 uint32
 	IptablesMarkScratch1 uint32
+	IptablesMarkEndPoint uint32
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16
@@ -294,6 +302,7 @@ func NewRenderer(config Config) RuleRenderer {
 
 	return &DefaultRuleRenderer{
 		Config:             config,
+		epmm:               NewEndPointMarkManager(config.IptablesMarkEndPoint),
 		inputAcceptActions: inputAcceptActions,
 		filterAllowAction:  filterAllowAction,
 		mangleAllowAction:  mangleAllowAction,

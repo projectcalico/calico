@@ -56,6 +56,19 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 		),
+		// Chain for set endpoint mark for the endpoint.
+		r.endpointIptablesChain(
+			nil,
+			nil,
+			ifaceName,
+			"",
+			"",
+			WorkloadSetEndPointMarkPfx,
+			"",
+			chainTypeSetEndPointMark,
+			true,
+			nil,
+		),
 	}
 }
 
@@ -190,6 +203,7 @@ const (
 	chainTypeUntracked
 	chainTypePreDNAT
 	chainTypeForward
+	chainTypeSetEndPointMark
 )
 
 func (r *DefaultRuleRenderer) endpointIptablesChain(
@@ -217,6 +231,19 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		return &Chain{
 			Name:  chainName,
 			Rules: rules,
+		}
+	}
+
+	if chainType == chainTypeSetEndPointMark {
+		if endPointMark, err := r.epmm.GetEndPointMark(name); err == nil {
+			// Set endpoint mark.
+			rules = append(rules, Rule{
+				Action: SetMarkAction{Mark: endPointMark},
+			})
+			return &Chain{
+				Name:  chainName,
+				Rules: rules,
+			}
 		}
 	}
 

@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
 )
 
 func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*Chain) {
@@ -29,6 +30,8 @@ func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains [
 
 const (
 	ProtoIPIP   = 4
+	ProtoTCP    = 6
+	ProtoUDP    = 17
 	ProtoICMPv6 = 58
 )
 
@@ -37,6 +40,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
 		r.failsafeInChain(),
+		r.StaticFilterInputForwardCheckChain(),
 	}
 }
 
@@ -46,6 +50,50 @@ func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 			Match:  Match().MarkSet(r.IptablesMarkAccept),
 			Action: r.filterAllowAction,
 		},
+	}
+}
+
+func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain() *Chain {
+	var fwRules []Rule
+	var portRanges []*proto.PortRange
+
+	// Temporary
+	hostIPSet := "ipvs4-host-ips"
+	portRange := &proto.PortRange{
+		First: 30000,
+		Last:  32000,
+	}
+	portRanges = append(portRanges, portRange)
+
+	fwRules = append(fwRules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: ReturnAction{},
+		},
+		Rule{
+			Match: Match().Protocol("tcp").
+				DestPortRanges(portRanges).
+				DestIPSet(hostIPSet),
+			Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+			Comment: "To kubernetes NodePort service",
+		},
+		Rule{
+			Match: Match().Protocol("udp").
+				DestPortRanges(portRanges).
+				DestIPSet(hostIPSet),
+			Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+			Comment: "To kubernetes NodePort service",
+		},
+		Rule{
+			Match:   Match().NotDestIPSet(hostIPSet),
+			Action:  JumpAction{Target: ChainDispatchSetEndPointMark},
+			Comment: "To kubernetes service",
+		},
+	)
+
+	return &Chain{
+		Name:  ChainForwardCheck,
+		Rules: fwRules,
 	}
 }
 
@@ -74,6 +122,21 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			},
 		)
 	}
+
+	// Check if packet belongs to forwarded traffic. (e.g. part of an ipvs connection).
+	// If it is, set endpoint mark and skip "to local host" rules below.
+	inputRules = append(inputRules,
+		Rule{
+			Action: ClearMarkAction{Mark: r.IptablesMarkEndPoint},
+		},
+		Rule{
+			Action: JumpAction{Target: ChainForwardCheck},
+		},
+		Rule{
+			Match:  Match().MarkNotClear(r.IptablesMarkEndPoint),
+			Action: ReturnAction{},
+		},
+	)
 
 	// Apply our policy to packets coming from workload endpoints.
 	for _, prefix := range r.WorkloadIfacePrefixes {
@@ -315,6 +378,26 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
+
+	// Jump to from-endpoint-mark dispatch chain if endpoint mark is not zero, which means
+	// packet has been through filter INPUT chain. There could be policies apply to its' ingress interface.
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkNotClear(r.IptablesMarkEndPoint),
+			Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+		},
+	)
+
+	// Clear endpoint mark immediately after. If IPIP is enabled, the packet will be sent over to tunnel device and
+	// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain. We need
+	// to make sure endpoint mark has been cleared to stop the packet going through from-endpoint-mark again with node ip.
+	rules = append(rules,
+		Rule{
+			Action: ClearMarkAction{
+				Mark: r.IptablesMarkEndPoint,
+			},
+		},
+	)
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
 	// That decision is based on pragmatism; it's generally very useful to be able to contact

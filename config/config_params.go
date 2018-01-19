@@ -182,8 +182,6 @@ type Config struct {
 	sourceToRawConfig map[Source]map[string]string
 	rawValues         map[string]string
 	Err               error
-
-	numIptablesBitsAllocated int
 }
 
 type ProtoPort struct {
@@ -250,30 +248,6 @@ func (config *Config) OpenstackActive() bool {
 	}
 	log.Debug("No evidence this is an OpenStack deployment; disabling OpenStack special-cases")
 	return false
-}
-
-func (config *Config) NextIptablesMark() uint32 {
-	mark := config.NthIPTablesMark(config.numIptablesBitsAllocated)
-	config.numIptablesBitsAllocated++
-	return mark
-}
-
-func (config *Config) NthIPTablesMark(n int) uint32 {
-	numBitsFound := 0
-	for shift := uint(0); shift < 32; shift++ {
-		candidate := uint32(1) << shift
-		if config.IptablesMarkMask&candidate > 0 {
-			if numBitsFound == n {
-				return candidate
-			}
-			numBitsFound += 1
-		}
-	}
-	log.WithFields(log.Fields{
-		"IptablesMarkMask": config.IptablesMarkMask,
-		"requestedMark":    n,
-	}).Panic("Not enough iptables mark bits available.")
-	return 0
 }
 
 func (config *Config) resolve() (changed bool, err error) {

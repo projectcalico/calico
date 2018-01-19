@@ -44,6 +44,13 @@ func (m MatchCriteria) MarkClear(mark uint32) MatchCriteria {
 	return append(m, fmt.Sprintf("-m mark --mark 0/%#x", mark))
 }
 
+func (m MatchCriteria) MarkNotClear(mark uint32) MatchCriteria {
+	if mark == 0 {
+		log.Panic("Probably bug: zero mark")
+	}
+	return append(m, fmt.Sprintf("-m mark ! --mark 0/%#x", mark))
+}
+
 func (m MatchCriteria) MarkSet(mark uint32) MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: zero mark")
