@@ -14,7 +14,7 @@
 import json
 import re
 import subprocess
-import yaml
+import logging
 
 from netaddr import IPAddress, IPNetwork
 from nose_parameterized import parameterized
@@ -28,6 +28,8 @@ from tests.st.utils.utils import check_bird_status, retry_until_success, \
         update_bgp_config
 
 from .peer import create_bgp_peer
+
+logger = logging.getLogger(__name__)
 
 """
 Test calico IPIP behaviour.
@@ -159,6 +161,89 @@ class TestIPIP(TestBase):
             self.pool_action(host, "create", new_ipv4_pool, ipip_mode="Always", pool_name="pool-b")
             self.pool_action(host, "delete", ipv4_pool)
             self.assert_tunl_ip(host, new_ipv4_pool)
+
+    @parameterized.expand([
+        ('bird',),
+        # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
+        # ('gobgp',),
+    ])
+    def test_issue_1584(self, backend):
+        """
+        Test cold start of bgp daemon correctly fixes tunl/non-tunl routes.
+
+        This test modifies the working IPIP mode of the pool and monitors the
+        traffic flow to ensure it either is or is not going over the IPIP
+        tunnel as expected.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        start_calico=False) as host1, \
+                DockerHost('host2',
+                           additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                           start_calico=False) as host2:
+
+            # Create an IP pool with IP-in-IP disabled.
+            self.pool_action(host1, "create", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Never")
+
+            # Autodetect the IP addresses - this should ensure the subnet is
+            # correctly configured.
+            host1.start_calico_node("--ip=autodetect --backend={0}".format(backend))
+            host2.start_calico_node("--ip=autodetect --backend={0}".format(backend))
+
+            # Create a network and a workload on each host.
+            network1 = host1.create_network("subnet1")
+            workload_host1 = host1.create_workload("workload1",
+                                                   network=network1)
+            workload_host2 = host2.create_workload("workload2",
+                                                   network=network1)
+
+            # Allow network to converge.
+            self.assert_true(
+                workload_host1.check_can_ping(workload_host2.ip, retries=10))
+
+            # Check connectivity in both directions
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[workload_host1.ip,
+                                                      workload_host2.ip])
+
+            # Turn on IPIP and check that IPIP tunnel is being used.
+            self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode="Always")
+            self.assert_ipip_routing(host1, workload_host1, workload_host2,
+                                     True)
+
+            # Toggle the IPIP mode between being expecting IPIP and not.  Only the mode
+            # "Always" should result in IPIP tunnel being used in these tests.
+            modes = ["Always"]
+            for mode in ["CrossSubnet", "Always", "Never", "Always"]:
+                # At the start of this loop we should have connectivity.
+                logger.info("New mode setting: %s" % mode)
+                logger.info("Previous mode settings: %s" % modes)
+
+                # Shutdown the calico-node on host1, we should still have connectivity because
+                # the node was shut down without removing the routes.  Check tunnel usage based
+                # on the current IPIP mode (only a mode of Always will use the tunnel).
+                host1.execute("docker rm -f calico-node")
+                self.assert_ipip_routing(host1, workload_host1, workload_host2,
+                                         modes[-1] == "Always")
+
+                # Update the IPIP mode.
+                self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, ipip_mode=mode)
+                modes.append(mode)
+
+                # At this point, since we are toggling between IPIP connectivity and no IPIP
+                # connectivity, there will be a mistmatch between the two nodes because host1
+                # does not have the BGP daemon running on it.
+                self.assert_ip_connectivity(workload_list=[workload_host1],
+                                            ip_pass_list=[],
+                                            ip_fail_list=[workload_host2.ip],
+                                            retries=10)
+
+                # Start the calico-node.  Connectivity should be restored once the BGP daemon
+                # on host1 fixes the route.
+                host1.start_calico_node("--ip=autodetect --backend={0}".format(backend))
+                self.assert_ipip_routing(host1, workload_host1, workload_host2,
+                                         modes[-1] == "Always")
 
     @staticmethod
     def pool_action(host, action, cidr,
