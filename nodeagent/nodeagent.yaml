@@ -27,13 +27,14 @@ spec:
       volumes:
         - name: test-mgmt
           hostPath:
-            # directory location on host for the mgmt api
+            # directory location on host for the mgmt api between flexvolume driver and nodeagent
             type: DirectoryOrCreate
-            path: /var/run/flexvol/udsuspver
+            path: /tmp/udsuspver
         - name: test-workload
           hostPath:
+            # directory location on host for the uds between nodeagent and workload
             type: DirectoryOrCreate
-            path: /var/run/flexvol/nodeagent
+            path: /tmp/nodeagent
         - name: flexvol-driver-host
           hostPath:
             type: DirectoryOrCreate
