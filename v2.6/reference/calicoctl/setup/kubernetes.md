@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl - Kubernetes datastore
-no_canonical: true
 ---
 
 This document covers the configuration options for calicoctl when using the Kubernetes API as a datastore.

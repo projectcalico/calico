@@ -1,6 +1,5 @@
 ---
 title: Global Network Policy Resource (GlobalNetworkPolicy)
-no_canonical: true
 ---
 
 A global network policy resource (`GlobalNetworkPolicy`) represents an ordered set of rules which are applied

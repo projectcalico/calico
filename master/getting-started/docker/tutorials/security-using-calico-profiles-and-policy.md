@@ -1,6 +1,5 @@
 ---
 title: Security using Calico Profiles and Policy
-no_canonical: true
 ---
 
 ## Background

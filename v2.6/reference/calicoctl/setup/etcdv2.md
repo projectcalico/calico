@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl - etcdv2 datastore
-no_canonical: true
 ---
 
 

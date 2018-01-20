@@ -1,6 +1,5 @@
 ---
 title: Network Policy (Docker Containerizer)
-no_canonical: true
 ---
 
 The Docker Containerizer uses Docker directly to launch tasks.

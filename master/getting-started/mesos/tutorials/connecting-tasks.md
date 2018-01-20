@@ -1,6 +1,5 @@
 ---
 title: Connecting to Tasks
-no_canonical: true
 ---
 
 When {{site.prodname}} is used to network Mesos tasks,

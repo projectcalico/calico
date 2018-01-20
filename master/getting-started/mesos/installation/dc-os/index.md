@@ -1,6 +1,5 @@
 ---
 title: Overview of Calico for DC/OS
-no_canonical: true
 ---
 
 The following information details {{site.prodname}}'s installation and runtime dependencies

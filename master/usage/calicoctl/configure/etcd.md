@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl to connect to an etcd datastore
-no_canonical: true
 ---
 
 ## Complete list of etcdv3 configuration options

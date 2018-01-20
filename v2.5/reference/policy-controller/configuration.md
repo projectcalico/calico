@@ -1,6 +1,5 @@
 ---
 title: Configuring the Calico policy controller
-no_canonical: true
 ---
 
 The policy controller is primarily configured through environment variables.  When running

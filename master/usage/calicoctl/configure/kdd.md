@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl to connect to the Kubernetes API datastore
-no_canonical: true
 ---
 
 

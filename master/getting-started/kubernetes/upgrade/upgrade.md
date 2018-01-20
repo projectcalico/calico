@@ -1,6 +1,5 @@
 ---
 title: Upgrading Calico 
-no_canonical: true
 ---
 
 

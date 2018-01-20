@@ -1,6 +1,5 @@
 ---
 title: calicoctl convert
-no_canonical: true
 ---
 
 This sections describes the `calicoctl convert` command.

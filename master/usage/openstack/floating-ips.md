@@ -1,6 +1,5 @@
 ---
 title: Floating IPs
-no_canonical: true
 ---
 
 networking-calico includes beta support for floating IPs.  Currently this

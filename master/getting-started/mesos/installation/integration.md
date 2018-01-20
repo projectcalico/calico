@@ -1,6 +1,5 @@
 ---
 title: Integration Guide
-no_canonical: true
 ---
 
 This guide explains how to integrate {{site.prodname}} networking and policy on an existing

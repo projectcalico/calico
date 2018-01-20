@@ -1,6 +1,5 @@
 ---
 title: Service IPs
-no_canonical: true
 ---
 
 Calico supports two approaches for assigning a service IP to a Calico-networked

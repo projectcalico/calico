@@ -1,6 +1,5 @@
 ---
 title: Running the Calico tutorials on CoreOS Container Linux using Vagrant and VirtualBox
-no_canonical: true
 ---
 
 These instructions allow you to set up a CoreOS Container Linux cluster ready to network Docker containers with

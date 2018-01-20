@@ -1,6 +1,5 @@
 ---
 title: Calico DC/OS Installation Guide
-no_canonical: true
 ---
 
 The following guide walks through installing {{site.prodname}} for DC/OS using the Universe

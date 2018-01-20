@@ -1,6 +1,5 @@
 ---
 title: Downgrading Calico
-no_canonical: true
 ---
 
 ## About downgrading {{site.prodname}}

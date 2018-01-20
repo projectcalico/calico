@@ -1,6 +1,5 @@
 ---
 title: Calico key and path prefixes in etcd v2
-no_canonical: true
 ---
 
 The Paths listed here are the key or path prefixes that a particular calico

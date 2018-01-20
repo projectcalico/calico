@@ -1,6 +1,5 @@
 ---
 title: Testing the data migration
-no_canonical: true
 ---
 
 

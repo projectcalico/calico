@@ -1,6 +1,5 @@
 ---
 title: calicoctl config
-no_canonical: true
 ---
 
 This sections describes the `calicoctl config` commands.

@@ -1,6 +1,5 @@
 ---
 title: Kuryr
-no_canonical: true
 ---
 
 networking-calico works with Kuryr; this means using Neutron, with the {{site.prodname}}

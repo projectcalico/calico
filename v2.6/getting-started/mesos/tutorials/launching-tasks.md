@@ -1,6 +1,5 @@
 ---
 title: Launching Tasks
-no_canonical: true
 ---
 
 The following information describes how to launch Calico networked tasks in Mesos

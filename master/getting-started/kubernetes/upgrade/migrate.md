@@ -1,6 +1,5 @@
 ---
 title: Migrating Calico data
-no_canonical: true
 ---
 
 > **Important**: Once you begin the migration, stop using `calicoctl` or 

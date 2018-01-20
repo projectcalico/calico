@@ -1,5 +1,6 @@
 ---
 title: Deploying Calico and Kubernetes on GCE
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/gce'
 ---
 
 See [this page]({{site.baseurl}}/{{page.version}}/reference/public-cloud/gce)

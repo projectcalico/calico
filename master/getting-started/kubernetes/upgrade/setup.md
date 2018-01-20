@@ -1,6 +1,5 @@
 ---
 title: Installing and configuring calico-upgrade
-no_canonical: true
 ---
 
 

@@ -1,6 +1,5 @@
 ---
 title: Integration with Fuel
-no_canonical: true
 ---
 
 {{site.prodname}} plugins are available for Fuel 6.1 and 7.0, and work is in progress for

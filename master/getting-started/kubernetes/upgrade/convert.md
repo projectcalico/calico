@@ -1,6 +1,5 @@
 ---
 title: Converting your calicoctl manifests
-no_canonical: true
 ---
 
  Use `calicoctl convert` to convert your Calico resource manifests from v1 API to v3 API.

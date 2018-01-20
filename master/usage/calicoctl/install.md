@@ -1,6 +1,5 @@
 ---
 title: Installing calicoctl
-no_canonical: true
 ---
 
 ## About installing calicoctl

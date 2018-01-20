@@ -1,6 +1,5 @@
 ---
 title: BGP Configuration Resource (BGPConfiguration)
-no_canonical: true
 ---
 
 A BGP configuration resource (`BGPConfiguration`) represents BGP specific configuration options for the cluster.

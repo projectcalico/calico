@@ -1,6 +1,5 @@
 ---
 title: Calico with OpenStack
-no_canonical: true
 ---
 
 There are many ways to try out Calico with OpenStack, because OpenStack

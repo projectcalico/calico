@@ -1,6 +1,5 @@
 ---
 title: Network Policy Resource (NetworkPolicy)
-no_canonical: true
 ---
 
 A network policy resource (`NetworkPolicy`) represents an ordered set of rules which are applied

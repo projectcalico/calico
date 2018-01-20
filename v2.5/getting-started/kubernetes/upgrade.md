@@ -1,6 +1,6 @@
 ---
 title: Upgrading Calico for Kubernetes
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/'
 ---
 
 This document covers upgrading the Calico components in a Kubernetes deployment.  This

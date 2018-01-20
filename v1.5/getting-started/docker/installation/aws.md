@@ -1,5 +1,6 @@
 ---
 title: # Running the Calico tutorials on AWS
+canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/installation/aws'
 ---
 
 Calico is designed to provide high performance massively scalable virtual

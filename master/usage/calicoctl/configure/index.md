@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl
-no_canonical: true
 ---
 
 ### About configuring calicoctl

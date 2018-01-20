@@ -1,6 +1,5 @@
 ---
 title: Deleting old data
-no_canonical: true
 ---
 
 ## About deleting old Calico data

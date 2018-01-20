@@ -1,6 +1,5 @@
 ---
 title: Host routes
-no_canonical: true
 ---
 
 Neutron allows "host routes" to be configured on a subnet, with each host route

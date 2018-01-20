@@ -1,6 +1,5 @@
 ---
 title: Requirements for Calico with Mesos
-no_canonical: true
 ---
 
 #### 1. etcd

@@ -1,6 +1,5 @@
 ---
 title: Upgrade Procedure (OpenStack)
-no_canonical: true
 ---
 
 This document details the procedure for upgrading a {{site.prodname}}-based

@@ -1,6 +1,5 @@
 ---
 title: Security using Docker Labels and Calico Policy
-no_canonical: true
 ---
 
 ## Background

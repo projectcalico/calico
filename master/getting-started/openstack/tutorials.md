@@ -1,6 +1,5 @@
 ---
 title: Worked Examples Using Calico-based OpenStack
-no_canonical: true
 ---
 
 Here are a few worked examples for common {{site.prodname}} on OpenStack deployment

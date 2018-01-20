@@ -1,6 +1,5 @@
 ---
 title: Chef Trial Install
-no_canonical: true
 ---
 
 > **Important**: The chef install only supports OpenStack Icehouse and we've heard

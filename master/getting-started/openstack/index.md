@@ -1,6 +1,5 @@
 ---
 title: Calico for OpenStack
-no_canonical: true
 ---
 
 {{site.prodname}}'s integration with OpenStack consists of the following pieces.
