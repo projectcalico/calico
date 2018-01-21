@@ -92,6 +92,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	labels := make(map[string]string)
 	annot := make(map[string]string)
+	annotNS := make(map[string]string)
+
 	var ports []api.EndpointPort
 	var profiles []string
 	var generateName string
@@ -102,6 +104,12 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Kubernetes API
 	if conf.Policy.PolicyType == "k8s" {
 		var err error
+
+		annotNS, err = getK8sNSInfo(client, epIDs.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		logger.WithField("NS Annotations", annotNS).Debug("Fetched K8s namespace annotations")
 
 		labels, annot, ports, profiles, generateName, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
 		if err != nil {
@@ -115,8 +123,21 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		// Check for calico IPAM specific annotations and set them if needed.
 		if conf.IPAM.Type == "calico-ipam" {
 
-			v4pools := annot["cni.projectcalico.org/ipv4pools"]
-			v6pools := annot["cni.projectcalico.org/ipv6pools"]
+			var v4pools, v6pools string
+
+			// Sets  the Namespace annotation for IP pools as default
+			v4pools = annotNS["cni.projectcalico.org/ipv4pools"]
+			v6pools = annotNS["cni.projectcalico.org/ipv6pools"]
+
+			// Gets the POD annotation for IP Pools and overwrites Namespace annotation if it exists
+			v4poolpod := annot["cni.projectcalico.org/ipv4pools"]
+			if len(v4poolpod) != 0 {
+				v4pools = v4poolpod
+			}
+			v6poolpod := annot["cni.projectcalico.org/ipv6pools"]
+			if len(v6poolpod) != 0 {
+				v6pools = v6poolpod
+			}
 
 			if len(v4pools) != 0 || len(v6pools) != 0 {
 				var stdinData map[string]interface{}
@@ -664,6 +685,15 @@ func newK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 
 	// Create the clientset
 	return kubernetes.NewForConfig(config)
+}
+
+func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
+	ns, err := client.CoreV1().Namespaces().Get(podNamespace, metav1.GetOptions{})
+	logrus.Infof("namespace info %+v", ns)
+	if err != nil {
+		return nil, err
+	}
+	return ns.Annotations, nil
 }
 
 func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, profiles []string, generateName string, err error) {
