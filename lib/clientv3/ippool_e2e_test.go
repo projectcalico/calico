@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,11 +97,14 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
 			By("Creating a new IPPool with name1/spec1")
-			res1, outError := c.IPPools().Create(ctx, &apiv3.IPPool{
+			poolToCreate := &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
-			}, options.SetOptions{})
+			}
+			poolToCreateCopy := poolToCreate.DeepCopy()
+			res1, outError := c.IPPools().Create(ctx, poolToCreate, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(poolToCreate).To(Equal(poolToCreateCopy), "Create() unexpectedly modified input")
 			testutils.ExpectResource(res1, apiv3.KindIPPool, testutils.ExpectNoNamespace, name1, spec1)
 
 			// Track the version of the original data for name1.
@@ -155,8 +158,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 
 			By("Updating IPPool name1 with spec1_2")
 			res1.Spec = spec1_2
-			res1, outError = c.IPPools().Update(ctx, res1, options.SetOptions{})
+			res1Copy := res1.DeepCopy()
+			res1Out, outError := c.IPPools().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
+			res1 = res1Out
 			testutils.ExpectResource(res1, apiv3.KindIPPool, testutils.ExpectNoNamespace, name1, spec1_2)
 
 			By("Attempting to update the IPPool without a Creation Timestamp")

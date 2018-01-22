@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,12 @@ type ipPools struct {
 // Create takes the representation of a IPPool and creates it.  Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
 	// Validate the IPPool before creating the resource.
 	if err := r.validateAndSetDefaults(ctx, res, nil); err != nil {
 		return nil, err
@@ -75,6 +81,12 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 // Update takes the representation of a IPPool and updates it. Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}

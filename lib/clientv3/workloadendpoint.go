@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,12 @@ type workloadEndpoints struct {
 // Create takes the representation of a WorkloadEndpoint and creates it.  Returns the stored
 // representation of the WorkloadEndpoint, and an error, if there is any.
 func (r workloadEndpoints) Create(ctx context.Context, res *apiv3.WorkloadEndpoint, opts options.SetOptions) (*apiv3.WorkloadEndpoint, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
 	if err := r.assignOrValidateName(res); err != nil {
 		return nil, err
 	} else if err := validator.Validate(res); err != nil {
@@ -60,6 +66,12 @@ func (r workloadEndpoints) Create(ctx context.Context, res *apiv3.WorkloadEndpoi
 // Update takes the representation of a WorkloadEndpoint and updates it. Returns the stored
 // representation of the WorkloadEndpoint, and an error, if there is any.
 func (r workloadEndpoints) Update(ctx context.Context, res *apiv3.WorkloadEndpoint, opts options.SetOptions) (*apiv3.WorkloadEndpoint, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
 	if err := r.assignOrValidateName(res); err != nil {
 		return nil, err
 	} else if err := validator.Validate(res); err != nil {
@@ -144,9 +156,11 @@ func (r workloadEndpoints) assignOrValidateName(res *apiv3.WorkloadEndpoint) err
 // the Namespace and Orchestrator labels which must be set to the correct values and are
 // not user configurable.
 func (r workloadEndpoints) updateLabelsForStorage(res *apiv3.WorkloadEndpoint) {
-	if res.Labels == nil {
-		res.Labels = make(map[string]string, 2)
+	labelsCopy := make(map[string]string, len(res.GetLabels())+2)
+	for k, v := range res.GetLabels() {
+		labelsCopy[k] = v
 	}
-	res.Labels[apiv3.LabelNamespace] = res.Namespace
-	res.Labels[apiv3.LabelOrchestrator] = res.Spec.Orchestrator
+	labelsCopy[apiv3.LabelNamespace] = res.Namespace
+	labelsCopy[apiv3.LabelOrchestrator] = res.Spec.Orchestrator
+	res.SetLabels(labelsCopy)
 }
