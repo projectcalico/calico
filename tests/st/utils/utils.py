@@ -299,7 +299,7 @@ def writeyaml(filename, data):
     """
     with open(filename, 'w') as f:
         text = yaml.dump(data, default_flow_style=False)
-        logger.debug("Writing %s: \n%s" % (filename, text))
+        logger.debug("Writing %s: \n%s" % (filename, truncate_for_log(text, 4000)))
         f.write(text)
 
 
@@ -314,8 +314,14 @@ def writejson(filename, data):
                           sort_keys=True,
                           indent=2,
                           separators=(',', ': '))
-        logger.debug("Writing %s: \n%s" % (filename, text))
+        logger.debug("Writing %s: \n%s" % (filename, truncate_for_log(text, 4000)))
         f.write(text)
+
+
+def truncate_for_log(text, length):
+    if len(text) <=length:
+        return text
+    return text[:length] + "... <truncated>"
 
 
 def get_ip(v6=False):
