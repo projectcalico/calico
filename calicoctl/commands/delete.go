@@ -65,6 +65,7 @@ Description:
     * bgpPeer
     * felixConfiguration
     * globalNetworkPolicy
+    * globalNetworkSet
     * hostEndpoint
     * ipPool
     * networkPolicy

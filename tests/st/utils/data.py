@@ -313,6 +313,27 @@ globalnetworkpolicy_name1_rev2 = {
     }
 }
 
+
+#
+# Global network sets
+#
+
+globalnetworkset_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'GlobalNetworkSet',
+    'metadata': {
+        'name': 'net-set1',
+    },
+    'spec': {
+        'nets': [
+            "10.0.0.1",
+            "11.0.0.0/16",
+            "feed:beef::1",
+            "dead:beef::96",
+        ]
+    }
+}
+
 #
 # Host Endpoints
 #

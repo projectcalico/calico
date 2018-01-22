@@ -318,6 +318,7 @@ class TestCalicoctlCommands(TestBase):
         (ippool_name1_rev1_v4,),
         (profile_name1_rev1,),
         (globalnetworkpolicy_name1_rev1,),
+        (globalnetworkset_name1_rev1,),
         (hostendpoint_name1_rev1,),
         (bgppeer_name1_rev1_v4,),
         (node_name1_rev1,),
