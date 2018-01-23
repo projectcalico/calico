@@ -10,6 +10,8 @@ gems:
 
 url: https://docs.projectcalico.org
 
+repository: projectcalico/calico
+
 prodname: Calico
 nodecontainer: calico/node
 noderunning: calico-node
