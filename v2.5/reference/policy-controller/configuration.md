@@ -1,5 +1,6 @@
 ---
 title: Configuring the Calico policy controller
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration'
 ---
 
 The policy controller is primarily configured through environment variables.  When running

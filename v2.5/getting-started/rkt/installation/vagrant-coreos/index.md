@@ -1,5 +1,6 @@
 ---
 title: Running the Calico rkt tutorials on CoreOS Container Linux using Vagrant and VirtualBox
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/rkt/installation/vagrant-coreos/'
 ---
 
 This is a Quick Start guide that uses Vagrant and VirtualBox to create a two-node

@@ -1,5 +1,6 @@
 ---
 title: Chef Trial Install
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/chef'
 ---
 
 > **Important**: The chef install only supports OpenStack Icehouse and we've heard

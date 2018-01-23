@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting Calico for rkt
-no-canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/rkt/troubleshooting'
 ---
 
 This article contains rkt specific troubleshooting advice for Calico and 
