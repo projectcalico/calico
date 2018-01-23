@@ -57,7 +57,7 @@ Both of the commands should respond with raw HTML response data from the nginx a
 
 ### 2. Deny all ingress traffic
 
-Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://Kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic).
+Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic).
 
 ```shell
 kubectl create -f - <<EOF
@@ -127,7 +127,7 @@ After creating the policy, we can now access the nginx Service.
 
 ### 4. Deny all egress traffic
 
-Enable egress isolation on the namespace by deploying a [default deny all egress traffic policy](https://Kubernetes.io/docs/concepts/services-networking/network-policies/#4-deny-all-egress-traffic).
+Enable egress isolation on the namespace by deploying a [default deny all egress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#4-deny-all-egress-traffic).
 
 ```shell
 kubectl create -f - <<EOF
