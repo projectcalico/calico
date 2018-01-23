@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,6 +96,11 @@ func (c client) IPPools() IPPoolInterface {
 // Profiles returns an interface for managing profile resources.
 func (c client) Profiles() ProfileInterface {
 	return profiles{client: c}
+}
+
+// GlobalNetworkSets returns an interface for managing host endpoint resources.
+func (c client) GlobalNetworkSets() GlobalNetworkSetInterface {
+	return globalNetworkSets{client: c}
 }
 
 // HostEndpoints returns an interface for managing host endpoint resources.

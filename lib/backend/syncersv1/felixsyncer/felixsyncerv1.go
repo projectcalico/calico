@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,6 +41,10 @@ func New(client api.Client, callbacks api.SyncerCallbacks, datastoreType apiconf
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy},
 			UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
+		},
+		{
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkSet},
+			UpdateProcessor: updateprocessors.NewGlobalNetworkSetUpdateProcessor(),
 		},
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},

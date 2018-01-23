@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -179,6 +179,7 @@ func init() {
 	// Register structs that have two level of additional structs to validate.
 	registerStructValidator(validatorTertiary, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validatorTertiary, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
+	registerStructValidator(validatorTertiary, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -806,6 +807,22 @@ func validateNetworkPolicy(v *validator.Validate, structLevel *validator.StructL
 
 	validateObjectMetaAnnotations(v, structLevel, np.Annotations)
 	validateObjectMetaLabels(v, structLevel, np.Labels)
+}
+
+func validateGlobalNetworkSet(v *validator.Validate, structLevel *validator.StructLevel) {
+	gns := structLevel.CurrentStruct.Interface().(api.GlobalNetworkSet)
+	for k := range gns.GetLabels() {
+		if k == "projectcalico.org/namespace" {
+			// The namespace label should only be used when mapping the real namespace through
+			// to the v1 datamodel.  It shouldn't appear in the v3 datamodel.
+			structLevel.ReportError(
+				reflect.ValueOf(k),
+				"Metadata.Labels (label)",
+				"",
+				reason("projectcalico.org/namespace is not a valid label name"),
+			)
+		}
+	}
 }
 
 func validateGlobalNetworkPolicy(v *validator.Validate, structLevel *validator.StructLevel) {

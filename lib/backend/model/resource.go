@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,6 +82,11 @@ func init() {
 		apiv3.KindHostEndpoint,
 		"hostendpoints",
 		reflect.TypeOf(apiv3.HostEndpoint{}),
+	)
+	registerResourceInfo(
+		apiv3.KindGlobalNetworkSet,
+		"globalnetworksets",
+		reflect.TypeOf(apiv3.GlobalNetworkSet{}),
 	)
 	registerResourceInfo(
 		apiv3.KindIPPool,

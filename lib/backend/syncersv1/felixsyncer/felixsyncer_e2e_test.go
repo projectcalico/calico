@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -200,6 +200,37 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key:   model.GlobalConfigKey{"IpInIpEnabled"},
 				Value: "true",
+			})
+
+			By("Creating a GlobalNetworkSet")
+			gns := apiv3.NewGlobalNetworkSet()
+			gns.Name = "anetworkset"
+			gns.Labels = map[string]string{
+				"a": "b",
+			}
+			gns.Spec.Nets = []string{
+				"11.0.0.0/16",
+			}
+			gns, err = c.GlobalNetworkSets().Create(
+				ctx,
+				gns,
+				options.SetOptions{},
+			)
+			expectedCacheSize++
+			syncTester.ExpectCacheSize(expectedCacheSize)
+			_, expNet, err := net.ParseCIDROrIP("11.0.0.0/16")
+			Expect(err).NotTo(HaveOccurred())
+			syncTester.ExpectData(model.KVPair{
+				Key: model.NetworkSetKey{Name: "anetworkset"},
+				Value: &model.NetworkSet{
+					Labels: map[string]string{
+						"a": "b",
+					},
+					Nets: []net.IPNet{
+						*expNet,
+					},
+				},
+				Revision: gns.ResourceVersion,
 			})
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {

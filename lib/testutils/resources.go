@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,13 +40,13 @@ const ExpectNoNamespace = ""
 
 func ExpectResource(res runtime.Object, kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) {
 	ma := res.(v1.ObjectMetaAccessor)
-	Expect(ma.GetObjectMeta().GetNamespace()).To(Equal(namespace), optionalDescription...)
-	Expect(ma.GetObjectMeta().GetName()).To(Equal(name), optionalDescription...)
-	Expect(ma.GetObjectMeta().GetResourceVersion()).ToNot(BeEmpty(), optionalDescription...)
-	Expect(res.GetObjectKind().GroupVersionKind().Kind).To(Equal(kind), optionalDescription...)
-	Expect(res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv3.Group), optionalDescription...)
-	Expect(res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv3.VersionCurrent), optionalDescription...)
-	Expect(getSpec(res)).To(Equal(spec), optionalDescription...)
+	ExpectWithOffset(1, ma.GetObjectMeta().GetNamespace()).To(Equal(namespace), optionalDescription...)
+	ExpectWithOffset(1, ma.GetObjectMeta().GetName()).To(Equal(name), optionalDescription...)
+	ExpectWithOffset(1, ma.GetObjectMeta().GetResourceVersion()).ToNot(BeEmpty(), optionalDescription...)
+	ExpectWithOffset(1, res.GetObjectKind().GroupVersionKind().Kind).To(Equal(kind), optionalDescription...)
+	ExpectWithOffset(1, res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv3.Group), optionalDescription...)
+	ExpectWithOffset(1, res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv3.VersionCurrent), optionalDescription...)
+	ExpectWithOffset(1, getSpec(res)).To(Equal(spec), optionalDescription...)
 }
 
 // TestResourceWatch is a test helper used to validate a set of events are received
