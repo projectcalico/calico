@@ -79,17 +79,17 @@ spec:
     spec:
       # Only run this pod on the master.
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
-      # so we should tolerate it to schedule the calico pods
-      - key: node.cloudprovider.kubernetes.io/uninitialized
-        value: "true"
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
-      # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
-      # This, along with the annotation above marks this pod as a critical add-on.
-      - key: CriticalAddonsOnly
-        operator: Exists
+        # this taint is set by all kubelets running `--cloud-provider=external`
+        # so we should tolerate it to schedule the calico pods
+        - key: node.cloudprovider.kubernetes.io/uninitialized
+          value: "true"
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
+        # This, along with the annotation above marks this pod as a critical add-on.
+        - key: CriticalAddonsOnly
+          operator: Exists
       nodeSelector:
         node-role.kubernetes.io/master: ""
       hostNetwork: true
@@ -171,17 +171,14 @@ spec:
     spec:
       hostNetwork: true
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
-      # so we should tolerate it to schedule the calico pods
-      - key: node.cloudprovider.kubernetes.io/uninitialized
-        value: "true"
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
-      # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
-      # This, along with the annotation above marks this pod as a critical add-on.
-      - key: CriticalAddonsOnly
-        operator: Exists
+        # Make sure calico/node gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists  
       serviceAccountName: calico-cni-plugin
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
@@ -336,17 +333,12 @@ spec:
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
-      # so we should tolerate it to schedule the calico pods
-      - key: node.cloudprovider.kubernetes.io/uninitialized
-        value: "true"
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
-      # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
-      # This, along with the annotation above marks this pod as a critical add-on.
-      - key: CriticalAddonsOnly
-        operator: Exists
+        # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
+        # This, along with the annotation above marks this pod as a critical add-on.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers

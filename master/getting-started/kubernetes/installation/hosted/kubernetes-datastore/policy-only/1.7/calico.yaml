@@ -102,12 +102,13 @@ spec:
         # if it ever gets evicted.
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
+      hostNetwork: true
       tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
       # Since Calico can't network a pod until Typha is up, we need to run Typha itself
       # as a host-networked pod.
-      hostNetwork: true
       serviceAccountName: calico-node
       containers:
       - image: {{site.imageNames["typha"]}}:{{site.data.versions[page.version].first.components["typha"].version}}
@@ -183,15 +184,16 @@ spec:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
       hostNetwork: true
-      serviceAccountName: calico-node
       tolerations:
-        # Allow the pod to run on the master.  This is required for
-        # the master to communicate with pods.
-        - key: node-role.kubernetes.io/master
-          effect: NoSchedule
+        # Make sure calico/node gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
           operator: Exists
+        - effect: NoExecute
+          operator: Exists 
+      serviceAccountName: calico-node
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
