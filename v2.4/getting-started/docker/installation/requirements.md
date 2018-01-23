@@ -1,6 +1,6 @@
 ---
 title:  Requirements
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/installation/requirements'
 ---
 
 The following information details basic prerequisites that must be met

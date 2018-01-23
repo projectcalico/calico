@@ -1,5 +1,6 @@
 ---
 title: Running calico/node with an init system
+canonical_url: 'https://docs.projectcalico.org/v3.0/usage/configuration/as-service'
 ---
 
 This guide explains how to run `{{site.nodecontainer}}` with an init system like

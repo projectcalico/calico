@@ -1,6 +1,6 @@
 ---
 title: Juju Install
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/juju'
 ---
 
 You can use Ubuntu's [Juju Charms](https://jujucharms.com/) to quickly deploy a

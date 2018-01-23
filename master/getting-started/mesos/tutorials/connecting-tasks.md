@@ -1,6 +1,6 @@
 ---
 title: Connecting to Tasks
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/connecting-tasks'
 ---
 
 When {{site.prodname}} is used to network Mesos tasks,

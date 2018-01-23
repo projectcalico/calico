@@ -1,5 +1,6 @@
 ---
 title: Configuring the Calico CNI plugins
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/cni-plugin/configuration'
 ---
 
 The Calico CNI plugin is configured through the standard CNI 

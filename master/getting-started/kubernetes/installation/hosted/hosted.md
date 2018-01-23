@@ -1,5 +1,6 @@
 ---
 title: Standard Hosted Install
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/hosted'
 ---
 
 The following steps install {{site.prodname}} as a Kubernetes add-on using your own etcd cluster.

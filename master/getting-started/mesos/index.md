@@ -1,6 +1,6 @@
 ---
 title: Integration Guide
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/'
 ---
 
 {{site.prodname}} introduces IP-per-container & fine-grained security policies to Mesos, while

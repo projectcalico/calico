@@ -1,6 +1,5 @@
 ---
 redirect_to: /master/usage/calicoctl/configure/
-no_canonical: true
 ---
 
 <!--- Page was deleted, now it just performs a redirect

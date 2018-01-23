@@ -1,6 +1,6 @@
 ---
 title: Connectivity in OpenStack
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/connectivity'
 ---
 
 An OpenStack deployment is of limited use if its VMs cannot reach and be

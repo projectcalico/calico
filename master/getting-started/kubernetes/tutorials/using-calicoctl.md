@@ -1,5 +1,6 @@
 ---
 title: Using calicoctl in Kubernetes
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/tutorials/using-calicoctl'
 ---
 
 `calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects

@@ -1,5 +1,6 @@
 ---
 title: Profile Resource (Profile)
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/profile'
 ---
 
 A profile resource (`Profile`) represents a set of rules which are applied 

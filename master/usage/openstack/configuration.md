@@ -1,6 +1,6 @@
 ---
 title: Configuring Systems for use with Calico
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/configuration'
 ---
 
 When running {{site.prodname}} with OpenStack, you also need to configure various

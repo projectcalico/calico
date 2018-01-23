@@ -1,6 +1,6 @@
 ---
 title: calicoctl config
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/reference/calicoctl/commands/config'
 ---
 
 This sections describes the `calicoctl config` commands.

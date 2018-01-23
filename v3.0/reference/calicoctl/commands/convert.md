@@ -1,7 +1,6 @@
 ---
 title: calicoctl convert
 redirect_from: latest/reference/calicoctl/commands/convert
-no_canonical: true
 ---
 
 This sections describes the `calicoctl convert` command.

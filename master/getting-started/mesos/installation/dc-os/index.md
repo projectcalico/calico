@@ -1,6 +1,6 @@
 ---
 title: Overview of Calico for DC/OS
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/'
 ---
 
 The following information details {{site.prodname}}'s installation and runtime dependencies

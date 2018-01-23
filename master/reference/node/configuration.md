@@ -1,5 +1,6 @@
 ---
 title: Configuring calico/node
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/node/configuration'
 ---
 
 The `{{site.nodecontainer}}` container is primarily configured through environment variables.

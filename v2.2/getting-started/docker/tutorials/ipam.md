@@ -1,5 +1,6 @@
 ---
 title: IPAM
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/tutorials/ipam'
 ---
 
 With the release of Docker 1.10, support has been added to allow users to

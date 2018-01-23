@@ -1,6 +1,6 @@
 ---
 title: Policy Resource (policy)
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy'
 ---
 
 A Policy resource (policy) represents an ordered set of rules which are applied

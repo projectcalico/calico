@@ -1,5 +1,6 @@
 ---
 title: Service IPs
+canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/service-ips'
 ---
 
 Calico supports two approaches for assigning a service IP to a Calico-networked

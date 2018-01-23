@@ -1,6 +1,6 @@
 ---
 title: Installing Calico for Docker
-no_canonical: true
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/installation/manual'
 ---
 
 {{site.prodname}} runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `{{site.nodecontainer}}` container.

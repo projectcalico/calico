@@ -1,5 +1,6 @@
 ---
 title: Kuryr
+canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/kuryr'
 ---
 
 networking-calico works with Kuryr; this means using Neutron, with the Calico

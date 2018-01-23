@@ -1,5 +1,6 @@
 ---
 title: calicoctl apply
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/apply'
 ---
 
 This sections describes the `calicoctl apply` command.

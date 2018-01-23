@@ -1,5 +1,6 @@
 ---
 title:  Preparing the environment for Calico as a Docker network plugin
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/installation/manual'
 ---
 
 The worked example in the _Calico as a Docker network plugin tutorial_ is run

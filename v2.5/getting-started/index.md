@@ -1,5 +1,6 @@
 ---
 title: Calico Integrations
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/'
 ---
 
 To get started using Calico, we recommend running through one or more of the

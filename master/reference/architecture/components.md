@@ -1,5 +1,6 @@
 ---
-title: Anatomy of a {{site.nodecontainer}} container
+title: Anatomy of a calico/node container
+canonical_url: 'https://docs.projectcalico.org/v3.0/reference/architecture/components'
 ---
 
 `{{site.nodecontainer}}` can be regarded as a helper container that bundles together the
