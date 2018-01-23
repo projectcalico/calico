@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,6 +202,11 @@ func KeyFromDefaultPath(path string) Key {
 		return HostEndpointKey{
 			Hostname:   m[1],
 			EndpointID: unescapeName(m[2]),
+		}
+	} else if m := matchNetworkSet.FindStringSubmatch(path); m != nil {
+		log.Debugf("Path is a network set: %v", path)
+		return NetworkSetKey{
+			Name: unescapeName(m[1]),
 		}
 	} else if m := matchPolicy.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a policy: %v", path)

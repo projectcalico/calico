@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@ type Interface interface {
 	IPPools() IPPoolInterface
 	// Profiles returns an interface for managing profile resources.
 	Profiles() ProfileInterface
+	// GlobalNetworkSets returns an interface for managing global network sets resources.
+	GlobalNetworkSets() GlobalNetworkSetInterface
 	// HostEndpoints returns an interface for managing host endpoint resources.
 	HostEndpoints() HostEndpointInterface
 	// WorkloadEndpoints returns an interface for managing workload endpoint resources.
@@ -53,3 +55,6 @@ type Interface interface {
 	// is already initialized.
 	EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error
 }
+
+// Compile-time assertion that our client implements its interface.
+var _ Interface = (*client)(nil)

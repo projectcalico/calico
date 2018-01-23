@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ The client has a number of methods that return interfaces for managing:
     -  BGP Peer resources
 	-  Policy resources
 	-  IP Pool resources
+	-  Global network sets resources
 	-  Host endpoint resources
 	-  Workload endpoint resources
 	-  Profile resources
