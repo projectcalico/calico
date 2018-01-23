@@ -11,13 +11,13 @@ spec:
     spec:
       initContainers:
       - name: flexvol-driver
-        image: quay.io/saurabh/flexvol:latest
+        image: quay.io/saurabh/flexvol:178c1fa
         volumeMounts:
         - name: flexvol-driver-host
           mountPath: /host/driver
       containers:
       - name: nodeagent
-        image: quay.io/saurabh/nodeagent:933707e
+        image: quay.io/saurabh/nodeagent:178c1fa
         imagePullPolicy: Always
         volumeMounts:
         - name: test-mgmt
