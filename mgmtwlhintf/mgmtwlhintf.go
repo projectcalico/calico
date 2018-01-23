@@ -1,5 +1,6 @@
 // NodeAgent Mgmt and Workload Handler coupling with the Workload API implementor
 package mgmtwlhintf
+
 import (
 	"google.golang.org/grpc"
 
@@ -27,21 +28,21 @@ type RegisterGrpcServer func(s *grpc.Server)
 
 // WlServer is what the workload API implementor must fill out
 type WlServer struct {
-	SockFile	string
-	RegAPI		RegisterGrpcServer
+	SockFile string
+	RegAPI   RegisterGrpcServer
 }
 
 // WlHandler is used by NodeagentMgmt to create workload handler per workload.
 type WlHandler struct {
 	// Used to create a new Workload handler object.
-	NewWlhCb	NewWorkloadHandler
+	NewWlhCb NewWorkloadHandler
 	// Passed to workload handler to create the workload api grpc server.
-	Wl	*WlServer
+	Wl *WlServer
 }
 
 func NewWlHandler(wls *WlServer, cb NewWorkloadHandler) *WlHandler {
 	return &WlHandler{
-			Wl: wls,
-			NewWlhCb: cb,
-		}
+		Wl:       wls,
+		NewWlhCb: cb,
+	}
 }

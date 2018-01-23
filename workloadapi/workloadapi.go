@@ -8,20 +8,20 @@ import (
 	"google.golang.org/grpc"
 
 	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
-	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
 	pb "github.com/colabsaumoh/proto-udsuspver/protos/udsver_v1"
+	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
 )
 
 const (
 	socName string = "/server.sock"
 )
 
-type WlServer struct {}
+type WlServer struct{}
 
 func NewWlAPIServer() *mwi.WlServer {
 	return &mwi.WlServer{
 		SockFile: socName,
-		RegAPI: RegisterGrpc,
+		RegAPI:   RegisterGrpc,
 	}
 }
 

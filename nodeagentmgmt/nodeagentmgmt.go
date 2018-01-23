@@ -13,15 +13,15 @@ import (
 
 	google_rpc "google.golang.org/genproto/googleapis/rpc/status"
 
-	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
+	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 )
 
 type Server struct {
-	wlmgmts     map[string]mwi.WorkloadMgmtInterface
+	wlmgmts    map[string]mwi.WorkloadMgmtInterface
 	pathPrefix string
 	done       chan bool //main 2 mgmt-api server to stop
-	wli		*mwi.WlHandler
+	wli        *mwi.WlHandler
 }
 
 type Client struct {
@@ -32,10 +32,10 @@ type Client struct {
 
 func NewServer(pathPrefix string, wli *mwi.WlHandler) *Server {
 	return &Server{
-		done: make(chan bool, 1),
+		done:       make(chan bool, 1),
 		pathPrefix: pathPrefix,
-		wli: wli,
-		wlmgmts: make(map[string]mwi.WorkloadMgmtInterface),
+		wli:        wli,
+		wlmgmts:    make(map[string]mwi.WorkloadMgmtInterface),
 	}
 }
 
@@ -85,23 +85,23 @@ func (s *Server) WorkloadAdded(ctx context.Context, request *pb.WorkloadInfo) (*
 
 	log.Printf("%v", request)
 	if _, ok := s.wlmgmts[request.Attrs.Uid]; ok == true {
-		return &pb.Response{&google_rpc.Status{ Code: 7, //AlreadyPresent
-													  Message: "Already present",
-								}}, nil
+		return &pb.Response{&google_rpc.Status{Code: 7, //AlreadyPresent
+			Message: "Already present",
+		}}, nil
 	}
 
 	s.wlmgmts[request.Attrs.Uid] = s.wli.NewWlhCb(request, s.wli.Wl, s.pathPrefix)
 	go s.wlmgmts[request.Attrs.Uid].Serve()
 	log.Printf("%v", s)
 
-	return &pb.Response{Status: &google_rpc.Status{	Code: 0, // OK
-													Message: "OK",
-		}}, nil
+	return &pb.Response{Status: &google_rpc.Status{Code: 0, // OK
+		Message: "OK",
+	}}, nil
 }
 
 func (s *Server) WorkloadDeleted(ctx context.Context, request *pb.WorkloadInfo) (*pb.Response, error) {
 	if _, ok := s.wlmgmts[request.Attrs.Uid]; ok == false {
-		return &pb.Response{&google_rpc.Status{ Code: 5, //NotFound
+		return &pb.Response{&google_rpc.Status{Code: 5, //NotFound
 			Message: "Not present",
 		}}, nil
 	}
@@ -112,7 +112,7 @@ func (s *Server) WorkloadDeleted(ctx context.Context, request *pb.WorkloadInfo) 
 
 	delete(s.wlmgmts, request.Attrs.Uid)
 
-	return &pb.Response{Status: &google_rpc.Status{	Code: 0, // OK
+	return &pb.Response{Status: &google_rpc.Status{Code: 0, // OK
 		Message: "OK",
 	}}, nil
 }
@@ -129,7 +129,6 @@ func (s *Server) CloseAllWlds() {
 func unixDialer(target string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("unix", target, timeout)
 }
-
 
 // Used by the flexvolume driver to interface with the nodeagement mgmt grpc server
 func NewClient(isUds bool, path string) *Client {

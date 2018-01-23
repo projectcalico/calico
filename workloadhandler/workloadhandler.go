@@ -13,28 +13,27 @@ import (
 
 // The WorkloadHandler (one per workload).
 type Server struct {
-	creds		*CredInfo
-	filePath	string
-	done		chan bool
-	wlS			*mwi.WlServer
+	creds    *CredInfo
+	filePath string
+	done     chan bool
+	wlS      *mwi.WlServer
 }
 
 func NewCreds(wli *pbmgmt.WorkloadInfo) *CredInfo {
 	return &CredInfo{
-		Uid: wli.Attrs.Uid,
-		Name: wli.Attrs.Workload,
-		Namespace: wli.Attrs.Namespace,
+		Uid:            wli.Attrs.Uid,
+		Name:           wli.Attrs.Workload,
+		Namespace:      wli.Attrs.Namespace,
 		ServiceAccount: wli.Attrs.Serviceaccount,
 	}
 }
 
-
 func NewServer(wli *pbmgmt.WorkloadInfo, wlS *mwi.WlServer, pathPrefix string) mwi.WorkloadMgmtInterface {
 	s := &Server{
-		done: make(chan bool, 1),
-		creds: NewCreds(wli),
+		done:     make(chan bool, 1),
+		creds:    NewCreds(wli),
 		filePath: pathPrefix + "/" + wli.Workloadpath + wlS.SockFile,
-		wlS: wlS,
+		wlS:      wlS,
 	}
 	return s
 }

@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
-	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
 	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
+	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
 	wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
+	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
 )
 
 const (

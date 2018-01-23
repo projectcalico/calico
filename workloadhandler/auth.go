@@ -11,7 +11,7 @@ import (
 
 var (
 	ErrInvalidConnection = errors.New("invalid connection")
-	ErrNoCredentials = errors.New("No credentials available")
+	ErrNoCredentials     = errors.New("No credentials available")
 )
 
 const (
@@ -24,7 +24,7 @@ type CredInfo struct {
 	Name           string
 	Namespace      string
 	ServiceAccount string
-	Err		error
+	Err            error
 }
 
 func (c CredInfo) AuthType() string {
