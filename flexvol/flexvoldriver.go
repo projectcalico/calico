@@ -258,15 +258,20 @@ func checkValidMountOpts(opts string) (*pb.WorkloadInfo, bool) {
 		return nil, false
 	}
 
-	wlInfo := pb.WorkloadInfo{Uid: ninputs.Uid,
-		Workload:       ninputs.Name,
-		Namespace:      ninputs.Namespace,
-		Serviceaccount: ninputs.ServiceAccount}
+	wlInfo := pb.WorkloadInfo{
+				Attrs: &pb.WorkloadInfo_WorkloadAttributes{
+					Uid:			ninputs.Uid,
+					Workload:		ninputs.Name,
+					Namespace:		ninputs.Namespace,
+					Serviceaccount: ninputs.ServiceAccount,
+					},
+				Workloadpath: ninputs.Uid,
+	}
 	return &wlInfo, true
 }
 
 func doMount(dstDir string, ninputs *pb.WorkloadInfo) error {
-	newDir := NodeAgentUdsHome + "/" + ninputs.Uid
+	newDir := NodeAgentUdsHome + "/" + ninputs.Workloadpath
 	err := os.MkdirAll(newDir, 0777)
 	if err != nil {
 		return err
@@ -346,7 +351,10 @@ func Unmount(dir string) error {
 
 	uid := comps[5]
 	// TBD: Check if uid is the correct format.
-	naInp := &pb.WorkloadInfo{Uid: uid}
+	naInp := &pb.WorkloadInfo{
+				Attrs: &pb.WorkloadInfo_WorkloadAttributes{Uid: uid},
+				Workloadpath: uid,
+			}
 	if err := DelListener(naInp); err != nil {
 		sErr := "Failure to notify nodeagent: " + err.Error()
 		return Failure("unmount", dir, sErr)

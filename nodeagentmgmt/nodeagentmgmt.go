@@ -11,6 +11,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	google_rpc "google.golang.org/genproto/googleapis/rpc/status"
+
 	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
 )
@@ -82,33 +84,37 @@ func (s *Server) Serve(isUds bool, path string) {
 func (s *Server) WorkloadAdded(ctx context.Context, request *pb.WorkloadInfo) (*pb.Response, error) {
 
 	log.Printf("%v", request)
-	if _, ok := s.wlmgmts[request.Uid]; ok == true {
-		status := &pb.Response_Status{Code: pb.Response_Status_ALREADY_EXISTS, Message: "Already present"}
-		return &pb.Response{Status: status}, nil
+	if _, ok := s.wlmgmts[request.Attrs.Uid]; ok == true {
+		return &pb.Response{&google_rpc.Status{ Code: 7, //AlreadyPresent
+													  Message: "Already present",
+								}}, nil
 	}
 
-	s.wlmgmts[request.Uid] = s.wli.NewWlhCb(request, s.wli.Wl, s.pathPrefix)
-	go s.wlmgmts[request.Uid].Serve()
+	s.wlmgmts[request.Attrs.Uid] = s.wli.NewWlhCb(request, s.wli.Wl, s.pathPrefix)
+	go s.wlmgmts[request.Attrs.Uid].Serve()
 	log.Printf("%v", s)
 
-	status := &pb.Response_Status{Code: pb.Response_Status_OK, Message: "Ok"}
-	return &pb.Response{Status: status}, nil
+	return &pb.Response{Status: &google_rpc.Status{	Code: 0, // OK
+													Message: "OK",
+		}}, nil
 }
 
 func (s *Server) WorkloadDeleted(ctx context.Context, request *pb.WorkloadInfo) (*pb.Response, error) {
-	if _, ok := s.wlmgmts[request.Uid]; ok == false {
-		status := &pb.Response_Status{Code: pb.Response_Status_NOT_FOUND, Message: "Not present"}
-		return &pb.Response{Status: status}, nil
+	if _, ok := s.wlmgmts[request.Attrs.Uid]; ok == false {
+		return &pb.Response{&google_rpc.Status{ Code: 5, //NotFound
+			Message: "Not present",
+		}}, nil
 	}
 
-	log.Printf("%s: Stop.", request.Uid)
-	s.wlmgmts[request.Uid].Stop()
-	s.wlmgmts[request.Uid].WaitDone()
+	log.Printf("%s: Stop.", request.Attrs.Uid)
+	s.wlmgmts[request.Attrs.Uid].Stop()
+	s.wlmgmts[request.Attrs.Uid].WaitDone()
 
-	delete(s.wlmgmts, request.Uid)
+	delete(s.wlmgmts, request.Attrs.Uid)
 
-	status := &pb.Response_Status{Code: pb.Response_Status_OK, Message: "Ok"}
-	return &pb.Response{Status: status}, nil
+	return &pb.Response{Status: &google_rpc.Status{	Code: 0, // OK
+		Message: "OK",
+	}}, nil
 }
 
 func (s *Server) CloseAllWlds() {
