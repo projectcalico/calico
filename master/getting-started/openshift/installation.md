@@ -6,10 +6,9 @@ Installation of {{site.prodname}} in OpenShift is integrated in openshift-ansibl
 The information below explains the variables which must be set during
 during the standard [Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables).
 
-## Shared etcd
+## Installation
 
-To enable an installation of {{site.prodname}} that shares the etcd
-instance used by the apiserver, set the following `OSEv3:vars` in your
+To install {{site.prodname}} in OpenShift, set the following `OSEv3:vars` in your
 inventory file:
 
   - `os_sdn_network_plugin_name=cni`
@@ -41,51 +40,7 @@ node1
 etcd1
 ```
 
-## Bring-your-own etcd
-
-{{site.prodname}}'s OpenShift-ansible integration supports connection to a custom etcd which
-a user has already set up.
-
-**Requirements:**
-
-  - The etcd instance must have SSL authentication enabled.
-  - Certs must be present at the specified filepath on all nodes.
-  - All cert files must be in the same directory specified by `calico_etcd_cert_dir`.
-
-**Inventory Parameters:**
-
-| Key | Value     |
-| :------------- | :------------- |
-| `calico_etcd_endpoints` | Address of etcd, e.g. `https://calico-etcd:2379` |
-| `calico_etcd_ca_cert_file` | Absolute filepath of the etcd CA file. |
-| `calico_etcd_cert_file` | Absolute filepath of the etcd client cert. |
-| `calico_etcd_key_file` | Absolute filepath of the etcd key file. |
-| `calico_etcd_cert_dir` | Absolute path to the directory containing the etcd certs. |
-
-**Sample Inventory File:**
-
-```
-[OSEv3:children]
-masters
-nodes
-etcd
-
-[OSEv3:vars]
-os_sdn_network_plugin_name=cni
-openshift_use_calico=true
-openshift_use_openshift_sdn=false
-calico_etcd_endpoints=http://calico-etcd:2379
-calico_etcd_ca_cert_file=/etc/calico/etcd-ca.crt
-calico_etcd_cert_file=/etc/calico/etcd-client.crt
-calico_etcd_key_file=/etc/calico/etcd-client.key
-calico_etcd_cert_dir=/etc/calico/
-
-[masters]
-master1
-
-[nodes]
-node1
-
-[etcd]
-etcd1
-```
+You are now ready to execute the ansible provision which will install {{site.prodname}}. Note that by default, 
+{{site.prodname}} will connect to the same etcd that OpenShift uses, and in order to do so, will distribute etcd's
+certs to each node. If you would prefer Calico not connect to the same etcd as OpenShift, you may modify the install
+such that Calico connects to an etcd you have already set up by following the [dedicated etcd install guide](dedicated-etcd).

@@ -68,6 +68,8 @@ toc:
   section:
     - title: Installation
       path: /getting-started/openshift/installation
+    - title: Connecting to a dedicated etcd cluster (optional)
+      path: /getting-started/openshift/dedicated-etcd
 
 - title: Mesos
   section:
