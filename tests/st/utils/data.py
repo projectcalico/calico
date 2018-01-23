@@ -340,7 +340,9 @@ globalnetworkset_name1_rev1 = {
 #
 # - Kubernetes' gRPC API has a 4MB message size limit.
 # - etcdv3 has a 1MB value size limit.
-many_nets = [str(net) for net in netaddr.IPNetwork("10.0.0.0/10").subnet(28)][:10000]
+many_nets = []
+for i in xrange(10000):
+    many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
 globalnetworkset_name1_rev1_large = {
     'apiVersion': API_VERSION,
     'kind': 'GlobalNetworkSet',

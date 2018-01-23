@@ -106,7 +106,7 @@ class CalicoctlOutput:
 
     def assert_list(self, kind, items, format="yaml", text=None):
         """
-        Assert the calicoctl command output an empty list of the specified
+        Assert the calicoctl command output a list of the specified
         kind.
 
         Args:

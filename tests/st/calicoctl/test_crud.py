@@ -335,6 +335,12 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=data1)
         rc.assert_no_error()
 
+        # Get the resource type as normal.
+        rc = calicoctl("get %s" % kind)
+        rc.assert_no_error()
+        rc = calicoctl("get %s -o wide" % kind)
+        rc.assert_no_error()
+
         # Get the resource with name1 and namespace2.
         # For non-namespaced resources this will error.
         rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))
@@ -344,11 +350,34 @@ class TestCalicoctlCommands(TestBase):
         # For non-namespaced resources this will error.
         rc = calicoctl("get %s --all-namespaces -o yaml" % kind)
         rc.assert_error(NOT_NAMESPACED)
+        # Get the resource type for all namespaces.
+        # For non-namespaced resources this will error.
+        rc = calicoctl("get %s --all-namespaces -o yaml" % kind)
+        rc.assert_error(NOT_NAMESPACED)
 
         # Delete the resource
         rc = calicoctl("delete", data=data1)
         rc.assert_no_error()
 
+    def test_nets_truncation(self):
+        """
+        Test that the list of nets is truncated if it's too long.
+        """
+        rc = calicoctl("create", data=globalnetworkset_name1_rev1_large)
+        rc.assert_no_error()
+        rc = calicoctl("get globalnetworkset -o wide")
+        rc.assert_no_error()
+        rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
+
+    def test_nets_no_truncation(self):
+        """
+        Test that the list of nets is shown in full if not too long.
+        """
+        rc = calicoctl("create", data=globalnetworkset_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("get globalnetworkset -o wide")
+        rc.assert_no_error()
+        rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
 
     @parameterized.expand([
         (networkpolicy_name1_rev1,),

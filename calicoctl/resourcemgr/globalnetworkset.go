@@ -32,7 +32,7 @@ func init() {
 		[]string{"NAME", "NETS"},
 		map[string]string{
 			"NAME": "{{.ObjectMeta.Name}}",
-			"NETS": "{{join .Spec.Nets \",\"}}",
+			"NETS": "{{joinAndTruncate .Spec.Nets \",\" 80}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkSet)
