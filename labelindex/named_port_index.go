@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"reflect"
 
 	"strings"
+
+	"fmt"
 
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
@@ -245,7 +247,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 				nil,
 				nil)
 		} else {
-			log.Debugf("Deleting host endpoint %v from NamedPortIndex", key)
+			log.Debugf("Deleting network set %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)
 		}
 	case model.ProfileLabelsKey:
@@ -409,10 +411,14 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 	ports []model.EndpointPort,
 	parentIDs []string,
 ) {
+	var cidrsToLog interface{} = nets
+	if log.GetLevel() < log.DebugLevel && len(nets) > 20 {
+		cidrsToLog = fmt.Sprintf("<too many to log (%d)>", len(nets))
+	}
 	logCxt := log.WithFields(log.Fields{
 		"endpointID": id,
 		"newLabels":  labels,
-		"CIDRs":      nets,
+		"CIDRs":      cidrsToLog,
 		"ports":      ports,
 		"parentIDs":  parentIDs,
 	})

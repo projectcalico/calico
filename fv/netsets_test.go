@@ -26,6 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
@@ -43,43 +44,18 @@ const (
 	numNetworkSets = 100
 )
 
-var _ = FContext("Network sets connectivity tests with initialized Felix and etcd datastore", func() {
-
-})
-
 var _ = Context("Network sets churn test with initialized Felix and etcd datastore", func() {
 
 	var (
 		etcd     *containers.Container
-		felix    *containers.Container
+		felix    *containers.Felix
 		felixPID int
 		client   client.Interface
 	)
 
-	getFelixPIDs := func() []int {
-		return felix.GetPIDs("calico-felix")
-	}
-
-	updateFelixPID := func() {
-		// Get Felix's PID.  This retry loop ensures that we don't get tripped up if we see multiple
-		// PIDs, which can happen transiently when Felix restarts/forks off a subprocess.
-		start := time.Now()
-		for {
-			pids := getFelixPIDs()
-			if len(pids) == 1 {
-				felixPID = pids[0]
-				break
-			}
-			Expect(time.Since(start)).To(BeNumerically("<", time.Second))
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.TopologyOptions{
-			FelixLogSeverity: "info",
-		})
-		updateFelixPID()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felixPID = felix.GetFelixPID()
 	})
 
 	AfterEach(func() {
@@ -100,9 +76,9 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			cc *workload.ConnectivityChecker
 		)
 
-		createPolicy := func(policy *api.NetworkPolicy) {
-			log.WithField("policy", dumpPolicy(policy)).Info("Creating policy")
-			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+		createPolicy := func(policy *api.GlobalNetworkPolicy) {
+			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
+			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -129,7 +105,7 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 				Protocol: "tcp",
 			}
 
-			pol := api.NewNetworkPolicy()
+			pol := api.NewGlobalNetworkPolicy()
 			pol.Namespace = "fv"
 			pol.Name = "policy-1"
 			pol.Spec.Ingress = []api.Rule{
@@ -141,6 +117,11 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 					Destination: api.EntityRule{
 						Selector: "has(allow-as-dest)",
 					},
+				},
+			}
+			pol.Spec.Egress = []api.Rule{
+				{
+					Action: "Allow",
 				},
 			}
 			pol.Spec.Selector = "all()"
@@ -161,6 +142,7 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			cc.ExpectNone(w[3], w[0])
 			cc.ExpectNone(w[3], w[1])
 			cc.ExpectNone(w[3], w[2])
+			cc.CheckConnectivity()
 		})
 
 		It("with network sets matching some workloads, should have expected connectivity", func() {
@@ -174,7 +156,8 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			srcNS.Labels = map[string]string{
 				"allow-as-source": "",
 			}
-			client.GlobalNetworkSets().Create(utils.Ctx, srcNS, utils.NoOptions)
+			_, err := client.GlobalNetworkSets().Create(utils.Ctx, srcNS, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
 
 			destNS := api.NewGlobalNetworkSet()
 			destNS.Name = "ns-2"
@@ -185,7 +168,8 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			destNS.Labels = map[string]string{
 				"allow-as-dest": "",
 			}
-			client.GlobalNetworkSets().Create(utils.Ctx, destNS, utils.NoOptions)
+			_, err = client.GlobalNetworkSets().Create(utils.Ctx, destNS, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
 
 			cc.ExpectNone(w[0], w[1]) // not in dest net set
 			cc.ExpectSome(w[0], w[2])
@@ -200,6 +184,7 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			cc.ExpectNone(w[3], w[0])
 			cc.ExpectNone(w[3], w[1])
 			cc.ExpectNone(w[3], w[2])
+			cc.CheckConnectivity()
 		})
 
 		AfterEach(func() {
@@ -339,7 +324,7 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			wg.Wait()
 
 			// getFelixPIDs may return more than one PID, transiently due to Felix calling fork().
-			Eventually(getFelixPIDs).Should(ConsistOf(felixPID))
+			Expect(felix.GetFelixPID()).To(Equal(felixPID))
 		})
 	})
 })

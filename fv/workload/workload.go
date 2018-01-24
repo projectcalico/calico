@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,12 +66,12 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *containers.Container, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
+func Run(c *containers.Felix, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
 
 	// Build unique workload name and struct.
 	workloadIdx++
 	w = &Workload{
-		C:             c,
+		C:             c.Container,
 		Name:          fmt.Sprintf("%s-idx%v", name, workloadIdx),
 		InterfaceName: interfaceName,
 		IP:            ip,

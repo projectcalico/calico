@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,13 +44,13 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Container
+		felix  *containers.Felix
 		client client.Interface
 		w      [2]*workload.Workload
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()

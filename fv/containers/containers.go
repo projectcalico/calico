@@ -196,6 +196,21 @@ func (c *Container) GetPIDs(processName string) []int {
 	return pids
 }
 
+func (c *Container) GetSinglePID(processName string) int {
+	// Get the process's PID.  This retry loop ensures that we don't get tripped up if we see multiple
+	// PIDs, which can happen transiently when a process restarts/forks off a subprocess.
+	start := time.Now()
+	for {
+		pids := c.GetPIDs(processName)
+		if len(pids) == 1 {
+			return pids[0]
+		}
+		Expect(time.Since(start)).To(BeNumerically("<", time.Second),
+			"Timed out waiting for there to be a single PID")
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func (c *Container) WaitUntilRunning() {
 	log.Info("Wait for container to be listed in docker ps")
 
@@ -337,50 +352,51 @@ func RunEtcd() *Container {
 		"--listen-client-urls", "http://0.0.0.0:2379")
 }
 
-func RunFelix(etcdIP string, options TopologyOptions) *Container {
+type Felix struct {
+	*Container
+}
+
+func (f *Felix) GetFelixPID() int {
+	return f.GetSinglePID("calico-felix")
+}
+
+func (f *Felix) GetFelixPIDs() []int {
+	return f.GetPIDs("calico-felix")
+}
+
+func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
-	return Run("felix",
-		RunOpts{AutoRemove: true},
-		"--privileged",
-		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
-		"-e", "FELIX_LOGSEVERITYSCREEN="+options.felixLogSeverity(),
-		"-e", "FELIX_DATASTORETYPE=etcdv3",
-		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT=false",
-		"calico/felix:latest")
+	return &Felix{
+		Container: Run("felix",
+			RunOpts{AutoRemove: true},
+			"--privileged",
+			"-e", "CALICO_DATASTORE_TYPE=etcdv3",
+			"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
+			"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
+			"-e", "FELIX_DATASTORETYPE=etcdv3",
+			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
+			"-e", "FELIX_USAGEREPORTINGENABLED=false",
+			"-e", "FELIX_IPV6SUPPORT=false",
+			"calico/felix:latest"),
+	}
 }
 
 type TopologyOptions struct {
 	FelixLogSeverity string
 }
 
-func (o TopologyOptions) felixLogSeverity() string {
-	if o.FelixLogSeverity == "" {
-		return "debug"
+func DefaultTopologyOptions() TopologyOptions {
+	return TopologyOptions{
+		FelixLogSeverity: "debug",
 	}
-	return o.FelixLogSeverity
 }
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology(options ...TopologyOptions) (felix, etcd *Container, calicoClient client.Interface) {
-	felixes, etcd, calicoClient := StartNNodeEtcdTopology(1, options...)
+func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *Container, calicoClient client.Interface) {
+	felixes, etcd, calicoClient := StartNNodeEtcdTopology(1, options)
 	felix = felixes[0]
 	return
-}
-
-// StartTwoNodeEtcdTopology starts an etcd container and a pair of Felix hosts connected
-// with IPIP.
-//
-// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
-//   but (for simplicity) we don't actually use IPAM to assign IPs.
-// - Configures routes between the two "hosts", giving each host 10.65.x.0/24, where x is the
-//   index in the returned array.  When creating workloads, use IPs from the relevant block.
-// - Configures the Tunnel IP as 10.65.x.1
-func StartTwoNodeEtcdTopology(options ...TopologyOptions) (felixes []*Container, etcd *Container, client client.Interface) {
-	return StartNNodeEtcdTopology(2, options...)
 }
 
 // StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
@@ -391,12 +407,8 @@ func StartTwoNodeEtcdTopology(options ...TopologyOptions) (felixes []*Container,
 // - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
 //   index in the returned array.  When creating workloads, use IPs from the relevant block.
 // - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeEtcdTopology(n int, topoOptions ...TopologyOptions) (felixes []*Container, etcd *Container, client client.Interface) {
+func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *Container, client client.Interface) {
 	log.Infof("Starting a %d-node etcd topology.", n)
-	var opts TopologyOptions
-	if len(topoOptions) > 0 {
-		opts = topoOptions[0]
-	}
 	success := false
 	var err error
 	defer func() {

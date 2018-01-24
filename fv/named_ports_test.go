@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Container
+		felix  *containers.Felix
 		client client.Interface
 		w      [4]*workload.Workload
 		cc     *workload.ConnectivityChecker
@@ -80,7 +80,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
@@ -197,7 +197,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	})
 
 	createPolicy := func(policy *api.NetworkPolicy) {
-		log.WithField("policy", dumpPolicy(policy)).Info("Creating policy")
+		log.WithField("policy", dumpResource(policy)).Info("Creating policy")
 		_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -336,7 +336,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
-				dumpPolicy(pol),
+				dumpResource(pol),
 			)
 		},
 
@@ -438,7 +438,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
-				dumpPolicy(policy),
+				dumpResource(policy),
 			)
 		}
 		It("should have expected connectivity", expectBaselineConnectivity)
@@ -466,7 +466,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
+					dumpResource(policy),
 				)
 			})
 		})
@@ -497,7 +497,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
+					dumpResource(policy),
 				)
 			})
 		})
@@ -517,7 +517,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 				Equal(cc.ExpectedConnectivity()),
-				dumpPolicy(policy),
+				dumpResource(policy),
 			)
 		}
 
@@ -643,7 +643,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 						Equal(cc.ExpectedConnectivity()),
-						dumpPolicy(policy),
+						dumpResource(policy),
 					)
 				})
 			})
@@ -677,7 +677,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
 					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
+					dumpResource(policy),
 				)
 			})
 		})
@@ -688,7 +688,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	var (
 		etcd              *containers.Container
-		felix             *containers.Container
+		felix             *containers.Felix
 		client            client.Interface
 		nginx             *workload.Workload
 		nginxClient       *workload.Workload
@@ -698,7 +698,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Create a namespace profile and write to the datastore.
 		defaultProfile := api.NewProfile()
@@ -826,7 +826,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 var _ = Describe("tests with mixed TCP/UDP", func() {
 	var (
 		etcd                        *containers.Container
-		felix                       *containers.Container
+		felix                       *containers.Felix
 		client                      client.Interface
 		targetTCPWorkload           *workload.Workload
 		targetUDPWorkload           *workload.Workload
@@ -837,7 +837,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Create a profile that opens up traffic by default.
 		defaultProfile := api.NewProfile()
@@ -969,9 +969,11 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	})
 })
 
-func dumpPolicy(pol *api.NetworkPolicy) string {
+func dumpResource(pol interface {
+	GetName() string
+}) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
-	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
-		pol.Name, pol.Spec, string(jsonPol))
+	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tObject: %+v\n\tJSON:\n\t%s",
+		pol.GetName(), pol, string(jsonPol))
 	return polDump
 }
