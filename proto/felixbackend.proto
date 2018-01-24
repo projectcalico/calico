@@ -2,6 +2,24 @@ syntax = "proto3";
 package felix;
 option go_package = "proto";
 
+service PolicySync {
+  // On this API, only the following payloads will be sent:
+  //  - InSync
+  //  - IPSetUpdate
+  //  - IPSetDeltaUpdate
+  //  - IPSetRemove
+  //  - ActiveProfileUpdate
+  //  - ActiveProfileRemove
+  //  - ActivePolicyUpdate
+  //  - ActivePolicyRemove
+  //  - WorkloadEndpointUpdate
+  //  - WorkloadEndpointRemove
+  rpc Sync(SyncRequest) returns (stream ToDataplane);
+}
+
+message SyncRequest {
+}
+
 // Rationale for having explicit Remove messages rather than sending and update
 // with empty payload (which is the convention we used to use in Felix):
 // protobuf and golang use zero values to indicate missing data and that makes

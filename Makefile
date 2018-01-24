@@ -285,7 +285,7 @@ protobuf: proto/felixbackend.pb.go
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}/proto:/src:rw \
 	              calico/protoc$(ARCHTAG) \
-	              --gogofaster_out=. \
+	              --gogofaster_out=plugins=grpc:. \
 	              felixbackend.proto
 
 # Update the vendored dependencies with the latest upstream versions matching
