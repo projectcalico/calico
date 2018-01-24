@@ -16,6 +16,7 @@ package syncher
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
@@ -80,6 +81,8 @@ func processUpdate(store *policystore.PolicyStore, update *proto.ToDataplane) {
 		processWorkloadEndpointUpdate(store, payload.WorkloadEndpointUpdate)
 	case *proto.ToDataplane_WorkloadEndpointRemove:
 		processWorkloadEndpointRemove(store, payload.WorkloadEndpointRemove)
+	default:
+		panic(fmt.Sprintf("unknown payload %v", update.String()))
 	}
 }
 
@@ -93,10 +96,10 @@ func processIPSetUpdate(store *policystore.PolicyStore, update *proto.IPSetUpdat
 	log.WithFields(log.Fields{
 		"id": update.Id,
 	}).Debug("Processing IPSetUpdate")
-	s := store.IPSetByID[update.Id]
-	if s == nil {
-		s = policystore.NewIPSet(update.Type)
-	}
+
+	// IPSetUpdate replaces the existing set.
+	s := policystore.NewIPSet(update.Type)
+	store.IPSetByID[update.Id] = s
 	for _, addr := range update.Members {
 		s.AddString(addr)
 	}
@@ -108,7 +111,8 @@ func processIPSetDeltaUpdate(store *policystore.PolicyStore, update *proto.IPSet
 	}).Debug("Processing IPSetDeltaUpdate")
 	s := store.IPSetByID[update.Id]
 	if s == nil {
-		log.Fatalf("Unknown IPSet id: %v", update.Id)
+		log.Errorf("Unknown IPSet id: %v", update.Id)
+		panic("unknown IPSet id")
 	}
 	for _, addr := range update.AddedMembers {
 		s.AddString(addr)
@@ -130,7 +134,8 @@ func processActiveProfileUpdate(store *policystore.PolicyStore, update *proto.Ac
 		"id": update.Id,
 	}).Debug("Processing ActiveProfileUpdate")
 	if update.Id == nil {
-		log.Fatal("got ActiveProfileUpdate with nil ProfileID")
+		log.Error("got ActiveProfileUpdate with nil ProfileID")
+		panic("got ActiveProfileUpdate with nil ProfileID")
 	}
 	store.ProfileByID[*update.Id] = update.Profile
 }
@@ -140,7 +145,8 @@ func processActiveProfileRemove(store *policystore.PolicyStore, update *proto.Ac
 		"id": update.Id,
 	}).Debug("Processing ActiveProfileRemove")
 	if update.Id == nil {
-		log.Fatal("got ActiveProfileRemove with nil ProfileID")
+		log.Error("got ActiveProfileRemove with nil ProfileID")
+		panic("got ActiveProfileRemove with nil ProfileID")
 	}
 	delete(store.ProfileByID, *update.Id)
 }
@@ -150,7 +156,8 @@ func processActivePolicyUpdate(store *policystore.PolicyStore, update *proto.Act
 		"id": update.Id,
 	}).Debug("Processing ActivePolicyUpdate")
 	if update.Id == nil {
-		log.Fatal("got ActivePolicyUpdate with nil PolicyID")
+		log.Error("got ActivePolicyUpdate with nil PolicyID")
+		panic("got ActivePolicyUpdate with nil PolicyID")
 	}
 	store.PolicyByID[*update.Id] = update.Policy
 }
@@ -160,7 +167,8 @@ func processActivePolicyRemove(store *policystore.PolicyStore, update *proto.Act
 		"id": update.Id,
 	}).Debug("Processing ActivePolicyRemove")
 	if update.Id == nil {
-		log.Fatal("got ActivePolicyRemove with nil PolicyID")
+		log.Error("got ActivePolicyRemove with nil PolicyID")
+		panic("got ActivePolicyRemove with nil PolicyID")
 	}
 	delete(store.PolicyByID, *update.Id)
 }

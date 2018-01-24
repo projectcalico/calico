@@ -35,3 +35,6 @@ import:
   version: v0.0.5
 - package: github.com/googleapis/googleapis
 - package: google.golang.org/genproto/googleapis/
+- package: github.com/onsi/gomega
+  version: ^1.1.0
+- package: github.com/gogo/protobuf

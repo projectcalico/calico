@@ -21,6 +21,7 @@ import (
 	syncapi "github.com/projectcalico/app-policy/proto"
 
 	log "github.com/sirupsen/logrus"
+	"strings"
 )
 
 type IPSet interface {
@@ -85,7 +86,8 @@ func (m ipPortMapSet) RemoveString(ip string) {
 
 func (m ipPortMapSet) ContainsAddress(addr *envoyapi.Address) bool {
 	sck := addr.GetSocketAddress()
-	key := fmt.Sprintf("%v,%v:%d", sck.GetAddress(), sck.GetProtocol(), sck.GetPortValue())
+	p := strings.ToLower(sck.GetProtocol().String())
+	key := fmt.Sprintf("%v,%v:%d", sck.GetAddress(), p, sck.GetPortValue())
 	log.WithFields(log.Fields{
 		"proto": addr.String(),
 		"key":   key,

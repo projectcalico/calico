@@ -27,13 +27,12 @@ import (
 
 type (
 	auth_server struct {
-		NodeName string
-		Store    *policystore.PolicyStore
+		Store *policystore.PolicyStore
 	}
 )
 
-func NewServer(nodeName string, store *policystore.PolicyStore) *auth_server {
-	return &auth_server{nodeName, store}
+func NewServer(store *policystore.PolicyStore) *auth_server {
+	return &auth_server{store}
 }
 
 func (as *auth_server) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {

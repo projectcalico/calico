@@ -36,16 +36,16 @@ const (
 	DENY
 	LOG
 	PASS
+	NO_MATCH // Indicates policy did not match request. Cannot be assigned to rule.
 )
 
 // Check a list of policies and return OK if the check passes, or PERMISSION_DENIED if the check fails.
 // Note, if no policy matches, the default is PERMISSION_DENIED.
 func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s status.Status) {
-	s = status.Status{}
+	s = status.Status{Code: PERMISSION_DENIED}
 	ep := store.Endpoint
 	if ep == nil {
 		log.Warning("CheckRequest before we synced Endpoint information.")
-		s.Code = PERMISSION_DENIED
 		return
 	}
 	if len(ep.Tiers) > 0 {
@@ -53,29 +53,49 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 
 		tier := ep.Tiers[0]
 		policies := tier.IngressPolicies
-		if len(policies) == 0 {
-			log.Debug("0 active policies, allow request.")
-			s.Code = OK
-		} else {
-			// If there are active policies, the default is deny if no rules match.
-			s.Code = PERMISSION_DENIED
-		}
+	Policy:
 		for i, name := range policies {
 			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
 			action := checkPolicy(policy, req)
-			log.Debugf("Policy %d %v returned action %s", i, pID, action)
+			log.Debugf("Policy %d %v returned action %v", i, pID, action)
 			switch action {
+			case NO_MATCH:
+				continue
+			// If the Policy matches, end evaluation (skipping profiles, if any)
+			case ALLOW:
+				s.Code = OK
+				return
+			case LOG, DENY:
+				s.Code = PERMISSION_DENIED
+				return
 			case PASS:
+				// Pass means end evaluation of policies and proceed to profiles, if any.
+				break Policy
+			}
+		}
+	}
+	// If we reach here, there were either no policies, or none that matched.
+	if len(ep.ProfileIds) > 0 {
+		for i, name := range ep.ProfileIds {
+			pID := proto.ProfileID{Name: name}
+			profile := store.ProfileByID[pID]
+			action := checkProfile(profile, req)
+			log.Debugf("Profile %d %v returned action %v", i, name, action)
+			switch action {
+			case NO_MATCH:
 				continue
 			case ALLOW:
 				s.Code = OK
-				break
-			case LOG, DENY:
+				return
+			case LOG, DENY, PASS:
 				s.Code = PERMISSION_DENIED
-				break
+				return
 			}
 		}
+	} else {
+		log.Debug("0 active profiles, deny request.")
+		s.Code = PERMISSION_DENIED
 	}
 	return
 }
@@ -83,14 +103,21 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 // checkPolicy checks if the policy matches the request data, and returns the action.
 func checkPolicy(policy *proto.Policy, req *authz.CheckRequest) (action Action) {
 	// Note that we support only inbound policy.
-	for _, r := range policy.InboundRules {
+	return checkRules(policy.InboundRules, req)
+}
+
+func checkProfile(p *proto.Profile, req *authz.CheckRequest) (action Action) {
+	return checkRules(p.InboundRules, req)
+}
+
+func checkRules(rules []*proto.Rule, req *authz.CheckRequest) (action Action) {
+	for _, r := range rules {
 		if match(r, req) {
 			log.Debugf("Rule matched.")
 			return ActionFromString(r.Action)
 		}
 	}
-	// Default for unmatched policy is "pass"
-	return PASS
+	return NO_MATCH
 }
 
 func ActionFromString(s string) Action {
@@ -102,7 +129,8 @@ func ActionFromString(s string) Action {
 	}
 	a, found := m[strings.ToLower(s)]
 	if !found {
-		log.Fatalf("Got bad action %v", s)
+		log.Errorf("Got bad action %v", s)
+		panic("got bad action")
 	}
 	return a
 }
