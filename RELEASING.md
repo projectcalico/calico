@@ -76,6 +76,9 @@ release is announced.
 1. Push the tag.
 1. Create a GitHub release on the Calico repo, upload the release file (calico_node/release-<VERSION>.tgz), and post the updated
    release notes (see above for details).
+1. Run `make update_canonical_urls OLD=vX.Y NEW=vX.Y` to switch the canonical URLs to the latest release version number. Pass in the number of the previous release via `OLD` and the number of the current latest release via `NEW`. Example: `make update_canonical_urls OLD=v3.0 NEW=v3.1`, where `3.0` was the previous latest and `3.1` is the new latest release.
+1. Test the changes locally by running `htmlproofer` then open a pull request, make sure it passes CI and get it reviewed. 
+    NOTE: You may experience `htmlproofer` errors at this stage if a page was deleted or renamed in the `master` directory. Such errors can also occur if a page was deleted or renamed in the latest release and the `master` directories but the canonical links were not updated according to the instructions in CONTRIBUTING_DOCS.md. Modify the `canonical_url` metadata of the pages that error out so that they point to valid locations. If the page was deleted, adjust the version number of the canonical URLs to the final copy of the page. If the page was renamed, update the canonical URLs to the new path.
 
 ### Performing a "patch" release
 Patch releases shouldn't include any new functionality, just bug fixes (expect during pre-release testing).
