@@ -114,19 +114,21 @@ func (r resourcePrinterTable) print(client client.Interface, resources []runtime
 		if err != nil {
 			return err
 		}
+		log.WithField("template", tpls).Debug("Got resource template")
 
 		// Convert the template string into a template - we need to include the join
 		// function.
 		fns := template.FuncMap{
-			"join":   join,
-			"config": config(client),
+			"join":            join,
+			"joinAndTruncate": joinAndTruncate,
+			"config":          config(client),
 		}
 		tmpl, err := template.New("get").Funcs(fns).Parse(tpls)
 		if err != nil {
 			panic(err)
 		}
 
-		// Use a tabwriter to write out the teplate - this provides better formatting.
+		// Use a tabwriter to write out the template - this provides better formatting.
 		writer := tabwriter.NewWriter(os.Stdout, 5, 1, 3, ' ', 0)
 		err = tmpl.Execute(writer, resource)
 		if err != nil {
@@ -171,8 +173,9 @@ func (r resourcePrinterTemplate) print(client client.Interface, resources []runt
 	// We include a join function in the template as it's useful for multi
 	// value columns.
 	fns := template.FuncMap{
-		"join":   join,
-		"config": config(client),
+		"join":            join,
+		"joinAndTruncate": joinAndTruncate,
+		"config":          config(client),
 	}
 	tmpl, err := template.New("get").Funcs(fns).Parse(r.template)
 	if err != nil {
@@ -187,29 +190,35 @@ func (r resourcePrinterTemplate) print(client client.Interface, resources []runt
 // each to its string representation and joins them together with the provided separator
 // string.
 func join(items interface{}, separator string) string {
-	// If this is a slice of strings - just use the strings.Join function.
-	switch s := items.(type) {
-	case []string:
-		return strings.Join(s, separator)
+	return joinAndTruncate(items, separator, 0)
+}
+
+// joinAndTruncate is similar to strings.Join() but takes an arbitrary slice of interfaces and converts
+// each to its string representation, joins them together with the provided separator
+// string and (if maxLen is >0) truncates the output at the given maximum length.
+func joinAndTruncate(items interface{}, separator string, maxLen int) string {
+	if reflect.TypeOf(items).Kind() != reflect.Slice {
+		// Input wasn't a slice, convert it to one so we can take advantage of shared
+		// buffer/truncation logic...
+		items = []interface{}{items}
 	}
 
-	// Otherwise, provided this is a slice, just convert each item to a string and
-	// join together.
-	switch reflect.TypeOf(items).Kind() {
-	case reflect.Slice:
-		slice := reflect.ValueOf(items)
-		buf := new(bytes.Buffer)
-		for i := 0; i < slice.Len(); i++ {
-			if i > 0 {
-				buf.WriteString(separator)
-			}
-			fmt.Fprint(buf, slice.Index(i).Interface())
+	slice := reflect.ValueOf(items)
+	buf := new(bytes.Buffer)
+	for i := 0; i < slice.Len(); i++ {
+		if i > 0 {
+			buf.WriteString(separator)
 		}
-		return buf.String()
+		fmt.Fprint(buf, slice.Index(i).Interface())
+		if maxLen > 0 && buf.Len() > maxLen {
+			// Break out early so that we don't have to stringify a long list, only to then throw it away.
+			const truncationSuffix = "..."
+			buf.Truncate(maxLen-len(truncationSuffix))
+			buf.WriteString(truncationSuffix)
+			break
+		}
 	}
-
-	// The supplied items is not a slice - so just convert to a string.
-	return fmt.Sprint(items)
+	return buf.String()
 }
 
 // config returns a function that returns the current global named config

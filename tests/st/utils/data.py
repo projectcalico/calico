@@ -24,6 +24,7 @@
 #
 # The key attributes provide some useful additonal data, for example (a v4 specific
 # resource).
+import netaddr
 
 from utils import API_VERSION
 
@@ -310,6 +311,46 @@ globalnetworkpolicy_name1_rev2 = {
                 'protocol': 'UDP',
             },
         ],
+    }
+}
+
+
+#
+# Global network sets
+#
+
+globalnetworkset_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'GlobalNetworkSet',
+    'metadata': {
+        'name': 'net-set1',
+    },
+    'spec': {
+        'nets': [
+            "10.0.0.1",
+            "11.0.0.0/16",
+            "feed:beef::1",
+            "dead:beef::96",
+        ]
+    }
+}
+
+# A network set with a large number of entries.  In prototyping this test, I found that there are
+# "upstream" limits that cap how large we can go:
+#
+# - Kubernetes' gRPC API has a 4MB message size limit.
+# - etcdv3 has a 1MB value size limit.
+many_nets = []
+for i in xrange(10000):
+    many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
+globalnetworkset_name1_rev1_large = {
+    'apiVersion': API_VERSION,
+    'kind': 'GlobalNetworkSet',
+    'metadata': {
+        'name': 'net-set1',
+    },
+    'spec': {
+        'nets': many_nets,
     }
 }
 
