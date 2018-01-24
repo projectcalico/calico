@@ -42,11 +42,10 @@ You must have a cluster which meets the following requirements:
 
 ## Installation
 
-This document describes three installation options for Calico using Kubernetes API as the datastore:
+This document describes two installation options for Calico using Kubernetes API as the datastore:
 
 1. Calico policy with Calico networking (beta)
 2. Calico policy-only with user-supplied networking
-3. Calico policy-only with flannel networking
 
 Ensure you have a cluster which meets the above requirements.  There may be additional requirements based on the installation option you choose.
 
@@ -129,14 +128,6 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 >[Click here to view the above yaml directly.](policy-only/1.7/calico.yaml)
 
-
-### 3. Calico policy-only with flannel networking
-
-The [Canal](https://github.com/projectcalico/canal) project provides a way to easily deploy
-Calico with flannel networking.
-
-Refer to the following [Kubernetes self-hosted install guide](https://github.com/projectcalico/canal/blob/master/k8s-install/README.md)
-in the Canal project for details on installing Calico with flannel.
 
 ## Try it out
 
