@@ -38,7 +38,7 @@ import:
 - package: github.com/prometheus/procfs
   version: b15cd069a83443be3154b719d0cc9fe8117f09fb
 - package: github.com/gogo/protobuf
-  version: ^0.3.0
+  version: ^0.5.0
 - package: google.golang.org/grpc
   repo: https://github.com/grpc/grpc-go.git
   version: v1.9.2
