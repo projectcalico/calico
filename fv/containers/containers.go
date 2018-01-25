@@ -45,6 +45,8 @@ type Container struct {
 
 	mutex    sync.Mutex
 	binaries set.Set
+
+	logFinished sync.WaitGroup
 }
 
 var containerIdx = 0
@@ -52,13 +54,70 @@ var containerIdx = 0
 func (c *Container) Stop() {
 	if c == nil {
 		log.Info("Stop no-op because nil container")
-	} else if c.runCmd == nil {
-		log.WithField("container", c).Info("Stop no-op because container is not running")
-	} else {
-		log.WithField("container", c).Info("Stop")
-		c.runCmd.Process.Signal(os.Interrupt)
-		c.WaitNotRunning(60 * time.Second)
+		return
 	}
+
+	logCxt := log.WithField("container", c.Name)
+	if c.runCmd == nil {
+		logCxt.Info("Stop no-op because container is not running")
+		return
+	}
+
+	logCxt.Info("Stop")
+
+	// Ask docker to stop the container.
+	c.execDockerStop()
+	// Shut down the docker run process (if needed).
+	c.signalDockerRun(os.Interrupt)
+
+	// Wait for the container to exit, then escalate to killing it.
+	startTime := time.Now()
+	for {
+		if !c.ListedInDockerPS() {
+			// Container has stopped.
+			logCxt.Info("Container stopped")
+			c.logFinished.Wait()
+			return
+		}
+		if time.Since(startTime) > 2*time.Second {
+			logCxt.Info("Container didn't stop, asking docker to kill it")
+			err := exec.Command("docker", "kill", c.Name).Run()
+			logCxt.WithError(err).Info("Ran 'docker kill'")
+			c.signalDockerRun(os.Kill)
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	c.WaitNotRunning(60 * time.Second)
+	logCxt.Info("Container stopped")
+	c.logFinished.Wait()
+}
+
+func (c *Container) execDockerStop() {
+	logCxt := log.WithField("container", c.Name)
+	logCxt.Info("Executing 'docker stop'")
+	cmd := exec.Command("docker", "stop", c.Name)
+	err := cmd.Run()
+	if err != nil {
+		logCxt.WithError(err).WithField("cmd", cmd).Error("docker stop command failed")
+		return
+	}
+	logCxt.Info("'docker stop' returned success")
+}
+
+func (c *Container) signalDockerRun(sig os.Signal) {
+	logCxt := log.WithFields(log.Fields{
+		"container": c.Name,
+		"signal":    sig,
+	})
+	logCxt.Info("Sending signal to 'docker run' process")
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.runCmd == nil {
+		return
+	}
+	c.runCmd.Process.Signal(sig)
+	logCxt.Info("Signalled docker run")
 }
 
 type RunOpts struct {
@@ -95,8 +154,9 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Merge container's output into our own logging.
-	go copyOutputToLog(c.Name, "stdout", stdout)
-	go copyOutputToLog(c.Name, "stderr", stderr)
+	c.logFinished.Add(2)
+	go copyOutputToLog(c.Name, "stdout", stdout, &c.logFinished)
+	go copyOutputToLog(c.Name, "stderr", stderr, &c.logFinished)
 
 	// Note: it might take a long time for the container to start running, e.g. if the image
 	// needs to be downloaded.
@@ -125,8 +185,9 @@ func (c *Container) Start() {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Merge container's output into our own logging.
-	go copyOutputToLog(c.Name, "stdout", stdout)
-	go copyOutputToLog(c.Name, "stderr", stderr)
+	c.logFinished.Add(2)
+	go copyOutputToLog(c.Name, "stdout", stdout, &c.logFinished)
+	go copyOutputToLog(c.Name, "stderr", stderr, &c.logFinished)
 
 	c.WaitUntilRunning()
 
@@ -143,7 +204,8 @@ func (c *Container) Remove() {
 	log.WithField("container", c).Info("Removed container.")
 }
 
-func copyOutputToLog(name string, streamName string, stream io.Reader) {
+func copyOutputToLog(name string, streamName string, stream io.Reader, done *sync.WaitGroup) {
+	defer done.Done()
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
 		log.Info(name, "[", streamName, "] ", scanner.Text())
@@ -153,7 +215,7 @@ func copyOutputToLog(name string, streamName string, stream io.Reader) {
 		"stream": stream,
 	})
 	if scanner.Err() != nil {
-		logCxt.WithError(scanner.Err()).Warn("Error reading container stream")
+		logCxt.WithError(scanner.Err()).Error("Non-EOF error reading container stream")
 	}
 	logCxt.Info("Stream finished")
 }
