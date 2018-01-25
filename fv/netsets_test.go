@@ -54,7 +54,9 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		topologyOptions := containers.DefaultTopologyOptions()
+		topologyOptions.FelixLogSeverity = "debug"
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = felix.GetFelixPID()
 	})
 
@@ -312,7 +314,7 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 			go func() {
 				defer wg.Done()
 				defer log.Info("Finished churning policies")
-				churnPolicies(3)
+				churnPolicies(6)
 			}()
 			go func() {
 				RegisterFailHandler(Fail)
