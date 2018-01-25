@@ -466,7 +466,7 @@ type TopologyOptions struct {
 
 func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
-		FelixLogSeverity: "debug",
+		FelixLogSeverity: "info",
 	}
 }
 
