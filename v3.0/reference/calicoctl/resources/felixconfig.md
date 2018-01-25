@@ -38,7 +38,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| ipv6Support | IPv6 support for Felix | true, false | boolean | `false` |
+| ipv6Support | IPv6 support for Felix | true, false | boolean | `true` |
 | logFilePath | The full path to the Felix log. Set to `""` to disable file logging. | string | string | `/var/log/calico/felix.log` |
 | logSeveritySys | The log severity above which logs are sent to the syslog. Set to `""` for no logging to syslog. | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | logSeverityFile| The log severity above which logs are sent to the log file. | Same as `logSeveritySys` | string | `Info` |
