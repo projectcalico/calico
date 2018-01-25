@@ -284,7 +284,7 @@ protobuf: proto/felixbackend.pb.go
 # Generate the protobuf bindings for go.
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}/proto:/src:rw \
-	              calico/protoc$(ARCHTAG):gogo-v0.5 \
+	              calico/protoc$(ARCHTAG) \
 	              --gogofaster_out=plugins=grpc:. \
 	              felixbackend.proto
 

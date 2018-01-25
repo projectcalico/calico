@@ -1,5 +1,5 @@
-hash: 04ce4a01dc537df5cd32979376aadbbf8dfa352a9f74a6c1e3a67fc946254b39
-updated: 2018-01-24T12:50:18.217744799Z
+hash: 0d454a9146af30a997fc6e21d5db5fc1f6d9884979060e33b8fa5f6a6058c202
+updated: 2018-01-25T15:14:27.730948012-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -110,7 +110,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 7ce9f81585a31f4d6528d46bce26919f325deb94
+  version: 48d644b006ba26f1793bffc46396e981801078e3
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -180,11 +180,6 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
-- name: github.com/opentracing/opentracing-go
-  version: 216894e5277dc6098f93ceca97beb6101610b418
-  subpackages:
-  - ext
-  - log
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
@@ -252,7 +247,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 89604d197083d4781071d3c65855d24ecfb0a563
+  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -272,15 +267,15 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 5f5d5cddcf414bb44941b9c6c0d2df31253ec40e
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 3d37316aaa6bd9929127ac9a527abf408178ea7b
+  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -335,7 +330,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
   subpackages:
   - internal
   - internal/app_identity
@@ -346,33 +341,18 @@ imports:
   - internal/remote_api
   - internal/urlfetch
   - urlfetch
-- name: google.golang.org/genproto
-  version: 14790a1795ea4c3387aaf24aed670ddb51f18292
-  subpackages:
-  - googleapis/rpc/status
 - name: google.golang.org/grpc
-  version: 6b51017f791ae1cfbec89c52efdf444b13b550ef
-  repo: https://github.com/grpc/grpc-go.git
+  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
   subpackages:
-  - balancer
-  - balancer/base
-  - balancer/roundrobin
   - codes
-  - connectivity
   - credentials
-  - encoding
-  - grpclb/grpc_lb_v1/messages
   - grpclog
   - internal
   - keepalive
   - metadata
   - naming
   - peer
-  - resolver
-  - resolver/dns
-  - resolver/passthrough
   - stats
-  - status
   - tap
   - transport
 - name: gopkg.in/go-playground/validator.v8
