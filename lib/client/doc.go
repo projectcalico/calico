@@ -23,7 +23,7 @@ definitions for each resource type are defined in the following package:
 	github.com/projectcalico/libcalico-go/lib/api
 
 The client has a number of methods that return interfaces for managing:
-    -  BGP Peer resources
+	-  BGP Peer resources
 	-  Policy resources
 	-  IP Pool resources
 	-  Host endpoint resources
