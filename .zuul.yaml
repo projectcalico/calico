@@ -1,5 +1,4 @@
 - project:
-    name: openstack/networking-calico
     check:
       jobs:
         - networking-calico-tempest-dsvm
