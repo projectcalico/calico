@@ -55,7 +55,6 @@ var _ = Context("Network sets churn test with initialized Felix and etcd datasto
 
 	BeforeEach(func() {
 		topologyOptions := containers.DefaultTopologyOptions()
-		topologyOptions.FelixLogSeverity = "debug"
 		felix, etcd, client = containers.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = felix.GetFelixPID()
 	})
