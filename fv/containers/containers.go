@@ -75,7 +75,8 @@ func (c *Container) Stop() {
 	for {
 		if !c.ListedInDockerPS() {
 			// Container has stopped.
-			logCxt.Info("Container stopped")
+			logCxt.Info("Container stopped (no longer listed in 'docker ps')")
+			withTimeout(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
 			withTimeout(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
 			return
 		}
@@ -90,6 +91,7 @@ func (c *Container) Stop() {
 	}
 	c.WaitNotRunning(60 * time.Second)
 	logCxt.Info("Container stopped")
+	withTimeout(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
 	withTimeout(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
 }
 
@@ -298,14 +300,14 @@ func (c *Container) WaitUntilRunning() {
 	go func() {
 		defer close(stoppedChan)
 		err := c.runCmd.Wait()
-		log.WithError(err).WithField("name", c.Name).Info("Container stopped")
+		log.WithError(err).WithField("name", c.Name).Info("Container stopped ('docker run' exited)")
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
 		c.runCmd = nil
 	}()
 
 	for {
-		Expect(stoppedChan).NotTo(BeClosed())
+		Expect(stoppedChan).NotTo(BeClosed(), "Container failed before being listed in 'docker ps'")
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
