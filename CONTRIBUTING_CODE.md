@@ -30,7 +30,7 @@ Once you've agreed on a design for your bugfix or new feature, development again
 1. Make sure that existing tests are passing, and that you've written new tests for any new functionality. Each repository has its own suite of tests. See the README for each
    repository for more information on building and running that repository's tests.
 1. Push your feature branch to your fork on GitHub.
-1. [Create a pull request][pulls] using GitHub, from your fork and branch to projectcalico master.
+1. [Create a pull request][pulls] using GitHub, from your fork and branch to projectcalico `master`.
     1. If you haven't already done so, you will need to agree to our contributor agreement. See [below](#contributor-agreements).
     1. Opening a pull request will automatically run your changes through our CI. Make sure all pre-submit tests pass so that a maintainer can merge your contribution.
 1. Await review from a maintainer.
@@ -40,6 +40,17 @@ Once you've agreed on a design for your bugfix or new feature, development again
     1. If necessary, make a top-level comment along the lines of “Please re-review”, notifying your reviewer, and repeat the above.
     1. Once all the requested changes have been made, your reviewer may ask you to squash your commits. If so, combine the commits into one with a single descriptive message.
     1. Once your PR has been approved and the commits have been squashed, your reviewer will merge the PR. If you have the necessary permissions, you may merge the PR yourself.
+
+#### Patching an older release
+
+If your contribution is intended for an older release, the change will need to be cherry-picked into the appropriate release branch after it has been reviewed
+and merged into master. Once your reviewer agrees the patch is valid for cherry-picking, perform the following steps to create the cherry-pick PR.
+
+1. Check out the release branch corresponding to your target release, for example: `git fetch upstream; git checkout release-v2.5`.
+1. Create the cherry-pick branch, for example: `git checkout -b cherry-pick-pr12345`
+1. Cherry-pick the commit to your new branch: `git cherry-pick [ORIGINAL_COMMIT_HASH]`
+1. Push the branch to your fork and create a PR against the appropriate `release-vX.Y` branch.
+1. Notify your original reviewer on the PR.
 
 ### Release notes
 
