@@ -767,6 +767,38 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete", data=k8s_np)
         rc.assert_error(text=NOT_SUPPORTED)
         rc.assert_error(text=KUBERNETES_NP)
+
+    @parameterized.expand([
+        ('replace'),
+        ('apply'),
+    ])
+    def test_disallow_update_old_resource_version(self, update_cmd):
+        """
+        Test that we disallow updates on resources with old resource versions.
+        """
+        rc = calicoctl("create", data=ippool_name1_rev1_v4)
+        rc.assert_no_error()
+
+        rc = calicoctl(
+                "get ippool %s -o yaml" % name(ippool_name1_rev1_v4))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+
+        rc = calicoctl(update_cmd, data=rev1)
+        rc.assert_no_error()
+
+        rc = calicoctl(
+                "get ippool %s -o yaml" % name(ippool_name1_rev1_v4))
+        rc.assert_no_error()
+        rev2 = rc.decoded
+        self.assertNotEqual(rev1['metadata']['resourceVersion'], rev2['metadata']['resourceVersion'])
+
+        rc = calicoctl(update_cmd, data=rev1)
+        rc.assert_error(text=ERROR_CONFLICT)
+
+        # Delete the resource
+        rc = calicoctl("delete ippool %s" % name(ippool_name1_rev1_v4))
+        rc.assert_no_error()
 #
 #
 # class TestCreateFromFile(TestBase):
