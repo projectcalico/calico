@@ -291,6 +291,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
 	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+	dp.RegisterManager(newHostIPManager(
+		config.RulesConfig.WorkloadIfacePrefixes,
+		rules.IPSetIDThisHostIPs,
+		ipSetsV4,
+		config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		rawTableV4,
@@ -350,6 +355,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
+		dp.RegisterManager(newHostIPManager(
+			config.RulesConfig.WorkloadIfacePrefixes,
+			rules.IPSetIDThisHostIPs,
+			ipSetsV6,
+			config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,

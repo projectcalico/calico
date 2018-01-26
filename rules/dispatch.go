@@ -51,12 +51,12 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 		),
 		r.dispatchChains(
 			names,
-			WorkloadFromEndpointPfx,
 			WorkloadSetEndPointMarkPfx,
-			ChainDispatchFromEndPointMark,
+			WorkloadFromEndpointPfx,
 			ChainDispatchSetEndPointMark,
-			true,
+			ChainDispatchFromEndPointMark,
 			false, // Non forwarded packet will pass through set endpoint mark chain.
+			true,
 			true,
 		)...,
 	)
@@ -195,7 +195,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 
 	// Now, iterate over the prefixes.  If there are multiple names in a prefix, we render a
 	// child chain for that prefix.  Otherwise, we render the rule directly to avoid the cost
-	// of an extra goto.
+	// of an extra goto. Note we need to deal with from-endpoint-mark as to-endpoint-chain.
 	var chains []*Chain
 	for _, prefix := range prefixes {
 		ifaceNames := prefixToNames[prefix]
@@ -225,12 +225,15 @@ func (r *DefaultRuleRenderer) dispatchChains(
 					Target: childFromChainName,
 				},
 			})
-			rootToEndpointRules = append(rootToEndpointRules, Rule{
-				Match: Match().OutInterface(ifaceMatch),
-				Action: GotoAction{
-					Target: childToChainName,
-				},
-			})
+
+			if !useEndPointMark {
+				rootToEndpointRules = append(rootToEndpointRules, Rule{
+					Match: Match().OutInterface(ifaceMatch),
+					Action: GotoAction{
+						Target: childToChainName,
+					},
+				})
+			}
 
 			// ...and child chains.
 			childFromEndpointRules := make([]Rule, 0)
@@ -238,14 +241,14 @@ func (r *DefaultRuleRenderer) dispatchChains(
 			for _, name := range ifaceNames {
 				logCxt.WithField("ifaceName", name).Debug("Adding rule to child chains")
 
+				childFromEndpointRules = append(childFromEndpointRules, Rule{
+					Match: Match().InInterface(name),
+					Action: GotoAction{
+						Target: EndpointChainName(fromEndpointPfx, name),
+					},
+				})
+
 				if !useEndPointMark {
-					// We are working on normal from-endpoint and to-endpoint chain.
-					childFromEndpointRules = append(childFromEndpointRules, Rule{
-						Match: Match().InInterface(name),
-						Action: GotoAction{
-							Target: EndpointChainName(fromEndpointPfx, name),
-						},
-					})
 					childToEndpointRules = append(childToEndpointRules, Rule{
 						Match: Match().OutInterface(name),
 						Action: GotoAction{
@@ -253,15 +256,9 @@ func (r *DefaultRuleRenderer) dispatchChains(
 						},
 					})
 				} else if endPointMark, err := r.epmm.GetEndPointMark(name); err == nil {
-					// We are working on from-endpoint-mark and set-endpoint-mark chain.
-					childFromEndpointRules = append(childFromEndpointRules, Rule{
+					// implement each name into root rules for from-endpoint-mark chain.
+					rootToEndpointRules = append(rootToEndpointRules, Rule{
 						Match: Match().MarkSet(endPointMark),
-						Action: GotoAction{
-							Target: EndpointChainName(fromEndpointPfx, name),
-						},
-					})
-					childToEndpointRules = append(childToEndpointRules, Rule{
-						Match: Match().InInterface(name),
 						Action: GotoAction{
 							Target: EndpointChainName(toEndpointPfx, name),
 						},
@@ -298,7 +295,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				Name:  childToChainName,
 				Rules: childToEndpointRules,
 			}
-			if toEndpointPfx != "" {
+			if toEndpointPfx != "" && !useEndPointMark {
 				chains = append(chains, childFromEndpointChain, childToEndpointChain)
 			} else {
 				// Only emit from endpoint chains.
@@ -310,14 +307,14 @@ func (r *DefaultRuleRenderer) dispatchChains(
 			ifaceName := ifaceNames[0]
 			logCxt.WithField("ifaceName", ifaceName).Debug("Adding rule to root chains")
 
+			rootFromEndpointRules = append(rootFromEndpointRules, Rule{
+				Match: Match().InInterface(ifaceName),
+				Action: GotoAction{
+					Target: EndpointChainName(fromEndpointPfx, ifaceName),
+				},
+			})
+
 			if !useEndPointMark {
-				// We are working on normal from-endpoint and to-endpoint chain.
-				rootFromEndpointRules = append(rootFromEndpointRules, Rule{
-					Match: Match().InInterface(ifaceName),
-					Action: GotoAction{
-						Target: EndpointChainName(fromEndpointPfx, ifaceName),
-					},
-				})
 				rootToEndpointRules = append(rootToEndpointRules, Rule{
 					Match: Match().OutInterface(ifaceName),
 					Action: GotoAction{
@@ -325,21 +322,14 @@ func (r *DefaultRuleRenderer) dispatchChains(
 					},
 				})
 			} else if endPointMark, err := r.epmm.GetEndPointMark(ifaceName); err == nil {
-				// We are working on from-endpoint-mark and set-endpoint-mark chain.
-				rootFromEndpointRules = append(rootFromEndpointRules, Rule{
-					Match: Match().MarkSet(endPointMark),
-					Action: GotoAction{
-						Target: EndpointChainName(fromEndpointPfx, ifaceName),
-					},
-				})
 				rootToEndpointRules = append(rootToEndpointRules, Rule{
-					Match: Match().InInterface(ifaceName),
+					Match: Match().MarkSet(endPointMark),
 					Action: GotoAction{
 						Target: EndpointChainName(toEndpointPfx, ifaceName),
 					},
 				})
-			}
 
+			}
 		}
 	}
 

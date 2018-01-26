@@ -40,7 +40,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
 		r.failsafeInChain(),
-		r.StaticFilterInputForwardCheckChain(),
+		r.StaticFilterInputForwardCheckChain(ipVersion),
 	}
 }
 
@@ -53,17 +53,24 @@ func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain() *Chain {
+func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8) *Chain {
 	var fwRules []Rule
 	var portRanges []*proto.PortRange
 
-	// Temporary
-	hostIPSet := "ipvs4-host-ips"
 	portRange := &proto.PortRange{
 		First: 30000,
 		Last:  32000,
 	}
 	portRanges = append(portRanges, portRange)
+
+	nameForIPSet := func(ipsetID string) string {
+		if ipVersion == 4 {
+			return r.IPSetConfigV4.NameForMainIPSet(ipsetID)
+		} else {
+			return r.IPSetConfigV6.NameForMainIPSet(ipsetID)
+		}
+	}
+	hostIPSet := nameForIPSet(IPSetIDThisHostIPs)
 
 	fwRules = append(fwRules,
 		Rule{
