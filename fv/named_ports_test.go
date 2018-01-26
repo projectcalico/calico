@@ -928,11 +928,11 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		// The profile has a default allow so we should start with connectivity.
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(81))
-		Eventually(tcpCC.ActualConnectivity, "10s", "100ms").Should(Equal(tcpCC.ExpectedConnectivity()))
+		tcpCC.CheckConnectivity()
 
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(81))
-		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
+		udpCC.CheckConnectivity()
 
 		// Then the connectivity should be broken by adding the confused policy.
 		_, err := client.NetworkPolicies().Create(utils.Ctx, allowConfusedProtocolPolicy, utils.NoOptions)
@@ -940,11 +940,11 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		tcpCC.ResetExpectations()
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(81))
-		Eventually(tcpCC.ActualConnectivity, "10s", "100ms").Should(Equal(tcpCC.ExpectedConnectivity()))
+		tcpCC.CheckConnectivity()
 		udpCC.ResetExpectations()
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(81))
-		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
+		udpCC.CheckConnectivity()
 	})
 })
 

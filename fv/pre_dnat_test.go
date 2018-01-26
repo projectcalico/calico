@@ -116,7 +116,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 			cc.ExpectSome(w[1], w[0], 32010)
 			cc.ExpectSome(etcd, w[1], 32011)
 			cc.ExpectSome(etcd, w[0], 32010)
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+			cc.CheckConnectivity()
 		})
 
 		Context("with pre-DNAT policy to prevent access from outside", func() {
@@ -148,7 +148,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 				cc.ExpectSome(w[1], w[0], 32010)
 				cc.ExpectNone(etcd, w[1], 32011)
 				cc.ExpectNone(etcd, w[0], 32010)
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+				cc.CheckConnectivity()
 			})
 
 			Context("with pre-DNAT policy to open pinhole to 32010", func() {
@@ -180,7 +180,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					cc.ExpectSome(w[1], w[0], 32010)
 					cc.ExpectNone(etcd, w[1], 32011)
 					cc.ExpectSome(etcd, w[0], 32010)
-					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+					cc.CheckConnectivity()
 				})
 			})
 
@@ -213,7 +213,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					cc.ExpectSome(w[1], w[0], 32010)
 					cc.ExpectNone(etcd, w[1], 32011)
 					cc.ExpectNone(etcd, w[0], 32010)
-					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+					cc.CheckConnectivity()
 				})
 			})
 		})

@@ -20,6 +20,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -400,6 +401,10 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 }
 
 func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
-	EventuallyWithOffset(1, c.ActualConnectivity(), "60s", "100ms").Should(
+	// Make sure that we retry at least once even if the check itself takes >10s.
+	if reflect.DeepEqual(c.ActualConnectivity(), c.ExpectedConnectivity()) {
+		return
+	}
+	EventuallyWithOffset(1, c.ActualConnectivity(), "10s", "100ms").Should(
 		Equal(c.ExpectedConnectivity()), optionalDescription...)
 }
