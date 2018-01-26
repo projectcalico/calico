@@ -45,6 +45,14 @@ spec:
 | Field  | Description                 | Accepted Values   | Schema | Default    |
 |--------|-----------------------------|-------------------|--------|------------|
 | bgp    | BGP configuration for this node.  Omit if using {{site.prodname}} for policy only. | | [BGP](#bgp) |
+| orchRefs | Correlates this node to a node in another orchestrator. | | list of [OrchRefs](#OrchRef) |
+
+#### OrchRef
+
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| nodeName    | Name of this node according to the orchestrator. | | string |
+| orchestrator | Name of the orchestrator. | k8s | string |
 
 #### BGP 
 
