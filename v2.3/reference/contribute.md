@@ -1,5 +1,6 @@
 ---
 title: Contribution Guidelines
+canonical_url: 'https://docs.projectcalico.org/v2.5/reference/contribute'
 ---
 
 Features or any changes to the codebase should be done as follows:
