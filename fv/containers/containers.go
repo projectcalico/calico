@@ -224,8 +224,7 @@ func (c *Container) Remove() {
 func copyOutputToLog(name string, streamName string, stream io.Reader, done *sync.WaitGroup) {
 	defer done.Done()
 	scanner := bufio.NewScanner(stream)
-	bufSize := 10 * 1024 * 1024
-	scanner.Buffer(make([]byte, bufSize), bufSize)
+	scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
 	for scanner.Scan() {
 		log.Info(name, "[", streamName, "] ", scanner.Text())
 	}

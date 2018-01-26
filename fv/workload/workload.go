@@ -399,6 +399,7 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 	return result
 }
 
-func (c *ConnectivityChecker) CheckConnectivity() {
-	EventuallyWithOffset(1, c.ActualConnectivity(), "10s", "100ms").Should(Equal(c.ExpectedConnectivity()))
+func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
+	EventuallyWithOffset(1, c.ActualConnectivity(), "60s", "100ms").Should(
+		Equal(c.ExpectedConnectivity()), optionalDescription...)
 }
