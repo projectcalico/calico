@@ -1,5 +1,5 @@
-hash: 0d454a9146af30a997fc6e21d5db5fc1f6d9884979060e33b8fa5f6a6058c202
-updated: 2018-01-25T15:14:27.730948012-08:00
+hash: b6c694fbe7ef5dde35759f338e6f2d70c4f0787ad991f87f76292be02ef227ab
+updated: 2018-01-26T15:23:50.539024179-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -17,6 +17,8 @@ imports:
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
+- name: github.com/colabsaumoh/proto-udsuspver
+  version: 81f7a4460994018fd0529c31df1ba43a26f7ee4f
 - name: github.com/containernetworking/cni
   version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
   subpackages:
@@ -389,7 +391,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: bc110fd540ab678abbf2bc71d9ce908eb9325ef6
+  version: 4972c8e335e32ab65ba45bde0a99c6544c8a8e4c
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
