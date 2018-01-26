@@ -113,11 +113,21 @@ func (p *Processor) handleDataplane(update interface{}) {
 		p.handleWorkloadEndpointUpdate(update)
 	case proto.WorkloadEndpointRemove:
 		p.handleWorkloadEndpointRemove(update)
+	case proto.ActiveProfileUpdate:
+		p.handleActiveProfileUpdate(update)
+	case proto.ActiveProfileRemove:
+		p.handleActiveProfileRemove(update)
+	case proto.ActivePolicyUpdate:
+		p.handleActivePolicyUpdate(update)
+	case proto.ActivePolicyRemove:
+		p.handleActivePolicyRemove(update)
+	default:
+		log.WithFields(log.Fields{"update": update}).Debug("Unhandled update")
 	}
 }
 
 func (p *Processor) handleInSync(update proto.InSync) {
-	panic("not implemented")
+	return
 }
 
 func (p *Processor) handleWorkloadEndpointUpdate(update proto.WorkloadEndpointUpdate) {
@@ -192,48 +202,144 @@ func (p *Processor) handleWorkloadEndpointRemove(update proto.WorkloadEndpointRe
 	delete(p.endpointsById, *update.Id)
 }
 
-func (p *Processor) syncPolicies(ei *EndpointInfo) {
-	for _, tier := range ei.endpointUpd.Endpoint.GetTiers() {
-		for _, name := range tier.GetIngressPolicies() {
-			pId := proto.PolicyID{Tier: tier.GetName(), Name: name}
-			p.syncPolicy(ei, pId)
+func (p *Processor) handleActiveProfileUpdate(update proto.ActiveProfileUpdate) {
+	pId := *update.Id
+	profile := update.GetProfile()
+	p.profileById[pId] = profile
+
+	// Update any endpoints that reference this profile
+	for _, ei := range p.updateableEndpoints() {
+		action := func(other proto.ProfileID) bool {
+			if other == pId {
+				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{&update}}
+				ei.syncedProfiles[pId] = true
+				return true
+			}
+			return false
 		}
-		for _, name := range tier.GetEgressPolicies() {
-			pId := proto.PolicyID{Tier: tier.GetName(), Name: name}
-			p.syncPolicy(ei, pId)
-		}
+		ei.iterateProfiles(action)
 	}
 }
 
-func (p *Processor) syncPolicy(ei *EndpointInfo, pId proto.PolicyID) {
-	if !ei.syncedPolicies[pId] {
-		policy := p.policyById[pId]
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
-			&proto.ActivePolicyUpdate{
-				Id:     &pId,
-				Policy: policy,
-			},
-		}}
-		ei.syncedPolicies[pId] = true
+func (p *Processor) handleActiveProfileRemove(update proto.ActiveProfileRemove) {
+	pId := *update.Id
+	log.WithFields(log.Fields{"ProfileID": pId.String()}).Debug("Processing ActiveProfileRemove")
+
+	// Push the update to any endpoints it was synced to
+	for _, ei := range p.updateableEndpoints() {
+		if ei.syncedProfiles[pId] {
+			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{&update}}
+			delete(ei.syncedProfiles, pId)
+		}
 	}
+	delete(p.profileById, pId)
+}
+
+func (p *Processor) handleActivePolicyUpdate(update proto.ActivePolicyUpdate) {
+	pId := *update.Id
+	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyUpdate")
+	policy := update.GetPolicy()
+	p.policyById[pId] = policy
+
+	// Update any endpoints that reference this policy
+	for _, ei := range p.updateableEndpoints() {
+		// Closure of the action to take on each policy on the endpoint.
+		action := func(other proto.PolicyID) bool {
+			if other == pId {
+				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{&update}}
+				ei.syncedPolicies[pId] = true
+				return true
+			}
+			return false
+		}
+		ei.iteratePolicies(action)
+	}
+}
+
+func (p *Processor) handleActivePolicyRemove(update proto.ActivePolicyRemove) {
+	pId := *update.Id
+	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyRemove")
+
+	// Push the update to any endpoints it was synced to
+	for _, ei := range p.updateableEndpoints() {
+		if ei.syncedPolicies[pId] {
+			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{&update}}
+			delete(ei.syncedPolicies, pId)
+		}
+	}
+	delete(p.policyById, pId)
+}
+
+func (p *Processor) syncPolicies(ei *EndpointInfo) {
+	ei.iteratePolicies(func(pId proto.PolicyID) bool {
+		if !ei.syncedPolicies[pId] {
+			policy := p.policyById[pId]
+			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
+				&proto.ActivePolicyUpdate{
+					Id:     &pId,
+					Policy: policy,
+				},
+			}}
+			ei.syncedPolicies[pId] = true
+		}
+		return false
+	})
 }
 
 func (p *Processor) syncProfiles(ei *EndpointInfo) {
-	for _, name := range ei.endpointUpd.Endpoint.GetProfileIds() {
-		pId := proto.ProfileID{Name: name}
-		p.syncProfile(ei, pId)
+	ei.iterateProfiles(func(pId proto.ProfileID) bool {
+		if !ei.syncedProfiles[pId] {
+			profile := p.profileById[pId]
+			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
+				&proto.ActiveProfileUpdate{
+					Id:      &pId,
+					Profile: profile,
+				},
+			}}
+			ei.syncedProfiles[pId] = true
+		}
+		return false
+	})
+}
+
+// A slice of all the Endpoints that can currently be sent updates.
+func (p *Processor) updateableEndpoints() []*EndpointInfo {
+	out := make([]*EndpointInfo, 0)
+	for _, ei := range p.endpointsById {
+		if ei.output != nil {
+			out = append(out, ei)
+		}
+	}
+	return out
+}
+
+// Perform the action on every policy on the Endpoint, breaking if the action returns true.
+func (ei *EndpointInfo) iteratePolicies(action func(id proto.PolicyID) (stop bool)) {
+	var pId proto.PolicyID
+	for _, tier := range ei.endpointUpd.GetEndpoint().GetTiers() {
+		pId.Tier = tier.Name
+		for _, name := range tier.GetIngressPolicies() {
+			pId.Name = name
+			if action(pId) {
+				return
+			}
+		}
+		for _, name := range tier.GetEgressPolicies() {
+			pId.Name = name
+			if action(pId) {
+				return
+			}
+		}
 	}
 }
 
-func (p *Processor) syncProfile(ei *EndpointInfo, pId proto.ProfileID) {
-	if !ei.syncedProfiles[pId] {
-		profile := p.profileById[pId]
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
-			&proto.ActiveProfileUpdate{
-				Id:      &pId,
-				Profile: profile,
-			},
-		}}
-		ei.syncedProfiles[pId] = true
+// Perform the action on every profile on the Endpoint, breaking if the action returns true.
+func (ei *EndpointInfo) iterateProfiles(action func(id proto.ProfileID) (stop bool)) {
+	var pId proto.ProfileID
+	for _, name := range ei.endpointUpd.GetEndpoint().GetProfileIds() {
+		pId.Name = name
+		if action(pId) {
+			return
+		}
 	}
 }
