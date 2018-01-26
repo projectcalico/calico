@@ -70,14 +70,14 @@ func init() {
 }
 
 type AsyncCalcGraph struct {
-	Dispatcher       *dispatcher.Dispatcher
-	inputEvents      chan interface{}
-	outputEvents     chan<- interface{}
-	eventBuffer      *EventSequencer
-	beenInSync       bool
-	needToSendInSync bool
-	syncStatusNow    api.SyncStatus
-	healthAggregator *health.HealthAggregator
+	Dispatcher         *dispatcher.Dispatcher
+	inputEvents        chan interface{}
+	outputDestinations []chan<- interface{}
+	eventBuffer        *EventSequencer
+	beenInSync         bool
+	needToSendInSync   bool
+	syncStatusNow      api.SyncStatus
+	healthAggregator   *health.HealthAggregator
 
 	flushTicks       <-chan time.Time
 	flushLeakyBucket int
@@ -91,15 +91,19 @@ const (
 	healthInterval = 10 * time.Second
 )
 
-func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}, healthAggregator *health.HealthAggregator) *AsyncCalcGraph {
+func NewAsyncCalcGraph(
+	conf *config.Config,
+	outputDestinations []chan<- interface{},
+	healthAggregator *health.HealthAggregator,
+) *AsyncCalcGraph {
 	eventBuffer := NewEventBuffer(conf)
 	disp := NewCalculationGraph(eventBuffer, conf.FelixHostname)
 	g := &AsyncCalcGraph{
-		inputEvents:      make(chan interface{}, 10),
-		outputEvents:     outputEvents,
-		Dispatcher:       disp,
-		eventBuffer:      eventBuffer,
-		healthAggregator: healthAggregator,
+		inputEvents:        make(chan interface{}, 10),
+		outputDestinations: outputDestinations,
+		Dispatcher:         disp,
+		eventBuffer:        eventBuffer,
+		healthAggregator:   healthAggregator,
 	}
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
 		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
@@ -215,7 +219,9 @@ func (acg *AsyncCalcGraph) maybeFlush() {
 
 func (acg *AsyncCalcGraph) onEvent(event interface{}) {
 	log.Debug("Sending output event on channel")
-	acg.outputEvents <- event
+	for _, c := range acg.outputDestinations {
+		c <- event
+	}
 	countOutputEvents.Inc()
 	log.Debug("Sent output event on channel")
 }

@@ -36,6 +36,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/projectcalico/felix/policysync"
+
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -307,6 +309,10 @@ configRetry:
 	}
 	dpConnector := newConnector(configParams, connToUsageRepUpdChan, backendClient, dpDriver, failureReportChan)
 
+	// Initialise the policy sync server, which listens for connections from Dikastes.
+	toPolicySync := make(chan interface{})
+	policySyncProcessor := policysync.NewProcessor(toPolicySync)
+
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
 	//
@@ -348,7 +354,11 @@ configRetry:
 	// Create the ipsets/active policy calculation graph, which will
 	// do the dynamic calculation of ipset memberships and active policies
 	// etc.
-	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, dpConnector.ToDataplane, healthAggregator)
+	asyncCalcGraph := calc.NewAsyncCalcGraph(
+		configParams,
+		[]chan<- interface{}{dpConnector.ToDataplane, toPolicySync},
+		healthAggregator,
+	)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
@@ -441,6 +451,9 @@ configRetry:
 
 	// Start communicating with the dataplane driver.
 	dpConnector.Start()
+
+	// Start communicating with dikastes instances.
+	policySyncProcessor.Start()
 
 	// Send the opening message to the dataplane driver, giving it its
 	// config.
