@@ -383,27 +383,28 @@ Use decimal points. Example, 2.5 pounds.
 
 ## Terminology
 
-| Correct               | Incorrect
-| --------------------- | ---------
-| agent                 | slave
-| API                   | api
-| API server            | api server, apiserver
-| DockerHub             | Dockerhub, dockerhub
-| GitHub                | Github, github
-| email                 | e-mail, Email, E-mail
-| etcd                  | Etcd, ETCD
-| flannel               | Flannel
-| internet              | Internet
-| kubeadm               | Kubeadmn
-| Mesos containerizer   | Unified containerizer, Universal containerizer
-| `NetworkPolicy`       | NetworkPolicy
-| network policy        | Network Policy, NetworkPolicy
-| quickstart            | quick start, quick-start   
-| systemd               | Systemd
-| to                    | in order to
-| tutorial or procedure | worked example
-| web interface         | GUI, UI
-| web server            | webserver
+| Correct                  | Incorrect
+| ------------------------ | ---------
+| agent                    | slave
+| API                      | api
+| API server               | api server, apiserver
+| DockerHub                | Dockerhub, dockerhub
+| GitHub                   | Github, github
+| email                    | e-mail, Email, E-mail
+| etcd                     | Etcd, ETCD
+| flannel                  | Flannel
+| internet                 | Internet
+| kubeadm                  | Kubeadmn
+| Kubernetes API datastore | Kubernetes datastore, kdd datastore
+| Mesos containerizer      | Unified containerizer, Universal containerizer
+| `NetworkPolicy`          | NetworkPolicy
+| network policy           | Network Policy, NetworkPolicy
+| quickstart               | quick start, quick-start   
+| systemd                  | Systemd
+| to                       | in order to
+| tutorial or procedure    | worked example
+| web interface            | GUI, UI
+| web server               | webserver
 
 
 ## Commonly confused
