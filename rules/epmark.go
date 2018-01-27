@@ -21,9 +21,15 @@ import (
 	"github.com/projectcalico/felix/markbits"
 )
 
-// Endpoint Mark Manager (EPM) provides set of functions to manage allocation/free endpoint mark bit
+// Endpoint Mark Mapper (EPM) provides set of functions to manage allocation/free endpoint mark bit
 // given a mark bit mask.
-type EndPointMarkManager struct {
+type EndpointMarkMapper interface {
+	GetEndpointMark(ep string) (uint32, error)
+	RemoveEndpointMark(ep string)
+	SetEndpointMark(ep string, mark uint32)
+}
+
+type DefaultEPMarkManager struct {
 	markBitsManager *markbits.MarkBitsManager
 	maxPosition     int
 
@@ -33,10 +39,10 @@ type EndPointMarkManager struct {
 	mutex sync.Mutex
 }
 
-func NewEndPointMarkManager(markMask uint32) *EndPointMarkManager {
+func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
-	return &EndPointMarkManager{
+	return &DefaultEPMarkManager{
 		markBitsManager:          markBitsManager,
 		maxPosition:              markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
 		activeEndpointToPosition: map[string]int{},
@@ -44,7 +50,7 @@ func NewEndPointMarkManager(markMask uint32) *EndPointMarkManager {
 	}
 }
 
-func (epmm *EndPointMarkManager) GetEndPointMark(ep string) (uint32, error) {
+func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	length := len(ep)
 	if length == 0 {
 		return 0, errors.New("Invalid endpoint name")
@@ -53,7 +59,7 @@ func (epmm *EndPointMarkManager) GetEndPointMark(ep string) (uint32, error) {
 	epmm.mutex.Lock()
 	defer epmm.mutex.Unlock()
 
-	// Return current mark for EndPoint if it already has one.
+	// Return current mark for Endpoint if it already has one.
 	if pos, ok := epmm.activeEndpointToPosition[ep]; ok {
 		mark := epmm.markBitsManager.MapNumberToMark(pos)
 		if mark == 0 {
@@ -104,7 +110,7 @@ func (epmm *EndPointMarkManager) GetEndPointMark(ep string) (uint32, error) {
 	return mark, nil
 }
 
-func (epmm *EndPointMarkManager) RemoveEndPointMark(ep string) {
+func (epmm *DefaultEPMarkManager) RemoveEndpointMark(ep string) {
 	epmm.mutex.Lock()
 	defer epmm.mutex.Unlock()
 
@@ -115,7 +121,7 @@ func (epmm *EndPointMarkManager) RemoveEndPointMark(ep string) {
 	}
 }
 
-func (epmm *EndPointMarkManager) SetEndPointMark(ep string, mark uint32) {
+func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) {
 	epmm.mutex.Lock()
 	defer epmm.mutex.Unlock()
 

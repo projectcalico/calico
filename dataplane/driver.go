@@ -52,13 +52,13 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 		}
 
 		// Mark bits for end point mark. Currently felix takes the rest bits from mask available for use.
-		markEndPointMark, _ := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
+		markEndpointMark, _ := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
 		log.WithFields(log.Fields{
 			"acceptMark":   markAccept,
 			"passMark":     markPass,
 			"scratch0Mark": markScratch0,
 			"scratch1Mark": markScratch1,
-			"EndPointMark": markEndPointMark,
+			"EndpointMark": markEndpointMark,
 		}).Info("Calculated iptables mark bits")
 
 		dpConfig := intdataplane.Config{
@@ -89,7 +89,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 				IptablesMarkPass:     markPass,
 				IptablesMarkScratch0: markScratch0,
 				IptablesMarkScratch1: markScratch1,
-				IptablesMarkEndPoint: markEndPointMark,
+				IptablesMarkEndpoint: markEndpointMark,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,

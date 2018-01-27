@@ -134,13 +134,13 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	// If it is, set endpoint mark and skip "to local host" rules below.
 	inputRules = append(inputRules,
 		Rule{
-			Action: ClearMarkAction{Mark: r.IptablesMarkEndPoint},
+			Action: ClearMarkAction{Mark: r.IptablesMarkEndpoint},
 		},
 		Rule{
 			Action: JumpAction{Target: ChainForwardCheck},
 		},
 		Rule{
-			Match:  Match().MarkNotClear(r.IptablesMarkEndPoint),
+			Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
 			Action: ReturnAction{},
 		},
 	)
@@ -390,7 +390,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	// packet has been through filter INPUT chain. There could be policies apply to its' ingress interface.
 	rules = append(rules,
 		Rule{
-			Match:  Match().MarkNotClear(r.IptablesMarkEndPoint),
+			Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
 			Action: JumpAction{Target: ChainDispatchFromEndPointMark},
 		},
 	)
@@ -401,7 +401,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	rules = append(rules,
 		Rule{
 			Action: ClearMarkAction{
-				Mark: r.IptablesMarkEndPoint,
+				Mark: r.IptablesMarkEndpoint,
 			},
 		},
 	)

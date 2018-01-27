@@ -24,6 +24,7 @@ import (
 
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	adminUp bool,
 	ingressPolicies []string,
 	egressPolicies []string,
@@ -35,6 +36,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			ingressPolicies,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			WorkloadToEndpointPfx,
@@ -48,6 +50,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			egressPolicies,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			WorkloadFromEndpointPfx,
@@ -61,6 +64,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			nil,
 			nil,
 			ifaceName,
+			epMarkMapper,
 			"",
 			"",
 			WorkloadSetEndPointMarkPfx,
@@ -74,6 +78,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	ingressPolicyNames []string,
 	egressPolicyNames []string,
 	ingressForwardPolicyNames []string,
@@ -87,6 +92,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			egressPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			HostToEndpointPfx,
@@ -100,6 +106,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ingressPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointPfx,
@@ -113,6 +120,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			egressForwardPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			HostToEndpointForwardPfx,
@@ -126,6 +134,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ingressForwardPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointForwardPfx,
@@ -139,6 +148,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	ingressPolicyNames []string,
 	egressPolicyNames []string,
 ) []*Chain {
@@ -149,6 +159,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			egressPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			HostToEndpointPfx,
@@ -162,6 +173,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ingressPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointPfx,
@@ -175,6 +187,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	preDNATPolicyNames []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
@@ -185,6 +198,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 			preDNATPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointPfx,
@@ -210,6 +224,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	policyNames []string,
 	profileIds []string,
 	name string,
+	epMarkMapper EndpointMarkMapper,
 	policyPrefix PolicyChainNamePrefix,
 	profilePrefix ProfileChainNamePrefix,
 	endpointPrefix string,
@@ -235,7 +250,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	}
 
 	if chainType == chainTypeSetEndPointMark {
-		if endPointMark, err := r.epmm.GetEndPointMark(name); err == nil {
+		if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
 			// Set endpoint mark.
 			rules = append(rules, Rule{
 				Action: SetMarkAction{Mark: endPointMark},

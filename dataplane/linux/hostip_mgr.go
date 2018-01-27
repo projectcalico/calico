@@ -81,7 +81,7 @@ func (m *hostIPManager) getCurrentMembers() []string {
 func (m *hostIPManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *ifaceAddrsUpdate:
-		log.WithField("update", msg).Debug("Interface addrs changed.")
+		log.WithField("update", msg).Info("GJM Interface addrs changed.")
 		if m.nonHostIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Not a real host interface, ignoring.")
 			return
@@ -92,6 +92,7 @@ func (m *hostIPManager) OnUpdate(msg interface{}) {
 			delete(m.hostIfaceToAddrs, msg.Name)
 		}
 
+		// Host ip update is a relative rare event. Flush entire ipsets to make it simple.
 		metadata := ipsets.IPSetMetadata{
 			Type:    ipsets.IPSetTypeHashIP,
 			SetID:   m.hostIPSetID,

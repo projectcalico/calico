@@ -304,6 +304,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer,
 		routeTableV4,
 		4,
+		config.RulesConfig.IptablesMarkEndpoint,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
@@ -368,6 +369,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ruleRenderer,
 			routeTableV6,
 			6,
+			config.RulesConfig.IptablesMarkEndpoint,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))

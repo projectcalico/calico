@@ -57,7 +57,7 @@ const (
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
-	IPSetIDAllHostIPs = "all-hosts"
+	IPSetIDAllHostIPs  = "all-hosts"
 	IPSetIDThisHostIPs = "this-host"
 
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
@@ -143,19 +143,21 @@ type RuleRenderer interface {
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 
-	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint, EndpointMarkMapper) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		adminUp bool,
 		ingressPolicies []string,
 		egressPolicies []string,
 		profileIDs []string,
 	) []*iptables.Chain
 
-	HostDispatchChains(map[string]proto.HostEndpointID, bool) []*iptables.Chain
-	FromHostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
+	HostDispatchChains(map[string]proto.HostEndpointID, EndpointMarkMapper, bool) []*iptables.Chain
+	FromHostDispatchChains(map[string]proto.HostEndpointID, EndpointMarkMapper) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		ingressPolicyNames []string,
 		egressPolicyNames []string,
 		ingressForwardPolicyNames []string,
@@ -164,11 +166,13 @@ type RuleRenderer interface {
 	) []*iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		ingressPolicyNames []string,
 		egressPolicyNames []string,
 	) []*iptables.Chain
 	HostEndpointToMangleChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		preDNATPolicyNames []string,
 	) []*iptables.Chain
 
@@ -180,13 +184,10 @@ type RuleRenderer interface {
 
 	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*iptables.Chain
-
-	CleanupEndPoint(ifaceName string)
 }
 
 type DefaultRuleRenderer struct {
 	Config
-	epmm               *EndPointMarkManager
 	inputAcceptActions []iptables.Action
 	filterAllowAction  iptables.Action
 	mangleAllowAction  iptables.Action
@@ -213,7 +214,7 @@ type Config struct {
 	IptablesMarkPass     uint32
 	IptablesMarkScratch0 uint32
 	IptablesMarkScratch1 uint32
-	IptablesMarkEndPoint uint32
+	IptablesMarkEndpoint uint32
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16
@@ -303,7 +304,6 @@ func NewRenderer(config Config) RuleRenderer {
 
 	return &DefaultRuleRenderer{
 		Config:             config,
-		epmm:               NewEndPointMarkManager(config.IptablesMarkEndPoint),
 		inputAcceptActions: inputAcceptActions,
 		filterAllowAction:  filterAllowAction,
 		mangleAllowAction:  mangleAllowAction,

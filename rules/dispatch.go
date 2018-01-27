@@ -24,12 +24,9 @@ import (
 	"github.com/projectcalico/felix/stringutils"
 )
 
-func (r *DefaultRuleRenderer) CleanupEndPoint(ifaceName string) {
-	r.epmm.RemoveEndPointMark(ifaceName)
-}
-
 func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	epMarkMapper EndpointMarkMapper,
 ) []*Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload dispatch chains")
@@ -41,6 +38,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	return append(
 		r.dispatchChains(
 			names,
+			epMarkMapper,
 			WorkloadFromEndpointPfx,
 			WorkloadToEndpointPfx,
 			ChainFromWorkloadDispatch,
@@ -51,6 +49,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 		),
 		r.dispatchChains(
 			names,
+			epMarkMapper,
 			WorkloadSetEndPointMarkPfx,
 			WorkloadFromEndpointPfx,
 			ChainDispatchSetEndPointMark,
@@ -64,19 +63,22 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 
 func (r *DefaultRuleRenderer) HostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	epMarkMapper EndpointMarkMapper,
 	applyOnForward bool,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, false, applyOnForward)
+	return r.hostDispatchChains(endpoints, epMarkMapper, false, applyOnForward)
 }
 
 func (r *DefaultRuleRenderer) FromHostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	epMarkMapper EndpointMarkMapper,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, true, false)
+	return r.hostDispatchChains(endpoints, epMarkMapper, true, false)
 }
 
 func (r *DefaultRuleRenderer) hostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	epMarkMapper EndpointMarkMapper,
 	fromOnly bool,
 	applyOnForward bool,
 ) []*Chain {
@@ -90,6 +92,7 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 	if fromOnly {
 		return r.dispatchChains(
 			names,
+			epMarkMapper,
 			HostFromEndpointPfx,
 			"",
 			ChainDispatchFromHostEndpoint,
@@ -103,6 +106,7 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 	if !applyOnForward {
 		return r.dispatchChains(
 			names,
+			epMarkMapper,
 			HostFromEndpointPfx,
 			HostToEndpointPfx,
 			ChainDispatchFromHostEndpoint,
@@ -117,6 +121,7 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 	return append(
 		r.dispatchChains(
 			names,
+			epMarkMapper,
 			HostFromEndpointPfx,
 			HostToEndpointPfx,
 			ChainDispatchFromHostEndpoint,
@@ -127,6 +132,7 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 		),
 		r.dispatchChains(
 			names,
+			epMarkMapper,
 			HostFromEndpointForwardPfx,
 			HostToEndpointForwardPfx,
 			ChainDispatchFromHostEndPointForward,
@@ -140,6 +146,7 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 
 func (r *DefaultRuleRenderer) dispatchChains(
 	names []string,
+	epMarkMapper EndpointMarkMapper,
 	fromEndpointPfx,
 	toEndpointPfx,
 	dispatchFromEndpointChainName,
@@ -255,7 +262,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 							Target: EndpointChainName(toEndpointPfx, name),
 						},
 					})
-				} else if endPointMark, err := r.epmm.GetEndPointMark(name); err == nil {
+				} else if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
 					// implement each name into root rules for from-endpoint-mark chain.
 					rootToEndpointRules = append(rootToEndpointRules, Rule{
 						Match: Match().MarkSet(endPointMark),
@@ -321,7 +328,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 						Target: EndpointChainName(toEndpointPfx, ifaceName),
 					},
 				})
-			} else if endPointMark, err := r.epmm.GetEndPointMark(ifaceName); err == nil {
+			} else if endPointMark, err := epMarkMapper.GetEndpointMark(ifaceName); err == nil {
 				rootToEndpointRules = append(rootToEndpointRules, Rule{
 					Match: Match().MarkSet(endPointMark),
 					Action: GotoAction{
