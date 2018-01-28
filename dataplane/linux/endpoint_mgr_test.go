@@ -513,7 +513,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				IptablesMarkPass:     0x10,
 				IptablesMarkScratch0: 0x20,
 				IptablesMarkScratch1: 0x40,
-				IptablesMarkEndpoint: 0x11110000,
+				IptablesMarkEndpoint: 0xff00,
 			}
 			eth0Addrs = set.New()
 			eth0Addrs.Add(ipv4)

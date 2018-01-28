@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ipsets"
 	. "github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
 )
 
 var _ = Describe("Static", func() {
@@ -40,6 +41,8 @@ var _ = Describe("Static", func() {
 		BeforeEach(func() {
 			conf = Config{
 				WorkloadIfacePrefixes: []string{"cali"},
+				IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 				FailsafeInboundHostPorts: []config.ProtoPort{
 					{Protocol: "tcp", Port: 22},
 					{Protocol: "tcp", Port: 1022},
@@ -52,6 +55,7 @@ var _ = Describe("Static", func() {
 				IptablesMarkPass:     0x20,
 				IptablesMarkScratch0: 0x40,
 				IptablesMarkScratch1: 0x80,
+				IptablesMarkEndpoint: 0xff00,
 			}
 		})
 
@@ -59,6 +63,14 @@ var _ = Describe("Static", func() {
 			Describe(fmt.Sprintf("IPv%d", ipVersion), func() {
 				// Capture current value of ipVersion.
 				ipVersion := ipVersion
+				ipSetThisHost := fmt.Sprintf("cali%d-this-host", ipVersion)
+
+				var portRanges []*proto.PortRange
+				portRange := &proto.PortRange{
+					First: 30000,
+					Last:  32000,
+				}
+				portRanges = append(portRanges, portRange)
 
 				expFailsafeIn := &Chain{
 					Name: "cali-failsafe-in",
@@ -73,6 +85,35 @@ var _ = Describe("Static", func() {
 					Rules: []Rule{
 						{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
 						{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
+					},
+				}
+
+				expForwardCheck := &Chain{
+					Name: "cali-forward-check",
+					Rules: []Rule{
+						{
+							Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: ReturnAction{},
+						},
+						{
+							Match: Match().Protocol("tcp").
+								DestPortRanges(portRanges).
+								DestIPSet(ipSetThisHost),
+							Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+							Comment: "To kubernetes NodePort service",
+						},
+						{
+							Match: Match().Protocol("udp").
+								DestPortRanges(portRanges).
+								DestIPSet(fmt.Sprintf("cali%d-this-host", ipVersion)),
+							Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+							Comment: "To kubernetes NodePort service",
+						},
+						{
+							Match:   Match().NotDestIPSet(ipSetThisHost),
+							Action:  JumpAction{Target: ChainDispatchSetEndPointMark},
+							Comment: "To kubernetes service",
+						},
 					},
 				}
 
@@ -105,7 +146,15 @@ var _ = Describe("Static", func() {
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
 							{Match: Match().MarkSet(0x10),
-								Action: AcceptAction{}},
+								Action: AcceptAction{},
+							},
+
+							// Forward check chain.
+							{Action: ClearMarkAction{Mark: conf.IptablesMarkEndpoint}},
+							{Action: JumpAction{Target: ChainForwardCheck}},
+							{Match: Match().MarkNotClear(conf.IptablesMarkEndpoint),
+								Action: ReturnAction{},
+							},
 
 							// Per-prefix workload jump rules.  Note use of goto so that we
 							// don't return here.
@@ -129,7 +178,14 @@ var _ = Describe("Static", func() {
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
 							{Match: Match().MarkSet(0x10),
-								Action: AcceptAction{}},
+								Action: AcceptAction{},
+							},
+
+							// From endpoint mark chain
+							{Match: Match().MarkNotClear(conf.IptablesMarkEndpoint),
+								Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+							},
+							{Action: ClearMarkAction{Mark: conf.IptablesMarkEndpoint}},
 
 							// To workload traffic.
 							{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
@@ -152,8 +208,11 @@ var _ = Describe("Static", func() {
 				It("should include the expected failsafe-out chain in the filter chains", func() {
 					Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expFailsafeOut))
 				})
+				It("should include the expected forward-check chain in the filter chains", func() {
+					Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-check")).To(Equal(expForwardCheck))
+				})
 				It("should return only the expected filter chains", func() {
-					Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(6))
+					Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(7))
 				})
 
 				It("Should return expected raw OUTPUT chain", func() {
@@ -278,6 +337,8 @@ var _ = Describe("Static", func() {
 		BeforeEach(func() {
 			conf = Config{
 				WorkloadIfacePrefixes:        []string{"tap"},
+				IPSetConfigV4:                ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:                ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 				OpenStackSpecialCasesEnabled: true,
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
 				OpenStackMetadataPort:        1234,
@@ -285,6 +346,7 @@ var _ = Describe("Static", func() {
 				IptablesMarkPass:             0x20,
 				IptablesMarkScratch0:         0x40,
 				IptablesMarkScratch1:         0x80,
+				IptablesMarkEndpoint:         0xff00,
 			}
 		})
 
@@ -377,6 +439,8 @@ var _ = Describe("Static", func() {
 		BeforeEach(func() {
 			conf = Config{
 				WorkloadIfacePrefixes:        []string{"tap"},
+				IPSetConfigV4:                ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:                ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 				OpenStackSpecialCasesEnabled: true,
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
 				OpenStackMetadataPort:        1234,
@@ -384,6 +448,7 @@ var _ = Describe("Static", func() {
 				IptablesMarkPass:             0x20,
 				IptablesMarkScratch0:         0x40,
 				IptablesMarkScratch1:         0x80,
+				IptablesMarkEndpoint:         0xff00,
 				IptablesFilterAllowAction:    "RETURN",
 			}
 		})
@@ -441,16 +506,19 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("with IPIP enabled", func() {
+		epMark := uint32(0xff00)
 		BeforeEach(func() {
 			conf = Config{
 				WorkloadIfacePrefixes: []string{"cali"},
 				IPIPEnabled:           true,
 				IPIPTunnelAddress:     net.ParseIP("10.0.0.1"),
 				IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 				IptablesMarkAccept:    0x10,
 				IptablesMarkPass:      0x20,
 				IptablesMarkScratch0:  0x40,
 				IptablesMarkScratch1:  0x80,
+				IptablesMarkEndpoint:  epMark,
 			}
 		})
 
@@ -472,6 +540,13 @@ var _ = Describe("Static", func() {
 				{Match: Match().ProtocolNum(4),
 					Action:  DropAction{},
 					Comment: "Drop IPIP packets from non-Calico hosts"},
+
+				// Forward check chain.
+				{Action: ClearMarkAction{Mark: epMark}},
+				{Action: JumpAction{Target: ChainForwardCheck}},
+				{Match: Match().MarkNotClear(epMark),
+					Action: ReturnAction{},
+				},
 
 				// Per-prefix workload jump rules.  Note use of goto so that we
 				// don't return here.
@@ -497,6 +572,13 @@ var _ = Describe("Static", func() {
 				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
 
+				// Forward check chain.
+				{Action: ClearMarkAction{Mark: epMark}},
+				{Action: JumpAction{Target: ChainForwardCheck}},
+				{Match: Match().MarkNotClear(epMark),
+					Action: ReturnAction{},
+				},
+
 				// Per-prefix workload jump rules.  Note use of goto so that we
 				// don't return here.
 				{Match: Match().InInterface("cali+"),
@@ -519,6 +601,12 @@ var _ = Describe("Static", func() {
 				// Untracked packets already matched in raw table.
 				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
+
+				// From endpoint mark chain
+				{Match: Match().MarkNotClear(epMark),
+					Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+				},
+				{Action: ClearMarkAction{Mark: epMark}},
 
 				// To workload traffic.
 				{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
@@ -551,6 +639,12 @@ var _ = Describe("Static", func() {
 				// Untracked packets already matched in raw table.
 				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
+
+				// From endpoint mark chain
+				{Match: Match().MarkNotClear(epMark),
+					Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+				},
+				{Action: ClearMarkAction{Mark: epMark}},
 
 				// To workload traffic.
 				{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
@@ -611,13 +705,17 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("with RETURN accept action", func() {
+		epMark := uint32(0xff00)
 		BeforeEach(func() {
 			conf = Config{
 				WorkloadIfacePrefixes:     []string{"cali"},
+				IPSetConfigV4:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 				IptablesMarkAccept:        0x10,
 				IptablesMarkPass:          0x20,
 				IptablesMarkScratch0:      0x40,
 				IptablesMarkScratch1:      0x80,
+				IptablesMarkEndpoint:      epMark,
 				IptablesFilterAllowAction: "RETURN",
 				IptablesMangleAllowAction: "RETURN",
 			}
@@ -656,6 +754,13 @@ var _ = Describe("Static", func() {
 						{Match: Match().MarkSet(0x10),
 							Action: ReturnAction{}},
 
+						// Forward check chain.
+						{Action: ClearMarkAction{Mark: epMark}},
+						{Action: JumpAction{Target: ChainForwardCheck}},
+						{Match: Match().MarkNotClear(epMark),
+							Action: ReturnAction{},
+						},
+
 						// Per-prefix workload jump rules.  Note use of goto so that we
 						// don't return here.
 						{Match: Match().InInterface("cali+"),
@@ -679,6 +784,12 @@ var _ = Describe("Static", func() {
 						// Untracked packets already matched in raw table.
 						{Match: Match().MarkSet(0x10),
 							Action: ReturnAction{}},
+
+						// From endpoint mark chain
+						{Match: Match().MarkNotClear(epMark),
+							Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+						},
+						{Action: ClearMarkAction{Mark: epMark}},
 
 						// To workload traffic.
 						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},

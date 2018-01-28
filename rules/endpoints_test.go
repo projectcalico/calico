@@ -34,6 +34,7 @@ var _ = Describe("Endpoints", func() {
 		IptablesMarkPass:          0x10,
 		IptablesMarkScratch0:      0x20,
 		IptablesMarkScratch1:      0x40,
+		IptablesMarkEndpoint:      0xff00,
 		IptablesMangleAllowAction: "RETURN",
 	}
 
@@ -46,18 +47,21 @@ var _ = Describe("Endpoints", func() {
 		IptablesMarkPass:          0x10,
 		IptablesMarkScratch0:      0x20,
 		IptablesMarkScratch1:      0x40,
+		IptablesMarkEndpoint:      0xff00,
 		DisableConntrackInvalid:   true,
 		IptablesFilterAllowAction: "RETURN",
 	}
 
 	var renderer RuleRenderer
+	var epMarkMapper EndpointMarkMapper
 	Context("with normal config", func() {
 		BeforeEach(func() {
 			renderer = NewRenderer(rrConfigNormalMangleReturn)
+			epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint)
 		})
 
 		It("should render a minimal workload endpoint", func() {
-			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil, nil)).To(Equal([]*Chain{
+			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", epMarkMapper, true, nil, nil, nil)).To(Equal([]*Chain{
 				{
 					Name: "cali-tw-cali1234",
 					Rules: []Rule{
@@ -84,13 +88,19 @@ var _ = Describe("Endpoints", func() {
 						{Action: ClearMarkAction{Mark: 0x8}},
 						{Action: DropAction{},
 							Comment: "Drop if no profiles matched"},
+					},
+				},
+				{
+					Name: "cali-sepm-cali1234",
+					Rules: []Rule{
+						{Action: SetMarkAction{Mark: 0x3400}},
 					},
 				},
 			}))
 		})
 
 		It("should render a disabled workload endpoint", func() {
-			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", false, nil, nil, nil)).To(Equal([]*Chain{
+			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", epMarkMapper, false, nil, nil, nil)).To(Equal([]*Chain{
 				{
 					Name: "cali-tw-cali1234",
 					Rules: []Rule{
@@ -103,6 +113,12 @@ var _ = Describe("Endpoints", func() {
 					Rules: []Rule{
 						{Action: DropAction{},
 							Comment: "Endpoint admin disabled"},
+					},
+				},
+				{
+					Name: "cali-sepm-cali1234",
+					Rules: []Rule{
+						{Action: SetMarkAction{Mark: 0x3400}},
 					},
 				},
 			}))
@@ -111,6 +127,7 @@ var _ = Describe("Endpoints", func() {
 		It("should render a fully-loaded workload endpoint", func() {
 			Expect(renderer.WorkloadEndpointToIptablesChains(
 				"cali1234",
+				epMarkMapper,
 				true,
 				[]string{"ai", "bi"},
 				[]string{"ae", "be"},
@@ -196,11 +213,18 @@ var _ = Describe("Endpoints", func() {
 							Comment: "Drop if no profiles matched"},
 					},
 				},
+				{
+					Name: "cali-sepm-cali1234",
+					Rules: []Rule{
+						{Action: SetMarkAction{Mark: 0x3400}},
+					},
+				},
 			}))
 		})
 
 		It("should render a host endpoint", func() {
 			Expect(renderer.HostEndpointToFilterChains("eth0",
+				epMarkMapper,
 				[]string{"ai", "bi"}, []string{"ae", "be"},
 				[]string{"afi", "bfi"}, []string{"afe", "bfe"},
 				[]string{"prof1", "prof2"})).To(Equal([]*Chain{
@@ -350,7 +374,7 @@ var _ = Describe("Endpoints", func() {
 		})
 
 		It("should render host endpoint raw chains with untracked policies", func() {
-			Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"}, []string{"c"})).To(Equal([]*Chain{
+			Expect(renderer.HostEndpointToRawChains("eth0", epMarkMapper, []string{"c"}, []string{"c"})).To(Equal([]*Chain{
 				{
 					Name: "cali-th-eth0",
 					Rules: []Rule{
@@ -401,6 +425,7 @@ var _ = Describe("Endpoints", func() {
 		It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 			Expect(renderer.HostEndpointToMangleChains(
 				"eth0",
+				epMarkMapper,
 				[]string{"c"},
 			)).To(Equal([]*Chain{
 				{
@@ -437,10 +462,11 @@ var _ = Describe("Endpoints", func() {
 	Describe("with ctstate=INVALID disabled", func() {
 		BeforeEach(func() {
 			renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
+			epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.IptablesMarkEndpoint)
 		})
 
 		It("should render a minimal workload endpoint", func() {
-			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil, nil)).To(Equal([]*Chain{
+			Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", epMarkMapper, true, nil, nil, nil)).To(Equal([]*Chain{
 				{
 					Name: "cali-tw-cali1234",
 					Rules: []Rule{
@@ -469,12 +495,19 @@ var _ = Describe("Endpoints", func() {
 							Comment: "Drop if no profiles matched"},
 					},
 				},
+				{
+					Name: "cali-sepm-cali1234",
+					Rules: []Rule{
+						{Action: SetMarkAction{Mark: 0x3400}},
+					},
+				},
 			}))
 		})
 
 		It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 			Expect(renderer.HostEndpointToMangleChains(
 				"eth0",
+				epMarkMapper,
 				[]string{"c"},
 			)).To(Equal([]*Chain{
 				{

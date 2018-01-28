@@ -192,6 +192,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		IptablesMarkPass:     0x100,
 		IptablesMarkScratch0: 0x200,
 		IptablesMarkScratch1: 0x400,
+		IptablesMarkEndpoint: 0xff000,
 		IptablesLogPrefix:    "calico-packet",
 	}
 

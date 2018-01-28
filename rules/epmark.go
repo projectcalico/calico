@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/projectcalico/felix/markbits"
+	log "github.com/sirupsen/logrus"
 )
 
 // Endpoint Mark Mapper (EPM) provides set of functions to manage allocation/free endpoint mark bit
@@ -107,6 +108,11 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	if mark == 0 {
 		return 0, errors.New("Not enough mark bits available")
 	}
+	log.WithFields(log.Fields{
+		"ep":   ep,
+		"Pos":  prospect,
+		"Mark": mark,
+	}).Debug("Got endpoint mark")
 	return mark, nil
 }
 
