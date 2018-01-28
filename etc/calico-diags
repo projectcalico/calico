@@ -64,7 +64,7 @@ echo "  copying contents of etcd..."
 
 ${ETCDCTL} ls --recursive -p | grep -v '/$' | xargs -n1 -I '{}' sh -c "echo; echo {}; ${ETCDCTL} get {} " | tee etcdctl_get
 echo >> etcdctl_get
-${ETCDCTL_V3} get --prefix /calico | tee -a etcdctl_get
+eval ${ETCDCTL_V3} get --prefix /calico | tee -a etcdctl_get
 
 echo "  copying config files..."
 
