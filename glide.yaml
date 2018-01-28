@@ -26,7 +26,8 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 7c2de5ed8c029f222d87fc849b54c4075ef3173f
+  repo:    git@github.com:song-jiang/libcalico-go.git
+  version: ipvs-egress
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
