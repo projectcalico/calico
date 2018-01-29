@@ -129,7 +129,7 @@ func (mc *MarkBitsManager) CurrentFreeNumberOfMark() int {
 }
 
 // Return a mark given a position number.
-func (mc *MarkBitsManager) MapNumberToMark(n int) uint32 {
+func (mc *MarkBitsManager) MapNumberToMark(n int) (uint32, error) {
 	number := uint32(n)
 	mark := uint32(0)
 	numBitsFound := uint32(0)
@@ -150,15 +150,20 @@ func (mc *MarkBitsManager) MapNumberToMark(n int) uint32 {
 			"Name":               mc.name,
 			"MarkMask":           mc.mask,
 			"requestedMapNumber": n,
-		}).Panic("Not enough mark bits available.")
-		return 0
+		}).Warn("Not enough mark bits available.")
+		return 0, errors.New("Not enough mark bits available")
 	}
 
-	return mark
+	return mark, nil
 }
 
 // Return a position number given a mark.
-func (mc *MarkBitsManager) MapMarkToNumber(mark uint32) int {
+func (mc *MarkBitsManager) MapMarkToNumber(mark uint32) (int, error) {
+	if mark & mc.mask != mark {
+		// mark bit not compatible.
+		return 0, errors.New("Mark bit not compatible")
+	}
+
 	number := 0
 	numBitsFound := uint32(0)
 	for shift := uint(0); shift < 32; shift++ {
@@ -171,5 +176,5 @@ func (mc *MarkBitsManager) MapMarkToNumber(mark uint32) int {
 		}
 	}
 
-	return number
+	return number, nil
 }

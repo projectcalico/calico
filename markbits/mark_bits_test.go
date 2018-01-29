@@ -20,6 +20,8 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/markbits"
+	"fmt"
+	"golang.org/x/tools/cmd/guru/testdata/src/alias"
 )
 
 const (
@@ -38,14 +40,16 @@ type markBitsResult struct {
 
 func init() {
 
+	errMark := uint32(0)
+	errNumber := 0
 	errResult := markBitsResult{0, 0, -1, -1}
 
 	DescribeTable("MarkBits initialization",
-		func(mask uint32, freeBits int, freePos int) {
+		func(mask uint32, expectedFreeBits int, expectedFreePos int) {
 			m := markbits.NewMarkBitsManager(mask, "initialization")
 
-			Expect(m.AvailableMarkBitCount()).To(Equal(freeBits))
-			Expect(m.CurrentFreeNumberOfMark()).To(Equal(freePos))
+			Expect(m.AvailableMarkBitCount()).To(Equal(expectedFreeBits))
+			Expect(m.CurrentFreeNumberOfMark()).To(Equal(expectedFreePos))
 		},
 
 		Entry("should initialise with one bit", uint32(0x10), 1, 2),
@@ -105,6 +109,32 @@ func init() {
 				{uint32(0x3200), 3, 0, 0},
 				errResult,
 			}),
+	)
+
+	DescribeTable("MarkBits map number to mark",
+		func(mask uint32, number int, mark uint32) {
+			m := markbits.NewMarkBitsManager(mask, "MapNumberToMark")
+
+			resultMark, err := m.MapNumberToMark(number)
+			if err != nil {
+				Expect(mark).To(Equal(errMark))
+			} else {
+				Expect(resultMark).To(Equal(mark))
+			}
+
+			resultNumber, err := m.MapMarkToNumber(mark)
+			if err != nil {
+				Expect(number).To(Equal(errNumber))
+			} else {
+				Expect(resultNumber).To(Equal(number)))
+			}
+		},
+
+		Entry("should map with one bit", uint32(0x10), 1, uint32(0x10)),
+		Entry("should map with some bits", uint32(0x12300004), 0xf, uint32(0x2300004)),
+		Entry("should map with all bits", uint32(0x12300004), 0x1f, uint32(0x12300004)),
+		Entry("should map with max bits", uint32(0xffffffff), 0xffffffff, uint32(0xffffffff)),
+		Entry("should not map with less bits", uint32(0x12300004), 0x1235, errMark),
 	)
 }
 

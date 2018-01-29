@@ -27,7 +27,7 @@ import (
 type EndpointMarkMapper interface {
 	GetEndpointMark(ep string) (uint32, error)
 	RemoveEndpointMark(ep string)
-	SetEndpointMark(ep string, mark uint32)
+	SetEndpointMark(ep string, mark uint32) (error)
 }
 
 type DefaultEPMarkManager struct {
@@ -62,9 +62,9 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 
 	// Return current mark for Endpoint if it already has one.
 	if pos, ok := epmm.activeEndpointToPosition[ep]; ok {
-		mark := epmm.markBitsManager.MapNumberToMark(pos)
-		if mark == 0 {
-			return 0, errors.New("Not enough mark bits available")
+		mark, err := epmm.markBitsManager.MapNumberToMark(pos)
+		if err != nil {
+			return 0, err
 		}
 		return mark, nil
 	}
@@ -104,9 +104,9 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 
 	epmm.activePositionToEndpoint[prospect] = ep
 	epmm.activeEndpointToPosition[ep] = prospect
-	mark := epmm.markBitsManager.MapNumberToMark(prospect)
-	if mark == 0 {
-		return 0, errors.New("Not enough mark bits available")
+	mark, err := epmm.markBitsManager.MapNumberToMark(prospect)
+	if err != nil {
+		return 0, err
 	}
 	log.WithFields(log.Fields{
 		"ep":   ep,
@@ -127,11 +127,15 @@ func (epmm *DefaultEPMarkManager) RemoveEndpointMark(ep string) {
 	}
 }
 
-func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) {
+func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) error {
 	epmm.mutex.Lock()
 	defer epmm.mutex.Unlock()
 
-	pos := epmm.markBitsManager.MapMarkToNumber(mark)
+	pos, err := epmm.markBitsManager.MapMarkToNumber(mark)
+	if err != nil {
+		return err
+	}
 	epmm.activePositionToEndpoint[pos] = ep
 	epmm.activeEndpointToPosition[ep] = pos
+	return nil
 }
