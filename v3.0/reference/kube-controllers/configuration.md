@@ -1,5 +1,6 @@
 ---
 title: Configuring the Calico Kubernetes controllers
+canonical_url: https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration
 redirect_from: latest/reference/kube-controllers/configuration
 ---
 

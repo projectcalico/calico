@@ -1,5 +1,6 @@
 ---
 title: Troubleshooting Calico for Kubernetes
+canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/troubleshooting
 redirect_from: latest/getting-started/kubernetes/troubleshooting
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: 'Calico BIRD Route Reflector container'
+canonical_url: https://docs.projectcalico.org/v3.0/usage/routereflector/calico-routereflector
 redirect_from: latest/usage/routereflector/calico-routereflector
 ---
 

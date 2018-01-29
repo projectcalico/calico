@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico 
+canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/upgrade
 redirect_from: latest/getting-started/kubernetes/upgrade/upgrade
 ---
 

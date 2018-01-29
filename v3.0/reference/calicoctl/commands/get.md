@@ -1,5 +1,6 @@
 ---
 title: calicoctl get
+canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/get
 redirect_from: latest/reference/calicoctl/commands/get
 ---
 

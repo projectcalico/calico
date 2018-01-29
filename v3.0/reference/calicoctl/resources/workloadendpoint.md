@@ -1,5 +1,6 @@
 ---
 title: Workload Endpoint Resource (WorkloadEndpoint)
+canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint
 redirect_from: latest/reference/calicoctl/resources/workloadendpoint
 ---
 

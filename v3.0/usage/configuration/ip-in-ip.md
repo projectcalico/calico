@@ -1,5 +1,6 @@
 ---
 title: Configuring IP-in-IP
+canonical_url: https://docs.projectcalico.org/v3.0/usage/configuration/ip-in-ip
 redirect_from: latest/usage/configuration/ip-in-ip
 ---
 

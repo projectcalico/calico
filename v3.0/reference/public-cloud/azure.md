@@ -1,5 +1,6 @@
 ---
 title: Deploying Calico on Azure
+canonical_url: https://docs.projectcalico.org/v3.0/reference/public-cloud/azure
 redirect_from: latest/reference/public-cloud/azure
 ---
 
