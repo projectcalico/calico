@@ -6,7 +6,7 @@ owners:
   email: shaun@tigera.io
 import:
 - package: github.com/coreos/etcd
-  version: ^3.2.0-rc.1
+  version: 1e1dbb23924672c6cd72c62ee0db2b45f778da71
   subpackages:
   - client
   - pkg/transport
@@ -27,7 +27,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: v1.7.x-series
+  version: release-v2.6
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
