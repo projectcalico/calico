@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -311,7 +311,9 @@ configRetry:
 
 	// Initialise the policy sync server, which listens for connections from Dikastes.
 	toPolicySync := make(chan interface{})
+	policySyncUIDAllocator := policysync.NewUIDAllocator()
 	policySyncProcessor := policysync.NewProcessor(toPolicySync)
+	policySyncServer := policysync.NewMgmtAPIServer(policySyncProcessor.Joins, policySyncUIDAllocator.NextUID)
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -454,6 +456,7 @@ configRetry:
 
 	// Start communicating with dikastes instances.
 	policySyncProcessor.Start()
+	policySyncServer.Serve(true, "/var/run/calico/policysync.sock")
 
 	// Send the opening message to the dataplane driver, giving it its
 	// config.

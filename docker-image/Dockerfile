@@ -27,6 +27,7 @@ RUN mkdir /code
 ADD bin/calico-felix /code
 WORKDIR /code
 RUN ln -s /code/calico-felix /usr/bin
+RUN mkdir -p /var/run/calico
 
 # Run felix by default
 CMD ["calico-felix-wrapper"]

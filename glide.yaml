@@ -39,10 +39,6 @@ import:
   version: b15cd069a83443be3154b719d0cc9fe8117f09fb
 - package: github.com/gogo/protobuf
   version: ^0.5.0
-# Skip importing this and just take whatever etcd depends on
-#- package: google.golang.org/grpc
-#  repo: https://github.com/grpc/grpc-go.git
-#  version: v1.7.5
 - package: github.com/vishvananda/netlink
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
@@ -59,8 +55,8 @@ import:
 - package: github.com/onsi/gomega
   version: ^1.1.0
 - package: github.com/jbenet/go-reuseport
-  repo: https://github.com/fasaxc/go-reuseport.git
   version: disable-dial-check
+  repo: https://github.com/fasaxc/go-reuseport.git
 - package: github.com/jbenet/go-sockaddr
   version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
   subpackages:
@@ -71,3 +67,6 @@ import:
   version: 34a629f78a5d50f7de07727e41a948685c45e026
 - package: github.com/colabsaumoh/proto-udsuspver
   version: 81f7a4460994018fd0529c31df1ba43a26f7ee4f
+- package: google.golang.org/genproto
+  subpackages:
+  - googleapis

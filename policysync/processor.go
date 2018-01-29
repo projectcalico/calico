@@ -15,6 +15,8 @@
 package policysync
 
 import (
+	"reflect"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/proto"
@@ -23,19 +25,18 @@ import (
 type Processor struct {
 	Updates       <-chan interface{}
 	Joins         chan JoinRequest
-	joinCount     uint64
-	endpointsById map[proto.WorkloadEndpointID]*EndpointInfo
-	policyById    map[proto.PolicyID]*proto.Policy
-	profileById   map[proto.ProfileID]*proto.Profile
+	endpointsByID map[proto.WorkloadEndpointID]*EndpointInfo
+	policyByID    map[proto.PolicyID]*proto.Policy
+	profileByID   map[proto.ProfileID]*proto.Profile
 }
 
 type EndpointInfo struct {
 	// The channel to send updates for this workload to.
-	output            chan<- proto.ToDataplane
-	expectedJoinCount uint64
-	endpointUpd       *proto.WorkloadEndpointUpdate
-	syncedPolicies    map[proto.PolicyID]bool
-	syncedProfiles    map[proto.ProfileID]bool
+	output         chan<- proto.ToDataplane
+	currentJoinUID uint64
+	endpointUpd    *proto.WorkloadEndpointUpdate
+	syncedPolicies map[proto.PolicyID]bool
+	syncedProfiles map[proto.ProfileID]bool
 }
 
 // JoinRequest is sent to the Processor when a new socket connection is accepted by the GRPC server,
@@ -45,8 +46,8 @@ type JoinRequest struct {
 	// C is the channel to send updates to the policy sync client.  Processor closes the channel when the
 	// workload endpoint is removed, or when a new JoinRequest is received for the same endpoint.  If nil, indicates
 	// the client wants to stop receiving updates.
-	C         chan<- proto.ToDataplane
-	JoinCount uint64
+	C       chan<- proto.ToDataplane
+	JoinUID uint64
 }
 
 func NewProcessor(updates <-chan interface{}) *Processor {
@@ -55,10 +56,14 @@ func NewProcessor(updates <-chan interface{}) *Processor {
 		Updates: updates,
 		// Joins from the new servers that have started.
 		Joins:         make(chan JoinRequest, 10),
-		endpointsById: make(map[proto.WorkloadEndpointID]*EndpointInfo),
-		policyById:    make(map[proto.PolicyID]*proto.Policy),
-		profileById:   make(map[proto.ProfileID]*proto.Profile),
+		endpointsByID: make(map[proto.WorkloadEndpointID]*EndpointInfo),
+		policyByID:    make(map[proto.PolicyID]*proto.Policy),
+		profileByID:   make(map[proto.ProfileID]*proto.Profile),
 	}
+}
+
+func (p *Processor) Start() {
+	go p.loop()
 }
 
 func (p *Processor) loop() {
@@ -74,35 +79,43 @@ func (p *Processor) loop() {
 
 func (p *Processor) handleJoin(joinReq JoinRequest) {
 	logCxt := log.WithField("joinReq", joinReq)
-	ei, ok := p.endpointsById[joinReq.EndpointID]
+	ei, ok := p.endpointsByID[joinReq.EndpointID]
+
 	if !ok {
-		if joinReq.C == nil {
-			logCxt.Info("Leave request for already-deleted endpoint, ignoring")
+		logCxt.Info("Request for unknown endpoint, pre-creating EndpointInfo")
+		ei = &EndpointInfo{}
+		p.endpointsByID[joinReq.EndpointID] = ei
+	}
+
+	if joinReq.C == nil {
+		// This is a leave request, make sure we clean up endpointsByID if needed.
+		defer func() {
+			if reflect.DeepEqual(*ei, EndpointInfo{}) {
+				logCxt.Info("Cleaning up empty EndpointInfo")
+				delete(p.endpointsByID, joinReq.EndpointID)
+			}
+		}()
+		if ei.currentJoinUID != joinReq.JoinUID {
+			logCxt.Info("Leave request doesn't match active connection, ignoring")
 			return
 		}
-		logCxt.Info("Join for deleted endpoint, closing new channel immediately")
-		close(joinReq.C)
+		logCxt.Info("Leave request for active connection, closing channel.")
+		close(ei.output)
+		ei.output = nil
+		ei.currentJoinUID = 0
 		return
 	}
-	if ei.expectedJoinCount != joinReq.JoinCount {
-		if joinReq.C != nil {
-			logCxt.Info("Out of date join request, closing its channel immediately")
-			close(joinReq.C)
-			return
-		}
-		logCxt.Info("Out of date leave request, ignoring")
-		return
-	}
+
+	// If we get here, we've got a join request.
 	if ei.output != nil {
-		logCxt.Info("Join/Leave for endpoint that already has an active connection. Closing the old connection.")
+		logCxt.Info("Join request for already-active connection, closing old channel.")
 		close(ei.output)
 	}
+
+	ei.currentJoinUID = joinReq.JoinUID
 	ei.output = joinReq.C
-	if ei.output == nil {
-		return // Nothing more to do after a leave.
-	}
-	logCxt.Info("Join: have new channel for (known) endpoint, syncing it")
-	p.syncEndpoint(ei)
+
+	p.maybeSyncEndpoint(ei)
 }
 
 func (p *Processor) handleDataplane(update interface{}) {
@@ -131,58 +144,29 @@ func (p *Processor) handleInSync(update proto.InSync) {
 }
 
 func (p *Processor) handleWorkloadEndpointUpdate(update proto.WorkloadEndpointUpdate) {
-	ei, ok := p.endpointsById[*update.Id]
+	ei, ok := p.endpointsByID[*update.Id]
 	if !ok {
 		// Add this endpoint
 		ei = &EndpointInfo{
-			endpointUpd:       &update,
-			expectedJoinCount: p.joinCount,
+			endpointUpd: &update,
 		}
-		p.joinCount++
-		p.endpointsById[*update.Id] = ei
-		p.startListener(*update.Id, ei.expectedJoinCount)
+		p.endpointsByID[*update.Id] = ei
 	} else {
 		ei.endpointUpd = &update
 	}
-	if ei.output != nil {
-		// There is a channel waiting for updates on this endpoint, send them now.
-		p.syncEndpoint(ei)
+	p.maybeSyncEndpoint(ei)
+}
+
+func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
+	if ei.endpointUpd == nil {
+		log.Debug("Skipping sync: endpoint has no update")
+		return
 	}
-}
+	if ei.output == nil {
+		log.Debug("Skipping sync: endpoint has no listening client")
+		return
+	}
 
-func (p *Processor) startListener(epID proto.WorkloadEndpointID, joinCount uint64) {
-	go func() {
-		for {
-			// TODO Accept a connection.
-
-			// Then start a per-connection goroutine...
-			go func() {
-				updates := make(chan proto.ToDataplane)
-				p.Joins <- JoinRequest{
-					EndpointID: epID,
-					C:          updates,
-					JoinCount:  joinCount,
-				}
-				for update := range updates {
-					// TODO send update to client
-					_ := update
-
-					// TODO Then on connection failure....
-					joins := p.Joins
-					leave := JoinRequest{EndpointID: epID, JoinCount: joinCount}
-					select {
-					case joins <- leave:
-						log.Info("Sent leave request, draining the updates until channel is closed...")
-						joins = nil
-					case <-updates:
-					}
-				}
-			}()
-		}
-	}()
-}
-
-func (p *Processor) syncEndpoint(ei *EndpointInfo) {
 	// The calc graph sends us policies and profiles before endpoint updates, but the Processor doesn't know
 	// which endpoints need them until now.  Send any unsynced profiles & policies referenced
 	p.syncPolicies(ei)
@@ -193,19 +177,19 @@ func (p *Processor) syncEndpoint(ei *EndpointInfo) {
 
 func (p *Processor) handleWorkloadEndpointRemove(update proto.WorkloadEndpointRemove) {
 	// we trust the Calc graph never to send us a remove for an endpoint it didn't tell us about
-	ei := p.endpointsById[*update.Id]
+	ei := p.endpointsByID[*update.Id]
 	if ei.output != nil {
 		// Send update and close down.
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{&update}}
 		close(ei.output)
 	}
-	delete(p.endpointsById, *update.Id)
+	delete(p.endpointsByID, *update.Id)
 }
 
 func (p *Processor) handleActiveProfileUpdate(update proto.ActiveProfileUpdate) {
 	pId := *update.Id
 	profile := update.GetProfile()
-	p.profileById[pId] = profile
+	p.profileByID[pId] = profile
 
 	// Update any endpoints that reference this profile
 	for _, ei := range p.updateableEndpoints() {
@@ -232,14 +216,14 @@ func (p *Processor) handleActiveProfileRemove(update proto.ActiveProfileRemove) 
 			delete(ei.syncedProfiles, pId)
 		}
 	}
-	delete(p.profileById, pId)
+	delete(p.profileByID, pId)
 }
 
 func (p *Processor) handleActivePolicyUpdate(update proto.ActivePolicyUpdate) {
 	pId := *update.Id
 	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyUpdate")
 	policy := update.GetPolicy()
-	p.policyById[pId] = policy
+	p.policyByID[pId] = policy
 
 	// Update any endpoints that reference this policy
 	for _, ei := range p.updateableEndpoints() {
@@ -267,13 +251,13 @@ func (p *Processor) handleActivePolicyRemove(update proto.ActivePolicyRemove) {
 			delete(ei.syncedPolicies, pId)
 		}
 	}
-	delete(p.policyById, pId)
+	delete(p.policyByID, pId)
 }
 
 func (p *Processor) syncPolicies(ei *EndpointInfo) {
 	ei.iteratePolicies(func(pId proto.PolicyID) bool {
 		if !ei.syncedPolicies[pId] {
-			policy := p.policyById[pId]
+			policy := p.policyByID[pId]
 			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 				&proto.ActivePolicyUpdate{
 					Id:     &pId,
@@ -289,7 +273,7 @@ func (p *Processor) syncPolicies(ei *EndpointInfo) {
 func (p *Processor) syncProfiles(ei *EndpointInfo) {
 	ei.iterateProfiles(func(pId proto.ProfileID) bool {
 		if !ei.syncedProfiles[pId] {
-			profile := p.profileById[pId]
+			profile := p.profileByID[pId]
 			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
 				&proto.ActiveProfileUpdate{
 					Id:      &pId,
@@ -305,7 +289,7 @@ func (p *Processor) syncProfiles(ei *EndpointInfo) {
 // A slice of all the Endpoints that can currently be sent updates.
 func (p *Processor) updateableEndpoints() []*EndpointInfo {
 	out := make([]*EndpointInfo, 0)
-	for _, ei := range p.endpointsById {
+	for _, ei := range p.endpointsByID {
 		if ei.output != nil {
 			out = append(out, ei)
 		}
