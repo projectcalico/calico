@@ -172,6 +172,7 @@ func init() {
 	registerStructValidator(validatorPrimary, validateObjectMeta, metav1.ObjectMeta{})
 
 	// Register structs that have one level of additional structs to validate.
+	registerStructValidator(validatorSecondary, validateFelixConfigSpec, api.FelixConfigurationSpec{})
 	registerStructValidator(validatorSecondary, validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validatorSecondary, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validatorSecondary, validateRule, api.Rule{})
@@ -470,6 +471,29 @@ func validateIPNAT(v *validator.Validate, structLevel *validator.StructLevel) {
 	if iip.Version() != eip.Version() {
 		structLevel.ReportError(reflect.ValueOf(i.ExternalIP),
 			"ExternalIP", "", reason("mismatched IP versions"))
+	}
+}
+
+func validateFelixConfigSpec(v *validator.Validate, structLevel *validator.StructLevel) {
+	c := structLevel.CurrentStruct.Interface().(api.FelixConfigurationSpec)
+
+	// Validate that the node port ranges list isn't too long and contains only numeric ports.
+	// We set the limit at 7 because the iptables multiport match can accept at most 15 port
+	// numbers, with each port range requiring 2 entries.
+	if c.KubeNodePortRanges != nil {
+		if len(*c.KubeNodePortRanges) > 7 {
+			structLevel.ReportError(reflect.ValueOf(*c.KubeNodePortRanges),
+				"KubeNodePortRanges", "",
+				reason("node port ranges list is too long (max 7)"))
+		}
+
+		for _, p := range *c.KubeNodePortRanges {
+			if p.PortName != "" {
+				structLevel.ReportError(reflect.ValueOf(*c.KubeNodePortRanges),
+					"KubeNodePortRanges", "",
+					reason("node port ranges should not contain named ports"))
+			}
+		}
 	}
 }
 

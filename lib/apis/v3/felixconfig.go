@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package v3
 
 import (
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -176,6 +177,14 @@ type FelixConfigurationSpec struct {
 	// to “tcp”. To disable all outbound host ports, use the value none. The default value opens etcd’s standard ports to ensure that Felix
 	// does not get cut off from etcd as well as allowing DHCP and DNS. [Default: tcp:2379, tcp:2380, tcp:4001, tcp:7001, udp:53, udp:67]
 	FailsafeOutboundHostPorts *[]ProtoPort `json:"failsafeOutboundHostPorts,omitempty"`
+
+	// KubeIPVSSupportEnabled must be set (only) if using Calico with Kubernetes and kube-proxy is running in ipvs mode.  It changes the way
+	// Felix renders iptables policy to be compatible with the ipvs packet flow. [Default: false]
+	KubeIPVSSupportEnabled *bool `json:"kubeIPVSSupportEnabled,omitempty"`
+
+	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if ipvs support is enabled.  Felix uses these
+	// ranges to separate host and workload traffic. [Default: 30000:32767].
+	KubeNodePortRanges *[]numorstring.Port `json:"kubeNodePortRanges,omitempty" validate:"omitempty,dive"`
 
 	// UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage
 	// server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]

@@ -467,6 +467,21 @@ func init() {
 		Entry("should accept a valid IptablesFilterAllowAction value 'Accept'", api.FelixConfigurationSpec{IptablesFilterAllowAction: "Accept"}, true),
 		Entry("should accept a valid IptablesMangleAllowAction value 'Return'", api.FelixConfigurationSpec{IptablesMangleAllowAction: "Return"}, true),
 		Entry("should reject an invalid IptablesMangleAllowAction value 'Drop'", api.FelixConfigurationSpec{IptablesMangleAllowAction: "Drop"}, false),
+		Entry("should accept a valid KubeNodePortRanges value", api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
+			mustParsePortRange(3000, 4000), mustParsePortRange(5000, 6000),
+			mustParsePortRange(7000, 8000), mustParsePortRange(8000, 9000),
+			mustParsePortRange(10000, 11000), mustParsePortRange(12000, 13000),
+			numorstring.SinglePort(15000),
+		}}, true),
+		Entry("should reject a too-long KubeNodePortRanges value", api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
+			mustParsePortRange(3000, 4000), mustParsePortRange(5000, 6000),
+			mustParsePortRange(7000, 8000), mustParsePortRange(8000, 9000),
+			mustParsePortRange(10000, 11000), mustParsePortRange(12000, 13000),
+			mustParsePortRange(14000, 15000), mustParsePortRange(16000, 17000),
+		}}, false),
+		Entry("should reject a named port KubeNodePortRanges value", api.FelixConfigurationSpec{KubeNodePortRanges: &[]numorstring.Port{
+			numorstring.NamedPort("testport"),
+		}}, false),
 
 		Entry("should reject an invalid LogSeverityScreen value 'badVal'", api.FelixConfigurationSpec{LogSeverityScreen: "badVal"}, false),
 		Entry("should reject an invalid LogSeverityFile value 'badVal'", api.FelixConfigurationSpec{LogSeverityFile: "badVal"}, false),
@@ -1438,4 +1453,12 @@ func protocolFromString(s string) *numorstring.Protocol {
 func protocolFromInt(i uint8) *numorstring.Protocol {
 	p := numorstring.ProtocolFromInt(i)
 	return &p
+}
+
+func mustParsePortRange(min, max uint16) numorstring.Port {
+	p, err := numorstring.PortFromRange(min, max)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
