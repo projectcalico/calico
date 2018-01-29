@@ -70,6 +70,7 @@ func (mc *MarkBitsManager) AvailableMarkBitCount() int {
 
 // Allocate a block of bits given a requested size.
 // Return allocated mark and how many bits allocated.
+// It is up to the caller to check the result.
 func (mc *MarkBitsManager) NextBlockBitsMark(size int) (uint32, int) {
 	mark := uint32(0)
 	numBitsFound := 0
@@ -121,7 +122,10 @@ func (mc *MarkBitsManager) nthMark(n int) (uint32, error) {
 
 // Return how many free position number left.
 func (mc *MarkBitsManager) CurrentFreeNumberOfMark() int {
-	return int(uint32(1) << uint32(mc.numFreeBits))
+	if mc.numFreeBits > 0 {
+		return int(uint64(1) << uint64(mc.numFreeBits))
+	}
+	return 0
 }
 
 // Return a mark given a position number.
