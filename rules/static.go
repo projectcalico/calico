@@ -58,8 +58,8 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 	var portRanges []*proto.PortRange
 
 	portRange := &proto.PortRange{
-		First: 30000,
-		Last:  32000,
+		First: int32(r.KubeNodePortRangeMin),
+		Last:  int32(r.KubeNodePortRangeMax),
 	}
 	portRanges = append(portRanges, portRange)
 

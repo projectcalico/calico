@@ -56,6 +56,8 @@ var _ = Describe("Static", func() {
 				IptablesMarkScratch0: 0x40,
 				IptablesMarkScratch1: 0x80,
 				IptablesMarkEndpoint: 0xff00,
+				KubeNodePortRangeMin: 30030,
+				KubeNodePortRangeMax: 30040,
 			}
 		})
 
@@ -67,8 +69,8 @@ var _ = Describe("Static", func() {
 
 				var portRanges []*proto.PortRange
 				portRange := &proto.PortRange{
-					First: 30000,
-					Last:  32000,
+					First: 30030,
+					Last:  30040,
 				}
 				portRanges = append(portRanges, portRange)
 

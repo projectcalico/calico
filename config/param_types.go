@@ -30,6 +30,7 @@ import (
 
 	"github.com/kardianos/osext"
 	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 const (
@@ -277,6 +278,14 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 		})
 	}
 	return result, nil
+}
+
+type PortRangeParam struct {
+	Metadata
+}
+
+func (p *PortRangeParam) Parse(raw string) (interface{}, error) {
+	return numorstring.PortFromString(raw)
 }
 
 type EndpointListParam struct {

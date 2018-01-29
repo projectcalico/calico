@@ -216,6 +216,9 @@ type Config struct {
 	IptablesMarkScratch1 uint32
 	IptablesMarkEndpoint uint32
 
+	KubeNodePortRangeMin uint16
+	KubeNodePortRangeMax uint16
+
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16
 	OpenStackSpecialCasesEnabled bool
