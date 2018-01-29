@@ -32,7 +32,7 @@ const (
 	SockName       = "/policysync.sock"
 	OrchestratorId = "k8s"
 	EndpointId     = "eth0"
-	PathPrefix     = "/tmp/"
+	PathPrefix     = ""
 )
 
 // WorkloadAPIServer implements the API that each policy-sync agent connects to in order to get policy information.
@@ -45,7 +45,8 @@ type WorkloadAPIServer struct {
 
 func NewWorkloadAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *WorkloadAPIServer {
 	return &WorkloadAPIServer{
-		Joins: joins,
+		Joins:       joins,
+		nextJoinUID: allocUID,
 	}
 }
 
@@ -74,6 +75,7 @@ func NewMgmtAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *nam.Ser
 }
 
 func (s *WorkloadAPIServer) RegisterGrpc(g *grpc.Server) {
+	log.Debug("Registering with grpc.Server")
 	proto.RegisterPolicySyncServer(g, s)
 }
 
@@ -86,7 +88,8 @@ func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 	if !ok {
 		return errors.New("Unable to authenticate client.")
 	}
-	workloadID := creds.Uid
+	// TODO Ensure names are correctly handled/namespaced
+	workloadID := creds.Namespace + "/" + creds.Uid
 
 	// Allocate a new unique join ID, this allows the processor to disambiguate if there are multiple connections
 	// for the same workload, which can happen transiently over client restart.  In particular, if our "leave"

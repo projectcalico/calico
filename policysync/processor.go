@@ -78,21 +78,25 @@ func (p *Processor) loop() {
 }
 
 func (p *Processor) handleJoin(joinReq JoinRequest) {
-	logCxt := log.WithField("joinReq", joinReq)
-	ei, ok := p.endpointsByID[joinReq.EndpointID]
+	epID := joinReq.EndpointID
+	logCxt := log.WithField("joinReq", joinReq).WithField("epID", epID)
+	ei, ok := p.endpointsByID[epID]
 
 	if !ok {
 		logCxt.Info("Request for unknown endpoint, pre-creating EndpointInfo")
-		ei = &EndpointInfo{}
-		p.endpointsByID[joinReq.EndpointID] = ei
+		ei = &EndpointInfo{
+			syncedPolicies: map[proto.PolicyID]bool{},
+			syncedProfiles: map[proto.ProfileID]bool{},
+		}
+		p.endpointsByID[epID] = ei
 	}
 
 	if joinReq.C == nil {
 		// This is a leave request, make sure we clean up endpointsByID if needed.
 		defer func() {
-			if reflect.DeepEqual(*ei, EndpointInfo{}) {
+			if ei.output == nil && ei.currentJoinUID == 0 && ei.endpointUpd == nil {
 				logCxt.Info("Cleaning up empty EndpointInfo")
-				delete(p.endpointsByID, joinReq.EndpointID)
+				delete(p.endpointsByID, epID)
 			}
 		}()
 		if ei.currentJoinUID != joinReq.JoinUID {
@@ -119,40 +123,48 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 }
 
 func (p *Processor) handleDataplane(update interface{}) {
+	log.WithField("update", update).Info("Dataplane update")
 	switch update := update.(type) {
-	case proto.InSync:
+	case *proto.InSync:
 		p.handleInSync(update)
-	case proto.WorkloadEndpointUpdate:
+	case *proto.WorkloadEndpointUpdate:
 		p.handleWorkloadEndpointUpdate(update)
-	case proto.WorkloadEndpointRemove:
+	case *proto.WorkloadEndpointRemove:
 		p.handleWorkloadEndpointRemove(update)
-	case proto.ActiveProfileUpdate:
+	case *proto.ActiveProfileUpdate:
 		p.handleActiveProfileUpdate(update)
-	case proto.ActiveProfileRemove:
+	case *proto.ActiveProfileRemove:
 		p.handleActiveProfileRemove(update)
-	case proto.ActivePolicyUpdate:
+	case *proto.ActivePolicyUpdate:
 		p.handleActivePolicyUpdate(update)
-	case proto.ActivePolicyRemove:
+	case *proto.ActivePolicyRemove:
 		p.handleActivePolicyRemove(update)
 	default:
-		log.WithFields(log.Fields{"update": update}).Debug("Unhandled update")
+		log.WithFields(log.Fields{
+			"update": update,
+			"type":   reflect.TypeOf(update),
+		}).Warn("Unhandled update")
 	}
 }
 
-func (p *Processor) handleInSync(update proto.InSync) {
+func (p *Processor) handleInSync(update *proto.InSync) {
 	return
 }
 
-func (p *Processor) handleWorkloadEndpointUpdate(update proto.WorkloadEndpointUpdate) {
-	ei, ok := p.endpointsByID[*update.Id]
+func (p *Processor) handleWorkloadEndpointUpdate(update *proto.WorkloadEndpointUpdate) {
+	epID := *update.Id
+	log.WithField("epID", epID).Info("Endpoint update")
+	ei, ok := p.endpointsByID[epID]
 	if !ok {
 		// Add this endpoint
 		ei = &EndpointInfo{
-			endpointUpd: &update,
+			endpointUpd:    update,
+			syncedPolicies: map[proto.PolicyID]bool{},
+			syncedProfiles: map[proto.ProfileID]bool{},
 		}
-		p.endpointsByID[*update.Id] = ei
+		p.endpointsByID[epID] = ei
 	} else {
-		ei.endpointUpd = &update
+		ei.endpointUpd = update
 	}
 	p.maybeSyncEndpoint(ei)
 }
@@ -175,18 +187,18 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{ei.endpointUpd}}
 }
 
-func (p *Processor) handleWorkloadEndpointRemove(update proto.WorkloadEndpointRemove) {
+func (p *Processor) handleWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
 	// we trust the Calc graph never to send us a remove for an endpoint it didn't tell us about
 	ei := p.endpointsByID[*update.Id]
 	if ei.output != nil {
 		// Send update and close down.
-		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{&update}}
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{update}}
 		close(ei.output)
 	}
 	delete(p.endpointsByID, *update.Id)
 }
 
-func (p *Processor) handleActiveProfileUpdate(update proto.ActiveProfileUpdate) {
+func (p *Processor) handleActiveProfileUpdate(update *proto.ActiveProfileUpdate) {
 	pId := *update.Id
 	profile := update.GetProfile()
 	p.profileByID[pId] = profile
@@ -195,7 +207,7 @@ func (p *Processor) handleActiveProfileUpdate(update proto.ActiveProfileUpdate) 
 	for _, ei := range p.updateableEndpoints() {
 		action := func(other proto.ProfileID) bool {
 			if other == pId {
-				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{&update}}
+				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{update}}
 				ei.syncedProfiles[pId] = true
 				return true
 			}
@@ -205,21 +217,21 @@ func (p *Processor) handleActiveProfileUpdate(update proto.ActiveProfileUpdate) 
 	}
 }
 
-func (p *Processor) handleActiveProfileRemove(update proto.ActiveProfileRemove) {
+func (p *Processor) handleActiveProfileRemove(update *proto.ActiveProfileRemove) {
 	pId := *update.Id
 	log.WithFields(log.Fields{"ProfileID": pId.String()}).Debug("Processing ActiveProfileRemove")
 
 	// Push the update to any endpoints it was synced to
 	for _, ei := range p.updateableEndpoints() {
 		if ei.syncedProfiles[pId] {
-			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{&update}}
+			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{update}}
 			delete(ei.syncedProfiles, pId)
 		}
 	}
 	delete(p.profileByID, pId)
 }
 
-func (p *Processor) handleActivePolicyUpdate(update proto.ActivePolicyUpdate) {
+func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 	pId := *update.Id
 	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyUpdate")
 	policy := update.GetPolicy()
@@ -230,7 +242,7 @@ func (p *Processor) handleActivePolicyUpdate(update proto.ActivePolicyUpdate) {
 		// Closure of the action to take on each policy on the endpoint.
 		action := func(other proto.PolicyID) bool {
 			if other == pId {
-				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{&update}}
+				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{update}}
 				ei.syncedPolicies[pId] = true
 				return true
 			}
@@ -240,14 +252,14 @@ func (p *Processor) handleActivePolicyUpdate(update proto.ActivePolicyUpdate) {
 	}
 }
 
-func (p *Processor) handleActivePolicyRemove(update proto.ActivePolicyRemove) {
+func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 	pId := *update.Id
 	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyRemove")
 
 	// Push the update to any endpoints it was synced to
 	for _, ei := range p.updateableEndpoints() {
 		if ei.syncedPolicies[pId] {
-			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{&update}}
+			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{update}}
 			delete(ei.syncedPolicies, pId)
 		}
 	}
