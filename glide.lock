@@ -1,5 +1,5 @@
-hash: 24ba71445fe98111b7f2e2362019852ce8ed1d38b5efbe6ee3e49f098fe95a7d
-updated: 2017-12-15T15:17:43.74922996-08:00
+hash: cb911f067a16d204d16d5c12d9fca12f51f19051df48e5c0adc9d850c5f548ed
+updated: 2018-01-29T13:45:06.285158972-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -135,7 +135,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: da7b693f04138e96c3d3a4300cbd038b8eaac404
+  version: edcbcf64348004bfeb0dc3882cd2790743ec7728
   subpackages:
   - lib
   - lib/api
@@ -166,7 +166,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
+  version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
   - prometheus
   - prometheus/promhttp
@@ -189,7 +189,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: 879c5887cd475cd7864858769793b2ceb0d44feb
+  version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
