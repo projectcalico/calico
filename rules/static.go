@@ -53,16 +53,20 @@ func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 	}
 }
 
+// Forward check chain is to check if a packet belongs to a forwarded traffic or not.
+// With kube-proxy running in ipvs mode, both local or forwarded traffic goes through INPUT filter chain.
 func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8) *Chain {
 	var fwRules []Rule
 	var portRanges []*proto.PortRange
 
+	// Assembly port ranges for kubernetes node ports.
 	portRange := &proto.PortRange{
 		First: int32(r.KubeNodePortRangeMin),
 		Last:  int32(r.KubeNodePortRangeMax),
 	}
 	portRanges = append(portRanges, portRange)
 
+	// Get ipsets name for local host ips.
 	nameForIPSet := func(ipsetID string) string {
 		if ipVersion == 4 {
 			return r.IPSetConfigV4.NameForMainIPSet(ipsetID)
@@ -73,10 +77,13 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 	hostIPSet := nameForIPSet(IPSetIDThisHostIPs)
 
 	fwRules = append(fwRules,
+		// If packet belongs to an existing conntrack connection, it does not belong to a forwarded traffic even destination ip is a
+		// service ip. This could happen when pod send back response to a local host process accessing a service ip.
 		Rule{
 			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 			Action: ReturnAction{},
 		},
+		// If packet is accessing local host within kubernetes NodePort range, it belongs to a forwarded traffic.
 		Rule{
 			Match: Match().Protocol("tcp").
 				DestPortRanges(portRanges).
@@ -91,6 +98,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 			Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
 			Comment: "To kubernetes NodePort service",
 		},
+		// If packet is accessing non local host ip, it belongs to a forwarded traffic.
 		Rule{
 			Match:   Match().NotDestIPSet(hostIPSet),
 			Action:  JumpAction{Target: ChainDispatchSetEndPointMark},

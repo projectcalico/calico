@@ -53,9 +53,19 @@ func (m MatchCriteria) MarkNotClear(mark uint32) MatchCriteria {
 
 func (m MatchCriteria) MarkSet(mark uint32) MatchCriteria {
 	if mark == 0 {
-		log.Panic("Probably bug: zero mark")
+		log.Panic("Probably bug: MarkSet got zero mark")
 	}
 	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mark))
+}
+
+func (m MatchCriteria) MarkMultiSet(mark, mask uint32) MatchCriteria {
+	if mark == 0 {
+		log.Panic("Probably bug: MarkMultiSet got zero mark")
+	}
+	if mask == 0 {
+		log.Panic("Probably bug: MarkMultiSet got zero mask")
+	}
+	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mask))
 }
 
 func (m MatchCriteria) InInterface(ifaceMatch string) MatchCriteria {

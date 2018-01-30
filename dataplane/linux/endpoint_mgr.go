@@ -119,7 +119,7 @@ func newEndpointManager(
 	ruleRenderer rules.RuleRenderer,
 	routeTable routeTable,
 	ipVersion uint8,
-	IptablesMarkEndpoint uint32,
+	epMarkMapper rules.EndpointMarkMapper,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 ) *endpointManager {
@@ -130,7 +130,7 @@ func newEndpointManager(
 		ruleRenderer,
 		routeTable,
 		ipVersion,
-		IptablesMarkEndpoint,
+		epMarkMapper,
 		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
@@ -144,7 +144,7 @@ func newEndpointManagerWithShims(
 	ruleRenderer rules.RuleRenderer,
 	routeTable routeTable,
 	ipVersion uint8,
-	IptablesMarkEndpoint uint32,
+	epMarkMapper rules.EndpointMarkMapper,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
@@ -162,7 +162,7 @@ func newEndpointManagerWithShims(
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
 		writeProcSys: procSysWriter,
-		epMarkMapper: rules.NewEndpointMarkMapper(IptablesMarkEndpoint),
+		epMarkMapper: epMarkMapper,
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
@@ -394,7 +394,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Updating per-endpoint chains.")
 			if oldWorkload != nil && oldWorkload.Name != workload.Name {
 				logCxt.Debug("Interface name changed, cleaning up old state")
-				m.epMarkMapper.RemoveEndpointMark(oldWorkload.Name)
+				m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 				m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
@@ -472,7 +472,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 			if oldWorkload != nil {
-				m.epMarkMapper.RemoveEndpointMark(oldWorkload.Name)
+				m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 				// Remove any routes from the routing table.  The RouteTable will
 				// remove any conntrack entries as a side-effect.
 				logCxt.Info("Workload removed, deleting old state.")

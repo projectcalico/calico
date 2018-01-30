@@ -59,19 +59,11 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 		),
-		// Chain for set endpoint mark for the endpoint.
-		r.endpointIptablesChain(
-			nil,
-			nil,
+		// Chain for setting endpoint mark of an endpoint.
+		r.endpointSetMarkChain(
 			ifaceName,
 			epMarkMapper,
-			"",
-			"",
 			WorkloadSetEndPointMarkPfx,
-			"",
-			chainTypeSetEndPointMark,
-			true,
-			nil,
 		),
 	}
 }
@@ -217,8 +209,29 @@ const (
 	chainTypeUntracked
 	chainTypePreDNAT
 	chainTypeForward
-	chainTypeSetEndPointMark
 )
+
+func (r *DefaultRuleRenderer) endpointSetMarkChain(
+	name string,
+	epMarkMapper EndpointMarkMapper,
+	endpointPrefix string,
+) *Chain {
+	rules := []Rule{}
+	chainName := EndpointChainName(endpointPrefix, name)
+
+	if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
+		// Set endpoint mark.
+		rules = append(rules, Rule{
+			Action: SetMaskedMarkAction{
+				Mark: endPointMark,
+				Mask: epMarkMapper.GetMask()},
+		})
+	}
+	return &Chain{
+		Name:  chainName,
+		Rules: rules,
+	}
+}
 
 func (r *DefaultRuleRenderer) endpointIptablesChain(
 	policyNames []string,
@@ -246,19 +259,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		return &Chain{
 			Name:  chainName,
 			Rules: rules,
-		}
-	}
-
-	if chainType == chainTypeSetEndPointMark {
-		if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
-			// Set endpoint mark.
-			rules = append(rules, Rule{
-				Action: SetMarkAction{Mark: endPointMark},
-			})
-			return &Chain{
-				Name:  chainName,
-				Rules: rules,
-			}
 		}
 	}
 

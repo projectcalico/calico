@@ -39,11 +39,11 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 		markBitsManager := markbits.NewMarkBitsManager(configParams.IptablesMarkMask, "felix-iptables")
 		// Dedicated mark bits for accept and pass actions.  These are long lived bits
 		// that we use for communicating between chains.
-		markAccept, _ := markBitsManager.NextSigleBitMark()
-		markPass, _ := markBitsManager.NextSigleBitMark()
+		markAccept, _ := markBitsManager.NextSingleBitMark()
+		markPass, _ := markBitsManager.NextSingleBitMark()
 		// Short-lived mark bits for local calculations within a chain.
-		markScratch0, _ := markBitsManager.NextSigleBitMark()
-		markScratch1, _ := markBitsManager.NextSigleBitMark()
+		markScratch0, _ := markBitsManager.NextSingleBitMark()
+		markScratch1, _ := markBitsManager.NextSingleBitMark()
 		if markAccept == 0 || markPass == 0 || markScratch0 == 0 || markScratch1 == 0 {
 			log.WithFields(log.Fields{
 				"Name":     "felix-iptables",

@@ -149,9 +149,8 @@ func init() {
 }
 
 func getMarkBitsResult(m *markbits.MarkBitsManager, size int) (*markBitsResult, error) {
-
 	if size == SingleBitAlloc {
-		mark, err := m.NextSigleBitMark()
+		mark, err := m.NextSingleBitMark()
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +160,6 @@ func getMarkBitsResult(m *markbits.MarkBitsManager, size int) (*markBitsResult, 
 			currentFreeBits: m.AvailableMarkBitCount(),
 			currentFreePos:  m.CurrentFreeNumberOfMark(),
 		}, nil
-
 	}
 
 	mark, allocated := m.NextBlockBitsMark(size)
@@ -174,5 +172,4 @@ func getMarkBitsResult(m *markbits.MarkBitsManager, size int) (*markBitsResult, 
 		currentFreeBits: m.AvailableMarkBitCount(),
 		currentFreePos:  m.CurrentFreeNumberOfMark(),
 	}, nil
-
 }

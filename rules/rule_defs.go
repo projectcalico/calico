@@ -83,7 +83,7 @@ const (
 
 	WorkloadToEndpointPfx      = ChainNamePrefix + "tw-"
 	WorkloadFromEndpointPfx    = ChainNamePrefix + "fw-"
-	WorkloadSetEndPointMarkPfx = ChainNamePrefix + "sepm-"
+	WorkloadSetEndPointMarkPfx = ChainNamePrefix + "sm-"
 
 	HostToEndpointPfx          = ChainNamePrefix + "th-"
 	HostFromEndpointPfx        = ChainNamePrefix + "fh-"

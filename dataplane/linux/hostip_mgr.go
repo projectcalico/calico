@@ -81,7 +81,7 @@ func (m *hostIPManager) getCurrentMembers() []string {
 func (m *hostIPManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *ifaceAddrsUpdate:
-		log.WithField("update", msg).Info("GJM Interface addrs changed.")
+		log.WithField("update", msg).Info("Interface addrs changed.")
 		if m.nonHostIfacesRegexp.MatchString(msg.Name) {
 			log.WithField("update", msg).Debug("Not a real host interface, ignoring.")
 			return

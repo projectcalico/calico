@@ -36,6 +36,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	}
 
 	return append(
+		// Assembly a from-workload and to-workload dispatch chain.
 		r.dispatchChains(
 			names,
 			epMarkMapper,
@@ -47,6 +48,10 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 			true,
 			false,
 		),
+		// In some scenario, e.g. packet goes to an kuberentes ipvs service ip. Traffic goes through input/output filter chain
+		// instead of forward filter chain. It is not feasible to match on an incoming workload interface with service ips.
+		// Assembly a set-endpoint-mark chain to set endpoint mark matching on an incoming workload interface and
+		// a from-endpoint-mark chain to jump to a corresponding endpoint chain matching on its' endpoint mark.
 		r.dispatchChains(
 			names,
 			epMarkMapper,
@@ -265,7 +270,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				} else if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
 					// implement each name into root rules for from-endpoint-mark chain.
 					rootToEndpointRules = append(rootToEndpointRules, Rule{
-						Match: Match().MarkSet(endPointMark),
+						Match: Match().MarkMultiSet(endPointMark, epMarkMapper.GetMask()),
 						Action: GotoAction{
 							Target: EndpointChainName(toEndpointPfx, name),
 						},
@@ -330,7 +335,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				})
 			} else if endPointMark, err := epMarkMapper.GetEndpointMark(ifaceName); err == nil {
 				rootToEndpointRules = append(rootToEndpointRules, Rule{
-					Match: Match().MarkSet(endPointMark),
+					Match: Match().MarkMultiSet(endPointMark, epMarkMapper.GetMask()),
 					Action: GotoAction{
 						Target: EndpointChainName(toEndpointPfx, ifaceName),
 					},

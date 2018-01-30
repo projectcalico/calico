@@ -48,8 +48,12 @@ func NewMarkBitsManager(markMask uint32, markName string) *MarkBitsManager {
 	}
 }
 
+func (mc *MarkBitsManager) GetMask() uint32 {
+	return mc.mask
+}
+
 // Allocate next mark bit.
-func (mc *MarkBitsManager) NextSigleBitMark() (uint32, error) {
+func (mc *MarkBitsManager) NextSingleBitMark() (uint32, error) {
 	mc.mutex.Lock()
 	defer mc.mutex.Unlock()
 

@@ -16,18 +16,18 @@ package rules
 
 import (
 	"errors"
-	"sync"
+	"hash/fnv"
 
 	"github.com/projectcalico/felix/markbits"
-	log "github.com/sirupsen/logrus"
 )
 
 // Endpoint Mark Mapper (EPM) provides set of functions to manage allocation/free endpoint mark bit
-// given a mark bit mask.
+// given a mark bit mask. Note: This is not thread safe.
 type EndpointMarkMapper interface {
+	GetMask() uint32
 	GetEndpointMark(ep string) (uint32, error)
-	RemoveEndpointMark(ep string)
-	SetEndpointMark(ep string, mark uint32) (error)
+	ReleaseEndpointMark(ep string)
+	SetEndpointMark(ep string, mark uint32) error
 }
 
 type DefaultEPMarkManager struct {
@@ -35,9 +35,8 @@ type DefaultEPMarkManager struct {
 	maxPosition     int
 
 	activeEndpointToPosition map[string]int
+	activeEndpointToMark     map[string]uint32
 	activePositionToEndpoint map[int]string
-
-	mutex sync.Mutex
 }
 
 func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
@@ -47,8 +46,13 @@ func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
 		markBitsManager:          markBitsManager,
 		maxPosition:              markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
 		activeEndpointToPosition: map[string]int{},
+		activeEndpointToMark:     map[string]uint32{},
 		activePositionToEndpoint: map[int]string{},
 	}
+}
+
+func (epmm *DefaultEPMarkManager) GetMask() uint32 {
+	return epmm.markBitsManager.GetMask()
 }
 
 func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
@@ -57,85 +61,66 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 		return 0, errors.New("Invalid endpoint name")
 	}
 
-	epmm.mutex.Lock()
-	defer epmm.mutex.Unlock()
-
 	// Return current mark for Endpoint if it already has one.
-	if pos, ok := epmm.activeEndpointToPosition[ep]; ok {
-		mark, err := epmm.markBitsManager.MapNumberToMark(pos)
-		if err != nil {
-			return 0, err
-		}
+	if mark, ok := epmm.activeEndpointToMark[ep]; ok {
 		return mark, nil
 	}
 
 	// Try to allocate a position based on a simple hash from endpoint name.
-	// Make sure we are likely to get a good performance based on average 10 to 50 pods per node.
+	h := fnv.New32()
+	h.Write([]byte(ep))
+	total := int(h.Sum32())
 
-	// Take last two bytes or one byte from name and take the modulus of max position.
-	var total int
-	bytes := []byte(ep)
-	if length >= 2 {
-		total = int(uint32(bytes[length-2])<<8 + uint32(bytes[length-1]))
-	} else {
-		total = int(bytes[length-1])
-	}
-	prospect := total % epmm.maxPosition //Get hash position prospect
-	if prospect == 0 {
-		// Make sure it is not zero
-		prospect++
-	}
-
-	if _, alloced := epmm.activePositionToEndpoint[prospect]; alloced {
-		// We got a collision, prospect position has been allocated. Walk through and find an empty position.
-		for i := 0; i < epmm.maxPosition && alloced; i++ {
-			prospect++
-			if prospect >= epmm.maxPosition {
-				prospect = 1 // Make sure it is not zero
-			}
-
-			_, alloced = epmm.activePositionToEndpoint[prospect]
+	var prospect int
+	for i := 0; i < epmm.maxPosition; i++ {
+		prospect = (total + i) % epmm.maxPosition
+		if prospect == 0 {
+			// Make sure we get non zero position number.
+			continue
 		}
-
-		if alloced {
-			return 0, errors.New("No mark position left")
+		_, alreadyAlloced := epmm.activePositionToEndpoint[prospect]
+		if !alreadyAlloced {
+			break
 		}
 	}
 
-	epmm.activePositionToEndpoint[prospect] = ep
-	epmm.activeEndpointToPosition[ep] = prospect
 	mark, err := epmm.markBitsManager.MapNumberToMark(prospect)
 	if err != nil {
 		return 0, err
 	}
-	log.WithFields(log.Fields{
-		"ep":   ep,
-		"Pos":  prospect,
-		"Mark": mark,
-	}).Debug("Got endpoint mark")
+	epmm.setMark(ep, prospect, mark)
 	return mark, nil
 }
 
-func (epmm *DefaultEPMarkManager) RemoveEndpointMark(ep string) {
-	epmm.mutex.Lock()
-	defer epmm.mutex.Unlock()
-
-	if _, ok := epmm.activeEndpointToPosition[ep]; ok {
-		pos := epmm.activeEndpointToPosition[ep]
+func (epmm *DefaultEPMarkManager) ReleaseEndpointMark(ep string) {
+	if pos, ok := epmm.activeEndpointToPosition[ep]; ok {
 		delete(epmm.activeEndpointToPosition, ep)
+		delete(epmm.activeEndpointToMark, ep)
 		delete(epmm.activePositionToEndpoint, pos)
 	}
 }
 
+// This is used to set a mark for an endpoint from previous allocated mark.
+// The endpoint should not have a mark already.
 func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) error {
-	epmm.mutex.Lock()
-	defer epmm.mutex.Unlock()
+	if current, ok := epmm.activeEndpointToMark[ep]; ok {
+		// We got a mark already.
+		if current != mark {
+			return errors.New("Different mark already exists")
+		}
+		return nil
+	}
 
 	pos, err := epmm.markBitsManager.MapMarkToNumber(mark)
 	if err != nil {
 		return err
 	}
+	epmm.setMark(ep, pos, mark)
+	return nil
+}
+
+func (epmm *DefaultEPMarkManager) setMark(ep string, pos int, mark uint32) {
 	epmm.activePositionToEndpoint[pos] = ep
 	epmm.activeEndpointToPosition[ep] = pos
-	return nil
+	epmm.activeEndpointToMark[ep] = mark
 }
