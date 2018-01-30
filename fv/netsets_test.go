@@ -277,6 +277,92 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				})
 			})
 
+			Describe("after adding a new, overlapping source network set", func() {
+				var srcNS2 *api.GlobalNetworkSet
+
+				BeforeEach(func() {
+					srcNS2 = api.NewGlobalNetworkSet()
+					srcNS2.Name = "ns-3"
+					srcNS2.Spec.Nets = []string{
+						"10.65.1.0/24", // exact match
+						"10.65.2.1/32", // subset of other net set's CIDR
+						"10.65.3.0/24", // unique to this net set
+					}
+					srcNS2.Labels = map[string]string{
+						"allow-as-source": "",
+					}
+					var err error
+					srcNS2, err = client.GlobalNetworkSets().Create(utils.Ctx, srcNS2, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should have expected connectivity", func() {
+					cc.ExpectNone(w[0], w[1]) // not in dest net set
+					cc.ExpectSome(w[0], w[2])
+					cc.ExpectSome(w[0], w[3])
+					cc.ExpectNone(w[1], w[0]) // not in dest net set
+					cc.ExpectSome(w[1], w[2])
+					cc.ExpectSome(w[1], w[3])
+					cc.ExpectNone(w[2], w[0]) // not in dest net set
+					cc.ExpectNone(w[2], w[1]) // not in dest net set
+					cc.ExpectSome(w[2], w[3])
+					// 3 is now a valid source.
+					cc.ExpectNone(w[3], w[0])
+					cc.ExpectNone(w[3], w[1])
+					cc.ExpectSome(w[3], w[2])
+					cc.CheckConnectivity()
+				})
+
+				Describe("after removing the original src netset", func() {
+					BeforeEach(func() {
+						_, err := client.GlobalNetworkSets().Delete(utils.Ctx, srcNS.Name, options.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("should have expected connectivity", func() {
+						// w[0] is no longer a valid source.
+						cc.ExpectNone(w[0], w[1])
+						cc.ExpectNone(w[0], w[2])
+						cc.ExpectNone(w[0], w[3])
+
+						cc.ExpectNone(w[1], w[0]) // not in dest net set
+						cc.ExpectSome(w[1], w[2])
+						cc.ExpectSome(w[1], w[3])
+
+						cc.ExpectNone(w[2], w[0]) // not in dest net set
+						cc.ExpectNone(w[2], w[1]) // not in dest net set
+						cc.ExpectSome(w[2], w[3])
+
+						// 3 is still a valid source.
+						cc.ExpectNone(w[3], w[0])
+						cc.ExpectNone(w[3], w[1])
+						cc.ExpectSome(w[3], w[2])
+						cc.CheckConnectivity()
+					})
+
+					Describe("after removing the new src netset", func() {
+						BeforeEach(func() {
+							_, err := client.GlobalNetworkSets().Delete(utils.Ctx, srcNS2.Name, options.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+						})
+						It("should have no connectivity", assertNoConnectivity)
+					})
+				})
+
+				Describe("after removing the new src netset", func() {
+					BeforeEach(func() {
+						// Make sure the new netset becomes active before we remove it...
+						cc.ExpectSome(w[3], w[2])
+						cc.CheckConnectivity()
+						cc.ResetExpectations()
+
+						_, err := client.GlobalNetworkSets().Delete(utils.Ctx, srcNS2.Name, options.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					})
+					It("should have baseline connectivity", assertBaselineNetsetsConnectivity)
+				})
+			})
+
 			Describe("after adding duplicate and overlapping members", func() {
 				BeforeEach(func() {
 					srcNS.Spec.Nets = []string{
@@ -378,6 +464,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 						})
 						It("should have no connectivity", assertNoConnectivity)
 					})
+
 					Describe("after removing the dest netset", func() {
 						BeforeEach(func() {
 							_, err := client.GlobalNetworkSets().Delete(utils.Ctx, destNS.Name, options.DeleteOptions{})
