@@ -73,14 +73,23 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 
 	Describe("connectivity tests", func() {
 		var (
-			w  [4]*workload.Workload
-			cc *workload.ConnectivityChecker
+			w   [4]*workload.Workload
+			cc  *workload.ConnectivityChecker
+			pol *api.GlobalNetworkPolicy
 		)
 
-		createPolicy := func(policy *api.GlobalNetworkPolicy) {
+		createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
 			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
-			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			policy, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
+			return policy
+		}
+
+		updatePolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
+			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
+			policy, err := client.GlobalNetworkPolicies().Update(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+			return policy
 		}
 
 		BeforeEach(func() {
@@ -106,7 +115,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				Protocol: "tcp",
 			}
 
-			pol := api.NewGlobalNetworkPolicy()
+			pol = api.NewGlobalNetworkPolicy()
 			pol.Namespace = "fv"
 			pol.Name = "policy-1"
 			pol.Spec.Ingress = []api.Rule{
@@ -127,7 +136,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			}
 			pol.Spec.Selector = "all()"
 
-			createPolicy(pol)
+			pol = createPolicy(pol)
 		})
 
 		It("with no matching network sets, should deny all", func() {
@@ -146,46 +155,157 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			cc.CheckConnectivity()
 		})
 
-		It("with network sets matching some workloads, should have expected connectivity", func() {
-			srcNS := api.NewGlobalNetworkSet()
-			srcNS.Name = "ns-1"
-			srcNS.Spec.Nets = []string{
-				"10.65.0.0/24",
-				"10.65.1.0/24",
-				"10.65.2.0/24",
-			}
-			srcNS.Labels = map[string]string{
-				"allow-as-source": "",
-			}
-			_, err := client.GlobalNetworkSets().Create(utils.Ctx, srcNS, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
+		Describe("with network sets matching some workloads", func() {
+			var (
+				srcNS  *api.GlobalNetworkSet
+				destNS *api.GlobalNetworkSet
+			)
 
-			destNS := api.NewGlobalNetworkSet()
-			destNS.Name = "ns-2"
-			destNS.Spec.Nets = []string{
-				"10.65.2.0/24",
-				"10.65.3.0/24",
-			}
-			destNS.Labels = map[string]string{
-				"allow-as-dest": "",
-			}
-			_, err = client.GlobalNetworkSets().Create(utils.Ctx, destNS, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
+			BeforeEach(func() {
+				// We put workloads 0, 1 and 2 in a set that's allowed as a source.
+				srcNS = api.NewGlobalNetworkSet()
+				srcNS.Name = "ns-1"
+				srcNS.Spec.Nets = []string{
+					"10.65.0.0/24",
+					"10.65.1.0/24",
+					"10.65.2.0/24",
+				}
+				srcNS.Labels = map[string]string{
+					"allow-as-source": "",
+				}
+				var err error
+				srcNS, err = client.GlobalNetworkSets().Create(utils.Ctx, srcNS, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
 
-			cc.ExpectNone(w[0], w[1]) // not in dest net set
-			cc.ExpectSome(w[0], w[2])
-			cc.ExpectSome(w[0], w[3])
-			cc.ExpectNone(w[1], w[0]) // not in dest net set
-			cc.ExpectSome(w[1], w[2])
-			cc.ExpectSome(w[1], w[3])
-			cc.ExpectNone(w[2], w[0]) // not in dest net set
-			cc.ExpectNone(w[2], w[1]) // not in dest net set
-			cc.ExpectSome(w[2], w[3])
-			// 3 isn't in the source net set so it can't talk to anyone.
-			cc.ExpectNone(w[3], w[0])
-			cc.ExpectNone(w[3], w[1])
-			cc.ExpectNone(w[3], w[2])
-			cc.CheckConnectivity()
+				// We put workloads 2 and 3 in a set that's allowed as destination.
+				destNS = api.NewGlobalNetworkSet()
+				destNS.Name = "ns-2"
+				destNS.Spec.Nets = []string{
+					"10.65.2.0/24",
+					"10.65.3.0/24",
+				}
+				destNS.Labels = map[string]string{
+					"allow-as-dest": "",
+				}
+				destNS, err = client.GlobalNetworkSets().Create(utils.Ctx, destNS, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			assertBaselineNetsetsConnectivity := func() {
+				cc.ExpectNone(w[0], w[1]) // not in dest net set
+				cc.ExpectSome(w[0], w[2])
+				cc.ExpectSome(w[0], w[3])
+				cc.ExpectNone(w[1], w[0]) // not in dest net set
+				cc.ExpectSome(w[1], w[2])
+				cc.ExpectSome(w[1], w[3])
+				cc.ExpectNone(w[2], w[0]) // not in dest net set
+				cc.ExpectNone(w[2], w[1]) // not in dest net set
+				cc.ExpectSome(w[2], w[3])
+				// 3 isn't in the source net set so it can't talk to anyone.
+				cc.ExpectNone(w[3], w[0])
+				cc.ExpectNone(w[3], w[1])
+				cc.ExpectNone(w[3], w[2])
+				cc.CheckConnectivity()
+			}
+
+			It("should have expected connectivity", assertBaselineNetsetsConnectivity)
+
+			Describe("after updating some members in the sets", func() {
+				BeforeEach(func() {
+					srcNS.Spec.Nets = []string{
+						// "10.65.0.0/24", removed
+						"10.65.1.0/24",
+						"10.65.2.0/24",
+						"10.65.3.0/24", // added
+					}
+					var err error
+					srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+
+					destNS.Spec.Nets = []string{
+						// "10.65.2.0/24", removed
+						"10.65.1.0/24", // added
+						"10.65.3.0/24",
+					}
+					destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should have expected connectivity", func() {
+					// Now w[0] isn't in the source set so it can't talk to anyone.
+					cc.ExpectNone(w[0], w[1])
+					cc.ExpectNone(w[0], w[2])
+					cc.ExpectNone(w[0], w[3])
+
+					cc.ExpectNone(w[1], w[0]) // not in dest net set
+					cc.ExpectNone(w[1], w[2]) // not in dest net set
+					cc.ExpectSome(w[1], w[3])
+
+					cc.ExpectNone(w[2], w[0]) // not in dest net set
+					cc.ExpectSome(w[2], w[1])
+					cc.ExpectSome(w[2], w[3])
+
+					cc.ExpectNone(w[3], w[0])
+					cc.ExpectSome(w[3], w[1])
+					cc.ExpectNone(w[3], w[2])
+					cc.CheckConnectivity()
+				})
+
+				Describe("after reverting the change", func() {
+					BeforeEach(func() {
+						srcNS.Spec.Nets = []string{
+							"10.65.0.0/24",
+							"10.65.1.0/24",
+							"10.65.2.0/24",
+						}
+						var err error
+						srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred())
+
+						destNS.Spec.Nets = []string{
+							"10.65.2.0/24",
+							"10.65.3.0/24",
+						}
+						destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
+				})
+			})
+
+			Describe("after updating rules to allow some traffic based on workload labels", func() {
+				BeforeEach(func() {
+					pol.Spec.Ingress[0].Source.Selector =
+						"has(allow-as-source) || name in {'" + w[3].Name + "', '" + w[0].Name + "'}"
+					pol = updatePolicy(pol)
+				})
+
+				It("should have expected connectivity", func() {
+					cc.ExpectNone(w[0], w[1]) // not in dest net set
+					cc.ExpectSome(w[0], w[2])
+					cc.ExpectSome(w[0], w[3])
+					cc.ExpectNone(w[1], w[0]) // not in dest net set
+					cc.ExpectSome(w[1], w[2])
+					cc.ExpectSome(w[1], w[3])
+					cc.ExpectNone(w[2], w[0]) // not in dest net set
+					cc.ExpectNone(w[2], w[1]) // not in dest net set
+					cc.ExpectSome(w[2], w[3])
+					cc.ExpectNone(w[3], w[0])
+					cc.ExpectNone(w[3], w[1])
+					cc.ExpectSome(w[3], w[2]) // Can now reach
+					cc.CheckConnectivity()
+				})
+
+				Describe("after reverting that change", func() {
+					BeforeEach(func() {
+						pol.Spec.Ingress[0].Source.Selector = "has(allow-as-source)"
+						pol = updatePolicy(pol)
+					})
+
+					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
+				})
+			})
 		})
 
 		AfterEach(func() {

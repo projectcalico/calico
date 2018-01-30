@@ -23,7 +23,9 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
@@ -409,9 +411,33 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 
 func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
 	// Make sure that we retry at least once even if the check itself takes >10s.
-	if reflect.DeepEqual(c.ActualConnectivity(), c.ExpectedConnectivity()) {
+	expConnectivity := c.ExpectedConnectivity()
+	if reflect.DeepEqual(c.ActualConnectivity(), expConnectivity) {
 		return
 	}
-	EventuallyWithOffset(1, c.ActualConnectivity(), "10s", "100ms").Should(
-		Equal(c.ExpectedConnectivity()), optionalDescription...)
+	start := time.Now()
+	completedAttempts := 0
+	var actualConn []string
+	for time.Since(start) < 10*time.Second || completedAttempts <= 1 {
+		actualConn = c.ActualConnectivity()
+		if reflect.DeepEqual(actualConn, expConnectivity) {
+			return
+		}
+		completedAttempts++
+	}
+
+	// Build a concise description of the incorrect connectivity.
+	for i := range actualConn {
+		if actualConn[i] != expConnectivity[i] {
+			actualConn[i] += " <---- WRONG"
+			expConnectivity[i] += " <----"
+		}
+	}
+
+	message := fmt.Sprintf(
+		"Connectivity was incorrect:\n\nExpected\n    %s\nto equal\n    %s",
+		strings.Join(actualConn, "\n    "),
+		strings.Join(expConnectivity, "\n    "),
+	)
+	Fail(message, 1)
 }
