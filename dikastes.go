@@ -93,7 +93,7 @@ func runServer(arguments map[string]interface{}) {
 	}
 	gs := grpc.NewServer()
 	store := policystore.NewPolicyStore()
-	checkServer := checker.NewServer(getNodeName(), store)
+	checkServer := checker.NewServer(store)
 	authz.RegisterAuthorizationServer(gs, checkServer)
 
 	// Synchronize the policy store
@@ -117,14 +117,6 @@ func runServer(arguments map[string]interface{}) {
 	// Block until a signal is received.
 	s := <-c
 	log.Infof("Got signal:", s)
-}
-
-func getNodeName() string {
-	nn, ok := os.LookupEnv(NODE_NAME_ENV)
-	if !ok {
-		log.Fatalf("Environment variable %v is required.", NODE_NAME_ENV)
-	}
-	return nn
 }
 
 func runClient(arguments map[string]interface{}) {
