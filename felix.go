@@ -456,7 +456,8 @@ configRetry:
 
 	// Start communicating with dikastes instances.
 	policySyncProcessor.Start()
-	policySyncServer.Serve(true, "/var/run/calico/policysync.sock")
+	// TODO: Make path configurable
+	policySyncServer.Serve(true, "/tmp/udsuspver/mgmt.sock")
 
 	// Send the opening message to the dataplane driver, giving it its
 	// config.

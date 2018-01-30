@@ -32,7 +32,7 @@ const (
 	SockName       = "/policysync.sock"
 	OrchestratorId = "k8s"
 	EndpointId     = "eth0"
-	PathPrefix     = ""
+	PathPrefix     = "/tmp/nodeagent"
 )
 
 // WorkloadAPIServer implements the API that each policy-sync agent connects to in order to get policy information.
@@ -89,7 +89,7 @@ func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 		return errors.New("Unable to authenticate client.")
 	}
 	// TODO Ensure names are correctly handled/namespaced
-	workloadID := creds.Namespace + "/" + creds.Uid
+	workloadID := creds.Namespace + "/" + creds.Name
 
 	// Allocate a new unique join ID, this allows the processor to disambiguate if there are multiple connections
 	// for the same workload, which can happen transiently over client restart.  In particular, if our "leave"
