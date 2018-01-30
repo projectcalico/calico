@@ -54,11 +54,11 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 		// Mark bits for end point mark. Currently felix takes the rest bits from mask available for use.
 		markEndpointMark, _ := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
 		log.WithFields(log.Fields{
-			"acceptMark":   markAccept,
-			"passMark":     markPass,
-			"scratch0Mark": markScratch0,
-			"scratch1Mark": markScratch1,
-			"endpointMark": markEndpointMark,
+			"acceptMark":    markAccept,
+			"passMark":      markPass,
+			"scratch0Mark":  markScratch0,
+			"scratch1Mark":  markScratch1,
+			"endpointMark":  markEndpointMark,
 			"kubePortRange": configParams.KubeNodePortRange.String(),
 		}).Info("Calculated iptables mark bits")
 

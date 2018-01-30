@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/kardianos/osext"
-	log "github.com/sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

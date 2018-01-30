@@ -16,6 +16,7 @@ package rules
 
 import (
 	"errors"
+	"hash"
 	"hash/fnv"
 
 	"github.com/projectcalico/felix/markbits"
@@ -34,6 +35,8 @@ type DefaultEPMarkManager struct {
 	markBitsManager *markbits.MarkBitsManager
 	maxPosition     int
 
+	hash32 hash.Hash32
+
 	activeEndpointToPosition map[string]int
 	activeEndpointToMark     map[string]uint32
 	activePositionToEndpoint map[int]string
@@ -43,8 +46,9 @@ func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
 	return &DefaultEPMarkManager{
-		markBitsManager:          markBitsManager,
-		maxPosition:              markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
+		markBitsManager: markBitsManager,
+		maxPosition:     markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
+		hash32:          fnv.New32(),
 		activeEndpointToPosition: map[string]int{},
 		activeEndpointToMark:     map[string]uint32{},
 		activePositionToEndpoint: map[int]string{},
@@ -66,10 +70,9 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 		return mark, nil
 	}
 
-	// Try to allocate a position based on a simple hash from endpoint name.
-	h := fnv.New32()
-	h.Write([]byte(ep))
-	total := int(h.Sum32())
+	// Try to allocate a position based on hash from endpoint name.
+	epmm.hash32.Write([]byte(ep))
+	total := int(epmm.hash32.Sum32())
 
 	var prospect int
 	for i := 0; i < epmm.maxPosition; i++ {

@@ -136,7 +136,7 @@ func chainsForIfaces(ifaceMetadata []string,
 	inPrefix := "cali-to-"
 	epMarkSetName := "cali-set-endpoint-mark"
 	epMarkFromName := "cali-from-endpoint-mark"
-	epMarkSetOnePrefix := "cali-sepm-"
+	epMarkSetOnePrefix := "cali-sm-"
 
 	if host {
 		hostOrWlLetter = "h"
@@ -367,7 +367,7 @@ func chainsForIfaces(ifaceMetadata []string,
 					Name: epMarkSetOnePrefix + ifaceName,
 					Rules: []iptables.Rule{
 						iptables.Rule{
-							Action: iptables.SetMarkAction{Mark: epMark},
+							Action: iptables.SetMaskedMarkAction{Mark: epMark, Mask: epMarkMapper.GetMask()},
 						},
 					},
 				},
@@ -380,7 +380,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			)
 			epMarkFrom = append(epMarkFrom,
 				iptables.Rule{
-					Match:  iptables.Match().MarkSet(epMark),
+					Match:  iptables.Match().MarkMultiSet(epMark, epMarkMapper.GetMask()),
 					Action: iptables.GotoAction{Target: outPrefix[:6] + hostOrWlLetter + "-" + ifaceName},
 				},
 			)
@@ -542,7 +542,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				renderer,
 				routeTable,
 				ipVersion,
-				rrConfigNormal.IptablesMarkEndpoint,
+				rules.NewEndpointMarkMapper(rrConfigNormal.IptablesMarkEndpoint),
 				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,

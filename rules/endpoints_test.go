@@ -91,9 +91,9 @@ var _ = Describe("Endpoints", func() {
 					},
 				},
 				{
-					Name: "cali-sepm-cali1234",
+					Name: "cali-sm-cali1234",
 					Rules: []Rule{
-						{Action: SetMarkAction{Mark: 0x3400}},
+						{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
 					},
 				},
 			}))
@@ -116,9 +116,9 @@ var _ = Describe("Endpoints", func() {
 					},
 				},
 				{
-					Name: "cali-sepm-cali1234",
+					Name: "cali-sm-cali1234",
 					Rules: []Rule{
-						{Action: SetMarkAction{Mark: 0x3400}},
+						{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
 					},
 				},
 			}))
@@ -214,9 +214,9 @@ var _ = Describe("Endpoints", func() {
 					},
 				},
 				{
-					Name: "cali-sepm-cali1234",
+					Name: "cali-sm-cali1234",
 					Rules: []Rule{
-						{Action: SetMarkAction{Mark: 0x3400}},
+						{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
 					},
 				},
 			}))
@@ -496,9 +496,9 @@ var _ = Describe("Endpoints", func() {
 					},
 				},
 				{
-					Name: "cali-sepm-cali1234",
+					Name: "cali-sm-cali1234",
 					Rules: []Rule{
-						{Action: SetMarkAction{Mark: 0x3400}},
+						{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
 					},
 				},
 			}))

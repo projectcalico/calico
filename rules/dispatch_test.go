@@ -121,13 +121,13 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-set-endpoint-mark",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "cali-sepm-cali1234"),
+					inboundGotoRule("cali1234", "cali-sm-cali1234"),
 				},
 			},
 			{
 				Name: "cali-from-endpoint-mark",
 				Rules: []iptables.Rule{
-					epMarkFromGotoRule(0x3400, "cali-fw-cali1234"),
+					epMarkFromGotoRule(0xd400, 0xff00, "cali-fw-cali1234"),
 					expDropRule,
 				},
 			},
@@ -168,23 +168,23 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-set-endpoint-mark-2",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali2333", "cali-sepm-cali2333"),
-					inboundGotoRule("cali2444", "cali-sepm-cali2444"),
+					inboundGotoRule("cali2333", "cali-sm-cali2333"),
+					inboundGotoRule("cali2444", "cali-sm-cali2444"),
 				},
 			},
 			{
 				Name: "cali-set-endpoint-mark",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "cali-sepm-cali1234"),
+					inboundGotoRule("cali1234", "cali-sm-cali1234"),
 					inboundGotoRule("cali2+", "cali-set-endpoint-mark-2"),
 				},
 			},
 			{
 				Name: "cali-from-endpoint-mark",
 				Rules: []iptables.Rule{
-					epMarkFromGotoRule(0x3400, "cali-fw-cali1234"),
-					epMarkFromGotoRule(0x3300, "cali-fw-cali2333"),
-					epMarkFromGotoRule(0x3500, "cali-fw-cali2444"),
+					epMarkFromGotoRule(0xd400, 0xff00, "cali-fw-cali1234"),
+					epMarkFromGotoRule(0x8a00, 0xff00, "cali-fw-cali2333"),
+					epMarkFromGotoRule(0x7500, 0xff00, "cali-fw-cali2444"),
 					expDropRule,
 				},
 			},
@@ -245,16 +245,16 @@ var _ = Describe("Dispatch chains", func() {
 				{
 					Name: "cali-set-endpoint-mark-1",
 					Rules: []iptables.Rule{
-						inboundGotoRule("cali11", "cali-sepm-cali11"),
-						inboundGotoRule("cali12", "cali-sepm-cali12"),
-						inboundGotoRule("cali13", "cali-sepm-cali13"),
+						inboundGotoRule("cali11", "cali-sm-cali11"),
+						inboundGotoRule("cali12", "cali-sm-cali12"),
+						inboundGotoRule("cali13", "cali-sm-cali13"),
 					},
 				},
 				{
 					Name: "cali-set-endpoint-mark-2",
 					Rules: []iptables.Rule{
-						inboundGotoRule("cali21", "cali-sepm-cali21"),
-						inboundGotoRule("cali22", "cali-sepm-cali22"),
+						inboundGotoRule("cali21", "cali-sm-cali21"),
+						inboundGotoRule("cali22", "cali-sm-cali22"),
 					},
 				},
 				{
@@ -267,11 +267,11 @@ var _ = Describe("Dispatch chains", func() {
 				{
 					Name: "cali-from-endpoint-mark",
 					Rules: []iptables.Rule{
-						epMarkFromGotoRule(0x3100, "cali-fw-cali11"),
-						epMarkFromGotoRule(0x3200, "cali-fw-cali12"),
-						epMarkFromGotoRule(0x3300, "cali-fw-cali13"),
-						epMarkFromGotoRule(0x3400, "cali-fw-cali21"),
-						epMarkFromGotoRule(0x3500, "cali-fw-cali22"),
+						epMarkFromGotoRule(0x200, 0xff00, "cali-fw-cali11"),
+						epMarkFromGotoRule(0x7200, 0xff00, "cali-fw-cali12"),
+						epMarkFromGotoRule(0x6300, 0xff00, "cali-fw-cali13"),
+						epMarkFromGotoRule(0xf500, 0xff00, "cali-fw-cali21"),
+						epMarkFromGotoRule(0xe400, 0xff00, "cali-fw-cali22"),
 						expDropRule,
 					},
 				},
@@ -298,13 +298,13 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-set-endpoint-mark",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "cali-sepm-cali1234"),
+					inboundGotoRule("cali1234", "cali-sm-cali1234"),
 				},
 			},
 			{
 				Name: "cali-from-endpoint-mark",
 				Rules: []iptables.Rule{
-					epMarkFromGotoRule(0x3400, "cali-fw-cali1234"),
+					epMarkFromGotoRule(0xd400, 0xff00, "cali-fw-cali1234"),
 					expDropRule,
 				},
 			},
@@ -717,9 +717,9 @@ func outboundGotoRule(ifaceMatch string, target string) iptables.Rule {
 	}
 }
 
-func epMarkFromGotoRule(epMark uint32, target string) iptables.Rule {
+func epMarkFromGotoRule(epMark, mask uint32, target string) iptables.Rule {
 	return iptables.Rule{
-		Match:  iptables.Match().MarkSet(epMark),
+		Match:  iptables.Match().MarkMultiSet(epMark, mask),
 		Action: iptables.GotoAction{Target: target},
 	}
 }
