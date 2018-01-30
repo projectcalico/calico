@@ -198,6 +198,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindHostEndpoint,
+		resources.NewHostEndpointClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindWorkloadEndpoint,
 		resources.NewWorkloadEndpointClient(cs, ca.AlphaFeatures),
 	)
@@ -272,6 +278,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindGlobalNetworkPolicy,
 		apiv3.KindGlobalNetworkSet,
 		apiv3.KindIPPool,
+		apiv3.KindHostEndpoint,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
@@ -339,6 +346,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 				&apiv3.GlobalNetworkPolicyList{},
 				&apiv3.NetworkPolicy{},
 				&apiv3.NetworkPolicyList{},
+				&apiv3.HostEndpoint{},
+				&apiv3.HostEndpointList{},
 			)
 			return nil
 		})

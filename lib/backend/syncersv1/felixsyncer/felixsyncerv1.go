@@ -66,15 +66,10 @@ func New(client api.Client, callbacks api.SyncerCallbacks, datastoreType apiconf
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
 			UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
 		},
-	}
-
-	if datastoreType != apiconfig.Kubernetes {
-		resourceTypes = append(resourceTypes,
-			watchersyncer.ResourceType{
-				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
-				UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
-			},
-		)
+		{
+			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
+			UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
+		},
 	}
 
 	return watchersyncer.New(
