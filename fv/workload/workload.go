@@ -435,7 +435,7 @@ func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface
 	}
 
 	message := fmt.Sprintf(
-		"Connectivity was incorrect:\n\nExpected\n    %s\nto equal\n    %s",
+		"Connectivity was incorrect:\n\nExpected\n    %s\nto match\n    %s",
 		strings.Join(actualConn, "\n    "),
 		strings.Join(expConnectivity, "\n    "),
 	)
