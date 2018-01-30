@@ -139,7 +139,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			pol = createPolicy(pol)
 		})
 
-		It("with no matching network sets, should deny all", func() {
+		assertNoConnectivity := func() {
 			cc.ExpectNone(w[0], w[1])
 			cc.ExpectNone(w[0], w[2])
 			cc.ExpectNone(w[0], w[3])
@@ -153,7 +153,9 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			cc.ExpectNone(w[3], w[1])
 			cc.ExpectNone(w[3], w[2])
 			cc.CheckConnectivity()
-		})
+		}
+
+		It("with no matching network sets, should deny all", assertNoConnectivity)
 
 		Describe("with network sets matching some workloads", func() {
 			var (
@@ -210,6 +212,24 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 
 			It("should have expected connectivity", assertBaselineNetsetsConnectivity)
 
+			resetNetsetsMembers := func() {
+				srcNS.Spec.Nets = []string{
+					"10.65.0.0/24",
+					"10.65.1.0/24",
+					"10.65.2.0/24",
+				}
+				var err error
+				srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+
+				destNS.Spec.Nets = []string{
+					"10.65.2.0/24",
+					"10.65.3.0/24",
+				}
+				destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
 			Describe("after updating some members in the sets", func() {
 				BeforeEach(func() {
 					srcNS.Spec.Nets = []string{
@@ -252,24 +272,123 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				})
 
 				Describe("after reverting the change", func() {
+					BeforeEach(resetNetsetsMembers)
+					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
+				})
+			})
+
+			Describe("after adding duplicate and overlapping members", func() {
+				BeforeEach(func() {
+					srcNS.Spec.Nets = []string{
+						"10.65.1.0/24",
+						"10.65.2.0/24",
+						"10.65.3.1/32", // added
+						"10.65.3.1",    // added
+						"10.65.3.0/28", // added
+						"10.65.3.0/24", // added
+						"10.65.3.0/28", // added
+						"10.65.3.0/24", // added
+					}
+					var err error
+					srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+
+					destNS.Spec.Nets = []string{
+						// "10.65.2.0/24", removed
+						"10.65.1.0/24", // added
+						"10.65.1.0/25", // added
+						"10.65.1.1/32", // added
+						"10.65.3.0/24",
+					}
+					destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should have expected connectivity", func() {
+					// Now w[0] isn't in the source set so it can't talk to anyone.
+					cc.ExpectNone(w[0], w[1])
+					cc.ExpectNone(w[0], w[2])
+					cc.ExpectNone(w[0], w[3])
+
+					cc.ExpectNone(w[1], w[0]) // not in dest net set
+					cc.ExpectNone(w[1], w[2]) // not in dest net set
+					cc.ExpectSome(w[1], w[3])
+
+					cc.ExpectNone(w[2], w[0]) // not in dest net set
+					cc.ExpectSome(w[2], w[1])
+					cc.ExpectSome(w[2], w[3])
+
+					cc.ExpectNone(w[3], w[0])
+					cc.ExpectSome(w[3], w[1])
+					cc.ExpectNone(w[3], w[2])
+					cc.CheckConnectivity()
+				})
+
+				Describe("after removing some duplicates and adding back some members", func() {
 					BeforeEach(func() {
 						srcNS.Spec.Nets = []string{
-							"10.65.0.0/24",
 							"10.65.1.0/24",
 							"10.65.2.0/24",
+							"10.65.3.1/32", // added
+							"10.65.3.1",    // added
 						}
 						var err error
 						srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
 
 						destNS.Spec.Nets = []string{
+							"10.65.0.0/24",
 							"10.65.2.0/24",
+							"10.65.1.0/24",
 							"10.65.3.0/24",
 						}
 						destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
 					})
 
+					It("should have expected connectivity", func() {
+						// Now w[0] isn't in the source set so it can't talk to anyone.
+						cc.ExpectNone(w[0], w[1])
+						cc.ExpectNone(w[0], w[2])
+						cc.ExpectNone(w[0], w[3])
+
+						cc.ExpectSome(w[1], w[0])
+						cc.ExpectSome(w[1], w[2])
+						cc.ExpectSome(w[1], w[3])
+
+						cc.ExpectSome(w[2], w[0])
+						cc.ExpectSome(w[2], w[1])
+						cc.ExpectSome(w[2], w[3])
+
+						cc.ExpectSome(w[3], w[0])
+						cc.ExpectSome(w[3], w[1])
+						cc.ExpectSome(w[3], w[2])
+						cc.CheckConnectivity()
+					})
+
+					Describe("after reverting the netsets", func() {
+						BeforeEach(resetNetsetsMembers)
+						It("should have expected connectivity", assertBaselineNetsetsConnectivity)
+					})
+
+					Describe("after removing the src netset", func() {
+						BeforeEach(func() {
+							_, err := client.GlobalNetworkSets().Delete(utils.Ctx, srcNS.Name, options.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+						})
+						It("should have no connectivity", assertNoConnectivity)
+					})
+					Describe("after removing the dest netset", func() {
+						BeforeEach(func() {
+							_, err := client.GlobalNetworkSets().Delete(utils.Ctx, destNS.Name, options.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+						})
+						It("should have no connectivity", assertNoConnectivity)
+					})
+				})
+
+				Describe("after reverting the change", func() {
+					BeforeEach(resetNetsetsMembers)
 					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
 				})
 			})
@@ -295,6 +414,33 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 					cc.ExpectNone(w[3], w[1])
 					cc.ExpectSome(w[3], w[2]) // Can now reach
 					cc.CheckConnectivity()
+				})
+
+				Describe("after removing the src netset", func() {
+					BeforeEach(func() {
+						_, err := client.GlobalNetworkSets().Delete(utils.Ctx, srcNS.Name, options.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					})
+					It("should have expected connectivity", func() {
+						cc.ExpectNone(w[0], w[1]) // not in dest net set
+						cc.ExpectSome(w[0], w[2])
+						cc.ExpectSome(w[0], w[3])
+
+						// Doesn't match as a source.
+						cc.ExpectNone(w[1], w[0])
+						cc.ExpectNone(w[1], w[2])
+						cc.ExpectNone(w[1], w[3])
+
+						// Doesn't match as a source any more.
+						cc.ExpectNone(w[2], w[0])
+						cc.ExpectNone(w[2], w[1])
+						cc.ExpectNone(w[2], w[3])
+
+						cc.ExpectNone(w[3], w[0])
+						cc.ExpectNone(w[3], w[1])
+						cc.ExpectSome(w[3], w[2]) // Can now reach
+						cc.CheckConnectivity()
+					})
 				})
 
 				Describe("after reverting that change", func() {
