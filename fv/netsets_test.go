@@ -44,7 +44,7 @@ const (
 	numNetworkSets = 100
 )
 
-var _ = Context("Network sets churn test with initialized Felix and etcd datastore", func() {
+var _ = Context("Network sets tests with initialized Felix and etcd datastore", func() {
 
 	var (
 		etcd     *containers.Container

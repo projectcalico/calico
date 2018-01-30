@@ -28,6 +28,8 @@ import (
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -332,6 +334,8 @@ type expectation struct {
 	expected bool
 }
 
+var UnactivatedConnectivityCheckers = set.New()
+
 // ConnectivityChecker records a set of connectivity expectations and supports calculating the
 // actual state of the connectivity between the given workloads.  It is expected to be used like so:
 //
@@ -349,6 +353,7 @@ type ConnectivityChecker struct {
 }
 
 func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	UnactivatedConnectivityCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(connectionSource), from.(connectionTarget)
 	}
@@ -356,6 +361,7 @@ func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTar
 }
 
 func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	UnactivatedConnectivityCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(connectionSource), from.(connectionTarget)
 	}
@@ -371,6 +377,7 @@ func (c *ConnectivityChecker) ResetExpectations() {
 // human readable, and they are in the same order and format as those returned by
 // ExpectedConnectivity().
 func (c *ConnectivityChecker) ActualConnectivity() []string {
+	UnactivatedConnectivityCheckers.Discard(c)
 	var wg sync.WaitGroup
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
