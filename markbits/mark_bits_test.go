@@ -20,8 +20,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/markbits"
-	"fmt"
-	"golang.org/x/tools/cmd/guru/testdata/src/alias"
 )
 
 const (
@@ -112,21 +110,14 @@ func init() {
 	)
 
 	DescribeTable("MarkBits map number to mark",
-		func(mask uint32, number int, mark uint32) {
+		func(mask uint32, number int, expectedMark uint32) {
 			m := markbits.NewMarkBitsManager(mask, "MapNumberToMark")
 
 			resultMark, err := m.MapNumberToMark(number)
 			if err != nil {
-				Expect(mark).To(Equal(errMark))
+				Expect(expectedMark).To(Equal(errMark))
 			} else {
-				Expect(resultMark).To(Equal(mark))
-			}
-
-			resultNumber, err := m.MapMarkToNumber(mark)
-			if err != nil {
-				Expect(number).To(Equal(errNumber))
-			} else {
-				Expect(resultNumber).To(Equal(number)))
+				Expect(resultMark).To(Equal(expectedMark))
 			}
 		},
 
@@ -135,6 +126,25 @@ func init() {
 		Entry("should map with all bits", uint32(0x12300004), 0x1f, uint32(0x12300004)),
 		Entry("should map with max bits", uint32(0xffffffff), 0xffffffff, uint32(0xffffffff)),
 		Entry("should not map with less bits", uint32(0x12300004), 0x1235, errMark),
+	)
+
+	DescribeTable("MarkBits map mark to number",
+		func(mask uint32, mark uint32, expectedNumber int) {
+			m := markbits.NewMarkBitsManager(mask, "MapNumberToMark")
+
+			resultNumber, err := m.MapMarkToNumber(mark)
+			if err != nil {
+				Expect(expectedNumber).To(Equal(errNumber))
+			} else {
+				Expect(resultNumber).To(Equal(expectedNumber))
+			}
+		},
+
+		Entry("should map with one bit", uint32(0x10), uint32(0x10), 1),
+		Entry("should map with some bits", uint32(0x12300004), uint32(0x2300004), 0xf),
+		Entry("should map with all bits", uint32(0x12300004), uint32(0x12300004), 0x1f),
+		Entry("should map with max bits", uint32(0xffffffff), uint32(0xffffffff), 0xffffffff),
+		Entry("should not map with less bits", uint32(0x12300004), uint32(0x1230005), errNumber),
 	)
 }
 
