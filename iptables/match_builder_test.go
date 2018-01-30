@@ -35,6 +35,7 @@ var _ = DescribeTable("MatchBuilder",
 	// Marks.
 	Entry("MarkClear", Match().MarkClear(0x400a), "-m mark --mark 0/0x400a"),
 	Entry("MarkSet", Match().MarkSet(0x400a), "-m mark --mark 0x400a/0x400a"),
+	Entry("MarkMultiSet", Match().MarkMultiSet(0x400a, 0xf00f), "-m mark --mark 0x400a/0xf00f"),
 	// Conntrack.
 	Entry("ConntrackState", Match().ConntrackState("INVALID"), "-m conntrack --ctstate INVALID"),
 	// Interfaces.
