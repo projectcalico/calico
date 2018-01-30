@@ -73,7 +73,7 @@ get_templates() {
     repo_dir="/node-repo"
     if [ ! -d ${repo_dir} ]; then
         echo "Getting latest confd templates from calico repo"
-        git clone https://github.com/projectcalico/calico.git --branch=v2.6.x-series ${repo_dir}
+        git clone https://github.com/projectcalico/calico.git --branch=release-v2.6 ${repo_dir}
         ln -s ${repo_dir}/calico_node/filesystem/etc/calico/ /etc/calico
     fi
 }
