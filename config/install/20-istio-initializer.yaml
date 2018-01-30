@@ -12,12 +12,13 @@ data:
     namespaces: [""] # everything, aka v1.NamepsaceAll, aka cluster-wide
     initializerName: "sidecar.initializer.istio.io"
     params:
-      initImage: quay.io/calico/istio-proxy_init:20171130234734
-      proxyImage: quay.io/calico/istio-proxy_debug:20171130234734
+      initImage: quay.io/calico/istio-proxy_init:20180118230747
+      proxyImage: quay.io/calico/istio-proxy_debug:20180118230747
       verbosity: 2
       version: runner_171031_222114
       meshConfigMapName: istio
       imagePullPolicy: IfNotPresent
+      dikastesImage: quay.io/spikecurtis/dikastes:20180130152148
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -49,7 +50,7 @@ spec:
       serviceAccountName: istio-initializer-service-account
       containers:
         - name: initializer
-          image: quay.io/calico/istio-sidecar_initializer:20171130234734
+          image: quay.io/calico/istio-sidecar_initializer:spike_180130_133148
           imagePullPolicy: Always
           args:
             - --port=8083

@@ -190,12 +190,18 @@ spec:
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
+      initContainers:
+      - name: flexvol-driver
+        image: quay.io/saurabh/flexvol:178c1fa
+        volumeMounts:
+        - name: flexvol-driver-host
+          mountPath: /host/driver
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:v3.0.1
+          image: quay.io/spikecurtis/calico-node:policysync
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -267,6 +273,10 @@ spec:
             - mountPath: /var/run/calico
               name: var-run-calico
               readOnly: false
+            - name: test-mgmt
+              mountPath: /tmp/udsuspver
+            - name: test-workload
+              mountPath: /tmp/nodeagent
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -307,6 +317,20 @@ spec:
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
+        - name: test-mgmt
+          hostPath:
+            # directory location on host for the mgmt api between flexvolume driver and nodeagent
+            type: DirectoryOrCreate
+            path: /tmp/udsuspver
+        - name: test-workload
+          hostPath:
+            # directory location on host for the uds between nodeagent and workload
+            type: DirectoryOrCreate
+            path: /tmp/nodeagent
+        - name: flexvol-driver-host
+          hostPath:
+            type: DirectoryOrCreate
+            path: /opt/bin/volume-plugins/nodeagent~uds
 
 # Create all the CustomResourceDefinitions needed for
 # Calico policy and networking mode.

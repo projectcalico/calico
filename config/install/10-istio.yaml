@@ -340,7 +340,7 @@ spec:
       serviceAccountName: istio-pilot-service-account
       containers:
       - name: discovery
-        image: quay.io/calico/istio-pilot:20171130234734
+        image: quay.io/calico/istio-pilot:20180118230747
         imagePullPolicy: Always
         args: ["discovery", "-v", "2", "--admission-service", "istio-pilot-external"]
         ports:
@@ -422,7 +422,7 @@ spec:
       serviceAccountName: istio-ingress-service-account
       containers:
       - name: istio-ingress
-        image: quay.io/calico/istio-proxy_debug:20171130234734
+        image: quay.io/calico/istio-proxy_debug:20180118230747
         args:
         - proxy
         - ingress
@@ -504,7 +504,7 @@ spec:
       serviceAccountName: istio-egress-service-account
       containers:
       - name: proxy
-        image: quay.io/calico/istio-proxy_debug:20171130234734
+        image: quay.io/calico/istio-proxy_debug:20180118230747
         imagePullPolicy: IfNotPresent
         args:
         - proxy
@@ -560,78 +560,6 @@ spec:
       serviceAccountName: istio-ca-service-account
       containers:
       - name: istio-ca
-        image: quay.io/calico/istio-ca:20171130235454
+        image: quay.io/calico/istio-ca:20180118231149
         imagePullPolicy: IfNotPresent
 
-##########################
-# Dikastes
-##########################
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: dikastes-node
-  namespace: istio-system
----
-kind: DaemonSet
-apiVersion: extensions/v1beta1
-metadata:
-  name: dikastes-node
-  namespace: istio-system
-  labels:
-    k8s-app: dikastes-node
-spec:
-  selector:
-    matchLabels:
-      k8s-app: dikastes-node
-  template:
-    metadata:
-      labels:
-        k8s-app: dikastes-node
-      annotations:
-        # This, along with the CriticalAddonsOnly toleration below,
-        # marks the pod as a critical add-on, ensuring it gets
-        # priority scheduling and that its resources are reserved
-        # if it ever gets evicted.
-        scheduler.alpha.kubernetes.io/critical-pod: ''
-    spec:
-      # hostPID is required to map callers over the unix socket to pods
-      hostPID: true
-      serviceAccountName: dikastes-node
-      tolerations:
-        # Mark the pod as a critical add-on for rescheduling.
-        - key: "CriticalAddonsOnly"
-          operator: "Exists"
-      containers:
-        # Runs calico/node container on each Kubernetes node.  This
-        # container programs network policy and routes on each
-        # host.
-        - name: dikastes-node
-          image: quay.io/calico/dikastes:20171130213137
-          imagePullPolicy: Always
-          args:
-            - /dikastes
-            - server
-            - --debug
-            - -l
-            - "/var/run/dikastes/dikastes.sock"
-            - "-k"
-            - "https://10.100.0.1:443"
-          volumeMounts:
-            - mountPath: /var/run/dikastes
-              name: var-run-dikastes
-              readOnly: false
-            - mountPath: /host/proc
-              name: host-proc
-          env:
-            - name: K8S_NODENAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-      volumes:
-        - name: var-run-dikastes
-          hostPath:
-            path: /var/run/dikastes
-        - name: host-proc
-          hostPath:
-            path: /proc

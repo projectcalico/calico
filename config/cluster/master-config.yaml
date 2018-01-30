@@ -130,7 +130,9 @@ coreos:
         --hostname-override=$private_ipv4 \
         --logtostderr=true \
         --register-node=true \
-        --register-schedulable=false
+        --register-schedulable=false \
+        --enable-controller-attach-detach=false \
+        --volume-plugin-dir=/opt/bin/volume-plugins
         Restart=always
         RestartSec=10
 

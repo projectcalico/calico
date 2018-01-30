@@ -58,7 +58,9 @@ coreos:
         --cluster-domain=cluster.local \
         --hostname-override=$private_ipv4 \
         --logtostderr=true \
-        --network-plugin=cni
+        --network-plugin=cni \
+        --enable-controller-attach-detach=false \
+        --volume-plugin-dir=/opt/bin/volume-plugins
         Restart=always
         RestartSec=10
 
