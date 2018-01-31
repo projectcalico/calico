@@ -65,6 +65,7 @@ rules:
       - globalnetworkpolicies
       - ippools
       - networkpolicies
+      - hostendpoints
     verbs:
       - create
       - get
