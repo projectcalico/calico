@@ -1765,17 +1765,17 @@ master:
   note: ""
   components:
      felix:
-      version: 2.6.x-series
+      version: release-v2.6
       url: ""
      calicoctl:
-      version: v1.6.x-series
+      version: release-v2.6
       url: "https://www.projectcalico.org/builds/calicoctl"
       download_url: "https://www.projectcalico.org/builds/calicoctl"
      calico/node:
-      version: v2.6.x-series
+      version: release-v2.6
       url: ""
      calico/cni:
-      version: v1.11.x-series
+      version: release-v2.6
       url: ""
       download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.1/calico
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.11.1/calico-ipam
@@ -1783,7 +1783,7 @@ master:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
      confd:
-      version: v2.6.x-dev
+      version: release-v2.6
      calico-bgp-daemon:
       version: v0.2.2
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.2
@@ -1791,7 +1791,7 @@ master:
       version: master
       url: ""
      calico/kube-controllers:
-      version: v1.x-series
+      version: release-v2.6
       url: ""
      networking-calico:
       version: master
