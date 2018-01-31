@@ -45,7 +45,7 @@ func init() {
 	DescribeTable("MarkBits initialization",
 		func(mask uint32, expectedFreeBits int, expectedFreePos int) {
 			m := markbits.NewMarkBitsManager(mask, "initialization")
-
+			Expect(m.GetMask()).To(Equal(mask))
 			Expect(m.AvailableMarkBitCount()).To(Equal(expectedFreeBits))
 			Expect(m.CurrentFreeNumberOfMark()).To(Equal(expectedFreePos))
 		},

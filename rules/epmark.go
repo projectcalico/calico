@@ -16,8 +16,8 @@ package rules
 
 import (
 	"errors"
-	"hash"
 	"hash/fnv"
+	"io"
 
 	"github.com/projectcalico/felix/markbits"
 )
@@ -35,23 +35,29 @@ type DefaultEPMarkManager struct {
 	markBitsManager *markbits.MarkBitsManager
 	maxPosition     int
 
-	hash32 hash.Hash32
+	hash32 HashCaculator32
 
 	activeEndpointToPosition map[string]int
 	activeEndpointToMark     map[string]uint32
 	activePositionToEndpoint map[int]string
+	activeMarkToEndpoint     map[uint32]string
 }
 
 func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
+	return NewEndpointMarkMapperWithShim(markMask, fnv.New32())
+}
+
+func NewEndpointMarkMapperWithShim(markMask uint32, hash32 HashCaculator32) EndpointMarkMapper {
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
 	return &DefaultEPMarkManager{
 		markBitsManager: markBitsManager,
 		maxPosition:     markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
-		hash32:          fnv.New32(),
+		hash32:          hash32,
 		activeEndpointToPosition: map[string]int{},
 		activeEndpointToMark:     map[string]uint32{},
 		activePositionToEndpoint: map[int]string{},
+		activeMarkToEndpoint:     map[uint32]string{},
 	}
 }
 
@@ -73,6 +79,7 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	// Try to allocate a position based on hash from endpoint name.
 	epmm.hash32.Write([]byte(ep))
 	total := int(epmm.hash32.Sum32())
+	epmm.hash32.Reset()
 
 	var prospect int
 	for i := 0; i < epmm.maxPosition; i++ {
@@ -96,20 +103,25 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 }
 
 func (epmm *DefaultEPMarkManager) ReleaseEndpointMark(ep string) {
-	if pos, ok := epmm.activeEndpointToPosition[ep]; ok {
-		delete(epmm.activeEndpointToPosition, ep)
-		delete(epmm.activeEndpointToMark, ep)
-		delete(epmm.activePositionToEndpoint, pos)
+	if mark, ok := epmm.activeEndpointToMark[ep]; ok {
+		epmm.deleteMark(ep, epmm.activeEndpointToPosition[ep], mark)
 	}
 }
 
 // This is used to set a mark for an endpoint from previous allocated mark.
 // The endpoint should not have a mark already.
 func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) error {
-	if current, ok := epmm.activeEndpointToMark[ep]; ok {
-		// We got a mark already.
-		if current != mark {
+	if currentMark, ok := epmm.activeEndpointToMark[ep]; ok {
+		// We got a endpoint with mark already.
+		if currentMark != mark {
 			return errors.New("Different mark already exists")
+		}
+		return nil
+	}
+	if currentEP, ok := epmm.activeMarkToEndpoint[mark]; ok {
+		// We got a mark with endpoint already.
+		if currentEP != ep {
+			return errors.New("Endpoint with this mark already exists")
 		}
 		return nil
 	}
@@ -122,8 +134,30 @@ func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) error 
 	return nil
 }
 
+func (epmm *DefaultEPMarkManager) deleteMark(ep string, pos int, mark uint32) {
+	delete(epmm.activePositionToEndpoint, pos)
+	delete(epmm.activeMarkToEndpoint, mark)
+	delete(epmm.activeEndpointToPosition, ep)
+	delete(epmm.activeEndpointToMark, ep)
+}
+
 func (epmm *DefaultEPMarkManager) setMark(ep string, pos int, mark uint32) {
 	epmm.activePositionToEndpoint[pos] = ep
 	epmm.activeEndpointToPosition[ep] = pos
 	epmm.activeEndpointToMark[ep] = mark
+	epmm.activeMarkToEndpoint[mark] = ep
+}
+
+// This interface has subset of functions of built in hash32 interface.
+type HashCaculator32 interface {
+	// Write (via the embedded io.Writer interface) adds more data to the running hash.
+	// It never returns an error.
+	io.Writer
+
+	// Sum32 returns a hash result of uint32.
+	// It does not change the underlying hash state.
+	Sum32() uint32
+
+	// Reset resets the Hash to its initial state.
+	Reset()
 }
