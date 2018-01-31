@@ -1,5 +1,5 @@
-hash: 723abbb583f183a1b02a30cd6e6b38deead400ecc56a2678f1a95b72b767a067
-updated: 2017-12-19T18:47:23.480016822Z
+hash: ba0a905e16b05fb04749d7adf47c6f7bebf8c6b3e73ff007862adf9935dfe666
+updated: 2018-01-30T17:06:39.101201365-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -110,7 +110,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 48d644b006ba26f1793bffc46396e981801078e3
+  version: 3437940fe522edd3e99a5117e062e52a7abc9b28
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -167,7 +167,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c893efa28eb45626cdaa76c9f653b62488858837
+  version: 003f63b7f4cff3fc95357005358af2de0f5fe152
   subpackages:
   - format
   - internal/assertion
@@ -180,6 +180,11 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/opentracing/opentracing-go
+  version: 216894e5277dc6098f93ceca97beb6101610b418
+  subpackages:
+  - ext
+  - log
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
@@ -193,7 +198,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 7c2de5ed8c029f222d87fc849b54c4075ef3173f
+  version: 8439a792041f7cb676bc339dffccf30e165a9ec3
   subpackages:
   - lib
   - lib/apiconfig
@@ -232,7 +237,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 0bba94171368573d2a936e02454b1762ff7fba7f
+  version: daebaf6338cf6faf48a307e6065d5688f8a23617
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -247,13 +252,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
+  version: 89604d197083d4781071d3c65855d24ecfb0a563
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -261,13 +266,13 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: 879c5887cd475cd7864858769793b2ceb0d44feb
+  version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 3ff4c2196115d804aa1c747781ad2b2a5c73e140
+  version: 5f5d5cddcf414bb44941b9c6c0d2df31253ec40e
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -275,7 +280,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: d585fd2cc9195196078f516b69daff6744ef5e84
+  version: 1875d0a70c90e57f11972aefd42276df65e895b9
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -362,7 +367,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 9b9dca205a15b6ce9ef10091f05d60a13fdcf418
+  version: 389dfa299845bcf399c16af89987e8775718ea48
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -389,7 +394,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 5134afd2c0c91158afac0d8a28bd2177185a3bcc
+  version: 4972c8e335e32ab65ba45bde0a99c6544c8a8e4c
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
