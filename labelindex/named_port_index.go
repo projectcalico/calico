@@ -209,7 +209,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Updating NamedPortIndex with endpoint %v", key)
 			endpoint := update.Value.(*model.WorkloadEndpoint)
 			profileIDs := endpoint.ProfileIDs
-			idx.UpdateEndpoint(
+			idx.UpdateEndpointOrSet(
 				key,
 				endpoint.Labels,
 				extractCIDRsFromWorkloadEndpoint(endpoint),
@@ -225,7 +225,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Updating NamedPortIndex for host endpoint %v", key)
 			endpoint := update.Value.(*model.HostEndpoint)
 			profileIDs := endpoint.ProfileIDs
-			idx.UpdateEndpoint(
+			idx.UpdateEndpointOrSet(
 				key,
 				endpoint.Labels,
 				extractCIDRsFromHostEndpoint(endpoint),
@@ -240,7 +240,7 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			// Figure out what's changed and update the cache.
 			log.Debugf("Updating NamedPortIndex for network set %v", key)
 			netSet := update.Value.(*model.NetworkSet)
-			idx.UpdateEndpoint(
+			idx.UpdateEndpointOrSet(
 				key,
 				netSet.Labels,
 				extractCIDRsFromNetworkSet(netSet),
@@ -308,7 +308,29 @@ func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
 	a := netSet.Nets
 	combined := make([]ip.CIDR, 0, len(a))
 	for _, addr := range a {
-		combined = append(combined, ip.CIDRFromCalicoNet(addr))
+		cidr := ip.CIDRFromCalicoNet(addr)
+		if cidr.Prefix() == 0 {
+			// Special case: the linux dataplane can't handle 0-length CIDRs so we split it into
+			// multiple CIDRs.  Note: if the /1s were also in the network set, the deduplication is
+			// handled by reference counting in the ipSetData struct.
+			log.Debug("Converting 0 length CIDR to pair of /1s")
+			switch cidr.Version() {
+			case 4:
+				combined = append(combined,
+					ip.MustParseCIDROrIP("0.0.0.0/1"),
+					ip.MustParseCIDROrIP("128.0.0.0/1"),
+				)
+			case 6:
+				combined = append(combined,
+					ip.MustParseCIDROrIP("::/1"),
+					ip.MustParseCIDROrIP("8000::/1"),
+				)
+			default:
+				log.WithField("cidr", cidr).Panic("Unknown IP version")
+			}
+			continue
+		}
+		combined = append(combined, cidr)
 	}
 	return combined
 }
@@ -404,7 +426,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 	delete(idx.ipSetDataByID, id)
 }
 
-func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
+func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	id interface{},
 	labels map[string]string,
 	nets []ip.CIDR,
@@ -416,13 +438,13 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 		cidrsToLog = fmt.Sprintf("<too many to log (%d)>", len(nets))
 	}
 	logCxt := log.WithFields(log.Fields{
-		"endpointID": id,
-		"newLabels":  labels,
-		"CIDRs":      cidrsToLog,
-		"ports":      ports,
-		"parentIDs":  parentIDs,
+		"endpointOrSetID": id,
+		"newLabels":       labels,
+		"CIDRs":           cidrsToLog,
+		"ports":           ports,
+		"parentIDs":       parentIDs,
 	})
-	logCxt.Debug("Updating endpoint")
+	logCxt.Debug("Updating endpoint/network set")
 
 	// Calculate the new endpoint data.
 	newEndpointData := &endpointData{}
@@ -486,7 +508,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 ) {
 	for ipSetID, ipSetData := range idx.ipSetDataByID {
 		// Remove any previous match from the endpoint's cache.  We'll re-add it below if the match
-		// is still correct.  (This is a no-op when we're called from UpdateEndpoint(), which always
+		// is still correct.  (This is a no-op when we're called from UpdateEndpointOrSet(), which always
 		// creates a new endpointData struct.)
 		epData.RemoveMatchingIPSetID(ipSetID)
 
@@ -500,6 +522,9 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 				// Incref all the new members.  If any of them go from 0 to 1 reference then we
 				// know that they're new.  We'll temporarily double-count members that were already
 				// present, then decref them below.
+				//
+				// This reference counting also allows us to tolerate duplicate members in the
+				// input data.
 				for _, newMember := range newIPSetContribution {
 					newRefCount := ipSetData.memberToRefCount[newMember] + 1
 					if newRefCount == 1 {

@@ -277,6 +277,39 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				})
 			})
 
+			Describe("after switching to 0.0.0.0/0", func() {
+				BeforeEach(func() {
+					srcNS.Spec.Nets = []string{
+						"0.0.0.0/0",
+						"::/0",
+					}
+					var err error
+					srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should have expected connectivity", func() {
+					cc.ExpectNone(w[0], w[1]) // not in dest net set
+					cc.ExpectSome(w[0], w[2])
+					cc.ExpectSome(w[0], w[3])
+					cc.ExpectNone(w[1], w[0]) // not in dest net set
+					cc.ExpectSome(w[1], w[2])
+					cc.ExpectSome(w[1], w[3])
+					cc.ExpectNone(w[2], w[0]) // not in dest net set
+					cc.ExpectNone(w[2], w[1]) // not in dest net set
+					cc.ExpectSome(w[2], w[3])
+					cc.ExpectNone(w[3], w[0])
+					cc.ExpectNone(w[3], w[1])
+					cc.ExpectSome(w[3], w[2]) // now allowed because all sources are white listed
+					cc.CheckConnectivity()
+				})
+
+				Describe("after reverting the change", func() {
+					BeforeEach(resetNetsetsMembers)
+					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
+				})
+			})
+
 			Describe("after adding a new, overlapping source network set", func() {
 				var srcNS2 *api.GlobalNetworkSet
 
