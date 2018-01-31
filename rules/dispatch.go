@@ -35,7 +35,8 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 		names = append(names, endpoint.Name)
 	}
 
-	return append(
+	result := []*Chain{}
+	result = append(result,
 		// Assembly a from-workload and to-workload dispatch chain.
 		r.dispatchChains(
 			names,
@@ -47,23 +48,29 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 			true,
 			true,
 			false,
-		),
+		)...,
+	)
+
+	if r.KubeIPVSSupportEnabled {
 		// In some scenario, e.g. packet goes to an kuberentes ipvs service ip. Traffic goes through input/output filter chain
 		// instead of forward filter chain. It is not feasible to match on an incoming workload interface with service ips.
 		// Assembly a set-endpoint-mark chain to set endpoint mark matching on an incoming workload interface and
 		// a from-endpoint-mark chain to jump to a corresponding endpoint chain matching on its' endpoint mark.
-		r.dispatchChains(
-			names,
-			epMarkMapper,
-			WorkloadSetEndPointMarkPfx,
-			WorkloadFromEndpointPfx,
-			ChainDispatchSetEndPointMark,
-			ChainDispatchFromEndPointMark,
-			false, // Non forwarded packet will pass through set endpoint mark chain.
-			true,
-			true,
-		)...,
-	)
+		result = append(result,
+			r.dispatchChains(
+				names,
+				epMarkMapper,
+				WorkloadSetEndPointMarkPfx,
+				WorkloadFromEndpointPfx,
+				ChainDispatchSetEndPointMark,
+				ChainDispatchFromEndPointMark,
+				false, // Non forwarded packet will pass through set endpoint mark chain.
+				true,
+				true,
+			)...,
+		)
+	}
+	return result
 }
 
 func (r *DefaultRuleRenderer) HostDispatchChains(

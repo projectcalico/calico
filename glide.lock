@@ -1,5 +1,5 @@
 hash: 3da09e53f6e9d637938099ded2bf219c7961ca49312361bdd15707216d372189
-updated: 2018-01-29T13:57:52.130626596Z
+updated: 2018-01-31T15:27:25.755168961Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -110,7 +110,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 7ce9f81585a31f4d6528d46bce26919f325deb94
+  version: 3437940fe522edd3e99a5117e062e52a7abc9b28
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -198,7 +198,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: f9f1e35d8d861e1b979649e76456f68e442cf9de
+  version: 0bfcf899bb06f3cdafdc9a1014bcabb2e2b6e679
   repo: git@github.com:song-jiang/libcalico-go.git
   subpackages:
   - lib

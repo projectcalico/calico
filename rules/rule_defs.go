@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 const (
@@ -216,8 +217,8 @@ type Config struct {
 	IptablesMarkScratch1 uint32
 	IptablesMarkEndpoint uint32
 
-	KubeNodePortRangeMin uint16
-	KubeNodePortRangeMax uint16
+	KubeNodePortRanges     []numorstring.Port
+	KubeIPVSSupportEnabled bool
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16

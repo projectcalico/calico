@@ -514,6 +514,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				IptablesMarkScratch0: 0x20,
 				IptablesMarkScratch1: 0x40,
 				IptablesMarkEndpoint: 0xff00,
+				KubeIPVSSupportEnabled: true,
 			}
 			eth0Addrs = set.New()
 			eth0Addrs.Add(ipv4)

@@ -39,6 +39,7 @@ var _ = Describe("Dispatch chains", func() {
 		IptablesMarkScratch0: 0x20,
 		IptablesMarkScratch1: 0x40,
 		IptablesMarkEndpoint: 0xff00,
+		KubeIPVSSupportEnabled: true,
 	}
 
 	var expDropRule = iptables.Rule{

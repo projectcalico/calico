@@ -59,7 +59,6 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 			"scratch0Mark":  markScratch0,
 			"scratch1Mark":  markScratch1,
 			"endpointMark":  markEndpointMark,
-			"kubePortRange": configParams.KubeNodePortRange.String(),
 		}).Info("Calculated iptables mark bits")
 
 		dpConfig := intdataplane.Config{
@@ -82,8 +81,8 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 					nil,
 				),
 
-				KubeNodePortRangeMin: configParams.KubeNodePortRange.MinPort,
-				KubeNodePortRangeMax: configParams.KubeNodePortRange.MaxPort,
+				KubeNodePortRanges: configParams.KubeNodePortRanges,
+				KubeIPVSSupportEnabled: configParams.KubeIPVSSupportEnabled,
 
 				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),
 				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),

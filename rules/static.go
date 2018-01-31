@@ -36,12 +36,16 @@ const (
 )
 
 func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
-	return []*Chain{
+	result := []*Chain{}
+	result = append(result,
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
 		r.failsafeInChain(),
-		r.StaticFilterInputForwardCheckChain(ipVersion),
+	)
+	if r.KubeIPVSSupportEnabled {
+		result = append(result, r.StaticFilterInputForwardCheckChain(ipVersion))
 	}
+	return result
 }
 
 func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
@@ -60,11 +64,13 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 	var portRanges []*proto.PortRange
 
 	// Assembly port ranges for kubernetes node ports.
-	portRange := &proto.PortRange{
-		First: int32(r.KubeNodePortRangeMin),
-		Last:  int32(r.KubeNodePortRangeMax),
+	for _, portRange := range r.KubeNodePortRanges {
+		pr := &proto.PortRange{
+			First: int32(portRange.MinPort),
+			Last:  int32(portRange.MaxPort),
+		}
+		portRanges = append(portRanges, pr)
 	}
-	portRanges = append(portRanges, portRange)
 
 	// Get ipsets name for local host ips.
 	nameForIPSet := func(ipsetID string) string {
@@ -83,21 +89,29 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 			Action: ReturnAction{},
 		},
-		// If packet is accessing local host within kubernetes NodePort range, it belongs to a forwarded traffic.
-		Rule{
-			Match: Match().Protocol("tcp").
-				DestPortRanges(portRanges).
-				DestIPSet(hostIPSet),
-			Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
-			Comment: "To kubernetes NodePort service",
-		},
-		Rule{
-			Match: Match().Protocol("udp").
-				DestPortRanges(portRanges).
-				DestIPSet(hostIPSet),
-			Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
-			Comment: "To kubernetes NodePort service",
-		},
+	)
+
+	// If packet is accessing local host within kubernetes NodePort range, it belongs to a forwarded traffic.
+	for _, portSplit := range SplitPortList(portRanges) {
+		fwRules = append(fwRules,
+			Rule{
+				Match: Match().Protocol("tcp").
+					DestPortRanges(portSplit).
+					DestIPSet(hostIPSet),
+				Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+				Comment: "To kubernetes NodePort service",
+			},
+			Rule{
+				Match: Match().Protocol("udp").
+					DestPortRanges(portSplit).
+					DestIPSet(hostIPSet),
+				Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+				Comment: "To kubernetes NodePort service",
+			},
+		)
+	}
+
+	fwRules = append(fwRules,
 		// If packet is accessing non local host ip, it belongs to a forwarded traffic.
 		Rule{
 			Match:   Match().NotDestIPSet(hostIPSet),

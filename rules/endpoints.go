@@ -30,7 +30,8 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	egressPolicies []string,
 	profileIDs []string,
 ) []*Chain {
-	return []*Chain{
+	result := []*Chain{}
+	result = append(result,
 		// Chain for traffic _to_ the endpoint.
 		r.endpointIptablesChain(
 			ingressPolicies,
@@ -59,13 +60,20 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 		),
+	)
+
+	if r.KubeIPVSSupportEnabled {
 		// Chain for setting endpoint mark of an endpoint.
-		r.endpointSetMarkChain(
-			ifaceName,
-			epMarkMapper,
-			WorkloadSetEndPointMarkPfx,
-		),
+		result = append(result,
+			r.endpointSetMarkChain(
+				ifaceName,
+				epMarkMapper,
+				WorkloadSetEndPointMarkPfx,
+			),
+		)
 	}
+
+	return result
 }
 
 func (r *DefaultRuleRenderer) HostEndpointToFilterChains(

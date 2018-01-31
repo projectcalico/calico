@@ -280,12 +280,20 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 	return result, nil
 }
 
-type PortRangeParam struct {
+type PortRangeListParam struct {
 	Metadata
 }
 
-func (p *PortRangeParam) Parse(raw string) (interface{}, error) {
-	return numorstring.PortFromString(raw)
+func (p *PortRangeListParam) Parse(raw string) (interface{}, error) {
+	var result []numorstring.Port
+	for _, rangeStr := range strings.Split(raw, ",") {
+		portRange, err := numorstring.PortFromString(rangeStr)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, portRange)
+	}
+	return result, nil
 }
 
 type EndpointListParam struct {

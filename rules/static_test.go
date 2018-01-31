@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/felix/ipsets"
 	. "github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var _ = Describe("Static", func() {
@@ -56,8 +57,8 @@ var _ = Describe("Static", func() {
 				IptablesMarkScratch0: 0x40,
 				IptablesMarkScratch1: 0x80,
 				IptablesMarkEndpoint: 0xff00,
-				KubeNodePortRangeMin: 30030,
-				KubeNodePortRangeMax: 30040,
+				KubeIPVSSupportEnabled: true,
+				KubeNodePortRanges: []numorstring.Port{{30030,30040, ""}},
 			}
 		})
 

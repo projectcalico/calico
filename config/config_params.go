@@ -165,7 +165,8 @@ type Config struct {
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
 
-	KubeNodePortRange numorstring.Port `config:"port-range;30000:32767"`
+	KubeNodePortRanges     []numorstring.Port `config:"portrange-list;30000:32767"`
+	KubeIPVSSupportEnabled bool               `config:"bool;false"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
 	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
@@ -483,8 +484,8 @@ func loadParams() {
 			param = &EndpointListParam{}
 		case "port-list":
 			param = &PortListParam{}
-		case "port-range":
-			param = &PortRangeParam{}
+		case "portrange-list":
+			param = &PortRangeListParam{}
 		case "hostname":
 			param = &RegexpParam{Regexp: HostnameRegexp,
 				Msg: "invalid hostname"}

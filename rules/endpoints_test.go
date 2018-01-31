@@ -35,6 +35,7 @@ var _ = Describe("Endpoints", func() {
 		IptablesMarkScratch0:      0x20,
 		IptablesMarkScratch1:      0x40,
 		IptablesMarkEndpoint:      0xff00,
+		KubeIPVSSupportEnabled:    true,
 		IptablesMangleAllowAction: "RETURN",
 	}
 
@@ -493,12 +494,6 @@ var _ = Describe("Endpoints", func() {
 						{Action: ClearMarkAction{Mark: 0x8}},
 						{Action: DropAction{},
 							Comment: "Drop if no profiles matched"},
-					},
-				},
-				{
-					Name: "cali-sm-cali1234",
-					Rules: []Rule{
-						{Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00}},
 					},
 				},
 			}))
