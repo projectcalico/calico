@@ -22,39 +22,15 @@ import (
 	. "github.com/projectcalico/felix/rules"
 )
 
-// Mock a super simple Hash32Caculator interface.
-type mockHash32 struct {
-	lastByte byte
-}
-
-func (h *mockHash32) Write(b []byte) (n int, err error) {
-	if len(b) == 0 {
-		h.lastByte = 0
-		return 0, nil
-	}
-	h.lastByte = b[len(b)-1]
-	return 1, nil
-}
-
-func (h *mockHash32) Sum32() uint32 {
-	return uint32(h.lastByte)
-}
-
-func (h *mockHash32) Reset() {
-	return
-}
-
 func init() {
 
 	ErrMark := uint32(0)
-	//NoCheck := uint32(0)
 
 	DescribeTable("EndpointMarkMapper initialization",
 		func(mask uint32) {
 			epmm := NewEndpointMarkMapperWithShim(mask, &mockHash32{})
 			Expect(epmm.GetMask()).To(Equal(mask))
 		},
-
 		Entry("should initialise with one bit", uint32(0x10)),
 		Entry("should initialise with some bits", uint32(0x123f)),
 		Entry("should initialise with max bits", uint32(0xffffffff)),
@@ -145,4 +121,26 @@ func init() {
 			Expect(mark).To(Equal(uint32(0x400)))
 		})
 	})
+}
+
+// Mock a super simple Hash32Caculator interface.
+type mockHash32 struct {
+	lastByte byte
+}
+
+func (h *mockHash32) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		h.lastByte = 0
+		return 0, nil
+	}
+	h.lastByte = b[len(b)-1]
+	return 1, nil
+}
+
+func (h *mockHash32) Sum32() uint32 {
+	return uint32(h.lastByte)
+}
+
+func (h *mockHash32) Reset() {
+	return
 }
