@@ -457,6 +457,7 @@ func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
 		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
+		"-v", "/lib/modules:/lib/modules",
 		"calico/felix:latest",
 	)
 
