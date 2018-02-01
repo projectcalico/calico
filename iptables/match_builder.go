@@ -62,9 +62,6 @@ func (m MatchCriteria) MarkMultiSet(mark, mask uint32) MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: MarkMultiSet got zero mark")
 	}
-	if mask == 0 {
-		log.Panic("Probably bug: MarkMultiSet got zero mask")
-	}
 	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mask))
 }
 
