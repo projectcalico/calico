@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var _ = Describe("FelixConfig vs ConfigParams parity", func() {
@@ -308,6 +309,22 @@ var _ = DescribeTable("Config parsing",
 			{Protocol: "tcp", Port: 6667},
 		},
 	),
+	Entry("KubeIPVSSupportEnabled empty", "KubeIPVSSupportEnabled", "", false),
+	Entry("KubeIPVSSupportEnabled true", "KubeIPVSSupportEnabled", "true", true),
+	Entry("KubeIPVSSupportEnabled false", "KubeIPVSSupportEnabled", "false", false),
+
+	Entry("KubeNodePortRanges empty", "KubeNodePortRanges", "",
+		[]numorstring.Port{
+			{30000, 32767, ""},
+		},
+	),
+	Entry("KubeNodePortRanges range", "KubeNodePortRanges", "30001:30002,30030:30040,30500:30600",
+		[]numorstring.Port{
+			{30001, 30002, ""},
+			{30030, 30040, ""},
+			{30500, 30600, ""},
+		},
+	),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
@@ -348,38 +365,6 @@ var _ = DescribeTable("OpenStack heuristic tests",
 	Entry("ifacePrefixes = cali,tap", nil, nil, nil, "cali,tap", true),
 	Entry("ifacePrefixes = tap,cali ", nil, nil, nil, "tap,cali", true),
 	Entry("ifacePrefixes = cali ", nil, nil, nil, "cali", false),
-)
-
-var _ = DescribeTable("Mark bit calculation tests",
-	func(mask string, bitNum int, expected uint32) {
-		config := New()
-		config.UpdateFrom(map[string]string{"IptablesMarkMask": mask}, EnvironmentVariable)
-		Expect(config.NthIPTablesMark(bitNum)).To(Equal(expected))
-	},
-	Entry("0th bit in 0xf", "0xf", 0, uint32(0x1)),
-	Entry("1st bit in 0xf", "0xf", 1, uint32(0x2)),
-	Entry("7th bit in 0xff", "0xff", 7, uint32(0x80)),
-	Entry("4th bit in 0xf00f", "0xf00f", 4, uint32(0x1000)),
-	Entry("3rd bit in 0xf00f", "0xf00f", 3, uint32(0x0008)),
-	Entry("7th bit in 0xf00f", "0xf00f", 7, uint32(0x8000)),
-	Entry("0th bit of 0xff000000", "0xff000000", 0, uint32(0x01000000)),
-)
-
-var _ = DescribeTable("Next mark bit calculation tests",
-	func(mask string, numCalls int, expected uint32) {
-		config := New()
-		config.UpdateFrom(map[string]string{"IptablesMarkMask": mask}, EnvironmentVariable)
-		var mark uint32
-		for i := 0; i < numCalls; i++ {
-			mark = config.NextIptablesMark()
-		}
-		Expect(mark).To(Equal(expected))
-	},
-	Entry("0th bit in 0xf", "0xf", 1, uint32(0x1)),
-	Entry("1st bit in 0xf", "0xf", 2, uint32(0x2)),
-	Entry("7th bit in 0xff", "0xff", 8, uint32(0x80)),
-	Entry("7th bit in 0xf00f", "0xf00f", 8, uint32(0x8000)),
-	Entry("0th bit of 0xff000000", "0xff000000", 1, uint32(0x01000000)),
 )
 
 var _ = Describe("DatastoreConfig tests", func() {
