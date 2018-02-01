@@ -155,7 +155,11 @@ func Run(c *containers.Felix, name, interfaceName, ip, ports string, protocol st
 	wep.Spec.Orchestrator = "felixfv"
 	wep.Spec.Workload = w.Name
 	wep.Spec.Endpoint = w.Name
-	wep.Spec.IPNetworks = []string{w.IP + "/32"}
+	prefixLen := "32"
+	if strings.Contains(w.IP, ":") {
+		prefixLen = "128"
+	}
+	wep.Spec.IPNetworks = []string{w.IP + "/" + prefixLen}
 	wep.Spec.InterfaceName = w.InterfaceName
 	wep.Spec.Profiles = []string{"default"}
 	w.WorkloadEndpoint = wep

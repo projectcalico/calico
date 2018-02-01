@@ -446,28 +446,46 @@ func (f *Felix) GetFelixPIDs() []int {
 
 func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
+	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
+	c := Run("felix",
+		RunOpts{AutoRemove: true},
+		"--privileged",
+		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
+		"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
+		"-e", "FELIX_DATASTORETYPE=etcdv3",
+		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
+		"-e", "FELIX_USAGEREPORTINGENABLED=false",
+		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
+		"calico/felix:latest",
+	)
+
+	if options.EnableIPv6 {
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.default.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.lo.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=1")
+	} else {
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=1")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.default.disable_ipv6=1")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.lo.disable_ipv6=1")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=0")
+	}
+
 	return &Felix{
-		Container: Run("felix",
-			RunOpts{AutoRemove: true},
-			"--privileged",
-			"-e", "CALICO_DATASTORE_TYPE=etcdv3",
-			"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
-			"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
-			"-e", "FELIX_DATASTORETYPE=etcdv3",
-			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-			"-e", "FELIX_USAGEREPORTINGENABLED=false",
-			"-e", "FELIX_IPV6SUPPORT=false",
-			"calico/felix:latest"),
+		Container: c,
 	}
 }
 
 type TopologyOptions struct {
 	FelixLogSeverity string
+	EnableIPv6       bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
 		FelixLogSeverity: "info",
+		EnableIPv6:       true,
 	}
 }
 

@@ -44,6 +44,41 @@ const (
 	numNetworkSets = 100
 )
 
+// netsetsConfig is used to parametrise the whole suite of tests for IPv4 or IPv6, it provides
+// methods that return:
+//
+//     - the IP to use for a given workload, each from a separate subnet
+//     - a CIDR that encompasses each workload's IP (and only its IP)
+//     - a full-length CIDR (i.e. the IP address expressed as a /32 or /128).
+type netsetsConfig struct {
+	ipVersion int
+	zeroCIDR  string
+}
+
+func (c netsetsConfig) workloadIP(workloadIdx int) string {
+	if c.ipVersion == 4 {
+		// Each IP is in its own /24.
+		return fmt.Sprintf("10.65.%d.1", workloadIdx)
+	}
+	// Each IP gets its own /64.
+	return fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", workloadIdx)
+}
+
+func (c netsetsConfig) workloadCIDR(workloadIdx, prefixLengthDelta int) string {
+	if c.ipVersion == 4 {
+		return fmt.Sprintf("10.65.%d.0/%d", workloadIdx, 24+prefixLengthDelta)
+	}
+	return fmt.Sprintf("fdc6:3dbc:e983:cbc%x::/%d", workloadIdx, 64+prefixLengthDelta)
+}
+
+func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int) string {
+	addr := c.workloadIP(workloadIdx)
+	if c.ipVersion == 4 {
+		return addr + "/32"
+	}
+	return addr + "/128"
+}
+
 var _ = Context("Network sets tests with initialized Felix and etcd datastore", func() {
 
 	var (
@@ -71,7 +106,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 		etcd.Stop()
 	})
 
-	Describe("connectivity tests", func() {
+	describeConnTests := func(c netsetsConfig) {
 		var (
 			w   [4]*workload.Workload
 			cc  *workload.ConnectivityChecker
@@ -102,7 +137,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 					felix,
 					"w"+iiStr,
 					"cali0"+iiStr,
-					"10.65."+iiStr+".1", // IPs each in their own /24
+					c.workloadIP(ii),
 					ports,
 					"tcp",
 				)
@@ -168,9 +203,9 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				srcNS = api.NewGlobalNetworkSet()
 				srcNS.Name = "ns-1"
 				srcNS.Spec.Nets = []string{
-					"10.65.0.0/24",
-					"10.65.1.0/24",
-					"10.65.2.0/24",
+					c.workloadCIDR(0, 0),
+					c.workloadCIDR(1, 0),
+					c.workloadCIDR(2, 0),
 				}
 				srcNS.Labels = map[string]string{
 					"allow-as-source": "",
@@ -183,8 +218,8 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				destNS = api.NewGlobalNetworkSet()
 				destNS.Name = "ns-2"
 				destNS.Spec.Nets = []string{
-					"10.65.2.0/24",
-					"10.65.3.0/24",
+					c.workloadCIDR(2, 0),
+					c.workloadCIDR(3, 0),
 				}
 				destNS.Labels = map[string]string{
 					"allow-as-dest": "",
@@ -214,17 +249,17 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 
 			resetNetsetsMembers := func() {
 				srcNS.Spec.Nets = []string{
-					"10.65.0.0/24",
-					"10.65.1.0/24",
-					"10.65.2.0/24",
+					c.workloadCIDR(0, 0),
+					c.workloadCIDR(1, 0),
+					c.workloadCIDR(2, 0),
 				}
 				var err error
 				srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 
 				destNS.Spec.Nets = []string{
-					"10.65.2.0/24",
-					"10.65.3.0/24",
+					c.workloadCIDR(2, 0),
+					c.workloadCIDR(3, 0),
 				}
 				destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
@@ -233,19 +268,19 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			Describe("after updating some members in the sets", func() {
 				BeforeEach(func() {
 					srcNS.Spec.Nets = []string{
-						// "10.65.0.0/24", removed
-						"10.65.1.0/24",
-						"10.65.2.0/24",
-						"10.65.3.0/24", // added
+						// c.workloadCIDR(0, 0), removed
+						c.workloadCIDR(1, 0),
+						c.workloadCIDR(2, 0),
+						c.workloadCIDR(3, 0), // added
 					}
 					var err error
 					srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 
 					destNS.Spec.Nets = []string{
-						// "10.65.2.0/24", removed
-						"10.65.1.0/24", // added
-						"10.65.3.0/24",
+						// c.workloadCIDR(2, 0), removed
+						c.workloadCIDR(1, 0),
+						c.workloadCIDR(3, 0),
 					}
 					destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
@@ -277,11 +312,10 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				})
 			})
 
-			Describe("after switching to 0.0.0.0/0", func() {
+			Describe("after switching to zero-CIDR", func() {
 				BeforeEach(func() {
 					srcNS.Spec.Nets = []string{
-						"0.0.0.0/0",
-						"::/0",
+						c.zeroCIDR,
 					}
 					var err error
 					srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
@@ -317,9 +351,9 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 					srcNS2 = api.NewGlobalNetworkSet()
 					srcNS2.Name = "ns-3"
 					srcNS2.Spec.Nets = []string{
-						"10.65.1.0/24", // exact match
-						"10.65.2.1/32", // subset of other net set's CIDR
-						"10.65.3.0/24", // unique to this net set
+						c.workloadCIDR(1, 0),        // exact match
+						c.workloadFullLengthCIDR(2), // exact match
+						c.workloadCIDR(3, 0),        // unique to this net set
 					}
 					srcNS2.Labels = map[string]string{
 						"allow-as-source": "",
@@ -399,25 +433,27 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			Describe("after adding duplicate and overlapping members", func() {
 				BeforeEach(func() {
 					srcNS.Spec.Nets = []string{
-						"10.65.1.0/24",
-						"10.65.2.0/24",
-						"10.65.3.1/32", // added
-						"10.65.3.1",    // added
-						"10.65.3.0/28", // added
-						"10.65.3.0/24", // added
-						"10.65.3.0/28", // added
-						"10.65.3.0/24", // added
+						c.workloadCIDR(1, 0),
+						c.workloadCIDR(2, 0),
+						// Lots of dupes...
+						c.workloadFullLengthCIDR(3),
+						c.workloadFullLengthCIDR(3),
+						c.workloadCIDR(3, 4),
+						c.workloadCIDR(3, 0),
+						c.workloadCIDR(3, 0),
+						c.workloadCIDR(3, 4),
+						c.workloadCIDR(3, 0),
 					}
 					var err error
 					srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 
 					destNS.Spec.Nets = []string{
-						// "10.65.2.0/24", removed
-						"10.65.1.0/24", // added
-						"10.65.1.0/25", // added
-						"10.65.1.1/32", // added
-						"10.65.3.0/24",
+						// c.workloadCIDR(2, 0), // removed
+						c.workloadCIDR(1, 0),        // added
+						c.workloadCIDR(1, 1),        // added
+						c.workloadFullLengthCIDR(1), // added
+						c.workloadCIDR(3, 0),
 					}
 					destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
@@ -446,20 +482,20 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				Describe("after removing some duplicates and adding back some members", func() {
 					BeforeEach(func() {
 						srcNS.Spec.Nets = []string{
-							"10.65.1.0/24",
-							"10.65.2.0/24",
-							"10.65.3.1/32", // added
-							"10.65.3.1",    // added
+							c.workloadCIDR(1, 0),
+							c.workloadCIDR(2, 0),
+							c.workloadFullLengthCIDR(3), // added
+							c.workloadIP(3),             // added
 						}
 						var err error
 						srcNS, err = client.GlobalNetworkSets().Update(utils.Ctx, srcNS, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
 
 						destNS.Spec.Nets = []string{
-							"10.65.0.0/24",
-							"10.65.2.0/24",
-							"10.65.1.0/24",
-							"10.65.3.0/24",
+							c.workloadCIDR(0, 0),
+							c.workloadCIDR(2, 0),
+							c.workloadCIDR(1, 0),
+							c.workloadCIDR(3, 0),
 						}
 						destNS, err = client.GlobalNetworkSets().Update(utils.Ctx, destNS, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
@@ -579,6 +615,16 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				w[ii].Stop()
 			}
 		})
+	}
+
+	Context("IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
+		netsetsConfigV4 := netsetsConfig{ipVersion: 4, zeroCIDR: "0.0.0.0/0"}
+		describeConnTests(netsetsConfigV4)
+	})
+
+	Context("IPv6: Network sets tests with initialized Felix and etcd datastore", func() {
+		netsetsConfigV6 := netsetsConfig{ipVersion: 6, zeroCIDR: "::/0"}
+		describeConnTests(netsetsConfigV6)
 	})
 
 	Describe("churn tests", func() {

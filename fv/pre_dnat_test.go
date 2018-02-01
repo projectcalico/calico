@@ -50,7 +50,10 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		options := containers.DefaultTopologyOptions()
+		// For variety, run this test with IPv6 disabled.
+		options.EnableIPv6 = false
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
