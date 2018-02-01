@@ -94,6 +94,7 @@ func main() {
 
 		var hostIPv6Addr net.IP
 		if strings.Contains(ipAddress, ":") {
+			attempts := 0
 			for {
 				// No need to add a dummy next hop route as the host veth device will already have an IPv6
 				// link local address that can be used as a next hop.
@@ -104,6 +105,11 @@ func main() {
 				}
 
 				if len(addresses) < 1 {
+					attempts++
+					if attempts > 30 {
+						log.WithError(err).Panic("Giving up waiting for IPv6 addresses after multiple retries")
+					}
+
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
@@ -192,11 +198,16 @@ func main() {
 	// Now listen on the specified ports in the workload namespace.
 	err = namespace.Do(func(_ ns.NetNS) error {
 		if strings.Contains(ipAddress, ":") {
+			attempts := 0
 			for {
 				out, err := exec.Command("ip", "-6", "addr").CombinedOutput()
 				panicIfError(err)
 				if strings.Contains(string(out), "tentative") {
-					time.Sleep(100 * time.Millisecond)
+					attempts++
+					if attempts > 30 {
+						log.Panic("IPv6 address still tentative after 30s")
+					}
+					time.Sleep(1 * time.Second)
 					continue
 				}
 				break
