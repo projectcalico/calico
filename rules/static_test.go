@@ -110,7 +110,7 @@ var _ = Describe("Static", func() {
 							{
 								Match: Match().Protocol("udp").
 									DestPortRanges(portRanges).
-									DestIPSet(fmt.Sprintf("cali%d-this-host", ipVersion)),
+									DestIPSet(ipSetThisHost),
 								Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
 								Comment: "To kubernetes NodePort service",
 							},
@@ -712,6 +712,101 @@ var _ = Describe("Static", func() {
 			})
 		})
 	}
+
+	Describe("with multiple KubePortRanges", func() {
+		BeforeEach(func() {
+			conf = Config{
+				WorkloadIfacePrefixes:  []string{"cali"},
+				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:     0x10,
+				IptablesMarkPass:       0x20,
+				IptablesMarkScratch0:   0x40,
+				IptablesMarkScratch1:   0x80,
+				IptablesMarkEndpoint:   0xff00,
+				KubeIPVSSupportEnabled: true,
+				KubeNodePortRanges: []numorstring.Port{
+					{30030, 30040, ""},
+					{30130, 30140, ""},
+					{30230, 30240, ""},
+					{30330, 30340, ""},
+					{30430, 30440, ""},
+					{30530, 30540, ""},
+					{30630, 30640, ""},
+					{30730, 30740, ""},
+					{30830, 30840, ""},
+				},
+			}
+		})
+		for _, ipVersion := range []uint8{4, 6} {
+			// Capture current value of ipVersion.
+			ipVersion := ipVersion
+			ipSetThisHost := fmt.Sprintf("cali%d-this-host", ipVersion)
+
+			portRanges1 := []*proto.PortRange{
+				{30030, 30040},
+				{30130, 30140},
+				{30230, 30240},
+				{30330, 30340},
+				{30430, 30440},
+				{30530, 30540},
+				{30630, 30640},
+			}
+
+			portRanges2 := []*proto.PortRange{
+				{30730, 30740},
+				{30830, 30840},
+			}
+
+			expForwardCheck := &Chain{
+				Name: "cali-forward-check",
+				Rules: []Rule{
+					{
+						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: ReturnAction{},
+					},
+					{
+						Match: Match().Protocol("tcp").
+							DestPortRanges(portRanges1).
+							DestIPSet(ipSetThisHost),
+						Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+						Comment: "To kubernetes NodePort service",
+					},
+					{
+						Match: Match().Protocol("udp").
+							DestPortRanges(portRanges1).
+							DestIPSet(ipSetThisHost),
+						Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+						Comment: "To kubernetes NodePort service",
+					},
+					{
+						Match: Match().Protocol("tcp").
+							DestPortRanges(portRanges2).
+							DestIPSet(ipSetThisHost),
+						Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+						Comment: "To kubernetes NodePort service",
+					},
+					{
+						Match: Match().Protocol("udp").
+							DestPortRanges(portRanges2).
+							DestIPSet(ipSetThisHost),
+						Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+						Comment: "To kubernetes NodePort service",
+					},
+					{
+						Match:   Match().NotDestIPSet(ipSetThisHost),
+						Action:  JumpAction{Target: ChainDispatchSetEndPointMark},
+						Comment: "To kubernetes service",
+					},
+				},
+			}
+
+			It("should include the expected forward-check chain in the filter chains", func() {
+				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-check")).To(Equal(expForwardCheck))
+
+			})
+		}
+	})
 
 	Describe("with openstack special-cases", func() {
 		BeforeEach(func() {
