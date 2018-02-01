@@ -35,7 +35,7 @@ type DefaultEPMarkManager struct {
 	markBitsManager *markbits.MarkBitsManager
 	maxPosition     int
 
-	hash32 HashCaculator32
+	hash32 HashCalculator32
 
 	activeEndpointToPosition map[string]int
 	activeEndpointToMark     map[string]uint32
@@ -47,7 +47,7 @@ func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
 	return NewEndpointMarkMapperWithShim(markMask, fnv.New32())
 }
 
-func NewEndpointMarkMapperWithShim(markMask uint32, hash32 HashCaculator32) EndpointMarkMapper {
+func NewEndpointMarkMapperWithShim(markMask uint32, hash32 HashCalculator32) EndpointMarkMapper {
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
 	return &DefaultEPMarkManager{
@@ -82,6 +82,7 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	epmm.hash32.Reset()
 
 	var prospect int
+	gotOne := false
 	for i := 0; i < epmm.maxPosition; i++ {
 		prospect = (total + i) % epmm.maxPosition
 		if prospect == 0 {
@@ -90,8 +91,13 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 		}
 		_, alreadyAlloced := epmm.activePositionToEndpoint[prospect]
 		if !alreadyAlloced {
+			gotOne = true
 			break
 		}
+	}
+
+	if !gotOne {
+		return 0, errors.New("No mark left for endpoint")
 	}
 
 	mark, err := epmm.markBitsManager.MapNumberToMark(prospect)
@@ -149,7 +155,7 @@ func (epmm *DefaultEPMarkManager) setMark(ep string, pos int, mark uint32) {
 }
 
 // This interface has subset of functions of built in hash32 interface.
-type HashCaculator32 interface {
+type HashCalculator32 interface {
 	// Write (via the embedded io.Writer interface) adds more data to the running hash.
 	// It never returns an error.
 	io.Writer

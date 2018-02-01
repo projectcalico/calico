@@ -859,7 +859,7 @@ func outboundGotoRule(ifaceMatch string, target string) iptables.Rule {
 
 func epMarkFromGotoRule(epMark, mask uint32, target string) iptables.Rule {
 	return iptables.Rule{
-		Match:  iptables.Match().MarkMultiSet(epMark, mask),
+		Match:  iptables.Match().MarkSetWithMark(epMark, mask),
 		Action: iptables.GotoAction{Target: target},
 	}
 }

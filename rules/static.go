@@ -412,7 +412,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 
 	if r.KubeIPVSSupportEnabled {
 		// Jump to from-endpoint-mark dispatch chain if endpoint mark is not zero, which means
-		// packet has been through filter INPUT chain. There could be policies apply to its' ingress interface.
+		// packet has been through filter INPUT chain. There could be policies apply to its ingress interface.
 		rules = append(rules,
 			Rule{
 				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),

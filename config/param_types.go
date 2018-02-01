@@ -289,7 +289,10 @@ func (p *PortRangeListParam) Parse(raw string) (interface{}, error) {
 	for _, rangeStr := range strings.Split(raw, ",") {
 		portRange, err := numorstring.PortFromString(rangeStr)
 		if err != nil {
-			return nil, err
+			return nil, p.parseFailed(raw, fmt.Sprintf("%s is not a valid port range", rangeStr))
+		}
+		if len(portRange.PortName) > 0 {
+			return nil, p.parseFailed(raw, fmt.Sprintf("%s has port name set", rangeStr))
 		}
 		result = append(result, portRange)
 	}

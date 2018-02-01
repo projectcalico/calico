@@ -415,271 +415,282 @@ var _ = Describe("Static", func() {
 				}
 			})
 
-			expInputChainIPIPV4 := map[bool]*Chain{
-				true: {
-					Name: "cali-INPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			expInputChainIPIPV4IPVS := &Chain{
+				Name: "cali-INPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// IPIP rules
-						{Match: Match().
-							ProtocolNum(4).
-							SourceIPSet("cali4-all-hosts").
-							DestAddrType("LOCAL"),
+					// IPIP rules
+					{Match: Match().
+						ProtocolNum(4).
+						SourceIPSet("cali4-all-hosts").
+						DestAddrType("LOCAL"),
 
-							Action:  AcceptAction{},
-							Comment: "Allow IPIP packets from Calico hosts"},
-						{Match: Match().ProtocolNum(4),
-							Action:  DropAction{},
-							Comment: "Drop IPIP packets from non-Calico hosts"},
+						Action:  AcceptAction{},
+						Comment: "Allow IPIP packets from Calico hosts"},
+					{Match: Match().ProtocolNum(4),
+						Action:  DropAction{},
+						Comment: "Drop IPIP packets from non-Calico hosts"},
 
-						// Forward check chain.
-						{Action: ClearMarkAction{Mark: epMark}},
-						{Action: JumpAction{Target: ChainForwardCheck}},
-						{Match: Match().MarkNotClear(epMark),
-							Action: ReturnAction{},
-						},
+					// Forward check chain.
+					{Action: ClearMarkAction{Mark: epMark}},
+					{Action: JumpAction{Target: ChainForwardCheck}},
+					{Match: Match().MarkNotClear(epMark),
+						Action: ReturnAction{},
+					},
 
-						// Per-prefix workload jump rules.  Note use of goto so that we
-						// don't return here.
-						{Match: Match().InInterface("cali+"),
-							Action: GotoAction{Target: "cali-wl-to-host"}},
+					// Per-prefix workload jump rules.  Note use of goto so that we
+					// don't return here.
+					{Match: Match().InInterface("cali+"),
+						Action: GotoAction{Target: "cali-wl-to-host"}},
 
-						// Not from a workload, apply host policy.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: "cali-from-host-endpoint"}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Not from a workload, apply host policy.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
-				false: {
-					Name: "cali-INPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			}
 
-						// IPIP rules
-						{Match: Match().
-							ProtocolNum(4).
-							SourceIPSet("cali4-all-hosts").
-							DestAddrType("LOCAL"),
+			expInputChainIPIPV4NoIPVS := &Chain{
+				Name: "cali-INPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-							Action:  AcceptAction{},
-							Comment: "Allow IPIP packets from Calico hosts"},
-						{Match: Match().ProtocolNum(4),
-							Action:  DropAction{},
-							Comment: "Drop IPIP packets from non-Calico hosts"},
+					// IPIP rules
+					{Match: Match().
+						ProtocolNum(4).
+						SourceIPSet("cali4-all-hosts").
+						DestAddrType("LOCAL"),
 
-						// Per-prefix workload jump rules.  Note use of goto so that we
-						// don't return here.
-						{Match: Match().InInterface("cali+"),
-							Action: GotoAction{Target: "cali-wl-to-host"}},
+						Action:  AcceptAction{},
+						Comment: "Allow IPIP packets from Calico hosts"},
+					{Match: Match().ProtocolNum(4),
+						Action:  DropAction{},
+						Comment: "Drop IPIP packets from non-Calico hosts"},
 
-						// Not from a workload, apply host policy.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: "cali-from-host-endpoint"}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Per-prefix workload jump rules.  Note use of goto so that we
+					// don't return here.
+					{Match: Match().InInterface("cali+"),
+						Action: GotoAction{Target: "cali-wl-to-host"}},
+
+					// Not from a workload, apply host policy.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
 			}
 
 			// V6 should be unaffected.
-			expInputChainIPIPV6 := map[bool]*Chain{
-				true: {
-					Name: "cali-INPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			expInputChainIPIPV6IPVS := &Chain{
+				Name: "cali-INPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// Forward check chain.
-						{Action: ClearMarkAction{Mark: epMark}},
-						{Action: JumpAction{Target: ChainForwardCheck}},
-						{Match: Match().MarkNotClear(epMark),
-							Action: ReturnAction{},
-						},
+					// Forward check chain.
+					{Action: ClearMarkAction{Mark: epMark}},
+					{Action: JumpAction{Target: ChainForwardCheck}},
+					{Match: Match().MarkNotClear(epMark),
+						Action: ReturnAction{},
+					},
 
-						// Per-prefix workload jump rules.  Note use of goto so that we
-						// don't return here.
-						{Match: Match().InInterface("cali+"),
-							Action: GotoAction{Target: "cali-wl-to-host"}},
+					// Per-prefix workload jump rules.  Note use of goto so that we
+					// don't return here.
+					{Match: Match().InInterface("cali+"),
+						Action: GotoAction{Target: "cali-wl-to-host"}},
 
-						// Not from a workload, apply host policy.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: "cali-from-host-endpoint"}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Not from a workload, apply host policy.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
-				false: {
-					Name: "cali-INPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			}
+			expInputChainIPIPV6NoIPVS := &Chain{
+				Name: "cali-INPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// Per-prefix workload jump rules.  Note use of goto so that we
-						// don't return here.
-						{Match: Match().InInterface("cali+"),
-							Action: GotoAction{Target: "cali-wl-to-host"}},
+					// Per-prefix workload jump rules.  Note use of goto so that we
+					// don't return here.
+					{Match: Match().InInterface("cali+"),
+						Action: GotoAction{Target: "cali-wl-to-host"}},
 
-						// Not from a workload, apply host policy.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: "cali-from-host-endpoint"}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Not from a workload, apply host policy.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
 			}
 
-			expOutputChainIPIPV4 := map[bool]*Chain{
-				true: {
-					Name: "cali-OUTPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			expOutputChainIPIPV4IPVS := &Chain{
+				Name: "cali-OUTPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// From endpoint mark chain
-						{Match: Match().MarkNotClear(epMark),
-							Action: JumpAction{Target: ChainDispatchFromEndPointMark},
-						},
-						{Action: ClearMarkAction{Mark: epMark}},
+					// From endpoint mark chain
+					{Match: Match().MarkNotClear(epMark),
+						Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+					},
+					{Action: ClearMarkAction{Mark: epMark}},
 
-						// To workload traffic.
-						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+					// To workload traffic.
+					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
+					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
-						// Auto-allow IPIP traffic to other Calico hosts.
-						{
-							Match: Match().ProtocolNum(4).
-								DestIPSet("cali4-all-hosts").
-								SrcAddrType(AddrTypeLocal, false),
-							Action:  AcceptAction{},
-							Comment: "Allow IPIP packets to other Calico hosts",
-						},
+					// Auto-allow IPIP traffic to other Calico hosts.
+					{
+						Match: Match().ProtocolNum(4).
+							DestIPSet("cali4-all-hosts").
+							SrcAddrType(AddrTypeLocal, false),
+						Action:  AcceptAction{},
+						Comment: "Allow IPIP packets to other Calico hosts",
+					},
 
-						// Non-workload traffic, send to host chains.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Non-workload traffic, send to host chains.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
-				false: {
-					Name: "cali-OUTPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			}
 
-						// To workload traffic.
-						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+			expOutputChainIPIPV4NoIPVS := &Chain{
+				Name: "cali-OUTPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// Auto-allow IPIP traffic to other Calico hosts.
-						{
-							Match: Match().ProtocolNum(4).
-								DestIPSet("cali4-all-hosts").
-								SrcAddrType(AddrTypeLocal, false),
-							Action:  AcceptAction{},
-							Comment: "Allow IPIP packets to other Calico hosts",
-						},
+					// To workload traffic.
+					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
+					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
-						// Non-workload traffic, send to host chains.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Auto-allow IPIP traffic to other Calico hosts.
+					{
+						Match: Match().ProtocolNum(4).
+							DestIPSet("cali4-all-hosts").
+							SrcAddrType(AddrTypeLocal, false),
+						Action:  AcceptAction{},
+						Comment: "Allow IPIP packets to other Calico hosts",
+					},
+
+					// Non-workload traffic, send to host chains.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
 			}
 
 			// V6 should be unaffected.
-			expOutputChainIPIPV6 := map[bool]*Chain{
-				true: {
-					Name: "cali-OUTPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			expOutputChainIPIPV6IPVS := &Chain{
+				Name: "cali-OUTPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// From endpoint mark chain
-						{Match: Match().MarkNotClear(epMark),
-							Action: JumpAction{Target: ChainDispatchFromEndPointMark},
-						},
-						{Action: ClearMarkAction{Mark: epMark}},
+					// From endpoint mark chain
+					{Match: Match().MarkNotClear(epMark),
+						Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+					},
+					{Action: ClearMarkAction{Mark: epMark}},
 
-						// To workload traffic.
-						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+					// To workload traffic.
+					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
+					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
-						// Non-workload traffic, send to host chains.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// Non-workload traffic, send to host chains.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
-				false: {
-					Name: "cali-OUTPUT",
-					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
+			}
 
-						// To workload traffic.
-						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+			expOutputChainIPIPV6NoIPVS := &Chain{
+				Name: "cali-OUTPUT",
+				Rules: []Rule{
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSet(0x10),
+						Action: AcceptAction{}},
 
-						// Non-workload traffic, send to host chains.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
-						{
-							Match:   Match().MarkSet(0x10),
-							Action:  AcceptAction{},
-							Comment: "Host endpoint policy accepted packet.",
-						},
+					// To workload traffic.
+					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
+					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+
+					// Non-workload traffic, send to host chains.
+					{Action: ClearMarkAction{Mark: 0xf0}},
+					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+					{
+						Match:   Match().MarkSet(0x10),
+						Action:  AcceptAction{},
+						Comment: "Host endpoint policy accepted packet.",
 					},
 				},
 			}
 
 			It("IPv4: should include the expected input chain in the filter chains", func() {
-				Expect(findChain(rr.StaticFilterTableChains(4), "cali-INPUT")).To(Equal(expInputChainIPIPV4[kubeIPVSEnabled]))
+				if kubeIPVSEnabled {
+					Expect(findChain(rr.StaticFilterTableChains(4), "cali-INPUT")).To(Equal(expInputChainIPIPV4IPVS))
+				} else {
+					Expect(findChain(rr.StaticFilterTableChains(4), "cali-INPUT")).To(Equal(expInputChainIPIPV4NoIPVS))
+				}
 			})
 			It("IPv6: should include the expected input chain in the filter chains", func() {
-				Expect(findChain(rr.StaticFilterTableChains(6), "cali-INPUT")).To(Equal(expInputChainIPIPV6[kubeIPVSEnabled]))
+				if kubeIPVSEnabled {
+					Expect(findChain(rr.StaticFilterTableChains(6), "cali-INPUT")).To(Equal(expInputChainIPIPV6IPVS))
+				} else {
+					Expect(findChain(rr.StaticFilterTableChains(6), "cali-INPUT")).To(Equal(expInputChainIPIPV6NoIPVS))
+				}
 			})
 			It("IPv4: should include the expected output chain in the filter chains", func() {
-				Expect(findChain(rr.StaticFilterTableChains(4), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV4[kubeIPVSEnabled]))
+				if kubeIPVSEnabled {
+					Expect(findChain(rr.StaticFilterTableChains(4), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV4IPVS))
+				} else {
+					Expect(findChain(rr.StaticFilterTableChains(4), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV4NoIPVS))
+				}
 			})
 			It("IPv6: should include the expected output chain in the filter chains", func() {
-				Expect(findChain(rr.StaticFilterTableChains(6), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV6[kubeIPVSEnabled]))
+				if kubeIPVSEnabled {
+					Expect(findChain(rr.StaticFilterTableChains(6), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV6IPVS))
+				} else {
+					Expect(findChain(rr.StaticFilterTableChains(6), "cali-OUTPUT")).To(Equal(expOutputChainIPIPV6NoIPVS))
+				}
 			})
 			It("IPv4: Should return expected NAT postrouting chain", func() {
 				Expect(rr.StaticNATPostroutingChains(4)).To(Equal([]*Chain{

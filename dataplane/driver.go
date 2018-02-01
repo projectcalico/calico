@@ -52,7 +52,13 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 		}
 
 		// Mark bits for end point mark. Currently felix takes the rest bits from mask available for use.
-		markEndpointMark, _ := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
+		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
+		if configParams.KubeIPVSSupportEnabled && allocated == 0 {
+			log.WithFields(log.Fields{
+				"Name":     "felix-iptables",
+				"MarkMask": configParams.IptablesMarkMask,
+			}).Panic("Not enough mark bits available for endpoint mark.")
+		}
 		log.WithFields(log.Fields{
 			"acceptMark":    markAccept,
 			"passMark":      markPass,

@@ -65,6 +65,9 @@ func init() {
 			Entry("should allocate/release with collision",
 				[]string{"cali1", "cali6", "cali3", "xcali1", "xcali2", "cali33", "cali11", "cali66"},
 				[]uint32{0x100, 0x600, 0x300, 0x400, 0x100, 0x700}),
+			Entry("should allocate/fail/release/allocate",
+				[]string{"cali1", "cali6", "cali3", "cali11", "cali22", "cali33", "cali8", "cali5", "xcali3", "xcali6","cali55", "cali66"},
+				[]uint32{0x100, 0x600, 0x300, 0x200, 0x400, 0x500, 0x700, ErrMark, 0x600, 0x300}),
 		)
 	})
 

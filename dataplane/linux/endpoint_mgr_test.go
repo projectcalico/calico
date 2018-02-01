@@ -179,7 +179,15 @@ func chainsForIfaces(ifaceMetadata []string,
 				ifaceKind = nameParts[2]
 			}
 		}
-		epMark, _ := epMarkMapper.GetEndpointMark(ifaceName)
+		epMark, err := epMarkMapper.GetEndpointMark(ifaceName)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"ifaces":    ifaceMetadata,
+				"host":      host,
+				"tableKind": tableKind,
+			}).Debug("Failed to get endpoint mark for interface")
+			continue
+		}
 
 		if tableKind != ifaceKind && tableKind != "normal" && tableKind != "applyOnForward" {
 			continue
