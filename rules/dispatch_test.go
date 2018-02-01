@@ -29,10 +29,8 @@ import (
 )
 
 var _ = Describe("Dispatch chains", func() {
-	var epMarkMapper EndpointMarkMapper
-	var renderer RuleRenderer
-
-	for _, kubeIPVSEnabled := range []bool{true, false} {
+	for _, trueOrFalse := range []bool{true, false} {
+		kubeIPVSEnabled := trueOrFalse
 		var rrConfigNormal = Config{
 			IPIPEnabled:            true,
 			IPIPTunnelAddress:      nil,
@@ -51,6 +49,8 @@ var _ = Describe("Dispatch chains", func() {
 			Comment: "Unknown interface",
 		}
 
+		var epMarkMapper EndpointMarkMapper
+		var renderer RuleRenderer
 		BeforeEach(func() {
 			renderer = NewRenderer(rrConfigNormal)
 			epMarkMapper = NewEndpointMarkMapper(rrConfigNormal.IptablesMarkEndpoint)

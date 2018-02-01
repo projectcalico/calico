@@ -38,7 +38,8 @@ var _ = Describe("Static", func() {
 		rr = NewRenderer(conf).(*DefaultRuleRenderer)
 	})
 
-	for _, kubeIPVSEnabled := range []bool{true, false} {
+	for _, trueOrFalse := range []bool{true, false} {
+		kubeIPVSEnabled := trueOrFalse
 		Describe("with default config", func() {
 			BeforeEach(func() {
 				conf = Config{

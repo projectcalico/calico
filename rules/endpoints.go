@@ -63,6 +63,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	)
 
 	if r.KubeIPVSSupportEnabled {
+		log.WithField("iface", ifaceName).Debug("Adding set mark rules")
 		// Chain for setting endpoint mark of an endpoint.
 		result = append(result,
 			r.endpointSetMarkChain(
