@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -192,6 +192,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		IptablesMarkPass:     0x100,
 		IptablesMarkScratch0: 0x200,
 		IptablesMarkScratch1: 0x400,
+		IptablesMarkEndpoint: 0xff000,
 		IptablesLogPrefix:    "calico-packet",
 	}
 
@@ -206,7 +207,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x80}))
 			Expect(rules[1]).To(Equal(iptables.Rule{
-				Match:  iptables.Match().MarkSet(0x80),
+				Match:  iptables.Match().MarkSingleBitSet(0x80),
 				Action: iptables.ReturnAction{},
 			}))
 
@@ -232,7 +233,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Expect(rules[0].Match.Render()).To(Equal(expMatch))
 				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100}))
 				Expect(rules[1]).To(Equal(iptables.Rule{
-					Match:  iptables.Match().MarkSet(0x100),
+					Match:  iptables.Match().MarkSingleBitSet(0x100),
 					Action: iptables.ReturnAction{},
 				}))
 			}

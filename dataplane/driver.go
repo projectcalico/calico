@@ -1,6 +1,6 @@
 // +build !windows
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/felix/markbits"
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
@@ -35,19 +36,37 @@ import (
 func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.HealthAggregator) (DataplaneDriver, *exec.Cmd) {
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal (linux) dataplane driver.")
+		markBitsManager := markbits.NewMarkBitsManager(configParams.IptablesMarkMask, "felix-iptables")
 		// Dedicated mark bits for accept and pass actions.  These are long lived bits
 		// that we use for communicating between chains.
-		markAccept := configParams.NextIptablesMark()
-		markPass := configParams.NextIptablesMark()
+		markAccept, _ := markBitsManager.NextSingleBitMark()
+		markPass, _ := markBitsManager.NextSingleBitMark()
 		// Short-lived mark bits for local calculations within a chain.
-		markScratch0 := configParams.NextIptablesMark()
-		markScratch1 := configParams.NextIptablesMark()
+		markScratch0, _ := markBitsManager.NextSingleBitMark()
+		markScratch1, _ := markBitsManager.NextSingleBitMark()
+		if markAccept == 0 || markPass == 0 || markScratch0 == 0 || markScratch1 == 0 {
+			log.WithFields(log.Fields{
+				"Name":     "felix-iptables",
+				"MarkMask": configParams.IptablesMarkMask,
+			}).Panic("Not enough mark bits available.")
+		}
+
+		// Mark bits for end point mark. Currently felix takes the rest bits from mask available for use.
+		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
+		if configParams.KubeIPVSSupportEnabled && allocated == 0 {
+			log.WithFields(log.Fields{
+				"Name":     "felix-iptables",
+				"MarkMask": configParams.IptablesMarkMask,
+			}).Panic("Not enough mark bits available for endpoint mark.")
+		}
 		log.WithFields(log.Fields{
 			"acceptMark":   markAccept,
 			"passMark":     markPass,
 			"scratch0Mark": markScratch0,
 			"scratch1Mark": markScratch1,
+			"endpointMark": markEndpointMark,
 		}).Info("Calculated iptables mark bits")
+
 		dpConfig := intdataplane.Config{
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExcludes(),
@@ -68,6 +87,9 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 					nil,
 				),
 
+				KubeNodePortRanges:     configParams.KubeNodePortRanges,
+				KubeIPVSSupportEnabled: configParams.KubeIPVSSupportEnabled,
+
 				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),
 				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
 				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
@@ -76,6 +98,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 				IptablesMarkPass:     markPass,
 				IptablesMarkScratch0: markScratch0,
 				IptablesMarkScratch1: markScratch1,
+				IptablesMarkEndpoint: markEndpointMark,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,

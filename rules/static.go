@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
 )
 
 func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*Chain) {
@@ -29,23 +30,99 @@ func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains [
 
 const (
 	ProtoIPIP   = 4
+	ProtoTCP    = 6
+	ProtoUDP    = 17
 	ProtoICMPv6 = 58
 )
 
 func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
-	return []*Chain{
+	result := []*Chain{}
+	result = append(result,
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
 		r.failsafeInChain(),
+	)
+	if r.KubeIPVSSupportEnabled {
+		result = append(result, r.StaticFilterInputForwardCheckChain(ipVersion))
 	}
+	return result
 }
 
 func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 	return []Rule{
 		{
-			Match:  Match().MarkSet(r.IptablesMarkAccept),
+			Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action: r.filterAllowAction,
 		},
+	}
+}
+
+// Forward check chain is to check if a packet belongs to a forwarded traffic or not.
+// With kube-proxy running in ipvs mode, both local or forwarded traffic goes through INPUT filter chain.
+func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8) *Chain {
+	var fwRules []Rule
+	var portRanges []*proto.PortRange
+
+	// Assembly port ranges for kubernetes node ports.
+	for _, portRange := range r.KubeNodePortRanges {
+		pr := &proto.PortRange{
+			First: int32(portRange.MinPort),
+			Last:  int32(portRange.MaxPort),
+		}
+		portRanges = append(portRanges, pr)
+	}
+
+	// Get ipsets name for local host ips.
+	nameForIPSet := func(ipsetID string) string {
+		if ipVersion == 4 {
+			return r.IPSetConfigV4.NameForMainIPSet(ipsetID)
+		} else {
+			return r.IPSetConfigV6.NameForMainIPSet(ipsetID)
+		}
+	}
+	hostIPSet := nameForIPSet(IPSetIDThisHostIPs)
+
+	fwRules = append(fwRules,
+		// If packet belongs to an existing conntrack connection, it does not belong to a forwarded traffic even destination ip is a
+		// service ip. This could happen when pod send back response to a local host process accessing a service ip.
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: ReturnAction{},
+		},
+	)
+
+	// If packet is accessing local host within kubernetes NodePort range, it belongs to a forwarded traffic.
+	for _, portSplit := range SplitPortList(portRanges) {
+		fwRules = append(fwRules,
+			Rule{
+				Match: Match().Protocol("tcp").
+					DestPortRanges(portSplit).
+					DestIPSet(hostIPSet),
+				Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+				Comment: "To kubernetes NodePort service",
+			},
+			Rule{
+				Match: Match().Protocol("udp").
+					DestPortRanges(portSplit).
+					DestIPSet(hostIPSet),
+				Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
+				Comment: "To kubernetes NodePort service",
+			},
+		)
+	}
+
+	fwRules = append(fwRules,
+		// If packet is accessing non local host ip, it belongs to a forwarded traffic.
+		Rule{
+			Match:   Match().NotDestIPSet(hostIPSet),
+			Action:  JumpAction{Target: ChainDispatchSetEndPointMark},
+			Comment: "To kubernetes service",
+		},
+	)
+
+	return &Chain{
+		Name:  ChainForwardCheck,
+		Rules: fwRules,
 	}
 }
 
@@ -75,6 +152,23 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		)
 	}
 
+	if r.KubeIPVSSupportEnabled {
+		// Check if packet belongs to forwarded traffic. (e.g. part of an ipvs connection).
+		// If it is, set endpoint mark and skip "to local host" rules below.
+		inputRules = append(inputRules,
+			Rule{
+				Action: ClearMarkAction{Mark: r.IptablesMarkEndpoint},
+			},
+			Rule{
+				Action: JumpAction{Target: ChainForwardCheck},
+			},
+			Rule{
+				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
+				Action: ReturnAction{},
+			},
+		)
+	}
+
 	// Apply our policy to packets coming from workload endpoints.
 	for _, prefix := range r.WorkloadIfacePrefixes {
 		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
@@ -94,7 +188,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 		},
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
@@ -291,7 +385,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	// Accept packet if policies above set ACCEPT mark.
 	rules = append(rules,
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: "Policy explicitly accepted packet.",
 		},
@@ -315,6 +409,28 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
+
+	if r.KubeIPVSSupportEnabled {
+		// Jump to from-endpoint-mark dispatch chain if endpoint mark is not zero, which means
+		// packet has been through filter INPUT chain. There could be policies apply to its ingress interface.
+		rules = append(rules,
+			Rule{
+				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
+				Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+			},
+		)
+
+		// Clear endpoint mark immediately after. If IPIP is enabled, the packet will be sent over to tunnel device and
+		// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain. We need
+		// to make sure endpoint mark has been cleared to stop the packet going through from-endpoint-mark again with node ip.
+		rules = append(rules,
+			Rule{
+				Action: ClearMarkAction{
+					Mark: r.IptablesMarkEndpoint,
+				},
+			},
+		)
+	}
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
 	// That decision is based on pragmatism; it's generally very useful to be able to contact
@@ -365,7 +481,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
 		},
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
@@ -500,7 +616,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 	// Or if we've already accepted this packet in the raw table.
 	rules = append(rules,
 		Rule{
-			Match:  Match().MarkSet(r.IptablesMarkAccept),
+			Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action: r.mangleAllowAction,
 		},
 	)
@@ -528,7 +644,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		// In the MarkAccept case, we ACCEPT or RETURN according to
 		// IptablesMangleAllowAction.
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.mangleAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
@@ -576,7 +692,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		// In addition, the IPv4 check is complicated by the fact that we have special
 		// case handling for DHCP to the host, which would require an exclusion.
 		rules = append(rules, Rule{
-			Match:  Match().MarkSet(markFromWorkload).RPFCheckFailed(),
+			Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
 			Action: DropAction{},
 		})
 	}
@@ -588,7 +704,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		// Then, if the packet was marked as allowed, accept it.  Packets also return here
 		// without the mark bit set if the interface wasn't one that we're policing.  We
 		// let those packets fall through to the user's policy.
-		Rule{Match: Match().MarkSet(r.IptablesMarkAccept),
+		Rule{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action: AcceptAction{}},
 	)
 
@@ -617,7 +733,7 @@ func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
 			// Then, if the packet was marked as allowed, accept it.  Packets also
 			// return here without the mark bit set if the interface wasn't one that
 			// we're policing.
-			{Match: Match().MarkSet(r.IptablesMarkAccept),
+			{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action: AcceptAction{}},
 		},
 	}

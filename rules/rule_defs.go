@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 const (
@@ -57,7 +58,8 @@ const (
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
-	IPSetIDAllHostIPs = "all-hosts"
+	IPSetIDAllHostIPs  = "all-hosts"
+	IPSetIDThisHostIPs = "this-host"
 
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
@@ -75,9 +77,14 @@ const (
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
 	ChainDispatchToHostEndpointForward   = ChainNamePrefix + "to-hep-forward"
 	ChainDispatchFromHostEndPointForward = ChainNamePrefix + "from-hep-forward"
+	ChainDispatchSetEndPointMark         = ChainNamePrefix + "set-endpoint-mark"
+	ChainDispatchFromEndPointMark        = ChainNamePrefix + "from-endpoint-mark"
 
-	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
-	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
+	ChainForwardCheck = ChainNamePrefix + "forward-check"
+
+	WorkloadToEndpointPfx      = ChainNamePrefix + "tw-"
+	WorkloadFromEndpointPfx    = ChainNamePrefix + "fw-"
+	WorkloadSetEndPointMarkPfx = ChainNamePrefix + "sm-"
 
 	HostToEndpointPfx          = ChainNamePrefix + "th-"
 	HostFromEndpointPfx        = ChainNamePrefix + "fh-"
@@ -137,19 +144,21 @@ type RuleRenderer interface {
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 
-	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint, EndpointMarkMapper) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		adminUp bool,
 		ingressPolicies []string,
 		egressPolicies []string,
 		profileIDs []string,
 	) []*iptables.Chain
 
-	HostDispatchChains(map[string]proto.HostEndpointID, bool) []*iptables.Chain
-	FromHostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
+	HostDispatchChains(map[string]proto.HostEndpointID, EndpointMarkMapper, bool) []*iptables.Chain
+	FromHostDispatchChains(map[string]proto.HostEndpointID, EndpointMarkMapper) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		ingressPolicyNames []string,
 		egressPolicyNames []string,
 		ingressForwardPolicyNames []string,
@@ -158,11 +167,13 @@ type RuleRenderer interface {
 	) []*iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		ingressPolicyNames []string,
 		egressPolicyNames []string,
 	) []*iptables.Chain
 	HostEndpointToMangleChains(
 		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
 		preDNATPolicyNames []string,
 	) []*iptables.Chain
 
@@ -178,7 +189,6 @@ type RuleRenderer interface {
 
 type DefaultRuleRenderer struct {
 	Config
-
 	inputAcceptActions []iptables.Action
 	filterAllowAction  iptables.Action
 	mangleAllowAction  iptables.Action
@@ -205,6 +215,10 @@ type Config struct {
 	IptablesMarkPass     uint32
 	IptablesMarkScratch0 uint32
 	IptablesMarkScratch1 uint32
+	IptablesMarkEndpoint uint32
+
+	KubeNodePortRanges     []numorstring.Port
+	KubeIPVSSupportEnabled bool
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16

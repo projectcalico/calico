@@ -207,6 +207,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if ruleRenderer == nil {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig)
 	}
+	epMarkMapper := rules.NewEndpointMarkMapper(config.RulesConfig.IptablesMarkEndpoint)
 	dp := &InternalDataplane{
 		toDataplane:       make(chan interface{}, msgPeekLimit),
 		fromDataplane:     make(chan interface{}, 100),
@@ -291,6 +292,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
 	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+	dp.RegisterManager(newHostIPManager(
+		config.RulesConfig.WorkloadIfacePrefixes,
+		rules.IPSetIDThisHostIPs,
+		ipSetsV4,
+		config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		rawTableV4,
@@ -299,6 +305,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer,
 		routeTableV4,
 		4,
+		epMarkMapper,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
@@ -350,6 +357,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
+		dp.RegisterManager(newHostIPManager(
+			config.RulesConfig.WorkloadIfacePrefixes,
+			rules.IPSetIDThisHostIPs,
+			ipSetsV6,
+			config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
@@ -358,6 +370,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ruleRenderer,
 			routeTableV6,
 			6,
+			epMarkMapper,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
