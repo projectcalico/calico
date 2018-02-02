@@ -27,7 +27,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 8439a792041f7cb676bc339dffccf30e165a9ec3
+  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -54,5 +54,9 @@ import:
   version: release-1.8
 - package: github.com/gogo/protobuf
   version: ^0.3.0
+- package: github.com/prometheus/procfs
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  subpackages:
+  - xfs
 testImport:
 - package: github.com/onsi/gomega
