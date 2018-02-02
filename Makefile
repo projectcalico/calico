@@ -61,6 +61,7 @@ endif
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
+FV_GINKGO_NODES?=4
 
 help:
 	@echo "Felix Makefile"
@@ -415,7 +416,7 @@ fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_
 	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
-	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes 4 ./`basename $$t` || exit; \
+	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes $(FV_GINKGO_NODES) ./`basename $$t` || exit; \
 	done
 
 bin/check-licenses: $(FELIX_GO_FILES)
