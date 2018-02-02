@@ -23,7 +23,7 @@ all: clean test
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
 CALICOCTL_VER=master
-CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)
+CALICOCTL_CONTAINER_NAME=calico/ctl$(ARCHTAG):$(CALICOCTL_VER)
 K8S_VERSION=v1.8.1
 ETCD_VER=v3.2.5
 BIRD_VER=v0.3.1
@@ -71,7 +71,7 @@ vendor vendor/.up-to-date: glide.lock
 	touch vendor/.up-to-date
 
 container: bin/confd
-	docker build -t calico/confd .
+	docker build -t calico/confd$(ARCHTAG) -f Dockerfile$(ARCHTAG) .
 
 bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
