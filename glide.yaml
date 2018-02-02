@@ -1,6 +1,6 @@
 package: github.com/kelseyhightower/confd
 import:
 - package: github.com/projectcalico/libcalico-go
-  version: 7c2de5ed8c029f222d87fc849b54c4075ef3173f
+  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
 - package: github.com/coreos/etcd
   version: v3.2.7
