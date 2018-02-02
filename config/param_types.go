@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 
 	"github.com/kardianos/osext"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 const (
@@ -275,6 +277,25 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			Protocol: protocolStr,
 			Port:     uint16(port),
 		})
+	}
+	return result, nil
+}
+
+type PortRangeListParam struct {
+	Metadata
+}
+
+func (p *PortRangeListParam) Parse(raw string) (interface{}, error) {
+	var result []numorstring.Port
+	for _, rangeStr := range strings.Split(raw, ",") {
+		portRange, err := numorstring.PortFromString(rangeStr)
+		if err != nil {
+			return nil, p.parseFailed(raw, fmt.Sprintf("%s is not a valid port range", rangeStr))
+		}
+		if len(portRange.PortName) > 0 {
+			return nil, p.parseFailed(raw, fmt.Sprintf("%s has port name set", rangeStr))
+		}
+		result = append(result, portRange)
 	}
 	return result, nil
 }

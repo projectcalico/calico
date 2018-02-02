@@ -60,6 +60,7 @@ type endpointManager struct {
 	ruleRenderer rules.RuleRenderer
 	routeTable   routeTable
 	writeProcSys procSysWriter
+	epMarkMapper rules.EndpointMarkMapper
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -118,6 +119,7 @@ func newEndpointManager(
 	ruleRenderer rules.RuleRenderer,
 	routeTable routeTable,
 	ipVersion uint8,
+	epMarkMapper rules.EndpointMarkMapper,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 ) *endpointManager {
@@ -128,6 +130,7 @@ func newEndpointManager(
 		ruleRenderer,
 		routeTable,
 		ipVersion,
+		epMarkMapper,
 		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
@@ -141,6 +144,7 @@ func newEndpointManagerWithShims(
 	ruleRenderer rules.RuleRenderer,
 	routeTable routeTable,
 	ipVersion uint8,
+	epMarkMapper rules.EndpointMarkMapper,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
@@ -158,6 +162,7 @@ func newEndpointManagerWithShims(
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
 		writeProcSys: procSysWriter,
+		epMarkMapper: epMarkMapper,
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
@@ -389,6 +394,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Updating per-endpoint chains.")
 			if oldWorkload != nil && oldWorkload.Name != workload.Name {
 				logCxt.Debug("Interface name changed, cleaning up old state")
+				m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 				m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
@@ -402,6 +408,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			adminUp := workload.State == "active"
 			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
 				workload.Name,
+				m.epMarkMapper,
 				adminUp,
 				ingressPolicyNames,
 				egressPolicyNames,
@@ -465,6 +472,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 			if oldWorkload != nil {
+				m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 				// Remove any routes from the routing table.  The RouteTable will
 				// remove any conntrack entries as a side-effect.
 				logCxt.Info("Workload removed, deleting old state.")
@@ -482,7 +490,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 
 	if m.needToCheckDispatchChains {
 		// Rewrite the dispatch chains if they've changed.
-		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
+		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints, m.epMarkMapper)
 		m.updateDispatchChains(m.activeWlDispatchChains, newDispatchChains, m.filterTable)
 		m.needToCheckDispatchChains = false
 	}
@@ -642,6 +650,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 		filtChains := m.ruleRenderer.HostEndpointToFilterChains(
 			ifaceName,
+			m.epMarkMapper,
 			ingressPolicyNames,
 			egressPolicyNames,
 			ingressForwardPolicyNames,
@@ -668,6 +677,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 		}
 		mangleChains := m.ruleRenderer.HostEndpointToMangleChains(
 			ifaceName,
+			m.epMarkMapper,
 			ingressPolicyNames,
 		)
 		if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleChains[ifaceName]) {
@@ -690,6 +700,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 		}
 		rawChains := m.ruleRenderer.HostEndpointToRawChains(
 			ifaceName,
+			m.epMarkMapper,
 			ingressPolicyNames,
 			egressPolicyNames,
 		)
@@ -726,17 +737,17 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 	// Rewrite the filter dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite filter dispatch chains?")
-	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, true)
+	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID, m.epMarkMapper, true)
 	m.updateDispatchChains(m.activeHostFilterDispatchChains, newFilterDispatchChains, m.filterTable)
 
 	// Rewrite the mangle dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newPreDNATIfaceNameToHostEpID).Debug("Rewrite mangle dispatch chains?")
-	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID)
+	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, m.epMarkMapper)
 	m.updateDispatchChains(m.activeHostMangleDispatchChains, newMangleDispatchChains, m.mangleTable)
 
 	// Rewrite the raw dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
-	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, false)
+	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID, m.epMarkMapper, false)
 	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
 
 	log.Debug("Done resolving host endpoints.")

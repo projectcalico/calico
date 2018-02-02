@@ -1,5 +1,5 @@
-hash: ba0a905e16b05fb04749d7adf47c6f7bebf8c6b3e73ff007862adf9935dfe666
-updated: 2018-01-30T17:06:39.101201365-08:00
+hash: ae84fd295c525b379b1abbd513e0564e1353cd903d49c9095661ade36f0af03d
+updated: 2018-02-02T13:59:45.70529374Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -110,7 +110,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 3437940fe522edd3e99a5117e062e52a7abc9b28
+  version: 0e2a17b81af445147a78d94a45d4398c4008c219
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -181,7 +181,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: 216894e5277dc6098f93ceca97beb6101610b418
+  version: 11c95655c9621e5324ea237ebcce61e822e2deca
   subpackages:
   - ext
   - log
@@ -198,7 +198,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 8439a792041f7cb676bc339dffccf30e165a9ec3
+  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
   subpackages:
   - lib
   - lib/apiconfig
@@ -237,7 +237,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: daebaf6338cf6faf48a307e6065d5688f8a23617
+  version: 7d6db7cabab2f9a930ba1b3e61e360fe11154898
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -258,7 +258,7 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: f98634e408857669d61064b283c4cde240622865
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -272,7 +272,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 5f5d5cddcf414bb44941b9c6c0d2df31253ec40e
+  version: c27b7f7359fa2461b8e2a4c42021eb549ccc8ff0
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
