@@ -1,5 +1,5 @@
-hash: 25535b1df3cf4bf771fbab68f47cf945736acf71ef37a3a68467527f6ee17fa0
-updated: 2018-01-23T14:04:58.221543631Z
+hash: b56742d8d81bb8be544025b42a1bd942763af6aaed153ce478ca964ce5f3aeb8
+updated: 2018-02-02T13:36:34.055803539-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -118,7 +118,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 28f3912491a564677bfafc4602aa126023d1bfb2
+  version: c9e1201fac1ba59201d24e49cb4128622e021f7b
   subpackages:
   - client/v2
   - models
@@ -150,7 +150,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: b4575eea38cca1123ec2dc90c26529b5c5acfcff
 - name: github.com/olekukonko/tablewriter
-  version: 96aac992fc8b1a4c83841a6c3e7178d20d989625
+  version: b8a9be070da40449e501c3c4730a889e42d87a9e
 - name: github.com/onsi/ginkgo
   version: 9eda700730cba42af70d53180f9dcce9266bc2bc
   subpackages:
@@ -173,7 +173,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 003f63b7f4cff3fc95357005358af2de0f5fe152
+  version: 4fc17627b66f18840f3604eec277fe1af7f6d4a5
   subpackages:
   - format
   - internal/assertion
@@ -214,7 +214,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 0dddd966211ad78f62fc79421876628896545e32
+  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -295,7 +295,7 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: 5a988e882da75e9451a5a6b02eecd36df51606ed
+  version: c27b7f7359fa2461b8e2a4c42021eb549ccc8ff0
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -418,7 +418,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: bc110fd540ab678abbf2bc71d9ce908eb9325ef6
+  version: 4972c8e335e32ab65ba45bde0a99c6544c8a8e4c
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
