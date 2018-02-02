@@ -99,10 +99,10 @@ func processIPSetUpdate(store *policystore.PolicyStore, update *proto.IPSetUpdat
 
 	// IPSetUpdate replaces the existing set.
 	s := policystore.NewIPSet(update.Type)
-	store.IPSetByID[update.Id] = s
 	for _, addr := range update.Members {
 		s.AddString(addr)
 	}
+	store.IPSetByID[update.Id] = s
 }
 
 func processIPSetDeltaUpdate(store *policystore.PolicyStore, update *proto.IPSetDeltaUpdate) {

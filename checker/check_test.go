@@ -49,10 +49,17 @@ func TestCheckPolicyNoRules(t *testing.T) {
 
 // If rules exist, but none match, we should get NO_MATCH
 // Rules that do match should return their Action.
+// Log rules should continue processing.
 func TestCheckPolicyRules(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	policy := &proto.Policy{InboundRules: []*proto.Rule{
+		{
+			Action: "log",
+			Http: &proto.HTTPSelector{
+				Methods: []string{"GET", "POST"},
+			},
+		},
 		{
 			Action: "allow",
 			Http: &proto.HTTPSelector{

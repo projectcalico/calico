@@ -23,9 +23,13 @@ import (
 	envoyapi "github.com/envoyproxy/data-plane-api/api"
 )
 
+const addr1Ip = "3.4.6.8"
+const addr2Ip = "23.8.58.1"
+const addr3Ip = "2.2.2.2"
+
 var addr1 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
-		Address:  "3.4.6.8",
+		Address:  addr1Ip,
 		Protocol: envoyapi.SocketAddress_TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 5429,
@@ -34,7 +38,7 @@ var addr1 = &envoyapi.Address{
 }
 var addr2 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
-		Address:  "23.8.58.1",
+		Address:  addr2Ip,
 		Protocol: envoyapi.SocketAddress_TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 6632,
@@ -43,7 +47,7 @@ var addr2 = &envoyapi.Address{
 }
 var addr3 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
-		Address:  "2.2.2.2",
+		Address:  addr3Ip,
 		Protocol: envoyapi.SocketAddress_TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 2222,
@@ -97,8 +101,8 @@ func TestIPSetUpdateNew(t *testing.T) {
 		Id:   id,
 		Type: proto.IPSetUpdate_IP,
 		Members: []string{
-			"3.4.6.8",
-			"23.8.58.1",
+			addr1Ip,
+			addr2Ip,
 		},
 	}
 	processIPSetUpdate(store, update)
@@ -116,15 +120,15 @@ func TestIPSetUpdateExists(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	ipset := policystore.NewIPSet(proto.IPSetUpdate_IP)
 	store.IPSetByID[id] = ipset
-	ipset.AddString("3.4.6.8")
-	ipset.AddString("2.2.2.2")
+	ipset.AddString(addr1Ip)
+	ipset.AddString(addr3Ip)
 
 	update := &proto.IPSetUpdate{
 		Id:   id,
 		Type: proto.IPSetUpdate_IP,
 		Members: []string{
-			"3.4.6.8",
-			"23.8.58.1",
+			addr1Ip,
+			addr2Ip,
 		},
 	}
 	processIPSetUpdate(store, update)
@@ -147,8 +151,8 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 			Id:   id,
 			Type: proto.IPSetUpdate_IP,
 			Members: []string{
-				"3.4.6.8",
-				"23.8.58.1",
+				addr1Ip,
+				addr2Ip,
 			}}}}
 	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
@@ -161,15 +165,15 @@ func TestIPSetDeltaUpdateExists(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	ipset := policystore.NewIPSet(proto.IPSetUpdate_IP)
 	store.IPSetByID[id] = ipset
-	ipset.AddString("3.4.6.8")
-	ipset.AddString("2.2.2.2")
+	ipset.AddString(addr1Ip)
+	ipset.AddString(addr3Ip)
 
 	update := &proto.IPSetDeltaUpdate{
 		Id: id,
 		AddedMembers: []string{
-			"23.8.58.1",
+			addr2Ip,
 		},
-		RemovedMembers: []string{"2.2.2.2"},
+		RemovedMembers: []string{addr3Ip},
 	}
 	processIPSetDeltaUpdate(store, update)
 	ipset = store.IPSetByID[id] // don't assume set pointer doesn't change
@@ -189,9 +193,9 @@ func TestIPSetDeltaUpdateNonExist(t *testing.T) {
 	update := &proto.IPSetDeltaUpdate{
 		Id: id,
 		AddedMembers: []string{
-			"23.8.58.1",
+			addr2Ip,
 		},
-		RemovedMembers: []string{"2.2.2.2"},
+		RemovedMembers: []string{addr3Ip},
 	}
 	g.Expect(func() { processIPSetDeltaUpdate(store, update) }).To(Panic())
 }
@@ -209,9 +213,9 @@ func TestIPSetDeltaUpdateDispatch(t *testing.T) {
 		IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{
 			Id: id,
 			AddedMembers: []string{
-				"23.8.58.1",
+				addr2Ip,
 			},
-			RemovedMembers: []string{"2.2.2.2"},
+			RemovedMembers: []string{addr3Ip},
 		},
 	}}
 	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())

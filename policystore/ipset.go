@@ -73,7 +73,7 @@ func (m ipMapSet) ContainsAddress(addr *envoyapi.Address) bool {
 		"proto": addr.String(),
 		"key":   key,
 	}).Debug("Finding address in ipMapSet", addr)
-	return m[addr.GetSocketAddress().GetAddress()]
+	return m[key]
 }
 
 func (m ipPortMapSet) AddString(ip string) {

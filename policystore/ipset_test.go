@@ -22,16 +22,30 @@ import (
 	envoyapi "github.com/envoyproxy/data-plane-api/api"
 )
 
+func makeAddr(ip string, protocol envoyapi.SocketAddress_Protocol, port uint32) envoyapi.Address {
+	return envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
+		SocketAddress: &envoyapi.SocketAddress{
+			Address:       ip,
+			Protocol:      protocol,
+			PortSpecifier: &envoyapi.SocketAddress_PortValue{PortValue: port},
+		},
+	}}
+}
+
+func makeIpAddr(ip string) envoyapi.Address {
+	return envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
+		SocketAddress: &envoyapi.SocketAddress{
+			Address: ip,
+		},
+	}}
+}
+
 func TestAddIp(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP)
 	uut.AddString("2.2.2.2")
-	addr := envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
-		SocketAddress: &envoyapi.SocketAddress{
-			Address: "2.2.2.2",
-		},
-	}}
+	addr := makeIpAddr("2.2.2.2")
 	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 
 	uut.AddString("2.2.2.3")
@@ -48,11 +62,7 @@ func TestRemoveIp(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP)
-	addr := envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
-		SocketAddress: &envoyapi.SocketAddress{
-			Address: "2.2.2.2",
-		},
-	}}
+	addr := makeIpAddr("2.2.2.2")
 
 	uut.RemoveString("2.2.2.2")
 	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
@@ -73,13 +83,7 @@ func TestAddIpAndPort(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
-	addr := envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
-		SocketAddress: &envoyapi.SocketAddress{
-			Address:       "2.2.2.2",
-			Protocol:      envoyapi.SocketAddress_TCP,
-			PortSpecifier: &envoyapi.SocketAddress_PortValue{PortValue: 2222},
-		},
-	}}
+	addr := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
 
 	uut.AddString("2.2.2.2,tcp:2222")
 	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
@@ -97,13 +101,7 @@ func TestRemoveIpAndPort(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
-	addr := envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
-		SocketAddress: &envoyapi.SocketAddress{
-			Address:       "2.2.2.2",
-			Protocol:      envoyapi.SocketAddress_TCP,
-			PortSpecifier: &envoyapi.SocketAddress_PortValue{PortValue: 2222},
-		},
-	}}
+	addr := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
 
 	uut.RemoveString("2.2.2.2,tcp:2222")
 	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
@@ -124,34 +122,24 @@ func TestIpPortContainsAddress(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
-	addr := envoyapi.Address{Address: &envoyapi.Address_SocketAddress{
-		SocketAddress: &envoyapi.SocketAddress{
-			Address:       "2.2.2.2",
-			Protocol:      envoyapi.SocketAddress_TCP,
-			PortSpecifier: &envoyapi.SocketAddress_PortValue{PortValue: 2222},
-		},
-	}}
+	addrTCP := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
+	addrUDP := makeAddr("2.2.2.2", envoyapi.SocketAddress_UDP, 2222)
+	addrPort := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2223)
+	addrIp := makeAddr("2.2.2.3", envoyapi.SocketAddress_TCP, 2222)
 
 	// Different protocol
 	uut.AddString("2.2.2.2,udp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	g.Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
 
-	sa := addr.GetSocketAddress()
-	sa.Protocol = envoyapi.SocketAddress_UDP
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
-	sa.Protocol = envoyapi.SocketAddress_TCP
+	g.Expect(uut.ContainsAddress(&addrUDP)).To(BeTrue())
 
 	// Different port
 	uut.AddString("2.2.2.2,tcp:2223")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
-	pv := sa.GetPortSpecifier().(*envoyapi.SocketAddress_PortValue)
-	pv.PortValue = 2223
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
-	pv.PortValue = 2222
+	g.Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
+	g.Expect(uut.ContainsAddress(&addrPort)).To(BeTrue())
 
 	// Different IP
 	uut.AddString("2.2.2.3,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
-	sa.Address = "2.2.2.3"
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	g.Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
+	g.Expect(uut.ContainsAddress(&addrIp)).To(BeTrue())
 }

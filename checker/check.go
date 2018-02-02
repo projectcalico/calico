@@ -66,12 +66,14 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 			case ALLOW:
 				s.Code = OK
 				return
-			case LOG, DENY:
+			case DENY:
 				s.Code = PERMISSION_DENIED
 				return
 			case PASS:
 				// Pass means end evaluation of policies and proceed to profiles, if any.
 				break Policy
+			case LOG:
+				panic("policy should never return LOG action")
 			}
 		}
 	}
@@ -88,9 +90,11 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 			case ALLOW:
 				s.Code = OK
 				return
-			case LOG, DENY, PASS:
+			case DENY, PASS:
 				s.Code = PERMISSION_DENIED
 				return
+			case LOG:
+				panic("profile should never return LOG action")
 			}
 		}
 	} else {
@@ -114,7 +118,12 @@ func checkRules(rules []*proto.Rule, req *authz.CheckRequest) (action Action) {
 	for _, r := range rules {
 		if match(r, req) {
 			log.Debugf("Rule matched.")
-			return ActionFromString(r.Action)
+			a := ActionFromString(r.Action)
+			if a != LOG {
+				// We don't support actually logging requests, but if we hit a LOG action, we should
+				// continue processing rules.
+				return a
+			}
 		}
 	}
 	return NO_MATCH
