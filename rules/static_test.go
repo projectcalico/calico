@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ var _ = Describe("Static", func() {
 								// Outgoing host endpoint chains.
 								{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
 								{
-									Match:   Match().MarkSet(0x10),
+									Match:   Match().MarkSingleBitSet(0x10),
 									Action:  AcceptAction{},
 									Comment: "Policy explicitly accepted packet.",
 								},
@@ -151,7 +151,7 @@ var _ = Describe("Static", func() {
 								Name: "cali-INPUT",
 								Rules: []Rule{
 									// Untracked packets already matched in raw table.
-									{Match: Match().MarkSet(0x10),
+									{Match: Match().MarkSingleBitSet(0x10),
 										Action: AcceptAction{},
 									},
 
@@ -171,7 +171,7 @@ var _ = Describe("Static", func() {
 									{Action: ClearMarkAction{Mark: 0xf0}},
 									{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 									{
-										Match:   Match().MarkSet(0x10),
+										Match:   Match().MarkSingleBitSet(0x10),
 										Action:  AcceptAction{},
 										Comment: "Host endpoint policy accepted packet.",
 									},
@@ -182,7 +182,7 @@ var _ = Describe("Static", func() {
 								Name: "cali-INPUT",
 								Rules: []Rule{
 									// Untracked packets already matched in raw table.
-									{Match: Match().MarkSet(0x10),
+									{Match: Match().MarkSingleBitSet(0x10),
 										Action: AcceptAction{},
 									},
 
@@ -195,7 +195,7 @@ var _ = Describe("Static", func() {
 									{Action: ClearMarkAction{Mark: 0xf0}},
 									{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 									{
-										Match:   Match().MarkSet(0x10),
+										Match:   Match().MarkSingleBitSet(0x10),
 										Action:  AcceptAction{},
 										Comment: "Host endpoint policy accepted packet.",
 									},
@@ -209,7 +209,7 @@ var _ = Describe("Static", func() {
 								Name: "cali-OUTPUT",
 								Rules: []Rule{
 									// Untracked packets already matched in raw table.
-									{Match: Match().MarkSet(0x10),
+									{Match: Match().MarkSingleBitSet(0x10),
 										Action: AcceptAction{},
 									},
 
@@ -227,7 +227,7 @@ var _ = Describe("Static", func() {
 									{Action: ClearMarkAction{Mark: 0xf0}},
 									{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 									{
-										Match:   Match().MarkSet(0x10),
+										Match:   Match().MarkSingleBitSet(0x10),
 										Action:  AcceptAction{},
 										Comment: "Host endpoint policy accepted packet.",
 									},
@@ -238,7 +238,7 @@ var _ = Describe("Static", func() {
 								Name: "cali-OUTPUT",
 								Rules: []Rule{
 									// Untracked packets already matched in raw table.
-									{Match: Match().MarkSet(0x10),
+									{Match: Match().MarkSingleBitSet(0x10),
 										Action: AcceptAction{},
 									},
 
@@ -250,7 +250,7 @@ var _ = Describe("Static", func() {
 									{Action: ClearMarkAction{Mark: 0xf0}},
 									{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 									{
-										Match:   Match().MarkSet(0x10),
+										Match:   Match().MarkSingleBitSet(0x10),
 										Action:  AcceptAction{},
 										Comment: "Host endpoint policy accepted packet.",
 									},
@@ -291,7 +291,7 @@ var _ = Describe("Static", func() {
 								// Then, if the packet was marked as allowed, accept it.  Packets also
 								// return here without the mark bit set if the interface wasn't one that
 								// we're policing.
-								{Match: Match().MarkSet(0x10), Action: AcceptAction{}},
+								{Match: Match().MarkSingleBitSet(0x10), Action: AcceptAction{}},
 							},
 						}))
 					})
@@ -316,7 +316,7 @@ var _ = Describe("Static", func() {
 							Action: SetMarkAction{Mark: 0x40}},
 						{Match: Match().MarkClear(0x40),
 							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
-						{Match: Match().MarkSet(0x10),
+						{Match: Match().MarkSingleBitSet(0x10),
 							Action: AcceptAction{}},
 					},
 				}))
@@ -328,11 +328,11 @@ var _ = Describe("Static", func() {
 						{Action: ClearMarkAction{Mark: 0xf0}},
 						{Match: Match().InInterface("cali+"),
 							Action: SetMarkAction{Mark: 0x40}},
-						{Match: Match().MarkSet(0x40).RPFCheckFailed(),
+						{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
 							Action: DropAction{}},
 						{Match: Match().MarkClear(0x40),
 							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
-						{Match: Match().MarkSet(0x10),
+						{Match: Match().MarkSingleBitSet(0x10),
 							Action: AcceptAction{}},
 					},
 				}))
@@ -419,7 +419,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-INPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// IPIP rules
@@ -450,7 +450,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -461,7 +461,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-INPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// IPIP rules
@@ -485,7 +485,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -497,7 +497,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-INPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// Forward check chain.
@@ -516,7 +516,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -526,7 +526,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-INPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// Per-prefix workload jump rules.  Note use of goto so that we
@@ -538,7 +538,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -549,7 +549,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-OUTPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// From endpoint mark chain
@@ -575,7 +575,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -586,7 +586,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-OUTPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// To workload traffic.
@@ -606,7 +606,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -618,7 +618,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-OUTPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// From endpoint mark chain
@@ -635,7 +635,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -646,7 +646,7 @@ var _ = Describe("Static", func() {
 				Name: "cali-OUTPUT",
 				Rules: []Rule{
 					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSet(0x10),
+					{Match: Match().MarkSingleBitSet(0x10),
 						Action: AcceptAction{}},
 
 					// To workload traffic.
@@ -657,7 +657,7 @@ var _ = Describe("Static", func() {
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 					{
-						Match:   Match().MarkSet(0x10),
+						Match:   Match().MarkSingleBitSet(0x10),
 						Action:  AcceptAction{},
 						Comment: "Host endpoint policy accepted packet.",
 					},
@@ -1026,7 +1026,7 @@ var _ = Describe("Static", func() {
 						// Outgoing host endpoint chains.
 						{Action: JumpAction{Target: ChainDispatchToHostEndpointForward}},
 						{
-							Match:   Match().MarkSet(0x10),
+							Match:   Match().MarkSingleBitSet(0x10),
 							Action:  ReturnAction{},
 							Comment: "Policy explicitly accepted packet.",
 						},
@@ -1038,7 +1038,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-INPUT",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
+						{Match: Match().MarkSingleBitSet(0x10),
 							Action: ReturnAction{}},
 
 						// Per-prefix workload jump rules.  Note use of goto so that we
@@ -1050,7 +1050,7 @@ var _ = Describe("Static", func() {
 						{Action: ClearMarkAction{Mark: 0xf0}},
 						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 						{
-							Match:   Match().MarkSet(0x10),
+							Match:   Match().MarkSingleBitSet(0x10),
 							Action:  ReturnAction{},
 							Comment: "Host endpoint policy accepted packet.",
 						},
@@ -1062,7 +1062,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-OUTPUT",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
+						{Match: Match().MarkSingleBitSet(0x10),
 							Action: ReturnAction{}},
 
 						// To workload traffic.
@@ -1073,7 +1073,7 @@ var _ = Describe("Static", func() {
 						{Action: ClearMarkAction{Mark: 0xf0}},
 						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 						{
-							Match:   Match().MarkSet(0x10),
+							Match:   Match().MarkSingleBitSet(0x10),
 							Action:  ReturnAction{},
 							Comment: "Host endpoint policy accepted packet.",
 						},

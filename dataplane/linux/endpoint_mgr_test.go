@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -230,12 +230,12 @@ func chainsForIfaces(ifaceMetadata []string,
 			})
 			if tableKind == "untracked" {
 				outRules = append(outRules, iptables.Rule{
-					Match:  iptables.Match().MarkSet(8),
+					Match:  iptables.Match().MarkSingleBitSet(8),
 					Action: iptables.NoTrackAction{},
 				})
 			}
 			outRules = append(outRules, iptables.Rule{
-				Match:   iptables.Match().MarkSet(8),
+				Match:   iptables.Match().MarkSingleBitSet(8),
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
@@ -297,12 +297,12 @@ func chainsForIfaces(ifaceMetadata []string,
 			})
 			if tableKind == "untracked" {
 				inRules = append(inRules, iptables.Rule{
-					Match:  iptables.Match().MarkSet(8),
+					Match:  iptables.Match().MarkSingleBitSet(8),
 					Action: iptables.NoTrackAction{},
 				})
 			}
 			inRules = append(inRules, iptables.Rule{
-				Match:   iptables.Match().MarkSet(8),
+				Match:   iptables.Match().MarkSingleBitSet(8),
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
@@ -388,7 +388,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			)
 			epMarkFrom = append(epMarkFrom,
 				iptables.Rule{
-					Match:  iptables.Match().MarkMultiSet(epMark, epMarkMapper.GetMask()),
+					Match:  iptables.Match().MarkMatchesWithMask(epMark, epMarkMapper.GetMask()),
 					Action: iptables.GotoAction{Target: outPrefix[:6] + hostOrWlLetter + "-" + ifaceName},
 				},
 			)
@@ -513,15 +513,15 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 		BeforeEach(func() {
 			rrConfigNormal = rules.Config{
-				IPIPEnabled:          true,
-				IPIPTunnelAddress:    nil,
-				IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:   0x8,
-				IptablesMarkPass:     0x10,
-				IptablesMarkScratch0: 0x20,
-				IptablesMarkScratch1: 0x40,
-				IptablesMarkEndpoint: 0xff00,
+				IPIPEnabled:            true,
+				IPIPTunnelAddress:      nil,
+				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:     0x8,
+				IptablesMarkPass:       0x10,
+				IptablesMarkScratch0:   0x20,
+				IptablesMarkScratch1:   0x40,
+				IptablesMarkEndpoint:   0xff00,
 				KubeIPVSSupportEnabled: true,
 			}
 			eth0Addrs = set.New()

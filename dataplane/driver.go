@@ -1,6 +1,6 @@
 // +build !windows
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,11 +60,11 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 			}).Panic("Not enough mark bits available for endpoint mark.")
 		}
 		log.WithFields(log.Fields{
-			"acceptMark":    markAccept,
-			"passMark":      markPass,
-			"scratch0Mark":  markScratch0,
-			"scratch1Mark":  markScratch1,
-			"endpointMark":  markEndpointMark,
+			"acceptMark":   markAccept,
+			"passMark":     markPass,
+			"scratch0Mark": markScratch0,
+			"scratch1Mark": markScratch1,
+			"endpointMark": markEndpointMark,
 		}).Info("Calculated iptables mark bits")
 
 		dpConfig := intdataplane.Config{
@@ -87,7 +87,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 					nil,
 				),
 
-				KubeNodePortRanges: configParams.KubeNodePortRanges,
+				KubeNodePortRanges:     configParams.KubeNodePortRanges,
 				KubeIPVSSupportEnabled: configParams.KubeIPVSSupportEnabled,
 
 				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -317,14 +317,14 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			if chainType == chainTypeUntracked {
 				// For an untracked policy, map allow to "NOTRACK and ALLOW".
 				rules = append(rules, Rule{
-					Match:  Match().MarkSet(r.IptablesMarkAccept),
+					Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
 					Action: NoTrackAction{},
 				})
 			}
 			// If accept bit is set, return from this chain.  We don't immediately
 			// accept because there may be other policy still to apply.
 			rules = append(rules, Rule{
-				Match:   Match().MarkSet(r.IptablesMarkAccept),
+				Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action:  ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
@@ -353,7 +353,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				// If policy marked packet as accepted, it returns, setting the
 				// accept mark bit.  If that is set, return from this chain.
 				Rule{
-					Match:   Match().MarkSet(r.IptablesMarkAccept),
+					Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 					Action:  ReturnAction{},
 					Comment: "Return if profile accepted",
 				})

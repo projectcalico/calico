@@ -16,9 +16,11 @@ package rules_test
 
 import (
 	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	. "github.com/projectcalico/felix/rules"
 )
 
@@ -47,7 +49,7 @@ func init() {
 				result := []uint32{}
 				for _, ep := range eps {
 					if strings.HasPrefix(ep, "x") {
-						epmm.ReleaseEndpointMark(strings.TrimPrefix(ep,"x"))
+						epmm.ReleaseEndpointMark(strings.TrimPrefix(ep, "x"))
 					} else {
 						// if error, function return 0 which match ErrMark.
 						mark, _ := epmm.GetEndpointMark(ep)
@@ -66,7 +68,7 @@ func init() {
 				[]string{"cali1", "cali6", "cali3", "xcali1", "xcali2", "cali33", "cali11", "cali66"},
 				[]uint32{0x100, 0x600, 0x300, 0x400, 0x100, 0x700}),
 			Entry("should allocate/fail/release/allocate",
-				[]string{"cali1", "cali6", "cali3", "cali11", "cali22", "cali33", "cali8", "cali5", "xcali3", "xcali6","cali55", "cali66"},
+				[]string{"cali1", "cali6", "cali3", "cali11", "cali22", "cali33", "cali8", "cali5", "xcali3", "xcali6", "cali55", "cali66"},
 				[]uint32{0x100, 0x600, 0x300, 0x200, 0x400, 0x500, 0x700, ErrMark, 0x600, 0x300}),
 		)
 	})

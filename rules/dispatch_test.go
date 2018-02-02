@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -859,7 +859,7 @@ func outboundGotoRule(ifaceMatch string, target string) iptables.Rule {
 
 func epMarkFromGotoRule(epMark, mask uint32, target string) iptables.Rule {
 	return iptables.Rule{
-		Match:  iptables.Match().MarkSetWithMark(epMark, mask),
+		Match:  iptables.Match().MarkMatchesWithMask(epMark, mask),
 		Action: iptables.GotoAction{Target: target},
 	}
 }

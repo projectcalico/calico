@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -277,7 +277,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				} else if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
 					// implement each name into root rules for from-endpoint-mark chain.
 					rootToEndpointRules = append(rootToEndpointRules, Rule{
-						Match: Match().MarkSetWithMark(endPointMark, epMarkMapper.GetMask()),
+						Match: Match().MarkMatchesWithMask(endPointMark, epMarkMapper.GetMask()),
 						Action: GotoAction{
 							Target: EndpointChainName(toEndpointPfx, name),
 						},
@@ -342,7 +342,7 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				})
 			} else if endPointMark, err := epMarkMapper.GetEndpointMark(ifaceName); err == nil {
 				rootToEndpointRules = append(rootToEndpointRules, Rule{
-					Match: Match().MarkSetWithMark(endPointMark, epMarkMapper.GetMask()),
+					Match: Match().MarkMatchesWithMask(endPointMark, epMarkMapper.GetMask()),
 					Action: GotoAction{
 						Target: EndpointChainName(toEndpointPfx, ifaceName),
 					},

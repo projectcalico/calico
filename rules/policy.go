@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -242,7 +242,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 		// The CIDR or port matches in the rule overflowed and we rendered them
 		// as additional rules, which set the markAllBlocksPass bit on
 		// success.  Add a match on that bit to the calculated rule.
-		match = match.MarkSet(matchBlockBuilder.markAllBlocksPass)
+		match = match.MarkSingleBitSet(matchBlockBuilder.markAllBlocksPass)
 	}
 	markBit, actions := r.CalculateActions(&ruleCopy, ipVersion)
 	rs := matchBlockBuilder.Rules
@@ -254,7 +254,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 			Match:  match,
 			Action: iptables.SetMarkAction{Mark: markBit},
 		})
-		match = iptables.Match().MarkSet(markBit)
+		match = iptables.Match().MarkSingleBitSet(markBit)
 	}
 	for _, action := range actions {
 		rs = append(rs, iptables.Rule{

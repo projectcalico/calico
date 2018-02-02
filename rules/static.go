@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 	return []Rule{
 		{
-			Match:  Match().MarkSet(r.IptablesMarkAccept),
+			Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action: r.filterAllowAction,
 		},
 	}
@@ -188,7 +188,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 		},
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
@@ -385,7 +385,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	// Accept packet if policies above set ACCEPT mark.
 	rules = append(rules,
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: "Policy explicitly accepted packet.",
 		},
@@ -481,7 +481,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
 		},
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
@@ -616,7 +616,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 	// Or if we've already accepted this packet in the raw table.
 	rules = append(rules,
 		Rule{
-			Match:  Match().MarkSet(r.IptablesMarkAccept),
+			Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action: r.mangleAllowAction,
 		},
 	)
@@ -644,7 +644,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		// In the MarkAccept case, we ACCEPT or RETURN according to
 		// IptablesMangleAllowAction.
 		Rule{
-			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.mangleAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
@@ -692,7 +692,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		// In addition, the IPv4 check is complicated by the fact that we have special
 		// case handling for DHCP to the host, which would require an exclusion.
 		rules = append(rules, Rule{
-			Match:  Match().MarkSet(markFromWorkload).RPFCheckFailed(),
+			Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
 			Action: DropAction{},
 		})
 	}
@@ -704,7 +704,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		// Then, if the packet was marked as allowed, accept it.  Packets also return here
 		// without the mark bit set if the interface wasn't one that we're policing.  We
 		// let those packets fall through to the user's policy.
-		Rule{Match: Match().MarkSet(r.IptablesMarkAccept),
+		Rule{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action: AcceptAction{}},
 	)
 
@@ -733,7 +733,7 @@ func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
 			// Then, if the packet was marked as allowed, accept it.  Packets also
 			// return here without the mark bit set if the interface wasn't one that
 			// we're policing.
-			{Match: Match().MarkSet(r.IptablesMarkAccept),
+			{Match: Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action: AcceptAction{}},
 		},
 	}
