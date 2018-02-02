@@ -32,6 +32,10 @@ func init() {
 	testutils.HookLogrusForGinkgo()
 }
 
+var _ = BeforeEach(func() {
+	testutils.HookLogrusForGinkgo()
+})
+
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
