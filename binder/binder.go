@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 
 	"google.golang.org/grpc"
@@ -92,6 +93,15 @@ func (b *binder) addListener(uid string) {
 		return
 	}
 	sockPath := filepath.Join(b.searchPath, MountSubdir, uid, SocketFilename)
+	_, err = os.Stat(sockPath)
+	if !os.IsNotExist(err) {
+		// file exists, try to delete it.
+		err := os.Remove(sockPath)
+		if err != nil {
+			log.Printf("File %s exists and unable to remove.", sockPath)
+			return
+		}
+	}
 	lis, err := net.Listen("unix", sockPath)
 	if err != nil {
 		// TODO: consider adding retries
