@@ -2,16 +2,13 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-		"workloadhandler.go",
-		"auth.go",
-		"creds.go"
-	],
-    importpath = "github.com/colabsaumoh/proto-udsuspver/workloadhandler",
+    srcs = ["auth.go",
+            "binder.go",
+            "creds.go",
+            "watcher.go"],
+    importpath = "github.com/colabsaumoh/proto-udsuspver/binder",
     visibility = ["//visibility:public"],
     deps = [
-	"//mgmtwlhintf:go_default_library",
-        "//protos/mgmtintf_v1:go_default_library",
         "@org_golang_google_grpc//:go_default_library",
         "@org_golang_google_grpc//credentials:go_default_library",
         "@org_golang_google_grpc//peer:go_default_library",
