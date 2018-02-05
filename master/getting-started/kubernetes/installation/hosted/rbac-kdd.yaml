@@ -71,6 +71,7 @@ rules:
       - globalnetworksets
       - networkpolicies
       - clusterinformations
+      - hostendpoints
     verbs:
       - create
       - get
