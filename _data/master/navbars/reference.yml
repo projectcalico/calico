@@ -59,6 +59,8 @@ toc:
         path: /reference/calicoctl/resources/bgpconfig
       - title: Felix Configuration
         path: /reference/calicoctl/resources/felixconfig
+      - title: Global Network Set
+        path: /reference/calicoctl/resources/globalnetworkset
       - title: Host Endpoint
         path: /reference/calicoctl/resources/hostendpoint
       - title: IP Pool

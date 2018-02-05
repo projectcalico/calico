@@ -68,6 +68,7 @@ component needs access to in etcd to function successfully.
 | /calico/ipam/v2/\*                                              |   R    |
 | /calico/resources/v3/projectcalico.org/\*                       |   R    |
 | /calico/resources/v3/projectcalico.org/globalnetworkpolicies/\* |   RW   |
+| /calico/resources/v3/projectcalico.org/globalnetworksets/\*     |   RW   |
 | /calico/resources/v3/projectcalico.org/networkpolicies/\*       |   RW   |
 | /calico/resources/v3/projectcalico.org/profiles/\*              |   RW   |
 
