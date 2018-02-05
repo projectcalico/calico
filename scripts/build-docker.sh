@@ -2,6 +2,8 @@
 ## Build the docker image for nodeagent (default)
 ## Invoke it from the base directory of the repo
 
+set -e
+
 usage() {
   [[ -n "${1}" ]] && echo "${1}"
 
@@ -36,7 +38,6 @@ DEBUG_IMAGE_NAME="${REG}/${USER}/${IMAGE}:${TAG}"
 TARGET_DIR="${ROOT}/bin/${IMAGE}"
 
 if [ $CLEAN_BUILD -eq 1 ]; then
-  rm -rf ${TARGET_DIR}
   bazel build //${IMAGE}:${IMAGE}
 fi
 
@@ -50,6 +51,7 @@ if [ ! -f ${OPFILE} ]; then
    exit 2
 fi
 
+rm -rf ${TARGET_DIR}
 mkdir -p ${TARGET_DIR}
 
 cp ${OPFILE} ${TARGET_DIR}/
