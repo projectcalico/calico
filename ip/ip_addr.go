@@ -21,13 +21,17 @@
 package ip
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 )
+
+var ErrInvalidIP = errors.New("Failed to parse IP address")
 
 // Addr represents either an IPv4 or IPv6 IP address.
 type Addr interface {
@@ -37,6 +41,7 @@ type Addr interface {
 	// this object.
 	AsNetIP() net.IP
 	AsCalicoNetIP() calinet.IP
+	AsCIDR() CIDR
 	String() string
 }
 
@@ -52,6 +57,13 @@ func (a V4Addr) AsNetIP() net.IP {
 
 func (a V4Addr) AsCalicoNetIP() calinet.IP {
 	return calinet.IP{IP: a.AsNetIP()}
+}
+
+func (a V4Addr) AsCIDR() CIDR {
+	return V4CIDR{
+		addr:   a,
+		prefix: 32,
+	}
 }
 
 func (a V4Addr) String() string {
@@ -70,6 +82,13 @@ func (a V6Addr) AsNetIP() net.IP {
 
 func (a V6Addr) AsCalicoNetIP() calinet.IP {
 	return calinet.IP{IP: a.AsNetIP()}
+}
+
+func (a V6Addr) AsCIDR() CIDR {
+	return V6CIDR{
+		addr:   a,
+		prefix: 128,
+	}
 }
 
 func (a V6Addr) String() string {
@@ -181,10 +200,34 @@ func CIDRFromIPNet(ipNet *net.IPNet) CIDR {
 	}
 }
 
-func MustParseCIDR(s string) CIDR {
-	_, ipNet, err := net.ParseCIDR(s)
+// CIDRFromNetIP converts the given IP into our CIDR representation as a /32 or /128.
+func CIDRFromNetIP(netIP net.IP) CIDR {
+	return FromNetIP(netIP).AsCIDR()
+}
+
+// MustParseCIDROrIP parses the given IP address or CIDR, treating IP addresses as "full length"
+// CIDRs.  For example, "10.0.0.1" is treated as "10.0.0.1/32".  It panics on failure.
+func MustParseCIDROrIP(s string) CIDR {
+	cidr, err := ParseCIDROrIP(s)
 	if err != nil {
 		log.WithError(err).WithField("cidr", s).Panic("Failed to parse CIDR")
 	}
-	return CIDRFromIPNet(ipNet)
+	return cidr
+}
+
+// ParseCIDROrIP parses the given IP address or CIDR, treating IP addresses as "full length"
+// CIDRs.  For example, "10.0.0.1" is treated as "10.0.0.1/32".
+func ParseCIDROrIP(s string) (CIDR, error) {
+	if !strings.Contains(s, "/") {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			return nil, ErrInvalidIP
+		}
+		return CIDRFromNetIP(ip), nil
+	}
+	_, netCIDR, err := net.ParseCIDR(s)
+	if err != nil {
+		return nil, err
+	}
+	return CIDRFromIPNet(netCIDR), nil
 }

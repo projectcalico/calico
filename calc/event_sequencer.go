@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ type EventSequencer struct {
 //
 //}
 
-func NewEventBuffer(conf configInterface) *EventSequencer {
+func NewEventSequencer(conf configInterface) *EventSequencer {
 	buf := &EventSequencer{
 		config:                     conf,
 		pendingAddedIPSets:         map[string]proto.IPSetUpdate_IPSetType{},
@@ -146,7 +146,7 @@ func (buf *EventSequencer) OnIPSetMemberAdded(setID string, member labelindex.IP
 	log.Debugf("IP set %v now contains %v", setID, member)
 	_, updatePending := buf.pendingAddedIPSets[setID]
 	if !buf.sentIPSets.Contains(setID) && !updatePending {
-		log.WithField("setID", setID).Panic("IP added to unknown IP set")
+		log.WithField("setID", setID).Panic("Member added to unknown IP set")
 	}
 	if buf.pendingRemovedIPSetMembers.Contains(setID, member) {
 		buf.pendingRemovedIPSetMembers.Discard(setID, member)
@@ -159,7 +159,7 @@ func (buf *EventSequencer) OnIPSetMemberRemoved(setID string, member labelindex.
 	log.Debugf("IP set %v no longer contains %v", setID, member)
 	_, updatePending := buf.pendingAddedIPSets[setID]
 	if !buf.sentIPSets.Contains(setID) && !updatePending {
-		log.WithField("setID", setID).Panic("IP removed from unknown IP set")
+		log.WithField("setID", setID).Panic("Member removed from unknown IP set")
 	}
 	if buf.pendingAddedIPSetMembers.Contains(setID, member) {
 		buf.pendingAddedIPSetMembers.Discard(setID, member)
@@ -518,11 +518,11 @@ func (buf *EventSequencer) flushAddedIPSets() {
 func memberToProto(member labelindex.IPSetMember) string {
 	switch member.Protocol {
 	case labelindex.ProtocolNone:
-		return member.IP.String()
+		return member.CIDR.String()
 	case labelindex.ProtocolTCP:
-		return fmt.Sprintf("%s,tcp:%d", member.IP, member.PortNumber)
+		return fmt.Sprintf("%s,tcp:%d", member.CIDR.Addr(), member.PortNumber)
 	case labelindex.ProtocolUDP:
-		return fmt.Sprintf("%s,udp:%d", member.IP, member.PortNumber)
+		return fmt.Sprintf("%s,udp:%d", member.CIDR.Addr(), member.PortNumber)
 	}
 	log.WithField("member", member).Panic("Unknown IP set member type")
 	return ""

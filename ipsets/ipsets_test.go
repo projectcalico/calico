@@ -61,16 +61,11 @@ var _ = Describe("IPSetType", func() {
 	It("should treat hash:ip,port as valid", func() {
 		Expect(IPSetType("hash:ip,port").IsValid()).To(BeTrue())
 	})
+})
+
+var _ = Describe("IPSetTypeHashIPPort", func() {
 	It("should return its string form from SetType()", func() {
 		Expect(IPSetTypeHashIPPort.SetType()).To(Equal("hash:ip,port"))
-	})
-	It("should canonicalise an IPv4", func() {
-		Expect(IPSetTypeHashIP.CanonicaliseMember("10.0.0.1")).
-			To(Equal(ip.FromString("10.0.0.1")))
-	})
-	It("should canonicalise an IPv6", func() {
-		Expect(IPSetTypeHashIP.CanonicaliseMember("feed:0::beef")).
-			To(Equal(ip.FromString("feed::beef")))
 	})
 	It("should canonicalise an IPv4 IP,port", func() {
 		Expect(IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,TCP:1234")).
@@ -88,17 +83,6 @@ var _ = Describe("IPSetType", func() {
 				Port:     3456,
 			}))
 	})
-	It("should canonicalise an IPv4 CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
-			To(Equal(ip.MustParseCIDR("10.0.0.0/24")))
-	})
-	It("should canonicalise an IPv6 CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef/24")).
-			To(Equal(ip.MustParseCIDR("feed::/24")))
-	})
-	It("should panic on bad IP", func() {
-		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
-	})
 	It("should panic on bad IP,port", func() {
 		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar") }).To(Panic())
 	})
@@ -114,24 +98,63 @@ var _ = Describe("IPSetType", func() {
 	It("should panic on bad IP,port (too long)", func() {
 		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,tcp:1234,5") }).To(Panic())
 	})
-	It("should panic on bad CIDR", func() {
-		Expect(func() { IPSetTypeHashNet.CanonicaliseMember("foobar") }).To(Panic())
-	})
 	It("should detect IPv6 for an IP,port", func() {
 		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
 	})
 	It("should detect IPv4 for an IP,port", func() {
 		Expect(IPSetTypeHashIPPort.IsMemberIPV6("10.0.0.1,tcp:1234")).To(BeFalse())
 	})
+	It("should detect IPv6 for an IP,port", func() {
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
+	})
+	It("should detect IPv4 for an IP,port", func() {
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("10.0.0.0,tcp:1234")).To(BeFalse())
+	})
+})
+
+var _ = Describe("IPSetTypeHashIP", func() {
+	It("should canonicalise an IPv4", func() {
+		Expect(IPSetTypeHashIP.CanonicaliseMember("10.0.0.1")).
+			To(Equal(ip.FromString("10.0.0.1")))
+	})
+	It("should canonicalise an IPv6", func() {
+		Expect(IPSetTypeHashIP.CanonicaliseMember("feed:0::beef")).
+			To(Equal(ip.FromString("feed::beef")))
+	})
+	It("should panic on bad IP", func() {
+		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
+	})
+})
+
+var _ = Describe("IPSetTypeHashNet", func() {
+	It("should canonicalise an IPv4 CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
+			To(Equal(ip.MustParseCIDROrIP("10.0.0.0/24")))
+	})
+	It("should canonicalise an IPv6 CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef/24")).
+			To(Equal(ip.MustParseCIDROrIP("feed::/24")))
+	})
+	It("should canonicalise an IPv4 IP as a CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1")).
+			To(Equal(ip.MustParseCIDROrIP("10.0.0.1/32")))
+	})
+	It("should canonicalise an IPv6 IP as a CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef")).
+			To(Equal(ip.MustParseCIDROrIP("feed::beef/128")))
+	})
+	It("should panic on bad CIDR", func() {
+		Expect(func() { IPSetTypeHashNet.CanonicaliseMember("foobar") }).To(Panic())
+	})
 })
 
 var _ = Describe("IPPort types", func() {
 	It("V4 should stringify correctly", func() {
 		Expect(V4IPPort{
-			IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
+			IP:       ip.FromString("10.0.0.0").(ip.V4Addr),
 			Protocol: labelindex.ProtocolTCP,
 			Port:     1234,
-		}.String()).To(Equal("10.0.0.1,tcp:1234"))
+		}.String()).To(Equal("10.0.0.0,tcp:1234"))
 	})
 	It("V6 should stringify correctly", func() {
 		Expect(V6IPPort{

@@ -45,10 +45,10 @@ var (
 	mac2 = testutils.MustParseMAC("00:11:22:33:44:52")
 	mac3 = testutils.MustParseMAC("00:11:22:33:44:53")
 
-	ip1  = ip.MustParseCIDR("10.0.0.1/32").ToIPNet()
-	ip2  = ip.MustParseCIDR("10.0.0.2/32").ToIPNet()
-	ip3  = ip.MustParseCIDR("10.0.0.3/32").ToIPNet()
-	ip13 = ip.MustParseCIDR("10.0.1.3/32").ToIPNet()
+	ip1  = ip.MustParseCIDROrIP("10.0.0.1/32").ToIPNet()
+	ip2  = ip.MustParseCIDROrIP("10.0.0.2/32").ToIPNet()
+	ip3  = ip.MustParseCIDROrIP("10.0.0.3/32").ToIPNet()
+	ip13 = ip.MustParseCIDROrIP("10.0.1.3/32").ToIPNet()
 )
 
 var _ = Describe("RouteTable", func() {
@@ -165,7 +165,7 @@ var _ = Describe("RouteTable", func() {
 				rt.Apply()
 				// We try to add 10.0.0.1 back in.
 				rt.SetRoutes("cali1", []Target{
-					{CIDR: ip.MustParseCIDR("10.0.0.1/32"), DestMAC: mac1},
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"), DestMAC: mac1},
 				})
 				start := time.Now()
 				rt.Apply()
@@ -177,7 +177,7 @@ var _ = Describe("RouteTable", func() {
 				rt.Apply()
 				// We try to add 10.0.0.10, which hasn't been seen before.
 				rt.SetRoutes("cali1", []Target{
-					{CIDR: ip.MustParseCIDR("10.0.0.10/32"), DestMAC: mac1},
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.10/32"), DestMAC: mac1},
 				})
 				start := time.Now()
 				rt.Apply()
@@ -207,13 +207,13 @@ var _ = Describe("RouteTable", func() {
 			Describe(desc, func() {
 				BeforeEach(func() {
 					rt.SetRoutes("cali1", []Target{
-						{CIDR: ip.MustParseCIDR("10.0.0.1/32"), DestMAC: mac1},
+						{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"), DestMAC: mac1},
 					})
 					rt.SetRoutes("cali2", []Target{
-						{CIDR: ip.MustParseCIDR("10.0.0.2/32"), DestMAC: mac2},
+						{CIDR: ip.MustParseCIDROrIP("10.0.0.2/32"), DestMAC: mac2},
 					})
 					rt.SetRoutes("cali3", []Target{
-						{CIDR: ip.MustParseCIDR("10.0.1.3/32")},
+						{CIDR: ip.MustParseCIDROrIP("10.0.1.3/32")},
 					})
 					dataplane.failuresToSimulate = failFlags
 				})

@@ -117,7 +117,7 @@ func (d *IPSetData) DataplaneProtocolType() proto.IPSetUpdate_IPSetType {
 	if d.NamedPortProtocol != labelindex.ProtocolNone {
 		return proto.IPSetUpdate_IP_AND_PORT
 	}
-	return proto.IPSetUpdate_IP
+	return proto.IPSetUpdate_NET
 }
 
 func NewRuleScanner() *RuleScanner {

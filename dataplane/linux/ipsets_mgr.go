@@ -48,6 +48,8 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 		switch msg.Type {
 		case proto.IPSetUpdate_IP:
 			setType = ipsets.IPSetTypeHashIP
+		case proto.IPSetUpdate_NET:
+			setType = ipsets.IPSetTypeHashNet
 		case proto.IPSetUpdate_IP_AND_PORT:
 			setType = ipsets.IPSetTypeHashIPPort
 		default:

@@ -76,6 +76,14 @@ var baseTests = []StateList{
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
 
+	// Network set tests.
+	{hostEp1WithPolicy,
+		hostEp1WithPolicyAndANetworkSet,
+		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
+		hostEp2WithPolicy,
+		hostEp1WithPolicyAndANetworkSet,
+		hostEp1WithPolicyAndTwoNetworkSets},
+
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
 	// Mixed policy.
@@ -201,6 +209,28 @@ var baseTests = []StateList{
 		withProfileTagInherit,
 		localEp1WithNamedPortPolicyUDP,
 		localEp1WithNamedPortPolicyUDP,
+	},
+
+	// And another.
+	{localEpsWithProfile,
+		localEp1WithOneTierPolicy123,
+		localEpsWithNonMatchingProfile,
+		localEpsWithTagInheritProfile,
+		localEpsWithPolicy,
+		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
+		hostEp1WithPolicy,
+		localEpsWithUpdatedProfile,
+		withProfileTagInherit,
+		hostEp1WithPolicyAndTwoNetworkSets,
+		localEp1WithIngressPolicy,
+		localEpsWithNonMatchingProfile,
+		localEpsWithUpdatedProfileNegatedTags,
+		hostEp1WithUntrackedPolicy,
+		localEpsWithTagInheritProfile,
+		localEp1WithPolicy,
+		localEpsWithProfile,
+		hostEp1WithPolicyAndANetworkSet,
 	},
 
 	// TODO(smc): Test config calculation
@@ -389,7 +419,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 
 	BeforeEach(func() {
 		tracker = newMockDataplane()
-		eventBuf = NewEventBuffer(tracker)
+		eventBuf = NewEventSequencer(tracker)
 		eventBuf.Callback = tracker.onEvent
 		calcGraph = NewCalculationGraph(eventBuf, localHostname)
 		validationFilter = NewValidationFilter(calcGraph)

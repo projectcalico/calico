@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,12 +20,17 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
+	"time"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
@@ -66,12 +71,12 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *containers.Container, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
+func Run(c *containers.Felix, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
 
 	// Build unique workload name and struct.
 	workloadIdx++
 	w = &Workload{
-		C:             c,
+		C:             c.Container,
 		Name:          fmt.Sprintf("%s-idx%v", name, workloadIdx),
 		InterfaceName: interfaceName,
 		IP:            ip,
@@ -150,7 +155,11 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string, protoco
 	wep.Spec.Orchestrator = "felixfv"
 	wep.Spec.Workload = w.Name
 	wep.Spec.Endpoint = w.Name
-	wep.Spec.IPNetworks = []string{w.IP + "/32"}
+	prefixLen := "32"
+	if strings.Contains(w.IP, ":") {
+		prefixLen = "128"
+	}
+	wep.Spec.IPNetworks = []string{w.IP + "/" + prefixLen}
 	wep.Spec.InterfaceName = w.InterfaceName
 	wep.Spec.Profiles = []string{"default"}
 	w.WorkloadEndpoint = wep
@@ -331,6 +340,8 @@ type expectation struct {
 	expected bool
 }
 
+var UnactivatedConnectivityCheckers = set.New()
+
 // ConnectivityChecker records a set of connectivity expectations and supports calculating the
 // actual state of the connectivity between the given workloads.  It is expected to be used like so:
 //
@@ -348,6 +359,7 @@ type ConnectivityChecker struct {
 }
 
 func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	UnactivatedConnectivityCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(connectionSource), from.(connectionTarget)
 	}
@@ -355,6 +367,7 @@ func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTar
 }
 
 func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
+	UnactivatedConnectivityCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(connectionSource), from.(connectionTarget)
 	}
@@ -370,6 +383,7 @@ func (c *ConnectivityChecker) ResetExpectations() {
 // human readable, and they are in the same order and format as those returned by
 // ExpectedConnectivity().
 func (c *ConnectivityChecker) ActualConnectivity() []string {
+	UnactivatedConnectivityCheckers.Discard(c)
 	var wg sync.WaitGroup
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
@@ -399,6 +413,35 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 	return result
 }
 
-func (c *ConnectivityChecker) CheckConnectivity() {
-	EventuallyWithOffset(1, c.ActualConnectivity(), "10s", "100ms").Should(Equal(c.ExpectedConnectivity()))
+func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
+	expConnectivity := c.ExpectedConnectivity()
+	start := time.Now()
+
+	// Track the number of attempts. If the first connectivity check fails, we want to
+	// do at least one retry before we time out.  That covers the case where the first
+	// connectivity check takes longer than the timeout.
+	completedAttempts := 0
+	var actualConn []string
+	for time.Since(start) < 10*time.Second || completedAttempts < 2 {
+		actualConn = c.ActualConnectivity()
+		if reflect.DeepEqual(actualConn, expConnectivity) {
+			return
+		}
+		completedAttempts++
+	}
+
+	// Build a concise description of the incorrect connectivity.
+	for i := range actualConn {
+		if actualConn[i] != expConnectivity[i] {
+			actualConn[i] += " <---- WRONG"
+			expConnectivity[i] += " <----"
+		}
+	}
+
+	message := fmt.Sprintf(
+		"Connectivity was incorrect:\n\nExpected\n    %s\nto match\n    %s",
+		strings.Join(actualConn, "\n    "),
+		strings.Join(expConnectivity, "\n    "),
+	)
+	Fail(message, 1)
 }

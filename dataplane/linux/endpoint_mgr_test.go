@@ -1282,12 +1282,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should set routes", func() {
 					if ipVersion == 6 {
 						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
-							CIDR:    ip.MustParseCIDR("2001:db8:2::2/128"),
+							CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					} else {
 						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
-							CIDR:    ip.MustParseCIDR("10.0.240.0/24"),
+							CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
 							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 						}})
 					}
@@ -1386,30 +1386,30 @@ func endpointManagerTests(ipVersion uint8) func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDR("2001:db8:2::2/128"),
+										CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDR("2001:db8:3::2/128"),
+										CIDR:    ip.MustParseCIDROrIP("2001:db8:3::2/128"),
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDR("2001:db8:4::2/128"),
+										CIDR:    ip.MustParseCIDROrIP("2001:db8:4::2/128"),
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
 							} else {
 								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
 									{
-										CIDR:    ip.MustParseCIDR("10.0.240.0/24"),
+										CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDR("172.16.1.3/32"),
+										CIDR:    ip.MustParseCIDROrIP("172.16.1.3/32"),
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 									{
-										CIDR:    ip.MustParseCIDR("172.18.1.4/32"),
+										CIDR:    ip.MustParseCIDROrIP("172.18.1.4/32"),
 										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 									},
 								})
@@ -1474,12 +1474,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 						It("should have set routes for new iface", func() {
 							if ipVersion == 6 {
 								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
-									CIDR:    ip.MustParseCIDR("2001:db8:2::2/128"),
+									CIDR:    ip.MustParseCIDROrIP("2001:db8:2::2/128"),
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							} else {
 								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
-									CIDR:    ip.MustParseCIDR("10.0.240.0/24"),
+									CIDR:    ip.MustParseCIDROrIP("10.0.240.0/24"),
 									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
 								}})
 							}

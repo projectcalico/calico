@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/fv/workload"
+
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -35,3 +37,13 @@ func TestFv(t *testing.T) {
 	junitReporter := reporters.NewJUnitReporter("junit.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
 }
+
+var _ = AfterEach(func() {
+	defer workload.UnactivatedConnectivityCheckers.Clear()
+	if CurrentGinkgoTestDescription().Failed {
+		// If the test has already failed, ignore any connectivity checker leak.
+		return
+	}
+	Expect(workload.UnactivatedConnectivityCheckers.Len()).To(BeZero(),
+		"Test bug: ConnectivityChecker was created but not activated.")
+})

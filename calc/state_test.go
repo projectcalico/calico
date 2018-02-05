@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	. "github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -30,7 +30,7 @@ type State struct {
 	Name string
 	// List of KVPairs that are in the datastore.  Stored as a list rather
 	// than a map to give us a deterministic ordering of injection.
-	DatastoreState                       []KVPair
+	DatastoreState                       []model.KVPair
 	ExpectedIPSets                       map[string]set.Set
 	ExpectedPolicyIDs                    set.Set
 	ExpectedUntrackedPolicyIDs           set.Set
@@ -50,7 +50,7 @@ func (s State) String() string {
 
 func NewState() State {
 	return State{
-		DatastoreState:                       []KVPair{},
+		DatastoreState:                       []model.KVPair{},
 		ExpectedIPSets:                       make(map[string]set.Set),
 		ExpectedPolicyIDs:                    set.New(),
 		ExpectedUntrackedPolicyIDs:           set.New(),
@@ -91,13 +91,13 @@ func (s State) Copy() State {
 // withKVUpdates returns a deep copy of the state, incorporating the passed KVs.
 // If a new KV is an update to an existing KV, the existing KV is discarded and
 // the new KV is appended.  If the value of a new KV is nil, it is removed.
-func (s State) withKVUpdates(kvs ...KVPair) (newState State) {
+func (s State) withKVUpdates(kvs ...model.KVPair) (newState State) {
 	// Start with a clean copy.
 	newState = s.Copy()
 	// But replace the datastoreState, which we're about to modify.
-	newState.DatastoreState = make([]KVPair, 0, len(kvs)+len(s.DatastoreState))
+	newState.DatastoreState = make([]model.KVPair, 0, len(kvs)+len(s.DatastoreState))
 	// Make a set containing the new keys.
-	newKeys := make(map[Key]bool)
+	newKeys := make(map[model.Key]bool)
 	for _, kv := range kvs {
 		newKeys[kv.Key] = true
 	}
@@ -201,8 +201,8 @@ func (s State) Keys() set.Set {
 	return set
 }
 
-func (s State) KVsCopy() map[Key]interface{} {
-	kvs := make(map[Key]interface{})
+func (s State) KVsCopy() map[model.Key]interface{} {
+	kvs := make(map[model.Key]interface{})
 	for _, kv := range s.DatastoreState {
 		kvs[kv.Key] = kv.Value
 	}
@@ -211,7 +211,7 @@ func (s State) KVsCopy() map[Key]interface{} {
 
 func (s State) KVDeltas(prev State) []api.Update {
 	newAndUpdatedKVs := s.KVsCopy()
-	updatedKVs := make(map[Key]bool)
+	updatedKVs := make(map[model.Key]bool)
 	for _, kv := range prev.DatastoreState {
 		if reflect.DeepEqual(newAndUpdatedKVs[kv.Key], kv.Value) {
 			// Key had same value in both states so we ignore it.
@@ -227,7 +227,7 @@ func (s State) KVDeltas(prev State) []api.Update {
 		if !currentKeys.Contains(kv.Key) {
 			deltas = append(
 				deltas,
-				api.Update{KVPair{Key: kv.Key}, api.UpdateTypeKVDeleted},
+				api.Update{model.KVPair{Key: kv.Key}, api.UpdateTypeKVDeleted},
 			)
 		}
 	}

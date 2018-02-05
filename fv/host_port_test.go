@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-func MetricsPortReachable(felix *containers.Container) bool {
+func MetricsPortReachable(felix *containers.Felix) bool {
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
 	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
@@ -65,13 +65,13 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 
 	var (
 		etcd                 *containers.Container
-		felix                *containers.Container
+		felix                *containers.Felix
 		client               client.Interface
 		metricsPortReachable func() bool
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		metricsPortReachable = func() bool {
 			return MetricsPortReachable(felix)

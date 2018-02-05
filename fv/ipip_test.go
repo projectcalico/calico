@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 
 	var (
 		etcd    *containers.Container
-		felixes []*containers.Container
+		felixes []*containers.Felix
 		client  client.Interface
 		w       [2]*workload.Workload
 		hostW   [2]*workload.Workload
@@ -49,7 +49,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 	)
 
 	BeforeEach(func() {
-		felixes, etcd, client = containers.StartTwoNodeEtcdTopology()
+		felixes, etcd, client = containers.StartNNodeEtcdTopology(2, containers.DefaultTopologyOptions())
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
@@ -176,7 +176,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 			// updated as a signal that Felix has restarted.
 			for _, f := range felixes {
 				Eventually(func() int {
-					return getNumIPSetMembers(f, "cali4-all-hosts")
+					return getNumIPSetMembers(f.Container, "cali4-all-hosts")
 				}, "5s", "200ms").Should(BeZero())
 			}
 		})

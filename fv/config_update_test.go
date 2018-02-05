@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,34 +36,15 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	var (
 		etcd     *containers.Container
-		felix    *containers.Container
+		felix    *containers.Felix
 		felixPID int
 		client   client.Interface
 		w        [3]*workload.Workload
 	)
 
-	getFelixPIDs := func() []int {
-		return felix.GetPIDs("calico-felix")
-	}
-
-	updateFelixPID := func() {
-		// Get Felix's PID.  This retry loop ensures that we don't get tripped up if we see multiple
-		// PIDs, which can happen transiently when Felix restarts/forks off a subprocess.
-		start := time.Now()
-		for {
-			pids := getFelixPIDs()
-			if len(pids) == 1 {
-				felixPID = pids[0]
-				break
-			}
-			Expect(time.Since(start)).To(BeNumerically("<", time.Second))
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
-		updateFelixPID()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felixPID = felix.GetSinglePID("calico-felix")
 	})
 
 	AfterEach(func() {
@@ -88,10 +69,10 @@ var _ = Context("Config update tests, after starting felix", func() {
 		// Felix has a 2s timer before it restarts so need to monitor for > 2s.
 		// We use ContainElement because Felix regularly forks off subprocesses and those
 		// subprocesses initially have name "calico-felix".
-		Consistently(getFelixPIDs, "3s", "200ms").Should(ContainElement(felixPID))
+		Consistently(felix.GetFelixPIDs, "3s", "200ms").Should(ContainElement(felixPID))
 		// We know the initial PID has continued to be active, check that none of the extra
 		// transientPIDs we see are long-lived.
-		Eventually(getFelixPIDs).Should(ConsistOf(felixPID))
+		Eventually(felix.GetFelixPIDs).Should(ConsistOf(felixPID))
 	}
 
 	It("should stay up >2s", shouldStayUp)
@@ -136,8 +117,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 	})
 
 	shouldExitAfterADelay := func() {
-		Consistently(getFelixPIDs, "1s", "100ms").Should(ContainElement(felixPID))
-		Eventually(getFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
+		Consistently(felix.GetFelixPIDs, "1s", "100ms").Should(ContainElement(felixPID))
+		Eventually(felix.GetFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
 	}
 
 	Context("after updating config that should trigger a restart", func() {
@@ -161,8 +142,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 		Context("after deleting config that should trigger a restart", func() {
 			BeforeEach(func() {
 				// Wait for the add to register and cause a restart.
-				Eventually(getFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixPID))
-				updateFelixPID()
+				Eventually(felix.GetFelixPIDs, "5s", "100ms").ShouldNot(ContainElement(felixPID))
+				felixPID = felix.GetSinglePID("calico-felix")
 
 				// Then remove the config that we added.
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -177,7 +158,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 	})
 })
 
-func waitForFelixInSync(felix *containers.Container) {
+func waitForFelixInSync(felix *containers.Felix) {
 	// The datastore should transition to in-sync.
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_resync_state")

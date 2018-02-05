@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -504,3 +504,41 @@ var profileLabelsTag1 = map[string]string{
 
 var tag1LabelID = ipSetIDForTag("tag-1")
 var tag2LabelID = ipSetIDForTag("tag-2")
+
+var netSet1Key = NetworkSetKey{Name: "netset-1"}
+var netSet1 = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.0.0.0/24"),
+		mustParseNet("12.0.0.0/24"), // A dupe, why not!
+		mustParseNet("12.1.0.0/24"),
+		mustParseNet("10.0.0.1/32"), // Overlaps with host endpoint.
+		mustParseNet("feed:beef::/32"),
+		mustParseNet("feed:beef:0::/32"), // Non-canonical dupe.
+	},
+	Labels: map[string]string{
+		"a": "b",
+	},
+}
+var netSet1WithBEqB = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.0.0.0/24"),
+		mustParseNet("12.0.0.0/24"), // A dupe, why not!
+		mustParseNet("12.1.0.0/24"),
+		mustParseNet("10.0.0.1/32"), // Overlaps with host endpoint.
+	},
+	Labels: map[string]string{
+		"foo": "bar",
+		"b":   "b",
+	},
+}
+
+var netSet2Key = NetworkSetKey{Name: "netset-2"}
+var netSet2 = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.0.0.0/24"), // Overlaps with netset-1
+		mustParseNet("13.1.0.0/24"),
+	},
+	Labels: map[string]string{
+		"a": "b",
+	},
+}

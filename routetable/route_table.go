@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ var (
 	IfaceDown       = errors.New("interface down")
 	IfaceGrace      = errors.New("interface in cleanup grace period")
 
-	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
+	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
 	listIfaceTime = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_route_table_list_seconds",

@@ -166,8 +166,10 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 			}
 		}
 	case IPSetTypeHashNet:
-		// Convert the string into our ip.CIDR type, which is backed by a struct.
-		return ip.MustParseCIDR(member)
+		// Convert the string into our ip.CIDR type, which is backed by a struct.  When
+		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
+		// suffix.
+		return ip.MustParseCIDROrIP(member)
 	}
 	log.WithField("type", string(t)).Panic("Unknown IPSetType")
 	return nil

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ type Container struct {
 
 	mutex    sync.Mutex
 	binaries set.Set
+
+	logFinished sync.WaitGroup
 }
 
 var containerIdx = 0
@@ -52,13 +54,94 @@ var containerIdx = 0
 func (c *Container) Stop() {
 	if c == nil {
 		log.Info("Stop no-op because nil container")
-	} else if c.runCmd == nil {
-		log.WithField("container", c).Info("Stop no-op because container is not running")
-	} else {
-		log.WithField("container", c).Info("Stop")
-		c.runCmd.Process.Signal(os.Interrupt)
-		c.WaitNotRunning(60 * time.Second)
+		return
 	}
+
+	logCxt := log.WithField("container", c.Name)
+	c.mutex.Lock()
+	if c.runCmd == nil {
+		logCxt.Info("Stop no-op because container is not running")
+		c.mutex.Unlock()
+		return
+	}
+	c.mutex.Unlock()
+
+	logCxt.Info("Stop")
+
+	// Ask docker to stop the container.
+	withTimeoutPanic(logCxt, 30*time.Second, c.execDockerStop)
+	// Shut down the docker run process (if needed).
+	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Interrupt) })
+
+	// Wait for the container to exit, then escalate to killing it.
+	startTime := time.Now()
+	for {
+		if !c.ListedInDockerPS() {
+			// Container has stopped.  Mkae sure the docker CLI command is dead (it should be already)
+			// and wait for its log.
+			logCxt.Info("Container stopped (no longer listed in 'docker ps')")
+			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+			withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
+			return
+		}
+		if time.Since(startTime) > 2*time.Second {
+			logCxt.Info("Container didn't stop, asking docker to kill it")
+			// `docker kill` asks the docker daemon to kill the container but, on a
+			// resource constrained system, we've seen that fail because the CLI command
+			// was blocked so we kill the CLI command too.
+			err := exec.Command("docker", "kill", c.Name).Run()
+			logCxt.WithError(err).Info("Ran 'docker kill'")
+			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	c.WaitNotRunning(60 * time.Second)
+	logCxt.Info("Container stopped")
+	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+	withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
+}
+
+func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		f()
+	}()
+
+	select {
+	case <-done:
+		return
+	case <-time.After(t):
+		logCxt.Panic("Timeout!")
+	}
+}
+
+func (c *Container) execDockerStop() {
+	logCxt := log.WithField("container", c.Name)
+	logCxt.Info("Executing 'docker stop'")
+	cmd := exec.Command("docker", "stop", c.Name)
+	err := cmd.Run()
+	if err != nil {
+		logCxt.WithError(err).WithField("cmd", cmd).Error("docker stop command failed")
+		return
+	}
+	logCxt.Info("'docker stop' returned success")
+}
+
+func (c *Container) signalDockerRun(sig os.Signal) {
+	logCxt := log.WithFields(log.Fields{
+		"container": c.Name,
+		"signal":    sig,
+	})
+	logCxt.Info("Sending signal to 'docker run' process")
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.runCmd == nil {
+		return
+	}
+	c.runCmd.Process.Signal(sig)
+	logCxt.Info("Signalled docker run")
 }
 
 type RunOpts struct {
@@ -95,8 +178,9 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Merge container's output into our own logging.
-	go copyOutputToLog(c.Name, "stdout", stdout)
-	go copyOutputToLog(c.Name, "stderr", stderr)
+	c.logFinished.Add(2)
+	go copyOutputToLog(c.Name, "stdout", stdout, &c.logFinished)
+	go copyOutputToLog(c.Name, "stderr", stderr, &c.logFinished)
 
 	// Note: it might take a long time for the container to start running, e.g. if the image
 	// needs to be downloaded.
@@ -125,8 +209,9 @@ func (c *Container) Start() {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Merge container's output into our own logging.
-	go copyOutputToLog(c.Name, "stdout", stdout)
-	go copyOutputToLog(c.Name, "stderr", stderr)
+	c.logFinished.Add(2)
+	go copyOutputToLog(c.Name, "stdout", stdout, &c.logFinished)
+	go copyOutputToLog(c.Name, "stderr", stderr, &c.logFinished)
 
 	c.WaitUntilRunning()
 
@@ -143,8 +228,10 @@ func (c *Container) Remove() {
 	log.WithField("container", c).Info("Removed container.")
 }
 
-func copyOutputToLog(name string, streamName string, stream io.Reader) {
+func copyOutputToLog(name string, streamName string, stream io.Reader, done *sync.WaitGroup) {
+	defer done.Done()
 	scanner := bufio.NewScanner(stream)
+	scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
 	for scanner.Scan() {
 		log.Info(name, "[", streamName, "] ", scanner.Text())
 	}
@@ -153,7 +240,7 @@ func copyOutputToLog(name string, streamName string, stream io.Reader) {
 		"stream": stream,
 	})
 	if scanner.Err() != nil {
-		logCxt.WithError(scanner.Err()).Warn("Error reading container stream")
+		logCxt.WithError(scanner.Err()).Error("Non-EOF error reading container stream")
 	}
 	logCxt.Info("Stream finished")
 }
@@ -196,6 +283,21 @@ func (c *Container) GetPIDs(processName string) []int {
 	return pids
 }
 
+func (c *Container) GetSinglePID(processName string) int {
+	// Get the process's PID.  This retry loop ensures that we don't get tripped up if we see multiple
+	// PIDs, which can happen transiently when a process restarts/forks off a subprocess.
+	start := time.Now()
+	for {
+		pids := c.GetPIDs(processName)
+		if len(pids) == 1 {
+			return pids[0]
+		}
+		Expect(time.Since(start)).To(BeNumerically("<", time.Second),
+			"Timed out waiting for there to be a single PID")
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func (c *Container) WaitUntilRunning() {
 	log.Info("Wait for container to be listed in docker ps")
 
@@ -204,14 +306,14 @@ func (c *Container) WaitUntilRunning() {
 	go func() {
 		defer close(stoppedChan)
 		err := c.runCmd.Wait()
-		log.WithError(err).WithField("name", c.Name).Info("Container stopped")
+		log.WithError(err).WithField("name", c.Name).Info("Container stopped ('docker run' exited)")
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
 		c.runCmd = nil
 	}()
 
 	for {
-		Expect(stoppedChan).NotTo(BeClosed())
+		Expect(stoppedChan).NotTo(BeClosed(), "Container failed before being listed in 'docker ps'")
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
@@ -337,39 +439,70 @@ func RunEtcd() *Container {
 		"--listen-client-urls", "http://0.0.0.0:2379")
 }
 
-func RunFelix(etcdIP string) *Container {
+type Felix struct {
+	*Container
+}
+
+func (f *Felix) GetFelixPID() int {
+	return f.GetSinglePID("calico-felix")
+}
+
+func (f *Felix) GetFelixPIDs() []int {
+	return f.GetPIDs("calico-felix")
+}
+
+func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
-	return Run("felix",
+	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
+	c := Run("felix",
 		RunOpts{AutoRemove: true},
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
-		"-e", "FELIX_LOGSEVERITYSCREEN=debug",
+		"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT=false",
-		"calico/felix:latest")
+		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
+		"-v", "/lib/modules:/lib/modules",
+		"calico/felix:latest",
+	)
+
+	if options.EnableIPv6 {
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.default.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.lo.disable_ipv6=0")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=1")
+	} else {
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.disable_ipv6=1")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.default.disable_ipv6=1")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.lo.disable_ipv6=1")
+		c.Exec("sysctl", "-w", "net.ipv6.conf.all.forwarding=0")
+	}
+
+	return &Felix{
+		Container: c,
+	}
+}
+
+type TopologyOptions struct {
+	FelixLogSeverity string
+	EnableIPv6       bool
+}
+
+func DefaultTopologyOptions() TopologyOptions {
+	return TopologyOptions{
+		FelixLogSeverity: "info",
+		EnableIPv6:       true,
+	}
 }
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
-func StartSingleNodeEtcdTopology() (felix, etcd *Container, calicoClient client.Interface) {
-	felixes, etcd, calicoClient := StartNNodeEtcdTopology(1)
+func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *Container, calicoClient client.Interface) {
+	felixes, etcd, calicoClient := StartNNodeEtcdTopology(1, options)
 	felix = felixes[0]
 	return
-}
-
-// StartTwoNodeEtcdTopology starts an etcd container and a pair of Felix hosts connected
-// with IPIP.
-//
-// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
-//   but (for simplicity) we don't actually use IPAM to assign IPs.
-// - Configures routes between the two "hosts", giving each host 10.65.x.0/24, where x is the
-//   index in the returned array.  When creating workloads, use IPs from the relevant block.
-// - Configures the Tunnel IP as 10.65.x.1
-func StartTwoNodeEtcdTopology() (felixes []*Container, etcd *Container, client client.Interface) {
-	return StartNNodeEtcdTopology(2)
 }
 
 // StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
@@ -380,7 +513,7 @@ func StartTwoNodeEtcdTopology() (felixes []*Container, etcd *Container, client c
 // - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
 //   index in the returned array.  When creating workloads, use IPs from the relevant block.
 // - Configures the Tunnel IP for each host as 10.65.x.1.
-func StartNNodeEtcdTopology(n int) (felixes []*Container, etcd *Container, client client.Interface) {
+func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *Container, client client.Interface) {
 	log.Infof("Starting a %d-node etcd topology.", n)
 	success := false
 	var err error
@@ -416,7 +549,7 @@ func StartNNodeEtcdTopology(n int) (felixes []*Container, etcd *Container, clien
 
 	for i := 0; i < n; i++ {
 		// Then start Felix and create a node for it.
-		felix := RunFelix(etcd.IP)
+		felix := RunFelix(etcd.IP, opts)
 
 		felixNode := api.NewNode()
 		felixNode.Name = felix.Hostname
