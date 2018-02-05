@@ -174,34 +174,6 @@ To enable Typha in either the {{site.prodname}} networking manifest or the polic
 
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
-Below are a few examples for how to get started.
-
-## Configuration details
-
-The following environment variable configuration options are supported by the various {{site.prodname}} 
-components when using the Kubernetes API datastore.
-
-| Option           | Description    | Examples
-|------------------|----------------|----------
-| DATASTORE_TYPE   | Indicates the datastore to use | kubernetes
-| KUBECONFIG       | When using the Kubernetes API datastore, the location of a kubeconfig file to use. | /path/to/kube/config
-| K8S_API_ENDPOINT | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443
-| K8S_CERT_FILE    | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert
-| K8S_KEY_FILE     | Location of a client key for accessing the Kubernetes API. | /path/to/key
-| K8S_CA_FILE      | Location of a CA for accessing the Kubernetes API. | /path/to/ca
-| K8S_TOKEN        | Token to be used for accessing the Kubernetes API. |
-
-An example using `calicoctl`:
-
-```shell
-$ export DATASTORE_TYPE=kubernetes
-$ export KUBECONFIG=~/.kube/config
-$ calicoctl get workloadendpoints
-
-HOSTNAME                      ORCHESTRATOR  WORKLOAD                                       NAME
-kubernetes-minion-group-tbmi  k8s           kube-system.kube-dns-v20-jhk10                 eth0
-kubernetes-minion-group-x7ce  k8s           kube-system.kubernetes-dashboard-v1.4.0-wtrtm  eth0
-```
 
 ## How it works
 
