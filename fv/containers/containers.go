@@ -58,44 +58,51 @@ func (c *Container) Stop() {
 	}
 
 	logCxt := log.WithField("container", c.Name)
+	c.mutex.Lock()
 	if c.runCmd == nil {
 		logCxt.Info("Stop no-op because container is not running")
+		c.mutex.Unlock()
 		return
 	}
+	c.mutex.Unlock()
 
 	logCxt.Info("Stop")
 
 	// Ask docker to stop the container.
-	withTimeout(logCxt, 30*time.Second, c.execDockerStop)
+	withTimeoutPanic(logCxt, 30*time.Second, c.execDockerStop)
 	// Shut down the docker run process (if needed).
-	withTimeout(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Interrupt) })
+	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Interrupt) })
 
 	// Wait for the container to exit, then escalate to killing it.
 	startTime := time.Now()
 	for {
 		if !c.ListedInDockerPS() {
-			// Container has stopped.
+			// Container has stopped.  Mkae sure the docker CLI command is dead (it should be already)
+			// and wait for its log.
 			logCxt.Info("Container stopped (no longer listed in 'docker ps')")
-			withTimeout(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
-			withTimeout(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
+			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+			withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
 			return
 		}
 		if time.Since(startTime) > 2*time.Second {
 			logCxt.Info("Container didn't stop, asking docker to kill it")
+			// `docker kill` asks the docker daemon to kill the container but, on a
+			// resource constrained system, we've seen that fail because the CLI command
+			// was blocked so we kill the CLI command too.
 			err := exec.Command("docker", "kill", c.Name).Run()
 			logCxt.WithError(err).Info("Ran 'docker kill'")
-			withTimeout(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
 	c.WaitNotRunning(60 * time.Second)
 	logCxt.Info("Container stopped")
-	withTimeout(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
-	withTimeout(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
+	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
+	withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
 }
 
-func withTimeout(logCxt *log.Entry, t time.Duration, f func()) {
+func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

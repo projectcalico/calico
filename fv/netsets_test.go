@@ -121,7 +121,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 		}
 
 		updatePolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
-			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
+			log.WithField("policy", dumpResource(policy)).Info("Updating policy")
 			policy, err := client.GlobalNetworkPolicies().Update(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 			return policy

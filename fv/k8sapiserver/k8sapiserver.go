@@ -73,7 +73,10 @@ var theServer *Server
 func SetUp() *Server {
 	var err error
 
-	attempts := 10
+	// Defensive: retry the whole server creation a few times.  We also do retries of individual
+	// operations, which catch almost all issues here, but, since the API server is so stateful,
+	// it's easy to miss a corner case.
+	attempts := 3
 	for theServer == nil {
 		log.Info("No existing k8s API server, creating one...")
 		theServer, err = Create()
@@ -121,6 +124,7 @@ func Create() (*Server, error) {
 		"--authorization-mode=RBAC",
 	)
 	if server.apiServerContainer == nil {
+		TearDown(server)
 		return nil, errors.New("failed to create k8s API server container")
 	}
 
@@ -175,7 +179,7 @@ func Create() (*Server, error) {
 			break
 		}
 		if time.Since(start) > 120*time.Second && err != nil {
-			log.WithError(err).Error("Failed to install role binding")
+			log.WithError(err).Error("API server is not responding to requests")
 			TearDown(server)
 			return nil, err
 		}
@@ -227,7 +231,7 @@ func Create() (*Server, error) {
 			}
 		}
 		if time.Since(start) > 120*time.Second && err != nil {
-			log.WithError(err).Error("Failed to get API server cert")
+			log.WithError(err).Error("Failed to initialise calico client")
 			TearDown(server)
 			return nil, err
 		}
@@ -244,7 +248,7 @@ func Create() (*Server, error) {
 			break
 		}
 		if time.Since(start) > 120*time.Second && err != nil {
-			log.WithError(err).Error("Failed to get API server cert")
+			log.WithError(err).Error("Failed to create k8s client.")
 			TearDown(server)
 			return nil, err
 		}

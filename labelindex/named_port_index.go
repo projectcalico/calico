@@ -328,9 +328,10 @@ func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
 			default:
 				log.WithField("cidr", cidr).Panic("Unknown IP version")
 			}
-			continue
+		} else {
+			// Normal case, just append the single CIDR.
+			combined = append(combined, cidr)
 		}
-		combined = append(combined, cidr)
 	}
 	return combined
 }

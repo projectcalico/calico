@@ -414,15 +414,15 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 }
 
 func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
-	// Make sure that we retry at least once even if the check itself takes >10s.
 	expConnectivity := c.ExpectedConnectivity()
-	if reflect.DeepEqual(c.ActualConnectivity(), expConnectivity) {
-		return
-	}
 	start := time.Now()
+
+	// Track the number of attempts. If the first connectivity check fails, we want to
+	// do at least one retry before we time out.  That covers the case where the first
+	// connectivity check takes longer than the timeout.
 	completedAttempts := 0
 	var actualConn []string
-	for time.Since(start) < 10*time.Second || completedAttempts <= 1 {
+	for time.Since(start) < 10*time.Second || completedAttempts < 2 {
 		actualConn = c.ActualConnectivity()
 		if reflect.DeepEqual(actualConn, expConnectivity) {
 			return
