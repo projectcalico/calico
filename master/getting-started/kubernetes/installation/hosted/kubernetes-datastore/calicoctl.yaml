@@ -63,6 +63,7 @@ rules:
       - clusterinformations
       - felixconfigurations
       - globalnetworkpolicies
+      - globalnetworksets
       - ippools
       - networkpolicies
     verbs:

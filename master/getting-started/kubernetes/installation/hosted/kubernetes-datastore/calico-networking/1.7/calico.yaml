@@ -419,6 +419,22 @@ spec:
 ---
 
 apiVersion: apiextensions.k8s.io/v1beta1
+description: Calico Global Network Sets
+kind: CustomResourceDefinition
+metadata:
+  name: globalnetworksets.crd.projectcalico.org
+spec:
+  scope: Cluster
+  group: crd.projectcalico.org
+  version: v1
+  names:
+    kind: GlobalNetworkSet
+    plural: globalnetworksets
+    singular: globalnetworkset
+
+---
+
+apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Network Policies
 kind: CustomResourceDefinition
 metadata:
