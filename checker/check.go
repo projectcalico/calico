@@ -128,7 +128,7 @@ func checkRules(rules []*proto.Rule, req *authz.CheckRequest) (action Action) {
 	for _, r := range rules {
 		if match(r, req) {
 			log.Debugf("Rule matched.")
-			a := ActionFromString(r.Action)
+			a := actionFromString(r.Action)
 			if a != LOG {
 				// We don't support actually logging requests, but if we hit a LOG action, we should
 				// continue processing rules.
@@ -139,8 +139,8 @@ func checkRules(rules []*proto.Rule, req *authz.CheckRequest) (action Action) {
 	return NO_MATCH
 }
 
-// ActionFromString converts a string action name, like "allow" into an Action.
-func ActionFromString(s string) Action {
+// actionFromString converts a string action name, like "allow" into an Action.
+func actionFromString(s string) Action {
 	m := map[string]Action{
 		"allow": ALLOW,
 		"deny":  DENY,

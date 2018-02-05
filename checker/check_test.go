@@ -24,19 +24,19 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 )
 
-// ActionFromString should parse strings in case insensitive mode.
+// actionFromString should parse strings in case insensitive mode.
 func TestActionFromString(t *testing.T) {
 	RegisterTestingT(t)
 
-	Expect(ActionFromString("allow")).To(Equal(ALLOW))
-	Expect(ActionFromString("Allow")).To(Equal(ALLOW))
-	Expect(ActionFromString("deny")).To(Equal(DENY))
-	Expect(ActionFromString("Deny")).To(Equal(DENY))
-	Expect(ActionFromString("pass")).To(Equal(PASS))
-	Expect(ActionFromString("Pass")).To(Equal(PASS))
-	Expect(ActionFromString("log")).To(Equal(LOG))
-	Expect(ActionFromString("Log")).To(Equal(LOG))
-	Expect(func() { ActionFromString("no_match") }).To(Panic())
+	Expect(actionFromString("allow")).To(Equal(ALLOW))
+	Expect(actionFromString("Allow")).To(Equal(ALLOW))
+	Expect(actionFromString("deny")).To(Equal(DENY))
+	Expect(actionFromString("Deny")).To(Equal(DENY))
+	Expect(actionFromString("pass")).To(Equal(PASS))
+	Expect(actionFromString("Pass")).To(Equal(PASS))
+	Expect(actionFromString("log")).To(Equal(LOG))
+	Expect(actionFromString("Log")).To(Equal(LOG))
+	Expect(func() { actionFromString("no_match") }).To(Panic())
 }
 
 // A policy with no rules does not match.
