@@ -66,6 +66,10 @@ class MultiHostMainline(TestBase):
         self.new_profiles = copy.deepcopy(self.original_profiles)
 
     def tearDown(self):
+        # Remove the network sets, if present
+        self.host1.calicoctl("delete globalnetworkset netset-1", raise_exception_on_failure=False)
+        self.host1.calicoctl("delete globalnetworkset netset-2", raise_exception_on_failure=False)
+
         # Now restore the original profile and check it all works as before
         self._apply_new_profile(self.original_profiles, self.host1)
         self.host1.calicoctl("get profile -o yaml")
@@ -163,6 +167,62 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(retries=2,
                                  pass_list=self.n1_workloads + self.n2_workloads)
     test_rules_source_ip_nets.batchnumber = 4
+
+    def test_rules_source_ip_sets(self):
+        """Test global network sets end-to-end"""
+        # Add a rule to each profile that allows traffic from all the workloads in the *other*
+        # network by means of a network set (which would normally be blocked).
+        prof_n1, prof_n2 = self._get_profiles(self.new_profiles)
+        n1_ips = [str(workload.ip) + "/32" for workload in self.n1_workloads]
+        n2_ips = [str(workload.ip) + "/32" for workload in self.n2_workloads]
+
+        netset = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'GlobalNetworkSet',
+            'metadata': {
+                'name': "netset-1",
+                'labels': {"group": "n1"},
+            },
+            'spec': {
+                'nets': n1_ips,
+            }
+        }
+        self.host1.writefile("netset.yaml", yaml.dump(netset, default_flow_style=False))
+        self.host1.calicoctl("create -f netset.yaml")
+        netset = {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'GlobalNetworkSet',
+            'metadata': {
+                'name': "netset-2",
+                'labels': {"group": "n2"},
+            },
+            'spec': {
+                'nets': n2_ips,
+            }
+        }
+        self.host1.writefile("netset.yaml", yaml.dump(netset, default_flow_style=False))
+        self.host1.calicoctl("create -f netset.yaml")
+
+        # Check initial connectivity before we update the rules to reference the
+        # network sets.
+        self.assert_connectivity(retries=2,
+                                 pass_list=self.n1_workloads,
+                                 fail_list=self.n2_workloads)
+        self.assert_connectivity(retries=2,
+                                 pass_list=self.n2_workloads,
+                                 fail_list=self.n1_workloads)
+
+        rule = {'action': 'Allow',
+                'source': {'selector': 'group=="n1"'}}
+        prof_n2['spec']['ingress'].append(rule)
+        rule = {'action': 'Allow',
+                'source': {'selector': 'group=="n2"'}}
+        prof_n1['spec']['ingress'].append(rule)
+        self._apply_new_profile(self.new_profiles, self.host1)
+
+        self.assert_connectivity(retries=2,
+                                 pass_list=self.n1_workloads + self.n2_workloads)
+    test_rules_source_ip_sets.batchnumber = 2
 
     def test_rules_source_ip_nets_2(self):
         # Adjust each profile to allow traffic from all IPs in the other group but then exclude
@@ -334,9 +394,8 @@ class MultiHostMainline(TestBase):
         host.calicoctl("apply -f new_profiles")
 
     def _setup_workloads(self, host1, host2):
-        # Create the networks on host1, but it should be usable from all
-        # hosts.  We create one network using the default driver, and the
-        # other using the Calico driver.
+        # Create the networks on host1, but they should be usable from all
+        # hosts.
         network1 = host1.create_network("testnet1")
         network2 = host1.create_network("testnet2")
         networks = [network1, network2]

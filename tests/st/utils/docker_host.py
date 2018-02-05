@@ -241,7 +241,7 @@ class DockerHost(object):
             raise Exception("Command %s returned non-zero exit code %s" %
                             (command, status))
 
-    def calicoctl(self, command, version=None):
+    def calicoctl(self, command, version=None, raise_exception_on_failure=True):
         """
         Convenience function for abstracting away calling the calicoctl
         command.
@@ -281,7 +281,7 @@ class DockerHost(object):
             calicoctl = "export HOSTNAME=%s; %s" % (
                 self.override_hostname, calicoctl)
 
-        return self.execute(calicoctl + " " + command)
+        return self.execute(calicoctl + " " + command, raise_exception_on_failure=raise_exception_on_failure)
 
     def start_calico_node(self, options="", with_ipv4pool_cidr_env_var=True, env_options=""):
         """
