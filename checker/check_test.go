@@ -15,8 +15,9 @@
 package checker
 
 import (
-	. "github.com/onsi/gomega"
 	"testing"
+
+	. "github.com/onsi/gomega"
 
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	"github.com/projectcalico/app-policy/policystore"
@@ -25,33 +26,33 @@ import (
 
 // ActionFromString should parse strings in case insensitive mode.
 func TestActionFromString(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
-	g.Expect(ActionFromString("allow")).To(Equal(ALLOW))
-	g.Expect(ActionFromString("Allow")).To(Equal(ALLOW))
-	g.Expect(ActionFromString("deny")).To(Equal(DENY))
-	g.Expect(ActionFromString("Deny")).To(Equal(DENY))
-	g.Expect(ActionFromString("pass")).To(Equal(PASS))
-	g.Expect(ActionFromString("Pass")).To(Equal(PASS))
-	g.Expect(ActionFromString("log")).To(Equal(LOG))
-	g.Expect(ActionFromString("Log")).To(Equal(LOG))
-	g.Expect(func() { ActionFromString("no_match") }).To(Panic())
+	Expect(ActionFromString("allow")).To(Equal(ALLOW))
+	Expect(ActionFromString("Allow")).To(Equal(ALLOW))
+	Expect(ActionFromString("deny")).To(Equal(DENY))
+	Expect(ActionFromString("Deny")).To(Equal(DENY))
+	Expect(ActionFromString("pass")).To(Equal(PASS))
+	Expect(ActionFromString("Pass")).To(Equal(PASS))
+	Expect(ActionFromString("log")).To(Equal(LOG))
+	Expect(ActionFromString("Log")).To(Equal(LOG))
+	Expect(func() { ActionFromString("no_match") }).To(Panic())
 }
 
 // A policy with no rules does not match.
 func TestCheckPolicyNoRules(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	policy := &proto.Policy{}
 	req := &authz.CheckRequest{}
-	g.Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
+	Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
 }
 
 // If rules exist, but none match, we should get NO_MATCH
 // Rules that do match should return their Action.
 // Log rules should continue processing.
 func TestCheckPolicyRules(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	policy := &proto.Policy{InboundRules: []*proto.Rule{
 		{
@@ -81,19 +82,19 @@ func TestCheckPolicyRules(t *testing.T) {
 			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
 		},
 	}}
-	g.Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
+	Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "POST"
-	g.Expect(checkPolicy(policy, req)).To(Equal(ALLOW))
+	Expect(checkPolicy(policy, req)).To(Equal(ALLOW))
 
 	http.Method = "GET"
-	g.Expect(checkPolicy(policy, req)).To(Equal(DENY))
+	Expect(checkPolicy(policy, req)).To(Equal(DENY))
 }
 
 // CheckStore when the store has no endpoint should deny requests.
 func TestCheckStoreNoEndpoint(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
@@ -105,12 +106,12 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 		},
 	}}
 	status := checkStore(store, req)
-	g.Expect(status.Code).To(Equal(PERMISSION_DENIED))
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
 // CheckStore with no Tiers and no Profiles on the endpoint should deny.
 func TestCheckStoreNoTiers(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = &proto.WorkloadEndpoint{
@@ -125,12 +126,12 @@ func TestCheckStoreNoTiers(t *testing.T) {
 		},
 	}}
 	status := checkStore(store, req)
-	g.Expect(status.Code).To(Equal(PERMISSION_DENIED))
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
 // If a Policy matches, the action on the matched rule is the result.
 func TestCheckStorePolicyMatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = &proto.WorkloadEndpoint{
@@ -168,18 +169,18 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	}}
 
 	status := checkStore(store, req)
-	g.Expect(status.Code).To(Equal(OK))
+	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
 	status = checkStore(store, req)
-	g.Expect(status.Code).To(Equal(PERMISSION_DENIED))
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
 // And endpoint with no Policies should evaluate Profiles.
 func TestCheckStoreProfileOnly(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = &proto.WorkloadEndpoint{
@@ -213,18 +214,18 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	}}
 
 	status := checkStore(store, req)
-	g.Expect(status.Code).To(Equal(OK))
+	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
 	status = checkStore(store, req)
-	g.Expect(status.Code).To(Equal(PERMISSION_DENIED))
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
 // Ensure policy action of "Pass" ends policy evaluation and moves to profiles.
 func TestCheckStorePass(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = &proto.WorkloadEndpoint{
@@ -273,5 +274,5 @@ func TestCheckStorePass(t *testing.T) {
 	}}
 
 	status := checkStore(store, req)
-	g.Expect(status.Code).To(Equal(OK))
+	Expect(status.Code).To(Equal(OK))
 }

@@ -14,8 +14,9 @@
 package policystore
 
 import (
-	. "github.com/onsi/gomega"
 	"testing"
+
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/app-policy/proto"
 
@@ -41,85 +42,85 @@ func makeIpAddr(ip string) envoyapi.Address {
 }
 
 func TestAddIp(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP)
 	uut.AddString("2.2.2.2")
 	addr := makeIpAddr("2.2.2.2")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 
 	uut.AddString("2.2.2.3")
 	addr.GetSocketAddress().Address = "2.2.2.3"
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 
 	// Test idempotency
 	uut.AddString("2.2.2.3")
 	addr.GetSocketAddress().Address = "2.2.2.3"
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 }
 
 func TestRemoveIp(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP)
 	addr := makeIpAddr("2.2.2.2")
 
 	uut.RemoveString("2.2.2.2")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 	uut.AddString("2.2.2.2")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 	uut.RemoveString("2.2.2.2")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 	// Test idempotency
 	uut.RemoveString("2.2.2.2")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 
 	// Adding a different address should not affect a removed one
 	uut.AddString("2.2.2.3")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 }
 
 func TestAddIpAndPort(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
 	addr := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
 
 	uut.AddString("2.2.2.2,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 
 	// Different port.
 	addr.GetSocketAddress().GetPortSpecifier().(*envoyapi.SocketAddress_PortValue).PortValue = 33
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 
 	// Add other port
 	uut.AddString("2.2.2.2,tcp:33")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 }
 
 func TestRemoveIpAndPort(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
 	addr := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
 
 	uut.RemoveString("2.2.2.2,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 	uut.AddString("2.2.2.2,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr)).To(BeTrue())
 	uut.RemoveString("2.2.2.2,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 	// Test idempotency
 	uut.RemoveString("2.2.2.2,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 
 	// Adding a different address should not affect a removed one
 	uut.AddString("2.2.2.3,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addr)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr)).To(BeFalse())
 }
 
 func TestIpPortContainsAddress(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	uut := NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
 	addrTCP := makeAddr("2.2.2.2", envoyapi.SocketAddress_TCP, 2222)
@@ -129,17 +130,17 @@ func TestIpPortContainsAddress(t *testing.T) {
 
 	// Different protocol
 	uut.AddString("2.2.2.2,udp:2222")
-	g.Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
 
-	g.Expect(uut.ContainsAddress(&addrUDP)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addrUDP)).To(BeTrue())
 
 	// Different port
 	uut.AddString("2.2.2.2,tcp:2223")
-	g.Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
-	g.Expect(uut.ContainsAddress(&addrPort)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addrPort)).To(BeTrue())
 
 	// Different IP
 	uut.AddString("2.2.2.3,tcp:2222")
-	g.Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
-	g.Expect(uut.ContainsAddress(&addrIp)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addrIp)).To(BeTrue())
 }

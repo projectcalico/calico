@@ -15,8 +15,9 @@
 package checker
 
 import (
-	. "github.com/onsi/gomega"
 	"testing"
+
+	. "github.com/onsi/gomega"
 
 	"github.com/envoyproxy/data-plane-api/api/auth"
 
@@ -25,144 +26,115 @@ import (
 
 // Successful parse should return name and namespace.
 func TestParseSpiffeIdOk(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "spiffe://foo.bar.com/ns/sandwich/sa/bacon"
 	name, namespace, err := parseSpiffeId(id)
-	g.Expect(name).To(Equal("bacon"))
-	g.Expect(namespace).To(Equal("sandwich"))
-	g.Expect(err).To(BeNil())
+	Expect(name).To(Equal("bacon"))
+	Expect(namespace).To(Equal("sandwich"))
+	Expect(err).To(BeNil())
 }
 
 // Unsuccessful parse should return an error.
 func TestParseSpiffeIdFail(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "http://foo.bar.com/ns/sandwich/sa/bacon"
 	_, _, err := parseSpiffeId(id)
-	g.Expect(err).ToNot(BeNil())
+	Expect(err).ToNot(BeNil())
 }
 
 // If no service account names are given, the clause matches any name.
-func TestMatchServiceAccountNameEmpty(t *testing.T) {
-	g := NewGomegaWithT(t)
+func TestMatchServiceAccountName(t *testing.T) {
+	RegisterTestingT(t)
+	testCases := []struct {
+		title  string
+		names  []string
+		name   string
+		result bool
+	}{
+		{"empty", []string{}, "reginald", true},
+		{"match", []string{"susan", "jim", "reginald"}, "reginald", true},
+		{"no match", []string{"susan", "jim", "reginald"}, "steven", false},
+	}
 
-	names := []string{}
-	name := "reginald"
-	result := matchServiceAccountName(names, name)
-	g.Expect(result).To(BeTrue())
-}
-
-// If the name matches a name in the list, the clause matches.
-func TestMatchServiceAccountNameMatch(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	names := []string{"susan", "jim", "reginald"}
-	name := "reginald"
-	result := matchServiceAccountName(names, name)
-	g.Expect(result).To(BeTrue())
-}
-
-// If the list has names, but none match, the clause does not match.
-func TestMatchServiceAccountNameNomatch(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	names := []string{"susan", "jim", "reginald"}
-	name := "steven"
-	result := matchServiceAccountName(names, name)
-	g.Expect(result).To(BeFalse())
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			result := matchServiceAccountName(tc.names, tc.name)
+			Expect(result).To(Equal(tc.result))
+		})
+	}
 }
 
 // An empty label selector matches any set of labels.
-func TestMatchServiceAccoutLabelsEmpty(t *testing.T) {
-	g := NewGomegaWithT(t)
+func TestMatchServiceAccoutLabels(t *testing.T) {
+	RegisterTestingT(t)
+	testCases := []struct {
+		title    string
+		selector string
+		labels   map[string]string
+		result   bool
+	}{
+		{"empty", "", map[string]string{"app": "foo", "env": "prod"}, true},
+		{"bad selector", "not.a.real.selector", map[string]string{"app": "foo", "env": "prod"}, false},
+		{"good selector", "app == 'foo'", map[string]string{"app": "foo", "env": "prod"}, true},
+	}
 
-	selector := ""
-	labels := map[string]string{"app": "foo", "env": "prod"}
-	result := matchServiceAccountLabels(selector, labels)
-	g.Expect(result).To(BeTrue())
-}
-
-// An unparsable selector will not match.
-func TestMatchServiceAccountLabelsBadSelector(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	selector := "not.a.real.selector"
-	labels := map[string]string{"app": "foo", "env": "prod"}
-	result := matchServiceAccountLabels(selector, labels)
-	g.Expect(result).To(BeFalse())
-}
-
-// A correct label selector matches subsets of labels.
-func TestMatchServiceAccountLabelsOk(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	selector := "app == 'foo'"
-	labels := map[string]string{"app": "foo", "env": "prod"}
-	result := matchServiceAccountLabels(selector, labels)
-	g.Expect(result).To(BeTrue())
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			result := matchServiceAccountLabels(tc.selector, tc.labels)
+			Expect(result).To(Equal(tc.result))
+		})
+	}
 }
 
 // If the Principle on the request cannot be parsed as a SPIFFE ID, service
 // account clause cannot match (even if empty).
 func TestMatchServiceAccountBadSpiffe(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	selector := &proto.ServiceAccountSelector{}
 	peer := &auth.AttributeContext_Peer{
 		Principal: "http://foo.com",
 	}
 	result := matchServiceAccounts(selector, peer)
-	g.Expect(result).To(BeFalse())
+	Expect(result).To(BeFalse())
 }
 
 // HTTP Methods clause with empty list will match any method.
-func TestMatchHTTPMethodsEmpty(t *testing.T) {
-	g := NewGomegaWithT(t)
+func TestMatchHTTPMethods(t *testing.T) {
+	RegisterTestingT(t)
+	testCases := []struct {
+		title   string
+		methods []string
+		method  string
+		result  bool
+	}{
+		{"empty", []string{}, "GET", true},
+		{"match", []string{"GET", "HEAD"}, "GET", true},
+		// HTTP methods are case sensitive. https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html
+		{"case sensitive", []string{"get", "HEAD"}, "GET", false},
+		{"wildcard", []string{"*"}, "MADNESS", true},
+	}
 
-	methods := []string{}
-	method := "GET"
-	g.Expect(matchHTTPMethods(methods, method)).To(BeTrue())
-}
-
-// Non-empty method list will exact match methods.
-func TestMatchHTTPMethodsMatch(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	methods := []string{"GET", "HEAD"}
-	method := "GET"
-	g.Expect(matchHTTPMethods(methods, method)).To(BeTrue())
-}
-
-// HTTP methods are case sensitive. https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html
-func TestMatchHTTPMethodsCase(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	methods := []string{"get", "HEAD"}
-	method := "GET"
-	g.Expect(matchHTTPMethods(methods, method)).To(BeFalse())
-}
-
-// A * is a wildcard that matches any method.
-func TestMatchHTTPMethodsWildcard(t *testing.T) {
-	g := NewGomegaWithT(t)
-
-	methods := []string{"*"}
-	method := "MADNESS"
-	g.Expect(matchHTTPMethods(methods, method)).To(BeTrue())
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			Expect(matchHTTPMethods(tc.methods, tc.method)).To(Equal(tc.result))
+		})
+	}
 }
 
 // An omitted HTTP Match clause always matches.
 func TestMatchHTTPNil(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	req := &auth.AttributeContext_HTTPRequest{}
-	g.Expect(matchHTTP(nil, req)).To(BeTrue())
+	Expect(matchHTTP(nil, req)).To(BeTrue())
 }
 
 // Matching a whole rule should require matching all subclauses.
 func TestMatchRule(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	rule := &proto.Rule{
 		SrcServiceAccount: &proto.ServiceAccountSelector{
@@ -182,5 +154,5 @@ func TestMatchRule(t *testing.T) {
 			},
 		},
 	}}
-	g.Expect(match(rule, req)).To(BeTrue())
+	Expect(match(rule, req)).To(BeTrue())
 }

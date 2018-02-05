@@ -18,14 +18,14 @@ import (
 	"fmt"
 	"regexp"
 
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
-
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	log "github.com/sirupsen/logrus"
 )
 
+// SPIFFE_ID_PATTERN is a regular expression to match SPIFFE ID URIs, e.g. spiffe://cluster.local/ns/default/sa/foo
 const SPIFFE_ID_PATTERN = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
 
 var spiffeIdRegExp *regexp.Regexp
@@ -43,9 +43,7 @@ func matchSource(r *proto.Rule, peer *authz.AttributeContext_Peer) bool {
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
-	log.WithFields(log.Fields{
-		"request": req,
-	}).Debug("Matching request.")
+	log.WithField("request", req).Debug("Matching request.")
 	return matchHTTP(rule.GetHttp(), req.GetHttp())
 }
 
@@ -77,7 +75,7 @@ func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.Att
 		matchServiceAccountLabels(saMatch.GetLabelSelector(), labels)
 }
 
-// Parse an Istio SPIFFE ID and extract the service account name and namespace.
+// parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
 func parseSpiffeId(id string) (name, namespace string, err error) {
 	// Init the regexp the first time this is called, and store it in the package namespace.
 	if spiffeIdRegExp == nil {
@@ -103,8 +101,8 @@ func matchServiceAccountName(names []string, name string) bool {
 		log.Debug("No service account names on rule.")
 		return true
 	}
-	for _, name2 := range names {
-		if name2 == name {
+	for _, n := range names {
+		if n == name {
 			return true
 		}
 	}

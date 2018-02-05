@@ -14,8 +14,9 @@
 package syncher
 
 import (
-	. "github.com/onsi/gomega"
 	"testing"
+
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
@@ -93,7 +94,7 @@ var endpoint1 = &proto.WorkloadEndpoint{
 
 // IPSetUpdate with a new ID
 func TestIPSetUpdateNew(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -107,14 +108,14 @@ func TestIPSetUpdateNew(t *testing.T) {
 	}
 	processIPSetUpdate(store, update)
 	ipset := store.IPSetByID[id]
-	g.Expect(ipset).ToNot(BeNil())
-	g.Expect(ipset.ContainsAddress(addr1)).To(BeTrue())
-	g.Expect(ipset.ContainsAddress(addr2)).To(BeTrue())
+	Expect(ipset).ToNot(BeNil())
+	Expect(ipset.ContainsAddress(addr1)).To(BeTrue())
+	Expect(ipset.ContainsAddress(addr2)).To(BeTrue())
 }
 
 // IPSetUpdate with existing ID
 func TestIPSetUpdateExists(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -135,14 +136,14 @@ func TestIPSetUpdateExists(t *testing.T) {
 	ipset = store.IPSetByID[id]
 
 	// The update should replace existing set, so we don't expect 2.2.2.2 (addr3) to still be
-	g.Expect(ipset.ContainsAddress(addr1)).To(BeTrue())
-	g.Expect(ipset.ContainsAddress(addr2)).To(BeTrue())
-	g.Expect(ipset.ContainsAddress(addr3)).To(BeFalse())
+	Expect(ipset.ContainsAddress(addr1)).To(BeTrue())
+	Expect(ipset.ContainsAddress(addr2)).To(BeTrue())
+	Expect(ipset.ContainsAddress(addr3)).To(BeFalse())
 }
 
 // processUpdate handles IPSetUpdate without a crash.
 func TestIPSetUpdateDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -154,12 +155,12 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 				addr1Ip,
 				addr2Ip,
 			}}}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // IPSetDeltaUpdate with existing ID.
 func TestIPSetDeltaUpdateExists(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -178,14 +179,14 @@ func TestIPSetDeltaUpdateExists(t *testing.T) {
 	processIPSetDeltaUpdate(store, update)
 	ipset = store.IPSetByID[id] // don't assume set pointer doesn't change
 
-	g.Expect(ipset.ContainsAddress(addr1)).To(BeTrue())
-	g.Expect(ipset.ContainsAddress(addr2)).To(BeTrue())
-	g.Expect(ipset.ContainsAddress(addr3)).To(BeFalse())
+	Expect(ipset.ContainsAddress(addr1)).To(BeTrue())
+	Expect(ipset.ContainsAddress(addr2)).To(BeTrue())
+	Expect(ipset.ContainsAddress(addr3)).To(BeFalse())
 }
 
 // IPSetDeltaUpdate with an unknown ID results in a panic.
 func TestIPSetDeltaUpdateNonExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -197,12 +198,12 @@ func TestIPSetDeltaUpdateNonExist(t *testing.T) {
 		},
 		RemovedMembers: []string{addr3Ip},
 	}
-	g.Expect(func() { processIPSetDeltaUpdate(store, update) }).To(Panic())
+	Expect(func() { processIPSetDeltaUpdate(store, update) }).To(Panic())
 }
 
 // processUpdate handles a valid IPSetDeltaUpdate without a panic
 func TestIPSetDeltaUpdateDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -218,12 +219,12 @@ func TestIPSetDeltaUpdateDispatch(t *testing.T) {
 			RemovedMembers: []string{addr3Ip},
 		},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // IPSetRemove with an existing ID.
 func TestIPSetRemoveExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -232,24 +233,24 @@ func TestIPSetRemoveExist(t *testing.T) {
 
 	update := &proto.IPSetRemove{Id: id}
 	processIPSetRemove(store, update)
-	g.Expect(store.IPSetByID[id]).To(BeNil())
+	Expect(store.IPSetByID[id]).To(BeNil())
 }
 
 // IPSetRemove with an unknown ID is handled
 func TestIPSetRemoveNonExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
 
 	update := &proto.IPSetRemove{Id: id}
 	processIPSetRemove(store, update)
-	g.Expect(store.IPSetByID[id]).To(BeNil())
+	Expect(store.IPSetByID[id]).To(BeNil())
 }
 
 // processUpdate with IPSetRemove
 func TestIPSetRemoveDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
@@ -259,12 +260,12 @@ func TestIPSetRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetRemove{
 		IpsetRemove: &proto.IPSetRemove{Id: id},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // ActiveProfileUpdate with a new id
 func TestActiveProfileUpdateNonExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -274,12 +275,12 @@ func TestActiveProfileUpdateNonExist(t *testing.T) {
 		Profile: profile1,
 	}
 	processActiveProfileUpdate(store, update)
-	g.Expect(store.ProfileByID[id]).To(BeIdenticalTo(profile1))
+	Expect(store.ProfileByID[id]).To(BeIdenticalTo(profile1))
 }
 
 // ActiveProfileUpdate with an existing ID
 func TestActiveProfileUpdateExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -290,24 +291,24 @@ func TestActiveProfileUpdateExist(t *testing.T) {
 		Profile: profile1,
 	}
 	processActiveProfileUpdate(store, update)
-	g.Expect(store.ProfileByID[id]).To(BeIdenticalTo(profile1))
+	Expect(store.ProfileByID[id]).To(BeIdenticalTo(profile1))
 }
 
 // ActiveProfileUpdate without an ID results in panic
 func TestActiveProfileUpdateNilId(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ActiveProfileUpdate{
 		Profile: profile1,
 	}
-	g.Expect(func() { processActiveProfileUpdate(store, update) }).To(Panic())
+	Expect(func() { processActiveProfileUpdate(store, update) }).To(Panic())
 }
 
 // processUpdate with ActiveProfileUpdate
 func TestActiveProfileUpdateDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -318,24 +319,24 @@ func TestActiveProfileUpdateDispatch(t *testing.T) {
 			Profile: profile1,
 		},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // ActiveProfileRemove with an unkown id is handled without panic.
 func TestActiveProfileRemoveNonExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ActiveProfileRemove{Id: &id}
 	processActiveProfileRemove(store, update)
-	g.Expect(store.ProfileByID[id]).To(BeNil())
+	Expect(store.ProfileByID[id]).To(BeNil())
 }
 
 // ActiveProfileRemove with existing id
 func TestActiveProfileRemoveExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -343,22 +344,22 @@ func TestActiveProfileRemoveExist(t *testing.T) {
 
 	update := &proto.ActiveProfileRemove{Id: &id}
 	processActiveProfileRemove(store, update)
-	g.Expect(store.ProfileByID[id]).To(BeNil())
+	Expect(store.ProfileByID[id]).To(BeNil())
 }
 
 // ActiveProfileRemove without an ID results in panic.
 func TestActiveProfileRemoveNilId(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ActiveProfileRemove{}
-	g.Expect(func() { processActiveProfileRemove(store, update) }).To(Panic())
+	Expect(func() { processActiveProfileRemove(store, update) }).To(Panic())
 }
 
 // processUpdate handles ActiveProfileRemove
 func TestActiveProfileRemoveDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -366,12 +367,12 @@ func TestActiveProfileRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
 		ActiveProfileRemove: &proto.ActiveProfileRemove{Id: &id},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // ActivePolicyUpdate for a new id
 func TestActivePolicyUpdateNonExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -381,12 +382,12 @@ func TestActivePolicyUpdateNonExist(t *testing.T) {
 		Policy: policy1,
 	}
 	processActivePolicyUpdate(store, update)
-	g.Expect(store.PolicyByID[id]).To(BeIdenticalTo(policy1))
+	Expect(store.PolicyByID[id]).To(BeIdenticalTo(policy1))
 }
 
 // ActivePolicyUpdate for an existing id
 func TestActivePolicyUpdateExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -397,24 +398,24 @@ func TestActivePolicyUpdateExist(t *testing.T) {
 		Policy: policy1,
 	}
 	processActivePolicyUpdate(store, update)
-	g.Expect(store.PolicyByID[id]).To(BeIdenticalTo(policy1))
+	Expect(store.PolicyByID[id]).To(BeIdenticalTo(policy1))
 }
 
 // ActivePolicyUpdate without an id causes a panic
 func TestActivePolicyUpdateNilId(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ActivePolicyUpdate{
 		Policy: policy1,
 	}
-	g.Expect(func() { processActivePolicyUpdate(store, update) }).To(Panic())
+	Expect(func() { processActivePolicyUpdate(store, update) }).To(Panic())
 }
 
 // processUpdate handles ActivePolicyDispatch
 func TestActivePolicyUpdateDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -425,24 +426,24 @@ func TestActivePolicyUpdateDispatch(t *testing.T) {
 			Policy: policy1,
 		},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // ActivePolicyRemove with unknown id is handled
 func TestActivePolicyRemoveNonExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ActivePolicyRemove{Id: &id}
 	processActivePolicyRemove(store, update)
-	g.Expect(store.PolicyByID[id]).To(BeNil())
+	Expect(store.PolicyByID[id]).To(BeNil())
 }
 
 // ActivePolicyRemove with existing id
 func TestActivePolicyRemoveExist(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -450,22 +451,22 @@ func TestActivePolicyRemoveExist(t *testing.T) {
 
 	update := &proto.ActivePolicyRemove{Id: &id}
 	processActivePolicyRemove(store, update)
-	g.Expect(store.PolicyByID[id]).To(BeNil())
+	Expect(store.PolicyByID[id]).To(BeNil())
 }
 
 // ActivePolicyRemove without an id causes a panic
 func TestActivePolicyRemoveNilId(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ActivePolicyRemove{}
-	g.Expect(func() { processActivePolicyRemove(store, update) }).To(Panic())
+	Expect(func() { processActivePolicyRemove(store, update) }).To(Panic())
 }
 
 // processUpdate handles ActivePolicyRemove
 func TestActivePolicyRemoveDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
@@ -473,47 +474,47 @@ func TestActivePolicyRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
 		ActivePolicyRemove: &proto.ActivePolicyRemove{Id: &id},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // WorkloadEndpointUpdate sets the endpoint
 func TestWorkloadEndpointUpdate(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 
 	update := &proto.WorkloadEndpointUpdate{Endpoint: endpoint1}
 	processWorkloadEndpointUpdate(store, update)
-	g.Expect(store.Endpoint).To(BeIdenticalTo(endpoint1))
+	Expect(store.Endpoint).To(BeIdenticalTo(endpoint1))
 }
 
 // processUpdate handles WorkloadEndpointUpdate
 func TestWorkloadEndpointUpdateDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
 		WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{Endpoint: endpoint1},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // WorkloadEndpointRemove removes the endpoint
 func TestWorkloadEndpointRemove(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = endpoint1
 
 	update := &proto.WorkloadEndpointRemove{}
 	processWorkloadEndpointRemove(store, update)
-	g.Expect(store.Endpoint).To(BeNil())
+	Expect(store.Endpoint).To(BeNil())
 }
 
 // processUpdate handles WorkloadEndpointRemove
 func TestWorkloadEndpointRemoveDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = endpoint1
@@ -521,23 +522,23 @@ func TestWorkloadEndpointRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{
 		WorkloadEndpointRemove: &proto.WorkloadEndpointRemove{},
 	}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // processUpdate handles InSync
 func TestInSyncDispatch(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_InSync{}}
-	g.Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
 }
 
 // processUpdate for an unhandled Payload causes a panic
 func TestProcessUpdateUnknown(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ConfigUpdate{}}
-	g.Expect(func() { processUpdate(store, update) }).To(Panic())
+	Expect(func() { processUpdate(store, update) }).To(Panic())
 }

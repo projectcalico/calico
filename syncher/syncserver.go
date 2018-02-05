@@ -30,7 +30,15 @@ type syncClient struct {
 	dialOpts []grpc.DialOption
 }
 
-func NewClient(target string, opts []grpc.DialOption) *syncClient {
+type SyncClient interface {
+
+	// Sync connects to the Policy Sync API server and processes updates from it.  It modifies the provided store with
+	// the updates.  Sync blocks until the connection to the API server is terminated.
+	Sync(ctx context.Context, store *policystore.PolicyStore)
+}
+
+// NewClient creates a new syncClient.
+func NewClient(target string, opts []grpc.DialOption) SyncClient {
 	return &syncClient{target: target, dialOpts: opts}
 }
 
@@ -176,9 +184,9 @@ func processActivePolicyRemove(store *policystore.PolicyStore, update *proto.Act
 func processWorkloadEndpointUpdate(store *policystore.PolicyStore, update *proto.WorkloadEndpointUpdate) {
 	// TODO: check the WorkloadEndpointID?
 	log.WithFields(log.Fields{
-		"orchestrator_id": update.GetId().GetOrchestratorId(),
-		"workload_id":     update.GetId().GetWorkloadId(),
-		"endpoint_id":     update.GetId().GetEndpointId(),
+		"orchestratorID": update.GetId().GetOrchestratorId(),
+		"workloadID":     update.GetId().GetWorkloadId(),
+		"endpointID":     update.GetId().GetEndpointId(),
 	}).Info("Processing WorkloadEndpointUpdate")
 	store.Endpoint = update.Endpoint
 }
@@ -186,9 +194,9 @@ func processWorkloadEndpointUpdate(store *policystore.PolicyStore, update *proto
 func processWorkloadEndpointRemove(store *policystore.PolicyStore, update *proto.WorkloadEndpointRemove) {
 	// TODO: maybe this isn't required, because removing the endpoint means shutting down the pod?
 	log.WithFields(log.Fields{
-		"orchestrator_id": update.GetId().GetOrchestratorId(),
-		"workload_id":     update.GetId().GetWorkloadId(),
-		"endpoint_id":     update.GetId().GetEndpointId(),
+		"orchestratorID": update.GetId().GetOrchestratorId(),
+		"workloadID":     update.GetId().GetWorkloadId(),
+		"endpointID":     update.GetId().GetEndpointId(),
 	}).Warning("Processing WorkloadEndpointRemove")
 	store.Endpoint = nil
 }

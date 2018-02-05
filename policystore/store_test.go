@@ -15,12 +15,13 @@
 package policystore
 
 import (
-	. "github.com/onsi/gomega"
 	"testing"
+
+	. "github.com/onsi/gomega"
 )
 
 func TestReadBlocksWrite(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 	until := make(chan bool)
 	readStep := make(chan bool)
 	writeStep := make(chan bool)
@@ -38,13 +39,13 @@ func TestReadBlocksWrite(t *testing.T) {
 	<-readStep
 	go store.Write(writer)
 	// writer should be blocked by reader.
-	g.Eventually(writeStep).ShouldNot(Receive())
+	Eventually(writeStep).ShouldNot(Receive())
 	until <- true
-	g.Eventually(writeStep).Should(Receive())
+	Eventually(writeStep).Should(Receive())
 }
 
 func TestReadAllowsRead(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 	until := make(chan bool)
 	read1Step := make(chan bool)
 	read2Step := make(chan bool)
@@ -61,7 +62,7 @@ func TestReadAllowsRead(t *testing.T) {
 	<-read1Step
 	go store.Read(read2)
 	// Test fails if this blocks, because read1 must be blocking read2.
-	g.Eventually(read2Step).Should(Receive())
+	Eventually(read2Step).Should(Receive())
 
 	// Clean up so goroutines end
 	until <- true

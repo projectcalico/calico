@@ -3,11 +3,11 @@ import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/golang/protobuf
-  version: master
+  version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
   subpackages:
   - proto
 - package: github.com/projectcalico/libcalico-go
-  version: master
+  version: d725fa5db923e8abe1430a74ce4e38f6bee6573a
   subpackages:
   - lib/apis/v3
   - lib/client

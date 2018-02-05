@@ -23,12 +23,12 @@ import (
 	"syscall"
 	"time"
 
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	"github.com/projectcalico/app-policy/checker"
-
-	docopt "github.com/docopt/docopt-go"
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/syncher"
+
+	docopt "github.com/docopt/docopt-go"
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -68,6 +68,7 @@ func main() {
 
 func runServer(arguments map[string]interface{}) {
 	filePath := arguments["--listen"].(string)
+	dial := arguments["--dial"].(string)
 	_, err := os.Stat(filePath)
 	if !os.IsNotExist(err) {
 		// file exists, try to delete it.
@@ -98,7 +99,7 @@ func runServer(arguments map[string]interface{}) {
 
 	// Synchronize the policy store
 	opts := getDialOptions()
-	syncClient := syncher.NewClient(arguments["--dial"].(string), opts)
+	syncClient := syncher.NewClient(dial, opts)
 	syncContext, cancelSync := context.WithCancel(context.Background())
 	defer cancelSync()
 	go syncClient.Sync(syncContext, store)
@@ -115,13 +116,18 @@ func runServer(arguments map[string]interface{}) {
 	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
 
 	// Block until a signal is received.
-	s := <-c
-	log.Infof("Got signal:", s)
+	log.Infof("Got signal:", <-c)
 }
 
 func runClient(arguments map[string]interface{}) {
+	dial := arguments["--dial"].(string)
+	namespace := arguments["<namespace>"].(string)
+	account := arguments["<account>"].(string)
+	useMethod := arguments["--method"].(bool)
+	method := arguments["<method>"].(string)
+
 	opts := getDialOptions()
-	conn, err := grpc.Dial(arguments["--dial"].(string), opts...)
+	conn, err := grpc.Dial(dial, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
@@ -131,14 +137,14 @@ func runClient(arguments map[string]interface{}) {
 		Attributes: &authz.AttributeContext{
 			Source: &authz.AttributeContext_Peer{
 				Principal: fmt.Sprintf("spiffe://cluster.local/ns/%s/sa/%s",
-					arguments["<namespace>"].(string), arguments["<account>"].(string)),
+					namespace, account),
 			},
 		},
 	}
-	if arguments["--method"].(bool) {
+	if useMethod {
 		req.Attributes.Request = &authz.AttributeContext_Request{
 			Http: &authz.AttributeContext_HTTPRequest{
-				Method: arguments["<method>"].(string),
+				Method: method,
 			},
 		}
 	}

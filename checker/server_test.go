@@ -16,15 +16,16 @@ package checker
 
 import (
 	"context"
-	. "github.com/onsi/gomega"
 	"testing"
+
+	. "github.com/onsi/gomega"
 
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	"github.com/projectcalico/app-policy/policystore"
 )
 
 func TestCheck(t *testing.T) {
-	g := NewGomegaWithT(t)
+	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	uut := NewServer(store)
@@ -32,6 +33,6 @@ func TestCheck(t *testing.T) {
 	ctx := context.Background()
 	req := &authz.CheckRequest{}
 	resp, err := uut.Check(ctx, req)
-	g.Expect(err).To(BeNil())
-	g.Expect(resp.GetStatus().GetCode()).To(Equal(PERMISSION_DENIED))
+	Expect(err).To(BeNil())
+	Expect(resp.GetStatus().GetCode()).To(Equal(PERMISSION_DENIED))
 }

@@ -16,14 +16,16 @@ package policystore
 
 import (
 	"fmt"
+	"strings"
 
-	envoyapi "github.com/envoyproxy/data-plane-api/api"
 	syncapi "github.com/projectcalico/app-policy/proto"
 
+	envoyapi "github.com/envoyproxy/data-plane-api/api"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 
+// IPSet is a data structure that contains IP addresses, or IP address/port pairs. It allows fast membership tests
+// of Address objects from the authorization API.
 type IPSet interface {
 	// Idempotent add IP address to set.
 	// ip depends on the IPSet type:
@@ -47,7 +49,7 @@ type IPSet interface {
 type ipMapSet map[string]bool
 type ipPortMapSet map[string]bool
 
-// Create a new IPSet.
+// NewIPSet creates an IPSet of the appropriate type given by t.
 func NewIPSet(t syncapi.IPSetUpdate_IPSetType) IPSet {
 	switch t {
 	case syncapi.IPSetUpdate_IP:

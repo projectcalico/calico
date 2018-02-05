@@ -18,9 +18,11 @@ import (
 	"sync"
 
 	"github.com/projectcalico/app-policy/proto"
+
 	"github.com/prometheus/common/log"
 )
 
+// PolicyStore is a data store that holds Calico policy information.
 type PolicyStore struct {
 	// The RWMutex protects the entire contents of the PolicyStore. No one should read from or write to the PolicyStore
 	// without acquiring the corresponding lock.
@@ -53,6 +55,8 @@ func (s *PolicyStore) Write(writeFn func(store *PolicyStore)) {
 	log.Debug("PolicyStore write unlocked")
 }
 
+// Read the PolicyStore, handling locking logic.
+// readFn is the logic that actually does the reading.
 func (s *PolicyStore) Read(readFn func(store *PolicyStore)) {
 	log.Debug("About to read lock PolicyStore")
 	s.RWMutex.RLock()

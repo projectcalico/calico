@@ -15,20 +15,21 @@
 package checker
 
 import (
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	"strings"
 
 	"github.com/projectcalico/app-policy/policystore"
-
 	"github.com/projectcalico/app-policy/proto"
+
+	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
-	"strings"
 )
 
 var OK = code.Code_value["OK"]
 var PERMISSION_DENIED = code.Code_value["PERMISSION_DENIED"]
 
+// Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int
 
 const (
@@ -39,8 +40,8 @@ const (
 	NO_MATCH // Indicates policy did not match request. Cannot be assigned to rule.
 )
 
-// Check a list of policies and return OK if the check passes, or PERMISSION_DENIED if the check fails.
-// Note, if no policy matches, the default is PERMISSION_DENIED.
+// checkStore applies the policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if the
+// check fails. Note, if no policy matches, the default is PERMISSION_DENIED.
 func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s status.Status) {
 	s = status.Status{Code: PERMISSION_DENIED}
 	ep := store.Endpoint
@@ -49,7 +50,8 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		return
 	}
 	if len(ep.Tiers) > 0 {
-		log.Debug("Checking policy tier 1.") // We only support a single tier.
+		// We only support a single tier.
+		log.Debug("Checking policy tier 1.")
 
 		tier := ep.Tiers[0]
 		policies := tier.IngressPolicies
@@ -58,7 +60,11 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
 			action := checkPolicy(policy, req)
-			log.Debugf("Policy %d %v returned action %v", i, pID, action)
+			log.WithFields(log.Fields{
+				"ordinal":  i,
+				"PolicyID": pID,
+				"result":   action,
+			}).Debug("Policy checked")
 			switch action {
 			case NO_MATCH:
 				continue
@@ -83,7 +89,11 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 			pID := proto.ProfileID{Name: name}
 			profile := store.ProfileByID[pID]
 			action := checkProfile(profile, req)
-			log.Debugf("Profile %d %v returned action %v", i, name, action)
+			log.WithFields(log.Fields{
+				"ordinal":   i,
+				"ProfileID": pID,
+				"result":    action,
+			}).Debug("Profile checked", i, name, action)
 			switch action {
 			case NO_MATCH:
 				continue
@@ -129,6 +139,7 @@ func checkRules(rules []*proto.Rule, req *authz.CheckRequest) (action Action) {
 	return NO_MATCH
 }
 
+// ActionFromString converts a string action name, like "allow" into an Action.
 func ActionFromString(s string) Action {
 	m := map[string]Action{
 		"allow": ALLOW,
