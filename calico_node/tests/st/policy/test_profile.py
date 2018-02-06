@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import copy
+from multiprocessing.dummy import Pool as ThreadPool
+
 import netaddr
 import logging
 import yaml
@@ -38,12 +40,19 @@ class MultiHostMainline(TestBase):
     @classmethod
     def setUpClass(cls):
         super(MultiHostMainline, cls).setUpClass()
-        cls.host1 = DockerHost("host1",
-                               additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
-                               post_docker_commands=POST_DOCKER_COMMANDS)
-        cls.host2 = DockerHost("host2",
-                               additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
-                               post_docker_commands=POST_DOCKER_COMMANDS)
+
+        def start_host(name):
+            return DockerHost(name,
+                              additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                              post_docker_commands=POST_DOCKER_COMMANDS)
+
+        startup_pool = ThreadPool(2)
+        try:
+            cls.host1, cls.host2 = startup_pool.map(start_host, ["host1", "host2"])
+        finally:
+            startup_pool.close()
+            startup_pool.join()
+
 
     @classmethod
     def tearDownClass(cls):
