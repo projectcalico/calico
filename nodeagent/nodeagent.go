@@ -8,51 +8,52 @@ import (
 
 	"github.com/spf13/cobra"
 
-	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
-	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
+	"github.com/colabsaumoh/proto-udsuspver/binder"
+	udsver "github.com/colabsaumoh/proto-udsuspver/protos/udsver_v1"
 	wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
-	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
 )
 
 const (
-	MgmtApiPath        string = "/tmp/udsuspver/mgmt.sock"
 	WorkloadApiUdsHome string = "/tmp/nodeagent"
 )
 
 var (
-	CfgMgmtApiPath   string
 	CfgWldApiUdsHome string
 
 	RootCmd = &cobra.Command{
 		Use:   "nodeagent",
-		Short: "Node agent with both mgmt and workload api interfaces.",
-		Long:  "Node agent with both mgmt and workload api interfaces.",
+		Short: "Node agent with workload api interfaces.",
+		Long:  "Node agent with workload api interfaces.",
 	}
 )
 
 func init() {
-	RootCmd.PersistentFlags().StringVarP(&CfgMgmtApiPath, "mgmtpath", "m", MgmtApiPath, "Mgmt API Uds path")
 	RootCmd.PersistentFlags().StringVarP(&CfgWldApiUdsHome, "wldpath", "w", WorkloadApiUdsHome, "Workload API home path")
 }
 
-func MgmtApi() {
-	// initialize the workload api.
+func Run() {
+	// initialize the workload api service
 	wl := wlapi.NewWlAPIServer()
-	// initialize the workload api handler with the workload api.
-	wli := mwi.NewWlHandler(wl, wlh.NewServer)
-	// finally initialize the node mgmt interface with workload handler.
-	mgmtServer := nam.NewServer(CfgWldApiUdsHome, wli)
 
+	// Create the binder
+	b := binder.NewBinder(WorkloadApiUdsHome)
+
+	// Register our service
+	udsver.RegisterVerifyServer(b.Server(), wl)
+
+	// Register for system signals
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
-	go func(s *nam.Server, c chan os.Signal) {
-		<-c
-		s.Stop()
-		s.WaitDone()
-		os.Exit(1)
-	}(mgmtServer, sigc)
 
-	mgmtServer.Serve(true, CfgMgmtApiPath)
+	// Start the binder creating sockets
+	bstop := make(chan interface{})
+	go b.SearchAndBind(bstop)
+
+	// Wait for term signal.
+	<-sigc
+
+	// Shut down the binder.
+	bstop <- nil
 }
 
 func main() {
@@ -66,6 +67,5 @@ func main() {
 		log.Fatalf("WorkloadApi Directory not present (%v)", WorkloadApiUdsHome)
 	}
 
-	MgmtApi()
-
+	Run()
 }

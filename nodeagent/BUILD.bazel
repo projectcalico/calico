@@ -6,10 +6,9 @@ go_library(
     importpath = "github.com/colabsaumoh/proto-udsuspver/nodeagent",
     visibility = ["//visibility:private"],
     deps = [
-	    "//mgmtwlhintf:go_default_library",
-        "//nodeagentmgmt:go_default_library",
-        "//workloadhandler:go_default_library",
+        "//binder:go_default_library",
         "//workloadapi:go_default_library",
+        "//protos/udsver_v1:go_default_library",
         "@com_github_spf13_cobra//:go_default_library",
     ],
 )
