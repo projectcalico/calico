@@ -3,24 +3,24 @@ title: Configuring BIRD as a BGP Route Reflector
 canonical_url: 'https://docs.projectcalico.org/v3.0/usage/routereflector/bird-rr-config'
 ---
 
-For many {{site.prodname}} deployments, the use of a Route Reflector is not required. 
+For many {{site.prodname}} deployments, the use of a route reflector is not required. 
 However, for large scale deployments a full mesh of BGP peerings between each
 of your {{site.prodname}} nodes may become untenable.  In this case, route reflectors
 allow you to remove the full mesh and scale up the size of the cluster.
 
 These instructions will take you through installing BIRD as a BGP route
 reflector, and updating your other BIRD instances to speak to your new
-route reflector.  The instructions that are are valid for both Ubuntu 14.04 and 
-RHEL 7.  
+route reflector.  The instructions are valid for both Ubuntu and Red Hat 
+Enterprise Linux (RHEL).  
 
 For a container-based deployment, using the `{{site.nodecontainer}}` container, check 
-out the [{{site.prodname}} BIRD Route Reflector container](calico-routereflector).
+out the [{{site.prodname}} BIRD route reflector container](calico-routereflector).
 
 ## Prerequisites
 
 Before starting this you will need the following:
 
--   A machine running either Ubuntu 14.04 or RHEL 7 that is not already
+-   A machine running either Ubuntu or RHEL that is not already
     being used as a compute host.
 -   SSH access to the machine.
 
@@ -28,10 +28,10 @@ Before starting this you will need the following:
 
 ### Step 1: Install BIRD
 
-#### Ubuntu 14.04
+#### Ubuntu
 
 Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
-fixes to BIRD that are not yet available in Ubuntu 14.04. To add the
+fixes to BIRD that are not yet available in Ubuntu. To add the
 PPA, run:
 
     sudo add-apt-repository ppa:cz.nic-labs/bird
@@ -42,20 +42,60 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
     sudo apt-get update
     sudo apt-get install bird
 
-#### RHEL 7
+#### RHEL
 
-First, install EPEL. Depending on your system, the following command may
-be sufficient:
+> **Note**: The following commands require root privileges. You can either open a root shell
+> or prefix them with `sudo`.
+{: .alert .alert-info}
 
-    sudo yum install epel-release
+1. From a terminal prompt, create a new file called bird.repo in the 
+   `/etc/yum.repos.d/` directory.
 
-If that fails, try the following instead:
+   ```bash 
+   vi /etc/yum.repos.d/bird.repo
+   ```
 
-    sudo yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+1. Add the following lines to the file.
 
-With that complete, you can now install BIRD:
+   ```
+   [bird]
+   name=Network.CZ Repository
+   baseurl=ftp://repo.network.cz/pub/redhat/
+   enabled=1
+   gpgcheck=0
+   gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-network.cz
+   ```
 
-    yum install -y bird{,6}
+1. Save and close the file.
+
+1. If you don't already have the `/pki/rpm-gpg/` directory, use the following command
+   to create it.
+   
+   ```bash
+   mkdir /etc/pki/ /etc/pki/rpm-gpg/
+   ```
+   
+1. Download the public key of the BIRD repository into the `/etc/pki/rpm-gpg/` directory.
+   
+   ```bash
+   curl ftp://bird.network.cz/pub/bird/redhat/RPM-GPG-KEY-network.cz -o /etc/pki/rpm-gpg/RPM-GPG-KEY-network.cz
+   ```
+   
+   > **Tip**: If you don't have curl, try replacing `curl` with `wget` in the command.
+   {: .alert .alert-success}
+   
+1. Use the following command to install BIRD.
+
+   ```bash
+   yum install -y bird
+   ```
+   
+> **Note**: We do not recommend installing [Extra Packages for Enterprise Linux (EPEL)](https://fedoraproject.org/wiki/EPEL). 
+> EPEL lacks official Red Hat support. It contains the BIRD package, but it also contains 
+> other packages. Installing EPEL may cause existing packages on your system to
+> be overwritten with unsupported packages. To avoid issues of this kind, we recommend 
+> using the method described above.
+{: .alert .alert-info}
 
 ### Step 2: Set your BIRD IPv4 configuration
 
@@ -121,7 +161,7 @@ IPv4 address: you cannot use an IPv6 address in that field.
 
 ### Step 4: Restart BIRD
 
-#### Ubuntu 14.04
+#### Ubuntu
 
 Restart BIRD:
 
@@ -131,7 +171,7 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
 
     sudo service bird6 restart
 
-#### RHEL 7
+#### RHEL
 
 Restart BIRD:
 

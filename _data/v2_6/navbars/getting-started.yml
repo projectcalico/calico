@@ -123,7 +123,7 @@ toc:
       path: /getting-started/openstack/installation/
     - title: Ubuntu
       path: /getting-started/openstack/installation/ubuntu
-    - title: Red Hat Enterprise Linux 7
+    - title: Red Hat Enterprise Linux
       path: /getting-started/openstack/installation/redhat
     - title: Juju Charms
       path: /getting-started/openstack/installation/juju
