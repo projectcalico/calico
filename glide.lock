@@ -1,5 +1,5 @@
-hash: ae84fd295c525b379b1abbd513e0564e1353cd903d49c9095661ade36f0af03d
-updated: 2018-02-02T13:59:45.70529374Z
+hash: 7d8df3f6c84908105e8bb5b21f7e3d3ef00b9d005b0c383d00d1e4cde7cf02ad
+updated: 2018-02-06T14:25:08.07041097-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -23,7 +23,7 @@ imports:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
+  version: c23606781f63d09917a1e7abfcefeb337a9608ea
   subpackages:
   - auth/authpb
   - client
@@ -33,6 +33,7 @@ imports:
   - mvcc/mvccpb
   - pkg/tlsutil
   - pkg/transport
+  - pkg/types
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
@@ -62,7 +63,9 @@ imports:
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
+  - gogoproto
   - proto
+  - protoc-gen-gogo/descriptor
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
@@ -181,7 +184,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: 11c95655c9621e5324ea237ebcce61e822e2deca
+  version: db37fa5964ade72399b2ac8201123b8623256d75
   subpackages:
   - ext
   - log
@@ -198,7 +201,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
+  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
   subpackages:
   - lib
   - lib/apiconfig
@@ -237,7 +240,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 7d6db7cabab2f9a930ba1b3e61e360fe11154898
+  version: 0a439d7a2542d29743ac487e91b8d9467eb1ab6d
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -248,11 +251,11 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 89604d197083d4781071d3c65855d24ecfb0a563
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -272,19 +275,19 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: c27b7f7359fa2461b8e2a4c42021eb549ccc8ff0
+  version: 6e453822d85ef5721799774b654d4d02fed62afb
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 1875d0a70c90e57f11972aefd42276df65e895b9
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
   - context
   - context/ctxhttp
@@ -335,7 +338,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
   subpackages:
   - internal
   - internal/app_identity
@@ -346,18 +349,29 @@ imports:
   - internal/remote_api
   - internal/urlfetch
   - urlfetch
-- name: google.golang.org/grpc
-  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
+- name: google.golang.org/genproto
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
+  - googleapis/rpc/status
+- name: google.golang.org/grpc
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
+  subpackages:
+  - balancer
   - codes
+  - connectivity
   - credentials
+  - grpclb/grpc_lb_v1/messages
   - grpclog
+  - health
+  - health/grpc_health_v1
   - internal
   - keepalive
   - metadata
   - naming
   - peer
+  - resolver
   - stats
+  - status
   - tap
   - transport
 - name: gopkg.in/go-playground/validator.v8
