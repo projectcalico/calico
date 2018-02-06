@@ -74,7 +74,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 		log.WithError(err).Fatalf("Unable to retrieve IPIP tunnel address. Error getting node '%s'", nodename)
 	}
 
-	if node.Spec.BGP.IPv4IPIPTunnelAddr == "" {
+	if node.Spec.BGP == nil || node.Spec.BGP.IPv4IPIPTunnelAddr == "" {
 		// The IPIP tunnel has no IP address assigned, assign one.
 		log.Debug("IPIP tunnel is not assigned - assign IP")
 		assignHostTunnelAddr(ctx, c, nodename, ipipCidrs)
@@ -113,7 +113,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			log.WithError(err).Fatalf("Unable to retrieve IPIP tunnel address for cleanup. Error getting node '%s'", nodename)
 		}
 
-		if node.Spec.BGP.IPv4IPIPTunnelAddr == "" {
+		if node.Spec.BGP == nil || node.Spec.BGP.IPv4IPIPTunnelAddr == "" {
 			log.Debug("No IPIP tunnel address assigned, and not required")
 			return
 		}
@@ -174,6 +174,9 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			log.WithError(err).Fatalf("Unable to retrieve IPIP tunnel address for cleanup. Error getting node '%s'", nodename)
 		}
 
+		if node.Spec.BGP == nil {
+			node.Spec.BGP = &api.NodeBGPSpec{}
+		}
 		node.Spec.BGP.IPv4IPIPTunnelAddr = ipv4Addrs[0].String()
 
 		_, updateError = c.Nodes().Update(ctx, node, options.SetOptions{})
