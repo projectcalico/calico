@@ -3,7 +3,7 @@ import:
 - package: github.com/sirupsen/logrus
   version: ^1.0.3
 - package: github.com/projectcalico/libcalico-go
-  version: 7c2de5ed8c029f222d87fc849b54c4075ef3173f
+  version: a06c8bdc578a0d64fd12fbb5a70bcc8fad53e501
   subpackages:
   - lib/api
   - lib/client
@@ -14,5 +14,8 @@ import:
   - lib/net
   - lib/numorstring
 - package: github.com/coreos/etcd
-  version: v3.2.7
-
+  version: v3.3.0
+- package: github.com/prometheus/procfs
+  version: f98634e408857669d61064b283c4cde240622865
+- package: golang.org/x/net
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
