@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 )
 
 type EnvConfig struct {
+	FelixImage string `default:"calico/felix:latest"`
 	EtcdImage  string `default:"quay.io/coreos/etcd"`
 	K8sImage   string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
 	TyphaImage string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
