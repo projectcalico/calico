@@ -16,6 +16,7 @@ package etcdv3
 
 import (
 	"context"
+	goerrors "errors"
 	"strconv"
 	"sync/atomic"
 
@@ -130,7 +131,11 @@ func (wc *watcher) watchLoop() {
 			}
 		}
 	}
-	log.Debug("End of watcher.watchLoop")
+
+	// If we exit the loop, it means the watcher has closed for some reason.
+	// Bubble this up as a watch termination error.
+	log.Warn("etcdv3 watch channel closed")
+	wc.sendError(goerrors.New("etcdv3 watch channel closed"), true)
 }
 
 // listCurrent retrieves the existing entries and sends an event for each listed
