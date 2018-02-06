@@ -19,11 +19,11 @@ component needs access to in etcd to function successfully.
 | /calico/ipam/v2/\*                        |   RW   |
 | /calico/resources/v3/projectcalico.org/\* |   RW   |
 
-## felix as a stand alone process
+## Felix as a stand alone process
 
 | Path                                      | Access |
 |-------------------------------------------|--------|
-| /calico/felix/v1/\*                       |   RW   |
+| /calico/felix/v1/\*                       |   R    |
 | /calico/resources/v3/projectcalico.org/\* |   RW   |
 
 ## CNI-plugin
