@@ -44,18 +44,10 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
 
 #### RHEL 7
 
-First, install EPEL. Depending on your system, the following command may
-be sufficient:
+Install BIRD. The BIRD packages can usually be found in the [EPEL](https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/b/ ) repository. We do not recommend adding EPEL as a base repository to your RHEL system to avoid packages in RHEL getting overwritten by EPEL versions.   
 
-    sudo yum install epel-release
-
-If that fails, try the following instead:
-
-    sudo yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-
-With that complete, you can now install BIRD:
-
-    yum install -y bird{,6}
+    yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/b/bird-1.4.5-2.el7.x86_64.rpm
+    yum install https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/b/bird6-1.4.5-2.el7.x86_64.rpm
 
 ### Step 2: Set your BIRD IPv4 configuration
 
