@@ -46,7 +46,6 @@ func TestParseSpiffeIdFail(t *testing.T) {
 
 // If no service account names are given, the clause matches any name.
 func TestMatchServiceAccountName(t *testing.T) {
-	RegisterTestingT(t)
 	testCases := []struct {
 		title  string
 		names  []string
@@ -60,6 +59,7 @@ func TestMatchServiceAccountName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
 			result := matchServiceAccountName(tc.names, tc.name)
 			Expect(result).To(Equal(tc.result))
 		})
@@ -68,7 +68,6 @@ func TestMatchServiceAccountName(t *testing.T) {
 
 // An empty label selector matches any set of labels.
 func TestMatchServiceAccoutLabels(t *testing.T) {
-	RegisterTestingT(t)
 	testCases := []struct {
 		title    string
 		selector string
@@ -82,6 +81,7 @@ func TestMatchServiceAccoutLabels(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
 			result := matchServiceAccountLabels(tc.selector, tc.labels)
 			Expect(result).To(Equal(tc.result))
 		})
@@ -103,7 +103,6 @@ func TestMatchServiceAccountBadSpiffe(t *testing.T) {
 
 // HTTP Methods clause with empty list will match any method.
 func TestMatchHTTPMethods(t *testing.T) {
-	RegisterTestingT(t)
 	testCases := []struct {
 		title   string
 		methods []string
@@ -119,6 +118,7 @@ func TestMatchHTTPMethods(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
 			Expect(matchHTTPMethods(tc.methods, tc.method)).To(Equal(tc.result))
 		})
 	}
