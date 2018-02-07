@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,8 +93,8 @@ var _ = Describe("Masquerade manager", func() {
 					{
 						Action: iptables.MasqAction{},
 						Match: iptables.Match().
-							SourceIPSet("cali4-masq-ipam-pools").
-							NotDestIPSet("cali4-all-ipam-pools"),
+							SourceIPSet("cali40masq-ipam-pools").
+							NotDestIPSet("cali40all-ipam-pools"),
 					},
 				},
 			}}})
@@ -140,8 +140,8 @@ var _ = Describe("Masquerade manager", func() {
 						{
 							Action: iptables.MasqAction{},
 							Match: iptables.Match().
-								SourceIPSet("cali4-masq-ipam-pools").
-								NotDestIPSet("cali4-all-ipam-pools"),
+								SourceIPSet("cali40masq-ipam-pools").
+								NotDestIPSet("cali40all-ipam-pools"),
 						},
 					},
 				}}})

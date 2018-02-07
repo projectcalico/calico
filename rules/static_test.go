@@ -68,7 +68,7 @@ var _ = Describe("Static", func() {
 				Describe(fmt.Sprintf("IPv%d", ipVersion), func() {
 					// Capture current value of ipVersion.
 					ipVersion := ipVersion
-					ipSetThisHost := fmt.Sprintf("cali%d-this-host", ipVersion)
+					ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
 
 					var portRanges []*proto.PortRange
 					portRange := &proto.PortRange{
@@ -425,7 +425,7 @@ var _ = Describe("Static", func() {
 					// IPIP rules
 					{Match: Match().
 						ProtocolNum(4).
-						SourceIPSet("cali4-all-hosts").
+						SourceIPSet("cali40all-hosts").
 						DestAddrType("LOCAL"),
 
 						Action:  AcceptAction{},
@@ -467,7 +467,7 @@ var _ = Describe("Static", func() {
 					// IPIP rules
 					{Match: Match().
 						ProtocolNum(4).
-						SourceIPSet("cali4-all-hosts").
+						SourceIPSet("cali40all-hosts").
 						DestAddrType("LOCAL"),
 
 						Action:  AcceptAction{},
@@ -565,7 +565,7 @@ var _ = Describe("Static", func() {
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
 						Match: Match().ProtocolNum(4).
-							DestIPSet("cali4-all-hosts").
+							DestIPSet("cali40all-hosts").
 							SrcAddrType(AddrTypeLocal, false),
 						Action:  AcceptAction{},
 						Comment: "Allow IPIP packets to other Calico hosts",
@@ -596,7 +596,7 @@ var _ = Describe("Static", func() {
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
 						Match: Match().ProtocolNum(4).
-							DestIPSet("cali4-all-hosts").
+							DestIPSet("cali40all-hosts").
 							SrcAddrType(AddrTypeLocal, false),
 						Action:  AcceptAction{},
 						Comment: "Allow IPIP packets to other Calico hosts",
@@ -752,7 +752,7 @@ var _ = Describe("Static", func() {
 		for _, ipVersion := range []uint8{4, 6} {
 			// Capture current value of ipVersion.
 			ipVersion := ipVersion
-			ipSetThisHost := fmt.Sprintf("cali%d-this-host", ipVersion)
+			ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
 
 			portRanges1 := []*proto.PortRange{
 				{30030, 30040},
@@ -814,7 +814,6 @@ var _ = Describe("Static", func() {
 
 			It("should include the expected forward-check chain in the filter chains", func() {
 				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-check")).To(Equal(expForwardCheck))
-
 			})
 		}
 	})

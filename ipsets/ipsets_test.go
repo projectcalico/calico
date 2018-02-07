@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,12 +31,12 @@ const (
 	ipSetID  = "s:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 	ipSetID2 = "t:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 
-	v4MainIPSetName  = "cali4-s:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4MainIPSetName  = "cali40s:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4TempIPSetName  = "cali4ts:qMt7iLlGDhvLnCjM0l9nzxb"
-	v4MainIPSetName2 = "cali4-t:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4TempIPSetName2 = "cali4tt:qMt7iLlGDhvLnCjM0l9nzxb"
 
-	v6MainIPSetName = "cali6-s:qMt7iLlGDhvLnCjM0l9nzxb"
+	v6MainIPSetName = "cali60s:qMt7iLlGDhvLnCjM0l9nzxb"
 	v6TempIPSetName = "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
@@ -619,7 +619,7 @@ var _ = Describe("IP sets dataplane", func() {
 		staleSet := set.New()
 		staleSet.Add("10.0.0.1")
 		staleSet.Add("10.0.0.2")
-		dataplane.IPSetMembers["cali4-unknown"] = staleSet
+		dataplane.IPSetMembers["cali40unknown"] = staleSet
 		dataplane.IPSetMembers["cali4tunknown"] = staleSet
 		ipsets.AddOrReplaceIPSet(meta, v4Members1And2)
 
@@ -665,7 +665,7 @@ var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 		rules.LegacyV4IPSetNames,
 	)
 	It("should own its own chains", func() {
-		Expect(v4VersionConf.OwnsIPSet("cali4-s:abcdef12345_-")).To(BeTrue())
+		Expect(v4VersionConf.OwnsIPSet("cali40s:abcdef12345_-")).To(BeTrue())
 		Expect(v4VersionConf.OwnsIPSet("cali4ts:abcdef12345_-")).To(BeTrue())
 	})
 	It("should own legacy special case chains", func() {
@@ -675,9 +675,10 @@ var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 	It("should own legacy chains", func() {
 		Expect(v4VersionConf.OwnsIPSet("felix-4-foobar")).To(BeTrue())
 		Expect(v4VersionConf.OwnsIPSet("felix-4t-foobar")).To(BeTrue())
+		Expect(v4VersionConf.OwnsIPSet("cali4-s:abcdef12345_-")).To(BeTrue())
 	})
 	It("should not own chains from another version", func() {
-		Expect(v4VersionConf.OwnsIPSet("cali6-s:abcdef12345_-")).To(BeFalse())
+		Expect(v4VersionConf.OwnsIPSet("cali60s:abcdef12345_-")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("cali6ts:abcdef12345_-")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("felix-6-foobar")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("felix-6t-foobar")).To(BeFalse())

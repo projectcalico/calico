@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -244,6 +244,21 @@ type IPVersionConfig struct {
 	ourNamePrefixesRegexp *regexp.Regexp
 }
 
+const (
+	// mainIpsetToken is the character that we append to the versioned prefix "cali4" or "cali6" to
+	// get the main IP set name prefix.   To minimise the length of the prefix (and hence preserve
+	// as much entropy as possible in the IP set ID) we use this as a version number, and
+	// increment it when making breaking changes to the IP set format.  In particular, this must
+	// be changed if the type of the IP set is changed because the kernel doesn't support the
+	// "ipset swap" operation unless the two IP sets to be swapped share a type.
+	//
+	// The first "version" used "-" for the token.
+	mainIpsetToken = "0"
+	// tempIpsetToken similarly, for the temporary copy of each IP set.  Typically, this doesn't
+	// need to be changed because we delete and recreate the temporary IP set before using it.
+	tempIpsetToken = "t"
+)
+
 func NewIPVersionConfig(
 	family IPFamily,
 	namePrefix string,
@@ -274,8 +289,8 @@ func NewIPVersionConfig(
 	return &IPVersionConfig{
 		Family:                family,
 		setNamePrefix:         versionedPrefix,
-		tempSetNamePrefix:     versionedPrefix + "t", // Replace "-" so we maintain the same length.
-		mainSetNamePrefix:     versionedPrefix + "-",
+		tempSetNamePrefix:     versionedPrefix + tempIpsetToken,
+		mainSetNamePrefix:     versionedPrefix + mainIpsetToken,
 		ourNamePrefixesRegexp: ourNamesRegexp,
 	}
 }
@@ -286,17 +301,17 @@ func NewIPVersionConfig(
 // "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb").
 func (c IPVersionConfig) NameForTempIPSet(setID string) string {
 	// Since IP set IDs are chosen with a secure hash already, we can simply truncate them
-	/// to length to get maximum entropy.
+	// to length to get maximum entropy.
 	return combineAndTrunc(c.tempSetNamePrefix, setID, MaxIPSetNameLength)
 }
 
 // NameForMainIPSet converts the given IP set ID (example: "qMt7iLlGDhvLnCjM0l9nzxbabcd"), to
 // a name for use in the dataplane.  The return value will have the configured prefix and is
 // guaranteed to be short enough to use as an ipset name (example:
-// "cali6-s:qMt7iLlGDhvLnCjM0l9nzxb").
+// "cali60s:qMt7iLlGDhvLnCjM0l9nzxb").
 func (c IPVersionConfig) NameForMainIPSet(setID string) string {
 	// Since IP set IDs are chosen with a secure hash already, we can simply truncate them
-	/// to length to get maximum entropy.
+	// to length to get maximum entropy.
 	return combineAndTrunc(c.mainSetNamePrefix, setID, MaxIPSetNameLength)
 }
 
