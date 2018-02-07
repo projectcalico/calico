@@ -28,7 +28,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"golang.org/x/sys/unix"
 )
 
 type linkModel struct {
@@ -135,7 +134,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 
 	// Build the update.
 	update := netlink.LinkUpdate{
-		Header: unix.NlMsghdr{
+		Header: syscall.NlMsghdr{
 			Type: msgType,
 		},
 		Link: &netlink.Dummy{
