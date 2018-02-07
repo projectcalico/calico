@@ -31,14 +31,18 @@ import:
   - tools/cache
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
+  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
 - package: github.com/projectcalico/felix
   version: 518dbc352494a962e46d50f8bfe72a70c86951bf
   subpackages:
   - fv
   - fv.containers
 - package: github.com/coreos/etcd
-  version: v3.2.7
+  version: v3.3.0
 # Version of pflag needed for k8s.io/release-1.8 series of pins.
 - package: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+- package: github.com/prometheus/procfs
+  version: f98634e408857669d61064b283c4cde240622865
+- package: golang.org/x/net
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
