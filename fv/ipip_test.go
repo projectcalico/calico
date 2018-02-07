@@ -176,7 +176,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 			// updated as a signal that Felix has restarted.
 			for _, f := range felixes {
 				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali4-all-hosts")
+					return getNumIPSetMembers(f.Container, "cali40all-hosts")
 				}, "5s", "200ms").Should(BeZero())
 			}
 		})

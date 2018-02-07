@@ -43,10 +43,10 @@ var ruleTestData = []TableEntry{
 		"--source 10.0.0.0/16"),
 	Entry("Source IP set", 4,
 		proto.Rule{SrcIpSetIds: []string{"ipsetid1"}},
-		"-m set --match-set cali4-ipsetid1 src"),
+		"-m set --match-set cali40ipsetid1 src"),
 	Entry("Source IP sets", 4,
 		proto.Rule{SrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
-		"-m set --match-set cali4-ipsetid1 src -m set --match-set cali4-ipsetid2 src"),
+		"-m set --match-set cali40ipsetid1 src -m set --match-set cali40ipsetid2 src"),
 	Entry("Source ports", 4,
 		proto.Rule{SrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport --source-ports 10:12"),
@@ -75,10 +75,10 @@ var ruleTestData = []TableEntry{
 		"--destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
 		proto.Rule{DstIpSetIds: []string{"ipsetid1"}},
-		"-m set --match-set cali4-ipsetid1 dst"),
+		"-m set --match-set cali40ipsetid1 dst"),
 	Entry("Dest IP sets", 4,
 		proto.Rule{DstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
-		"-m set --match-set cali4-ipsetid1 dst -m set --match-set cali4-ipsetid2 dst"),
+		"-m set --match-set cali40ipsetid1 dst -m set --match-set cali40ipsetid2 dst"),
 	Entry("Dest ports", 4,
 		proto.Rule{DstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport --destination-ports 10:12"),
@@ -104,13 +104,13 @@ var ruleTestData = []TableEntry{
 		"! --source 10.0.0.0/16"),
 	Entry("Negated source IP set", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
-		"-m set ! --match-set cali4-ipsetid1 src"),
+		"-m set ! --match-set cali40ipsetid1 src"),
 	Entry("Negated source IP set v6", 6,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
-		"-m set ! --match-set cali6-ipsetid1 src"),
+		"-m set ! --match-set cali60ipsetid1 src"),
 	Entry("Negated source IP sets", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
-		"-m set ! --match-set cali4-ipsetid1 src -m set ! --match-set cali4-ipsetid2 src"),
+		"-m set ! --match-set cali40ipsetid1 src -m set ! --match-set cali40ipsetid2 src"),
 	Entry("Negated source ports", 4,
 		proto.Rule{NotSrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --source-ports 10:12"),
@@ -151,13 +151,13 @@ var ruleTestData = []TableEntry{
 		"! --destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
 		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
-		"-m set ! --match-set cali4-ipsetid1 dst"),
+		"-m set ! --match-set cali40ipsetid1 dst"),
 	Entry("Dest IP set", 6,
 		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
-		"-m set ! --match-set cali6-ipsetid1 dst"),
+		"-m set ! --match-set cali60ipsetid1 dst"),
 	Entry("Dest IP sets", 4,
 		proto.Rule{NotDstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
-		"-m set ! --match-set cali4-ipsetid1 dst -m set ! --match-set cali4-ipsetid2 dst"),
+		"-m set ! --match-set cali40ipsetid1 dst -m set ! --match-set cali40ipsetid2 dst"),
 	Entry("Dest ports", 4,
 		proto.Rule{NotDstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --destination-ports 10:12"),
@@ -444,7 +444,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
-			"-A test -p tcp -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			"-A test -p tcp -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
@@ -454,8 +454,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
 			},
 			clearBothMarksRule,
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndUDPRule,
 			returnRule,
 		),
@@ -478,9 +478,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
 			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
@@ -518,7 +518,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
 			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
@@ -528,7 +528,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				DstNamedPortIpSetIds: []string{"ipset-1"},
 			},
-			"-A test -p tcp -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			"-A test -p tcp -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
@@ -538,8 +538,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				DstNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
 			},
 			clearBothMarksRule,
-			"-A test -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
@@ -554,7 +554,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
 			"-A test -p tcp -m multiport --destination-ports 1:2 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
 			returnRule,
 		),
@@ -572,7 +572,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
 			"-A test -p udp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -p udp -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
@@ -588,7 +588,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
 			"-A test -p tcp -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			// Source port rendered directly into the main rule.
 			"-A test -p tcp -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
 			returnRule,
@@ -606,10 +606,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Need to "OR" the named port and multiport matches together.
 			// First positive block so it sets the all bit directly.
 			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			// Second block uses per-block bit.
 			"-A test -p tcp -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x400/0x400",
-			"-A test -m set --match-set cali4-ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,
 			allowIfAllMarkAndTCPRule,
 			returnRule,
@@ -645,7 +645,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				NotSrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
 			"-A test -p tcp -m multiport ! --source-ports 1:2 "+
-				"-m set ! --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+				"-m set ! --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
@@ -667,9 +667,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p tcp "+
 				"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
 				"-m multiport ! --source-ports 15:16 "+ // Overflow to new multiport.
-				"-m set ! --match-set cali4-ipset-1 src,src "+
-				"-m set ! --match-set cali4-ipset-2 src,src "+
-				"-m set ! --match-set cali4-ipset-3 src,src "+
+				"-m set ! --match-set cali40ipset-1 src,src "+
+				"-m set ! --match-set cali40ipset-2 src,src "+
+				"-m set ! --match-set cali40ipset-3 src,src "+
 				"--jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
@@ -683,7 +683,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				NotDstNamedPortIpSetIds: []string{"ipset-1"},
 			},
 			"-A test -p tcp -m multiport ! --destination-ports 1:2 "+
-				"-m set ! --match-set cali4-ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+				"-m set ! --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
 		namedPortEntry(
@@ -705,9 +705,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p udp "+
 				"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
 				"-m multiport ! --destination-ports 15:16 "+ // Overflow to new multiport.
-				"-m set ! --match-set cali4-ipset-1 dst,dst "+
-				"-m set ! --match-set cali4-ipset-2 dst,dst "+
-				"-m set ! --match-set cali4-ipset-3 dst,dst "+
+				"-m set ! --match-set cali40ipset-1 dst,dst "+
+				"-m set ! --match-set cali40ipset-2 dst,dst "+
+				"-m set ! --match-set cali40ipset-3 dst,dst "+
 				"--jump MARK --set-mark 0x80/0x80",
 			returnRule,
 		),
@@ -733,9 +733,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			clearBothMarksRule,
 			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
 			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
 			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,
@@ -781,11 +781,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Positive source port match block.
 			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
 			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
-			"-A test -m set --match-set cali4-ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 
 			// Positive destination port match block..
 			"-A test -p tcp -m multiport --destination-ports 2:3 --jump MARK --set-mark 0x400/0x400",
-			"-A test -m set --match-set cali4-ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,
 
 			// Positive sroiuce CIDRs.
@@ -809,9 +809,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// Negative port matches can be inlined into the main rule.
 			"-A test -p tcp "+
 				"-m multiport ! --source-ports 101 "+
-				"-m set ! --match-set cali4-ipset-3 src,src "+
+				"-m set ! --match-set cali40ipset-3 src,src "+
 				"-m multiport ! --destination-ports 201 "+
-				"-m set ! --match-set cali4-ipset-4 dst,dst "+
+				"-m set ! --match-set cali40ipset-4 dst,dst "+
 				"-m mark --mark 0x200/0x200 "+
 				"--jump MARK --set-mark 0x80/0x80",
 			returnRule,
