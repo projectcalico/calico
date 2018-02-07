@@ -6,7 +6,7 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
-  version: v3.2.7
+  version: v3.3.0
   subpackages:
   - client
   - pkg/transport
@@ -18,6 +18,7 @@ import:
 - package: github.com/kelseyhightower/envconfig
   version: ^1.3.0
 - package: golang.org/x/net
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
   - context
 - package: gopkg.in/go-playground/validator.v8
@@ -26,7 +27,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
+  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -43,7 +44,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 7d6db7cabab2f9a930ba1b3e61e360fe11154898
+  version: 0a439d7a2542d29743ac487e91b8d9467eb1ab6d
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
