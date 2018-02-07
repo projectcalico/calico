@@ -245,7 +245,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Parse endpoint labels passed in by Mesos, and store in a map.
 			labels := map[string]string{}
 			for _, label := range conf.Args.Mesos.NetworkInfo.Labels.Labels {
-				labels[label.Key] = label.Value
+				// Sanitize mesos labels so that they pass the k8s label validation,
+				// as mesos labels accept any unicode value.
+				k := utils.SanitizeMesosLabel(label.Key)
+				v := utils.SanitizeMesosLabel(label.Value)
+
+				labels[k] = v
 			}
 
 			// 2) Create the endpoint object
