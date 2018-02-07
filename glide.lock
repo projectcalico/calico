@@ -1,5 +1,5 @@
-hash: 5fc44c9fb3daef40e013ec72ba1509b54a68e5d66188a9a36271241758fefa45
-updated: 2018-02-02T13:45:10.666984082-08:00
+hash: 8a7da27ca6c3f50bbd7ae7eee9f0ef533b90f6bffb0e531bb8d6c752dee5fe5e
+updated: 2018-02-06T22:05:48.252531678Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -20,7 +20,7 @@ imports:
 - name: github.com/BurntSushi/toml
   version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
 - name: github.com/coreos/etcd
-  version: bb66589f8cf18960c7f3d56b1b83753caeed9c7a
+  version: c23606781f63d09917a1e7abfcefeb337a9608ea
   subpackages:
   - auth/authpb
   - clientv3
@@ -29,6 +29,7 @@ imports:
   - mvcc/mvccpb
   - pkg/tlsutil
   - pkg/transport
+  - pkg/types
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
@@ -54,7 +55,9 @@ imports:
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
+  - gogoproto
   - proto
+  - protoc-gen-gogo/descriptor
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
@@ -128,7 +131,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d2fe70a7fc26fff6b08f2f91214cd129ec12426e
+  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -168,17 +171,17 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: f98634e408857669d61064b283c4cde240622865
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -192,23 +195,20 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
   - context
   - context/ctxhttp
-  - html
-  - html/atom
   - http2
   - http2/hpack
   - idna
   - internal/timeseries
   - lex/httplex
   - trace
-  - websocket
 - name: golang.org/x/oauth2
   version: a6bd8cefa1811bd24b86f8902872e4e8225f74c4
   subpackages:
@@ -217,9 +217,10 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: e48874b42435b4347fc52bdee0424a52abc974d7
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -246,18 +247,29 @@ imports:
   - internal/remote_api
   - internal/urlfetch
   - urlfetch
-- name: google.golang.org/grpc
-  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
+- name: google.golang.org/genproto
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
+  - googleapis/rpc/status
+- name: google.golang.org/grpc
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
+  subpackages:
+  - balancer
   - codes
+  - connectivity
   - credentials
+  - grpclb/grpc_lb_v1/messages
   - grpclog
+  - health
+  - health/grpc_health_v1
   - internal
   - keepalive
   - metadata
   - naming
   - peer
+  - resolver
   - stats
+  - status
   - tap
   - transport
 - name: gopkg.in/go-playground/validator.v8
