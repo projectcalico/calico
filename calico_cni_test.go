@@ -281,6 +281,130 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})
+
+		Context("Mesos Labels", func() {
+			It("applies mesos labels", func() {
+				netconf := fmt.Sprintf(`
+				{
+				  "cniVersion": "%s",
+				  "name": "net1",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "hostname": "namedHostname",
+				  "ipam": {
+					"type": "host-local",
+					"subnet": "10.0.0.0/8"
+				  },
+				  "args": {
+					"org.apache.mesos": {
+					  "network_info": {
+						"labels": {
+						  "labels": [
+							{
+							  "key": "k",
+							  "value": "v"
+							}
+						  ]
+						}
+					  }
+					}
+				  }
+				}`, cniVersion, os.Getenv("ETCD_IP"))
+
+				containerID, session, _, _, _, contNs, err := CreateContainer(netconf, "", "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				result, err := GetResultForCurrent(session, cniVersion)
+				if err != nil {
+					log.Fatalf("Error getting result from the session: %v\n", err)
+				}
+
+				log.Printf("Unmarshalled result: %v\n", result)
+
+				// The endpoint is created in etcd
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+
+				// Set the Revision to nil since we can't assert it's exact value.
+				endpoints.Items[0].Metadata.Revision = nil
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:             "namedHostname",
+					Name:             "eth0",
+					Workload:         containerID,
+					ActiveInstanceID: "",
+					Orchestrator:     "cni",
+					Labels: map[string]string{
+						"k": "v",
+					},
+				}))
+
+				_, err = DeleteContainer(netconf, contNs.Path(), "")
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+
+			It("sanitizes mesos labels", func() {
+				netconf := fmt.Sprintf(`
+				{
+				  "cniVersion": "%s",
+				  "name": "net1",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "hostname": "namedHostname",
+				  "ipam": {
+					"type": "host-local",
+					"subnet": "10.0.0.0/8"
+				  },
+				  "args": {
+					"org.apache.mesos": {
+					  "network_info": {
+						"labels": {
+						  "labels": [
+							{
+							  "key": "DCOS_SPACE",
+							  "value": "/a/b/c"
+							}
+						  ]
+						}
+					  }
+					}
+				  }
+				}`, cniVersion, os.Getenv("ETCD_IP"))
+
+				containerID, session, _, _, _, contNs, err := CreateContainer(netconf, "", "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				result, err := GetResultForCurrent(session, cniVersion)
+				if err != nil {
+					log.Fatalf("Error getting result from the session: %v\n", err)
+				}
+
+				log.Printf("Unmarshalled result: %v\n", result)
+
+				// The endpoint is created in etcd
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+
+				// Set the Revision to nil since we can't assert it's exact value.
+				endpoints.Items[0].Metadata.Revision = nil
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:             "namedHostname",
+					Name:             "eth0",
+					Workload:         containerID,
+					ActiveInstanceID: "",
+					Orchestrator:     "cni",
+					Labels: map[string]string{
+						"DCOS_SPACE": "a.b.c",
+					},
+				}))
+
+				_, err = DeleteContainer(netconf, contNs.Path(), "")
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
 	})
 
 	Describe("Run Calico CNI plugin", func() {
