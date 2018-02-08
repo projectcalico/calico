@@ -154,6 +154,32 @@ func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*current.Result, error)
 	return result, nil
 }
 
+// SanitizeMesosLabel converts a string from a valid mesos label to a valid Calico label.
+// Mesos labels have no restriction outside of being unicode.
+func SanitizeMesosLabel(s string) string {
+	// Inspired by:
+	// https://github.com/projectcalico/libcalico-go/blob/2ff29bed865c4b364d4fcf1ad214b2bd8d9b4afa/lib/upgrade/converters/names.go#L39-L58
+	invalidChar := regexp.MustCompile("[^-_.a-zA-Z0-9]+")
+	dotDashSeq := regexp.MustCompile("[.-]*[.][.-]*")
+	trailingLeadingDotsDashes := regexp.MustCompile("^[.-]*(.*?)[.-]*$")
+
+	// -  Convert [/] to .
+	s = strings.Replace(s, "/", ".", -1)
+
+	// -  Convert any other invalid chars
+	s = invalidChar.ReplaceAllString(s, "-")
+
+	// Convert any multi-byte sequence of [-.] with at least one [.] to a single .
+	s = dotDashSeq.ReplaceAllString(s, ".")
+
+	// Extract the trailing and leading dots and dashes.   This should always match even if
+	// the matched substring is empty.  The second item in the returned submatch
+	// slice is the captured match group.
+	submatches := trailingLeadingDotsDashes.FindStringSubmatch(s)
+	s = submatches[1]
+	return s
+}
+
 func GetIdentifiers(args *skel.CmdArgs) (workloadID string, orchestratorID string, err error) {
 	// Determine if running under k8s by checking the CNI args
 	k8sArgs := K8sArgs{}
