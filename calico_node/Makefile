@@ -13,8 +13,8 @@ ifeq ($(ARCH),ppc64le)
 	GO_BUILD_VER?=latest
 endif
 ###############################################################################
-# vX.Y format: update during major release process
-RELEASE_STREAM ?= v3.0
+# vX.Y format: redefine during a release, e.g. "RELEASE_STREAM=v3.1 make release"
+RELEASE_STREAM ?= master
 
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
