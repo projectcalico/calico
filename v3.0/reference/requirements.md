@@ -1,5 +1,6 @@
 ---
 title: Calico System Requirements
+canonical_url: https://docs.projectcalico.org/v3.0/reference/requirements
 redirect_from: latest/reference/requirements
 ---
 

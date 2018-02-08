@@ -1,5 +1,6 @@
 ---
 title: Configuring BGP Peers
+canonical_url: https://docs.projectcalico.org/v3.0/usage/configuration/bgp
 redirect_from: latest/usage/configuration/bgp
 ---
 

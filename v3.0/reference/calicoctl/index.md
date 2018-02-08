@@ -1,5 +1,6 @@
 ---
 title: calicoctl user reference
+canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/
 redirect_from: latest/reference/calicoctl/index
 ---
 

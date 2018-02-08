@@ -1,5 +1,6 @@
 ---
 title: Configuring a Node IP Address and Subnet
+canonical_url: https://docs.projectcalico.org/v3.0/usage/configuration/node
 redirect_from: latest/usage/configuration/node
 ---
 

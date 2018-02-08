@@ -1,5 +1,6 @@
 ---
 title: Installing Calico on OpenShift
+canonical_url: https://docs.projectcalico.org/v3.0/getting-started/openshift/installation
 redirect_from: latest/getting-started/openshift/installation
 ---
 

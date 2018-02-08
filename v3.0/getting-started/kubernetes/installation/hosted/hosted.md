@@ -1,5 +1,6 @@
 ---
 title: Standard Hosted Install
+canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/hosted
 redirect_from: latest/getting-started/kubernetes/installation/hosted/hosted
 ---
 

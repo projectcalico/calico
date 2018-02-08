@@ -1,5 +1,6 @@
 ---
 title: Migrating Calico data
+canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/migrate
 redirect_from: latest/getting-started/kubernetes/upgrade/migrate
 ---
 

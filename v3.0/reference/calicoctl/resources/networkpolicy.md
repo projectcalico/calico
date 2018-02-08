@@ -1,5 +1,6 @@
 ---
 title: Network Policy Resource (NetworkPolicy)
+canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy
 redirect_from: latest/reference/calicoctl/resources/networkpolicy
 ---
 

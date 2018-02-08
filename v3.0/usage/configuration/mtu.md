@@ -1,5 +1,6 @@
 ---
 title: Configuring MTU
+canonical_url: https://docs.projectcalico.org/v3.0/usage/configuration/mtu
 redirect_from: latest/usage/configuration/mtu
 ---
 
