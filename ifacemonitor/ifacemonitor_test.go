@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -134,7 +136,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 
 	// Build the update.
 	update := netlink.LinkUpdate{
-		Header: syscall.NlMsghdr{
+		Header: unix.NlMsghdr{
 			Type: msgType,
 		},
 		Link: &netlink.Dummy{
