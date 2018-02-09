@@ -1150,13 +1150,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("Applying a non-existent Node BGP Peer", func() {
 			var err error
-			kvpRes, err = c.Apply(kvp2a)
+			kvpRes, err = c.Apply(ctx, kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Updating the Node BGP Peer created by Apply", func() {
 			kvp2b.Revision = kvpRes.Revision
-			_, err := c.Apply(kvp2b)
+			_, err := c.Apply(ctx, kvp2b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1597,7 +1597,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			}
 			updFC.Value = val
-			updFC, err = c.Apply(updFC)
+			updFC, err = c.Apply(ctx, updFC)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("somenewprefix-"))
 		})
@@ -1629,7 +1629,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		By("applying a new object", func() {
 			// Revision should not be specified when creating.
 			fc.Revision = ""
-			updFC, err = c.Apply(fc)
+			updFC, err = c.Apply(ctx, fc)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec).To(Equal(fc.Value.(*apiv3.FelixConfiguration).Spec))
 		})

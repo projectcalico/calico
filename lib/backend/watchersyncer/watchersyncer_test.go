@@ -910,7 +910,7 @@ func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.K
 	panic("should not be called")
 	return nil, nil
 }
-func (c *fakeClient) Apply(object *model.KVPair) (*model.KVPair, error) {
+func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil
 }

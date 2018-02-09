@@ -203,7 +203,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 // by performing a Get/Create or Update to ensure we don't lose certain read-only Metadata.
 // It's possible that we will just perform that processing in the clients (e.g. calicoctl),
 // but that is to be decided.
-func (c *etcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
+func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
 	key, value, err := getKeyValueStrings(d)
@@ -211,8 +211,13 @@ func (c *etcdV3Client) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return nil, err
 	}
 
+	putOpts, err := c.getTTLOption(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+
 	logCxt.Debug("Performing etcdv3 Put for Apply request")
-	resp, err := c.etcdClient.Put(context.Background(), key, value)
+	resp, err := c.etcdClient.Put(ctx, key, value, putOpts...)
 	if err != nil {
 		logCxt.WithError(err).Warning("Apply failed")
 		return nil, cerrors.ErrorDatastoreError{Err: err}

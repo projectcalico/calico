@@ -773,7 +773,7 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 		// Compare and swap the handle using the KVPair from above.  We've been
 		// manipulating the structure in the KVPair, so pass straight back to
 		// apply the changes.
-		_, err = c.client.Apply(obj)
+		_, err = c.client.Apply(ctx, obj)
 		if err != nil {
 			continue
 		}
@@ -872,7 +872,7 @@ func (c ipamClient) SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error {
 		Key:   model.IPAMConfigKey{},
 		Value: c.convertIPAMConfigToBackend(&cfg),
 	}
-	_, err = c.client.Apply(&obj)
+	_, err = c.client.Apply(ctx, &obj)
 	if err != nil {
 		log.Errorf("Error applying IPAMConfig: %v", err)
 		return err

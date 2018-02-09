@@ -122,7 +122,7 @@ func (c *networkPolicyClient) Update(ctx context.Context, kvp *model.KVPair) (*m
 	return kvp, err
 }
 
-func (c *networkPolicyClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *networkPolicyClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
 		Operation:  "Apply",

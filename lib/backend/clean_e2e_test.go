@@ -16,6 +16,7 @@ package backend_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -85,6 +86,43 @@ var _ = testutils.E2eDatastoreDescribe("Backend API tests", testutils.DatastoreE
 			clean, err = isCleanIf.IsClean()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(clean).To(BeTrue())
+		})
+	})
+
+	Describe("Test Apply() with TTL", func() {
+		It("should time out", func() {
+			c, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Applying a status report with TTL")
+			statusReport := model.StatusReport{
+				Timestamp:     "5 past 3",
+				UptimeSeconds: 10,
+				FirstUpdate:   true,
+			}
+			kv := model.KVPair{
+				Key:   model.ActiveStatusReportKey{Hostname: "host1"},
+				Value: &statusReport,
+				TTL:   1 * time.Second,
+			}
+			ctx := context.Background()
+
+			// Apply key/value with a TTL.
+			_, err = c.Apply(ctx, &kv)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Read it back immediately, and check.
+			kvGet, err := c.Get(ctx, kv.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvGet.Key).To(Equal(kv.Key))
+			Expect(kvGet.Value).To(Equal(kv.Value))
+
+			// Expect new Gets to start failing, within 10s, because the KV has timed
+			// out and been removed.
+			Eventually(func() error {
+				_, err := c.Get(ctx, kv.Key, "")
+				return err
+			}, "10s", "1s").Should(HaveOccurred())
 		})
 	})
 })

@@ -73,7 +73,7 @@ type Client interface {
 	// Apply updates or creates the object specified in the KVPair.
 	// On success, returns a KVPair for the object with revision
 	// information filled-in.  Revision information is ignored on an Apply.
-	Apply(object *model.KVPair) (*model.KVPair, error)
+	Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 
 	// Delete removes the object specified by the KVPair.  If the KVPair
 	// contains revision information, the delete only succeeds if the

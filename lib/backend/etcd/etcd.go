@@ -169,7 +169,7 @@ func (c *EtcdClient) Update(d *model.KVPair) (*model.KVPair, error) {
 
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
-func (c *EtcdClient) Apply(d *model.KVPair) (*model.KVPair, error) {
+func (c *EtcdClient) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	return c.set(d, etcdApplyOpts)
 }
 
