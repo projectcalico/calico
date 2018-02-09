@@ -1,4 +1,83 @@
 v3.0:
+- title: v3.0.2
+  note: |
+    09 February 2018
+    
+    > **Important**: [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade. 
+    > You must upgrade to Calico v2.6.5 or later before you can upgrade to Calico v3.0.2.
+    {: .alert .alert-danger}
+
+    #### Bug Fixes 
+    
+    - Fixed a bug where Calico would silently lose its connection to etcd and never recover when the etcd server was terminated. [libcalico-go #780](https://github.com/projectcalico/libcalico-go/pull/780) (@caseydavenport)
+
+    - Fixed a bug when multiple nodes are restarted simultaneously and swap IP addresses [calico #1681](https://github.com/projectcalico/calico/pull/1681) (@caseydavenport)
+
+    - Fixed a route scan issue where upon startup bird did not notice that tunneled routes needed to be updated to be non-tunneled. [calico #1679](https://github.com/projectcalico/calico/pull/1679) (@caseydavenport)
+
+    - Enable Kubernetes node references for automatic cleanup of Node resources in etcd. [calico #1678](https://github.com/projectcalico/calico/pull/1678) (@caseydavenport)
+
+    - Fixed a panic when BGP is disabled. [calico #1674](https://github.com/projectcalico/calico/pull/1674) (@tmjd)
+
+    - Kubernetes self-hosted manifests now enable BGP IP address auto-detection by default. [calico #1588](https://github.com/projectcalico/calico/pull/1588) (@caseydavenport)
+    
+
+    #### Limitations
+
+    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the 
+      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
+      and are not supported. (Calico still supports Docker and rkt containers.) 
+      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker 
+      orchestrators in a future release.
+
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
+      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
+      for more information. We plan to resume support for GoBPG in a future release.
+    
+    - **Route reflectors cannot be clustered**: We plan to resume support for
+      this in a future release.
+
+  components:
+    felix:
+      version: 3.0.2
+      url: https://github.com/projectcalico/felix/releases/tag/3.0.2
+    typha:
+      version: v0.6.1
+      url: https://github.com/projectcalico/typha/releases/tag/v0.6.1
+    calicoctl:
+      version: v2.0.0
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.0.0
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.0.0/calicoctl
+    calico/node:
+      version: v3.0.2
+      url: https://github.com/projectcalico/calico/releases/tag/v3.0.2
+    calico/cni:
+      version: v2.0.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.0.0
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
+    calico/kube-controllers:
+      version: v2.0.0
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0
+    confd:
+      version: v1.0.1
+      url: https://github.com/projectcalico/confd/releases/tag/v1.0.1
+    calico-bird:
+      version: v0.3.2
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
+    calico/routereflector:
+      version: v0.5.0
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    networking-calico:
+      version: 1.4.3
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
+
 - title: v3.0.1
   note: |
     22 December 2017
