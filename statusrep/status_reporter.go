@@ -319,7 +319,9 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(ctx context.Context, epID
 		case model.WorkloadEndpointStatusKey:
 			kv.Value = &model.WorkloadEndpointStatus{status}
 		}
-		_, err = esr.datastore.Apply(ctx, &kv)
+		applyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, err = esr.datastore.Apply(applyCtx, &kv)
+		cancel()
 	} else {
 		logCxt.Info("Deleting endpoint status")
 		_, err = esr.datastore.Delete(ctx, epID, "")

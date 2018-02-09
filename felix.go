@@ -819,7 +819,9 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		Value: &statusReport,
 		TTL:   fc.config.ReportingTTLSecs,
 	}
-	_, err := fc.datastore.Apply(ctx, &kv)
+	applyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	_, err := fc.datastore.Apply(applyCtx, &kv)
+	cancel()
 	if err != nil {
 		log.Warningf("Failed to write status to datastore: %v", err)
 	} else {
@@ -829,7 +831,9 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		Key:   model.LastStatusReportKey{Hostname: fc.config.FelixHostname},
 		Value: &statusReport,
 	}
-	_, err = fc.datastore.Apply(ctx, &kv)
+	applyCtx, cancel = context.WithTimeout(ctx, 2*time.Second)
+	_, err = fc.datastore.Apply(applyCtx, &kv)
+	cancel()
 	if err != nil {
 		log.Warningf("Failed to write status to datastore: %v", err)
 	}
