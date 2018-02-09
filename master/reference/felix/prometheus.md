@@ -107,3 +107,11 @@ include:
 | `process_resident_memory_bytes` | Resident memory size in bytes. |
 | `process_start_time_seconds` | Start time of the process since unix epoch in seconds. |
 | `process_virtual_memory_bytes` | Virtual memory size in bytes. |
+
+## Grafana Dashboard
+
+A sample dashboard is provided by the Community to visualize some of the metrics from Felix.
+
+Download: [`grafana-dashboard.json`](grafana-dashboard.json)
+
+![Grafana dashboard]({{site.baseurl}}/images/grafana-dashboard.png)
