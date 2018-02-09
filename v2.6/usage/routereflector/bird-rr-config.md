@@ -3,17 +3,17 @@ title: 'Configuring BIRD as a BGP Route Reflector'
 canonical_url: 'https://docs.projectcalico.org/v3.0/usage/routereflector/bird-rr-config'
 ---
 
-For many Calico deployments, the use of a route reflector is not required. 
+For many Calico deployments, the use of a route reflector is not required.
 However, for large scale deployments a full mesh of BGP peerings between each
 of your Calico nodes may become untenable.  In this case, route reflectors
 allow you to remove the full mesh and scale up the size of the cluster.
 
 These instructions will take you through installing BIRD as a BGP route
 reflector, and updating your other BIRD instances to speak to your new
-route reflector.  The instructions are valid for both Ubuntu and Red Hat 
-Enterprise Linux (RHEL).  
+route reflector.  The instructions are valid for both Ubuntu and Red Hat
+Enterprise Linux (RHEL).
 
-For a container-based deployment, using the `{{site.nodecontainer}}` container, check 
+For a container-based deployment, using the `{{site.nodecontainer}}` container, check
 out the [{{site.prodname}} BIRD route reflector container](calico-routereflector).
 
 ## Prerequisites
@@ -48,10 +48,10 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
 > or prefix them with `sudo`.
 {: .alert .alert-info}
 
-1. From a terminal prompt, create a new file called bird.repo in the 
+1. From a terminal prompt, create a new file called bird.repo in the
    `/etc/yum.repos.d/` directory.
 
-   ```bash 
+   ```bash
    vi /etc/yum.repos.d/bird.repo
    ```
 
@@ -68,32 +68,32 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
 
 1. Save and close the file.
 
-1. If you don't already have the `/pki/rpm-gpg/` directory, use the following command
+1. If you don't already have the `/etc/pki/rpm-gpg/` directory, use the following command
    to create it.
-   
+
    ```bash
-   mkdir /etc/pki/ /etc/pki/rpm-gpg/
+   mkdir -p /etc/pki/rpm-gpg/
    ```
-   
+
 1. Download the public key of the BIRD repository into the `/etc/pki/rpm-gpg/` directory.
-   
+
    ```bash
    curl ftp://bird.network.cz/pub/bird/redhat/RPM-GPG-KEY-network.cz -o /etc/pki/rpm-gpg/RPM-GPG-KEY-network.cz
    ```
-   
+
    > **Tip**: If you don't have curl, try replacing `curl` with `wget` in the command.
    {: .alert .alert-success}
-   
+
 1. Use the following command to install BIRD.
 
    ```bash
    yum install -y bird
    ```
-   
-> **Note**: We do not recommend installing [Extra Packages for Enterprise Linux (EPEL)](https://fedoraproject.org/wiki/EPEL). 
-> EPEL lacks official Red Hat support. It contains the BIRD package, but it also contains 
+
+> **Note**: We do not recommend installing [Extra Packages for Enterprise Linux (EPEL)](https://fedoraproject.org/wiki/EPEL).
+> EPEL lacks official Red Hat support. It contains the BIRD package, but it also contains
 > other packages. Installing EPEL may cause existing packages on your system to
-> be overwritten with unsupported packages. To avoid issues of this kind, we recommend 
+> be overwritten with unsupported packages. To avoid issues of this kind, we recommend
 > using the method described above.
 {: .alert .alert-info}
 
@@ -183,7 +183,7 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
     systemctl restart bird6
     systemctl enable bird6
 
-### Step 5: Reconfigure compute nodes 
+### Step 5: Reconfigure compute nodes
 
 #### Openstack deployments
 
@@ -200,7 +200,7 @@ instances as detailed in step 4.
 
 #### Container-based deployments
 
-For container-based deployments using the `{{site.nodecontainer}}` container, use 
+For container-based deployments using the `{{site.nodecontainer}}` container, use
 `calicoctl` to disable the full mesh between each node and configure the
 route reflector as a global peer.
 
