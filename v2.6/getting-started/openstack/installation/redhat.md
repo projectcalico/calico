@@ -1,13 +1,13 @@
 ---
-title: Red Hat Enterprise Linux 7 Packaged Install Instructions
+title: Red Hat Enterprise Linux packaged install
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/redhat'
 ---
 
-For this version of Calico, with OpenStack on RHEL 7 or CentOS 7, we recommend
+For this version of {{site.prodname}}, with OpenStack on RHEL or CentOS, we recommend
 using OpenStack Liberty or later.
 
 > **Note**: On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
-> [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks Calico
+> [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks {{site.prodname}}
 > operation. You can avoid this bug by:
 >
 > - Using Newton or later (recommended), or
@@ -16,19 +16,19 @@ using OpenStack Liberty or later.
 >   install on each compute node.
 {: .alert .alert-info}
 
-These instructions will take you through a first-time install of Calico.  If
-you are upgrading an existing system, please see the [Calico on OpenStack
+These instructions will take you through a first-time install of {{site.prodname}}.  If
+you are upgrading an existing system, please see the [{{site.prodname}} on OpenStack
 upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
 document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
-control nodes to use Calico, and upgrading compute nodes to use Calico.
-Follow the **Common Steps** on each node before moving on to the
+control nodes to use {{site.prodname}}, and upgrading compute nodes to use {{site.prodname}}.
+Follow the [Common Steps](#common-steps) on each node before moving on to the
 specific instructions in the control and compute sections. If you want
 to create a combined control and compute node, work through all three
 sections.
 
-> **Important**: Following the upgrade to use etcd as a data store, Calico
+> **Important**: Following the upgrade to use etcd as a data store, {{site.prodname}}
 > currently only supports RHEL 7 and above. If support on RHEL 6.x
 > or other versions of Linux is important to you, then please [let
 > us know](https://www.projectcalico.org/contact/).
@@ -40,14 +40,14 @@ sections.
 
 Before starting this you will need the following:
 
--   One or more machines running RHEL 7, with OpenStack installed.
+-   One or more machines running RHEL, with OpenStack installed.
 -   SSH access to these machines.
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
 
 ## Common Steps
 
-Some steps need to be taken on all machines being installed with Calico.
+Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
 ### Install OpenStack
@@ -62,7 +62,7 @@ networking.
 Add the EPEL repository -- see <https://fedoraproject.org/wiki/EPEL>.
 You may have already added this to install OpenStack.
 
-Configure the Calico repository:
+Configure the {{site.prodname}} repository:
 
 ```
     cat > /etc/yum.repos.d/calico.repo <<EOF
@@ -77,9 +77,9 @@ Configure the Calico repository:
     EOF
 ```
 
-## Etcd Install
+## etcd install
 
-Calico requires an etcd database to operate - this may be installed on a
+{{site.prodname}} requires an etcd database to operate—this may be installed on a
 single machine or as a cluster.
 
 These instructions cover installing a single node etcd database. You may
@@ -182,7 +182,7 @@ through the process.
     systemctl enable etcd
     ```
 
-## Etcd Proxy Install
+## etcd proxy install
 
 Install an etcd proxy on every node running OpenStack services that
 isn't running the etcd database itself (both control and compute nodes).
@@ -247,7 +247,7 @@ isn't running the etcd database itself (both control and compute nodes).
     systemctl enable etcd
     ```
 
-## Control Node Install
+## Control node install
 
 On each control node, perform the following steps:
 
@@ -261,7 +261,7 @@ On each control node, perform the following steps:
     > need to be deleted from the Admin section.
     {: .alert .alert-success}
 
-    > **Important**: The Calico install will fail if incompatible state is
+    > **Important**: The {{site.prodname}} install will fail if incompatible state is
     > left around.
     {: .alert .alert-danger}
 
@@ -281,7 +281,7 @@ On each control node, perform the following steps:
     service neutron-server restart
     ```
 
-## Compute Node Install
+## Compute node install
 
 On each compute node, perform the following steps:
 
@@ -346,20 +346,20 @@ On each compute node, perform the following steps:
     service openstack-nova-compute restart
     ```
 
-    If this node is also a controller, additionally restart nova-api:
+    If this node is also a controller, additionally restart nova-api.
 
     ```
     service openstack-nova-api restart
     ```
 
-3.  If they're running, stop the Open vSwitch services:
+3.  If they're running, stop the Open vSwitch services.
 
     ```
     service neutron-openvswitch-agent stop
     service openvswitch stop
     ```
 
-    Then, prevent the services running if you reboot:
+    Then, prevent the services running if you reboot.
 
     ```
     chkconfig openvswitch off
@@ -367,27 +367,27 @@ On each compute node, perform the following steps:
     ```
 
     Then, on your control node, run the following command to find the
-    agents that you just stopped:
+    agents that you just stopped.
 
     ```
     neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
-    control node, replacing `<agent-id>` with the ID of the agent:
+    control node, replacing `<agent-id>` with the ID of the agent.
 
     ```
     neutron agent-delete <agent-id>
     ```
 
-5.  Install Neutron infrastructure code on the compute host:
+5.  Install Neutron infrastructure code on the compute host.
 
     ```
     yum install openstack-neutron
     ```
 
 6.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
-    ensure that the `lock_path` variable is uncommented and set as follows:
+    ensure that the `lock_path` variable is uncommented and set as follows.
 
     ```
     # Directory to use for lock files. For security, the specified directory should
@@ -398,8 +398,8 @@ On each compute node, perform the following steps:
     ```
 
     Then, stop and disable the Neutron DHCP agent, and install the
-    Calico DHCP agent (which uses etcd, allowing it to scale to higher
-    numbers of hosts):
+    {{site.prodname}} DHCP agent (which uses etcd, allowing it to scale to higher
+    numbers of hosts).
 
     ```
     service neutron-dhcp-agent stop
@@ -409,7 +409,7 @@ On each compute node, perform the following steps:
 
 7.  Stop and disable any other routing/bridging agents such as the L3
     routing agent or the Linux bridging agent. These conflict
-    with Calico.
+    with {{site.prodname}}.
 
     ```
     service neutron-l3-agent stop
@@ -427,19 +427,19 @@ On each compute node, perform the following steps:
     chkconfig openstack-nova-metadata-api on
     ```
 
-9.  Install the BIRD BGP client from EPEL:
+9.  Install the BIRD BGP client.
 
     ```
     yum install -y bird bird6
     ```
 
-10. Install the `calico-compute` package:
+10. Install the `calico-compute` package.
 
     ```
     yum install calico-compute
     ```
 
-11. Configure BIRD. By default Calico assumes that you'll be deploying a
+11. Configure BIRD. By default {{site.prodname}} assumes that you'll be deploying a
     route reflector to avoid the need for a full BGP mesh. To this end,
     it includes useful configuration scripts that will prepare a BIRD
     config file with a single peering to the route reflector. If that's
@@ -461,14 +461,14 @@ On each compute node, perform the following steps:
     Note that you'll also need to configure your route reflector to
     allow connections from the compute node as a route reflector client.
     If you are using BIRD as a route reflector, follow the instructions
-    in [this document]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If you are using another route reflector, refer
+    in [Configuring BIRD as a BGP route reflector]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If you are using another route reflector, refer
     to the appropriate instructions to configure a client connection.
 
     If you *are* configuring a full BGP mesh you'll need to handle the
     BGP configuration appropriately on each compute host. The scripts
     above can be used to generate a sample configuration for BIRD, by
     replacing the `<route_reflector_ip>` with the IP of one other
-    compute host -- this will generate the configuration for a single
+    compute host—this will generate the configuration for a single
     peer connection, which you can duplicate and update for each compute
     host in your mesh.
 
@@ -480,7 +480,7 @@ On each compute node, perform the following steps:
     -   Add KillSignal=SIGKILL as a new line in the \[Service\] section.
 
     Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on
-    reboot:
+    reboot.
 
     ```
     service bird restart
@@ -493,7 +493,7 @@ On each compute node, perform the following steps:
     `/etc/calico/felix.cfg.example`. Ordinarily the default values
     should be used, but see [Configuration]({{site.baseurl}}/{{page.version}}/getting-started/openstack/) for more details.
 
-13. Restart the Felix service:
+13. Restart the Felix service.
 
     ```
     systemctl restart calico-felix
