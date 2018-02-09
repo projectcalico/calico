@@ -1,5 +1,5 @@
-hash: 7d8df3f6c84908105e8bb5b21f7e3d3ef00b9d005b0c383d00d1e4cde7cf02ad
-updated: 2018-02-06T14:25:08.07041097-08:00
+hash: 48b9f1cbc93ee638f0c3e36a62e900fdd48366e53a85b2ca166995ca3bd4f919
+updated: 2018-02-09T14:50:24.755409597Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -201,7 +201,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
+  version: 13d015d6433fd53fb260dc2b3ab50340c34f5749
   subpackages:
   - lib
   - lib/apiconfig
@@ -240,7 +240,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 0a439d7a2542d29743ac487e91b8d9467eb1ab6d
+  version: 4ab01481018b09155c39708a81165a01c5277c4b
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -251,11 +251,11 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 89604d197083d4781071d3c65855d24ecfb0a563
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -275,15 +275,15 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: d35d6b58e1cb692b27b94fc403170bf44058ac3e
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 5119cf507ed5294cc409c092980c7497ee5d6fd2
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -338,7 +338,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
+  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
   subpackages:
   - internal
   - internal/app_identity

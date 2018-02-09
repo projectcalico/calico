@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 // See github.com/projectcalico/libcalico-go/lib/backend/api for more detail.
 type datastore interface {
 	List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
-	Apply(object *model.KVPair) (*model.KVPair, error)
+	Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 	Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
 }
 
@@ -319,7 +319,9 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(ctx context.Context, epID
 		case model.WorkloadEndpointStatusKey:
 			kv.Value = &model.WorkloadEndpointStatus{status}
 		}
-		_, err = esr.datastore.Apply(&kv)
+		applyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, err = esr.datastore.Apply(applyCtx, &kv)
+		cancel()
 	} else {
 		logCxt.Info("Deleting endpoint status")
 		_, err = esr.datastore.Delete(ctx, epID, "")

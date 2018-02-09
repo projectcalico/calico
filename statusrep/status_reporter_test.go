@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -537,7 +537,7 @@ func (d *mockDatastore) List(ctx context.Context, list model.ListInterface, revi
 	return &model.KVPairList{KVPairs: kvs}, nil
 }
 
-func (d *mockDatastore) Apply(object *model.KVPair) (*model.KVPair, error) {
+func (d *mockDatastore) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
