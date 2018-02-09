@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2016, 2018 Tigera, Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -237,10 +237,9 @@ class EtcdWatcher(EtcdClientOwner):
                 self.reconnect(copy_cluster_id=False)
                 self._on_pre_resync()
                 try:
-                    # Load initial dump from etcd.  First just get all the
-                    # endpoints and profiles by id.  The response contains a
-                    # generation ID allowing us to then start polling for
-                    # updates without missing any.
+                    # Get an initial snapshot of everything under the requested
+                    # <key_to_poll>.  The response contains a generation ID
+                    # allowing us to then poll for updates without missing any.
                     initial_dump = self.load_initial_dump()
                     _log.info("Loaded snapshot from etcd cluster %s, "
                               "processing it...",

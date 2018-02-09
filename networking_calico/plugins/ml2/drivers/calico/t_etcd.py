@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2015 Metaswitch Networks
+# Copyright (c) 2015, 2018 Metaswitch Networks
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -27,13 +27,16 @@ import uuid
 import weakref
 
 import etcd
+import eventlet
 from eventlet.semaphore import Semaphore
 
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import log
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v3
 from networking_calico import etcdutils
+from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
 
 
@@ -65,6 +68,7 @@ LOG = log.getLogger(__name__)
 # be refreshed.
 MASTER_REFRESH_INTERVAL = 10
 MASTER_TIMEOUT = 60
+WATCH_TIMEOUT_SECS = 10
 
 # Objects for lightly wrapping etcd return values for use in the mechanism
 # driver.
@@ -80,14 +84,15 @@ Profile = collections.namedtuple(
     'Profile',
     [
         'id',                   # Note: _without_ any OPENSTACK_SG_PREFIX.
-        'tags_modified_index',
-        'rules_modified_index',
-        'tags_data',
-        'rules_data',
+        'modified_index',
+        'spec',
     ]
 )
 Subnet = collections.namedtuple(
     'Subnet', ['id', 'modified_index', 'data']
+)
+Response = collections.namedtuple(
+    'Response', ['action', 'key', 'value']
 )
 
 
@@ -219,35 +224,14 @@ class CalicoTransportEtcd(object):
         return self.elector.master()
 
     @_handling_etcd_exceptions
-    def write_profile_to_etcd(self,
-                              profile,
-                              prev_rules_index=None,
-                              prev_tags_index=None):
-        """Write a single security profile into etcd."""
+    def write_profile_to_etcd(self, profile, mod_revision=None):
+        """Convert and write a SecurityProfile to etcdv3."""
         LOG.debug("Writing profile %s", profile)
-        etcd_profile_id = with_openstack_sg_prefix(profile.id)
-
-        # python-etcd is stupid about the prevIndex keyword argument, so we
-        # need to explicitly filter out None-y values ourselves.
-        rules_kwargs = {}
-        if prev_rules_index is not None:
-            rules_kwargs['prevIndex'] = prev_rules_index
-
-        tags_kwargs = {}
-        if prev_tags_index is not None:
-            tags_kwargs['prevIndex'] = prev_tags_index
-
-        self.client.write(
-            datamodel_v1.key_for_profile_rules(etcd_profile_id),
-            json.dumps(profile_rules(profile)),
-            **rules_kwargs
-        )
-
-        self.client.write(
-            datamodel_v1.key_for_profile_tags(etcd_profile_id),
-            json.dumps(profile_tags(profile)),
-            **tags_kwargs
-        )
+        name = with_openstack_sg_prefix(profile.id)
+        datamodel_v3.put("Profile",
+                         name,
+                         profile_spec(profile),
+                         mod_revision=mod_revision)
 
     @_handling_etcd_exceptions
     def subnet_created(self, subnet, prev_index=None):
@@ -268,7 +252,7 @@ class CalicoTransportEtcd(object):
     def subnet_deleted(self, subnet_id):
         """Delete data from etcd for a subnet that is no longer wanted."""
         LOG.info("Deleting subnet %s", subnet_id)
-        # Delete the etcd key for this endpoint.
+        # Delete the etcd key for this subnet.
         key = datamodel_v1.key_for_subnet(subnet_id)
         try:
             self.client.delete(key)
@@ -324,57 +308,108 @@ class CalicoTransportEtcd(object):
         """
         LOG.info("Providing Felix configuration")
 
-        # First create the ClusterGUID, if it is not already set.
-        cluster_guid_key = datamodel_v1.key_for_config('ClusterGUID')
-        try:
-            cluster_guid = self.client.read(cluster_guid_key).value
-            LOG.info('ClusterGUID is %s', cluster_guid)
-        except etcd.EtcdKeyNotFound:
-            # Generate and write a globally unique cluster GUID.  Write it
-            # idempotently into the datastore. The prevExist=False creates the
-            # value (safely with CaS) if it doesn't exist.
-            LOG.info('ClusterGUID not set yet (%s)', cluster_guid_key)
-            guid = uuid.uuid4()
-            guid_string = guid.get_hex()
+        rewrite_cluster_info = True
+        while rewrite_cluster_info:
+            # Get existing global ClusterInformation.  We will add to this,
+            # rather than trampling on anything that may already be there, and
+            # will also take care to avoid an overlapping write with some other
+            # orchestrator.
             try:
-                self.client.write(cluster_guid_key,
-                                  guid_string,
-                                  prevExist=False)
-            except etcd.EtcdAlreadyExist:
-                LOG.info('ClusterGUID is now set - another orchestrator or' +
-                         ' Neutron server instance must have just written it')
-                pass
+                cluster_info, ci_mod_revision = \
+                    datamodel_v3.get_with_mod_revision("ClusterInformation",
+                                                       "default")
+            except etcd.EtcdKeyNotFound:
+                cluster_info = {}
+                ci_mod_revision = 0
+            rewrite_cluster_info = False
+            LOG.info("Read ClusterInformation: %s", cluster_info)
 
-        # Read other config values that should exist.  We will write them only
-        # if they're not already (collectively) set as we want them.
-        prefix = None
-        reporting_enabled = None
-        ready = None
-        iface_pfx_key = datamodel_v1.key_for_config('InterfacePrefix')
-        reporting_key = datamodel_v1.key_for_config('EndpointReportingEnabled')
-        try:
-            prefix = self.client.read(iface_pfx_key).value
-            reporting_enabled = self.client.read(reporting_key).value
-            ready = self.client.read(datamodel_v1.READY_KEY).value
-        except etcd.EtcdKeyNotFound:
-            LOG.info('%s values are missing', datamodel_v1.CONFIG_DIR)
+            # Generate a cluster GUID if there isn't one already.
+            if not cluster_info.get(datamodel_v3.CLUSTER_GUID):
+                cluster_info[datamodel_v3.CLUSTER_GUID] = \
+                    uuid.uuid4().get_hex()
+                rewrite_cluster_info = True
 
-        prefixes = prefix.split(',') if prefix else []
-        if 'tap' not in prefixes:
-            prefixes.append('tap')
-        prefix_new = ','.join(prefixes)
+            # Add "openstack" to the cluster type, unless there already.
+            cluster_type = cluster_info.get(datamodel_v3.CLUSTER_TYPE, "")
+            if cluster_type:
+                if "openstack" not in cluster_type:
+                    cluster_info[datamodel_v3.CLUSTER_TYPE] = \
+                        cluster_type + ",openstack"
+                    rewrite_cluster_info = True
+            else:
+                cluster_info[datamodel_v3.CLUSTER_TYPE] = "openstack"
+                rewrite_cluster_info = True
 
-        # Now write the values that need writing.
-        if prefix != prefix_new:
-            LOG.info('%s -> %s', iface_pfx_key, prefix_new)
-            self.client.write(iface_pfx_key, prefix_new)
-        if reporting_enabled != "true":
-            LOG.info('%s -> true', reporting_key)
-            self.client.write(reporting_key, 'true')
-        if ready != 'true':
-            # TODO(nj) Set this flag only once we're really ready!
-            LOG.info('%s -> true', datamodel_v1.READY_KEY)
-            self.client.write(datamodel_v1.READY_KEY, 'true')
+            # Note, we don't touch the Calico version field here, as we don't
+            # know it.  (With other orchestrators, it is calico/node's
+            # responsibility to set the Calico version.  But we don't run
+            # calico/node in Calico for OpenStack.)
+
+            # Set the datastore to ready, if the datastore readiness state
+            # isn't already set at all.  This field is intentionally tri-state,
+            # i.e. it can be explicitly True, explicitly False, or not set.  If
+            # it has been set explicitly to False, that is probably because
+            # another orchestrator is doing an upgrade or wants for some other
+            # reason to suspend processing of the Calico datastore.
+            if datamodel_v3.DATASTORE_READY not in cluster_info:
+                cluster_info[datamodel_v3.DATASTORE_READY] = True
+                rewrite_cluster_info = True
+
+            # Rewrite ClusterInformation, if we changed anything above.
+            if rewrite_cluster_info:
+                LOG.info("New ClusterInformation: %s", cluster_info)
+                if datamodel_v3.put("ClusterInformation",
+                                    "default",
+                                    cluster_info,
+                                    mod_revision=ci_mod_revision):
+                    rewrite_cluster_info = False
+                else:
+                    # Short sleep to avoid a tight loop.
+                    eventlet.sleep(1)
+
+        rewrite_felix_config = True
+        while rewrite_felix_config:
+            # Get existing global FelixConfiguration.  We will add to this,
+            # rather than trampling on anything that may already be there, and
+            # will also take care to avoid an overlapping write with some other
+            # orchestrator.
+            try:
+                felix_config, fc_mod_revision = \
+                    datamodel_v3.get_with_mod_revision("FelixConfiguration",
+                                                       "default")
+            except etcd.EtcdKeyNotFound:
+                felix_config = {}
+                fc_mod_revision = 0
+            rewrite_felix_config = False
+            LOG.info("Read FelixConfiguration: %s", felix_config)
+
+            # Enable endpoint reporting.
+            if not felix_config.get(datamodel_v3.ENDPOINT_REPORTING_ENABLED,
+                                    False):
+                felix_config[datamodel_v3.ENDPOINT_REPORTING_ENABLED] = True
+                rewrite_felix_config = True
+
+            # Ensure that interface prefixes include 'tap'.
+            interface_prefix = felix_config.get(datamodel_v3.INTERFACE_PREFIX)
+            prefixes = interface_prefix.split(',') if interface_prefix else []
+            if 'tap' not in prefixes:
+                prefixes.append('tap')
+                felix_config[datamodel_v3.INTERFACE_PREFIX] = \
+                    ','.join(prefixes)
+                rewrite_felix_config = True
+
+            # Rewrite FelixConfiguration, if we changed anything above.
+            if rewrite_felix_config:
+                LOG.info("New FelixConfiguration: %s", felix_config)
+                if datamodel_v3.put("FelixConfiguration",
+                                    "default",
+                                    felix_config,
+                                    mod_revision=fc_mod_revision):
+                    rewrite_felix_config = False
+                else:
+                    # Short sleep to avoid a tight loop.
+                    eventlet.sleep(1)
 
     @_handling_etcd_exceptions
     def get_subnet_data(self, subnet):
@@ -541,154 +576,38 @@ class CalicoTransportEtcd(object):
         self._cleanup_workload_tree(endpoint.key)
 
     @_handling_etcd_exceptions
-    def get_profile_data(self, profile):
-        """get_profile_data
-
-        Get data for a profile out of etcd. This should be used on profiles
-        returned from functions like ``get_profiles``.
-
-        :param profile: A ``Profile`` class.
-        :return: A ``Profile`` class with tags and rules data present.
-        """
-        LOG.debug("Getting profile %s", profile.id)
-        etcd_profile_id = with_openstack_sg_prefix(profile.id)
-
-        tags_result = self.client.read(
-            datamodel_v1.key_for_profile_tags(etcd_profile_id),
-            timeout=ETCD_TIMEOUT
-        )
-        rules_result = self.client.read(
-            datamodel_v1.key_for_profile_rules(etcd_profile_id),
-            timeout=ETCD_TIMEOUT
-        )
-
-        return Profile(
-            id=profile.id,
-            tags_modified_index=tags_result.modifiedIndex,
-            rules_modified_index=rules_result.modifiedIndex,
-            tags_data=tags_result.value,
-            rules_data=rules_result.value,
-        )
-
-    @_handling_etcd_exceptions
     def get_profiles(self):
         """get_profiles
 
-        Gets information about every OpenStack profile in etcd. Returns a
-        generator of ``Profile`` objects.
+        Gets every OpenStack profile in etcdv3. Returns a generator of
+        ``Profile`` objects.
         """
-        LOG.info("Scanning etcd for all profiles")
+        LOG.info("Scanning etcdv3 for all profiles")
 
-        try:
-            result = self.client.read(
-                datamodel_v1.PROFILE_DIR, recursive=True, timeout=ETCD_TIMEOUT
-            )
-        except etcd.EtcdKeyNotFound:
-            # No key yet, which is totally fine: just exit.
-            LOG.info("No profiles key present")
-            return
-
-        nodes = result.children
-
-        tag_indices = {}
-        rules_indices = {}
-
-        for node in nodes:
-            # All groups have both tags and rules, and we need the
-            # modifiedIndex for both.  Note we're not interested in any profile
-            # IDs that don't begin with the OpenStack prefix.
-            tags_match = datamodel_v1.TAGS_KEY_RE.match(node.key)
-            rules_match = datamodel_v1.RULES_KEY_RE.match(node.key)
-            if tags_match:
-                profile_id = tags_match.group('profile_id')
-                if profile_id.startswith(OPENSTACK_SG_PREFIX):
-                    tag_indices[profile_id] = node.modifiedIndex
-                else:
-                    continue
-            elif rules_match:
-                profile_id = rules_match.group('profile_id')
-                if profile_id.startswith(OPENSTACK_SG_PREFIX):
-                    rules_indices[profile_id] = node.modifiedIndex
-                else:
-                    continue
-            else:
-                continue
-
-            # Check whether we have a complete set. If we do, remove them and
-            # yield.
-            if profile_id in tag_indices and profile_id in rules_indices:
-                tag_modified = tag_indices.pop(profile_id)
-                rules_modified = rules_indices.pop(profile_id)
-
-                LOG.debug("Found profile id %s", profile_id)
+        for result in datamodel_v3.get_all("Profile"):
+            name, spec, mod_revision = result
+            if name.startswith(OPENSTACK_SG_PREFIX):
+                LOG.debug("Found profile %s", name)
                 yield Profile(
-                    id=without_openstack_sg_prefix(profile_id),
-                    tags_modified_index=tag_modified,
-                    rules_modified_index=rules_modified,
-                    tags_data=None,
-                    rules_data=None,
+                    id=without_openstack_sg_prefix(name),
+                    modified_index=mod_revision,
+                    spec=spec,
                 )
-
-        # Quickly confirm that the tag and rule indices are empty (they should
-        # be).
-        if tag_indices or rules_indices:
-            LOG.warning(
-                "Imbalanced profile tags and rules! "
-                "Extra tags %s, extra rules %s", tag_indices, rules_indices
-            )
 
     @_handling_etcd_exceptions
     def atomic_delete_profile(self, profile):
         """atomic_delete_profile
 
-        Atomically delete a profile. This occurs in two stages: first the tag,
-        then the rules. Abort if the first stage fails, as we can assume that
-        someone else is trying to replace the profile.
-
-        Tolerates attempting to delete keys that are already deleted.
-
-        This will also attempt to clean up the directory, but isn't overly
-        bothered if that fails.
+        Atomically delete a profile.
         """
         LOG.info(
-            "Deleting profile %s, tags modified %s, rules modified %s",
+            "Deleting profile %s, modified %s",
             profile.id,
-            profile.tags_modified_index,
-            profile.rules_modified_index
+            profile.modified_index,
         )
-        etcd_profile_id = with_openstack_sg_prefix(profile.id)
+        name = with_openstack_sg_prefix(profile.id)
 
-        # Try to delete tags and rules. We don't care if we can't, but we
-        # should log in case it's symptomatic of a wider problem.
-        try:
-            self.client.delete(
-                datamodel_v1.key_for_profile_tags(etcd_profile_id),
-                prevIndex=profile.tags_modified_index,
-                timeout=ETCD_TIMEOUT
-            )
-        except etcd.EtcdKeyNotFound:
-            LOG.info(
-                "Profile %s tags already deleted, nothing to do.", profile.id
-            )
-
-        try:
-            self.client.delete(
-                datamodel_v1.key_for_profile_rules(etcd_profile_id),
-                prevIndex=profile.rules_modified_index,
-                timeout=ETCD_TIMEOUT
-            )
-        except etcd.EtcdKeyNotFound:
-            LOG.info(
-                "Profile %s rules already deleted, nothing to do.", profile.id
-            )
-
-        # Strip the rules/tags specific part of the key.
-        profile_key = datamodel_v1.key_for_profile(etcd_profile_id)
-
-        try:
-            self.client.delete(profile_key, dir=True, timeout=ETCD_TIMEOUT)
-        except etcd.EtcdException as e:
-            LOG.debug("Failed to delete %s (%r), giving up.", profile_key, e)
+        datamodel_v3.delete("Profile", name)
 
     def _cleanup_workload_tree(self, endpoint_key):
         """_cleanup_workload_tree
@@ -714,137 +633,245 @@ class CalicoTransportEtcd(object):
         self.elector.stop()
 
 
-class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
-    """An EtcdWatcher that watches our status-reporting subtree.
+class StatusWatcher(object):
+    """A class that watches our status-reporting subtree.
 
-    Responsible for parsing the events and passing the updates to the
-    mechanism driver.
+    Status events use the Calico v1 data model, under
+    datamodel_v1.FELIX_STATUS_DIR, but are written and read over etcdv3.
 
-    We deliberately do not share an etcd client with the transport.
-    The reason is that, if we share a client then managing the lifecycle
-    of the client becomes an awkward shared responsibility (complicated
-    by the EtcdClusterIdChanged exception, which is only thrown once).
+    This class parses events within that subtree and passes corresponding
+    updates to the mechanism driver.
+
+    Entrypoints:
+    - StatusWatcher(calico_driver) (constructor)
+    - watcher.loop()
+    - watcher.stop()
+
+    Callbacks (from the thread of watcher.loop()):
+    - calico_driver.on_port_status_changed
+    - calico_driver.on_felix_alive
     """
 
     def __init__(self, calico_driver):
-        calico_cfg = cfg.CONF.calico
-        host = calico_cfg.etcd_host
-        port = calico_cfg.etcd_port
-        LOG.info("CalicoEtcdWatcher created for %s:%s", host, port)
-        tls_config_params = [
-            calico_cfg.etcd_key_file,
-            calico_cfg.etcd_cert_file,
-            calico_cfg.etcd_ca_cert_file,
-        ]
-        if any(tls_config_params):
-            LOG.info("TLS to etcd is enabled with key file %s; "
-                     "cert file %s; CA cert file %s", *tls_config_params)
-            protocol = "https"
-        else:
-            LOG.info("TLS disabled, using HTTP to connect to etcd.")
-            protocol = "http"
-        super(CalicoEtcdWatcher, self).__init__(
-            "%s:%s" % (host, port),
-            datamodel_v1.FELIX_STATUS_DIR,
-            etcd_scheme=protocol,
-            etcd_key=calico_cfg.etcd_key_file,
-            etcd_cert=calico_cfg.etcd_cert_file,
-            etcd_ca=calico_cfg.etcd_ca_cert_file
-        )
+        LOG.info("StatusWatcher created")
         self.calico_driver = calico_driver
+        self.cancel = None
+        self.dispatcher = etcdutils.PathDispatcher()
 
         # Track the set of endpoints that are on each host so we can generate
-        # deletes for parent dirs being deleted.
+        # endpoint notifications if a Felix goes down.
         self._endpoints_by_host = collections.defaultdict(set)
 
+        # Track the hosts with a live Felix.
+        self._hosts_with_live_felix = set()
+
         # Register for felix uptime updates.
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/status",
-                           on_set=self._on_status_set,
-                           on_del=self._on_status_del)
+        self.dispatcher.register(datamodel_v1.FELIX_STATUS_DIR +
+                                 "/<hostname>/status",
+                                 on_set=self._on_status_set,
+                                 on_del=self._on_status_del)
         # Register for per-port status updates.
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/workload/openstack/"
-                           "<workload>/endpoint/<endpoint>",
-                           on_set=self._on_ep_set,
-                           on_del=self._on_ep_delete)
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/workload/openstack/"
-                           "<workload>/endpoint",
-                           on_del=self._on_per_host_dir_delete)
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/workload/openstack/"
-                           "<workload>",
-                           on_del=self._on_per_host_dir_delete)
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/workload/openstack",
-                           on_del=self._on_per_host_dir_delete)
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/workload",
-                           on_del=self._on_per_host_dir_delete)
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR + "/<hostname>",
-                           on_del=self._on_per_host_dir_delete)
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR,
-                           on_del=self._force_resync)
+        self.dispatcher.register(datamodel_v1.FELIX_STATUS_DIR +
+                                 "/<hostname>/workload/openstack/"
+                                 "<workload>/endpoint/<endpoint>",
+                                 on_set=self._on_ep_set,
+                                 on_del=self._on_ep_delete)
+        self._stopped = False
 
-    def _on_snapshot_loaded(self, etcd_snapshot_response):
-        """Called whenever a snapshot is loaded from etcd.
+    def loop(self):
+        LOG.info("Start watching status tree")
+        self._stopped = False
 
-        Updates the driver with the current state.
-        """
-        LOG.info("Started processing status-reporting snapshot from etcd")
-        endpoints_by_host = collections.defaultdict(set)
-        hosts_with_live_felix = set()
+        while not self._stopped:
+            # Get the current etcdv3 revision, so we know when to start
+            # watching from.
+            last_revision = int(datamodel_v3.get_current_revision())
+            LOG.info("Current etcdv3 revision is %d", last_revision)
 
-        # First pass: find all the Felixes that are alive.
-        for etcd_node in etcd_snapshot_response.leaves:
-            key = etcd_node.key
-            felix_hostname = datamodel_v1.hostname_from_status_key(key)
-            if felix_hostname:
-                # Defer to the code for handling an event.
-                hosts_with_live_felix.add(felix_hostname)
-                self._on_status_set(etcd_node, felix_hostname)
-                continue
+            # Save off current endpoint status, then reset current state, so we
+            # will be able to identify any changes in the new snapshot.
+            old_endpoints_by_host = self._endpoints_by_host
+            self._hosts_with_live_felix = set()
+            self._endpoints_by_host = collections.defaultdict(set)
 
-        # Second pass: find all the endpoints associated with a live Felix.
-        for etcd_node in etcd_snapshot_response.leaves:
-            key = etcd_node.key
-            endpoint_id = datamodel_v1.get_endpoint_id_from_key(key)
-            if endpoint_id:
-                if endpoint_id.host in hosts_with_live_felix:
-                    LOG.debug("Endpoint %s is on a host with a live Felix.",
-                              endpoint_id)
-                    self._report_status(
-                        endpoints_by_host,
-                        endpoint_id,
-                        etcd_node.value
-                    )
-                else:
-                    LOG.debug("Endpoint %s is not on a host with live Felix;"
-                              "marking it down.",
-                              endpoint_id)
-                    self.calico_driver.on_port_status_changed(
-                        endpoint_id.host,
-                        endpoint_id.endpoint,
-                        None,
-                    )
-                continue
-
-        # Find any removed endpoints.
-        for host, endpoints in self._endpoints_by_host.items():
-            current_endpoints = endpoints_by_host.get(host, set())
-            removed_endpoints = endpoints - current_endpoints
-            for endpoint_id in removed_endpoints:
-                LOG.debug("Endpoint %s removed by resync.")
-                self.calico_driver.on_port_status_changed(
-                    host,
-                    endpoint_id.endpoint,
-                    None,
+            # Report any existing values.
+            for result in datamodel_v3.get_prefix(
+                    datamodel_v1.FELIX_STATUS_DIR):
+                key, value = result
+                # Convert to what the dispatcher expects - see below.
+                response = Response(
+                    action='set',
+                    key=key,
+                    value=value,
                 )
+                LOG.info("status event: %s", response)
+                self.dispatcher.handle_event(response)
 
-        # Swap in the newly-loaded state.
-        self._endpoints_by_host = endpoints_by_host
-        LOG.info("Finished processing status-reporting snapshot from etcd")
+            # Collect hosts for each old endpoint status.  For each of those
+            # hosts we will check if we now have a Felix status.
+            all_hosts_with_endpoint_status = set()
+            for hostname in old_endpoints_by_host.keys():
+                all_hosts_with_endpoint_status.add(hostname)
+
+            # There might be new endpoint statuses with new hosts, for which we
+            # should also check if we also have Felix status for those hosts.
+            for hostname in self._endpoints_by_host.keys():
+                all_hosts_with_endpoint_status.add(hostname)
+
+            # For each of those hosts...
+            for hostname in all_hosts_with_endpoint_status:
+                LOG.info("host: %s", hostname)
+                if hostname not in self._hosts_with_live_felix:
+                    # Status for a Felix has disappeared in the new snapshot.
+                    # Signal port status None for both the endpoints that we
+                    # had for that Felix _before_ the snapshot, _and_ those
+                    # that we have in the new snapshot.
+                    LOG.info("has disappeared")
+                    for ep_id in (old_endpoints_by_host[hostname] |
+                                  self._endpoints_by_host[hostname]):
+                        LOG.info("signal None for %s", ep_id.endpoint)
+                        self.calico_driver.on_port_status_changed(
+                            hostname,
+                            ep_id.endpoint,
+                            None)
+                else:
+                    # Felix is still there, but we should check for particular
+                    # endpoints that have disappeared, and signal those.
+                    LOG.info("is still alive")
+                    for ep_id in (old_endpoints_by_host[hostname] -
+                                  self._endpoints_by_host[hostname]):
+                        LOG.info("signal None for %s", ep_id.endpoint)
+                        self.calico_driver.on_port_status_changed(
+                            hostname,
+                            ep_id.endpoint,
+                            None)
+
+            # Now watch for any changes, starting after the revision above.
+            while not self._stopped:
+                # Start a watch from just after the last known revision.
+                try:
+                    event_stream, cancel = \
+                        datamodel_v3.watch_subtree(
+                            datamodel_v1.FELIX_STATUS_DIR,
+                            str(last_revision + 1))
+                except Exception:
+                    # Log and handle by breaking out to the wider loop, which
+                    # means we'll get the tree again and then try watching
+                    # again.  E.g. it could be that the DB has just been
+                    # compacted and so the revision is no longer available that
+                    # we asked to start watching from.
+                    LOG.exception("Exception watching status tree")
+                    break
+
+                # Record time of last activity on the successfully created
+                # watch.  (This is updated below as we see watch events.)
+                last_event_time = monotonic_time()
+
+                def _cancel_watch_if_inactive():
+                    # Loop until we should cancel the watch, either because of
+                    # inactivity or because of stop() having been called.
+                    while not self._stopped:
+                        time_to_next_timeout = (last_event_time +
+                                                WATCH_TIMEOUT_SECS -
+                                                monotonic_time())
+                        LOG.debug("Time to next timeout is %ds",
+                                  time_to_next_timeout)
+                        if time_to_next_timeout < 1:
+                            break
+                        else:
+                            # Sleep until when we might next have to cancel
+                            # (but won't if a watch event has occurred in the
+                            # meantime).
+                            eventlet.sleep(time_to_next_timeout)
+
+                    # Cancel the watch
+                    cancel()
+                    return
+
+                # Spawn a greenlet to cancel the watch if it's inactive, or if
+                # stop() is called.  Cancelling the watch adds None to the
+                # event stream, so the following for loop will see that.
+                eventlet.spawn(_cancel_watch_if_inactive)
+
+                for event in event_stream:
+                    LOG.debug("status event: %s", event)
+                    last_event_time = monotonic_time()
+
+                    # If the StatusWatcher has been stopped, return from the
+                    # whole loop.
+                    if self._stopped:
+                        LOG.info("StatusWatcher has been stopped")
+                        return
+
+                    # Otherwise a None event means that the watch has been
+                    # cancelled owing to inactivity.  In that case we break out
+                    # from this loop, and the watch will be restarted.
+                    if event is None:
+                        LOG.debug("Watch cancelled owing to inactivity")
+                        break
+
+                    # Convert v3 event to form that the dispatcher expects;
+                    # namely an object response, with:
+                    # - response.key giving the etcd key
+                    # - response.action being "set" or "delete"
+                    # - whole response being passed on to the handler method.
+                    # Handler methods here expect
+                    # - response.key
+                    # - response.value
+                    response = Response(
+                        action=event.get('type', 'SET').lower(),
+                        key=event['kv']['key'],
+                        value=event['kv'].get('value', ''),
+                    )
+                    LOG.info("status event: %s", response)
+                    self.dispatcher.handle_event(response)
+
+                    # Update last known revision.
+                    mod_revision = int(event['kv'].get('mod_revision', '0'))
+                    if mod_revision > last_revision:
+                        last_revision = mod_revision
+                        LOG.info("Last known revision is now %d",
+                                 last_revision)
+
+    """
+    Example status events:
+
+    status event: {u'kv': {
+        u'mod_revision': u'4',
+        u'value': '{
+            "time":"2017-12-31T14:09:29Z",
+            "uptime":392.5231995,
+            "first_update":true
+        }',
+        u'create_revision': u'4',
+        u'version': u'1',
+        u'key': '/calico/felix/v1/host/ubuntu-xenial-rax-dfw-0001640133/status'
+    }}
+
+    status event: {u'type': u'DELETE',
+                   u'kv': {
+        u'mod_revision': u'88',
+        u'key': '/calico/felix/v1/host/ubuntu-xenial-rax-dfw-0001640133/' +
+                'workload/openstack/' +
+                'openstack%2f84a5e464-c2be-4bfd-926b-96030421999d/endpoint/' +
+                '84a5e464-c2be-4bfd-926b-96030421999d'
+    }}
+
+    status event: {u'kv': {
+        u'mod_revision': u'113',
+        u'value': '{"status":"down"}',
+        u'create_revision': u'113',
+        u'version': u'1',
+        u'key': '/calico/felix/v1/host/ubuntu-xenial-rax-dfw-0001640133/' +
+                'workload/openstack/' +
+                'openstack%2f8ae2181b-8aab-4b49-8242-346f6a0b21e5/endpoint/' +
+                '8ae2181b-8aab-4b49-8242-346f6a0b21e5'
+    }}
+    """
+
+    def stop(self):
+        LOG.info("Stop watching status tree")
+        self._stopped = True
 
     def _on_status_set(self, response, hostname):
         """Called when a felix uptime report is inserted/updated."""
@@ -855,6 +882,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Bad JSON data for key %s: %s",
                         response.key, response.value)
         else:
+            self._hosts_with_live_felix.add(hostname)
             self.calico_driver.on_felix_alive(
                 hostname,
                 new=new,
@@ -864,6 +892,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         """Called when Felix's status key expires.  Implies felix is dead."""
         LOG.error("Felix on host %s failed to check in.  Marking the "
                   "ports it was managing as in-error.", hostname)
+        self._hosts_with_live_felix.discard(hostname)
         for endpoint_id in self._endpoints_by_host[hostname]:
             # Flag all the ports as being in error.  They're no longer
             # receiving security updates.
@@ -887,21 +916,19 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             LOG.error("Failed to extract endpoint ID from: %s.  Ignoring "
                       "update!", response.key)
             return
-        self._report_status(self._endpoints_by_host,
-                            ep_id,
-                            response.value)
+        self._report_status(ep_id, response.value)
 
-    def _report_status(self, endpoints_by_host, endpoint_id, raw_json):
+    def _report_status(self, endpoint_id, raw_json):
         try:
             status = json.loads(raw_json)
         except (ValueError, TypeError):
             LOG.error("Bad JSON data for %s: %s", endpoint_id, raw_json)
             status = None  # Report as error
-            endpoints_by_host[endpoint_id.host].discard(endpoint_id)
-            if not endpoints_by_host[endpoint_id.host]:
-                del endpoints_by_host[endpoint_id.host]
+            self._endpoints_by_host[endpoint_id.host].discard(endpoint_id)
+            if not self._endpoints_by_host[endpoint_id.host]:
+                del self._endpoints_by_host[endpoint_id.host]
         else:
-            endpoints_by_host[endpoint_id.host].add(endpoint_id)
+            self._endpoints_by_host[endpoint_id.host].add(endpoint_id)
         LOG.debug("Port %s updated to status %s", endpoint_id, status)
         self.calico_driver.on_port_status_changed(
             endpoint_id.host,
@@ -926,35 +953,6 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             None,
         )
 
-    def _on_per_host_dir_delete(self, response, hostname, workload=None):
-        """_on_per_host_dir_delete
-
-        Called when one of the directories that may contain endpoint
-        statuses is deleted.  Cleans up either the specific workload
-        or the whole host.
-        """
-        LOG.debug("One of the per-host directories for host %s, workload "
-                  "%s deleted.", hostname, workload)
-        endpoints_on_host = self._endpoints_by_host[hostname]
-        for endpoint_id in [ep_id for ep_id in endpoints_on_host if
-                            workload is None or workload == ep_id.workload]:
-            LOG.info("Directory containing status report for %s deleted;"
-                     "updating port status",
-                     endpoint_id)
-            endpoints_on_host.discard(endpoint_id)
-            self.calico_driver.on_port_status_changed(
-                hostname,
-                endpoint_id.endpoint,
-                None
-            )
-        if not endpoints_on_host:
-            del self._endpoints_by_host[hostname]
-
-    def _force_resync(self, response, **kwargs):
-        LOG.warning("Forcing a resync due to %s to key %s",
-                    response.action, response.key)
-        raise etcdutils.ResyncRequired()
-
 
 def _neutron_rule_to_etcd_rule(rule):
     """_neutron_rule_to_etcd_rule
@@ -963,42 +961,39 @@ def _neutron_rule_to_etcd_rule(rule):
     etcd format.
     """
     ethertype = rule['ethertype']
-    etcd_rule = {}
+    etcd_rule = {'action': 'Allow'}
     # Map the ethertype field from Neutron to etcd format.
-    etcd_rule['ip_version'] = {'IPv4': 4,
-                               'IPv6': 6}[ethertype]
+    etcd_rule['ipVersion'] = {'IPv4': 4,
+                              'IPv6': 6}[ethertype]
     # Map the protocol field from Neutron to etcd format.
     if rule['protocol'] is None or rule['protocol'] == -1:
         pass
     elif rule['protocol'] == 'icmp':
-        etcd_rule['protocol'] = {'IPv4': 'icmp',
-                                 'IPv6': 'icmpv6'}[ethertype]
-    else:
+        etcd_rule['protocol'] = {'IPv4': 'ICMP',
+                                 'IPv6': 'ICMPv6'}[ethertype]
+    elif isinstance(rule['protocol'], int):
         etcd_rule['protocol'] = rule['protocol']
+    else:
+        etcd_rule['protocol'] = rule['protocol'].upper()
 
-    # OpenStack (sometimes) represents 'any IP address' by setting
-    # both 'remote_group_id' and 'remote_ip_prefix' to None.  We
-    # translate that to an explicit 0.0.0.0/0 (for IPv4) or ::/0
-    # (for IPv6).
-    net = rule['remote_ip_prefix']
-    if not (net or rule['remote_group_id']):
-        net = {'IPv4': '0.0.0.0/0',
-               'IPv6': '::/0'}[ethertype]
     port_spec = None
     if rule['protocol'] == 'icmp':
         # OpenStack stashes the ICMP match criteria in
         # port_range_min/max.
+        icmp_fields = {}
         icmp_type = rule['port_range_min']
         if icmp_type is not None and icmp_type != -1:
-            etcd_rule['icmp_type'] = icmp_type
+            icmp_fields['type'] = icmp_type
         icmp_code = rule['port_range_max']
         if icmp_code is not None and icmp_code != -1:
-            etcd_rule['icmp_code'] = icmp_code
+            icmp_fields['code'] = icmp_code
+        if icmp_fields:
+            etcd_rule['icmp'] = icmp_fields
     else:
         # src/dst_ports is a list in which each entry can be a
         # single number, or a string describing a port range.
         if rule['port_range_min'] == -1:
-            port_spec = ['1:65535']
+            port_spec = None
         elif rule['port_range_min'] == rule['port_range_max']:
             if rule['port_range_min'] is not None:
                 port_spec = [rule['port_range_min']]
@@ -1006,24 +1001,25 @@ def _neutron_rule_to_etcd_rule(rule):
             port_spec = ['%s:%s' % (rule['port_range_min'],
                                     rule['port_range_max'])]
 
-    # Put it all together and add to either the inbound or the
-    # outbound list.
-    if rule['direction'] == 'ingress':
-        if rule['remote_group_id'] is not None:
-            etcd_rule['src_tag'] = rule['remote_group_id']
-        if net is not None:
-            etcd_rule['src_net'] = net
-        if port_spec is not None:
-            etcd_rule['dst_ports'] = port_spec
-        LOG.debug("=> Inbound Calico rule %s" % etcd_rule)
-    else:
-        if rule['remote_group_id'] is not None:
-            etcd_rule['dst_tag'] = rule['remote_group_id']
-        if net is not None:
-            etcd_rule['dst_net'] = net
-        if port_spec is not None:
-            etcd_rule['dst_ports'] = port_spec
-        LOG.debug("=> Outbound Calico rule %s" % etcd_rule)
+    entity_rule = {}
+    if rule['remote_group_id'] is not None:
+        entity_rule['selector'] = 'has(%s)' % rule['remote_group_id']
+    if rule['remote_ip_prefix'] is not None:
+        entity_rule['nets'] = [rule['remote_ip_prefix']]
+    LOG.debug("=> Entity rule %s" % entity_rule)
+
+    # Store in source or destination field of the overall rule.
+    if entity_rule:
+        if rule['direction'] == 'ingress':
+            etcd_rule['source'] = entity_rule
+            if port_spec is not None:
+                etcd_rule['destination'] = {'ports': port_spec}
+        else:
+            if port_spec is not None:
+                entity_rule['ports'] = port_spec
+            etcd_rule['destination'] = entity_rule
+
+    LOG.debug("=> %s Calico rule %s" % (rule['direction'], etcd_rule))
 
     return etcd_rule
 
@@ -1109,19 +1105,10 @@ def port_etcd_data(port):
     return data
 
 
-def profile_tags(profile):
-    """profile_tags
+def profile_spec(profile):
+    """profile_spec
 
-    Get the tags from a given security profile.
-    """
-    # TODO(nj): This is going to be a no-op now, so consider removing it.
-    return profile.id.split('_')
-
-
-def profile_rules(profile):
-    """profile_rules
-
-    Get a dictionary of profile rules, ready for writing into etcd as JSON.
+    Generate JSON ProfileSpec for the given SecurityProfile.
     """
     inbound_rules = [
         _neutron_rule_to_etcd_rule(rule) for rule in profile.inbound_rules
@@ -1129,5 +1116,12 @@ def profile_rules(profile):
     outbound_rules = [
         _neutron_rule_to_etcd_rule(rule) for rule in profile.outbound_rules
     ]
+    labels_to_apply = {}
+    for tag in profile.id.split('_'):
+        labels_to_apply[tag] = ''
 
-    return {'inbound_rules': inbound_rules, 'outbound_rules': outbound_rules}
+    return {
+        'ingress': inbound_rules,
+        'egress': outbound_rules,
+        'labelsToApply': labels_to_apply,
+    }

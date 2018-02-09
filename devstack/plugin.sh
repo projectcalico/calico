@@ -2,77 +2,6 @@
 # Devstack plugin code for Calico
 # ===============================
 
-function install_configure_etcd {
-
-    # Install etcd from package sources (=> our PPA).
-    install_package etcd
-
-    # Stop the etcd service:
-    sudo service etcd stop || true
-
-    # Delete any existing etcd database:
-    sudo rm -rf /var/lib/etcd/*
-
-    # Mount a RAM disk at /var/lib/etcd:
-    sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
-
-    # Add the following to the bottom of /etc/fstab so that the RAM
-    # disk gets reinstated at boot time:
-    # tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
-
-    IP=`hostname -I | awk '{print $1}'`
-
-    # Edit /etc/init/etcd.conf: Find the line which begins exec
-    # /usr/bin/etcd and edit it, substituting for <controller_fqdn>
-    # and <controller_ip> appropriately.
-    if $CALICO_COMPUTE_ONLY; then
-	# Configure an etcd proxy.
-	if test -f /etc/init/etcd.conf; then
-	    # upstart configuration
-	    sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --proxy on \
-  --initial-cluster \"$SERVICE_HOST=http:\/\/$SERVICE_HOST:2380\"/" /etc/init/etcd.conf
-	else
-	    # systemd configuration
-	    etcd_cfg=`mktemp -t etcd.XXXXXX`
-	    cat >${etcd_cfg} <<EOF
-ETCD_PROXY=on
-ETCD_INITIAL_CLUSTER="$SERVICE_HOST=http://$SERVICE_HOST:2380"
-EOF
-	    sudo mv -f ${etcd_cfg} /etc/default/etcd
-	fi
-    else
-	# Configure an etcd master node.
-	if test -f /etc/init/etcd.conf; then
-	    # upstart configuration
-	    sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --name=\"$HOSTNAME\" \
-  --advertise-client-urls=\"http:\/\/$IP:2379,http:\/\/$IP:4001\" \
-  --listen-client-urls=\"http:\/\/0.0.0.0:2379,http:\/\/0.0.0.0:4001\" \
-  --listen-peer-urls \"http:\/\/0.0.0.0:2380\" \
-  --initial-advertise-peer-urls \"http:\/\/$IP:2380\" \
-  --initial-cluster-token \"$TOKEN\" \
-  --initial-cluster \"$HOSTNAME=http:\/\/$IP:2380\" \
-  --initial-cluster-state \"new\"/" /etc/init/etcd.conf
-	else
-	    # systemd configuration
-	    etcd_cfg=`mktemp -t etcd.XXXXXX`
-	    cat >${etcd_cfg} <<EOF
-ETCD_NAME="$HOSTNAME"
-ETCD_ADVERTISE_CLIENT_URLS="http://$IP:2379,http://$IP:4001"
-ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
-ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
-ETCD_INITIAL_ADVERTISE_PEER_URLS="http://$IP:2380"
-ETCD_INITIAL_CLUSTER="$HOSTNAME=http://$IP:2380"
-ETCD_INITIAL_CLUSTER_STATE="new"
-ETCD_INITIAL_CLUSTER_TOKEN="$TOKEN"
-EOF
-	    sudo mv -f ${etcd_cfg} /etc/default/etcd
-	fi
-    fi
-
-    # Start the etcd service:
-    sudo service etcd start
-}
-
 mode=$1				# stack, unstack or clean
 phase=$2			# pre-install, install, post-config or extra
 
@@ -93,7 +22,7 @@ if [ "${Q_AGENT}" = calico-felix ]; then
 		    echo Calico plugin: pre-install
 
 		    # Add Calico master PPA as a package source.
-		    sudo apt-add-repository -y ppa:project-calico/calico-2.6
+		    sudo apt-add-repository -y ppa:project-calico/master
 		    REPOS_UPDATED=False
 
 		    # Also add BIRD project PPA as a package source.
@@ -115,10 +44,18 @@ if [ "${Q_AGENT}" = calico-felix ]; then
 		    # Install BIRD.
 		    install_package bird
 
-		    # Install and configure etcd.
-		    install_configure_etcd
-
 		    # Install the Calico agent.
+		    sudo mkdir -p /etc/calico
+		    sudo sh -c "cat > /etc/calico/felix.cfg" << EOF
+[global]
+DatastoreType = etcdv3
+EtcdEndpoints = http://${SERVICE_HOST}:${ETCD_PORT}
+EOF
+		    if [ "${ENABLE_DEBUG_LOG_LEVEL}" = True ]; then
+			sudo sh -c "cat >> /etc/calico/felix.cfg" << EOF
+LogSeverityFile = debug
+EOF
+		    fi
 		    install_package calico-felix
 
 		    # Install Calico common code, that includes BIRD templates.
@@ -162,6 +99,11 @@ EOF
 		    # Propagate ENABLE_DEBUG_LOG_LEVEL to neutron.conf, so that
 		    # it applies to the Calico DHCP agent on each compute node.
 		    iniset $NEUTRON_CONF DEFAULT debug $ENABLE_DEBUG_LOG_LEVEL
+
+		    # Point the Calico DHCP agent and mechanism driver
+		    # at the etcd server.
+		    iniset $NEUTRON_CONF calico etcd_host $SERVICE_HOST
+		    iniset $NEUTRON_CONF calico etcd_port $ETCD_PORT
 		    ;;
 
 		extra)
@@ -172,7 +114,7 @@ EOF
 		    # Run script to automatically generate and
 		    # maintain BIRD config for the cluster.
 		    run_process calico-bird \
-                      "${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP}"
+                      "${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
 
 		    # Run the Calico DHCP agent.
 		    sudo mkdir /var/log/neutron || true
