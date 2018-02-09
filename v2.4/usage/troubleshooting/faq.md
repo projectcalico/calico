@@ -51,7 +51,7 @@ to the interface.
 
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
 
-The Kubernetes [NetworkPolicy](http://kubernetes.io/docs/api-reference/extensions/v1beta1/definitions/#_v1beta1_networkpolicy)
+The Kubernetes [NetworkPolicy](https://v1-8.docs.kubernetes.io/docs/api-reference/extensions/v1beta1/definitions/#_v1beta1_networkpolicy)
 API doesn't currently support this.  However,
 Calico does!  You can use `calicoctl` to configure egress policy to prevent
 Kubernetes pods from initiating outgoing connections based on the full set of
