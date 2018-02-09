@@ -105,9 +105,9 @@ func (c *ModelAdaptor) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 		t, l, r := ToTagsLabelsRules(d)
 		if t, err = c.client.Update(ctx, t); err != nil {
 			return nil, err
-		} else if _, err := c.client.Apply(l); err != nil {
+		} else if _, err := c.client.Apply(ctx, l); err != nil {
 			return nil, err
-		} else if _, err := c.client.Apply(r); err != nil {
+		} else if _, err := c.client.Apply(ctx, r); err != nil {
 			return nil, err
 		} else {
 			d.Revision = t.Revision
@@ -148,16 +148,16 @@ func (c *ModelAdaptor) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
-func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
+func (c *ModelAdaptor) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	var err error
 	switch d.Key.(type) {
 	case model.ProfileKey:
 		t, l, r := ToTagsLabelsRules(d)
-		if t, err = c.client.Apply(t); err != nil {
+		if t, err = c.client.Apply(ctx, t); err != nil {
 			return nil, err
-		} else if _, err := c.client.Apply(l); err != nil {
+		} else if _, err := c.client.Apply(ctx, l); err != nil {
 			return nil, err
-		} else if _, err := c.client.Apply(r); err != nil {
+		} else if _, err := c.client.Apply(ctx, r); err != nil {
 			return nil, errors.UpdateErrorIdentifier(err, d.Key)
 		} else {
 			d.Revision = t.Revision
@@ -165,7 +165,7 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 		}
 	case model.NodeKey:
 		p, o := toNodeComponents(d)
-		if p, err = c.client.Apply(p); err != nil {
+		if p, err = c.client.Apply(ctx, p); err != nil {
 			return nil, err
 		}
 		if err = c.applyOrDeleteSubcomponents(context.Background(), o); err != nil {
@@ -177,7 +177,7 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 		if err = validateBlockValue(d); err != nil {
 			return nil, err
 		}
-		b, err := c.client.Apply(d)
+		b, err := c.client.Apply(ctx, d)
 		if err != nil {
 			return nil, err
 		}
@@ -185,14 +185,14 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return d, nil
 	case model.GlobalBGPConfigKey:
 		nd := toDatastoreGlobalBGPConfig(*d)
-		b, err := c.client.Apply(nd)
+		b, err := c.client.Apply(ctx, nd)
 		if err != nil {
 			return nil, errors.UpdateErrorIdentifier(err, d.Key)
 		}
 		d.Revision = b.Revision
 		return d, nil
 	default:
-		return c.client.Apply(d)
+		return c.client.Apply(ctx, d)
 	}
 }
 
@@ -506,7 +506,7 @@ func (c *ModelAdaptor) applyOrDeleteSubcomponents(ctx context.Context, component
 		// If there is a value, apply it to either create or update.  Otherwise
 		// delete the entry, ignoring error indicating the entry does not exist.
 		if component.Value != nil {
-			if _, err := c.client.Apply(component); err != nil {
+			if _, err := c.client.Apply(ctx, component); err != nil {
 				return err
 			}
 		} else if _, err := c.client.Delete(ctx, component.Key, component.Revision); err != nil {

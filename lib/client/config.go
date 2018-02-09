@@ -93,7 +93,7 @@ func newConfigs(c *Client) ConfigInterface {
 // full BGP peering mesh between all nodes that support BGP.
 func (c *config) SetNodeToNodeMesh(enabled bool) error {
 	b, _ := json.Marshal(enabled)
-	_, err := c.c.Backend.Apply(&model.KVPair{
+	_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"},
 		Value: string(b),
 	})
@@ -123,7 +123,7 @@ func (c *config) GetNodeToNodeMesh() (bool, error) {
 // on each node.  This may be overridden by an explicitly configured value in
 // the node resource.
 func (c *config) SetGlobalASNumber(asNumber numorstring.ASNumber) error {
-	_, err := c.c.Backend.Apply(&model.KVPair{
+	_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   model.GlobalBGPConfigKey{Name: "AsNumber"},
 		Value: asNumber.String(),
 	})
@@ -149,7 +149,7 @@ func (c *config) GetGlobalASNumber() (numorstring.ASNumber, error) {
 // that fall within an IP in IP enabled Calico IP Pool, will be routed over an
 // IP in IP tunnel.
 func (c *config) SetGlobalIPIP(enabled bool) error {
-	_, err := c.c.Backend.Apply(&model.KVPair{
+	_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   model.GlobalConfigKey{Name: "IpInIpEnabled"},
 		Value: strconv.FormatBool(enabled),
 	})
@@ -177,7 +177,7 @@ func (c *config) SetNodeIPIPTunnelAddress(node string, ip *net.IP) error {
 		err := c.deleteConfig(key)
 		return err
 	} else {
-		_, err := c.c.Backend.Apply(&model.KVPair{
+		_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
 			Key:   key,
 			Value: ip.String(),
 		})
@@ -280,7 +280,7 @@ func (c *config) GetFelixConfig(name, node string) (string, bool, error) {
 // Caution should be observed using this method as no validation is performed
 // and changing arbitrary configuration may have unexpected consequences.
 func (c *config) SetFelixConfig(name, node string, value string) error {
-	_, err := c.c.Backend.Apply(&model.KVPair{
+	_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   getFelixConfigKey(name, node),
 		Value: value,
 	})
@@ -319,7 +319,7 @@ func (c *config) GetBGPConfig(name, node string) (string, bool, error) {
 // Caution should be observed using this method as no validation is performed
 // and changing arbitrary configuration may have unexpected consequences.
 func (c *config) SetBGPConfig(name, node string, value string) error {
-	_, err := c.c.Backend.Apply(&model.KVPair{
+	_, err := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   getBGPConfigKey(name, node),
 		Value: value,
 	})
@@ -358,11 +358,11 @@ func (c *config) setLogLevel(level string, felixKey, bgpKey model.Key) error {
 	if !ok {
 		return erroredField("loglevel", level)
 	}
-	_, err1 := c.c.Backend.Apply(&model.KVPair{
+	_, err1 := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   felixKey,
 		Value: level,
 	})
-	_, err2 := c.c.Backend.Apply(&model.KVPair{
+	_, err2 := c.c.Backend.Apply(context.Background(), &model.KVPair{
 		Key:   bgpKey,
 		Value: bgpLevel,
 	})

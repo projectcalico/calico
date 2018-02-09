@@ -280,7 +280,7 @@ func (c *Client) apply(apiObject unversioned.ResourceObject, helper conversionHe
 
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
-	} else if d, err = c.Backend.Apply(d); err != nil {
+	} else if d, err = c.Backend.Apply(context.Background(), d); err != nil {
 		return err
 	} else {
 		return nil

@@ -385,7 +385,7 @@ func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.  This is not exposed in the main client - but we keep here for the backend
 // API.
-func (c *KubeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *KubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":   kvp.Key,
 		"Value": kvp.Value,
@@ -395,7 +395,7 @@ func (c *KubeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 	// Attempt to Create and do an Update if the resource already exists.
 	// We only log debug here since the Create and Update will also log.
 	// Can't set Revision while creating a resource.
-	updated, err := c.Create(context.Background(), &model.KVPair{
+	updated, err := c.Create(ctx, &model.KVPair{
 		Key:   kvp.Key,
 		Value: kvp.Value,
 	})
@@ -406,7 +406,7 @@ func (c *KubeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 		}
 
 		// Try to Update if the resource already exists.
-		updated, err = c.Update(context.Background(), kvp)
+		updated, err = c.Update(ctx, kvp)
 		if err != nil {
 			logContext.Debug("Error applying resource (using Update)")
 			return nil, err
