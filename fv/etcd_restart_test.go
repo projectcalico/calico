@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,12 +129,12 @@ var _ = Context("etcd connection interruption", func() {
 				found := false
 				for _, line := range strings.Split(out, "\n") {
 					matches := portRegexp.FindStringSubmatch(line)
-					if len(matches) == 0 {
+					if len(matches) < 2 {
 						continue
 					}
 					found = true
 
-					// Use the raw table to drop the single TCP connection that felix is using,
+					// Use the raw table to drop the TCP connections (to etcd) that felix is using,
 					// in both directions, based on source and destination port.
 					felix.Exec("iptables",
 						"-t", "raw", "-I", "PREROUTING",
@@ -154,7 +154,7 @@ var _ = Context("etcd connection interruption", func() {
 			}
 		})
 
-		By("starting to update policy again", func() {
+		By("updating policy again", func() {
 			// Create a Policy that denies all traffic, after we've already cut the etcd connection.
 			deny := api.NewGlobalNetworkPolicy()
 			deny.Name = "deny-all"
