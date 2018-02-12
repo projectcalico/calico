@@ -42,6 +42,8 @@ Before starting this you will need the following:
 
 -   One or more machines running RHEL, with OpenStack installed.
 -   SSH access to these machines.
+-   Root access on those machines.  All of the commands shown below should be
+    run as root.
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
 
@@ -265,17 +267,33 @@ On each control node, perform the following steps:
     > left around.
     {: .alert .alert-danger}
 
-3.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
+1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
     section, find the line beginning with `core_plugin`, and change it to
     read `core_plugin = calico`.
 
-4.  Install the `calico-control` package:
+1.  Install the `etcd3gw` Python package, if it is not already installed on
+    your system.  `etcd3gw` is needed by Calico's OpenStack driver but not yet
+    RPM-packaged, so you should install it with `pip`.  First check in case it
+    has already been pulled in by your OpenStack installation.
+
+    ```
+    find /usr/lib/python2.7/ -name etcd3gw
+    ```
+
+    If you see no output there, install `etcd3gw` with pip.
+
+    ```
+    yum install -y python-pip
+    pip install etcd3gw
+    ```
+
+1.  Install the `calico-control` package:
 
     ```
     yum install calico-control
     ```
 
-5.  Restart the neutron server process:
+1.  Restart the neutron server process:
 
     ```
     service neutron-server restart
