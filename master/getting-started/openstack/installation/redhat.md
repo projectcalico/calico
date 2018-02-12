@@ -42,6 +42,8 @@ Before starting this you will need the following:
 
 -   One or more machines running RHEL, with OpenStack installed.
 -   SSH access to these machines.
+-   Root access on those machines.  All of the commands shown below should be
+    run as root.
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
 
