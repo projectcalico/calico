@@ -9,8 +9,8 @@ components and the order in which that upgrade should be performed. Most
 releases do not concurrently upgrade all of these components: if a
 release does not upgrade a given component, you may skip those steps.
 
-> **Important**: While the upgrade procedure is very safe, you will 
-> be unable to issue API requests to your OpenStack system during the 
+> **Important**: While the upgrade procedure is very safe, you will
+> be unable to issue API requests to your OpenStack system during the
 > procedure. Please plan your upgrade window accordingly, and see the
 > [Service Impact](#service-impact) section for more details.
 {: .alert .alert-danger}
@@ -198,12 +198,27 @@ running neutron-server), run the following upgrade steps.
 
 #### Ubuntu
 
-First, use `apt-get` to install the updated packages. On each control
-host you can upgrade only the {{site.prodname}} packages, as follows:
+First, install the `etcd3gw` Python package, if it is not already installed on
+your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver but not yet
+packaged for Ubuntu, so you should install it with `pip`.  First check in case
+it is already present:
+
+```
+find /usr/lib/python2.7/ -name etcd3gw
+```
+
+If you see no output there, install `etcd3gw` with pip.
+
+```
+apt-get install -y python-pip
+pip install etcd3gw
+```
+
+Then, use `apt-get` to install updated {{site.prodname}} packages:
 
     apt-get update
     apt-get install calico-control calico-common python-etcd networking-calico
-    
+
 > **Important**: Running `apt-get upgrade` is not sufficient to upgrade {{site.prodname}}
 > due to new dependent packages added in version 1.3. If you want to
 > upgrade {{site.prodname}} as part of a system-wide update, you must use
@@ -216,14 +231,30 @@ Then, restart Neutron to ensure that it picks up any changes:
 
 #### Red Hat 7
 
-First, upgrade python-etcd:
+First, install the `etcd3gw` Python package, if it is not already installed on
+your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver but not yet
+packaged for Red Hat, so you should install it with `pip`.  First check in case
+it is already present:
+
+```
+find /usr/lib/python2.7/ -name etcd3gw
+```
+
+If you see no output there, install `etcd3gw` with pip.
+
+```
+yum install -y python-pip
+pip install etcd3gw
+```
+
+Then upgrade python-etcd:
 
     curl -L https://github.com/projectcalico/python-etcd/archive/master.tar.gz -o python-etcd.tar.gz
     tar xvf python-etcd.tar.gz
     cd python-etcd-master
     python setup.py install
 
-Then, update packaged components:
+Then update packaged components:
 
     yum update
 

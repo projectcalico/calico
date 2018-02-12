@@ -192,18 +192,34 @@ perform the following steps:
     will bring in {{site.prodname}}-specific updates to the OpenStack packages and
     to `dnsmasq`. (OpenStack updates are not needed for Liberty.)
 
-2.  Install the `calico-control` package:
+1.  Install the `etcd3gw` Python package, if it is not already installed on
+    your system.  `etcd3gw` is needed by Calico's OpenStack driver but not yet
+    packaged for Ubuntu, so you should install it with `pip`.  First check in
+    case it has already been pulled in by your OpenStack installation.
+
+    ```
+        find /usr/lib/python2.7/ -name etcd3gw
+    ```
+
+    If you see no output there, install `etcd3gw` with pip.
+
+    ```
+        apt-get install -y python-pip
+        pip install etcd3gw
+    ```
+
+1.  Install the `calico-control` package:
 
     ```
         apt-get install calico-control
     ```
 
-3.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
+1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
     section:
     -   Find the line beginning with `core_plugin`, and change it to
         read `core_plugin = calico`.
 
-4.  With OpenStack releases earlier than Liberty, edit the
+1.  With OpenStack releases earlier than Liberty, edit the
     `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section:
     -   Find the line for the `dhcp_agents_per_network` setting,
         uncomment it, and set its value to the number of compute nodes
@@ -212,7 +228,7 @@ perform the following steps:
         because the networks on different compute nodes are not
         bridged together.
 
-5.  Restart the Neutron server process:
+1.  Restart the Neutron server process:
 
     ```
         service neutron-server restart
