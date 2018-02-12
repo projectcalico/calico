@@ -414,6 +414,10 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 }
 
 func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeout(10*time.Second, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
 	expConnectivity := c.ExpectedConnectivity()
 	start := time.Now()
 
@@ -422,7 +426,7 @@ func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface
 	// connectivity check takes longer than the timeout.
 	completedAttempts := 0
 	var actualConn []string
-	for time.Since(start) < 10*time.Second || completedAttempts < 2 {
+	for time.Since(start) < timeout || completedAttempts < 2 {
 		actualConn = c.ActualConnectivity()
 		if reflect.DeepEqual(actualConn, expConnectivity) {
 			return

@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	"time"
 
@@ -314,8 +316,13 @@ var _ = Describe("health tests", func() {
 	})
 
 	Describe("with datastore not ready", func() {
+		var (
+			info *v3.ClusterInformation
+		)
+
 		BeforeEach(func() {
-			info, err := k8sAPIServer.CalicoClient.ClusterInformation().Get(
+			var err error
+			info, err = k8sAPIServer.CalicoClient.ClusterInformation().Get(
 				context.Background(),
 				"default",
 				options.GetOptions{},
@@ -324,13 +331,27 @@ var _ = Describe("health tests", func() {
 			log.Infof("info = %#v", info)
 			notReady := false
 			info.Spec.DatastoreReady = &notReady
-			_, err = k8sAPIServer.CalicoClient.ClusterInformation().Update(
+			info, err = k8sAPIServer.CalicoClient.ClusterInformation().Update(
 				context.Background(),
 				info,
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			startFelix("", "", "")
+		})
+
+		AfterEach(func() {
+			if info != nil {
+				ready := true
+				info.Spec.DatastoreReady = &ready
+				var err error
+				info, err = k8sAPIServer.CalicoClient.ClusterInformation().Update(
+					context.Background(),
+					info,
+					options.SetOptions{},
+				)
+				Expect(err).NotTo(HaveOccurred())
+			}
 		})
 
 		AfterEach(func() {
