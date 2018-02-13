@@ -80,11 +80,13 @@ const (
 	ChainDispatchSetEndPointMark         = ChainNamePrefix + "set-endpoint-mark"
 	ChainDispatchFromEndPointMark        = ChainNamePrefix + "from-endpoint-mark"
 
-	ChainForwardCheck = ChainNamePrefix + "forward-check"
+	ChainForwardCheck        = ChainNamePrefix + "forward-check"
+	ChainForwardEndpointMark = ChainNamePrefix + "forward-endpoint-mark"
 
-	WorkloadToEndpointPfx      = ChainNamePrefix + "tw-"
-	WorkloadFromEndpointPfx    = ChainNamePrefix + "fw-"
-	WorkloadSetEndPointMarkPfx = ChainNamePrefix + "sm-"
+	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
+	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
+
+	SetEndPointMarkPfx = ChainNamePrefix + "sm-"
 
 	HostToEndpointPfx          = ChainNamePrefix + "th-"
 	HostFromEndpointPfx        = ChainNamePrefix + "fh-"
@@ -144,7 +146,7 @@ type RuleRenderer interface {
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 
-	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint, EndpointMarkMapper) []*iptables.Chain
+	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,
 		epMarkMapper EndpointMarkMapper,
@@ -154,8 +156,14 @@ type RuleRenderer interface {
 		profileIDs []string,
 	) []*iptables.Chain
 
-	HostDispatchChains(map[string]proto.HostEndpointID, EndpointMarkMapper, bool) []*iptables.Chain
-	FromHostDispatchChains(map[string]proto.HostEndpointID, EndpointMarkMapper) []*iptables.Chain
+	EndpointMarkDispatchChains(
+		epMarkMapper EndpointMarkMapper,
+		wlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+		hepEndpoints map[string]proto.HostEndpointID,
+	) []*iptables.Chain
+
+	HostDispatchChains(map[string]proto.HostEndpointID, bool) []*iptables.Chain
+	FromHostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
 		epMarkMapper EndpointMarkMapper,
@@ -167,13 +175,11 @@ type RuleRenderer interface {
 	) []*iptables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
-		epMarkMapper EndpointMarkMapper,
 		ingressPolicyNames []string,
 		egressPolicyNames []string,
 	) []*iptables.Chain
 	HostEndpointToMangleChains(
 		ifaceName string,
-		epMarkMapper EndpointMarkMapper,
 		preDNATPolicyNames []string,
 	) []*iptables.Chain
 
@@ -211,11 +217,12 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept   uint32
-	IptablesMarkPass     uint32
-	IptablesMarkScratch0 uint32
-	IptablesMarkScratch1 uint32
-	IptablesMarkEndpoint uint32
+	IptablesMarkAccept          uint32
+	IptablesMarkPass            uint32
+	IptablesMarkScratch0        uint32
+	IptablesMarkScratch1        uint32
+	IptablesMarkEndpoint        uint32
+	IptablesMarkEndpointGeneric uint32 // an endpoint mark which is reserved to mark generic endpoints.
 
 	KubeNodePortRanges     []numorstring.Port
 	KubeIPVSSupportEnabled bool
@@ -249,7 +256,7 @@ func (c *Config) validate() {
 	usedBits := uint32(0)
 	for i := 0; i < myValue.NumField(); i++ {
 		fieldName := myType.Field(i).Name
-		if strings.HasPrefix(fieldName, "IptablesMark") {
+		if strings.HasPrefix(fieldName, "IptablesMark") && fieldName != "IptablesMarkEndpointGeneric" {
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(

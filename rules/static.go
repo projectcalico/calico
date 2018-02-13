@@ -126,6 +126,37 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 	}
 }
 
+// With kube-proxy running in ipvs mode, forward traffic gets an endpoint mark in INPUT chain.
+// Forward endpoint mark chain implements rules to process forward packet with an endpoint mark in OUTPUT chain.
+func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chain {
+	var fwRules []Rule
+
+	fwRules = append(fwRules,
+		// Jump to from-endpoint-mark dispatch chain if endpoint mark is not a generic mark, which means
+		// packet has been through filter INPUT chain with a real ingress endpoint. There could be policies
+		// apply to its ingress interface, e.g. workload egress or host endpoint ingress policies.
+		Rule{
+			Match:  Match().MarkNotMatchesWithMask(r.IptablesMarkEndpointGeneric, r.IptablesMarkEndpoint),
+			Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+		},
+		// For any forward packet with an endpoint mark, apply host endpoint egress forward policies.
+		Rule{
+			Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
+		},
+		// Accept packet if policies above set ACCEPT mark.
+		Rule{
+			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
+			Action:  r.filterAllowAction,
+			Comment: "Policy explicitly accepted packet.",
+		},
+	)
+
+	return &Chain{
+		Name:  ChainForwardEndpointMark,
+		Rules: fwRules,
+	}
+}
+
 func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
@@ -398,10 +429,17 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 }
 
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*Chain {
-	return []*Chain{
+	result := []*Chain{}
+	result = append(result,
 		r.filterOutputChain(ipVersion),
 		r.failsafeOutChain(),
+	)
+
+	if r.KubeIPVSSupportEnabled {
+		result = append(result, r.StaticFilterOutputForwardEndpointMarkChain())
 	}
+
+	return result
 }
 
 func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
@@ -411,23 +449,29 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	rules = append(rules, r.acceptAlreadyAccepted()...)
 
 	if r.KubeIPVSSupportEnabled {
-		// Jump to from-endpoint-mark dispatch chain if endpoint mark is not zero, which means
+		if ipVersion == 4 && r.IPIPEnabled {
+			// Auto-allow IPIP traffic from tunnel device to other host interface.
+			// If IPIP is enabled, the packet will be sent over to tunnel device and
+			// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain.
+			// We need to make sure packet been allowed to stop it going through from-endpoint-mark again with node ip.
+			rules = append(rules,
+				Rule{
+					Match: Match().ProtocolNum(ProtoIPIP).
+						SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDThisHostIPs)).
+						DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs)).
+						SrcAddrType(AddrTypeLocal, false),
+					Action:  r.filterAllowAction,
+					Comment: "Allow IPIP packets from tunnel device to other Calico hosts",
+				},
+			)
+		}
+
+		// Jump to forward-endpoint-mark chain if endpoint mark is not zero, which means
 		// packet has been through filter INPUT chain. There could be policies apply to its ingress interface.
 		rules = append(rules,
 			Rule{
 				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
-				Action: JumpAction{Target: ChainDispatchFromEndPointMark},
-			},
-		)
-
-		// Clear endpoint mark immediately after. If IPIP is enabled, the packet will be sent over to tunnel device and
-		// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain. We need
-		// to make sure endpoint mark has been cleared to stop the packet going through from-endpoint-mark again with node ip.
-		rules = append(rules,
-			Rule{
-				Action: ClearMarkAction{
-					Mark: r.IptablesMarkEndpoint,
-				},
+				Action: JumpAction{Target: ChainForwardEndpointMark},
 			},
 		)
 	}
@@ -454,8 +498,18 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		)
 	}
 
+	// Return if endpoint mark is set (forward traffic).
+	if r.KubeIPVSSupportEnabled {
+		rules = append(rules,
+			Rule{
+				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
+				Action: ReturnAction{},
+			},
+		)
+	}
+
 	// If we reach here, the packet is not going to a workload so it must be going to a
-	// host endpoint.
+	// host endpoint. It also has no endpoint mark so it must be going to local process.
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// When IPIP is enabled, auto-allow IPIP traffic to other Calico nodes.  Without this,

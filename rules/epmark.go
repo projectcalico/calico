@@ -19,7 +19,13 @@ import (
 	"hash/fnv"
 	"io"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/markbits"
+)
+
+const (
+	pseudoGenericEndpointName = "caliPseudoGenericEndpoint"
 )
 
 // Endpoint Mark Mapper (EPM) provides set of functions to manage allocation/free endpoint mark bit
@@ -43,14 +49,14 @@ type DefaultEPMarkManager struct {
 	activeMarkToEndpoint     map[uint32]string
 }
 
-func NewEndpointMarkMapper(markMask uint32) EndpointMarkMapper {
-	return NewEndpointMarkMapperWithShim(markMask, fnv.New32())
+func NewEndpointMarkMapper(markMask, genericMark uint32) EndpointMarkMapper {
+	return NewEndpointMarkMapperWithShim(markMask, genericMark, fnv.New32())
 }
 
-func NewEndpointMarkMapperWithShim(markMask uint32, hash32 HashCalculator32) EndpointMarkMapper {
+func NewEndpointMarkMapperWithShim(markMask, genericMark uint32, hash32 HashCalculator32) EndpointMarkMapper {
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
-	return &DefaultEPMarkManager{
+	epmm := &DefaultEPMarkManager{
 		markBitsManager: markBitsManager,
 		maxPosition:     markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
 		hash32:          hash32,
@@ -59,6 +65,18 @@ func NewEndpointMarkMapperWithShim(markMask uint32, hash32 HashCalculator32) End
 		activePositionToEndpoint: map[int]string{},
 		activeMarkToEndpoint:     map[uint32]string{},
 	}
+
+	// Reserve genericMark to pseudoGenericEndpoint. This mark is reserved for any traffic whose
+	// incoming interface is neither a workload nor a host endpoint.
+	err := epmm.SetEndpointMark(pseudoGenericEndpointName, genericMark)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"MarkMask":    markMask,
+			"GenericMark": genericMark,
+		}).Panic("Reserve generic endpoint mark failed.")
+	}
+
+	return epmm
 }
 
 func (epmm *DefaultEPMarkManager) GetMask() uint32 {
@@ -100,11 +118,15 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 		return 0, errors.New("No mark left for endpoint")
 	}
 
-	mark, err := epmm.markBitsManager.MapNumberToMark(prospect)
+	return epmm.allocateOnePosition(ep, prospect)
+}
+
+func (epmm *DefaultEPMarkManager) allocateOnePosition(ep string, pos int) (uint32, error) {
+	mark, err := epmm.markBitsManager.MapNumberToMark(pos)
 	if err != nil {
 		return 0, err
 	}
-	epmm.setMark(ep, prospect, mark)
+	epmm.setMark(ep, pos, mark)
 	return mark, nil
 }
 
