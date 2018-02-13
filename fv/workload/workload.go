@@ -230,8 +230,15 @@ var (
 )
 
 func (w *Workload) LatencyTo(ip, port string) time.Duration {
+	if strings.Contains(ip, ":") {
+		ip = fmt.Sprintf("[%s]", ip)
+	}
 	out, err := w.ExecOutput("hping", "-p", port, "-c", "20", "--fast", "-S", "-n", ip)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	stderr := ""
+	if err, ok := err.(*exec.ExitError); ok {
+		stderr = string(err.Stderr)
+	}
+	Expect(err).NotTo(HaveOccurred(), stderr)
 
 	lines := strings.Split(out, "\n")[1:] // Skip header line
 	var rttSum time.Duration

@@ -59,7 +59,12 @@ ifeq ($(ARCH),ppc64le)
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
-FV_FELIXIMAGE?=calico/felix$(ARCHTAG)
+
+# Name used to tag the Felix container image when building.
+FELIX_IMAGE_NAME?=calico/felix$(ARCHTAG):latest
+
+# Name of the images to run FV tests against.
+FV_FELIXIMAGE?=$(FELIX_IMAGE_NAME)
 FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 FV_GINKGO_NODES?=4
@@ -179,7 +184,7 @@ calico/felix: bin/calico-felix
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix docker-image/bin/
-	docker build --pull -t calico/felix$(ARCHTAG) --file ./docker-image/Dockerfile$(ARCHTAG) docker-image
+	docker build --pull -t $(FELIX_IMAGE_NAME) --file ./docker-image/Dockerfile$(ARCHTAG) docker-image
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.

@@ -26,9 +26,13 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 type EnvConfig struct {
@@ -123,4 +127,29 @@ func GetEtcdClient(etcdIP string) client.Interface {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	return client
+}
+
+func IPSetNameForSelector(ipVersion int, rawSelector string) string {
+	var ipFamily ipsets.IPFamily
+	if ipVersion == 4 {
+		ipFamily = ipsets.IPFamilyV4
+	} else {
+		ipFamily = ipsets.IPFamilyV6
+	}
+
+	sel, err := selector.Parse(rawSelector)
+	Expect(err).ToNot(HaveOccurred())
+
+	ipSetData := calc.IPSetData{
+		Selector: sel,
+	}
+	setID := ipSetData.UniqueID()
+	ipVerConf := ipsets.NewIPVersionConfig(
+		ipFamily,
+		rules.IPSetNamePrefix,
+		nil,
+		nil,
+	)
+
+	return ipVerConf.NameForMainIPSet(setID)
 }

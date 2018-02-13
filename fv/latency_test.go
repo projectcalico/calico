@@ -36,7 +36,8 @@ import (
 )
 
 type latencyConfig struct {
-	ipVersion int
+	ipVersion   int
+	generateIPs func(n int) (result []string)
 }
 
 func (c latencyConfig) workloadIP(workloadIdx int) string {
@@ -61,6 +62,8 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 
 	BeforeEach(func() {
 		topologyOptions := containers.DefaultTopologyOptions()
+		topologyOptions.EnableIPv6 = true
+
 		felix, etcd, client = containers.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = felix.GetFelixPID()
 
@@ -164,9 +167,12 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Describe("with all() selector", func() {
+		Describe("with all() source selector", func() {
+			const (
+				sourceSelector = "all()"
+			)
 			BeforeEach(func() {
-				pol.Spec.Ingress[0].Source.Selector = "all()"
+				pol.Spec.Ingress[0].Source.Selector = sourceSelector
 				pol = updatePolicy(pol)
 			})
 
@@ -177,17 +183,23 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			Describe("with 10k IPs", func() {
+			Describe("with 10k IPs in an IP set", func() {
 				BeforeEach(func() {
+					// Add an extra 10k IPs to one of the workload endpoints.
 					w[1].WorkloadEndpoint.Spec.IPNetworks = append(w[1].WorkloadEndpoint.Spec.IPNetworks,
-						generateIPs(10000)...)
+						c.generateIPs(10000)...)
 					wep := w[1].WorkloadEndpoint
 					wep.Namespace = "fv"
 					_, err := client.WorkloadEndpoints().Update(utils.Ctx, wep, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 
+					// The all() selector should now map to an IP set with 10,002 IPs in it.
+					ipSetName := utils.IPSetNameForSelector(c.ipVersion, sourceSelector)
 					Eventually(func() int {
-						return getNumIPSetMembers(felix.Container, "cali4-s:5y5I3VdRZfDU01O--xXAPx2")
+						return getNumIPSetMembers(
+							felix.Container,
+							ipSetName,
+						)
 					}, "100s", "1000ms").Should(Equal(10002))
 				})
 
@@ -208,13 +220,16 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 	}
 
 	Context("IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
-		describeLatencyTests(latencyConfig{ipVersion: 4})
+		describeLatencyTests(latencyConfig{ipVersion: 4, generateIPs: generateIPv4s})
 	})
 
-	// TODO: IPv6
+	// Unfortunately, hping3 doesn't support IPv6.
+	//Context("IPv6: Network sets tests with initialized Felix and etcd datastore", func() {
+	//	describeLatencyTests(latencyConfig{ipVersion: 6, generateIPs: generateIPv6s})
+	//})
 })
 
-func generateIPs(n int) (result []string) {
+func generateIPv4s(n int) (result []string) {
 	for a := 0; a < 256; a++ {
 		for b := 0; b < 256; b++ {
 			for c := 0; c < 256; c++ {
@@ -222,6 +237,21 @@ func generateIPs(n int) (result []string) {
 					return
 				}
 				result = append(result, fmt.Sprintf("11.%d.%d.%d", a, b, c))
+				n--
+			}
+		}
+	}
+	panic("too many IPs")
+}
+
+func generateIPv6s(n int) (result []string) {
+	for a := 0; a < 256; a++ {
+		for b := 0; b < 256; b++ {
+			for c := 0; c < 256; c++ {
+				if n <= 0 {
+					return
+				}
+				result = append(result, fmt.Sprintf("fdc6:3dbc:e983:cbcf:%x:%x:%x::1", a, b, c))
 				n--
 			}
 		}
