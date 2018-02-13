@@ -28,7 +28,7 @@ import (
 	"syscall"
 	"time"
 
-	docopt "github.com/docopt/docopt-go"
+	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -38,6 +38,7 @@ import (
 
 	"github.com/projectcalico/felix/policysync"
 
+	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -309,11 +310,20 @@ configRetry:
 	}
 	dpConnector := newConnector(configParams, connToUsageRepUpdChan, backendClient, dpDriver, failureReportChan)
 
-	// Initialise the policy sync server, which listens for connections from Dikastes.
-	toPolicySync := make(chan interface{})
-	policySyncUIDAllocator := policysync.NewUIDAllocator()
-	policySyncProcessor := policysync.NewProcessor(toPolicySync)
-	policySyncServer := policysync.NewMgmtAPIServer(policySyncProcessor.Joins, policySyncUIDAllocator.NextUID)
+	// If enabled, create a server for the policy sync API.  This allows clients to connect to
+	// Felix over a socket and receive policy updates.
+	var policySyncServer *nam.Server
+	var policySyncProcessor *policysync.Processor
+	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
+	if configParams.PolicySyncSocketPath != "" {
+		log.WithField("managementSocket", configParams.PolicySyncSocketPath).Info(
+			"Policy sync API enabled.  Creating the policy sync server.")
+		toPolicySync := make(chan interface{})
+		policySyncUIDAllocator := policysync.NewUIDAllocator()
+		policySyncProcessor = policysync.NewProcessor(toPolicySync)
+		policySyncServer = policysync.NewMgmtAPIServer(policySyncProcessor.Joins, policySyncUIDAllocator.NextUID)
+		calcGraphClientChannels = append(calcGraphClientChannels, toPolicySync)
+	}
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -358,7 +368,7 @@ configRetry:
 	// etc.
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
 		configParams,
-		[]chan<- interface{}{dpConnector.ToDataplane, toPolicySync},
+		calcGraphClientChannels,
 		healthAggregator,
 	)
 
@@ -454,10 +464,12 @@ configRetry:
 	// Start communicating with the dataplane driver.
 	dpConnector.Start()
 
-	// Start communicating with dikastes instances.
-	policySyncProcessor.Start()
-	// TODO: Make path configurable
-	policySyncServer.Serve(true, "/tmp/udsuspver/mgmt.sock")
+	if policySyncProcessor != nil {
+		log.WithField("managementSocket", configParams.PolicySyncSocketPath).Info(
+			"Policy sync API enabled.  Starting the policy sync server.")
+		policySyncProcessor.Start()
+		policySyncServer.Serve(true, configParams.PolicySyncSocketPath)
+	}
 
 	// Send the opening message to the dataplane driver, giving it its
 	// config.

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,14 +70,14 @@ func init() {
 }
 
 type AsyncCalcGraph struct {
-	Dispatcher         *dispatcher.Dispatcher
-	inputEvents        chan interface{}
-	outputDestinations []chan<- interface{}
-	eventBuffer        *EventSequencer
-	beenInSync         bool
-	needToSendInSync   bool
-	syncStatusNow      api.SyncStatus
-	healthAggregator   *health.HealthAggregator
+	Dispatcher       *dispatcher.Dispatcher
+	inputEvents      chan interface{}
+	outputChannels   []chan<- interface{}
+	eventBuffer      *EventSequencer
+	beenInSync       bool
+	needToSendInSync bool
+	syncStatusNow    api.SyncStatus
+	healthAggregator *health.HealthAggregator
 
 	flushTicks       <-chan time.Time
 	flushLeakyBucket int
@@ -93,17 +93,17 @@ const (
 
 func NewAsyncCalcGraph(
 	conf *config.Config,
-	outputDestinations []chan<- interface{},
+	outputChannels []chan<- interface{},
 	healthAggregator *health.HealthAggregator,
 ) *AsyncCalcGraph {
 	eventBuffer := NewEventBuffer(conf)
 	disp := NewCalculationGraph(eventBuffer, conf.FelixHostname)
 	g := &AsyncCalcGraph{
-		inputEvents:        make(chan interface{}, 10),
-		outputDestinations: outputDestinations,
-		Dispatcher:         disp,
-		eventBuffer:        eventBuffer,
-		healthAggregator:   healthAggregator,
+		inputEvents:      make(chan interface{}, 10),
+		outputChannels:   outputChannels,
+		Dispatcher:       disp,
+		eventBuffer:      eventBuffer,
+		healthAggregator: healthAggregator,
 	}
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
 		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
@@ -219,7 +219,7 @@ func (acg *AsyncCalcGraph) maybeFlush() {
 
 func (acg *AsyncCalcGraph) onEvent(event interface{}) {
 	log.Debug("Sending output event on channel")
-	for _, c := range acg.outputDestinations {
+	for _, c := range acg.outputChannels {
 		c <- event
 	}
 	countOutputEvents.Inc()
