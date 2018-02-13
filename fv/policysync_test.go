@@ -18,6 +18,7 @@ package fv
 
 import (
 	"context"
+	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
@@ -42,19 +43,22 @@ import (
 var _ = Context("policy sync API tests", func() {
 
 	var (
-		etcd   *containers.Container
-		felix  *containers.Felix
-		client client.Interface
-		w      [3]*workload.Workload
+		etcd    *containers.Container
+		felix   *containers.Felix
+		client  client.Interface
+		w       [3]*workload.Workload
+		tempDir string
 	)
 
 	BeforeEach(func() {
-		// TODO: Unique directory for each run!
-		os.Remove("/tmp/fvtest-calico-run/policysync.sock")
+		var err error
+		tempDir, err = ioutil.TempDir("", "felixfv")
+		Expect(err).NotTo(HaveOccurred())
+
 		options := containers.DefaultTopologyOptions()
-		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policysync.sock"
+		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policy-mgmt.sock"
 		options.ExtraEnvVars["FELIX_PolicySyncWorkloadSocketPathPrefix"] = "/var/run/calico"
-		options.ExtraVolumes["/tmp/fvtest-calico-run"] = "/var/run/calico"
+		options.ExtraVolumes[tempDir] = "/var/run/calico"
 		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows workloads with this profile to talk to each
@@ -67,7 +71,7 @@ var _ = Context("policy sync API tests", func() {
 			Action: api.Allow,
 			Source: api.EntityRule{Selector: "default == ''"},
 		}}
-		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
+		_, err = client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create three workloads, using that profile.
@@ -93,19 +97,28 @@ var _ = Context("policy sync API tests", func() {
 		etcd.Stop()
 	})
 
+	AfterEach(func() {
+		if tempDir != "" {
+			err := os.RemoveAll(tempDir)
+			Expect(err).NotTo(HaveOccurred(), "Failed to clean up temp dir")
+		}
+	})
+
 	It("should do policy sync", func() {
-		By("Creating the socket")
-		Eventually(func() error {
-			_, err := os.Stat("/tmp/fvtest-calico-run/policysync.sock")
-			return err
-		}).ShouldNot(HaveOccurred())
-		// TODO Permissions on sockets
-		felix.Exec("chmod", "a+rw", "/var/run/calico/policysync.sock")
-		felix.Exec("rm", "-rf", "/var/run/calico/wl0")
-		felix.Exec("mkdir", "-p", "/var/run/calico/wl0")
+		By("Creating the management socket")
+		hostMgmtSocketPath := tempDir + "/policy-mgmt.sock"
+		Eventually(hostMgmtSocketPath).Should(BeAnExistingFile())
+
+		// Use the fact that anything we exec inside the Felix container runs as root to fix the
+		// permissions on the socket so the test process can connect.
+		felix.Exec("chmod", "a+rw", "/var/run/calico/policy-mgmt.sock")
 
 		By("Accepting a connection from the management API client")
-		client := nodeagentmgmt.ClientUds("/tmp/fvtest-calico-run/policysync.sock")
+		client := nodeagentmgmt.ClientUds(hostMgmtSocketPath)
+		// Create the workload directory, this would normally be the responsibility of the
+		// flex volume driver.
+		hostWlDir := tempDir + "/wl0"
+		os.MkdirAll(hostWlDir, 0777)
 		Eventually(func() error {
 			resp, err := client.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
 				Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
@@ -120,22 +133,23 @@ var _ = Context("policy sync API tests", func() {
 		}).ShouldNot(HaveOccurred())
 
 		By("Creating the per-workload socket")
-		Eventually(func() error {
-			_, err := os.Stat("/tmp/fvtest-calico-run/wl0/policysync.sock")
-			return err
-		}).ShouldNot(HaveOccurred())
-		// TODO Permissions on sockets
+		hostWlSocketPath := hostWlDir + "/policysync.sock"
+		Eventually(hostWlSocketPath).Should(BeAnExistingFile())
+
+		By("Accepting connections on the per-workload socket")
+
+		// Use the fact that anything we exec inside the Felix container runs as root to fix the
+		// permissions on the socket so the test process can connect.
 		felix.Exec("chmod", "a+rw", "/var/run/calico/wl0/policysync.sock")
 
-		// TODO Connect to policy sync API.
-
+		// Then connect to it.
 		var conn *grpc.ClientConn
 		var err error
 		var opts []grpc.DialOption
 
 		opts = append(opts, grpc.WithInsecure())
 		opts = append(opts, grpc.WithDialer(unixDialer))
-		conn, err = grpc.Dial("/tmp/fvtest-calico-run/wl0/policysync.sock", opts...)
+		conn, err = grpc.Dial(hostWlSocketPath, opts...)
 		Expect(err).NotTo(HaveOccurred())
 
 		c := proto.NewPolicySyncClient(conn)
