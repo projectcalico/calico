@@ -49,16 +49,19 @@ ARCH?=amd64
 ifeq ($(ARCH),amd64)
 	ARCHTAG?=
 	GO_BUILD_VER?=v0.9
+	PROTOC_VER?=v0.1
 	FV_TYPHAIMAGE?=calico/typha:v0.6.0-beta1-16-g512a0f2
 endif
 
 ifeq ($(ARCH),ppc64le)
 	ARCHTAG:=-ppc64le
 	GO_BUILD_VER?=latest
+	PROTOC_VER?=latest
 	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+PROTOC_CONTAINER?=calico/protoc$(ARCHTAG):$(PROTOC_VER)
 FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 FV_GINKGO_NODES?=4
@@ -285,7 +288,7 @@ protobuf: proto/felixbackend.pb.go
 # Generate the protobuf bindings for go.
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}/proto:/src:rw \
-	              calico/protoc$(ARCHTAG) \
+	              $(PROTOC_CONTAINER) \
 	              --gogofaster_out=. \
 	              felixbackend.proto
 
