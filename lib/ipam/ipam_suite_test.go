@@ -15,13 +15,16 @@
 package ipam
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"testing"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func TestIpam(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "IPAM Suite")
 }

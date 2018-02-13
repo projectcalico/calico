@@ -82,6 +82,12 @@ func (b *allocationBlock) autoAssign(
 		// Affinity check is enabled but the host does not match - error.
 		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", *b.Affinity, host)
 		return nil, errors.New(s)
+	} else if b.Affinity == nil {
+		log.Warn("Attempting to assign IPs from block with no affinity: %v", b)
+		if checkAffinity {
+			// If we're checking strict affinity, we can't assign from a block with no affinity.
+			return nil, fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
+		}
 	}
 
 	// Walk the allocations until we find enough addresses.
@@ -107,6 +113,12 @@ func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[st
 	if b.StrictAffinity && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
 		return errors.New("Block host affinity does not match")
+	} else if b.Affinity == nil {
+		log.Warn("Attempting to assign IP from block with no affinity: %v", b)
+		if b.StrictAffinity {
+			// If we're checking strict affinity, we can't assign from a block with no affinity.
+			return fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
+		}
 	}
 
 	// Convert to an ordinal.
@@ -205,7 +217,7 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		}
 	}
 	if len(attrsToDelete) != 0 {
-		log.Infof("Deleting attributes: %v", attrsToDelete)
+		log.Debugf("Deleting attributes: %v", attrsToDelete)
 		b.deleteAttributes(attrsToDelete, ordinals)
 	}
 
@@ -332,6 +344,10 @@ func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) 
 }
 
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {
+	logCtx := log.WithField("attrs", attrs)
+	if handleID != nil {
+		logCtx = log.WithField("handle", *handleID)
+	}
 	attr := model.AllocationAttribute{handleID, attrs}
 	for idx, existing := range b.Attributes {
 		if reflect.DeepEqual(attr, existing) {
@@ -341,7 +357,7 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 	}
 
 	// Does not exist - add it.
-	log.Infof("New allocation attribute: %+v", attr)
+	logCtx.Debugf("New allocation attribute: %#v", attr)
 	attrIndex := len(b.Attributes)
 	b.Attributes = append(b.Attributes, attr)
 	return attrIndex

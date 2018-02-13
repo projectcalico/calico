@@ -27,29 +27,24 @@ import (
 
 var (
 	matchBlockAffinity = regexp.MustCompile("^/?calico/ipam/v2/host/([^/]+)/ipv./block/([^/]+)$")
+	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
+)
 
-	// The BlockAffinity is stored as a raw string type.  It currently does
-	// not contain any information since all required information is stored
-	// in the key (hostname and block CIDR).  If we end up needing to store
-	// data in the BlockAffinity then care will need to be taken to ensure
-	// existing versions of the value (an empty string) can be successfully
-	// unmarshalled.
-	// - The Python version of IPAM wrote an empty string, but can handle
-	//   any value written into the data.
-	// - The original golang port of IPAM wrote "{}" into the data (the JSON
-	//   value for an empty dict).  It was unable to handle reading of an
-	//   empty string written out by the Python IPAM.
-	// - The current version of the golang port now has the BlockAffinity
-	//   as a raw-string type so that it can handle reading in any value.
-	//   We write in a fixed value of "{}" so that we are compatible with
-	//   both the Python and the original golang port.
-	BlockAffinityValue = "{}"
-	typeBlockAff       = rawStringType
+type BlockAffinityState string
+
+const (
+	StateConfirmed       BlockAffinityState = "confirmed"
+	StatePending         BlockAffinityState = "pending"
+	StatePendingDeletion BlockAffinityState = "pendingDeletion"
 )
 
 type BlockAffinityKey struct {
 	CIDR net.IPNet `json:"-" validate:"required,name"`
 	Host string    `json:"-"`
+}
+
+type BlockAffinity struct {
+	State BlockAffinityState `json:"state"`
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
