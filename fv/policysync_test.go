@@ -39,7 +39,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
-var _ = FContext("with initialized Felix, etcd datastore, 3 workloads", func() {
+var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 
 	var (
 		etcd   *containers.Container
