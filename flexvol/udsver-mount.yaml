@@ -16,7 +16,7 @@ spec:
       - name: udsver-client
         image: quay.io/saurabh/udsver:latest
         imagePullPolicy: IfNotPresent
-        args: [ "-c", "-s", "/tmp/udsver/nodeagent/server.sock" ]
+        args: [ "-c", "-s", "/tmp/udsver/nodeagent/socket" ]
         volumeMounts:
         - mountPath: /tmp/udsver
           name: test-volume

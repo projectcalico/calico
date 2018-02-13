@@ -125,7 +125,7 @@ func readCredentials(path string, c *Credentials) error {
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(data, c)
+	err = json.Unmarshal(data, &c.WorkloadCredentials)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -20,8 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	nagent "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
-	pb "github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
+	creds "github.com/colabsaumoh/proto-udsuspver/flexvol/creds"
 )
 
 // Response is the output of Flex volume driver to the kubelet.
@@ -66,15 +64,6 @@ type ConfigurationOptions struct {
 	// Default: /creds
 	// For example: /creds here implies /var/run/nodeagent/creds/ directory
 	NodeAgentCredentialsHomeDir string `json:"nodeagent_credentials_home,omitempty"`
-	// Whether node agent will be notified of workload using gRPC or by creating files in
-	// NodeAgentCredentialsHomeDir.
-	// Default: false
-	UseGrpc bool `json:"use_grpc,omitempty"`
-	// If UseGrpc is true then host the UDS socket here.
-	// This is relative to NodeAgentManagementHomeDir
-	// Default: mgmt.sock
-	// For example: /mgmt/mgmt.sock implies /var/run/nodeagement/mgmt/mgmt.sock
-	NodeAgentManagementApi string `json:"nodeagent_management_api,omitempty"`
 	// Log level for loggint to node syslog. Options: INFO|WARNING
 	// Default: WARNING
 	LogLevel string `json:"log_level,omitempty"`
@@ -97,7 +86,6 @@ const (
 	NODEAGENT_HOME string = "/var/run/nodeagent"
 	MOUNT_DIR      string = "/mount"
 	CREDS_DIR      string = "/creds"
-	MGMT_SOCK      string = "/mgmt.sock"
 	LOG_LEVEL_WARN string = "WARNING"
 )
 
@@ -112,8 +100,6 @@ var (
 		NodeAgentManagementHomeDir:  NODEAGENT_HOME,
 		NodeAgentWorkloadHomeDir:    NODEAGENT_HOME + MOUNT_DIR,
 		NodeAgentCredentialsHomeDir: NODEAGENT_HOME + CREDS_DIR,
-		UseGrpc:                     false,
-		NodeAgentManagementApi:      NODEAGENT_HOME + MGMT_SOCK,
 		LogLevel:                    LOG_LEVEL_WARN,
 	}
 
@@ -185,31 +171,27 @@ func initCommand() error {
 
 // checkValidMountOpts checks if there are sufficient inputs to
 // call node agent.
-func checkValidMountOpts(opts string) (*pb.WorkloadInfo, bool) {
+func checkValidMountOpts(opts string) (*creds.Credentials, string, bool) {
 	ninputs := FlexVolumeInputs{}
 	err := json.Unmarshal([]byte(opts), &ninputs)
 	if err != nil {
-		return nil, false
+		return nil, "", false
 	}
 
-	wlInfo := pb.WorkloadInfo{
-		Attrs: &pb.WorkloadInfo_WorkloadAttributes{
-			Uid:            ninputs.Uid,
-			Workload:       ninputs.Name,
-			Namespace:      ninputs.Namespace,
-			Serviceaccount: ninputs.ServiceAccount,
-		},
-		Workloadpath: ninputs.Uid,
-	}
-	return &wlInfo, true
+	return &creds.Credentials{
+		UID:            ninputs.Uid,
+		Workload:       ninputs.Name,
+		Namespace:      ninputs.Namespace,
+		ServiceAccount: ninputs.ServiceAccount,
+	}, ninputs.Uid, true
 }
 
 // doMount handles a new workload mounting the flex volume drive. It will:
 // * mount a tmpfs at the destinationDir(ectory) of the workload created by the kubelet.
 // * create a sub-directory ('nodeagent') there
 // * do a bind mount of the nodeagent's directory on the node to the destinationDir/nodeagent.
-func doMount(destinationDir string, ninputs *pb.WorkloadInfo) error {
-	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + ninputs.Workloadpath
+func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath string) error {
+	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + workloadPath
 	err := os.MkdirAll(newDir, 0777)
 	if err != nil {
 		return err
@@ -261,26 +243,19 @@ func doUnmount(dir string) error {
 func mount(dir, opts string) error {
 	inp := strings.Join([]string{dir, opts}, "|")
 
-	ninputs, s := checkValidMountOpts(opts)
+	ninputs, workloadPath, s := checkValidMountOpts(opts)
 	if s == false {
 		return failure("mount", inp, "Incomplete inputs")
 	}
 
-	if err := doMount(dir, ninputs); err != nil {
+	if err := doMount(dir, ninputs, workloadPath); err != nil {
 		sErr := "Failure to mount: " + err.Error()
 		return failure("mount", inp, sErr)
 	}
 
-	if configuration.UseGrpc == true {
-		if err := sendWorkloadAdded(ninputs); err != nil {
-			sErr := "Failure to notify nodeagent: " + err.Error()
-			return failure("mount", inp, sErr)
-		}
-	} else {
-		if err := addCredentialFile(ninputs); err != nil {
-			sErr := "Failure to create credentials: " + err.Error()
-			return failure("mount", inp, sErr)
-		}
+	if err := addCredentialFile(ninputs); err != nil {
+		sErr := "Failure to create credentials: " + err.Error()
+		return failure("mount", inp, sErr)
 	}
 
 	return genericSuccess("mount", inp, "Mount ok.")
@@ -300,20 +275,10 @@ func unmount(dir string) error {
 
 	uid := comps[5]
 	// TBD: Check if uid is the correct format.
-	naInp := &pb.WorkloadInfo{
-		Attrs:        &pb.WorkloadInfo_WorkloadAttributes{Uid: uid},
-		Workloadpath: uid,
-	}
-	if configuration.UseGrpc == true {
-		if err := sendWorkloadDeleted(naInp); err != nil {
-			sErr := "Failure to notify nodeagent: " + err.Error()
-			return failure("unmount", dir, sErr)
-		}
-	} else {
-		if err := removeCredentialFile(naInp); err != nil {
-			// Go ahead and finish the unmount; no need to hold up kubelet.
-			emsgs = append(emsgs, "Failure to delete credentials file: "+err.Error())
-		}
+	naInp := &creds.Credentials{UID: uid}
+	if err := removeCredentialFile(naInp); err != nil {
+		// Go ahead and finish the unmount; no need to hold up kubelet.
+		emsgs = append(emsgs, "Failure to delete credentials file: "+err.Error())
 	}
 
 	// unmount the bind mount
@@ -388,65 +353,32 @@ func logToSys(caller, inp, opts string) {
 	}
 }
 
-// sendWorkloadAdded is used to notify node agent of a addition of a workload with the flex-volume volume mounted.
-func sendWorkloadAdded(ninputs *pb.WorkloadInfo) error {
-	client := nagent.ClientUds(configuration.NodeAgentManagementApi)
-	if client == nil {
-		return errors.New("Failed to create Nodeagent client.")
-	}
-
-	_, err := client.WorkloadAdded(ninputs)
-	if err != nil {
-		return err
-	}
-
-	client.Close()
-
-	return nil
-}
-
-// sendWorkloadDeleted is used to notify node agent of deletion of a workload with the flex-volume volume mounted.
-func sendWorkloadDeleted(ninputs *pb.WorkloadInfo) error {
-	client := nagent.ClientUds(configuration.NodeAgentManagementApi)
-	if client == nil {
-		return errors.New("Failed to create Nodeagent client.")
-	}
-
-	_, err := client.WorkloadDeleted(ninputs)
-	if err != nil {
-		return err
-	}
-
-	client.Close()
-	return nil
-}
-
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
-func addCredentialFile(ninputs *pb.WorkloadInfo) error {
+func addCredentialFile(ninputs *creds.Credentials) error {
 	//Make the directory and then write the ninputs as json to it.
 	var err error
-	err = os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 755)
+	err = os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0755)
 	if err != nil {
 		return err
 	}
 
 	var attrs []byte
-	attrs, err = json.Marshal(ninputs.Attrs)
+	attrs, err = json.Marshal(ninputs)
 	if err != nil {
 		return err
 	}
 
-	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.Attrs.Uid + ".json"}, "/")
+	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.UID + ".json"}, "/")
 	err = ioutil.WriteFile(credsFileTmp, attrs, 0644)
 
 	// Move it to the right location now.
-	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.Attrs.Uid + ".json"}, "/")
+	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
 	return os.Rename(credsFileTmp, credsFile)
 }
 
 // removeCredentialFile is used to delete a credential file when a workload with the flex-volume volume mounted is deleted.
-func removeCredentialFile(ninputs *pb.WorkloadInfo) error {
-	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.Attrs.Uid + ".json"}, "/")
+func removeCredentialFile(ninputs *creds.Credentials) error {
+	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
 	err := os.Remove(credsFile)
 	return err
 }
@@ -486,10 +418,6 @@ func initConfiguration() {
 		config.NodeAgentCredentialsHomeDir = CREDS_DIR
 	}
 
-	if len(config.NodeAgentManagementApi) == 0 {
-		config.NodeAgentManagementApi = MGMT_SOCK
-	}
-
 	if len(config.LogLevel) == 0 {
 		config.LogLevel = LOG_LEVEL_WARN
 	}
@@ -510,12 +438,6 @@ func initConfiguration() {
 		prefix = "/"
 	}
 	config.NodeAgentCredentialsHomeDir = strings.Join([]string{config.NodeAgentManagementHomeDir, config.NodeAgentCredentialsHomeDir}, prefix)
-
-	prefix = ""
-	if !strings.HasPrefix(config.NodeAgentManagementApi, "/") {
-		prefix = "/"
-	}
-	config.NodeAgentManagementApi = strings.Join([]string{config.NodeAgentManagementHomeDir, config.NodeAgentManagementApi}, prefix)
 
 	configuration = &config
 }

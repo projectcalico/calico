@@ -6,8 +6,7 @@ go_binary(
     srcs = ["flexvoldriver.go"],
     visibility = ["//visibility:public"],
     deps = [
-	"//protos/mgmtintf_v1:go_default_library",
-	"//nodeagentmgmt:go_default_library",
+	"//flexvol/creds:go_default_library",
         "@com_github_spf13_cobra//:go_default_library",
     ] + GRPC_COMPILE_DEPS,
 )

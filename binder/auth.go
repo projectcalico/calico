@@ -5,35 +5,33 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+
+	fvcreds "github.com/colabsaumoh/proto-udsuspver/flexvol/creds"
 )
 
 const (
 	authType = "udsuspver"
 )
 
-// TODO relocate to shared location
 type Credentials struct {
-	Uid            string
-	Workload       string
-	Namespace      string
-	ServiceAccount string
+	WorkloadCredentials fvcreds.Credentials
 }
 
 func (c Credentials) AuthType() string {
 	return authType
 }
 
-func CallerFromContext(ctx context.Context) (Credentials, bool) {
+func CallerFromContext(ctx context.Context) (fvcreds.Credentials, bool) {
 	peer, ok := peer.FromContext(ctx)
 	if !ok {
-		return Credentials{}, false
+		return fvcreds.Credentials{}, false
 	}
 	return CallerFromAuthInfo(peer.AuthInfo)
 }
 
-func CallerFromAuthInfo(ainfo credentials.AuthInfo) (Credentials, bool) {
+func CallerFromAuthInfo(ainfo credentials.AuthInfo) (fvcreds.Credentials, bool) {
 	if ci, ok := ainfo.(Credentials); ok {
-		return ci, true
+		return ci.WorkloadCredentials, true
 	}
-	return Credentials{}, false
+	return fvcreds.Credentials{}, false
 }
