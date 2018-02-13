@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,12 +26,17 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 type EnvConfig struct {
+	FelixImage string `default:"calico/felix:latest"`
 	EtcdImage  string `default:"quay.io/coreos/etcd"`
 	K8sImage   string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
 	TyphaImage string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
@@ -122,4 +127,29 @@ func GetEtcdClient(etcdIP string) client.Interface {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	return client
+}
+
+func IPSetNameForSelector(ipVersion int, rawSelector string) string {
+	var ipFamily ipsets.IPFamily
+	if ipVersion == 4 {
+		ipFamily = ipsets.IPFamilyV4
+	} else {
+		ipFamily = ipsets.IPFamilyV6
+	}
+
+	sel, err := selector.Parse(rawSelector)
+	Expect(err).ToNot(HaveOccurred())
+
+	ipSetData := calc.IPSetData{
+		Selector: sel,
+	}
+	setID := ipSetData.UniqueID()
+	ipVerConf := ipsets.NewIPVersionConfig(
+		ipFamily,
+		rules.IPSetNamePrefix,
+		nil,
+		nil,
+	)
+
+	return ipVerConf.NameForMainIPSet(setID)
 }

@@ -59,6 +59,12 @@ ifeq ($(ARCH),ppc64le)
 endif
 
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+
+# Name used to tag the Felix container image when building.
+FELIX_IMAGE_NAME?=calico/felix$(ARCHTAG):latest
+
+# Name of the images to run FV tests against.
+FV_FELIXIMAGE?=$(FELIX_IMAGE_NAME)
 FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
 FV_GINKGO_NODES?=4
@@ -178,7 +184,7 @@ calico/felix: bin/calico-felix
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix docker-image/bin/
-	docker build --pull -t calico/felix$(ARCHTAG) --file ./docker-image/Dockerfile$(ARCHTAG) docker-image
+	docker build --pull -t $(FELIX_IMAGE_NAME) --file ./docker-image/Dockerfile$(ARCHTAG) docker-image
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
@@ -402,22 +408,26 @@ $(FV_TESTS): vendor/.up-to-date $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
-fv: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_TESTS)
+fv fv/latency.log: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_TESTS)
 	# Copy the ginkgo binary out of the container since we need to run the fv tests directly
 	# on the host (because they need to be able to manipulate docker).  It'd be even nicer
 	# if we could give the build container access to the docker API but we've so-far struggled
 	# to get that working.
 	@echo Running Go FVs.
 	$(DOCKER_GO_BUILD) cp /go/bin/ginkgo bin/ginkgo
-	# fv.test is not expecting a container name with an ARCHTAG.
-	-docker tag calico/felix$(ARCHTAG) calico/felix
+	rm -rf fv/latency.log
 	for t in $(FV_TESTS); do \
 	    cd $(TOPDIR)/`dirname $$t` && \
+	    FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes $(FV_GINKGO_NODES) ./`basename $$t` || exit; \
 	done
+	@echo
+	@echo "Latency results:"
+	@echo
+	-@cat fv/latency.log
 
 bin/check-licenses: $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"

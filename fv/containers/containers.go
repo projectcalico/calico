@@ -466,7 +466,7 @@ func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
 		"-v", "/lib/modules:/lib/modules",
 		"-v", "/tmp/fvtest-calico-run:/var/run/calico",
-		"calico/felix:latest",
+		utils.Config.FelixImage,
 	)
 
 	if options.EnableIPv6 {

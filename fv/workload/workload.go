@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -174,7 +176,8 @@ func (w *Workload) IPNet() string {
 func (w *Workload) Configure(client client.Interface) {
 	wep := w.WorkloadEndpoint
 	wep.Namespace = "fv"
-	_, err := client.WorkloadEndpoints().Create(utils.Ctx, w.WorkloadEndpoint, utils.NoOptions)
+	var err error
+	w.WorkloadEndpoint, err = client.WorkloadEndpoints().Create(utils.Ctx, w.WorkloadEndpoint, utils.NoOptions)
 	Expect(err).NotTo(HaveOccurred())
 }
 
@@ -210,6 +213,48 @@ func (w *Port) SourceName() string {
 		return w.Name
 	}
 	return fmt.Sprintf("%s:%d", w.Name, w.Port)
+}
+
+func (w *Workload) NamespaceID() string {
+	splits := strings.Split(w.namespacePath, "/")
+	return splits[len(splits)-1]
+}
+
+func (w *Workload) ExecOutput(args ...string) (string, error) {
+	args = append([]string{"ip", "netns", "exec", w.NamespaceID()}, args...)
+	return w.C.ExecOutput(args...)
+}
+
+var (
+	rttRegexp = regexp.MustCompile(`rtt=(.*) ms`)
+)
+
+func (w *Workload) LatencyTo(ip, port string) time.Duration {
+	if strings.Contains(ip, ":") {
+		ip = fmt.Sprintf("[%s]", ip)
+	}
+	out, err := w.ExecOutput("hping", "-p", port, "-c", "20", "--fast", "-S", "-n", ip)
+	stderr := ""
+	if err, ok := err.(*exec.ExitError); ok {
+		stderr = string(err.Stderr)
+	}
+	Expect(err).NotTo(HaveOccurred(), stderr)
+
+	lines := strings.Split(out, "\n")[1:] // Skip header line
+	var rttSum time.Duration
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		matches := rttRegexp.FindStringSubmatch(line)
+		Expect(matches).To(HaveLen(2), "Failed to extract RTT from line: "+line)
+		rttMsecStr := matches[1]
+		rttMsec, err := strconv.ParseFloat(rttMsecStr, 64)
+		Expect(err).ToNot(HaveOccurred())
+		rttSum += time.Duration(rttMsec * float64(time.Millisecond))
+	}
+	meanRtt := rttSum / time.Duration(len(lines))
+	return meanRtt
 }
 
 func (p *Port) CanConnectTo(ip, port, protocol string) bool {
