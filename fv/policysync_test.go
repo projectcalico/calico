@@ -39,11 +39,11 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
-var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
+var _ = Context("policy sync API tests", func() {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Container
+		felix  *containers.Felix
 		client client.Interface
 		w      [3]*workload.Workload
 	)
@@ -51,7 +51,11 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 	BeforeEach(func() {
 		// TODO: Unique directory for each run!
 		os.Remove("/tmp/fvtest-calico-run/policysync.sock")
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		options := containers.DefaultTopologyOptions()
+		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policysync.sock"
+		options.ExtraEnvVars["FELIX_PolicySyncWorkloadSocketPathPrefix"] = "/var/run/calico"
+		options.ExtraVolumes["/tmp/fvtest-calico-run"] = "/var/run/calico"
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
@@ -109,7 +113,7 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 					Namespace: "fv",
 					Workload:  "fv-pod-0",
 				},
-				Workloadpath: "/var/run/calico/wl0",
+				Workloadpath: "wl0",
 			})
 			log.WithField("response", resp).Info("WorkloadAdded response")
 			return err

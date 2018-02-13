@@ -454,19 +454,34 @@ func (f *Felix) GetFelixPIDs() []int {
 func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
-	c := Run("felix",
-		RunOpts{AutoRemove: true},
+
+	args := []string{
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://"+etcdIP+":2379",
-		"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
+		"-e", "CALICO_ETCD_ENDPOINTS=http://" + etcdIP + ":2379",
+		"-e", "FELIX_LOGSEVERITYSCREEN=" + options.FelixLogSeverity,
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
+		"-e", "FELIX_IPV6SUPPORT=" + ipv6Enabled,
 		"-v", "/lib/modules:/lib/modules",
-		"-v", "/tmp/fvtest-calico-run:/var/run/calico",
+	}
+
+	for k, v := range options.ExtraEnvVars {
+		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	for k, v := range options.ExtraVolumes {
+		args = append(args, "-v", fmt.Sprintf("%s:%s", k, v))
+	}
+
+	args = append(args,
 		utils.Config.FelixImage,
+	)
+
+	c := Run("felix",
+		RunOpts{AutoRemove: true},
+		args...,
 	)
 
 	if options.EnableIPv6 {
@@ -489,12 +504,16 @@ func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 type TopologyOptions struct {
 	FelixLogSeverity string
 	EnableIPv6       bool
+	ExtraEnvVars     map[string]string
+	ExtraVolumes     map[string]string
 }
 
 func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
 		FelixLogSeverity: "info",
 		EnableIPv6:       true,
+		ExtraEnvVars:     map[string]string{},
+		ExtraVolumes:     map[string]string{},
 	}
 }
 

@@ -20,8 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 

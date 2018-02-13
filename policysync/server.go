@@ -32,7 +32,6 @@ const (
 	SockName       = "/policysync.sock"
 	OrchestratorId = "k8s"
 	EndpointId     = "eth0"
-	PathPrefix     = "/tmp/nodeagent"
 )
 
 // WorkloadAPIServer implements the API that each policy-sync agent connects to in order to get policy information.
@@ -53,7 +52,7 @@ func NewWorkloadAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *Wor
 // NewMgmtAPIServer creates a new server to listen for workload lifecycle events (i.e. workloads being created and
 // removed).  It opens and closes the per-workload socket accordingly, registering the workload API server with each
 // new socket.
-func NewMgmtAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *nam.Server {
+func NewMgmtAPIServer(joins chan<- JoinRequest, allocUID func() uint64, pathPrefix string) *nam.Server {
 	// Initialize the workload API server.
 	s := NewWorkloadAPIServer(joins, allocUID)
 	// The WlServer sets up/tears down the sockets, deferring the API implementation to the WorkloadAPIServer.
@@ -68,7 +67,7 @@ func NewMgmtAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *nam.Ser
 	)
 	// The management API server will listen on the socket for lifecycle messages.
 	mgmtAPIServer := nam.NewServer(
-		PathPrefix,
+		pathPrefix,
 		workloadHandler,
 	)
 	return mgmtAPIServer

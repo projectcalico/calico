@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/felix/policysync"
 
 	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
+
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -315,13 +316,17 @@ configRetry:
 	var policySyncServer *nam.Server
 	var policySyncProcessor *policysync.Processor
 	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
-	if configParams.PolicySyncSocketPath != "" {
-		log.WithField("managementSocket", configParams.PolicySyncSocketPath).Info(
+	if configParams.PolicySyncManagementSocketPath != "" {
+		log.WithField("managementSocket", configParams.PolicySyncManagementSocketPath).Info(
 			"Policy sync API enabled.  Creating the policy sync server.")
 		toPolicySync := make(chan interface{})
 		policySyncUIDAllocator := policysync.NewUIDAllocator()
 		policySyncProcessor = policysync.NewProcessor(toPolicySync)
-		policySyncServer = policysync.NewMgmtAPIServer(policySyncProcessor.Joins, policySyncUIDAllocator.NextUID)
+		policySyncServer = policysync.NewMgmtAPIServer(
+			policySyncProcessor.Joins,
+			policySyncUIDAllocator.NextUID,
+			configParams.PolicySyncWorkloadSocketPathPrefix,
+		)
 		calcGraphClientChannels = append(calcGraphClientChannels, toPolicySync)
 	}
 
@@ -465,10 +470,10 @@ configRetry:
 	dpConnector.Start()
 
 	if policySyncProcessor != nil {
-		log.WithField("managementSocket", configParams.PolicySyncSocketPath).Info(
+		log.WithField("managementSocket", configParams.PolicySyncManagementSocketPath).Info(
 			"Policy sync API enabled.  Starting the policy sync server.")
 		policySyncProcessor.Start()
-		policySyncServer.Serve(true, configParams.PolicySyncSocketPath)
+		policySyncServer.Serve(true, configParams.PolicySyncManagementSocketPath)
 	}
 
 	// Send the opening message to the dataplane driver, giving it its

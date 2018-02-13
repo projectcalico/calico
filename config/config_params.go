@@ -121,7 +121,8 @@ type Config struct {
 	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
 	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
 
-	PolicySyncSocketPath string `config:"file;;"`
+	PolicySyncManagementSocketPath     string `config:"file;;"`
+	PolicySyncWorkloadSocketPathPrefix string `config:"file;;"`
 
 	NetlinkTimeoutSecs time.Duration `config:"seconds;10"`
 
