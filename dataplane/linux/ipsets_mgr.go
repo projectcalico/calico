@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,8 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 		switch msg.Type {
 		case proto.IPSetUpdate_IP:
 			setType = ipsets.IPSetTypeHashIP
+		case proto.IPSetUpdate_NET:
+			setType = ipsets.IPSetTypeHashNet
 		case proto.IPSetUpdate_IP_AND_PORT:
 			setType = ipsets.IPSetTypeHashIPPort
 		default:

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,12 +31,12 @@ const (
 	ipSetID  = "s:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 	ipSetID2 = "t:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 
-	v4MainIPSetName  = "cali4-s:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4MainIPSetName  = "cali40s:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4TempIPSetName  = "cali4ts:qMt7iLlGDhvLnCjM0l9nzxb"
-	v4MainIPSetName2 = "cali4-t:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
 	v4TempIPSetName2 = "cali4tt:qMt7iLlGDhvLnCjM0l9nzxb"
 
-	v6MainIPSetName = "cali6-s:qMt7iLlGDhvLnCjM0l9nzxb"
+	v6MainIPSetName = "cali60s:qMt7iLlGDhvLnCjM0l9nzxb"
 	v6TempIPSetName = "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
@@ -61,16 +61,11 @@ var _ = Describe("IPSetType", func() {
 	It("should treat hash:ip,port as valid", func() {
 		Expect(IPSetType("hash:ip,port").IsValid()).To(BeTrue())
 	})
+})
+
+var _ = Describe("IPSetTypeHashIPPort", func() {
 	It("should return its string form from SetType()", func() {
 		Expect(IPSetTypeHashIPPort.SetType()).To(Equal("hash:ip,port"))
-	})
-	It("should canonicalise an IPv4", func() {
-		Expect(IPSetTypeHashIP.CanonicaliseMember("10.0.0.1")).
-			To(Equal(ip.FromString("10.0.0.1")))
-	})
-	It("should canonicalise an IPv6", func() {
-		Expect(IPSetTypeHashIP.CanonicaliseMember("feed:0::beef")).
-			To(Equal(ip.FromString("feed::beef")))
 	})
 	It("should canonicalise an IPv4 IP,port", func() {
 		Expect(IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,TCP:1234")).
@@ -88,17 +83,6 @@ var _ = Describe("IPSetType", func() {
 				Port:     3456,
 			}))
 	})
-	It("should canonicalise an IPv4 CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
-			To(Equal(ip.MustParseCIDR("10.0.0.0/24")))
-	})
-	It("should canonicalise an IPv6 CIDR", func() {
-		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef/24")).
-			To(Equal(ip.MustParseCIDR("feed::/24")))
-	})
-	It("should panic on bad IP", func() {
-		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
-	})
 	It("should panic on bad IP,port", func() {
 		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("foobar") }).To(Panic())
 	})
@@ -114,24 +98,63 @@ var _ = Describe("IPSetType", func() {
 	It("should panic on bad IP,port (too long)", func() {
 		Expect(func() { IPSetTypeHashIPPort.CanonicaliseMember("10.0.0.1,tcp:1234,5") }).To(Panic())
 	})
-	It("should panic on bad CIDR", func() {
-		Expect(func() { IPSetTypeHashNet.CanonicaliseMember("foobar") }).To(Panic())
-	})
 	It("should detect IPv6 for an IP,port", func() {
 		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
 	})
 	It("should detect IPv4 for an IP,port", func() {
 		Expect(IPSetTypeHashIPPort.IsMemberIPV6("10.0.0.1,tcp:1234")).To(BeFalse())
 	})
+	It("should detect IPv6 for an IP,port", func() {
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("feed:beef::,tcp:1234")).To(BeTrue())
+	})
+	It("should detect IPv4 for an IP,port", func() {
+		Expect(IPSetTypeHashIPPort.IsMemberIPV6("10.0.0.0,tcp:1234")).To(BeFalse())
+	})
+})
+
+var _ = Describe("IPSetTypeHashIP", func() {
+	It("should canonicalise an IPv4", func() {
+		Expect(IPSetTypeHashIP.CanonicaliseMember("10.0.0.1")).
+			To(Equal(ip.FromString("10.0.0.1")))
+	})
+	It("should canonicalise an IPv6", func() {
+		Expect(IPSetTypeHashIP.CanonicaliseMember("feed:0::beef")).
+			To(Equal(ip.FromString("feed::beef")))
+	})
+	It("should panic on bad IP", func() {
+		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
+	})
+})
+
+var _ = Describe("IPSetTypeHashNet", func() {
+	It("should canonicalise an IPv4 CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
+			To(Equal(ip.MustParseCIDROrIP("10.0.0.0/24")))
+	})
+	It("should canonicalise an IPv6 CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef/24")).
+			To(Equal(ip.MustParseCIDROrIP("feed::/24")))
+	})
+	It("should canonicalise an IPv4 IP as a CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1")).
+			To(Equal(ip.MustParseCIDROrIP("10.0.0.1/32")))
+	})
+	It("should canonicalise an IPv6 IP as a CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef")).
+			To(Equal(ip.MustParseCIDROrIP("feed::beef/128")))
+	})
+	It("should panic on bad CIDR", func() {
+		Expect(func() { IPSetTypeHashNet.CanonicaliseMember("foobar") }).To(Panic())
+	})
 })
 
 var _ = Describe("IPPort types", func() {
 	It("V4 should stringify correctly", func() {
 		Expect(V4IPPort{
-			IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
+			IP:       ip.FromString("10.0.0.0").(ip.V4Addr),
 			Protocol: labelindex.ProtocolTCP,
 			Port:     1234,
-		}.String()).To(Equal("10.0.0.1,tcp:1234"))
+		}.String()).To(Equal("10.0.0.0,tcp:1234"))
 	})
 	It("V6 should stringify correctly", func() {
 		Expect(V6IPPort{
@@ -596,7 +619,7 @@ var _ = Describe("IP sets dataplane", func() {
 		staleSet := set.New()
 		staleSet.Add("10.0.0.1")
 		staleSet.Add("10.0.0.2")
-		dataplane.IPSetMembers["cali4-unknown"] = staleSet
+		dataplane.IPSetMembers["cali40unknown"] = staleSet
 		dataplane.IPSetMembers["cali4tunknown"] = staleSet
 		ipsets.AddOrReplaceIPSet(meta, v4Members1And2)
 
@@ -642,7 +665,7 @@ var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 		rules.LegacyV4IPSetNames,
 	)
 	It("should own its own chains", func() {
-		Expect(v4VersionConf.OwnsIPSet("cali4-s:abcdef12345_-")).To(BeTrue())
+		Expect(v4VersionConf.OwnsIPSet("cali40s:abcdef12345_-")).To(BeTrue())
 		Expect(v4VersionConf.OwnsIPSet("cali4ts:abcdef12345_-")).To(BeTrue())
 	})
 	It("should own legacy special case chains", func() {
@@ -652,9 +675,10 @@ var _ = Describe("Standard IPv4 IPVersionConfig", func() {
 	It("should own legacy chains", func() {
 		Expect(v4VersionConf.OwnsIPSet("felix-4-foobar")).To(BeTrue())
 		Expect(v4VersionConf.OwnsIPSet("felix-4t-foobar")).To(BeTrue())
+		Expect(v4VersionConf.OwnsIPSet("cali4-s:abcdef12345_-")).To(BeTrue())
 	})
 	It("should not own chains from another version", func() {
-		Expect(v4VersionConf.OwnsIPSet("cali6-s:abcdef12345_-")).To(BeFalse())
+		Expect(v4VersionConf.OwnsIPSet("cali60s:abcdef12345_-")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("cali6ts:abcdef12345_-")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("felix-6-foobar")).To(BeFalse())
 		Expect(v4VersionConf.OwnsIPSet("felix-6t-foobar")).To(BeFalse())

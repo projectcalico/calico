@@ -802,6 +802,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		fc.shutDownProcess("Failed to read messages from dataplane")
 	}()
 	log.Info("Reading from dataplane driver pipe...")
+	ctx := context.Background()
 	for {
 		payload, err := fc.dataplane.RecvMessage()
 		if err != nil {
@@ -811,7 +812,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 		log.WithField("payload", payload).Debug("New message from dataplane")
 		switch msg := payload.(type) {
 		case *proto.ProcessStatusUpdate:
-			fc.handleProcessStatusUpdate(msg)
+			fc.handleProcessStatusUpdate(ctx, msg)
 		case *proto.WorkloadEndpointStatusUpdate:
 			if fc.statusReporter != nil {
 				fc.StatusUpdatesFromDataplane <- msg
@@ -835,7 +836,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 	}
 }
 
-func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatusUpdate) {
+func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg *proto.ProcessStatusUpdate) {
 	log.Debugf("Status update from dataplane driver: %v", *msg)
 	statusReport := model.StatusReport{
 		Timestamp:     msg.IsoTimestamp,
@@ -847,7 +848,9 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatus
 		Value: &statusReport,
 		TTL:   fc.config.ReportingTTLSecs,
 	}
-	_, err := fc.datastore.Apply(&kv)
+	applyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	_, err := fc.datastore.Apply(applyCtx, &kv)
+	cancel()
 	if err != nil {
 		log.Warningf("Failed to write status to datastore: %v", err)
 	} else {
@@ -857,7 +860,9 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatus
 		Key:   model.LastStatusReportKey{Hostname: fc.config.FelixHostname},
 		Value: &statusReport,
 	}
-	_, err = fc.datastore.Apply(&kv)
+	applyCtx, cancel = context.WithTimeout(ctx, 2*time.Second)
+	_, err = fc.datastore.Apply(applyCtx, &kv)
+	cancel()
 	if err != nil {
 		log.Warningf("Failed to write status to datastore: %v", err)
 	}

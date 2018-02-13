@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,11 +21,12 @@ import (
 
 	"strings"
 
+	"fmt"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -34,7 +35,7 @@ import (
 // endpointData holds the data that we need to know about a particular endpoint.
 type endpointData struct {
 	labels  map[string]string
-	ipAddrs []ip.Addr
+	nets    []ip.CIDR
 	ports   []model.EndpointPort
 	parents []*npParentData
 
@@ -117,7 +118,7 @@ const (
 )
 
 type IPSetMember struct {
-	IP         ip.Addr
+	CIDR       ip.CIDR
 	Protocol   IPSetPortProtocol
 	PortNumber uint16
 }
@@ -196,6 +197,7 @@ func (idx *SelectorAndNamedPortIndex) RegisterWith(allUpdDispatcher *dispatcher.
 	allUpdDispatcher.Register(model.ProfileLabelsKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, idx.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, idx.OnUpdate)
+	allUpdDispatcher.Register(model.NetworkSetKey{}, idx.OnUpdate)
 }
 
 // OnUpdate makes SelectorAndNamedPortIndex compatible with the Dispatcher.  It accepts
@@ -207,10 +209,10 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Updating NamedPortIndex with endpoint %v", key)
 			endpoint := update.Value.(*model.WorkloadEndpoint)
 			profileIDs := endpoint.ProfileIDs
-			idx.UpdateEndpoint(
+			idx.UpdateEndpointOrSet(
 				key,
 				endpoint.Labels,
-				convertNets(endpoint.IPv4Nets, endpoint.IPv6Nets),
+				extractCIDRsFromWorkloadEndpoint(endpoint),
 				endpoint.Ports,
 				profileIDs)
 		} else {
@@ -223,14 +225,29 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			log.Debugf("Updating NamedPortIndex for host endpoint %v", key)
 			endpoint := update.Value.(*model.HostEndpoint)
 			profileIDs := endpoint.ProfileIDs
-			idx.UpdateEndpoint(
+			idx.UpdateEndpointOrSet(
 				key,
 				endpoint.Labels,
-				convertIPs(endpoint.ExpectedIPv4Addrs, endpoint.ExpectedIPv6Addrs),
+				extractCIDRsFromHostEndpoint(endpoint),
 				endpoint.Ports,
 				profileIDs)
 		} else {
 			log.Debugf("Deleting host endpoint %v from NamedPortIndex", key)
+			idx.DeleteEndpoint(key)
+		}
+	case model.NetworkSetKey:
+		if update.Value != nil {
+			// Figure out what's changed and update the cache.
+			log.Debugf("Updating NamedPortIndex for network set %v", key)
+			netSet := update.Value.(*model.NetworkSet)
+			idx.UpdateEndpointOrSet(
+				key,
+				netSet.Labels,
+				extractCIDRsFromNetworkSet(netSet),
+				nil,
+				nil)
+		} else {
+			log.Debugf("Deleting network set %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)
 		}
 	case model.ProfileLabelsKey:
@@ -255,24 +272,66 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
-func convertIPs(a, b []net.IP) []ip.Addr {
-	combined := make([]ip.Addr, 0, len(a)+len(b))
-	for _, addr := range a {
-		combined = append(combined, ip.FromNetIP(addr.IP))
+// extractCIDRsFromHostEndpoint converts the expected IPs of the host endpoint into /32 and /128
+// CIDRs.
+func extractCIDRsFromHostEndpoint(endpoint *model.HostEndpoint) []ip.CIDR {
+	v4Addrs := endpoint.ExpectedIPv4Addrs
+	v6Addrs := endpoint.ExpectedIPv6Addrs
+	combined := make([]ip.CIDR, 0, len(v4Addrs)+len(v6Addrs))
+	for _, addr := range v4Addrs {
+		combined = append(combined, ip.FromNetIP(addr.IP).AsCIDR())
 	}
-	for _, addr := range b {
-		combined = append(combined, ip.FromNetIP(addr.IP))
+	for _, addr := range v6Addrs {
+		combined = append(combined, ip.FromNetIP(addr.IP).AsCIDR())
 	}
 	return combined
 }
 
-func convertNets(a, b []net.IPNet) []ip.Addr {
-	combined := make([]ip.Addr, 0, len(a)+len(b))
-	for _, addr := range a {
-		combined = append(combined, ip.FromNetIP(addr.IP))
+// extractCIDRsFromWorkloadEndpoint converts the IPv[46]Nets fields of the WorkloadEndpoint into
+// /32 and /128 CIDRs.  It ignores any prefix length (but our validation ensures those nets are
+// /32s or /128s in any case).
+func extractCIDRsFromWorkloadEndpoint(endpoint *model.WorkloadEndpoint) []ip.CIDR {
+	v4Nets := endpoint.IPv4Nets
+	v6Nets := endpoint.IPv6Nets
+	combined := make([]ip.CIDR, 0, len(v4Nets)+len(v6Nets))
+	for _, addr := range v4Nets {
+		combined = append(combined, ip.CIDRFromNetIP(addr.IP))
 	}
-	for _, addr := range b {
-		combined = append(combined, ip.FromNetIP(addr.IP))
+	for _, addr := range v6Nets {
+		combined = append(combined, ip.CIDRFromNetIP(addr.IP))
+	}
+	return combined
+}
+
+// extractCIDRsFromNetworkSet converts the Nets field of the NetworkSet into an []ip.CIDR slice.
+func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
+	a := netSet.Nets
+	combined := make([]ip.CIDR, 0, len(a))
+	for _, addr := range a {
+		cidr := ip.CIDRFromCalicoNet(addr)
+		if cidr.Prefix() == 0 {
+			// Special case: the linux dataplane can't handle 0-length CIDRs so we split it into
+			// multiple CIDRs.  Note: if the /1s were also in the network set, the deduplication is
+			// handled by reference counting in the ipSetData struct.
+			log.Debug("Converting 0 length CIDR to pair of /1s")
+			switch cidr.Version() {
+			case 4:
+				combined = append(combined,
+					ip.MustParseCIDROrIP("0.0.0.0/1"),
+					ip.MustParseCIDROrIP("128.0.0.0/1"),
+				)
+			case 6:
+				combined = append(combined,
+					ip.MustParseCIDROrIP("::/1"),
+					ip.MustParseCIDROrIP("8000::/1"),
+				)
+			default:
+				log.WithField("cidr", cidr).Panic("Unknown IP version")
+			}
+		} else {
+			// Normal case, just append the single CIDR.
+			combined = append(combined, cidr)
+		}
 	}
 	return combined
 }
@@ -352,7 +411,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 		return
 	}
 
-	// Emit events for all the removed IPs.
+	// Emit events for all the removed CIDRs.
 	for member := range ipSetData.memberToRefCount {
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithField("member", member).Debug("Emitting deletion event.")
@@ -368,21 +427,25 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(id string) {
 	delete(idx.ipSetDataByID, id)
 }
 
-func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
+func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	id interface{},
 	labels map[string]string,
-	ips []ip.Addr,
+	nets []ip.CIDR,
 	ports []model.EndpointPort,
 	parentIDs []string,
 ) {
+	var cidrsToLog interface{} = nets
+	if log.GetLevel() < log.DebugLevel && len(nets) > 20 {
+		cidrsToLog = fmt.Sprintf("<too many to log (%d)>", len(nets))
+	}
 	logCxt := log.WithFields(log.Fields{
-		"endpointID": id,
-		"newLabels":  labels,
-		"IPs":        ips,
-		"ports":      ports,
-		"parentIDs":  parentIDs,
+		"endpointOrSetID": id,
+		"newLabels":       labels,
+		"CIDRs":           cidrsToLog,
+		"ports":           ports,
+		"parentIDs":       parentIDs,
 	})
-	logCxt.Debug("Updating endpoint")
+	logCxt.Debug("Updating endpoint/network set")
 
 	// Calculate the new endpoint data.
 	newEndpointData := &endpointData{}
@@ -396,8 +459,8 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 		}
 		newEndpointData.parents = parents
 	}
-	if len(ips) > 0 {
-		newEndpointData.ipAddrs = ips
+	if len(nets) > 0 {
+		newEndpointData.nets = nets
 	}
 	if len(ports) > 0 {
 		newEndpointData.ports = ports
@@ -411,7 +474,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpoint(
 		// change.
 		if reflect.DeepEqual(oldEndpointData.labels, newEndpointData.labels) &&
 			reflect.DeepEqual(oldEndpointData.ports, newEndpointData.ports) &&
-			reflect.DeepEqual(oldEndpointData.ipAddrs, newEndpointData.ipAddrs) &&
+			reflect.DeepEqual(oldEndpointData.nets, newEndpointData.nets) &&
 			reflect.DeepEqual(oldEndpointData.parents, newEndpointData.parents) {
 			log.Debug("Endpoint update makes no changes, skipping.")
 			return
@@ -446,7 +509,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 ) {
 	for ipSetID, ipSetData := range idx.ipSetDataByID {
 		// Remove any previous match from the endpoint's cache.  We'll re-add it below if the match
-		// is still correct.  (This is a no-op when we're called from UpdateEndpoint(), which always
+		// is still correct.  (This is a no-op when we're called from UpdateEndpointOrSet(), which always
 		// creates a new endpointData struct.)
 		epData.RemoveMatchingIPSetID(ipSetID)
 
@@ -460,6 +523,9 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstAllIPSets(
 				// Incref all the new members.  If any of them go from 0 to 1 reference then we
 				// know that they're new.  We'll temporarily double-count members that were already
 				// present, then decref them below.
+				//
+				// This reference counting also allows us to tolerate duplicate members in the
+				// input data.
 				for _, newMember := range newIPSetContribution {
 					newRefCount := ipSetData.memberToRefCount[newMember] + 1
 					if newRefCount == 1 {
@@ -597,19 +663,19 @@ func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointD
 		// matching named ports by IP address.
 		portNumbers := d.LookupNamedPorts(ipSetData.namedPort, ipSetData.namedPortProtocol)
 		for _, namedPort := range portNumbers {
-			for _, addr := range d.ipAddrs {
+			for _, addr := range d.nets {
 				contrib = append(contrib, IPSetMember{
-					IP:         addr,
+					CIDR:       addr,
 					Protocol:   ipSetData.namedPortProtocol,
 					PortNumber: namedPort,
 				})
 			}
 		}
 	} else {
-		// Non-named port match, simply return the IP addresses.
-		for _, addr := range d.ipAddrs {
+		// Non-named port match, simply return the CIDRs.
+		for _, addr := range d.nets {
 			contrib = append(contrib, IPSetMember{
-				IP: addr,
+				CIDR: addr,
 			})
 		}
 	}

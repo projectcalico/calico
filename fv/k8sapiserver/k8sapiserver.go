@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
@@ -74,18 +73,36 @@ var theServer *Server
 func SetUp() *Server {
 	var err error
 
-	// Return existing server if we already have one.
-	if theServer != nil {
-		return theServer
+	// Defensive: retry the whole server creation a few times.  We also do retries of individual
+	// operations, which catch almost all issues here, but, since the API server is so stateful,
+	// it's easy to miss a corner case.
+	attempts := 3
+	for theServer == nil {
+		log.Info("No existing k8s API server, creating one...")
+		theServer, err = Create()
+		if err != nil {
+			log.WithError(err).Error("Failed to create k8s API server")
+			attempts -= 1
+			if attempts == 0 {
+				log.Panic("Persistently failed to create k8s API server")
+			}
+			log.Info("Retrying...")
+			time.Sleep(1)
+		}
 	}
 
-	// Set up a new server.  We'll store this in 'theServer' if the setup is completely
-	// successful.
+	return theServer
+}
+
+func Create() (*Server, error) {
 	server := &Server{}
+	var err error
 
 	// Start etcd, which will back the k8s API server.
 	server.etcdContainer = containers.RunEtcd()
-	Expect(server.etcdContainer).NotTo(BeNil())
+	if server.etcdContainer == nil {
+		return nil, errors.New("failed to create etcd container")
+	}
 
 	// Start the k8s API server.
 	//
@@ -106,32 +123,49 @@ func SetUp() *Server {
 		//"-v=10",
 		"--authorization-mode=RBAC",
 	)
-	Expect(server.apiServerContainer).NotTo(BeNil())
+	if server.apiServerContainer == nil {
+		TearDown(server)
+		return nil, errors.New("failed to create k8s API server container")
+	}
 
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
-	Eventually(func() (err error) {
-		err = server.apiServerContainer.ExecMayFail(
+	start := time.Now()
+	for {
+		err := server.apiServerContainer.ExecMayFail(
 			"kubectl", "create", "clusterrolebinding",
 			"anonymous-admin",
 			"--clusterrole=cluster-admin",
 			"--user=system:anonymous",
 		)
-		if err != nil {
-			log.Info("Waiting for API server to accept cluster role binding")
+		if err == nil {
+			break
 		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
+		if time.Since(start) > 90*time.Second && err != nil {
+			log.WithError(err).Error("Failed to install role binding")
+			TearDown(server)
+			return nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	// Copy CRD registration manifest into the API server container, and apply it.
 	err = server.apiServerContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		TearDown(server)
+		return nil, err
+	}
 	err = server.apiServerContainer.ExecMayFail("kubectl", "apply", "-f", "/crds.yaml")
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		TearDown(server)
+		return nil, err
+	}
 
 	server.Endpoint = fmt.Sprintf("https://%s:6443", server.apiServerContainer.IP)
 	server.BadEndpoint = fmt.Sprintf("https://%s:1234", server.apiServerContainer.IP)
-	Eventually(func() (err error) {
+
+	start = time.Now()
+	for {
 		var resp *http.Response
 		resp, err = insecureHTTPClient.Get(server.Endpoint + "/apis/crd.projectcalico.org/v1/globalfelixconfigs")
 		if resp.StatusCode != 200 {
@@ -141,25 +175,40 @@ func SetUp() *Server {
 			log.WithError(err).WithField("status", resp.StatusCode).Warn("Waiting for API server to respond to requests")
 		}
 		resp.Body.Close()
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
+		if err == nil {
+			break
+		}
+		if time.Since(start) > 120*time.Second && err != nil {
+			log.WithError(err).Error("API server is not responding to requests")
+			TearDown(server)
+			return nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	log.Info("API server is up.")
 
-	// Get the API server's cert, which we need to pass to Felix/Typha
 	server.CertFileName = "/tmp/" + server.apiServerContainer.Name + ".crt"
-	Eventually(func() (err error) {
+	start = time.Now()
+	for {
 		cmd := utils.Command("docker", "cp",
 			server.apiServerContainer.Name+":/var/run/kubernetes/apiserver.crt",
 			server.CertFileName,
 		)
 		err = cmd.Run()
-		if err != nil {
-			log.WithError(err).Warn("Waiting for API cert to appear")
+		if err == nil {
+			break
 		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
+		if time.Since(start) > 120*time.Second && err != nil {
+			log.WithError(err).Error("Failed to get API server cert")
+			TearDown(server)
+			return nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
-	Eventually(func() (err error) {
+	start = time.Now()
+	for {
 		server.CalicoClient, err = client.New(apiconfig.CalicoAPIConfig{
 			Spec: apiconfig.CalicoAPIConfigSpec{
 				DatastoreType: apiconfig.Kubernetes,
@@ -169,34 +218,44 @@ func SetUp() *Server {
 				},
 			},
 		})
-		if err != nil {
-			log.WithError(err).Warn("Waiting to create Calico client")
-			return
+		if err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err = server.CalicoClient.EnsureInitialized(
+				ctx,
+				"v3.0.0-test",
+				"felix-fv,typha", // Including typha in clusterType to prevent config churn
+			)
+			cancel()
+			if err == nil {
+				break
+			}
 		}
+		if time.Since(start) > 120*time.Second && err != nil {
+			log.WithError(err).Error("Failed to initialise calico client")
+			TearDown(server)
+			return nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-		err = server.CalicoClient.EnsureInitialized(
-			ctx,
-			"v3.0.0-test",
-			"felix-fv,typha", // Including typha in clusterType to prevent config churn
-		)
-
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
-
-	Eventually(func() (err error) {
+	start = time.Now()
+	for {
 		server.Client, err = kubernetes.NewForConfig(&rest.Config{
 			Transport: insecureTransport,
 			Host:      "https://" + server.apiServerContainer.IP + ":6443",
 		})
-		if err != nil {
-			log.WithError(err).Warn("Waiting to create k8s client")
+		if err == nil {
+			break
 		}
-		return
-	}, "60s", "2s").ShouldNot(HaveOccurred())
+		if time.Since(start) > 120*time.Second && err != nil {
+			log.WithError(err).Error("Failed to create k8s client.")
+			TearDown(server)
+			return nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
-	theServer = server
-	return theServer
+	return server, nil
 }
 
 func TearDown(server *Server) {

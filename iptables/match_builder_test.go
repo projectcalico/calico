@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package iptables_test
 import (
 	. "github.com/projectcalico/felix/iptables"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
@@ -28,13 +29,33 @@ var portRanges = []*proto.PortRange{
 	{First: 5678, Last: 6000},
 }
 
+var _ = Describe("MatchBuilder failure cases", func() {
+	It("should panic if MarkSingleBitSet is passed more than one bit", func() {
+		Expect(func() {
+			Match().MarkSingleBitSet(0x4001)
+		}).To(Panic())
+	})
+	It("should panic if MarkMatchesWithMask is passed an invalid mark", func() {
+		Expect(func() {
+			Match().MarkMatchesWithMask(0xf, 0x1)
+		}).To(Panic())
+	})
+	It("should panic if MarkMatchesWithMask is passed a 0 mask", func() {
+		Expect(func() {
+			Match().MarkMatchesWithMask(0x0, 0x0)
+		}).To(Panic())
+	})
+})
+
 var _ = DescribeTable("MatchBuilder",
 	func(match MatchCriteria, expRendering string) {
 		Expect(match.Render()).To(Equal(expRendering))
 	},
 	// Marks.
 	Entry("MarkClear", Match().MarkClear(0x400a), "-m mark --mark 0/0x400a"),
-	Entry("MarkSet", Match().MarkSet(0x400a), "-m mark --mark 0x400a/0x400a"),
+	Entry("MarkClear", Match().MarkNotClear(0x400a), "-m mark ! --mark 0/0x400a"),
+	Entry("MarkSingleBitSet", Match().MarkSingleBitSet(0x4000), "-m mark --mark 0x4000/0x4000"),
+	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "-m mark --mark 0x400a/0xf00f"),
 	// Conntrack.
 	Entry("ConntrackState", Match().ConntrackState("INVALID"), "-m conntrack --ctstate INVALID"),
 	// Interfaces.

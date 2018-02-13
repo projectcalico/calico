@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Container
+		felix  *containers.Felix
 		client client.Interface
 		w      [4]*workload.Workload
 		cc     *workload.ConnectivityChecker
@@ -80,7 +80,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
@@ -192,12 +192,12 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[1], w[0].Port(4000))
 			cc.ExpectSome(w[2], w[0].Port(4000))
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+			cc.CheckConnectivity()
 		})
 	})
 
 	createPolicy := func(policy *api.NetworkPolicy) {
-		log.WithField("policy", dumpPolicy(policy)).Info("Creating policy")
+		log.WithField("policy", dumpResource(policy)).Info("Creating policy")
 		_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -334,10 +334,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[0], w[1].Port(w1Port))
 			cc.ExpectSome(w[0], w[2].Port(w2Port))
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-				Equal(cc.ExpectedConnectivity()),
-				dumpPolicy(pol),
-			)
+			cc.CheckConnectivity(dumpResource(pol))
 		},
 
 		// Non-negated named port match.  The rule will allow traffic to the named port.
@@ -436,10 +433,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectSome(w[3], w[0].Port(4000))       // Numeric port in list.
 			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-				Equal(cc.ExpectedConnectivity()),
-				dumpPolicy(policy),
-			)
+			cc.CheckConnectivity(dumpResource(policy))
 		}
 		It("should have expected connectivity", expectBaselineConnectivity)
 
@@ -464,10 +458,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
-				)
+				cc.CheckConnectivity(dumpResource(policy))
 			})
 		})
 
@@ -495,10 +486,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
-				)
+				cc.CheckConnectivity(dumpResource(policy))
 			})
 		})
 
@@ -515,10 +503,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			cc.ExpectNone(w[2], w[0].Port(4000))
 			cc.ExpectNone(w[2], w[0].Port(3000))
 
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-				Equal(cc.ExpectedConnectivity()),
-				dumpPolicy(policy),
-			)
+			cc.CheckConnectivity(dumpResource(policy))
 		}
 
 		Describe("with "+oppositeDir+" selectors, removing w[2] and w[3]", func() {
@@ -641,10 +626,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					cc.ExpectSome(w[3], w[0].Port(4000))       // No change.
 					cc.ExpectNone(w[2], w[0].Port(3000))       // No change.
 
-					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-						Equal(cc.ExpectedConnectivity()),
-						dumpPolicy(policy),
-					)
+					cc.CheckConnectivity(dumpResource(policy))
 				})
 			})
 		})
@@ -675,10 +657,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				cc.ExpectNone(w[3], w[0].Port(4000))       // Numeric port in NotPorts list.
 				cc.ExpectNone(w[2], w[0].Port(3000))       // No change
 
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(
-					Equal(cc.ExpectedConnectivity()),
-					dumpPolicy(policy),
-				)
+				cc.CheckConnectivity(dumpResource(policy))
 			})
 		})
 	})
@@ -688,7 +667,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	var (
 		etcd              *containers.Container
-		felix             *containers.Container
+		felix             *containers.Felix
 		client            client.Interface
 		nginx             *workload.Workload
 		nginxClient       *workload.Workload
@@ -698,7 +677,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Create a namespace profile and write to the datastore.
 		defaultProfile := api.NewProfile()
@@ -801,7 +780,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		// The profile has a default allow so we should start with connectivity.
 		cc.ExpectSome(nginxClient, nginx.Port(80))
 		cc.ExpectSome(nginxClient, nginx.Port(81))
-		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+		cc.CheckConnectivity()
 
 		// Then we add an (ingress) default deny policy, which should cut it off again.
 		// It's important to check this before applying the allow policy to check that the correct
@@ -811,14 +790,14 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		cc.ResetExpectations()
 		cc.ExpectNone(nginxClient, nginx.Port(80))
 		cc.ExpectNone(nginxClient, nginx.Port(81))
-		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+		cc.CheckConnectivity()
 
 		_, err = client.NetworkPolicies().Create(utils.Ctx, allowHTTPPolicy, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 		cc.ResetExpectations()
 		cc.ExpectSome(nginxClient, nginx.Port(80))
 		cc.ExpectNone(nginxClient, nginx.Port(81))
-		Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+		cc.CheckConnectivity()
 	})
 })
 
@@ -826,7 +805,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 var _ = Describe("tests with mixed TCP/UDP", func() {
 	var (
 		etcd                        *containers.Container
-		felix                       *containers.Container
+		felix                       *containers.Felix
 		client                      client.Interface
 		targetTCPWorkload           *workload.Workload
 		targetUDPWorkload           *workload.Workload
@@ -837,7 +816,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
 
 		// Create a profile that opens up traffic by default.
 		defaultProfile := api.NewProfile()
@@ -949,11 +928,11 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		// The profile has a default allow so we should start with connectivity.
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectSome(clientWorkload, targetTCPWorkload.Port(81))
-		Eventually(tcpCC.ActualConnectivity, "10s", "100ms").Should(Equal(tcpCC.ExpectedConnectivity()))
+		tcpCC.CheckConnectivity()
 
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectSome(clientWorkload, targetUDPWorkload.Port(81))
-		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
+		udpCC.CheckConnectivity()
 
 		// Then the connectivity should be broken by adding the confused policy.
 		_, err := client.NetworkPolicies().Create(utils.Ctx, allowConfusedProtocolPolicy, utils.NoOptions)
@@ -961,17 +940,19 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		tcpCC.ResetExpectations()
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(80))
 		tcpCC.ExpectNone(clientWorkload, targetTCPWorkload.Port(81))
-		Eventually(tcpCC.ActualConnectivity, "10s", "100ms").Should(Equal(tcpCC.ExpectedConnectivity()))
+		tcpCC.CheckConnectivity()
 		udpCC.ResetExpectations()
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(80))
 		udpCC.ExpectNone(clientWorkload, targetUDPWorkload.Port(81))
-		Eventually(udpCC.ActualConnectivity, "10s", "100ms").Should(Equal(udpCC.ExpectedConnectivity()))
+		udpCC.CheckConnectivity()
 	})
 })
 
-func dumpPolicy(pol *api.NetworkPolicy) string {
+func dumpResource(pol interface {
+	GetName() string
+}) string {
 	jsonPol, _ := json.MarshalIndent(pol, "\t", "  ")
-	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tSpec: %+v\n\tJSON:\n\t%s",
-		pol.Name, pol.Spec, string(jsonPol))
+	polDump := fmt.Sprintf("Active policy:\n\tName: %+v\n\tObject: %+v\n\tJSON:\n\t%s",
+		pol.GetName(), pol, string(jsonPol))
 	return polDump
 }

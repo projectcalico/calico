@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package iptables
 
 import (
 	"fmt"
+	"math/bits"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -44,11 +45,35 @@ func (m MatchCriteria) MarkClear(mark uint32) MatchCriteria {
 	return append(m, fmt.Sprintf("-m mark --mark 0/%#x", mark))
 }
 
-func (m MatchCriteria) MarkSet(mark uint32) MatchCriteria {
+func (m MatchCriteria) MarkNotClear(mark uint32) MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: zero mark")
 	}
-	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mark))
+	return append(m, fmt.Sprintf("-m mark ! --mark 0/%#x", mark))
+}
+
+func (m MatchCriteria) MarkSingleBitSet(mark uint32) MatchCriteria {
+	if bits.OnesCount32(mark) != 1 {
+		// Disallow multi-bit matches to force user to think about the mask they should use.
+		// For example, if you are storing a number in the mark then you likely want to match on its
+		// 0-bits too
+		log.WithField("mark", mark).Panic("MarkSingleBitSet() should only be used with a single mark bit")
+	}
+	return m.MarkMatchesWithMask(mark, mark)
+}
+
+func (m MatchCriteria) MarkMatchesWithMask(mark, mask uint32) MatchCriteria {
+	logCxt := log.WithFields(log.Fields{
+		"mark": mark,
+		"mask": mask,
+	})
+	if mask == 0 {
+		logCxt.Panic("Bug: mask is 0.")
+	}
+	if mark&mask != mark {
+		logCxt.Panic("Bug: mark is not contained in mask")
+	}
+	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mask))
 }
 
 func (m MatchCriteria) InInterface(ifaceMatch string) MatchCriteria {

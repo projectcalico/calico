@@ -6,10 +6,13 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
-  version: v3.2.7
+  version: v3.3.0
   subpackages:
   - client
   - pkg/transport
+# gRPC version that etcd requires.
+- package: google.golang.org/grpc
+  version: v1.7.5
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/ghodss/yaml
@@ -18,6 +21,7 @@ import:
 - package: github.com/kelseyhightower/envconfig
   version: ^1.3.0
 - package: golang.org/x/net
+  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
   - context
 - package: gopkg.in/go-playground/validator.v8
@@ -26,7 +30,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 7c2de5ed8c029f222d87fc849b54c4075ef3173f
+  version: 13d015d6433fd53fb260dc2b3ab50340c34f5749
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -35,28 +39,26 @@ import:
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
   version: v0.9.0-pre1
-- package: github.com/prometheus/procfs
-  version: b15cd069a83443be3154b719d0cc9fe8117f09fb
 - package: github.com/gogo/protobuf
   version: ^0.5.0
 - package: github.com/vishvananda/netlink
 - package: github.com/onsi/ginkgo
-  version: f40a49d81e5c12e90400620b6242fb29a8e7c9
+  version: ^1.4.0
+- package: github.com/onsi/gomega
+  version: ^1.1.0
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 0bba94171368573d2a936e02454b1762ff7fba7f
+  version: 4ab01481018b09155c39708a81165a01c5277c4b
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
   version: v1.2
 - package: github.com/containernetworking/cni
   version: v0.5.2
-- package: github.com/onsi/gomega
-  version: ^1.1.0
 - package: github.com/jbenet/go-reuseport
-  version: disable-dial-check
   repo: https://github.com/fasaxc/go-reuseport.git
+  version: disable-dial-check
 - package: github.com/jbenet/go-sockaddr
   version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
   subpackages:
@@ -70,3 +72,8 @@ import:
 - package: google.golang.org/genproto
   subpackages:
   - googleapis
+- package: github.com/prometheus/procfs
+  version: f98634e408857669d61064b283c4cde240622865
+  subpackages:
+  - xfs
+

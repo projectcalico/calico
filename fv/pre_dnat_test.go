@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,13 +44,16 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Container
+		felix  *containers.Felix
 		client client.Interface
 		w      [2]*workload.Workload
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology()
+		options := containers.DefaultTopologyOptions()
+		// For variety, run this test with IPv6 disabled.
+		options.EnableIPv6 = false
+		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
@@ -116,7 +119,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 			cc.ExpectSome(w[1], w[0], 32010)
 			cc.ExpectSome(etcd, w[1], 32011)
 			cc.ExpectSome(etcd, w[0], 32010)
-			Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+			cc.CheckConnectivity()
 		})
 
 		Context("with pre-DNAT policy to prevent access from outside", func() {
@@ -148,7 +151,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 				cc.ExpectSome(w[1], w[0], 32010)
 				cc.ExpectNone(etcd, w[1], 32011)
 				cc.ExpectNone(etcd, w[0], 32010)
-				Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+				cc.CheckConnectivity()
 			})
 
 			Context("with pre-DNAT policy to open pinhole to 32010", func() {
@@ -180,7 +183,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					cc.ExpectSome(w[1], w[0], 32010)
 					cc.ExpectNone(etcd, w[1], 32011)
 					cc.ExpectSome(etcd, w[0], 32010)
-					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+					cc.CheckConnectivity()
 				})
 			})
 
@@ -213,7 +216,7 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					cc.ExpectSome(w[1], w[0], 32010)
 					cc.ExpectNone(etcd, w[1], 32011)
 					cc.ExpectNone(etcd, w[0], 32010)
-					Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+					cc.CheckConnectivity()
 				})
 			})
 		})

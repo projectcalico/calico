@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ var _ = DescribeTable("IpAddr",
 		Expect([]byte(ip.AsNetIP())).To(Equal(bytes))
 		Expect(ip.String()).To(Equal(canonical))
 		Expect(int(ip.Version())).To(Equal(version))
+		Expect(MustParseCIDROrIP(inputIP).Addr().String()).To(Equal(canonical))
 	},
 	Entry("IPv4", 4, "10.0.0.1", "10.0.0.1", []byte{0xa, 0, 0, 1}),
 	Entry("IPv6", 6, "dead::beef", "dead::beef", []byte{
@@ -45,7 +46,7 @@ var _ = DescribeTable("IpAddr",
 
 var _ = DescribeTable("CIDR",
 	func(version int, inputCIDR, canonical string, bytes []byte, len int) {
-		cidr := MustParseCIDR(inputCIDR)
+		cidr := MustParseCIDROrIP(inputCIDR)
 		Expect([]byte(cidr.Addr().AsNetIP())).To(Equal(bytes))
 		Expect(int(cidr.Prefix())).To(Equal(len))
 		Expect(cidr.String()).To(Equal(canonical))

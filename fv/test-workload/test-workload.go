@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -79,6 +82,43 @@ func main() {
 		panicIfError(err)
 		log.WithField("veth", veth).Debug("Created veth pair")
 
+		err := netlink.LinkSetUp(veth)
+		panicIfError(err)
+
+		peerVeth, err := netlink.LinkByName(veth.PeerName)
+		panicIfError(err)
+
+		// Need to set the peer up in order to get an IPv6 address.
+		err = netlink.LinkSetUp(peerVeth)
+		panicIfError(err)
+
+		var hostIPv6Addr net.IP
+		if strings.Contains(ipAddress, ":") {
+			attempts := 0
+			for {
+				// No need to add a dummy next hop route as the host veth device will already have an IPv6
+				// link local address that can be used as a next hop.
+				// Just fetch the address of the host end of the veth and use it as the next hop.
+				addresses, err := netlink.AddrList(veth, netlink.FAMILY_V6)
+				if err != nil {
+					log.WithError(err).Panic("Error listing IPv6 addresses for the host side of the veth pair")
+				}
+
+				if len(addresses) < 1 {
+					attempts++
+					if attempts > 30 {
+						log.WithError(err).Panic("Giving up waiting for IPv6 addresses after multiple retries")
+					}
+
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+
+				hostIPv6Addr = addresses[0].IP
+				break
+			}
+		}
+
 		// Move the workload end of the pair into the namespace, and set it up.
 		workloadIf, err := netlink.LinkByName(veth.PeerName)
 		log.WithField("workloadIf", workloadIf).Debug("Workload end")
@@ -94,15 +134,47 @@ func main() {
 			if err != nil {
 				return
 			}
-			err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
-			if err != nil {
-				return
+
+			if strings.Contains(ipAddress, ":") {
+				// Make sure ipv6 is enabled in the container/pod network namespace.
+				// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address,
+				// which is required to add the default IPv6 route.
+				if err = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0"); err != nil {
+					return
+				}
+
+				if err = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0"); err != nil {
+					return
+				}
+
+				if err = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0"); err != nil {
+					return
+				}
+
+				err = utils.RunCommand("ip", "-6", "addr", "add", ipAddress+"/128", "dev", "eth0")
+				if err != nil {
+					return
+				}
+				err = utils.RunCommand("ip", "-6", "route", "add", "default", "via", hostIPv6Addr.String(), "dev", "eth0")
+
+				// Output the routing table to the log for diagnostic purposes.
+				utils.RunCommand("ip", "-6", "route")
+				utils.RunCommand("ip", "-6", "addr")
+			} else {
+				err = utils.RunCommand("ip", "addr", "add", ipAddress+"/32", "dev", "eth0")
+				if err != nil {
+					return
+				}
+				err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
+				if err != nil {
+					return
+				}
+				err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
+
+				// Output the routing table to the log for diagnostic purposes.
+				utils.RunCommand("ip", "route")
+				utils.RunCommand("ip", "addr")
 			}
-			err = utils.RunCommand("ip", "route", "add", "169.254.169.254/32", "dev", "eth0")
-			if err != nil {
-				return
-			}
-			err = utils.RunCommand("ip", "route", "add", "default", "via", "169.254.169.254", "dev", "eth0")
 			return
 		})
 		panicIfError(err)
@@ -125,6 +197,22 @@ func main() {
 
 	// Now listen on the specified ports in the workload namespace.
 	err = namespace.Do(func(_ ns.NetNS) error {
+		if strings.Contains(ipAddress, ":") {
+			attempts := 0
+			for {
+				out, err := exec.Command("ip", "-6", "addr").CombinedOutput()
+				panicIfError(err)
+				if strings.Contains(string(out), "tentative") {
+					attempts++
+					if attempts > 30 {
+						log.Panic("IPv6 address still tentative after 30s")
+					}
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				break
+			}
+		}
 
 		handleRequest := func(conn net.Conn) {
 			log.WithFields(log.Fields{
@@ -150,7 +238,12 @@ func main() {
 
 		// Listen on each port for either TCP or UDP.
 		for _, port := range ports {
-			myAddr := ipAddress + ":" + port
+			var myAddr string
+			if strings.Contains(ipAddress, ":") {
+				myAddr = "[" + ipAddress + "]:" + port
+			} else {
+				myAddr = ipAddress + ":" + port
+			}
 			logCxt := log.WithFields(log.Fields{
 				"udp":    udp,
 				"myAddr": myAddr,
@@ -202,4 +295,20 @@ func panicIfError(err error) {
 		panic(err)
 	}
 	return
+}
+
+// writeProcSys takes the sysctl path and a string value to set i.e. "0" or "1" and sets the sysctl.
+func writeProcSys(path, value string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	n, err := f.Write([]byte(value))
+	if err == nil && n < len(value) {
+		err = io.ErrShortWrite
+	}
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	return err
 }

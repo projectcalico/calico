@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,9 +104,16 @@ func tryConnect(ipAddress, port string, sourcePort string, protocol string) erro
 	// The reuse library implements a version of net.Dialer that can reuse UDP/TCP ports, which we
 	// need in order to make connection retries work.
 	var d reuse.Dialer
-	localAddr := "0.0.0.0:" + sourcePort
+	var localAddr string
+	var remoteAddr string
+	if strings.Contains(ipAddress, ":") {
+		localAddr = "[::]:" + sourcePort
+		remoteAddr = "[" + ipAddress + "]:" + port
+	} else {
+		localAddr = "0.0.0.0:" + sourcePort
+		remoteAddr = ipAddress + ":" + port
+	}
 	if protocol == "udp" {
-		remoteAddr := ipAddress + ":" + port
 		log.Infof("Connecting from %v to %v", localAddr, remoteAddr)
 		d.D.LocalAddr, _ = net.ResolveUDPAddr("udp", localAddr)
 		conn, err := d.Dial("udp", remoteAddr)
@@ -129,7 +136,7 @@ func tryConnect(ipAddress, port string, sourcePort string, protocol string) erro
 		if err != nil {
 			return err
 		}
-		conn, err := d.Dial("tcp", ipAddress+":"+port)
+		conn, err := d.Dial("tcp", remoteAddr)
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +63,7 @@ var _ = Describe("Constructor test", func() {
 				IptablesMarkPass:     0x2000000,
 				IptablesMarkScratch0: 0x4000000,
 				IptablesMarkScratch1: 0x8000000,
+				IptablesMarkEndpoint: 0x000ff00,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,

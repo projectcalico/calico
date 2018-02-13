@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,17 +24,20 @@ import (
 
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	adminUp bool,
 	ingressPolicies []string,
 	egressPolicies []string,
 	profileIDs []string,
 ) []*Chain {
-	return []*Chain{
+	result := []*Chain{}
+	result = append(result,
 		// Chain for traffic _to_ the endpoint.
 		r.endpointIptablesChain(
 			ingressPolicies,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			WorkloadToEndpointPfx,
@@ -48,6 +51,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			egressPolicies,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			WorkloadFromEndpointPfx,
@@ -56,11 +60,25 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 		),
+	)
+
+	if r.KubeIPVSSupportEnabled {
+		// Chain for setting endpoint mark of an endpoint.
+		result = append(result,
+			r.endpointSetMarkChain(
+				ifaceName,
+				epMarkMapper,
+				WorkloadSetEndPointMarkPfx,
+			),
+		)
 	}
+
+	return result
 }
 
 func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	ingressPolicyNames []string,
 	egressPolicyNames []string,
 	ingressForwardPolicyNames []string,
@@ -74,6 +92,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			egressPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			HostToEndpointPfx,
@@ -87,6 +106,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ingressPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointPfx,
@@ -100,6 +120,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			egressForwardPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			HostToEndpointForwardPfx,
@@ -113,6 +134,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ingressForwardPolicyNames,
 			profileIDs,
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointForwardPfx,
@@ -126,6 +148,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	ingressPolicyNames []string,
 	egressPolicyNames []string,
 ) []*Chain {
@@ -136,6 +159,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			egressPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
+			epMarkMapper,
 			PolicyOutboundPfx,
 			ProfileOutboundPfx,
 			HostToEndpointPfx,
@@ -149,6 +173,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ingressPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointPfx,
@@ -162,6 +187,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 	ifaceName string,
+	epMarkMapper EndpointMarkMapper,
 	preDNATPolicyNames []string,
 ) []*Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
@@ -172,6 +198,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 			preDNATPolicyNames,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
+			epMarkMapper,
 			PolicyInboundPfx,
 			ProfileInboundPfx,
 			HostFromEndpointPfx,
@@ -192,10 +219,33 @@ const (
 	chainTypeForward
 )
 
+func (r *DefaultRuleRenderer) endpointSetMarkChain(
+	name string,
+	epMarkMapper EndpointMarkMapper,
+	endpointPrefix string,
+) *Chain {
+	rules := []Rule{}
+	chainName := EndpointChainName(endpointPrefix, name)
+
+	if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
+		// Set endpoint mark.
+		rules = append(rules, Rule{
+			Action: SetMaskedMarkAction{
+				Mark: endPointMark,
+				Mask: epMarkMapper.GetMask()},
+		})
+	}
+	return &Chain{
+		Name:  chainName,
+		Rules: rules,
+	}
+}
+
 func (r *DefaultRuleRenderer) endpointIptablesChain(
 	policyNames []string,
 	profileIds []string,
 	name string,
+	epMarkMapper EndpointMarkMapper,
 	policyPrefix PolicyChainNamePrefix,
 	profilePrefix ProfileChainNamePrefix,
 	endpointPrefix string,
@@ -267,14 +317,14 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			if chainType == chainTypeUntracked {
 				// For an untracked policy, map allow to "NOTRACK and ALLOW".
 				rules = append(rules, Rule{
-					Match:  Match().MarkSet(r.IptablesMarkAccept),
+					Match:  Match().MarkSingleBitSet(r.IptablesMarkAccept),
 					Action: NoTrackAction{},
 				})
 			}
 			// If accept bit is set, return from this chain.  We don't immediately
 			// accept because there may be other policy still to apply.
 			rules = append(rules, Rule{
-				Match:   Match().MarkSet(r.IptablesMarkAccept),
+				Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action:  ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
@@ -303,7 +353,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				// If policy marked packet as accepted, it returns, setting the
 				// accept mark bit.  If that is set, return from this chain.
 				Rule{
-					Match:   Match().MarkSet(r.IptablesMarkAccept),
+					Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 					Action:  ReturnAction{},
 					Comment: "Return if profile accepted",
 				})
