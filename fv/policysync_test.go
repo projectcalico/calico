@@ -168,20 +168,25 @@ var _ = Context("policy sync API tests", func() {
 					ctx      context.Context
 				)
 
-				BeforeEach(func() {
-					// Use the fact that anything we exec inside the Felix container runs as root to fix the
-					// permissions on the socket so the test process can connect.
-					Eventually(hostWlSocketPath).Should(BeAnExistingFile())
-					felix.Exec("chmod", "a+rw", "/var/run/calico/wl0/policysync.sock")
+				createWorkloadConn := func() proto.PolicySyncClient {
 					var opts []grpc.DialOption
 					opts = append(opts, grpc.WithInsecure())
 					opts = append(opts, grpc.WithDialer(unixDialer))
 					var conn *grpc.ClientConn
 					conn, err = grpc.Dial(hostWlSocketPath, opts...)
 					Expect(err).NotTo(HaveOccurred())
-
 					wlClient = proto.NewPolicySyncClient(conn)
+					return wlClient
+				}
+
+				BeforeEach(func() {
 					ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+
+					// Use the fact that anything we exec inside the Felix container runs as root to fix the
+					// permissions on the socket so the test process can connect.
+					Eventually(hostWlSocketPath).Should(BeAnExistingFile())
+					felix.Exec("chmod", "a+rw", "/var/run/calico/wl0/policysync.sock")
+					wlClient = createWorkloadConn()
 				})
 
 				AfterEach(func() {
@@ -216,6 +221,44 @@ var _ = Context("policy sync API tests", func() {
 
 					cancel()
 					Eventually(done).Should(BeClosed())
+				})
+
+				It("should get closed if a second connection is created", func() {
+					syncClient, err := wlClient.Sync(ctx, &proto.SyncRequest{})
+					Expect(err).NotTo(HaveOccurred())
+					// Get something from the first connection to make sure it's up.
+					_, err = syncClient.Recv()
+					Expect(err).NotTo(HaveOccurred())
+
+					// Make the new connection.
+					By("Creating second connection")
+					wlClient2 := createWorkloadConn()
+					syncClient2, err := wlClient2.Sync(ctx, &proto.SyncRequest{})
+					Expect(err).NotTo(HaveOccurred())
+					mockDataplane := mock.NewMockDataplane()
+					done := make(chan struct{})
+					go func() {
+						defer GinkgoRecover()
+						defer close(done)
+
+						for {
+							msg, err := syncClient2.Recv()
+							if err != nil {
+								log.WithError(err).Warn("Recv failed.")
+								return
+							}
+							log.WithField("msg", msg).Info("Received workload message")
+							mockDataplane.OnEvent(reflect.ValueOf(msg.Payload).Elem().Field(0).Interface())
+						}
+					}()
+
+					Eventually(mockDataplane.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+					Eventually(mockDataplane.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+
+					Eventually(func() error {
+						_, err := syncClient.Recv()
+						return err
+					}).Should(HaveOccurred())
 				})
 			})
 		})

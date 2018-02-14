@@ -83,11 +83,8 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	ei, ok := p.endpointsByID[epID]
 
 	if !ok {
-		logCxt.Info("Request for unknown endpoint, pre-creating EndpointInfo")
-		ei = &EndpointInfo{
-			syncedPolicies: map[proto.PolicyID]bool{},
-			syncedProfiles: map[proto.ProfileID]bool{},
-		}
+		logCxt.Info("Join/Leave request for unknown endpoint, pre-creating EndpointInfo")
+		ei = &EndpointInfo{}
 		p.endpointsByID[epID] = ei
 	}
 
@@ -114,16 +111,20 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	if ei.output != nil {
 		logCxt.Info("Join request for already-active connection, closing old channel.")
 		close(ei.output)
+	} else {
+		logCxt.Info("Join request with no previously active connection.")
 	}
 
 	ei.currentJoinUID = joinReq.JoinUID
 	ei.output = joinReq.C
+	ei.syncedPolicies = map[proto.PolicyID]bool{}
+	ei.syncedProfiles = map[proto.ProfileID]bool{}
 
 	p.maybeSyncEndpoint(ei)
 }
 
 func (p *Processor) handleDataplane(update interface{}) {
-	log.WithField("update", update).Info("Dataplane update")
+	log.WithFields(log.Fields{"update": update, "type": reflect.TypeOf(update)}).Info("Dataplane update")
 	switch update := update.(type) {
 	case *proto.InSync:
 		p.handleInSync(update)
