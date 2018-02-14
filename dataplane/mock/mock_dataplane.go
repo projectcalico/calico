@@ -39,6 +39,8 @@ type MockDataplane struct {
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
+	endpointToAllPolicyIDs         map[string][]proto.PolicyID
+	endpointToProfiles             map[string][]string
 	config                         map[string]string
 }
 
@@ -142,6 +144,8 @@ func NewMockDataplane() *MockDataplane {
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
+		endpointToProfiles:             make(map[string][]string),
+		endpointToAllPolicyIDs:         make(map[string][]proto.PolicyID),
 	}
 	return s
 }
@@ -205,6 +209,13 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		}
 	case *proto.ActivePolicyRemove:
 		policyID := *event.Id
+		for ep, allPols := range d.endpointToAllPolicyIDs {
+			for _, p := range allPols {
+				if policyID == p {
+					Fail(fmt.Sprintf("Policy %s removed while still in use by endpoint %s", p, ep))
+				}
+			}
+		}
 		d.activePolicies.Discard(policyID)
 		d.activeUntrackedPolicies.Discard(policyID)
 		d.activePreDNATPolicies.Discard(policyID)
@@ -212,24 +223,58 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		// TODO: check rules against expected rules
 		d.activeProfiles.Add(*event.Id)
 	case *proto.ActiveProfileRemove:
+		for ep, profs := range d.endpointToProfiles {
+			for _, p := range profs {
+				if p == event.Id.Name {
+					Fail(fmt.Sprintf("Profile %s removed while still in use by endpoint %s", p, ep))
+				}
+			}
+		}
 		d.activeProfiles.Discard(*event.Id)
 	case *proto.WorkloadEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]TierInfo, len(tiers))
+		var allPolsIDs []proto.PolicyID
 		for i, tier := range event.Endpoint.Tiers {
 			tierInfos[i].Name = tier.Name
 			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
 			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
+
+			// Check that all the policies referenced by the endpoint are already present, which
+			// is one of the guarantees provided by the EventSequencer.
+			var combinedPolNames []string
+			combinedPolNames = append(combinedPolNames, tier.IngressPolicies...)
+			combinedPolNames = append(combinedPolNames, tier.EgressPolicies...)
+			for _, polName := range combinedPolNames {
+				polID := proto.PolicyID{Tier: tier.Name, Name: polName}
+				allPolsIDs = append(allPolsIDs, polID)
+				Expect(d.activePolicies.Contains(polID)).To(BeTrue(),
+					fmt.Sprintf("Expected policy %v referenced by workload endpoint "+
+						"update %v to be active", polID, event))
+			}
 		}
 		id := workloadId(*event.Id)
 		d.endpointToPolicyOrder[id.String()] = tierInfos
 		d.endpointToUntrackedPolicyOrder[id.String()] = []TierInfo{}
 		d.endpointToPreDNATPolicyOrder[id.String()] = []TierInfo{}
+		d.endpointToAllPolicyIDs[id.String()] = allPolsIDs
+
+		// Check that all the profiles referenced by the endpoint are already present, which
+		// is one of the guarantees provided by the EventSequencer.
+		for _, profName := range event.Endpoint.ProfileIds {
+			profID := proto.ProfileID{Name: profName}
+			Expect(d.activeProfiles.Contains(profID)).To(BeTrue(),
+				fmt.Sprintf("Expected profile %v referenced by workload endpoint "+
+					"update %v to be active", profID, event))
+		}
+		d.endpointToProfiles[id.String()] = event.Endpoint.ProfileIds
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(*event.Id)
 		delete(d.endpointToPolicyOrder, id.String())
 		delete(d.endpointToUntrackedPolicyOrder, id.String())
 		delete(d.endpointToPreDNATPolicyOrder, id.String())
+		delete(d.endpointToProfiles, id.String())
+		delete(d.endpointToAllPolicyIDs, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]TierInfo, len(tiers))
