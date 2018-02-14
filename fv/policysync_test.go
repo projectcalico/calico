@@ -216,6 +216,7 @@ var _ = Context("policy sync API tests", func() {
 						}
 					}()
 
+					Eventually(mockDataplane.InSync).Should(BeTrue())
 					Eventually(mockDataplane.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
 					Eventually(mockDataplane.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
 
@@ -252,6 +253,7 @@ var _ = Context("policy sync API tests", func() {
 						}
 					}()
 
+					Eventually(mockDataplane.InSync).Should(BeTrue())
 					Eventually(mockDataplane.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
 					Eventually(mockDataplane.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
 

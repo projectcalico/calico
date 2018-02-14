@@ -30,6 +30,7 @@ import (
 type MockDataplane struct {
 	sync.Mutex
 
+	inSync                         bool
 	ipSets                         map[string]set.Set
 	activePolicies                 set.Set
 	activeUntrackedPolicies        set.Set
@@ -39,6 +40,13 @@ type MockDataplane struct {
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
 	config                         map[string]string
+}
+
+func (d *MockDataplane) InSync() bool {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.inSync
 }
 
 func (d *MockDataplane) IPSets() map[string]set.Set {
@@ -138,23 +146,25 @@ func NewMockDataplane() *MockDataplane {
 	return s
 }
 
-func (s *MockDataplane) OnEvent(event interface{}) {
-	s.Lock()
-	defer s.Unlock()
+func (d *MockDataplane) OnEvent(event interface{}) {
+	d.Lock()
+	defer d.Unlock()
 
 	evType := reflect.TypeOf(event).String()
 	fmt.Fprintf(GinkgoWriter, "       <- Event: %v %v\n", evType, event)
 	Expect(event).NotTo(BeNil())
 	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
 	switch event := event.(type) {
+	case *proto.InSync:
+		d.inSync = true
 	case *proto.IPSetUpdate:
 		newMembers := set.New()
 		for _, ip := range event.Members {
 			newMembers.Add(ip)
 		}
-		s.ipSets[event.Id] = newMembers
+		d.ipSets[event.Id] = newMembers
 	case *proto.IPSetDeltaUpdate:
-		members, ok := s.ipSets[event.Id]
+		members, ok := d.ipSets[event.Id]
 		if !ok {
 			Fail(fmt.Sprintf("IP set delta to missing ipset %v", event.Id))
 			return
@@ -173,36 +183,36 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			members.Discard(ip)
 		}
 	case *proto.IPSetRemove:
-		_, ok := s.ipSets[event.Id]
+		_, ok := d.ipSets[event.Id]
 		if !ok {
 			Fail(fmt.Sprintf("IP set remove for unknown ipset %v", event.Id))
 			return
 		}
-		delete(s.ipSets, event.Id)
+		delete(d.ipSets, event.Id)
 	case *proto.ActivePolicyUpdate:
 		// TODO: check rules against expected rules
 		policyID := *event.Id
-		s.activePolicies.Add(policyID)
+		d.activePolicies.Add(policyID)
 		if event.Policy.Untracked {
-			s.activeUntrackedPolicies.Add(policyID)
+			d.activeUntrackedPolicies.Add(policyID)
 		} else {
-			s.activeUntrackedPolicies.Discard(policyID)
+			d.activeUntrackedPolicies.Discard(policyID)
 		}
 		if event.Policy.PreDnat {
-			s.activePreDNATPolicies.Add(policyID)
+			d.activePreDNATPolicies.Add(policyID)
 		} else {
-			s.activePreDNATPolicies.Discard(policyID)
+			d.activePreDNATPolicies.Discard(policyID)
 		}
 	case *proto.ActivePolicyRemove:
 		policyID := *event.Id
-		s.activePolicies.Discard(policyID)
-		s.activeUntrackedPolicies.Discard(policyID)
-		s.activePreDNATPolicies.Discard(policyID)
+		d.activePolicies.Discard(policyID)
+		d.activeUntrackedPolicies.Discard(policyID)
+		d.activePreDNATPolicies.Discard(policyID)
 	case *proto.ActiveProfileUpdate:
 		// TODO: check rules against expected rules
-		s.activeProfiles.Add(*event.Id)
+		d.activeProfiles.Add(*event.Id)
 	case *proto.ActiveProfileRemove:
-		s.activeProfiles.Discard(*event.Id)
+		d.activeProfiles.Discard(*event.Id)
 	case *proto.WorkloadEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]TierInfo, len(tiers))
@@ -212,14 +222,14 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		id := workloadId(*event.Id)
-		s.endpointToPolicyOrder[id.String()] = tierInfos
-		s.endpointToUntrackedPolicyOrder[id.String()] = []TierInfo{}
-		s.endpointToPreDNATPolicyOrder[id.String()] = []TierInfo{}
+		d.endpointToPolicyOrder[id.String()] = tierInfos
+		d.endpointToUntrackedPolicyOrder[id.String()] = []TierInfo{}
+		d.endpointToPreDNATPolicyOrder[id.String()] = []TierInfo{}
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(*event.Id)
-		delete(s.endpointToPolicyOrder, id.String())
-		delete(s.endpointToUntrackedPolicyOrder, id.String())
-		delete(s.endpointToPreDNATPolicyOrder, id.String())
+		delete(d.endpointToPolicyOrder, id.String())
+		delete(d.endpointToUntrackedPolicyOrder, id.String())
+		delete(d.endpointToPreDNATPolicyOrder, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]TierInfo, len(tiers))
@@ -229,7 +239,7 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		id := hostEpId(*event.Id)
-		s.endpointToPolicyOrder[id.String()] = tierInfos
+		d.endpointToPolicyOrder[id.String()] = tierInfos
 
 		uTiers := event.Endpoint.UntrackedTiers
 		uTierInfos := make([]TierInfo, len(uTiers))
@@ -238,7 +248,7 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			uTierInfos[i].IngressPolicyNames = tier.IngressPolicies
 			uTierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
-		s.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
+		d.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
 
 		pTiers := event.Endpoint.PreDnatTiers
 		pTierInfos := make([]TierInfo, len(pTiers))
@@ -247,21 +257,21 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			pTierInfos[i].IngressPolicyNames = tier.IngressPolicies
 			pTierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
-		s.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
+		d.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
 	case *proto.HostEndpointRemove:
 		id := hostEpId(*event.Id)
-		delete(s.endpointToPolicyOrder, id.String())
-		delete(s.endpointToUntrackedPolicyOrder, id.String())
-		delete(s.endpointToPreDNATPolicyOrder, id.String())
+		delete(d.endpointToPolicyOrder, id.String())
+		delete(d.endpointToUntrackedPolicyOrder, id.String())
+		delete(d.endpointToPreDNATPolicyOrder, id.String())
 	}
 }
 
-func (s *MockDataplane) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
+func (d *MockDataplane) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
 	return
 }
 
-func (s *MockDataplane) RawValues() map[string]string {
-	return s.Config()
+func (d *MockDataplane) RawValues() map[string]string {
+	return d.Config()
 }
 
 type TierInfo struct {

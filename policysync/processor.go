@@ -23,11 +23,12 @@ import (
 )
 
 type Processor struct {
-	Updates       <-chan interface{}
-	Joins         chan JoinRequest
-	endpointsByID map[proto.WorkloadEndpointID]*EndpointInfo
-	policyByID    map[proto.PolicyID]*proto.Policy
-	profileByID   map[proto.ProfileID]*proto.Profile
+	Updates        <-chan interface{}
+	Joins          chan JoinRequest
+	endpointsByID  map[proto.WorkloadEndpointID]*EndpointInfo
+	policyByID     map[proto.PolicyID]*proto.Policy
+	profileByID    map[proto.ProfileID]*proto.Profile
+	receivedInSync bool
 }
 
 type EndpointInfo struct {
@@ -149,6 +150,18 @@ func (p *Processor) handleDataplane(update interface{}) {
 }
 
 func (p *Processor) handleInSync(update *proto.InSync) {
+	if p.receivedInSync {
+		log.Debug("Ignoring duplicate InSync message from the calculation graph")
+		return
+	}
+	log.Info("Now in sync with the calculation graph")
+	p.receivedInSync = true
+	for _, ei := range p.endpointsByID {
+		if ei.output != nil {
+			ei.output <- proto.ToDataplane{
+				Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+		}
+	}
 	return
 }
 
@@ -186,6 +199,11 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 	p.syncProfiles(ei)
 	ei.output <- proto.ToDataplane{
 		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{ei.endpointUpd}}
+	if p.receivedInSync {
+		log.Debug("Already in sync with the datastore, sending in-sync message to client")
+		ei.output <- proto.ToDataplane{
+			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+	}
 }
 
 func (p *Processor) handleWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
