@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -30,6 +31,9 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	"github.com/projectcalico/felix/dataplane/mock"
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/proto"
 
@@ -186,12 +190,32 @@ var _ = Context("policy sync API tests", func() {
 					}
 				})
 
-				It("should receive something", func() {
+				It("should reach the expected state", func() {
 					syncClient, err := wlClient.Sync(ctx, &proto.SyncRequest{})
 					Expect(err).NotTo(HaveOccurred())
-					msg, err := syncClient.Recv()
-					Expect(err).NotTo(HaveOccurred())
-					log.WithField("message", msg).Info("Received message")
+
+					mockDataplane := mock.NewMockDataplane()
+					done := make(chan struct{})
+					go func() {
+						defer GinkgoRecover()
+						defer close(done)
+
+						for {
+							msg, err := syncClient.Recv()
+							if err != nil {
+								log.WithError(err).Warn("Recv failed.")
+								return
+							}
+							log.WithField("msg", msg).Info("Received workload message")
+							mockDataplane.OnEvent(reflect.ValueOf(msg.Payload).Elem().Field(0).Interface())
+						}
+					}()
+
+					Eventually(mockDataplane.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+					Eventually(mockDataplane.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+
+					cancel()
+					Eventually(done).Should(BeClosed())
 				})
 			})
 		})
