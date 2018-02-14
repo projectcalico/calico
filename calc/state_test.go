@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -36,9 +37,9 @@ type State struct {
 	ExpectedUntrackedPolicyIDs           set.Set
 	ExpectedPreDNATPolicyIDs             set.Set
 	ExpectedProfileIDs                   set.Set
-	ExpectedEndpointPolicyOrder          map[string][]tierInfo
-	ExpectedUntrackedEndpointPolicyOrder map[string][]tierInfo
-	ExpectedPreDNATEndpointPolicyOrder   map[string][]tierInfo
+	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
+	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
+	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
 }
 
 func (s State) String() string {
@@ -56,9 +57,9 @@ func NewState() State {
 		ExpectedUntrackedPolicyIDs:           set.New(),
 		ExpectedPreDNATPolicyIDs:             set.New(),
 		ExpectedProfileIDs:                   set.New(),
-		ExpectedEndpointPolicyOrder:          make(map[string][]tierInfo),
-		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]tierInfo),
-		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]tierInfo),
+		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
+		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
+		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
 	}
 }
 
@@ -133,11 +134,11 @@ func (s State) withIPSet(name string, members []string) (newState State) {
 	return
 }
 
-func (s State) withEndpoint(id string, tiers []tierInfo) State {
-	return s.withEndpointUntracked(id, tiers, []tierInfo{}, []tierInfo{})
+func (s State) withEndpoint(id string, tiers []mock.TierInfo) State {
+	return s.withEndpointUntracked(id, tiers, []mock.TierInfo{}, []mock.TierInfo{})
 }
 
-func (s State) withEndpointUntracked(id string, tiers, untrackedTiers, preDNATTiers []tierInfo) State {
+func (s State) withEndpointUntracked(id string, tiers, untrackedTiers, preDNATTiers []mock.TierInfo) State {
 	newState := s.Copy()
 	if tiers == nil {
 		delete(newState.ExpectedEndpointPolicyOrder, id)
