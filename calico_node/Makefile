@@ -573,13 +573,8 @@ node-test-at:
 	chmod +rx /tmp/goss && \
 	/tmp/goss --gossfile /tmp/goss.yaml validate'
 
-# This depends on clean to ensure that dependent images get untagged and repulled
-# THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
-.PHONY: semaphore
-semaphore:
-	# Clean up unwanted files to free disk space.
-	bash -c 'rm -rf /usr/local/golang /opt /var/lib/mongodb /usr/lib/jvm /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
-
+.PHONY: ci 
+ci:
 	# Run the containerized UTs first.
 	$(MAKE) node-test-containerized
 
@@ -588,6 +583,14 @@ semaphore:
 	# using "latest" tagged images.
 	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
 	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
+
+# This depends on clean to ensure that dependent images get untagged and repulled
+# THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
+.PHONY: semaphore
+semaphore:
+	# Clean up unwanted files to free disk space.
+	bash -c 'rm -rf /usr/local/golang /opt /var/lib/mongodb /usr/lib/jvm /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
+	$(MAKE) ci
 
 release: clean
 	@echo ""
