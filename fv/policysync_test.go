@@ -43,18 +43,22 @@ import (
 var _ = Context("policy sync API tests", func() {
 
 	var (
-		etcd    *containers.Container
-		felix   *containers.Felix
-		client  client.Interface
-		w       [3]*workload.Workload
-		tempDir string
+		etcd               *containers.Container
+		felix              *containers.Felix
+		client             client.Interface
+		w                  [3]*workload.Workload
+		tempDir            string
+		hostMgmtSocketPath string
 	)
 
 	BeforeEach(func() {
+		// Create a temporary directory to map into the container as /var/run/calico, which
+		// is where we tell Felix to put the policy sync socket.
 		var err error
 		tempDir, err = ioutil.TempDir("", "felixfv")
 		Expect(err).NotTo(HaveOccurred())
 
+		// Configure felix to enable the policy sync API.
 		options := containers.DefaultTopologyOptions()
 		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policy-mgmt.sock"
 		options.ExtraEnvVars["FELIX_PolicySyncWorkloadSocketPathPrefix"] = "/var/run/calico"
@@ -83,6 +87,8 @@ var _ = Context("policy sync API tests", func() {
 			w[ii].WorkloadEndpoint.Spec.Pod = "fv-pod-" + iiStr
 			w[ii].Configure(client)
 		}
+
+		hostMgmtSocketPath = tempDir + "/policy-mgmt.sock"
 	})
 
 	AfterEach(func() {
@@ -104,62 +110,91 @@ var _ = Context("policy sync API tests", func() {
 		}
 	})
 
-	It("should do policy sync", func() {
-		By("Creating the management socket")
-		hostMgmtSocketPath := tempDir + "/policy-mgmt.sock"
-		Eventually(hostMgmtSocketPath).Should(BeAnExistingFile())
+	Context("with an open management socket", func() {
+		var (
+			mgmtClient *nodeagentmgmt.Client
+		)
 
-		// Use the fact that anything we exec inside the Felix container runs as root to fix the
-		// permissions on the socket so the test process can connect.
-		felix.Exec("chmod", "a+rw", "/var/run/calico/policy-mgmt.sock")
+		BeforeEach(func() {
+			Eventually(hostMgmtSocketPath).Should(BeAnExistingFile())
 
-		By("Accepting a connection from the management API client")
-		client := nodeagentmgmt.ClientUds(hostMgmtSocketPath)
-		// Create the workload directory, this would normally be the responsibility of the
-		// flex volume driver.
-		hostWlDir := tempDir + "/wl0"
-		os.MkdirAll(hostWlDir, 0777)
-		Eventually(func() error {
-			resp, err := client.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
-				Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
-					Uid:       "fv-pod-0",
-					Namespace: "fv",
-					Workload:  "fv-pod-0",
-				},
-				Workloadpath: "wl0",
+			// Use the fact that anything we exec inside the Felix container runs as root to fix the
+			// permissions on the socket so the test process can connect.
+			felix.Exec("chmod", "a+rw", "/var/run/calico/policy-mgmt.sock")
+			mgmtClient = nodeagentmgmt.ClientUds(hostMgmtSocketPath)
+		})
+
+		Context("after sending a workload creation", func() {
+			var (
+				hostWlSocketPath string
+			)
+			BeforeEach(func() {
+				// Create the workload directory, this would normally be the responsibility of the
+				// flex volume driver.
+				hostWlDir := tempDir + "/wl0"
+				os.MkdirAll(hostWlDir, 0777)
+				Eventually(func() error {
+					resp, err := mgmtClient.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
+						Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
+							Uid:       "fv-pod-0",
+							Namespace: "fv",
+							Workload:  "fv-pod-0",
+						},
+						Workloadpath: "wl0",
+					})
+					log.WithField("response", resp).Info("WorkloadAdded response")
+					return err
+				}).ShouldNot(HaveOccurred())
+
+				By("Creating the per-workload socket")
+				hostWlSocketPath = hostWlDir + "/policysync.sock"
 			})
-			log.WithField("response", resp).Info("WorkloadAdded response")
-			return err
-		}).ShouldNot(HaveOccurred())
 
-		By("Creating the per-workload socket")
-		hostWlSocketPath := hostWlDir + "/policysync.sock"
-		Eventually(hostWlSocketPath).Should(BeAnExistingFile())
+			It("should create the workload socket", func() {
+				Eventually(hostWlSocketPath).Should(BeAnExistingFile())
+			})
 
-		By("Accepting connections on the per-workload socket")
+			Context("with an open workload connection", func() {
 
-		// Use the fact that anything we exec inside the Felix container runs as root to fix the
-		// permissions on the socket so the test process can connect.
-		felix.Exec("chmod", "a+rw", "/var/run/calico/wl0/policysync.sock")
+				// Then connect to it.
+				var (
+					wlClient proto.PolicySyncClient
+					err      error
+					cancel   context.CancelFunc
+					ctx      context.Context
+				)
 
-		// Then connect to it.
-		var conn *grpc.ClientConn
-		var err error
-		var opts []grpc.DialOption
+				BeforeEach(func() {
+					// Use the fact that anything we exec inside the Felix container runs as root to fix the
+					// permissions on the socket so the test process can connect.
+					Eventually(hostWlSocketPath).Should(BeAnExistingFile())
+					felix.Exec("chmod", "a+rw", "/var/run/calico/wl0/policysync.sock")
+					var opts []grpc.DialOption
+					opts = append(opts, grpc.WithInsecure())
+					opts = append(opts, grpc.WithDialer(unixDialer))
+					var conn *grpc.ClientConn
+					conn, err = grpc.Dial(hostWlSocketPath, opts...)
+					Expect(err).NotTo(HaveOccurred())
 
-		opts = append(opts, grpc.WithInsecure())
-		opts = append(opts, grpc.WithDialer(unixDialer))
-		conn, err = grpc.Dial(hostWlSocketPath, opts...)
-		Expect(err).NotTo(HaveOccurred())
+					wlClient = proto.NewPolicySyncClient(conn)
+					ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+				})
 
-		c := proto.NewPolicySyncClient(conn)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		syncClient, err := c.Sync(ctx, &proto.SyncRequest{})
-		Expect(err).NotTo(HaveOccurred())
-		msg, err := syncClient.Recv()
-		Expect(err).NotTo(HaveOccurred())
-		log.WithField("message", msg).Info("Received message")
+				AfterEach(func() {
+					if cancel != nil {
+						cancel()
+					}
+				})
+
+				It("should receive something", func() {
+					syncClient, err := wlClient.Sync(ctx, &proto.SyncRequest{})
+					Expect(err).NotTo(HaveOccurred())
+					msg, err := syncClient.Recv()
+					Expect(err).NotTo(HaveOccurred())
+					log.WithField("message", msg).Info("Received message")
+				})
+			})
+		})
 	})
 })
 
