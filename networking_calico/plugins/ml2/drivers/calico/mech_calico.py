@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2014, 2015, 2018 Metaswitch Networks
+# Copyright (c) 2014, 2015 Metaswitch Networks
 # Copyright (c) 2013 OpenStack Foundation
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -58,7 +59,6 @@ from sqlalchemy import exc as sa_exc
 import neutron.plugins.ml2.rpc as rpc
 
 # Calico imports.
-import etcd
 from networking_calico.compat import cfg
 from networking_calico.compat import constants
 from networking_calico.compat import db_exc
@@ -146,35 +146,6 @@ def requires_state(f):
     def wrapper(self, *args, **kwargs):
         self._init_state()
         return f(self, *args, **kwargs)
-
-    return wrapper
-
-
-def retry_on_cluster_id_change(f):
-    """retry_on_cluster_id_change
-
-    This decorator ensures that the appropriate methods will retry if an
-    etcd EtcdClusterIdChanged exception is raised. This ensures that if etcd
-    is moved under their feet these methods don't fail, but instead do their
-    best to succeed.
-
-    To avoid infinite loops, however, these methods attempt to retry a finite
-    number of times before abandoning the attempt.
-
-    This decorator can only be applied to functions of the
-    CalicoMechanismDriver.
-    """
-    @wraps(f)
-    def wrapper(self, *args, **kwargs):
-        retries = 5
-        while True:
-            try:
-                return f(self, *args, **kwargs)
-            except etcd.EtcdClusterIdChanged:
-                LOG.info("etcd cluster moved, retrying")
-                retries -= 1
-                if not retries:
-                    raise
 
     return wrapper
 
@@ -323,7 +294,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     LOG.info("Became the master, starting StatusWatcher")
                     self._etcd_watcher = t_etcd.StatusWatcher(self)
                     self._etcd_watcher_thread = eventlet.spawn(
-                        self._etcd_watcher.loop
+                        self._etcd_watcher.start
                     )
                     LOG.info("Started %s as %s",
                              self._etcd_watcher, self._etcd_watcher_thread)
@@ -555,7 +526,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
 
-    @retry_on_cluster_id_change
     @requires_state
     def create_subnet_postcommit(self, context):
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
@@ -571,7 +541,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Pass relevant subnet info to the transport layer.
                 self.transport.subnet_created(subnet)
 
-    @retry_on_cluster_id_change
     @requires_state
     def update_subnet_postcommit(self, context):
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
@@ -590,7 +559,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Tell transport layer that subnet has been deleted.
                 self.transport.subnet_deleted(subnet['id'])
 
-    @retry_on_cluster_id_change
     @requires_state
     def delete_subnet_postcommit(self, context):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
@@ -599,7 +567,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.transport.subnet_deleted(context.current['id'])
 
     # Idealised method forms.
-    @retry_on_cluster_id_change
     @requires_state
     def create_port_postcommit(self, context):
         """create_port_postcommit
@@ -619,7 +586,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if self._port_is_endpoint_port(port):
             self._create_endpoint(context, port)
 
-    @retry_on_cluster_id_change
     @requires_state
     def update_port_postcommit(self, context):
         """update_port_postcommit
@@ -638,7 +604,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if self._port_is_endpoint_port(port):
             self._update_endpoint(context, port, original)
 
-    @retry_on_cluster_id_change
     @requires_state
     def update_floatingip(self, plugin_context):
         """update_floatingip
@@ -653,7 +618,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                     plugin_context.fip_update_port_id)
             self._update_port(plugin_context, port)
 
-    @retry_on_cluster_id_change
     @requires_state
     def delete_port_postcommit(self, context):
         """delete_port_postcommit
@@ -670,11 +634,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not self._port_is_endpoint_port(port):
             return
 
-        # Pass this to the transport layer.
-        self.transport.endpoint_deleted(port)
         datamodel_v3.delete("WorkloadEndpoint", endpoint_name(port))
 
-    @retry_on_cluster_id_change
     @requires_state
     def send_sg_updates(self, sgids, context):
         """Called whenever security group rules or membership change.
@@ -761,16 +722,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for profile in profiles:
                 self.transport.write_profile_to_etcd(profile)
 
-            # Pass this to the transport layer.
             # Implementation note: we could arguably avoid holding the
             # transaction for this length and instead release it here, then
             # use atomic CAS. The problem there is that we potentially have to
             # repeatedly respin and regain the transaction. Let's not do that
             # for now, and performance test to see if it's a problem later.
-            self.transport.endpoint_created(port)
             datamodel_v3.put("WorkloadEndpoint",
                              endpoint_name(port),
-                             endpoint_spec(port))
+                             endpoint_spec(port),
+                             annotations=endpoint_annotations(port))
 
     def _update_endpoint(self, context, port, original):
         # If this port update is purely for a status change, don't do anything:
@@ -814,7 +774,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         destroys the port in etcd.
         """
         LOG.info("Port becoming unbound: destroy.")
-        self.transport.endpoint_deleted(port)
         datamodel_v3.delete("WorkloadEndpoint", endpoint_name(port))
 
     def _port_bound_update(self, context, port):
@@ -842,10 +801,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.transport.write_profile_to_etcd(profile)
 
         # Now write the new endpoint data for the port.
-        self.transport.endpoint_created(port)
         datamodel_v3.put("WorkloadEndpoint",
                          endpoint_name(port),
-                         endpoint_spec(port))
+                         endpoint_spec(port),
+                         annotations=endpoint_annotations(port))
 
     def _icehouse_migration_step(self, context, port, original):
         """_icehouse_migration_step
@@ -895,14 +854,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.transport.write_profile_to_etcd(profile)
 
             # Now write the new endpoint data for the port.
-            self.transport.endpoint_created(port)
             datamodel_v3.put("WorkloadEndpoint",
                              endpoint_name(port),
-                             endpoint_spec(port))
+                             endpoint_spec(port),
+                             annotations=endpoint_annotations(port))
         else:
             # Port unbound, attempt to delete.
             LOG.info("Port disabled, attempting delete if needed.")
-            self.transport.endpoint_deleted(port)
             datamodel_v3.delete("WorkloadEndpoint", endpoint_name(port))
 
     def add_port_gateways(self, port, context):
@@ -989,7 +947,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         )
 
                         # Next, resync endpoints.
-                        self.resync_endpoints(admin_context, v3_datamodel=True)
                         self.resync_endpoints(admin_context)
 
                         # Now delete the profiles that are no longer wanted.
@@ -1060,13 +1017,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :returns: Nothing.
         """
         for subnet in subnets_to_delete:
-            try:
-                self.transport.atomic_delete_subnet(subnet)
-            except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
-                # If the atomic CAD doesn't successfully delete, that's ok, it
-                # means the subnet was created or updated elsewhere.
-                LOG.info('Subnet %s was deleted elsewhere', subnet)
-                continue
+            self.transport.atomic_delete_subnet(subnet)
 
     def _resync_missing_subnets(self, context, missing_subnet_ids):
         """Resync missing subnets.
@@ -1101,14 +1052,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :returns: Nothing.
         """
         for subnet in common_subnets:
-            # Get the subnet data from etcd.
-            try:
-                etcd_subnet = self.transport.get_subnet_data(subnet)
-            except etcd.EtcdKeyNotFound:
-                # The subnet is gone. That's fine.
-                LOG.info("Failed to resync deleted subnet %s", subnet.id)
-                continue
-
+            # Get current Neutron data for the subnet.
             with self._txn_from_context(context, tag="resync-subnets-changed"):
                 try:
                     neutron_subnet = self.db.get_subnet(context, subnet.id)
@@ -1119,7 +1063,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             # Get the data for both.
             try:
-                etcd_data = json.loads(etcd_subnet.data)
+                etcd_data = json.loads(subnet.data)
             except (ValueError, TypeError):
                 # If the JSON data is bad, we need to fix it up. Set a value
                 # that is impossible for Neutron to be returning: nothing at
@@ -1133,41 +1077,35 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Write to etcd.
                 LOG.warning("etcd copy of subnet %s inconsistent with " +
                             "Neutron DB, resyncing", subnet.id)
-                try:
-                    self.transport.subnet_created(
+                if not self.transport.subnet_created(
                         neutron_subnet,
-                        prev_index=subnet.modified_index
-                    )
-                except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
+                        mod_revision=subnet.mod_revision
+                ):
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
                     continue
 
-    def resync_endpoints(self, context, v3_datamodel=False):
+    def resync_endpoints(self, context):
         """Handles periodic resynchronization for endpoints."""
         LOG.info("Resyncing endpoints")
 
         # Get all the endpoints in etcd. Do this outside a database transaction
         # to try to ensure that anything that gets created is in our Neutron
         # snapshot.
-        if v3_datamodel:
-            endpoints = []
-            endpoint_ids = set()
-            for result in datamodel_v3.get_all("WorkloadEndpoint"):
-                name, spec, mod_revision = result
-                LOG.debug("Found endpoint %s", name)
-                endpoints.append(t_etcd.Endpoint(
-                    id=spec['endpoint'],
-                    key=name,
-                    modified_index=mod_revision,
-                    host=spec['node'],
-                    data=spec,
-                ))
-                endpoint_ids.add(spec['endpoint'])
-        else:
-            endpoints = list(self.transport.get_endpoints())
-            endpoint_ids = set(ep.id for ep in endpoints)
+        endpoints = []
+        endpoint_ids = set()
+        for result in datamodel_v3.get_all("WorkloadEndpoint"):
+            name, spec, mod_revision = result
+            LOG.debug("Found endpoint %s", name)
+            endpoints.append(t_etcd.Endpoint(
+                id=spec['endpoint'],
+                key=name,
+                mod_revision=mod_revision,
+                host=spec['node'],
+                data=spec,
+            ))
+            endpoint_ids.add(spec['endpoint'])
 
         # Then, grab all the ports from Neutron.
         # TODO(lukasa): We can reduce the amount of data we load from Neutron
@@ -1215,17 +1153,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # First, handle the extra ports.
         eps_to_delete = (e for e in endpoints if e.id in extra_ports)
-        self._resync_extra_ports(eps_to_delete, v3_datamodel)
+        self._resync_extra_ports(eps_to_delete)
 
         # Next, the missing ports.
-        self._resync_missing_ports(context, missing_ports, v3_datamodel)
+        self._resync_missing_ports(context, missing_ports)
 
         # Finally, scan each of the ports in changes_ports. Work out if there
         # are any differences. If there are, write out to etcd.
         common_endpoints = (e for e in endpoints if e.id in changes_ports)
-        self._resync_changed_ports(context, common_endpoints, v3_datamodel)
+        self._resync_changed_ports(context, common_endpoints)
 
-    def _resync_missing_ports(self, context, missing_port_ids, v3_datamodel):
+    def _resync_missing_ports(self, context, missing_port_ids):
         """_resync_missing_ports
 
         For each missing port, do a quick port creation. This takes out a DB
@@ -1245,14 +1183,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Fill out other information we need on the port and write to
                 # etcd.
                 port = self.add_extra_port_information(context, port)
-                if v3_datamodel:
-                    datamodel_v3.put("WorkloadEndpoint",
-                                     endpoint_name(port),
-                                     endpoint_spec(port))
-                else:
-                    self.transport.endpoint_created(port)
+                datamodel_v3.put("WorkloadEndpoint",
+                                 endpoint_name(port),
+                                 endpoint_spec(port),
+                                 annotations=endpoint_annotations(port))
 
-    def _resync_extra_ports(self, ports_to_delete, v3_datamodel):
+    def _resync_extra_ports(self, ports_to_delete):
         """Atomically delete ports that are in etcd, but shouldn't be.
 
         :param ports_to_delete: An iterable of Endpoint objects to be
@@ -1260,18 +1196,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :returns: Nothing.
         """
         for endpoint in ports_to_delete:
-            try:
-                if v3_datamodel:
-                    datamodel_v3.delete("WorkloadEndpoint", endpoint.key)
-                else:
-                    self.transport.atomic_delete_endpoint(endpoint)
-            except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
-                # If the atomic CAD doesn't successfully delete, that's ok, it
-                # means the endpoint was created or updated elsewhere.
-                LOG.info('Endpoint %s was deleted elsewhere', endpoint)
-                continue
+            datamodel_v3.delete("WorkloadEndpoint", endpoint.key)
 
-    def _resync_changed_ports(self, context, common_endpoints, v3_datamodel):
+    def _resync_changed_ports(self, context, common_endpoints):
         """_resync_changed_ports
 
         Reconcile all changed ports by checking whether Neutron and etcd agree.
@@ -1282,16 +1209,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :returns: Nothing.
         """
         for endpoint in common_endpoints:
-            if not v3_datamodel:
-                # Get the endpoint data from etcd.
-                try:
-                    endpoint = self.transport.get_endpoint_data(endpoint)
-                except etcd.EtcdKeyNotFound:
-                    # The endpoint is gone. That's fine.
-                    LOG.info("Failed to update deleted endpoint %s",
-                             endpoint.id)
-                    continue
-
             with self._txn_from_context(context, tag="resync-ports-changed"):
                 try:
                     port = self.db.get_port(context, endpoint.id)
@@ -1302,10 +1219,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             # Get the data for both.
             try:
-                if v3_datamodel:
-                    etcd_data = endpoint.data
-                else:
-                    etcd_data = json.loads(endpoint.data)
+                etcd_data = endpoint.data
             except (ValueError, TypeError):
                 # If the JSON data is bad, we need to fix it up. Set a value
                 # that is impossible for Neutron to be returning: nothing at
@@ -1314,29 +1228,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 etcd_data = None
 
             port = self.add_extra_port_information(context, port)
-            if v3_datamodel:
-                neutron_data = endpoint_spec(port)
-            else:
-                neutron_data = t_etcd.port_etcd_data(port)
+            neutron_data = endpoint_spec(port)
 
             if etcd_data != neutron_data:
                 # Write to etcd.
                 LOG.warning("Resolving error in port %s", endpoint.id)
-                try:
-                    if v3_datamodel:
-                        datamodel_v3.put("WorkloadEndpoint",
-                                         endpoint_name(port),
-                                         neutron_data,
-                                         mod_revision=endpoint.modified_index)
-                    else:
-                        self.transport.write_port_to_etcd(
-                            port, prev_index=endpoint.modified_index
-                        )
-                except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
-                    # If someone wrote to etcd they probably have more recent
-                    # data than us, let it go.
-                    LOG.info("Atomic CAS failed, no action.")
-                    continue
+                datamodel_v3.put("WorkloadEndpoint",
+                                 endpoint_name(port),
+                                 neutron_data,
+                                 annotations=endpoint_annotations(port),
+                                 mod_revision=endpoint.mod_revision)
 
     def resync_profiles(self, context):
         """Resynchronize security profiles."""
@@ -1414,9 +1315,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :returns: Nothing.
         """
         for profile in profiles_to_delete:
-            try:
-                self.transport.atomic_delete_profile(profile)
-            except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
+            if not self.transport.atomic_delete_profile(profile):
                 # If the atomic CAD doesn't successfully delete, that's ok, it
                 # means the profile was created or updated elsewhere.
                 continue
@@ -1443,12 +1342,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Write to etcd.
                 LOG.warning("Resolving error in profile %s", etcd_profile.id)
 
-                try:
-                    self.transport.write_profile_to_etcd(
+                if not self.transport.write_profile_to_etcd(
                         neutron_profile,
-                        mod_revision=etcd_profile.modified_index,
-                    )
-                except (etcd.EtcdCompareFailed, etcd.EtcdKeyNotFound):
+                        mod_revision=etcd_profile.mod_revision,
+                ):
                     # If someone wrote to etcd they probably have more recent
                     # data than us, let it go.
                     LOG.info("Atomic CAS failed, no action.")
@@ -1576,6 +1473,21 @@ def endpoint_spec(port):
 
     # Return that data.
     return data
+
+
+def endpoint_annotations(port):
+    annotations = {}
+
+    # If the port has a DNS assignment, represent that as an FQDN annotation.
+    dns_assignment = port.get('dns_assignment')
+    if dns_assignment:
+        # Note: the Neutron server generates a list of assignment entries, one
+        # for each fixed IP, but all with the same FQDN, for slightly
+        # historical reasons.  We're fine getting the FQDN from the first
+        # entry.
+        annotations[datamodel_v3.ANN_KEY_FQDN] = dns_assignment[0]['fqdn']
+
+    return annotations
 
 
 # This section monkeypatches the AgentNotifierApi.security_groups_rule_updated

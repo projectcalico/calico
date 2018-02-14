@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2014, 2015 Metaswitch Networks
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +17,13 @@
 Test election code.
 """
 
-
+from etcd3gw import exceptions as e3e
 import eventlet
 import logging
 import mock
 import sys
 
+from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico.test import stub_etcd
 
@@ -41,9 +43,7 @@ def eventlet_sleep(time):
 class TestElection(unittest.TestCase):
     def setUp(self):
         super(TestElection, self).setUp()
-        self._real_etcd = election.etcd
         self._real_sleep = eventlet.sleep
-        election.etcd = stub_etcd
         eventlet.sleep = eventlet_sleep
         # Stop eventlet from printing our expected NoMoreResults exception
         # to stdout directly.
@@ -57,23 +57,24 @@ class TestElection(unittest.TestCase):
     def tearDown(self):
         self.sys_exit_p.stop()
         self.print_exc_patch.stop()
-        election.etcd = self._real_etcd
         eventlet.sleep = self._real_sleep
         super(TestElection, self).tearDown()
 
     def test_invalid(self):
         # Test that not elected using defaults.
         with self.assertRaises(ValueError):
-            client = stub_etcd.Client()
-            elector = election.Elector(client, "test_basic", "/bloop",
+            etcdv3._client = stub_etcd.Client()
+            elector = election.Elector("test_basic", "/bloop",
                                        interval=-1, ttl=15)
             self.assertFalse(elector.master())
+            self._wait_and_stop(etcdv3._client, elector)
 
         with self.assertRaises(ValueError):
-            client = stub_etcd.Client()
-            elector = election.Elector(client, "test_basic", "/bloop",
+            etcdv3._client = stub_etcd.Client()
+            elector = election.Elector("test_basic", "/bloop",
                                        interval=10, ttl=5)
             self.assertFalse(elector.master())
+            self._wait_and_stop(etcdv3._client, elector)
 
     def _wait_and_stop(self, client, elector):
         # Wait for the client to tell us that all the results have been
@@ -97,67 +98,64 @@ class TestElection(unittest.TestCase):
     def test_basic_election(self):
         # Test that not elected using defaults.
         LOG.debug("test_basic_election")
-        client = stub_etcd.Client()
+        etcdv3._client = client = stub_etcd.Client()
         client.add_read_result(key="/bloop", value="value")
-        elector = election.Elector(client, "test_basic", "/bloop",
+        elector = election.Elector("test_basic", "/bloop",
                                    interval=5, ttl=15)
         self._wait_and_stop(client, elector)
         self.assertFalse(elector.master())
 
     def test_become_master_first_time(self):
-        # Become the master after once round
+        # Become the master after one round
         LOG.debug("test_become_master_first_time")
-        client = stub_etcd.Client()
-        client.add_read_exception(stub_etcd.EtcdKeyNotFound())
+        etcdv3._client = client = stub_etcd.Client()
+        client.add_read_exception(etcdv3.KeyNotFound())
         client.add_write_exception(None)
         client.add_write_exception(None)
-        elector = election.Elector(client,
-                                   "test_basic",
+        elector = election.Elector("test_basic",
                                    "/bloop",
                                    interval=5,
                                    ttl=15)
         self._wait_and_stop(client, elector)
 
     def test_fail_to_maintain(self):
-        # Become the master after once round
+        # Become the master after one round
         LOG.debug("test_become_master_first_time")
-        client = stub_etcd.Client()
-        client.add_read_exception(stub_etcd.EtcdKeyNotFound())
+        etcdv3._client = client = stub_etcd.Client()
+        client.add_read_exception(etcdv3.KeyNotFound())
         client.add_write_exception(None)
-        client.add_write_exception(stub_etcd.EtcdClusterIdChanged())
-        elector = election.Elector(client,
-                                   "test_basic",
+        client.add_write_exception(e3e.ConnectionFailedError())
+        elector = election.Elector("test_basic",
                                    "/bloop",
                                    interval=5,
                                    ttl=15)
         self._wait_and_stop(client, elector)
 
     def test_become_master_multiple_attempts(self):
-        # Become the master after once round
+        # Become the master after one round
         LOG.debug("test_become_master_multiple_circuits")
         for action in ["delete", "expire", "compareAndDelete", "something"]:
             LOG.info("Testing etcd delete event %s", action)
-            client = stub_etcd.Client()
+            etcdv3._client = client = stub_etcd.Client()
             client.add_read_result(key="/bloop", value="value")
             client.add_read_result(key="/bloop", value="value")
             client.add_read_result(key="/bloop", value=None, action=action)
             client.add_write_exception(None)
             client.add_write_exception(None)
-            elector = election.Elector(client, "test_basic", "/bloop",
+            elector = election.Elector("test_basic", "/bloop",
                                        interval=5, ttl=15)
             self._wait_and_stop(client, elector)
 
     def test_become_master_implausible(self):
         # Become the master after key vanishes
         LOG.debug("test_become_master_implausible")
-        client = stub_etcd.Client()
+        etcdv3._client = client = stub_etcd.Client()
         client.add_read_result(key="/bloop", value="value")
         client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(stub_etcd.EtcdKeyNotFound())
+        client.add_read_exception(etcdv3.KeyNotFound())
         client.add_write_result()
         client.add_write_result()
-        elector = election.Elector(client,
-                                   "test_basic",
+        elector = election.Elector("test_basic",
                                    "/bloop",
                                    interval=5,
                                    ttl=15)
@@ -166,13 +164,12 @@ class TestElection(unittest.TestCase):
     def test_initial_read_exceptions(self):
         LOG.debug("test_initial_read_exceptions")
 
-        client = stub_etcd.Client()
-        client.add_read_exception(stub_etcd.EtcdException())
-        client.add_read_exception(stub_etcd.EtcdConnectionFailed())
-        client.add_read_exception(stub_etcd.EtcdClusterIdChanged())
-        client.add_read_exception(stub_etcd.EtcdEventIndexCleared())
-        elector = election.Elector(client,
-                                   "test_basic",
+        etcdv3._client = client = stub_etcd.Client()
+        client.add_read_exception(e3e.Etcd3Exception())
+        client.add_read_exception(e3e.InternalServerError())
+        client.add_read_exception(e3e.ConnectionFailedError())
+        client.add_read_exception(e3e.PreconditionFailedError())
+        elector = election.Elector("test_basic",
                                    "/bloop",
                                    interval=5,
                                    ttl=15)
@@ -181,75 +178,92 @@ class TestElection(unittest.TestCase):
     def test_later_exceptions(self):
         LOG.debug("test_later_read_exceptions")
 
-        client = stub_etcd.Client()
+        etcdv3._client = client = stub_etcd.Client()
         client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(stub_etcd.EtcdException())
+        client.add_read_exception(e3e.Etcd3Exception())
         client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(stub_etcd.EtcdConnectionFailed())
+        client.add_read_exception(e3e.InternalServerError())
         client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(stub_etcd.EtcdClusterIdChanged())
+        client.add_read_exception(e3e.ConnectionFailedError())
         client.add_read_result(key="/bloop", value="value")
-        client.add_read_exception(stub_etcd.EtcdEventIndexCleared())
-        elector = election.Elector(client, "test_basic", "/bloop",
+        client.add_read_exception(e3e.PreconditionFailedError())
+        elector = election.Elector("test_basic", "/bloop",
                                    interval=5, ttl=15)
         self._wait_and_stop(client, elector)
 
     def test_master_failure(self):
         LOG.debug("test_master_failure")
 
-        client = stub_etcd.Client()
-        client.add_read_exception(stub_etcd.EtcdKeyNotFound())
+        etcdv3._client = client = stub_etcd.Client()
+        client.add_read_exception(etcdv3.KeyNotFound())
         # Now become the master but fail
-        client.add_write_exception(stub_etcd.EtcdException())
+        client.add_write_exception(e3e.ConnectionFailedError())
         client.add_read_result(key="/bloop", value="value")
         client.add_read_result(key="/bloop", value=None, action="delete")
         # Now become the master but fail again
-        client.add_write_exception(stub_etcd.EtcdException())
+        client.add_write_exception(e3e.InternalServerError())
         # Go back to the beginning again.
         client.add_read_result(key="/bloop", value="value")
         client.add_read_result(key="/bloop", value=None, action="delete")
         client.add_write_exception(None)
         client.add_write_exception(None)
-        elector = election.Elector(client,
-                                   "test_basic",
+        elector = election.Elector("test_basic",
                                    "/bloop",
                                    interval=5,
                                    ttl=15)
         self._wait_and_stop(client, elector)
 
-        # We are no longer the master, after error.
+        # We are no longer the master, after being told to stop.
         self.assertFalse(elector.master())
 
     @mock.patch("os.path.exists")
     def test_check_master_process_died(self, m_exists):
         m_exists.return_value = False
-        client = mock.Mock()
-        elector = election.Elector(client, "server-id", "/bloop",
+        etcdv3._client = client = mock.Mock()
+        elector = election.Elector("server-id", "/bloop",
                                    interval=5, ttl=15)
-        client.delete.side_effect = stub_etcd.EtcdKeyNotFound()
+        # etcd3 transaction returns False because the key is no longer there.
+        client.transaction.return_value = {}
         self.assertRaises(election.RestartElection,
                           elector._check_master_process, "server-id:1234")
         self.assertEqual(
             [
-                mock.call("/bloop", prevValue="server-id:1234")
+                mock.call({
+                    'compare': [{
+                        'value': u'c2VydmVyLWlkOjEyMzQ=',
+                        'result': 'EQUAL',
+                        'key': u'L2Jsb29w',
+                        'target': 'VALUE'}],
+                    'success': [{
+                        'request_delete_range': {'key': u'L2Jsb29w'}}],
+                    'failure': []
+                })
             ],
-            client.delete.mock_calls
+            client.transaction.mock_calls
         )
+        client.failure = None
+        self._wait_and_stop(client, elector)
 
     @mock.patch("os.path.exists")
     def test_check_master_process_other_server(self, m_exists):
         m_exists.return_value = False
-        client = mock.Mock()
-        elector = election.Elector(client, "server-id", "/bloop",
+        etcdv3._client = client = mock.Mock()
+        elector = election.Elector("server-id", "/bloop",
                                    interval=5, ttl=15)
         elector._check_master_process("other-server:1234")
         self.assertEqual([], client.delete.mock_calls)
+        self.assertEqual([], client.transaction.mock_calls)
+        client.failure = None
+        self._wait_and_stop(client, elector)
 
     @mock.patch("os.path.exists")
     def test_check_master_process_still_alive(self, m_exists):
         m_exists.return_value = True
-        client = mock.Mock()
-        elector = election.Elector(client, "server-id", "/bloop",
+        etcdv3._client = client = mock.Mock()
+        elector = election.Elector("server-id", "/bloop",
                                    interval=5, ttl=15)
         elector._check_master_process("server-id:1234")
         self.assertEqual([], client.delete.mock_calls)
+        self.assertEqual([], client.transaction.mock_calls)
+        client.failure = None
+        self._wait_and_stop(client, elector)

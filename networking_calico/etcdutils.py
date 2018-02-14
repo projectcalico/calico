@@ -12,30 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
-
-import etcd
+import collections
+import eventlet
 import functools
 import json
 import logging
 import re
-import six
-from socket import timeout as SocketTimeout
-import time
 from types import StringTypes
 
-from urllib3.exceptions import ReadTimeoutError
-from urllib3 import Timeout
-
-from networking_calico.datamodel_v1 import READY_KEY
-from networking_calico.logutils import logging_exceptions
+from networking_calico import etcdv3
+from networking_calico.monotonic import monotonic_time
 
 _log = logging.getLogger(__name__)
-
-# Since this module does long-polling, we expect read timeouts from etcd but
-# urllib3 logs timeouts at warning level.  Disable that to avoid log spam.
-logging.getLogger("urllib3").setLevel(logging.ERROR)
-logging.getLogger("requests").setLevel(logging.ERROR)
 
 # Map etcd event actions to the effects we care about.
 ACTION_MAPPING = {
@@ -48,6 +36,7 @@ ACTION_MAPPING = {
     "compareAndDelete": "delete",
     "expire": "delete",
 }
+WATCH_TIMEOUT_SECS = 10
 
 
 class PathDispatcher(object):
@@ -104,312 +93,183 @@ class PathDispatcher(object):
                        action, response.key, handler_node)
 
 
-class EtcdClientOwner(object):
-    """Base class for objects that own an etcd Client.
-
-    Supports reconnecting, optionally copying the cluster ID.
-    """
-    def __init__(self,
-                 etcd_addrs,
-                 etcd_scheme="http",
-                 etcd_key=None,
-                 etcd_cert=None,
-                 etcd_ca=None):
-        """Constructor.
-
-        :param str|list[str] etcd_addrs: Either an authority string, such as
-               'localhost:1234' to connect to a single server (or proxy) or a
-               list of authority strings to connect to a cluster.
-        :param str etcd_scheme: "http" or "https"
-        :param etcd_key: Required if using HTTPS, path to the key file.
-        :param etcd_cert: Required if using HTTPS, path to the client cert
-               file.
-        :param etcd_ca: Required if using HTTPS, path to the CA cert.
-        """
-        super(EtcdClientOwner, self).__init__()
-        if isinstance(etcd_addrs, six.string_types):
-            # For back-compatibility, allow a single authority string to be
-            # supplied instead of a list.
-            _log.debug("Single etcd address: %s, wrapping in list.",
-                       etcd_addrs)
-            etcd_addrs = [etcd_addrs]
-        self.etcd_hosts = []
-        for addr in etcd_addrs:
-            host = None
-            port = None
-            if ":" in addr:
-                host, port = addr.split(":")
-                port = int(port)
-            else:
-                host = addr
-                port = 4001
-            self.etcd_hosts.append((host, port))
-        self.etcd_scheme = etcd_scheme
-        self.etcd_key = etcd_key
-        self.etcd_cert = etcd_cert
-        self.etcd_ca = etcd_ca
-        self.client = None
-        self.reconnect()
-
-    def reconnect(self, copy_cluster_id=True):
-        """Reconnects the etcd client."""
-        if self.client and copy_cluster_id:
-            old_cluster_id = self.client.expected_cluster_id
-            _log.info("(Re)connecting to etcd. Old etcd cluster ID was %s.",
-                      old_cluster_id)
-        else:
-            _log.info("(Re)connecting to etcd. No previous cluster ID.")
-            old_cluster_id = None
-
-        key_pair = None
-        if self.etcd_cert and self.etcd_key:
-            key_pair = (self.etcd_cert, self.etcd_key)
-
-        # Shuffle the list of hosts so that each client will fail over to
-        # a different etcd host on failure, spreading the load.
-        random.shuffle(self.etcd_hosts)
-
-        # python-etcd requires a single etcd endpoint to be specified using the
-        # host=, port= parameters, but requires a different syntax for
-        # multiple (>1): host=((host, port), ...).  Allow_reconnect only makes
-        # sense when multiple endpoints are available.
-        if len(self.etcd_hosts) == 1:
-            self.client = etcd.Client(
-                host=self.etcd_hosts[0][0],
-                port=self.etcd_hosts[0][1],
-                protocol=self.etcd_scheme,
-                cert=key_pair,
-                ca_cert=self.etcd_ca,
-                expected_cluster_id=old_cluster_id
-            )
-        else:
-            self.client = etcd.Client(
-                host=tuple(self.etcd_hosts),
-                protocol=self.etcd_scheme,
-                cert=key_pair,
-                ca_cert=self.etcd_ca,
-                expected_cluster_id=old_cluster_id,
-                allow_reconnect=True
-            )
+Response = collections.namedtuple(
+    'Response', ['action', 'key', 'value']
+)
 
 
-class EtcdWatcher(EtcdClientOwner):
-    """Helper class for managing an etcd watch session.
+class EtcdWatcher(object):
+    """A class that watches an etcdv3 subtree.
 
-    Maintains the etcd polling index and handles expected exceptions.
+    Entrypoints:
+    - EtcdWatcher() (constructor)
+    - watcher.start()
+    - watcher.stop()
     """
 
-    def __init__(self,
-                 etcd_addrs,
-                 key_to_poll,
-                 etcd_scheme="http",
-                 etcd_key=None,
-                 etcd_cert=None,
-                 etcd_ca=None,
-                 poll_timeout=10,
-                 connect_timeout=5):
-        super(EtcdWatcher, self).__init__(etcd_addrs,
-                                          etcd_scheme=etcd_scheme,
-                                          etcd_key=etcd_key,
-                                          etcd_cert=etcd_cert,
-                                          etcd_ca=etcd_ca)
-        self.etcd_timeout = Timeout(connect=connect_timeout,
-                                    read=poll_timeout)
-        self.key_to_poll = key_to_poll
-        self.next_etcd_index = None
-
-        # Forces a resync after the current poll if set.  Safe to set from
-        # another thread.  Automatically reset to False after the resync is
-        # triggered.
-        self.resync_after_current_poll = False
-
-        # Tells the watcher to stop after this poll.  One-way flag.
-        self._stopped = False
-
+    def __init__(self, prefix):
+        _log.debug("Creating EtcdWatcher for %s", prefix)
+        self.prefix = prefix
         self.dispatcher = PathDispatcher()
-
-    @logging_exceptions(_log)
-    def loop(self):
-        _log.info("Started %s loop", self)
-        while not self._stopped:
-            try:
-                _log.info("Reconnecting and loading snapshot from etcd...")
-                self.reconnect(copy_cluster_id=False)
-                self._on_pre_resync()
-                try:
-                    # Get an initial snapshot of everything under the requested
-                    # <key_to_poll>.  The response contains a generation ID
-                    # allowing us to then poll for updates without missing any.
-                    initial_dump = self.load_initial_dump()
-                    _log.info("Loaded snapshot from etcd cluster %s, "
-                              "processing it...",
-                              self.client.expected_cluster_id)
-                    self._on_snapshot_loaded(initial_dump)
-                    while not self._stopped:
-                        # Wait for something to change.
-                        response = self.wait_for_etcd_event()
-                        if not self._stopped:
-                            self.dispatcher.handle_event(response)
-                except ResyncRequired:
-                    _log.info("Polling aborted, doing resync.")
-            except etcd.EtcdException as e:
-                # Most likely a timeout or other error in the pre-resync;
-                # start over.  These exceptions have good semantic error text
-                # so the stack trace would just add log spam.
-                _log.error("Unexpected IO or etcd error, triggering "
-                           "resync with etcd: %r.", e)
-                time.sleep(1)  # Prevent tight loop due to unexpected error.
-        _log.info("%s.loop() stopped due to self.stop == True", self)
+        self._stopped = False
 
     def register_path(self, *args, **kwargs):
         self.dispatcher.register(*args, **kwargs)
 
-    def wait_for_ready(self, retry_delay):
-        _log.info("Waiting for etcd to be ready...")
-        ready = False
-        while not ready:
-            try:
-                db_ready = self.client.read(READY_KEY, timeout=10).value
-            except etcd.EtcdKeyNotFound:
-                _log.warning("Ready flag not present in etcd; felix will pause"
-                             " updates until the orchestrator sets the flag.")
-                db_ready = "false"
-            except etcd.EtcdException as e:
-                # Note: we don't log the
-                _log.error("Failed to retrieve ready flag from etcd (%r). "
-                           "Felix will not receive updates until the "
-                           "connection to etcd is restored.", e)
-                db_ready = "false"
+    def _pre_snapshot_hook(self):
+        return None
 
-            if db_ready == "true":
-                _log.info("etcd is ready.")
-                ready = True
-            else:
-                _log.info("etcd not ready.  Will retry.")
-                time.sleep(retry_delay)
-                continue
+    def _post_snapshot_hook(self, _):
+        pass
 
-    def load_initial_dump(self):
-        """Does a recursive get on the key and returns the result.
+    def start(self):
+        _log.info("Start watching %s", self.prefix)
+        self._stopped = False
 
-        As a side effect, initialises the next_etcd_index field for
-        use by wait_for_etcd_event()
+        while not self._stopped:
+            # Get the current etcdv3 cluster ID and revision, so (a) we can
+            # detect if the cluster ID changes, and (b) we know when to start
+            # watching from.
+            cluster_id, last_revision = etcdv3.get_status()
+            last_revision = int(last_revision)
+            _log.info("Current cluster_id %s, revision %d",
+                      cluster_id, last_revision)
 
-        :return: The etcd response object.
-        """
-        initial_dump = None
-        while not initial_dump:
-            try:
-                initial_dump = self.client.read(self.key_to_poll,
-                                                recursive=True)
-            except etcd.EtcdKeyNotFound:
-                # Avoid tight-loop if the whole directory doesn't exist yet.
-                if self._stopped:
-                    _log.info("Stopped: aborting load of initial dump.")
-                    raise
-                _log.info("Waiting for etcd directory '%s' to exist...",
-                          self.key_to_poll)
-                time.sleep(1)
+            # Allow subclass to do pre-snapshot processing, and to return any
+            # data that it will need for reconciliation after the snapshot.
+            snapshot_data = self._pre_snapshot_hook()
 
-        # The etcd_index is the high-water-mark for the snapshot, record that
-        # we want to poll starting at the next index.
-        self.next_etcd_index = initial_dump.etcd_index + 1
-        return initial_dump
+            # Get all existing values and process them through the dispatcher.
+            for result in etcdv3.get_prefix(self.prefix):
+                key, value, _ = result
+                # Convert to what the dispatcher expects - see below.
+                response = Response(
+                    action='set',
+                    key=key,
+                    value=value,
+                )
+                _log.info("status event: %s", response)
+                self.dispatcher.handle_event(response)
 
-    def wait_for_etcd_event(self):
-        """Polls etcd until something changes.
+            # Allow subclass to do post-snapshot reconciliation.
+            self._post_snapshot_hook(snapshot_data)
 
-        Retries on read timeouts and other non-fatal errors.
+            # Now watch for any changes, starting after the revision above.
+            while not self._stopped:
+                try:
+                    # Check for cluster ID changing.
+                    cluster_id_now, _ = etcdv3.get_status()
+                    _log.debug("Now cluster_id is %s", cluster_id_now)
+                    if cluster_id_now != cluster_id:
+                        _log.info("Cluster ID changed, resync")
+                        break
 
-        :returns: The etcd response object for the change.
-        :raises ResyncRequired: If we get out of sync with etcd or hit
-            a fatal error.
-        """
-        assert self.next_etcd_index is not None, \
-            "load_initial_dump() should be called first."
-        response = None
-        while not response:
-            if self.resync_after_current_poll:
-                _log.debug("Told to resync, aborting poll.")
-                self.resync_after_current_poll = False
-                raise ResyncRequired()
+                    # Start a watch from just after the last known revision.
+                    event_stream, cancel = etcdv3.watch_subtree(
+                        self.prefix,
+                        str(last_revision + 1))
+                except Exception:
+                    # Log and handle by breaking out to the wider loop, which
+                    # means we'll get the tree again and then try watching
+                    # again.  E.g. it could be that the DB has just been
+                    # compacted and so the revision is no longer available that
+                    # we asked to start watching from.
+                    _log.exception("Exception watching status tree")
+                    break
 
-            try:
-                _log.debug("About to wait for etcd update %s",
-                           self.next_etcd_index)
-                response = self.client.read(self.key_to_poll,
-                                            wait=True,
-                                            waitIndex=self.next_etcd_index,
-                                            recursive=True,
-                                            timeout=self.etcd_timeout)
-                _log.debug("etcd response: %r", response)
-            except etcd.EtcdConnectionFailed as e:
-                if isinstance(e.cause, (ReadTimeoutError, SocketTimeout)):
-                    # This is expected when we're doing a poll and nothing
-                    # happened. socket timeout doesn't seem to be caught by
-                    # urllib3 1.7.1.  Simply reconnect.
-                    _log.debug("Read from etcd timed out (%r), retrying.", e)
-                    # Force a reconnect to ensure urllib3 doesn't recycle the
-                    # connection.  (We were seeing this with urllib3 1.7.1.)
-                    self.reconnect()
-                else:
-                    # We don't log out the stack trace here because it can
-                    # spam the logs heavily if the requests keep failing.
-                    # The errors are very descriptive anyway.
-                    _log.warning("Connection to etcd failed: %r.", e)
-                    # Limit our retry rate in case etcd is down.
-                    time.sleep(1)
-                    self.reconnect()
-            except (etcd.EtcdClusterIdChanged,
-                    etcd.EtcdEventIndexCleared) as e:
-                _log.warning("Out of sync with etcd (%r).  Reconnecting "
-                             "for full sync.", e)
-                raise ResyncRequired()
-            except etcd.EtcdException as e:
-                # Assume any other errors are fatal to our poll and
-                # do a full resync.
-                _log.exception("Unknown etcd error %r; doing resync.",
-                               e.args)
-                # Limit our retry rate in case etcd is down.
-                time.sleep(1)
-                self.reconnect()
-                raise ResyncRequired()
-            except Exception:
-                _log.exception("Unexpected exception during etcd poll")
-                raise
+                # Record time of last activity on the successfully created
+                # watch.  (This is updated below as we see watch events.)
+                last_event_time = monotonic_time()
 
-        # Since we're polling on a subtree, we can't just increment
-        # the index, we have to look at the modifiedIndex to spot
-        # if we've skipped a lot of updates.
-        self.next_etcd_index = max(self.next_etcd_index,
-                                   response.modifiedIndex) + 1
-        return response
+                def _cancel_watch_if_inactive():
+                    # Loop until we should cancel the watch, either because of
+                    # inactivity or because of stop() having been called.
+                    while not self._stopped:
+                        time_to_next_timeout = (last_event_time +
+                                                WATCH_TIMEOUT_SECS -
+                                                monotonic_time())
+                        _log.debug("Time to next timeout is %ds",
+                                   time_to_next_timeout)
+                        if time_to_next_timeout < 1:
+                            break
+                        else:
+                            # Sleep until when we might next have to cancel
+                            # (but won't if a watch event has occurred in the
+                            # meantime).
+                            eventlet.sleep(time_to_next_timeout)
+
+                    # Cancel the watch
+                    cancel()
+                    return
+
+                # Spawn a greenlet to cancel the watch if it's inactive, or if
+                # stop() is called.  Cancelling the watch adds None to the
+                # event stream, so the following for loop will see that.
+                eventlet.spawn(_cancel_watch_if_inactive)
+
+                for event in event_stream:
+                    _log.debug("Event: %s", event)
+                    last_event_time = monotonic_time()
+
+                    # If the EtcdWatcher has been stopped, return from the
+                    # whole loop.
+                    if self._stopped:
+                        _log.info("EtcdWatcher has been stopped")
+                        return
+
+                    # Otherwise a None event means that the watch has been
+                    # cancelled owing to inactivity.  In that case we break out
+                    # from this loop, and the watch will be restarted.
+                    if event is None:
+                        _log.debug("Watch cancelled owing to inactivity")
+                        break
+
+                    # An event at this point has a form like
+                    #
+                    # {u'kv': {
+                    #     u'mod_revision': u'4',
+                    #     u'value': '...',
+                    #     u'create_revision': u'4',
+                    #     u'version': u'1',
+                    #     u'key': '/calico/felix/v1/host/ubuntu-xenial...'
+                    # }}
+                    #
+                    # when a key/value pair is created or updated, and like
+                    #
+                    # {u'type': u'DELETE',
+                    #  u'kv': {
+                    #     u'mod_revision': u'88',
+                    #     u'key': '/calico/felix/v1/host/ubuntu-xenial-...'
+                    # }}
+                    #
+                    # when a key/value pair is deleted.
+                    #
+                    # Convert that to the form that the dispatcher expects;
+                    # namely a response object, with:
+                    # - response.key giving the etcd key
+                    # - response.action being "set" or "delete"
+                    # - whole response being passed on to the handler method.
+                    # Handler methods here expect
+                    # - response.key
+                    # - response.value
+                    response = Response(
+                        action=event.get('type', 'SET').lower(),
+                        key=event['kv']['key'],
+                        value=event['kv'].get('value', ''),
+                    )
+                    _log.info("Event: %s", response)
+                    self.dispatcher.handle_event(response)
+
+                    # Update last known revision.
+                    mod_revision = int(event['kv'].get('mod_revision', '0'))
+                    if mod_revision > last_revision:
+                        last_revision = mod_revision
+                        _log.info("Last known revision is now %d",
+                                  last_revision)
 
     def stop(self):
+        _log.info("Stop watching status tree")
         self._stopped = True
-
-    def _on_pre_resync(self):
-        """Abstract:
-
-        Called before the initial dump is loaded and passed to
-        _on_snapshot_loaded().
-        """
-        pass
-
-    def _on_snapshot_loaded(self, etcd_snapshot_response):
-        """Abstract:
-
-        Called once a snapshot has been loaded, replaces all previous
-        state.
-
-        Responsible for applying the snapshot.
-        :param etcd_snapshot_response: Etcd response holding a complete dump.
-        """
-        pass
-
-
-class ResyncRequired(Exception):
-    pass
 
 
 def intern_dict(d, fields_to_intern=None):

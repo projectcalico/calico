@@ -1,6 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
-# Copyright 2016 Tigera, Inc.
+# Copyright 2016, 2018 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -15,13 +15,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import etcd
 import logging
+import netaddr
 import os
 import socket
 import sys
 
 import eventlet
+eventlet.monkey_patch()
 
 from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
@@ -41,16 +42,12 @@ from networking_calico.compat import cfg
 from networking_calico.compat import constants
 from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 
 LOG = logging.getLogger(__name__)
 
 NETWORK_ID = 'calico'
-
-
-class ValidationFailed(Exception):
-    """Class used for data validation exceptions."""
-    pass
 
 
 class FakePlugin(object):
@@ -138,82 +135,48 @@ def make_net_model(net_spec):
     return net_model
 
 
-def get_etcd_connection_settings():
-    """Provide common initializing arguments for etcd watchers"""
-    etcd_host = cfg.CONF.calico.etcd_host
-    etcd_port = cfg.CONF.calico.etcd_port
-    etcd_endpoint = "{0}:{1}".format(etcd_host, etcd_port)
-    watcher_kwargs = {
-        'etcd_addrs': etcd_endpoint,
-        'etcd_scheme': cfg.CONF.calico.etcd_scheme,
-        'etcd_key': cfg.CONF.calico.etcd_key_file,
-        'etcd_cert': cfg.CONF.calico.etcd_cert_file,
-        'etcd_ca': cfg.CONF.calico.etcd_ca_cert_file
-    }
-    return watcher_kwargs
+def split_endpoint_name(name):
+    parts = name.replace('--', '#').split('-')
+    return tuple([p.replace('#', '-') for p in parts])
 
 
 class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
-    def __init__(self, agent):
-        watcher_kwargs = get_etcd_connection_settings()
-        watcher_kwargs['key_to_poll'] = \
-            datamodel_v1.dir_for_host(socket.gethostname()) + "/workload"
-        super(CalicoEtcdWatcher, self).__init__(**watcher_kwargs)
+    def __init__(self, agent, hostname):
+        workload_endpoint_prefix = datamodel_v3._build_key("WorkloadEndpoint",
+                                                           "")
+        super(CalicoEtcdWatcher, self).__init__(workload_endpoint_prefix)
         self.agent = agent
+        self.hostname = hostname
         self.suppress_dnsmasq_updates = False
 
         # Register the etcd paths that we need to watch.
-        self.register_path(
-            "/calico/v1/host/<hostname>/workload/<orchestrator>" +
-            "/<workload_id>/endpoint/<endpoint_id>",
-            on_set=self.on_endpoint_set,
-            on_del=self.on_endpoint_delete
-        )
-        self.register_path(
-            "/calico/v1/host/<hostname>/workload/<orchestrator>" +
-            "/<workload_id>/endpoint",
-            on_del=self.on_dir_delete
-        )
-        self.register_path(
-            "/calico/v1/host/<hostname>/workload/<orchestrator>" +
-            "/<workload_id>",
-            on_del=self.on_dir_delete
-        )
-        self.register_path(
-            "/calico/v1/host/<hostname>/workload/<orchestrator>",
-            on_del=self.on_dir_delete
-        )
-        self.register_path(
-            "/calico/v1/host/<hostname>/workload",
-            on_del=self.on_dir_delete
-        )
+        self.register_path(workload_endpoint_prefix + "<name>",
+                           on_set=self.on_endpoint_set,
+                           on_del=self.on_endpoint_delete)
 
         # Networks for which Dnsmasq needs updating.
         self.dirty_networks = set()
 
-        # Subnets that have changed in etcd since when we last read them.
-        self.dirty_subnets = set()
-
         # Also watch the etcd subnet tree.  When something in that subtree
         # changes, the subnet watcher will tell _this_ watcher to resync.
         self.subnet_watcher = SubnetWatcher(self)
-        eventlet.spawn(self.subnet_watcher.loop)
 
-    def on_endpoint_set(self, response, hostname, orchestrator,
-                        workload_id, endpoint_id):
+    def start(self):
+        eventlet.spawn(self.subnet_watcher.start)
+        super(CalicoEtcdWatcher, self).start()
+
+    def on_endpoint_set(self, response, name):
         """Handler for endpoint creations and updates.
 
         Endpoint data is, for example:
 
-        { 'state': 'active' or 'inactive',
-          'name': port['interface_name'],
+        { 'interfaceName': port['interface_name'],
           'mac': port['mac_address'],
-          'profile_ids': port['security_groups'],
-          'ipv4_nets': ['10.28.0.2/32'],
-          'ipv4_gateway': '10.28.0.1',
-          'ipv6_nets': ['2001:db8:1::2/128'],
-          'ipv6_gateway': '2001:db8:1::1' }
+          'profiles': port['security_groups'],
+          'ipNetworks': ['10.28.0.2/32', '2001:db8:1::2/128'],
+          'ipv4Gateway': '10.28.0.1',
+          'ipv6Gateway': '2001:db8:1::1' }
 
         Port properties needed by DHCP code are:
 
@@ -247,43 +210,60 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
           'ipv6_address_mode': 'dhcpv6-stateful' | 'dhcpv6-stateless',
           'ipv6_ra_mode': 'dhcpv6-stateful' | 'dhcpv6-stateless' }
         """
+        try:
+            hostname, orchestrator, workload_id, endpoint_id = \
+                split_endpoint_name(name)
+        except ValueError:
+            # For some reason this endpoint's name does not have the expected
+            # form.  Ignore it.
+            LOG.warning("Unexpected form for endpoint name: %s", name)
+            return
 
-        # Get the endpoint data.
+        if hostname != self.hostname:
+            LOG.debug("Endpoint is not on this node; %s", name)
+            return
+
+        # Get the endpoint spec.
         endpoint = etcdutils.safe_decode_json(response.value, 'endpoint')
         if not (isinstance(endpoint, dict) and
-                'ipv4_nets' in endpoint and
-                'ipv4_subnet_ids' in endpoint and
-                'ipv6_nets' in endpoint and
-                'ipv6_subnet_ids' in endpoint and
-                'name' in endpoint and
-                'mac' in endpoint):
+                'spec' in endpoint and
+                isinstance(endpoint['spec'], dict) and
+                'interfaceName' in endpoint['spec'] and
+                'ipNetworks' in endpoint['spec'] and
+                'mac' in endpoint['spec']):
             # Endpoint data is invalid.
             LOG.warning("Invalid endpoint data: %s => %s",
                         response.value, endpoint)
             return
+        annotations = endpoint.get('metadata', {}).get('annotations', {})
+        endpoint = endpoint['spec']
 
         # Construct NetModel port equivalent of Calico's endpoint data.
         fixed_ips = []
         dns_assignments = []
-        fqdn = endpoint.get('fqdn')
-        for ip_version in [4, 6]:
-            # Generate the fixed IPs and DNS assignments for the current IP
-            # version.
-            for addrm, subnet_id in zip(endpoint['ipv%s_nets' % ip_version],
-                                        endpoint['ipv%s_subnet_ids' %
-                                                 ip_version]):
-                ip_addr = addrm.split('/')[0]
-                fixed_ips.append({'subnet_id': subnet_id,
-                                  'ip_address': ip_addr})
-                if fqdn:
-                    dns_assignments.append({'hostname': fqdn.split('.')[0],
-                                            'ip_address': ip_addr,
-                                            'fqdn': fqdn})
+        fqdn = annotations.get(datamodel_v3.ANN_KEY_FQDN)
+        for addrm in endpoint['ipNetworks']:
+            ip_addr = addrm.split('/')[0]
+            try:
+                subnet_id = self.subnet_watcher.get_subnet_id_for_addr(ip_addr)
+            except SubnetIDNotFound:
+                LOG.warning("Missing subnet data for one of port's IPs")
+                return
+            fixed_ips.append({'subnet_id': subnet_id,
+                              'ip_address': ip_addr})
+            if fqdn:
+                dns_assignments.append({'hostname': fqdn.split('.')[0],
+                                        'ip_address': ip_addr,
+                                        'fqdn': fqdn})
         port = {'id': endpoint_id,
                 'device_owner': 'calico',
-                'device_id': endpoint['name'],
+                'device_id': endpoint['interfaceName'],
                 'fixed_ips': fixed_ips,
                 'mac_address': endpoint['mac'],
+                # FIXME: Calico currently does not pass through extra DHCP
+                # options, but it would be nice if it did.  Perhaps we could
+                # use an endpoint annotation, similarly as we do for the FQDN.
+                # https://bugs.launchpad.net/networking-calico/+bug/1553348
                 'extra_dhcp_opts': []}
         if fqdn:
             port['dns_assignment'] = dns_assignments
@@ -292,11 +272,8 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # and set the port's network ID correctly.
         try:
             port['network_id'] = self._ensure_net_and_subnets(port)
-        except etcd.EtcdKeyNotFound:
+        except SubnetIDNotFound:
             LOG.warning("Missing data for one of port's subnets")
-            return
-        except ValidationFailed:
-            LOG.warning("Invalid data for one of port's subnets")
             return
 
         # Add this port into the NetModel.
@@ -322,32 +299,17 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         LOG.debug("Needed subnet IDs: %s", needed_subnet_ids)
         LOG.debug("Existing network model by subnet ID: %s", net)
 
-        # Get a mapping from subnet ID to data for all the subnets that we
-        # already have for the right network ID.
-        cached_subnets = {}
-        if net:
-            for subnet in net.subnets:
-                cached_subnets[subnet.id] = subnet
-
-        # For each subnet that we don't already have, or that we know has
-        # changed, read its data from etcd and hold for adding into the cache.
+        # For each subnet that we need, get its data from SubnetWatcher and
+        # hold for adding into the cache.
         new_subnets = {}
         for subnet_id in needed_subnet_ids:
-            if (subnet_id in self.dirty_subnets or
-                    subnet_id not in cached_subnets):
-                try:
-                    # Read data for this subnet from etcd.
-                    subnet = self._get_subnet(subnet_id)
-
-                    # Remember this as a new subnet that we'll need to add into
-                    # the cache.
-                    new_subnets[subnet_id] = subnet
-                except etcd.EtcdKeyNotFound:
-                    LOG.warning("No data for subnet %s", subnet_id)
-                    raise
-                except ValidationFailed:
-                    LOG.warning("Invalid data for subnet %s", subnet_id)
-                    raise
+            try:
+                # Get data for this subnet from SubnetWatcher.
+                new_subnets[subnet_id] = \
+                    self.subnet_watcher.get_subnet(subnet_id)
+            except SubnetIDNotFound:
+                LOG.warning("No data for subnet %s", subnet_id)
+                raise
 
         if not net:
             # We don't already have a NetModel, so look for a cached NetModel
@@ -410,40 +372,6 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             for port in self.agent.cache.cache[network_id].ports:
                 self.agent.cache.port_lookup[port.id] = network_id
 
-    def _get_subnet(self, subnet_id):
-        # Read data for subnet SUBNET_ID from etcd and translate it to the dict
-        # form expected for insertion into a Neutron NetModel.
-        LOG.debug("Read subnet %s from etcd", subnet_id)
-        self.dirty_subnets.discard(subnet_id)
-
-        subnet_key = datamodel_v1.key_for_subnet(subnet_id)
-        response = self.client.read(subnet_key, consistent=True)
-        data = etcdutils.safe_decode_json(response.value, 'subnet')
-        LOG.debug("Subnet data: %s", data)
-
-        if not (isinstance(data, dict) and
-                'cidr' in data and
-                'gateway_ip' in data):
-            # Subnet data was invalid.
-            LOG.warning("Invalid subnet data: %s => %s", response.value, data)
-            raise ValidationFailed("Invalid subnet data")
-
-        # Convert to form expected by NetModel.
-        ip_version = 6 if ':' in data['cidr'] else 4
-        subnet = {'enable_dhcp': True,
-                  'ip_version': ip_version,
-                  'cidr': data['cidr'],
-                  'dns_nameservers': data.get('dns_servers') or [],
-                  'id': subnet_id,
-                  'gateway_ip': data['gateway_ip'],
-                  'host_routes': data.get('host_routes', []),
-                  'network_id': data.get('network_id', NETWORK_ID)}
-        if ip_version == 6:
-            subnet['ipv6_address_mode'] = DHCPV6_STATEFUL
-            subnet['ipv6_ra_mode'] = DHCPV6_STATEFUL
-
-        return dhcp.DictModel(subnet)
-
     def _update_dnsmasq(self, network_id):
         """Start/stop/restart Dnsmasq for NETWORK_ID."""
 
@@ -467,9 +395,17 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self.agent.cache.remove(net)
             self.agent.call_driver('disable', net)
 
-    def on_endpoint_delete(self, response, hostname, orchestrator,
-                           workload_id, endpoint_id):
+    def on_endpoint_delete(self, response, name):
         """Handler for endpoint deletion."""
+        try:
+            hostname, orchestrator, workload_id, endpoint_id = \
+                split_endpoint_name(name)
+        except ValueError:
+            # For some reason this endpoint's name does not have the expected
+            # form.  Ignore it.
+            LOG.warning("Unexpected form for endpoint name: %s", name)
+            return
+
         # Find the corresponding port in the DHCP agent's cache.
         port = self.agent.cache.get_port_by_id(endpoint_id)
         if port:
@@ -477,8 +413,8 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self.agent.cache.remove_port(port)
             self._update_dnsmasq(port.network_id)
 
-    def _on_snapshot_loaded(self, etcd_snapshot_response):
-        """Called whenever a snapshot is loaded from etcd."""
+    def _pre_snapshot_hook(self):
+        """Called when a new snapshot is about to be read from etcdv3."""
 
         # Add all current networks to the dirty set, so that we will stop their
         # Dnsmasqs if no longer needed.  Also remove all port and subnet
@@ -489,19 +425,11 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self._fix_network_cache_port_lookup(network_id)
             self.agent.cache.put(empty_network(network_id))
 
-        # We're going to reread all required subnet data anyway, so we don't
-        # need any historical list of dirty subnet IDs.
-        self.dirty_subnets = set()
-
         # Suppress Dnsmasq updates until we've processed the whole snapshot.
         self.suppress_dnsmasq_updates = True
+        return None
 
-        # Now pass each snapshot node through the dispatcher, which
-        # means that on_endpoint_set will be called for each endpoint.
-        for etcd_node in etcd_snapshot_response.leaves:
-            etcd_node.action = 'set'
-            self.dispatcher.handle_event(etcd_node)
-
+    def _post_snapshot_hook(self, _):
         LOG.debug("End of new snapshot")
 
         # Now do Dnsmasq updates.
@@ -510,62 +438,92 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self._update_dnsmasq(network_id)
         self.dirty_networks = set()
 
-    def on_dir_delete(self, response, *args, **kwargs):
-        """Called if an endpoint parent directory is deleted from etcd."""
-        LOG.warning("Unexpected directory deletion from etcd; triggering" +
-                    " resync; %s %s %s", response, args, kwargs)
 
-        # Handle by doing a resync.
-        self.resync_after_current_poll = True
-
-    def on_subnet_set(self, response, subnet_id):
-        """Handler for subnet creations and updates.
-
-        Note: this is called from the SubnetWatcher's eventlet thread.
-        """
-        LOG.info("Subnet %s created or updated", subnet_id)
-
-        # Note this as a dirty subnet ID, so that we reread the subnet data
-        # immediately if an endpoint is created or updated that uses this
-        # subnet.
-        self.dirty_subnets.add(subnet_id)
-
-        # Also schedule a resync so that the handling for existing endpoints is
-        # updated.  (Although it's unlikely that an endpoint's subnet will
-        # change between when the endpoint was created and when it DHCPs, or
-        # that the endpoint will DHCP again later on... but hey.)
-        self.resync_after_current_poll = True
+class SubnetIDNotFound(Exception):
+    pass
 
 
 class SubnetWatcher(etcdutils.EtcdWatcher):
 
     def __init__(self, endpoint_watcher):
-        watcher_kwargs = get_etcd_connection_settings()
-        watcher_kwargs['key_to_poll'] = datamodel_v1.SUBNET_DIR
-        super(SubnetWatcher, self).__init__(**watcher_kwargs)
-
+        super(SubnetWatcher, self).__init__(datamodel_v1.SUBNET_DIR)
         self.endpoint_watcher = endpoint_watcher
         self.register_path(
             datamodel_v1.SUBNET_DIR + "/<subnet_id>",
-            on_set=self.endpoint_watcher.on_subnet_set
+            on_set=self.on_subnet_set,
+            on_del=self.on_subnet_del,
         )
+        self.subnets_by_id = {}
 
-    def loop(self):
+    def start(self):
         # Catch and report any exceptions that escape here.
         try:
-            super(SubnetWatcher, self).loop()
+            super(SubnetWatcher, self).start()
         except:                 # noqa
-            LOG.exception("Exception in SubnetWatcher.loop()")
+            LOG.exception("Exception in SubnetWatcher.start()")
             raise
         finally:
             # As this thread is exiting, arrange for the agent as a whole to
             # exit.
             self.endpoint_watcher.stop()
 
-    def _on_snapshot_loaded(self, etcd_snapshot_response):
-        """Called whenever a snapshot is loaded from etcd."""
-        LOG.info("New subnet snapshot, trigger endpoint watcher to resync")
-        self.endpoint_watcher.resync_after_current_poll = True
+    def on_subnet_set(self, response, subnet_id):
+        """Handler for subnet creations and updates."""
+        LOG.info("Subnet %s created or updated", subnet_id)
+        subnet_data = etcdutils.safe_decode_json(response.value, 'subnet')
+
+        if subnet_data is None:
+            LOG.warning("Invalid subnet data %s", response.value)
+            return
+
+        if not (isinstance(subnet_data, dict) and
+                'cidr' in subnet_data and
+                'gateway_ip' in subnet_data):
+            LOG.warning("Invalid subnet data: %s", subnet_data)
+            return
+
+        self.subnets_by_id[subnet_id] = subnet_data
+        return
+
+    def on_subnet_del(self, response, subnet_id):
+        """Handler for subnet deletions."""
+        LOG.info("Subnet %s deleted", subnet_id)
+        if subnet_id in self.subnets_by_id:
+            del self.subnets_by_id[subnet_id]
+        return
+
+    def get_subnet_id_for_addr(self, ip_str):
+        ip_addr = netaddr.IPAddress(ip_str)
+        for subnet_id, subnet_data in self.subnets_by_id.iteritems():
+            if ip_addr in netaddr.IPNetwork(subnet_data['cidr']):
+                return subnet_id
+        raise SubnetIDNotFound()
+
+    def get_subnet(self, subnet_id):
+        """Get data for the specified subnet."""
+        LOG.debug("Get subnet %s", subnet_id)
+
+        if subnet_id not in self.subnets_by_id:
+            raise SubnetIDNotFound()
+
+        data = self.subnets_by_id[subnet_id]
+        LOG.debug("Subnet data: %s", data)
+
+        # Convert to form expected by NetModel.
+        ip_version = 6 if ':' in data['cidr'] else 4
+        subnet = {'enable_dhcp': True,
+                  'ip_version': ip_version,
+                  'cidr': data['cidr'],
+                  'dns_nameservers': data.get('dns_servers') or [],
+                  'id': subnet_id,
+                  'gateway_ip': data['gateway_ip'],
+                  'host_routes': data.get('host_routes', []),
+                  'network_id': data.get('network_id', NETWORK_ID)}
+        if ip_version == 6:
+            subnet['ipv6_address_mode'] = DHCPV6_STATEFUL
+            subnet['ipv6_ra_mode'] = DHCPV6_STATEFUL
+
+        return dhcp.DictModel(subnet)
 
 
 class CalicoDhcpAgent(DhcpAgent):
@@ -580,7 +538,8 @@ class CalicoDhcpAgent(DhcpAgent):
     there are more than a few hundred agents running.
     """
     def __init__(self):
-        super(CalicoDhcpAgent, self).__init__(host=socket.gethostname())
+        hostname = socket.gethostname()
+        super(CalicoDhcpAgent, self).__init__(host=hostname)
 
         # Override settings that Calico's DHCP agent use requires.
         self.conf.set_override('enable_isolated_metadata', False)
@@ -611,11 +570,11 @@ class CalicoDhcpAgent(DhcpAgent):
         self.plugin_rpc = FakePlugin()
 
         # Watch etcd for any endpoint changes for this host.
-        self.etcd = CalicoEtcdWatcher(self)
+        self.etcd = CalicoEtcdWatcher(self, hostname)
 
     def run(self):
         """Run the EtcdWatcher loop."""
-        self.etcd.loop()
+        self.etcd.start()
 
 
 def setup_logging():

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2014, 2015 Metaswitch Networks
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -17,22 +18,17 @@
 """
 Calico election code.
 """
-import etcd
+from etcd3gw.exceptions import Etcd3Exception
 import eventlet
 import greenlet
 import os
 import random
 import re
-import urllib3
-
-# Fix urllib3 unvendoring error so that python-etcd can catch exceptions raised
-# by urllib3.  See networking_calico/agent/__init__.py for the full
-# explanation.
 import sys
-if sys.modules["urllib3"].exceptions is not sys.modules["urllib3.exceptions"]:
-    sys.modules["urllib3"].exceptions = sys.modules["urllib3.exceptions"]
 
 from networking_calico.compat import log
+from networking_calico import etcdv3
+
 
 LOG = log.getLogger(__name__)
 
@@ -46,11 +42,9 @@ class RestartElection(Exception):
 
 
 class Elector(object):
-    def __init__(self, client, server_id, election_key,
-                 interval=30, ttl=60):
+    def __init__(self, server_id, election_key, interval=30, ttl=60):
         """Class that manages elections.
 
-        :param client: etcd client object
         :param server_id: Server ID. Must be unique to this server, and should
                           take a value that is meaningful in logs (e.g.
                           hostname)
@@ -59,7 +53,6 @@ class Elector(object):
         :param interval: Interval (seconds) between checks on etcd. Must be > 0
         :param ttl: Time to live (seconds) for etcd values. Must be > interval.
         """
-        self._etcd_client = client
         self._server_id = server_id
         self._key = election_key
         self._interval = int(interval)
@@ -119,57 +112,46 @@ class Elector(object):
     def _vote(self):
         """Main election thread routine to reconnect and perform election."""
         try:
-            response = self._etcd_client.read(self._key,
-                                              timeout=self._interval)
-            index = response.etcd_index
-        except etcd.EtcdKeyNotFound:
+            value, mod_revision = etcdv3.get(self._key)
+            mod_revision = int(mod_revision)
+        except etcdv3.KeyNotFound:
             LOG.debug("Try to become the master - key not found")
             self._become_master()
             assert False, "_become_master() should not return."
-        except etcd.EtcdException as e:
+        except Etcd3Exception as e:
             # Something bad and unexpected. Log and reconnect.
             self._log_exception("read current master", e)
             return
 
-        LOG.debug("ID of elected master is : %s", response.value)
-        if response.value:
+        LOG.debug("ID of elected master is : %s", value)
+        if value:
             # If we happen to be on the same server, check if the master
             # process is still alive.
-            self._check_master_process(response.value)
+            self._check_master_process(value)
 
         while not self._stopped:
             # We know another instance is the master. Wait until something
             # changes, giving long enough that it really should do (i.e. we
             # expect this read always to return, never to time out).
             try:
-                response = self._etcd_client.read(self._key,
-                                                  wait=True,
-                                                  waitIndex=index + 1,
-                                                  timeout=urllib3.Timeout(
-                                                      connect=self._interval,
-                                                      read=self._ttl * 2))
-
-                index = response.etcd_index
-            except etcd.EtcdKeyNotFound:
+                event = etcdv3.watch_once(self._key,
+                                          timeout=self._ttl * 2,
+                                          start_revision=mod_revision + 1)
+                LOG.debug("election event: %s", event)
+                action = event.get('type', 'SET').lower()
+                value = event['kv'].get('value')
+                mod_revision = int(event['kv'].get('mod_revision', '0'))
+            except etcdv3.KeyNotFound:
                 # It should be impossible for somebody to delete the object
                 # without us getting the delete action, but safer to handle it.
                 LOG.warning("Implausible vanished key - become master")
                 self._become_master()
-            except etcd.EtcdEventIndexCleared:
-                # etcd only keeps a buffer of 1000 events. If that buffer wraps
-                # before the master refreshes, we get EtcdEventIndexCleared.
-                # Simply return, which will retry the read and get the new
-                # etcd index.
-                LOG.info("etcd index cleared; aborting poll to re-read key.")
-                return
-            except etcd.EtcdException as e:
+            except Etcd3Exception as e:
                 # Something bad and unexpected. Log and reconnect.
                 self._log_exception("wait for master change", e)
                 return
-            LOG.debug("Election key action: %s; new value %s",
-                      response.action, response.value)
-            if (response.action in ETCD_DELETE_ACTIONS or
-                    response.value is None):
+            LOG.debug("Election key action: %s; new value %s", action, value)
+            if (action in ETCD_DELETE_ACTIONS or value is None):
                 # Deleted - try and become the master.
                 LOG.info("Leader etcd key went away, attempting to become "
                          "the elected master")
@@ -201,12 +183,15 @@ class Elector(object):
                 LOG.warning("Master was on this server but cannot find its "
                             "PID in /proc.  Removing stale election key.")
                 try:
-                    self._etcd_client.delete(self._key,
-                                             prevValue=master_id)
-                except etcd.EtcdException as e:
+                    deleted = etcdv3.delete(self._key,
+                                            existing_value=master_id)
+                except Etcd3Exception as e:
                     LOG.warning("Failed to remove stale key from dead "
                                 "master: %r", e)
-                raise RestartElection()
+                    deleted = False
+
+                if not deleted:
+                    raise RestartElection()
 
     def _become_master(self):
         """_become_master
@@ -221,38 +206,36 @@ class Elector(object):
         """
 
         try:
-            self._etcd_client.write(self._key,
-                                    self.id_string,
-                                    ttl=self._ttl,
-                                    prevExist=False,
-                                    timeout=self._interval)
+            ttl_lease = etcdv3.get_lease(self._ttl)
+            self._master = etcdv3.put(self._key,
+                                      self.id_string,
+                                      lease=ttl_lease,
+                                      mod_revision='0')
         except Exception as e:
             # We could be smarter about what exceptions we allow, but any kind
             # of error means we should give up, and safer to have a broad
             # except here. Log and reconnect.
-            self._log_exception("become elected master", e)
+            self._log_exception("become master", e)
+            self._master = False
+
+        if not self._master:
+            LOG.info("Race: someone else beat us to be master")
             raise RestartElection()
 
         LOG.info("Successfully become master - key %s, value %s",
                  self._key, self.id_string)
 
-        self._master = True
-
         try:
             while not self._stopped:
                 try:
-                    LOG.info("Refreshing master role")
-                    self._etcd_client.write(self._key,
-                                            self.id_string,
-                                            ttl=self._ttl,
-                                            prevValue=self.id_string,
-                                            timeout=self._interval / 3)
-                    LOG.info("Refreshed master role")
+                    LOG.debug("Refreshing master role")
+                    ttl = ttl_lease.refresh()
+                    LOG.debug("Refreshed master role, TTL now is %d", ttl)
                 except Exception as e:
                     # This is a pretty broad except statement, but anything
                     # going wrong means this instance gives up being the
                     # master.
-                    self._log_exception("renew master role", e)
+                    self._log_exception("refresh master role", e)
                     raise RestartElection()
                 eventlet.sleep(self._interval)
         finally:
@@ -265,18 +248,15 @@ class Elector(object):
 
         :param failed_to: Snippet to include, such as "become master".
         """
-        if isinstance(exc, etcd.EtcdClusterIdChanged):
-            LOG.warning("etcd cluster ID changed while trying to %s, "
-                        "the etcd cluster may have been rebuilt.", failed_to)
-        elif isinstance(exc, etcd.EtcdException):
+        if isinstance(exc, Etcd3Exception):
             # Expected errors (with good messages): timeouts and connection
             # failures.  Don't log stack traces to avoid cluttering the log.
             LOG.warning("Failed to %s - key %s: %r", failed_to,
                         self._key, exc)
         else:
             # Genuinely unexpected errors.
-            LOG.exception("Unexpected error, failed to %s - key %s",
-                          failed_to, self._key)
+            LOG.exception("Failed to %s - key %s: %r", failed_to,
+                          self._key, exc)
 
     @property
     def id_string(self):
@@ -285,9 +265,7 @@ class Elector(object):
     def _attempt_step_down(self):
         self._master = False
         try:
-            self._etcd_client.delete(self._key,
-                                     prevValue=self.id_string,
-                                     timeout=self._interval)
+            etcdv3.delete(self._key, existing_value=self.id_string)
         except Exception:
             # Broad except because we're already on an error path.  The key
             # will expire anyway.

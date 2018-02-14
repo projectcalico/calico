@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright 2015, 2018 Metaswitch Networks
+# Copyright 2015 Metaswitch Networks
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +23,7 @@ import copy
 import json
 import unittest
 
+from etcd3gw.utils import _decode
 import eventlet
 import logging
 import mock
@@ -29,7 +31,7 @@ import mock
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 
 from networking_calico import datamodel_v1
-from networking_calico import datamodel_v3
+from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import t_etcd
@@ -54,14 +56,15 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         self.client.write.side_effect = self.check_etcd_write
         self.client.delete.side_effect = self.check_etcd_delete
 
-        # Hook the (mock) etcdv3 client.
-        datamodel_v3._client = self.clientv3 = mock.Mock()
+        # Insinuate a mock etcd3gw client.
+        etcdv3._client = self.clientv3 = mock.Mock()
         self.clientv3.put.side_effect = self.check_etcd_write
+        self.clientv3.transaction.side_effect = self.etcd3_transaction
         self.clientv3.delete.side_effect = self.etcd3_delete
         self.clientv3.get.side_effect = self.etcd3_get
         self.clientv3.get_prefix.side_effect = self.etcd3_get_prefix
         self.clientv3.status.return_value = {
-            'header': {'revision': '10'},
+            'header': {'revision': '10', 'cluster_id': '1234abcd'},
         }
 
         # Start with an empty set of recent writes and deletes.
@@ -155,16 +158,16 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         self.maybe_reset_etcd()
         if key in self.etcd_data:
             value = self.etcd_data[key]
-        else:
-            raise lib.m_etcd.EtcdKeyNotFound()
 
-        # Print and return the result.
-        _log.info("etcd3 get: %s; value: %s", key, value)
-        if metadata:
-            item = {'key': key, 'mod_revision': '10'}
-            return [(value, item)]
+            # Print and return the result.
+            _log.info("etcd3 get: %s; value: %s", key, value)
+            if metadata:
+                item = {'key': key, 'mod_revision': '10'}
+                return [(value, item)]
+            else:
+                return [value]
         else:
-            return [value]
+            return []
 
     def etcd3_get_prefix(self, prefix):
         self.maybe_reset_etcd()
@@ -184,6 +187,16 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             return True
         except lib.EtcdKeyNotFound:
             return False
+
+    def etcd3_transaction(self, txn):
+        if 'request_put' in txn['success'][0]:
+            put_request = txn['success'][0]['request_put']
+            succeeded = self.check_etcd_write(_decode(put_request['key']),
+                                              _decode(put_request['value']))
+        elif 'request_delete_range' in txn['success'][0]:
+            del_request = txn['success'][0]['request_delete_range']
+            succeeded = self.etcd3_delete(_decode(del_request['key']))
+        return {'succeeded': succeeded}
 
     def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
                   timeout=None):
@@ -336,12 +349,6 @@ class TestPluginEtcd(_TestEtcdBase):
             self.give_way()
             self.simulated_time_advance(31)
 
-        ep_deadbeef_key_v1 = (
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-1/' +
-            'endpoint/DEADBEEF-1234-5678')
-        ep_facebeef_key_v1 = (
-            '/calico/v1/host/felix-host-1/workload/openstack/instance-2/' +
-            'endpoint/FACEBEEF-1234-5678')
         ep_deadbeef_key_v3 = (
             '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
             'openstack/felix--host--1-openstack-' +
@@ -350,28 +357,6 @@ class TestPluginEtcd(_TestEtcdBase):
             '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
             'openstack/felix--host--1-openstack-' +
             'instance--2-FACEBEEF--1234--5678')
-        ep_deadbeef_value_v1 = {
-            "name": "tapDEADBEEF-12",
-            "profile_ids": ["openstack-sg-SGID-default"],
-            "mac": "00:11:22:33:44:55",
-            "ipv4_gateway": "10.65.0.1",
-            "ipv4_nat": [{'int_ip': '10.65.0.2',
-                          'ext_ip': u'192.168.0.1'}],
-            "ipv4_nets": ["10.65.0.2/32"],
-            "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-            "state": "active",
-            "ipv6_subnet_ids": [],
-            "ipv6_nets": []}
-        ep_facebeef_value_v1 = {
-            "name": "tapFACEBEEF-12",
-            "profile_ids": ["openstack-sg-SGID-default"],
-            "mac": "00:11:22:33:44:66",
-            "ipv4_gateway": "10.65.0.1",
-            "ipv4_nets": ["10.65.0.3/32"],
-            "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
-            "state": "active",
-            "ipv6_subnet_ids": [],
-            "ipv6_nets": []}
         ep_deadbeef_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'WorkloadEndpoint',
@@ -412,8 +397,6 @@ class TestPluginEtcd(_TestEtcdBase):
         expected_writes.update({
             ep_deadbeef_key_v3: ep_deadbeef_value_v3,
             ep_facebeef_key_v3: ep_facebeef_value_v3,
-            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
-            ep_facebeef_key_v1: ep_facebeef_value_v1,
         })
         self.assertEtcdWrites(expected_writes)
 
@@ -431,7 +414,7 @@ class TestPluginEtcd(_TestEtcdBase):
             side_effect = self.port_query
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
-        self.assertEtcdDeletes(set([ep_deadbeef_key_v1, ep_deadbeef_key_v3]))
+        self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
         self.osdb_ports = [lib.port2]
 
         # Do another resync - expect no changes to the etcd data.
@@ -444,7 +427,6 @@ class TestPluginEtcd(_TestEtcdBase):
         self.osdb_ports = [lib.port1, lib.port2]
         self.driver.create_port_postcommit(context)
         self.assertEtcdWrites({
-            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
             ep_deadbeef_key_v3: ep_deadbeef_value_v3,
             self.sg_default_key_v3: self.sg_default_value_v3,
         })
@@ -457,9 +439,7 @@ class TestPluginEtcd(_TestEtcdBase):
         self.osdb_ports[0]['binding:host_id'] = 'new-host'
         self.driver.update_port_postcommit(context)
 
-        self.assertEtcdDeletes(set([ep_deadbeef_key_v1, ep_deadbeef_key_v3]))
-        ep_deadbeef_key_v1 = ep_deadbeef_key_v1.replace('felix-host-1',
-                                                        'new-host')
+        self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
         ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace('felix--host--1',
                                                         'new--host')
         ep_deadbeef_value_v3['metadata']['name'] = \
@@ -469,7 +449,6 @@ class TestPluginEtcd(_TestEtcdBase):
             ep_deadbeef_value_v3['spec']['node'].replace('felix-host-1',
                                                          'new-host')
         self.assertEtcdWrites({
-            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
             ep_deadbeef_key_v3: ep_deadbeef_value_v3,
             self.sg_default_key_v3: self.sg_default_value_v3,
         })
@@ -482,9 +461,7 @@ class TestPluginEtcd(_TestEtcdBase):
         self.osdb_ports[0]['binding:host_id'] = 'felix-host-1'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
 
-        self.assertEtcdDeletes(set([ep_deadbeef_key_v1, ep_deadbeef_key_v3]))
-        ep_deadbeef_key_v1 = ep_deadbeef_key_v1.replace('new-host',
-                                                        'felix-host-1')
+        self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
         ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace('new--host',
                                                         'felix--host--1')
         ep_deadbeef_value_v3['metadata']['name'] = \
@@ -494,7 +471,6 @@ class TestPluginEtcd(_TestEtcdBase):
             ep_deadbeef_value_v3['spec']['node'].replace('new-host',
                                                          'felix-host-1')
         self.assertEtcdWrites({
-            ep_deadbeef_key_v1: ep_deadbeef_value_v1,
             ep_deadbeef_key_v3: ep_deadbeef_value_v3,
         })
 
@@ -503,23 +479,10 @@ class TestPluginEtcd(_TestEtcdBase):
         self.osdb_ports.append(context._port)
         self.driver.create_port_postcommit(context)
 
-        ep_hello_key_v1 = (
-            '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
-            'endpoint/HELLO-1234-5678')
         ep_hello_key_v3 = (
             '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
             'openstack/felix--host--2-openstack-' +
             'instance--3-HELLO--1234--5678')
-        ep_hello_value_v1 = {
-            "name": "tapHELLO-1234-",
-            "profile_ids": ["openstack-sg-SGID-default"],
-            "mac": "00:11:22:33:44:66",
-            "ipv6_gateway": "2001:db8:a41:2::1",
-            "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
-            "ipv6_nets": ["2001:db8:a41:2::12/128"],
-            "state": "active",
-            "ipv4_nets": [],
-            "ipv4_subnet_ids": []}
         ep_hello_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'WorkloadEndpoint',
@@ -537,7 +500,6 @@ class TestPluginEtcd(_TestEtcdBase):
                      'workload': 'instance-3'}}
 
         expected_writes = {
-            ep_hello_key_v1: ep_hello_value_v1,
             ep_hello_key_v3: ep_hello_value_v3,
             self.sg_default_key_v3: self.sg_default_value_v3,
         }
@@ -669,10 +631,8 @@ class TestPluginEtcd(_TestEtcdBase):
         })
         self.driver.update_port_postcommit(context)
 
-        ep_hello_value_v1['profile_ids'] = ["openstack-sg-SG-1"]
         ep_hello_value_v3['spec']['profiles'] = ["openstack-sg-SG-1"]
         expected_writes = {
-            ep_hello_key_v1: ep_hello_value_v1,
             ep_hello_key_v3: ep_hello_value_v3,
             sg_1_key_v3: sg_1_value_v3
         }
@@ -734,8 +694,6 @@ class TestPluginEtcd(_TestEtcdBase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([
-            ep_deadbeef_key_v1,
-            ep_facebeef_key_v1,
             ep_deadbeef_key_v3,
             ep_facebeef_key_v3,
         ]))
@@ -771,18 +729,11 @@ class TestPluginEtcd(_TestEtcdBase):
         _log.info("Resync with edited data")
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
 
-        ep_hello_value_v1['ipv4_nets'] = ["10.65.0.188/32"]
-        ep_hello_value_v1['ipv4_subnet_ids'] = ["subnet-id-10.65.0--24"]
-        ep_hello_value_v1['ipv4_gateway'] = "10.65.0.1"
-        ep_hello_value_v1['ipv6_nets'] = []
-        ep_hello_value_v1['ipv6_subnet_ids'] = []
-        del ep_hello_value_v1['ipv6_gateway']
         ep_hello_value_v3['spec']['ipNetworks'] = ["10.65.0.188/32"]
         ep_hello_value_v3['spec']['ipv4Gateway'] = "10.65.0.1"
         del ep_hello_value_v3['spec']['ipv6Gateway']
         sg_1_value_v3['spec']['ingress'][0]['destination']['ports'] = [5070]
         expected_writes = {
-            ep_hello_key_v1: ep_hello_value_v1,
             ep_hello_key_v3: ep_hello_value_v3,
             sg_1_key_v3: sg_1_value_v3,
         }
@@ -1051,22 +1002,6 @@ class TestPluginEtcd(_TestEtcdBase):
         self.simulated_time_advance(31)
         self.assertEtcdWrites({})
 
-    def test_tls(self):
-        """Test that a driver that is not master does not resync."""
-        # Initialize the state early to put the elector in place, then override
-        # it to claim that the driver is not master.
-        lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
-        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
-        lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
-        self.driver._init_state()
-        self.assertEqual([mock.call(ca_cert='ca-cert-file',
-                                    cert=('cert-file', 'key-file'),
-                                    host='localhost',
-                                    port=4001,
-                                    protocol='https')],
-                         lib.m_etcd.Client.mock_calls
-                         )
-
     def test_not_master_does_not_poll(self):
         """Test that a driver that is not master does not poll.
 
@@ -1226,8 +1161,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         m_watcher = m_StatusWatcher.return_value
         self.assertEqual(
             [
-                mock.call(m_watcher.loop),
-                mock.call(m_watcher.loop),
+                mock.call(m_watcher.start),
+                mock.call(m_watcher.start),
             ],
             [c for c in m_spawn.mock_calls if c[0] == ""]
         )
@@ -1426,7 +1361,7 @@ class TestStatusWatcher(_TestEtcdBase):
 
         # Start the watcher.  It will do initial snapshot processing, then stop
         # when it tries to watch for further changes.
-        self.watcher.loop()
+        self.watcher.start()
 
         self.driver.on_felix_alive.assert_called_once_with("hostname",
                                                            new=True)
@@ -1440,7 +1375,7 @@ class TestStatusWatcher(_TestEtcdBase):
         self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.loop()
+        self.watcher.start()
         self.driver.on_felix_alive.assert_called_once_with("hostname",
                                                            new=True)
         self.driver.on_port_status_changed.assert_has_calls([
@@ -1454,7 +1389,7 @@ class TestStatusWatcher(_TestEtcdBase):
         self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.loop()
+        self.watcher.start()
         self.driver.on_felix_alive.assert_called_once_with("hostname",
                                                            new=True)
         self.driver.on_port_status_changed.assert_has_calls([
@@ -1468,7 +1403,7 @@ class TestStatusWatcher(_TestEtcdBase):
         self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.loop()
+        self.watcher.start()
         self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
             mock.call("hostname", "ep1", None),

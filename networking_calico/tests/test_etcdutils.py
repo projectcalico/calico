@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,21 +24,14 @@ import logging
 import types
 import unittest
 
-from etcd import EtcdException
-from mock import ANY
 from mock import call
 from mock import Mock
 from mock import patch
-from urllib3.exceptions import ReadTimeoutError
 
-from networking_calico.etcdutils import EtcdClientOwner
 from networking_calico.etcdutils import EtcdWatcher
 from networking_calico.etcdutils import PathDispatcher
-from networking_calico.etcdutils import ResyncRequired
-
-# Since other tests patch the module table, make sure we have the same etcd
-# module as the module under test.
-from networking_calico.etcdutils import etcd
+from networking_calico.etcdutils import Response
+from networking_calico import etcdv3
 
 _log = logging.getLogger(__name__)
 
@@ -78,7 +72,7 @@ class _TestPathDispatcherBase(unittest.TestCase):
             exp_handler = key
         if isinstance(exp_handler, types.StringTypes):
             exp_handler = exp_handler.strip("/")
-        m_response = Mock(spec=etcd.EtcdResult)
+        m_response = Mock(spec=Response)
         m_response.key = key
         m_response.action = self.action
         self.dispatcher.handle_event(m_response)
@@ -132,7 +126,7 @@ class _TestPathDispatcherBase(unittest.TestCase):
         self.assert_handled("/foo", exp_handler=None)
 
     def test_cover_no_match(self):
-        m_result = Mock(spec=etcd.EtcdResult)
+        m_result = Mock(spec=Response)
         m_result.key = "/a"
         m_result.action = "unknown"
         self.dispatcher.handle_event(m_result)
@@ -182,212 +176,86 @@ class TestDispatcherExpire(_TestPathDispatcherBase):
 del _TestPathDispatcherBase
 
 
-class TestEtcdClientOwner(unittest.TestCase):
-    @patch("etcd.Client", autospec=True)
-    def test_create(self, m_client_cls):
-        # Check creation with a single string, which is required for
-        # back-compatibility.
-        self._test_create_internal("localhost:1234", m_client_cls)
-
-    @patch("etcd.Client", autospec=True)
-    def test_create_list(self, m_client_cls):
-        # Check creation with a list of servers.
-        self._test_create_internal(["localhost:1234"], m_client_cls)
-
-    def _test_create_internal(self, etcd_addrs, m_client_cls):
-        owner = EtcdClientOwner(etcd_addrs,
-                                etcd_scheme="https",
-                                etcd_key="/path/to/key",
-                                etcd_cert="/path/to/cert",
-                                etcd_ca="/path/to/ca")
-        m_client = m_client_cls.return_value
-        m_client.expected_cluster_id = "abcdef"
-        owner.reconnect()
-        self.assertEqual(m_client_cls.mock_calls,
-                         [call(host="localhost", port=1234,
-                               expected_cluster_id=None,
-                               cert=("/path/to/cert", "/path/to/key"),
-                               ca_cert="/path/to/ca", protocol="https"),
-                          call(host="localhost", port=1234,
-                               expected_cluster_id="abcdef",
-                               cert=("/path/to/cert", "/path/to/key"),
-                               ca_cert="/path/to/ca", protocol="https")])
-
-    @patch("etcd.Client", autospec=True)
-    def test_create_default(self, m_client):
-        owner = EtcdClientOwner(["localhost"])
-        assert owner
-        self.assertEqual(m_client.mock_calls,
-                         [call(host="localhost", port=4001,
-                               expected_cluster_id=None,
-                               cert=None, ca_cert=None, protocol="http")])
-
-    @patch("etcd.Client", autospec=True)
-    def test_create_multiple(self, m_client):
-        owner = EtcdClientOwner(["etcd1:1234", "etcd2:2345"])
-        assert owner
-        self.assertEqual(m_client.mock_calls,
-                         [call(host=ANY,
-                               expected_cluster_id=None,
-                               allow_reconnect=True,
-                               cert=None, ca_cert=None, protocol="http")])
-        # We shuffle the hosts so we need to check them by hand.
-        _, _, kwargs = m_client.mock_calls[0]
-        hosts = kwargs["host"]
-        self.assertIsInstance(hosts, tuple)
-        self.assertEqual(sorted(hosts), [("etcd1", 1234), ("etcd2", 2345)])
-
-
 class ExpectedException(Exception):
     pass
+
+
+def _rsp_to_tuple(rsp):
+    item = {'key': rsp.key, 'mod_revision': '10'}
+    return (rsp.value, item)
 
 
 class TestEtcdWatcher(unittest.TestCase):
     def setUp(self):
         super(TestEtcdWatcher, self).setUp()
-        self.reconnect_patch = patch(
-            "networking_calico.etcdutils.EtcdWatcher.reconnect"
-        )
-        self.m_reconnect = self.reconnect_patch.start()
-        self.watcher = EtcdWatcher(["foobar:4001"], "/calico")
         self.m_client = Mock()
-        self.watcher.client = self.m_client
+        etcdv3._client = self.m_client
+        self.watcher = EtcdWatcher("/calico")
         self.m_dispatcher = Mock(spec=PathDispatcher)
         self.watcher.dispatcher = self.m_dispatcher
 
-    @patch("time.sleep", autospec=True)
-    def test_mainline(self, m_sleep):
-        m_snap_response = Mock()
-        m_snap_response.etcd_index = 1
-        m_poll_response = Mock()
-        m_poll_response.modifiedIndex = 2
-        responses = [
-            m_snap_response, m_poll_response, ResyncRequired(),  # Loop 1
-            EtcdException(),  # Loop 2
-            ExpectedException(),  # Loop 3, Break out of loop.
-        ]
-        self.m_client.read.side_effect = iter(responses)
-        with patch.object(self.watcher, "_on_pre_resync",
-                          autospec=True) as m_pre_r:
-            with patch.object(self.watcher, "_on_snapshot_loaded",
-                              autospec=True) as m_snap_load:
-                self.assertRaises(ExpectedException, self.watcher.loop)
-        # _on_pre_resync() called once per loop.
-        self.assertEqual(m_pre_r.mock_calls, [call(), call(), call()])
-        # The snapshot only loads successfully the first time.
-        self.assertEqual(m_snap_load.mock_calls, [call(m_snap_response)])
+    def test_mainline(self):
+        # Set up 4 iterations through the watcher's main loop.
+        #
+        # 1. No data for snapshot.  Watch throws exception.
+        #
+        # 2. Data for snapshot.  Watch throws exception.
+        #
+        # 3. Same data for snapshot.  Cluster ID changes just before starting
+        #    watch.
+        #
+        # 4. Throw ExpectedException(), to exit.
+        status = {'header': {'cluster_id': '1234', 'revision': '10'}}
+        status_new_cluster_id = {
+            'header': {'cluster_id': '12345', 'revision': '10'}
+        }
+        self.m_client.status.side_effect = iter([
+            # Iteration 1.
+            status,
+            status,
+            # Iteration 2.
+            status,
+            status,
+            # Iteration 3.
+            status,
+            status_new_cluster_id,
+            # Iteration 4.
+            status,
+        ])
+        rsp1 = Response(action='set', key='foo', value='bar')
+        self.m_client.get_prefix.side_effect = iter([
+            [],
+            [_rsp_to_tuple(rsp1)],
+            [_rsp_to_tuple(rsp1)],
+            ExpectedException()
+        ])
+        self.m_client.watch_prefix.side_effect = etcdv3.KeyNotFound()
+
+        with patch.object(self.watcher, "_pre_snapshot_hook",
+                          autospec=True) as m_pre:
+            m_pre.return_value = None
+            with patch.object(self.watcher, "_post_snapshot_hook",
+                              autospec=True) as m_post:
+                self.assertRaises(ExpectedException, self.watcher.start)
+
+        # _pre_snapshot_hook() called 3 times.
+        self.assertEqual(m_pre.mock_calls, [call(), call(), call(), call()])
+
+        # _post_snapshot_hook() called twice.
+        self.assertEqual(m_post.mock_calls,
+                         [call(None), call(None), call(None)])
+
+        # watch_prefix called twice.
+        self.assertEqual(self.m_client.watch_prefix.mock_calls, [
+            call('/calico', start_revision='11'),
+            call('/calico', start_revision='11')
+        ])
+
+        # Snapshot event dispatched twice.
         self.assertEqual(self.m_dispatcher.handle_event.mock_calls,
-                         [call(m_poll_response)])
-        # Should sleep after exception.
-        m_sleep.assert_called_once_with(1)
-
-    def test_loop_stopped(self):
-        self.watcher._stopped = True
-
-        with patch.object(self.watcher, "_on_pre_resync",
-                          autospec=True) as m_pre_r:
-            self.watcher.loop()
-        self.assertFalse(m_pre_r.called)
+                         [call(rsp1), call(rsp1)])
 
     def test_register(self):
         self.watcher.register_path("key", foo="bar")
         self.assertEqual(self.m_dispatcher.register.mock_calls,
                          [call("key", foo="bar")])
-
-    @patch("time.sleep", autospec=True)
-    def test_wait_for_ready(self, m_sleep):
-        m_resp_1 = Mock()
-        m_resp_1.value = "false"
-        m_resp_2 = Mock()
-        m_resp_2.value = "true"
-        responses = [
-            etcd.EtcdException(),
-            etcd.EtcdKeyNotFound(),
-            m_resp_1,
-            m_resp_2,
-        ]
-        self.m_client.read.side_effect = iter(responses)
-        self.watcher.wait_for_ready(1)
-        self.assertEqual(m_sleep.mock_calls, [call(1)] * 3)
-
-    def test_load_initial_dump(self):
-        m_response = Mock(spec=etcd.EtcdResult)
-        m_response.etcd_index = 10000
-        self.m_client.read.side_effect = [
-            etcd.EtcdKeyNotFound(),
-            m_response
-        ]
-        with patch("time.sleep") as m_sleep:
-            self.assertEqual(self.watcher.load_initial_dump(), m_response)
-
-        m_sleep.assert_called_once_with(1)
-        self.m_client.read.assert_has_calls([
-            call("/calico", recursive=True),
-            call("/calico", recursive=True),
-        ])
-        self.assertEqual(self.watcher.next_etcd_index, 10001)
-
-    def test_load_initial_dump_stopped(self):
-        self.watcher.stop()
-        self.m_client.read.side_effect = etcd.EtcdKeyNotFound()
-        self.assertRaises(etcd.EtcdKeyNotFound, self.watcher.load_initial_dump)
-
-    def test_resync_set(self):
-        self.watcher.next_etcd_index = 1
-        self.watcher.resync_after_current_poll = True
-        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
-        self.assertFalse(self.watcher.resync_after_current_poll)
-
-    @patch("time.sleep", autospec=True)
-    def test_wait_for_etcd_event_conn_failed(self, m_sleep):
-        self.watcher.next_etcd_index = 1
-        m_resp = Mock()
-        m_resp.modifiedIndex = 123
-        read_timeout = etcd.EtcdConnectionFailed()
-        read_timeout.cause = ReadTimeoutError(Mock(), "", "")
-        other_error = etcd.EtcdConnectionFailed()
-        other_error.cause = ExpectedException()
-        responses = [
-            read_timeout,
-            other_error,
-            m_resp,
-        ]
-        self.m_client.read.side_effect = iter(responses)
-        event = self.watcher.wait_for_etcd_event()
-        self.assertEqual(event, m_resp)
-        self.assertEqual(m_sleep.mock_calls, [call(1)])
-
-    def test_wait_for_etcd_event_cluster_id_changed(self):
-        self.watcher.next_etcd_index = 1
-        responses = [
-            etcd.EtcdClusterIdChanged(),
-        ]
-        self.m_client.read.side_effect = iter(responses)
-        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
-
-    def test_wait_for_etcd_event_index_cleared(self):
-        self.watcher.next_etcd_index = 1
-        responses = [
-            etcd.EtcdEventIndexCleared(),
-        ]
-        self.m_client.read.side_effect = iter(responses)
-        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
-
-    @patch("time.sleep", autospec=True)
-    def test_wait_for_etcd_event_unexpected_error(self, m_sleep):
-        self.watcher.next_etcd_index = 1
-        responses = [
-            etcd.EtcdException(),
-        ]
-        self.m_client.read.side_effect = iter(responses)
-        self.assertRaises(ResyncRequired, self.watcher.wait_for_etcd_event)
-        self.assertEqual(m_sleep.mock_calls, [call(1)])
-
-    def test_coverage(self):
-        # These methods are no-ops.
-        self.watcher._on_pre_resync()
-        self.watcher._on_snapshot_loaded(Mock())
-
-    def tearDown(self):
-        self.reconnect_patch.stop()
-        super(TestEtcdWatcher, self).tearDown()

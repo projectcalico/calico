@@ -66,8 +66,7 @@ Depends:
  python-pbr,
  python-babel,
  python-eventlet,
- python-six,
- python-etcd
+ python-six
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. It uses IP routing to provide connectivity
