@@ -13,6 +13,11 @@ ifeq ($(ARCH),ppc64le)
 	GO_BUILD_VER?=latest
 endif
 
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER?=latest
+endif
+
 help:
 	@echo "Typha Makefile"
 	@echo
