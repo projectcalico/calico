@@ -68,7 +68,7 @@ func cleanup() {
 		"-v", cwd+"/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd+"/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
 		fmt.Sprintf("%s", os.Getenv("DEPLOY_CONTAINER_NAME")),
-		"sh", "-c", "rm -f /host/opt/cni/bin/* /host/etc/cni/net.d/*").CombinedOutput()
+		"sh", "-c", "rm -rf /host/opt/cni/bin/* /host/etc/cni/net.d/*").CombinedOutput()
 
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to clean up root owned files: %s", string(out)))
@@ -214,6 +214,34 @@ var _ = Describe("install-cni.sh tests", func() {
 				}
 
 				Expect(expected).To(Equal(received))
+			})
+		})
+
+		Context("copying /calico-secrets", func() {
+			err := os.MkdirAll("tmp/certs", 0755)
+			if err != nil {
+				Fail("Failed to create directory tmp/bin")
+			}
+
+			It("Should not crash or copy when having a hidden file", func() {
+				err = ioutil.WriteFile("tmp/certs/.hidden", []byte("doesn't matter"), 0755)
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
+
+				cwd, _ := os.Getwd()
+				err = runCniContainer("-v", cwd+"/tmp/certs:/calico-secrets")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = os.Open("tmp/net.d/calico-tls/.hidden")
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should copy a non-hidden file", func() {
+				err = ioutil.WriteFile("tmp/certs/nothidden", []byte("doesn't matter"), 0755)
+				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
+
+				cwd, _ := os.Getwd()
+				err = runCniContainer("-v", cwd+"/tmp/certs:/calico-secrets")
+				Expect(err).NotTo(HaveOccurred())
+				_, err = os.Open("tmp/net.d/calico-tls/nothidden")
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
