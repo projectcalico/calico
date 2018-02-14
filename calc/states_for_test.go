@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/proto"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 )
@@ -85,7 +86,7 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("ep1 local, policy")
@@ -123,7 +124,7 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{
 			Name:               "default",
 			IngressPolicyNames: []string{"pol-1"},
@@ -159,7 +160,7 @@ var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	proto.ProfileID{"prof-1"},
 ).withEndpoint(
 	"named",
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("Host endpoint, named port policy")
@@ -190,7 +191,7 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, nil},
 	},
 ).withName("ep1 local, ingress-only policy")
@@ -225,7 +226,7 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("host ep1, policy")
@@ -245,7 +246,7 @@ var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, nil},
 	},
 ).withName("host ep1, ingress-only policy")
@@ -265,7 +266,7 @@ var hostEp1WithEgressPolicy = withPolicyEgressOnly.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", nil, []string{"pol-1"}},
 	},
 ).withName("host ep1, egress-only policy")
@@ -292,11 +293,11 @@ var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpointUntracked(
 	hostEpWithNameId,
-	[]tierInfo{},
-	[]tierInfo{
+	[]mock.TierInfo{},
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withName("host ep1, untracked policy")
 
 var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
@@ -316,9 +317,9 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpointUntracked(
 	hostEpWithNameId,
-	[]tierInfo{},
-	[]tierInfo{},
-	[]tierInfo{
+	[]mock.TierInfo{},
+	[]mock.TierInfo{},
+	[]mock.TierInfo{
 		{"default", []string{"pre-dnat-pol-1"}, nil},
 	},
 ).withName("host ep1, pre-DNAT policy")
@@ -330,13 +331,13 @@ var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpda
 	proto.PolicyID{"default", "pol-2"},
 ).withEndpointUntracked(
 	hostEpWithNameId,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-2"}, []string{"pol-2"}},
 	},
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withName("host ep1, tracked+untracked policy")
 
 var hostEp2WithPolicy = withPolicy.withKVUpdates(
@@ -353,7 +354,7 @@ var hostEp2WithPolicy = withPolicy.withKVUpdates(
 	proto.ProfileID{"prof-3"},
 ).withEndpoint(
 	hostEpNoNameId,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("host ep2, policy")
@@ -408,7 +409,7 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 		proto.ProfileID{"prof-missing"},
 	).withEndpoint(
 		localWlEp1Id,
-		[]tierInfo{
+		[]mock.TierInfo{
 			{"default", expectedOrder[:], expectedOrder[:]},
 		},
 	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedOrder[:]))
@@ -433,7 +434,7 @@ var localEp2WithPolicy = withPolicy.withKVUpdates(
 	proto.ProfileID{"prof-3"},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("ep2 local, policy")
@@ -466,12 +467,12 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{
+	[]mock.TierInfo{
 		{"default", []string{"pol-1"}, []string{"pol-1"}},
 	},
 ).withName("2 local, overlapping IPs & a policy")
@@ -529,10 +530,10 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withActiveProfiles(
 	proto.ProfileID{"prof-1"},
 	proto.ProfileID{"prof-2"},
@@ -548,13 +549,13 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlapp
 	proto.PolicyID{Tier: "default", Name: "inherit-pol"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{{Name: "default",
+	[]mock.TierInfo{{Name: "default",
 		IngressPolicyNames: []string{"inherit-pol"},
 		EgressPolicyNames:  []string{"inherit-pol"},
 	}},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{{Name: "default",
+	[]mock.TierInfo{{Name: "default",
 		IngressPolicyNames: []string{"inherit-pol"},
 		EgressPolicyNames:  []string{"inherit-pol"},
 	}},
@@ -695,10 +696,10 @@ var localEpsWithProfile = withProfile.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withName("2 local, overlapping IPs & a profile")
 
 // localEpsWithNonMatchingProfile contains a pair of overlapping IP endpoints and a profile
@@ -709,10 +710,10 @@ var localEpsWithNonMatchingProfile = withProfile.withKVUpdates(
 	KVPair{Key: localWlEpKey2, Value: &localWlEp2NoProfiles},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withName("2 local, overlapping IPs & a non-matching profile")
 
 // localEpsWithUpdatedProfile Follows on from localEpsWithProfile, changing the
@@ -732,10 +733,10 @@ var localEpsWithUpdatedProfile = localEpsWithProfile.withKVUpdates(
 	tag2LabelID, []string{},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withName("2 local, overlapping IPs & updated profile")
 
 var localEpsWithUpdatedProfileNegatedTags = localEpsWithUpdatedProfile.withKVUpdates(
@@ -767,9 +768,9 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 	proto.ProfileID{"prof-3"},
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
-	localWlEp1Id, []tierInfo{},
+	localWlEp1Id, []mock.TierInfo{},
 ).withEndpoint(
-	localWlEp2Id, []tierInfo{},
+	localWlEp2Id, []mock.TierInfo{},
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(
@@ -801,10 +802,10 @@ var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
 	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withEndpoint(
 	localWlEp2Id,
-	[]tierInfo{},
+	[]mock.TierInfo{},
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var hostEp1WithPolicyAndANetworkSet = hostEp1WithPolicy.withKVUpdates(

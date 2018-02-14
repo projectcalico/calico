@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@ package calc_test
 
 import (
 	. "github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/dataplane/mock"
 
 	"fmt"
-	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // Each entry in baseTests contains a series of states to move through (defined in
@@ -342,7 +341,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					}()
 
 					// Now drain the output from the output channel.
-					tracker := newMockDataplane()
+					mockDataplane := mock.NewMockDataplane()
 					inSyncReceived := false
 				readLoop:
 					for {
@@ -354,7 +353,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 						case update := <-outputChan:
 							log.WithField("update", update).Info("Update from channel")
 							Expect(inSyncReceived).To(BeFalse(), "Unexpected update after in-sync")
-							tracker.onEvent(update)
+							mockDataplane.OnEvent(update)
 							if _, ok := update.(*proto.InSync); ok {
 								// InSync should be the last message, to make sure, give
 								// the graph another few ms before we stop.
@@ -370,27 +369,27 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 
 					// Async tests are slower to run so we do all the assertions
 					// on each test rather than as separate It() blocks.
-					Expect(tracker.ipsets).To(Equal(state.ExpectedIPSets),
+					Expect(mockDataplane.IPSets()).To(Equal(state.ExpectedIPSets),
 						"IP sets didn't match expected state after moving to state: %v",
 						state.Name)
 
-					Expect(tracker.activePolicies).To(Equal(state.ExpectedPolicyIDs),
+					Expect(mockDataplane.ActivePolicies()).To(Equal(state.ExpectedPolicyIDs),
 						"Active policy IDs were incorrect after moving to state: %v",
 						state.Name)
 
-					Expect(tracker.activeProfiles).To(Equal(state.ExpectedProfileIDs),
+					Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
 						"Active profile IDs were incorrect after moving to state: %v",
 						state.Name)
 
-					Expect(tracker.endpointToPolicyOrder).To(Equal(state.ExpectedEndpointPolicyOrder),
+					Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
 						"Endpoint policy order incorrect after moving to state: %v",
 						state.Name)
 
-					Expect(tracker.endpointToPreDNATPolicyOrder).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
+					Expect(mockDataplane.EndpointToPreDNATPolicyOrder()).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
 						"Endpoint pre-DNAT policy order incorrect after moving to state: %v",
 						state.Name)
 
-					Expect(tracker.endpointToUntrackedPolicyOrder).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
+					Expect(mockDataplane.EndpointToUntrackedPolicyOrder()).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
 						"Endpoint untracked policy order incorrect after moving to state: %v",
 						state.Name)
 				})
@@ -411,16 +410,16 @@ const (
 func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var validationFilter *ValidationFilter
 	var calcGraph *dispatcher.Dispatcher
-	var tracker *mockDataplane
+	var mockDataplane *mock.MockDataplane
 	var eventBuf *EventSequencer
 	var lastState State
 	var state State
 	var sentInSync bool
 
 	BeforeEach(func() {
-		tracker = newMockDataplane()
-		eventBuf = NewEventSequencer(tracker)
-		eventBuf.Callback = tracker.onEvent
+		mockDataplane = mock.NewMockDataplane()
+		eventBuf = NewEventSequencer(mockDataplane)
+		eventBuf.Callback = mockDataplane.OnEvent
 		calcGraph = NewCalculationGraph(eventBuf, localHostname)
 		validationFilter = NewValidationFilter(calcGraph)
 		sentInSync = false
@@ -474,199 +473,31 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	// Note: these used to be separate It() blocks but combining them knocks ~10s off the
 	// runtime, which is worthwhile!
 	It("should result in correct active state", iterStates(func() {
-		Expect(tracker.ipsets).To(Equal(state.ExpectedIPSets),
+		Expect(mockDataplane.IPSets()).To(Equal(state.ExpectedIPSets),
 			"IP sets didn't match expected state after moving to state: %v",
 			state.Name)
-		Expect(tracker.activePolicies).To(Equal(state.ExpectedPolicyIDs),
+		Expect(mockDataplane.ActivePolicies()).To(Equal(state.ExpectedPolicyIDs),
 			"Active policy IDs were incorrect after moving to state: %v",
 			state.Name)
-		Expect(tracker.activeProfiles).To(Equal(state.ExpectedProfileIDs),
+		Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
 			"Active profile IDs were incorrect after moving to state: %v",
 			state.Name)
-		Expect(tracker.endpointToPolicyOrder).To(Equal(state.ExpectedEndpointPolicyOrder),
+		Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
 			"Endpoint policy order incorrect after moving to state: %v",
 			state.Name)
-		Expect(tracker.endpointToUntrackedPolicyOrder).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
+		Expect(mockDataplane.EndpointToUntrackedPolicyOrder()).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
 			"Untracked endpoint policy order incorrect after moving to state: %v",
 			state.Name)
-		Expect(tracker.endpointToPreDNATPolicyOrder).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
+		Expect(mockDataplane.EndpointToPreDNATPolicyOrder()).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
 			"Untracked endpoint policy order incorrect after moving to state: %v",
 			state.Name)
-		Expect(tracker.activeUntrackedPolicies).To(Equal(state.ExpectedUntrackedPolicyIDs),
+		Expect(mockDataplane.ActiveUntrackedPolicies()).To(Equal(state.ExpectedUntrackedPolicyIDs),
 			"Untracked policies incorrect after moving to state: %v",
 			state.Name)
-		Expect(tracker.activePreDNATPolicies).To(Equal(state.ExpectedPreDNATPolicyIDs),
+		Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
 			"PreDNAT policies incorrect after moving to state: %v",
 			state.Name)
 	}))
-}
-
-type mockDataplane struct {
-	ipsets                         map[string]set.Set
-	activePolicies                 set.Set
-	activeUntrackedPolicies        set.Set
-	activePreDNATPolicies          set.Set
-	activeProfiles                 set.Set
-	endpointToPolicyOrder          map[string][]tierInfo
-	endpointToUntrackedPolicyOrder map[string][]tierInfo
-	endpointToPreDNATPolicyOrder   map[string][]tierInfo
-	config                         map[string]string
-}
-
-func newMockDataplane() *mockDataplane {
-	s := &mockDataplane{
-		ipsets:                         make(map[string]set.Set),
-		activePolicies:                 set.New(),
-		activeProfiles:                 set.New(),
-		activeUntrackedPolicies:        set.New(),
-		activePreDNATPolicies:          set.New(),
-		endpointToPolicyOrder:          make(map[string][]tierInfo),
-		endpointToUntrackedPolicyOrder: make(map[string][]tierInfo),
-		endpointToPreDNATPolicyOrder:   make(map[string][]tierInfo),
-	}
-	return s
-}
-
-func (s *mockDataplane) onEvent(event interface{}) {
-	evType := reflect.TypeOf(event).String()
-	fmt.Fprintf(GinkgoWriter, "       <- Event: %v %v\n", evType, event)
-	Expect(event).NotTo(BeNil())
-	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
-	switch event := event.(type) {
-	case *proto.IPSetUpdate:
-		newMembers := set.New()
-		for _, ip := range event.Members {
-			newMembers.Add(ip)
-		}
-		s.ipsets[event.Id] = newMembers
-	case *proto.IPSetDeltaUpdate:
-		members, ok := s.ipsets[event.Id]
-		if !ok {
-			Fail(fmt.Sprintf("IP set delta to missing ipset %v", event.Id))
-			return
-		}
-
-		for _, ip := range event.AddedMembers {
-			Expect(members.Contains(ip)).To(BeFalse(),
-				fmt.Sprintf("IP Set %v already contained added IP %v",
-					event.Id, ip))
-			members.Add(ip)
-		}
-		for _, ip := range event.RemovedMembers {
-			Expect(members.Contains(ip)).To(BeTrue(),
-				fmt.Sprintf("IP Set %v did not contain removed IP %v",
-					event.Id, ip))
-			members.Discard(ip)
-		}
-	case *proto.IPSetRemove:
-		_, ok := s.ipsets[event.Id]
-		if !ok {
-			Fail(fmt.Sprintf("IP set remove for unknown ipset %v", event.Id))
-			return
-		}
-		delete(s.ipsets, event.Id)
-	case *proto.ActivePolicyUpdate:
-		// TODO: check rules against expected rules
-		policyID := *event.Id
-		s.activePolicies.Add(policyID)
-		if event.Policy.Untracked {
-			s.activeUntrackedPolicies.Add(policyID)
-		} else {
-			s.activeUntrackedPolicies.Discard(policyID)
-		}
-		if event.Policy.PreDnat {
-			s.activePreDNATPolicies.Add(policyID)
-		} else {
-			s.activePreDNATPolicies.Discard(policyID)
-		}
-	case *proto.ActivePolicyRemove:
-		policyID := *event.Id
-		s.activePolicies.Discard(policyID)
-		s.activeUntrackedPolicies.Discard(policyID)
-		s.activePreDNATPolicies.Discard(policyID)
-	case *proto.ActiveProfileUpdate:
-		// TODO: check rules against expected rules
-		s.activeProfiles.Add(*event.Id)
-	case *proto.ActiveProfileRemove:
-		s.activeProfiles.Discard(*event.Id)
-	case *proto.WorkloadEndpointUpdate:
-		tiers := event.Endpoint.Tiers
-		tierInfos := make([]tierInfo, len(tiers))
-		for i, tier := range event.Endpoint.Tiers {
-			tierInfos[i].Name = tier.Name
-			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
-		}
-		id := workloadId(*event.Id)
-		s.endpointToPolicyOrder[id.String()] = tierInfos
-		s.endpointToUntrackedPolicyOrder[id.String()] = []tierInfo{}
-		s.endpointToPreDNATPolicyOrder[id.String()] = []tierInfo{}
-	case *proto.WorkloadEndpointRemove:
-		id := workloadId(*event.Id)
-		delete(s.endpointToPolicyOrder, id.String())
-		delete(s.endpointToUntrackedPolicyOrder, id.String())
-		delete(s.endpointToPreDNATPolicyOrder, id.String())
-	case *proto.HostEndpointUpdate:
-		tiers := event.Endpoint.Tiers
-		tierInfos := make([]tierInfo, len(tiers))
-		for i, tier := range tiers {
-			tierInfos[i].Name = tier.Name
-			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
-		}
-		id := hostEpId(*event.Id)
-		s.endpointToPolicyOrder[id.String()] = tierInfos
-
-		uTiers := event.Endpoint.UntrackedTiers
-		uTierInfos := make([]tierInfo, len(uTiers))
-		for i, tier := range uTiers {
-			uTierInfos[i].Name = tier.Name
-			uTierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			uTierInfos[i].EgressPolicyNames = tier.EgressPolicies
-		}
-		s.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
-
-		pTiers := event.Endpoint.PreDnatTiers
-		pTierInfos := make([]tierInfo, len(pTiers))
-		for i, tier := range pTiers {
-			pTierInfos[i].Name = tier.Name
-			pTierInfos[i].IngressPolicyNames = tier.IngressPolicies
-			pTierInfos[i].EgressPolicyNames = tier.EgressPolicies
-		}
-		s.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
-	case *proto.HostEndpointRemove:
-		id := hostEpId(*event.Id)
-		delete(s.endpointToPolicyOrder, id.String())
-		delete(s.endpointToUntrackedPolicyOrder, id.String())
-		delete(s.endpointToPreDNATPolicyOrder, id.String())
-	}
-}
-
-func (s *mockDataplane) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
-	return
-}
-
-func (s *mockDataplane) RawValues() map[string]string {
-	return s.config
-}
-
-type tierInfo struct {
-	Name               string
-	IngressPolicyNames []string
-	EgressPolicyNames  []string
-}
-
-type workloadId proto.WorkloadEndpointID
-
-func (w *workloadId) String() string {
-	return fmt.Sprintf("%v/%v/%v",
-		w.OrchestratorId, w.WorkloadId, w.EndpointId)
-}
-
-type hostEpId proto.HostEndpointID
-
-func (i *hostEpId) String() string {
-	return i.EndpointId
 }
 
 var _ = Describe("calc graph with health state", func() {
