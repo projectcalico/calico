@@ -261,6 +261,9 @@ var _ = Context("policy sync API tests", func() {
 						_, err := syncClient.Recv()
 						return err
 					}).Should(HaveOccurred())
+
+					cancel()
+					Eventually(done).Should(BeClosed())
 				})
 			})
 		})
