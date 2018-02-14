@@ -13,3 +13,9 @@
 !dist/ppc64le/loopback
 !dist/ppc64le/host-local
 !dist/ppc64le/portmap
+!dist/s390x/calico
+!dist/s390x/calico-ipam
+!dist/s390x/flannel
+!dist/s390x/loopback
+!dist/s390x/host-local
+!dist/s390x/portmap
