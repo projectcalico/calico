@@ -336,6 +336,31 @@ var _ = Context("policy sync API tests", func() {
 
 							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New()))
 						})
+
+						It("should handle a change of profiles", func() {
+							// Make sure the initial update makes it through or we might get a
+							// false positive.
+							defProfID := proto.ProfileID{Name: "default"}
+							Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(
+								defProfID,
+							)))
+							Eventually(mockWlClient[0].EndpointToProfiles).Should(Equal(map[string][]string{
+								"k8s/fv/fv-pod-0/eth0": {"default"}}))
+
+							// Send in an endpoint update that adds one profile and deletes another.
+							var err error
+							w[0].WorkloadEndpoint.Spec.Profiles = []string{"notdefault"}
+							w[0].WorkloadEndpoint, err = calicoClient.WorkloadEndpoints().Update(ctx, w[0].WorkloadEndpoint, options.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+
+							By("Sending through an endpoint update and policy remove/update")
+							notDefProfID := proto.ProfileID{Name: "notdefault"}
+							Eventually(mockWlClient[0].EndpointToProfiles).Should(Equal(map[string][]string{
+								"k8s/fv/fv-pod-0/eth0": {"notdefault"}}))
+							Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(notDefProfID)))
+
+							Consistently(mockWlClient[2].ActiveProfiles).Should(Equal(set.From(defProfID)))
+						})
 					})
 				})
 

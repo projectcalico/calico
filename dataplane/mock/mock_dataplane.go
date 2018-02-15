@@ -86,6 +86,18 @@ func (d *MockDataplane) ActiveProfiles() set.Set {
 
 	return d.activeProfiles.Copy()
 }
+func (d *MockDataplane) EndpointToProfiles() map[string][]string {
+	d.Lock()
+	defer d.Unlock()
+
+	epToProfCopy := map[string][]string{}
+	for k, v := range d.endpointToProfiles {
+		profCopy := append([]string{}, v...)
+		epToProfCopy[k] = profCopy
+	}
+
+	return epToProfCopy
+}
 func (d *MockDataplane) EndpointToPolicyOrder() map[string][]TierInfo {
 	d.Lock()
 	defer d.Unlock()
