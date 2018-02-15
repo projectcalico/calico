@@ -81,7 +81,7 @@ func (s *WorkloadAPIServer) RegisterGrpc(g *grpc.Server) {
 func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
 	log.Info("New policy sync connection")
 
-	// Extract the workload ID form the request.
+	// Extract the workload ID from the request.
 	cxt := stream.Context()
 	creds, ok := wlh.CallerFromContext(cxt)
 	if !ok {

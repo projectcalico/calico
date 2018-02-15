@@ -57,7 +57,7 @@ var _ = Context("policy sync API tests", func() {
 
 	BeforeEach(func() {
 		// Create a temporary directory to map into the container as /var/run/calico, which
-		// is where we tell Felix to put the policy sync socket.
+		// is where we tell Felix to put the policy sync management socket.
 		var err error
 		tempDir, err = ioutil.TempDir("", "felixfv")
 		Expect(err).NotTo(HaveOccurred())
@@ -130,28 +130,35 @@ var _ = Context("policy sync API tests", func() {
 
 		Context("after sending a workload creation", func() {
 			var (
-				hostWlSocketPath string
+				hostWlSocketPath, containerWlSocketPath string
 			)
-			BeforeEach(func() {
-				// Create the workload directory, this would normally be the responsibility of the
-				// flex volume driver.
-				hostWlDir := tempDir + "/wl0"
+
+			createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
+				dirName := "/ps-" + wl.WorkloadEndpoint.Spec.Pod
+				hostWlDir := tempDir + dirName
 				os.MkdirAll(hostWlDir, 0777)
 				Eventually(func() error {
 					resp, err := mgmtClient.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
 						Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
-							Uid:       "fv-pod-0",
+							Uid:       wl.WorkloadEndpoint.Spec.Pod,
 							Namespace: "fv",
-							Workload:  "fv-pod-0",
+							Workload:  wl.WorkloadEndpoint.Spec.Pod,
 						},
-						Workloadpath: "wl0",
+						Workloadpath: dirName,
 					})
 					log.WithField("response", resp).Info("WorkloadAdded response")
 					return err
 				}).ShouldNot(HaveOccurred())
 
-				By("Creating the per-workload socket")
+				return hostWlDir, "/var/run/calico/" + dirName
+			}
+
+			BeforeEach(func() {
+				// Create the workload directory, this would normally be the responsibility of the
+				// flex volume driver.
+				hostWlDir, containerWlDir := createWorkloadDirectory(w[0])
 				hostWlSocketPath = hostWlDir + "/policysync.sock"
+				containerWlSocketPath = containerWlDir + "/policysync.sock"
 			})
 
 			It("should create the workload socket", func() {
@@ -185,7 +192,7 @@ var _ = Context("policy sync API tests", func() {
 					// Use the fact that anything we exec inside the Felix container runs as root to fix the
 					// permissions on the socket so the test process can connect.
 					Eventually(hostWlSocketPath).Should(BeAnExistingFile())
-					felix.Exec("chmod", "a+rw", "/var/run/calico/wl0/policysync.sock")
+					felix.Exec("chmod", "a+rw", containerWlSocketPath)
 					wlClient = createWorkloadConn()
 				})
 
