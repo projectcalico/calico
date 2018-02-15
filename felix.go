@@ -323,7 +323,7 @@ configRetry:
 		policySyncUIDAllocator := policysync.NewUIDAllocator()
 		policySyncProcessor = policysync.NewProcessor(toPolicySync)
 		policySyncServer = policysync.NewMgmtAPIServer(
-			policySyncProcessor.Joins,
+			policySyncProcessor.JoinUpdates,
 			policySyncUIDAllocator.NextUID,
 			configParams.PolicySyncWorkloadSocketPathPrefix,
 		)

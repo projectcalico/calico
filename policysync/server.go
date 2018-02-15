@@ -38,11 +38,11 @@ const (
 // There is a single instance of the WorkloadAPIServer, it disambiguates connections from different clients by the
 // credentials present in the gRPC request.
 type WorkloadAPIServer struct {
-	Joins       chan<- JoinRequest
+	Joins       chan<- interface{}
 	nextJoinUID func() uint64
 }
 
-func NewWorkloadAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *WorkloadAPIServer {
+func NewWorkloadAPIServer(joins chan<- interface{}, allocUID func() uint64) *WorkloadAPIServer {
 	return &WorkloadAPIServer{
 		Joins:       joins,
 		nextJoinUID: allocUID,
@@ -52,7 +52,7 @@ func NewWorkloadAPIServer(joins chan<- JoinRequest, allocUID func() uint64) *Wor
 // NewMgmtAPIServer creates a new server to listen for workload lifecycle events (i.e. workloads being created and
 // removed).  It opens and closes the per-workload socket accordingly, registering the workload API server with each
 // new socket.
-func NewMgmtAPIServer(joins chan<- JoinRequest, allocUID func() uint64, pathPrefix string) *nam.Server {
+func NewMgmtAPIServer(joins chan<- interface{}, allocUID func() uint64, pathPrefix string) *nam.Server {
 	// Initialize the workload API server.
 	s := NewWorkloadAPIServer(joins, allocUID)
 	// The WlServer sets up/tears down the sockets, deferring the API implementation to the WorkloadAPIServer.
@@ -107,20 +107,20 @@ func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 		EndpointId:     EndpointId,
 		WorkloadId:     workloadID,
 	}
-	s.Joins <- JoinRequest{
+	joinMeta := JoinMetadata{
 		EndpointID: epID,
-		C:          updates,
 		JoinUID:    myJoinUID,
+	}
+	s.Joins <- JoinRequest{
+		JoinMetadata: joinMeta,
+		C:            updates,
 	}
 
 	// Defer the cleanup of the join and the updates channel.
 	defer func() {
 		logCxt.Info("Shutting down policy sync connection")
 		joinsCopy := s.Joins
-		leaveRequest := JoinRequest{
-			EndpointID: epID,
-			JoinUID:    myJoinUID,
-		}
+		leaveRequest := LeaveRequest{JoinMetadata: joinMeta}
 		// Since the processor closes the update channel, we need to keep draining the updates channel to avoid
 		// blocking the processor.
 		//

@@ -24,7 +24,7 @@ import (
 
 type Processor struct {
 	Updates        <-chan interface{}
-	Joins          chan JoinRequest
+	JoinUpdates    chan interface{}
 	endpointsByID  map[proto.WorkloadEndpointID]*EndpointInfo
 	policyByID     map[proto.PolicyID]*proto.Policy
 	profileByID    map[proto.ProfileID]*proto.Profile
@@ -40,23 +40,32 @@ type EndpointInfo struct {
 	syncedProfiles map[proto.ProfileID]bool
 }
 
+type JoinMetadata struct {
+	EndpointID proto.WorkloadEndpointID
+	// JoinUID is a correlator, used to match stop requests with join requests.
+	JoinUID uint64
+}
+
 // JoinRequest is sent to the Processor when a new socket connection is accepted by the GRPC server,
 // it provides the channel used to send sync messages back to the server goroutine.
 type JoinRequest struct {
-	EndpointID proto.WorkloadEndpointID
+	JoinMetadata
 	// C is the channel to send updates to the policy sync client.  Processor closes the channel when the
 	// workload endpoint is removed, or when a new JoinRequest is received for the same endpoint.  If nil, indicates
 	// the client wants to stop receiving updates.
-	C       chan<- proto.ToDataplane
-	JoinUID uint64
+	C chan<- proto.ToDataplane
+}
+
+type LeaveRequest struct {
+	JoinMetadata
 }
 
 func NewProcessor(updates <-chan interface{}) *Processor {
 	return &Processor{
 		// Updates from the calculation graph.
 		Updates: updates,
-		// Joins from the new servers that have started.
-		Joins:         make(chan JoinRequest, 10),
+		// JoinUpdates from the new servers that have started.
+		JoinUpdates:   make(chan interface{}, 10),
 		endpointsByID: make(map[proto.WorkloadEndpointID]*EndpointInfo),
 		policyByID:    make(map[proto.PolicyID]*proto.Policy),
 		profileByID:   make(map[proto.ProfileID]*proto.Profile),
@@ -72,8 +81,13 @@ func (p *Processor) loop() {
 		select {
 		case update := <-p.Updates:
 			p.handleDataplane(update)
-		case joinReq := <-p.Joins:
-			p.handleJoin(joinReq)
+		case joinReq := <-p.JoinUpdates:
+			switch r := joinReq.(type) {
+			case JoinRequest:
+				p.handleJoin(r)
+			case LeaveRequest:
+				p.handleLeave(r)
+			}
 		}
 	}
 }
@@ -84,31 +98,11 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	ei, ok := p.endpointsByID[epID]
 
 	if !ok {
-		logCxt.Info("Join/Leave request for unknown endpoint, pre-creating EndpointInfo")
+		logCxt.Info("Join request for unknown endpoint, pre-creating EndpointInfo")
 		ei = &EndpointInfo{}
 		p.endpointsByID[epID] = ei
 	}
 
-	if joinReq.C == nil {
-		// This is a leave request, make sure we clean up endpointsByID if needed.
-		defer func() {
-			if ei.output == nil && ei.currentJoinUID == 0 && ei.endpointUpd == nil {
-				logCxt.Info("Cleaning up empty EndpointInfo")
-				delete(p.endpointsByID, epID)
-			}
-		}()
-		if ei.currentJoinUID != joinReq.JoinUID {
-			logCxt.Info("Leave request doesn't match active connection, ignoring")
-			return
-		}
-		logCxt.Info("Leave request for active connection, closing channel.")
-		close(ei.output)
-		ei.output = nil
-		ei.currentJoinUID = 0
-		return
-	}
-
-	// If we get here, we've got a join request.
 	if ei.output != nil {
 		logCxt.Info("Join request for already-active connection, closing old channel.")
 		close(ei.output)
@@ -122,6 +116,34 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	ei.syncedProfiles = map[proto.ProfileID]bool{}
 
 	p.maybeSyncEndpoint(ei)
+}
+
+func (p *Processor) handleLeave(leaveReq LeaveRequest) {
+	epID := leaveReq.EndpointID
+	logCxt := log.WithField("leaveReq", leaveReq).WithField("epID", epID)
+	ei, ok := p.endpointsByID[epID]
+
+	if !ok {
+		logCxt.Info("Join/Leave request for unknown endpoint, ignoring")
+		return
+	}
+
+	// Make sure we clean up endpointsByID if needed.
+	defer func() {
+		if ei.output == nil && ei.currentJoinUID == 0 && ei.endpointUpd == nil {
+			logCxt.Info("Cleaning up empty EndpointInfo")
+			delete(p.endpointsByID, epID)
+		}
+	}()
+	if ei.currentJoinUID != leaveReq.JoinUID {
+		logCxt.Info("Leave request doesn't match active connection, ignoring")
+		return
+	}
+	logCxt.Info("Leave request for active connection, closing channel.")
+	close(ei.output)
+	ei.output = nil
+	ei.currentJoinUID = 0
+	return
 }
 
 func (p *Processor) handleDataplane(update interface{}) {
