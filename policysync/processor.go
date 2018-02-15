@@ -217,10 +217,12 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 
 	// The calc graph sends us policies and profiles before endpoint updates, but the Processor doesn't know
 	// which endpoints need them until now.  Send any unsynced profiles & policies referenced
-	p.syncPolicies(ei)
-	p.syncProfiles(ei)
+	p.syncAddedPolicies(ei)
+	p.syncAddedProfiles(ei)
 	ei.output <- proto.ToDataplane{
 		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{ei.endpointUpd}}
+	p.syncRemovedPolicies(ei)
+	p.syncRemovedProfiles(ei)
 	if p.receivedInSync {
 		log.Debug("Already in sync with the datastore, sending in-sync message to client")
 		ei.output <- proto.ToDataplane{
@@ -307,7 +309,7 @@ func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 	delete(p.policyByID, pId)
 }
 
-func (p *Processor) syncPolicies(ei *EndpointInfo) {
+func (p *Processor) syncAddedPolicies(ei *EndpointInfo) {
 	ei.iteratePolicies(func(pId proto.PolicyID) bool {
 		if !ei.syncedPolicies[pId] {
 			policy := p.policyByID[pId]
@@ -323,7 +325,33 @@ func (p *Processor) syncPolicies(ei *EndpointInfo) {
 	})
 }
 
-func (p *Processor) syncProfiles(ei *EndpointInfo) {
+// syncRemovedPolicies sends ActivePolicyRemove messages for any previously active, but now unused
+// policies.
+func (p *Processor) syncRemovedPolicies(ei *EndpointInfo) {
+	oldSyncedPolicies := ei.syncedPolicies
+	ei.syncedPolicies = map[proto.PolicyID]bool{}
+
+	ei.iteratePolicies(func(pId proto.PolicyID) bool {
+		if !oldSyncedPolicies[pId] {
+			// We've never sent this policy?
+			return false
+		}
+
+		// Still an active policy, remove it from the old set.
+		delete(oldSyncedPolicies, pId)
+		ei.syncedPolicies[pId] = true
+		return false
+	})
+
+	// oldSyncedPolicies now contains only policies that are no longer needed by this endpoint.
+	for polID := range oldSyncedPolicies {
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
+			&proto.ActivePolicyRemove{Id: &polID},
+		}}
+	}
+}
+
+func (p *Processor) syncAddedProfiles(ei *EndpointInfo) {
 	ei.iterateProfiles(func(pId proto.ProfileID) bool {
 		if !ei.syncedProfiles[pId] {
 			profile := p.profileByID[pId]
@@ -337,6 +365,32 @@ func (p *Processor) syncProfiles(ei *EndpointInfo) {
 		}
 		return false
 	})
+}
+
+// syncRemovedProfiles sends ActiveProfileRemove messages for any previously active, but now unused
+// profiles.
+func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
+	oldSyncedProfiles := ei.syncedProfiles
+	ei.syncedProfiles = map[proto.ProfileID]bool{}
+
+	ei.iterateProfiles(func(pId proto.ProfileID) bool {
+		if !oldSyncedProfiles[pId] {
+			// We've never sent this profile?
+			return false
+		}
+
+		// Still an active profile, remove it from the old set.
+		delete(oldSyncedProfiles, pId)
+		ei.syncedProfiles[pId] = true
+		return false
+	})
+
+	// oldSyncedProfiles now contains only policies that are no longer needed by this endpoint.
+	for polID := range oldSyncedProfiles {
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
+			&proto.ActiveProfileRemove{Id: &polID},
+		}}
+	}
 }
 
 // A slice of all the Endpoints that can currently be sent updates.

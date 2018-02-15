@@ -29,6 +29,7 @@ import (
 	"github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -250,6 +251,91 @@ var _ = Context("policy sync API tests", func() {
 						Eventually(mockWlClient[1].ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
 						Eventually(mockWlClient[1].EndpointToPolicyOrder).Should(Equal(
 							map[string][]mock.TierInfo{"k8s/fv/fv-pod-1/eth0": {}}))
+					})
+
+					Context("after adding a policy that applies to workload 0 only", func() {
+						var (
+							policy   *api.GlobalNetworkPolicy
+							policyID proto.PolicyID
+						)
+
+						BeforeEach(func() {
+							policy = api.NewGlobalNetworkPolicy()
+							policy.SetName("policy-0")
+							policy.Spec.Selector = w[0].NameSelector()
+							policy.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Selector: "all()",
+									},
+								},
+							}
+							policy.Spec.Egress = []api.Rule{
+								{
+									Action: "Allow",
+								},
+							}
+							policy, err = calicoClient.GlobalNetworkPolicies().Create(ctx, policy, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+
+							policyID = proto.PolicyID{Name: "default.policy-0", Tier: "default"}
+						})
+
+						It("should be sent to workload 0 only", func() {
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.From(
+								policyID,
+							)))
+							Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
+								map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {{
+									Name:               "default",
+									EgressPolicyNames:  []string{"default.policy-0"},
+									IngressPolicyNames: []string{"default.policy-0"},
+								}}}))
+
+							Consistently(mockWlClient[1].ActivePolicies).Should(Equal(set.New()))
+							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New()))
+						})
+
+						It("should handle a deletion", func() {
+							// Make sure the initial update makes it through or we might get a
+							// false positive.
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.From(policyID)))
+
+							_, err := calicoClient.GlobalNetworkPolicies().Delete(ctx, "policy-0", options.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.New()))
+						})
+
+						It("should handle a change of selector", func() {
+							// Make sure the initial update makes it through or we might get a
+							// false positive.
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.From(
+								policyID,
+							)))
+
+							By("Sending through an endpoint update and policy remove")
+							policy.Spec.Selector = w[1].NameSelector()
+							var err error
+							policy, err = calicoClient.GlobalNetworkPolicies().Update(ctx, policy, options.SetOptions{})
+							Expect(err).NotTo(HaveOccurred())
+
+							Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
+								map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.New()))
+
+							By("Updating workload 1 to make the policy active")
+							Eventually(mockWlClient[1].ActivePolicies).Should(Equal(set.From(policyID)))
+							Eventually(mockWlClient[1].EndpointToPolicyOrder).Should(Equal(
+								map[string][]mock.TierInfo{"k8s/fv/fv-pod-1/eth0": {{
+									Name:               "default",
+									EgressPolicyNames:  []string{"default.policy-0"},
+									IngressPolicyNames: []string{"default.policy-0"},
+								}}}))
+
+							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New()))
+						})
 					})
 				})
 
