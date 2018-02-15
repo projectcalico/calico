@@ -82,11 +82,14 @@ func (p *Processor) loop() {
 		case update := <-p.Updates:
 			p.handleDataplane(update)
 		case joinReq := <-p.JoinUpdates:
+			log.WithField("update", joinReq).Info("Request received on the join updates channel")
 			switch r := joinReq.(type) {
 			case JoinRequest:
 				p.handleJoin(r)
 			case LeaveRequest:
 				p.handleLeave(r)
+			default:
+				log.WithField("message", joinReq).Panic("Unexpected message")
 			}
 		}
 	}
@@ -124,7 +127,7 @@ func (p *Processor) handleLeave(leaveReq LeaveRequest) {
 	ei, ok := p.endpointsByID[epID]
 
 	if !ok {
-		logCxt.Info("Join/Leave request for unknown endpoint, ignoring")
+		logCxt.Info("Leave request for unknown endpoint, ignoring")
 		return
 	}
 
@@ -224,7 +227,7 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 	p.syncRemovedPolicies(ei)
 	p.syncRemovedProfiles(ei)
 	if p.receivedInSync {
-		log.Debug("Already in sync with the datastore, sending in-sync message to client")
+		log.WithField("channel", ei.output).Debug("Already in sync with the datastore, sending in-sync message to client")
 		ei.output <- proto.ToDataplane{
 			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
 	}

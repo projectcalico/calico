@@ -38,13 +38,13 @@ const (
 // There is a single instance of the WorkloadAPIServer, it disambiguates connections from different clients by the
 // credentials present in the gRPC request.
 type WorkloadAPIServer struct {
-	Joins       chan<- interface{}
+	JoinUpdates chan<- interface{}
 	nextJoinUID func() uint64
 }
 
 func NewWorkloadAPIServer(joins chan<- interface{}, allocUID func() uint64) *WorkloadAPIServer {
 	return &WorkloadAPIServer{
-		Joins:       joins,
+		JoinUpdates: joins,
 		nextJoinUID: allocUID,
 	}
 }
@@ -111,7 +111,7 @@ func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 		EndpointID: epID,
 		JoinUID:    myJoinUID,
 	}
-	s.Joins <- JoinRequest{
+	s.JoinUpdates <- JoinRequest{
 		JoinMetadata: joinMeta,
 		C:            updates,
 	}
@@ -119,7 +119,7 @@ func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 	// Defer the cleanup of the join and the updates channel.
 	defer func() {
 		logCxt.Info("Shutting down policy sync connection")
-		joinsCopy := s.Joins
+		joinsCopy := s.JoinUpdates
 		leaveRequest := LeaveRequest{JoinMetadata: joinMeta}
 		// Since the processor closes the update channel, we need to keep draining the updates channel to avoid
 		// blocking the processor.
@@ -127,18 +127,20 @@ func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 		// We also need to send the processor a leave request to ask it to stop sending updates.
 		//
 		// Make sure we don't block on either operation, or we could deadlock with the processor.
-		for updates != nil && joinsCopy != nil {
+		for updates != nil || joinsCopy != nil {
 			select {
-			case _, ok := <-updates:
+			case msg, ok := <-updates:
 				if !ok {
-					logCxt.Info("Updates channel was closed by processor.")
+					logCxt.Info("Shutting down: updates channel was closed by processor.")
 					updates = nil
 				}
+				logCxt.WithField("msg", msg).Debug("Shutting down: discarded a message from the processor")
 			case joinsCopy <- leaveRequest:
-				logCxt.Info("Leave request sent to processor")
+				logCxt.Info("Shutting down: Leave request sent to processor")
 				joinsCopy = nil
 			}
 		}
+		logCxt.Info("Finished shutting down policy sync connection")
 	}()
 
 	for update := range updates {

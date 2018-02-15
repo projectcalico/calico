@@ -18,6 +18,7 @@ package fv
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -67,6 +68,10 @@ var _ = Context("policy sync API tests", func() {
 		options := containers.DefaultTopologyOptions()
 		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policy-mgmt.sock"
 		options.ExtraEnvVars["FELIX_PolicySyncWorkloadSocketPathPrefix"] = "/var/run/calico"
+		// To enable debug logs, uncomment these lines; watch out for timeouts caused by the
+		// resulting slow down!
+		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
+		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico"
 		felix, etcd, calicoClient = containers.StartSingleNodeEtcdTopology(options)
 
@@ -184,13 +189,14 @@ var _ = Context("policy sync API tests", func() {
 
 				// Then connect to it.
 				var (
+					wlConn   [3]*grpc.ClientConn
 					wlClient [3]proto.PolicySyncClient
 					cancel   context.CancelFunc
 					ctx      context.Context
 					err      error
 				)
 
-				createWorkloadConn := func(i int) proto.PolicySyncClient {
+				createWorkloadConn := func(i int) (*grpc.ClientConn, proto.PolicySyncClient) {
 					var opts []grpc.DialOption
 					opts = append(opts, grpc.WithInsecure())
 					opts = append(opts, grpc.WithDialer(unixDialer))
@@ -198,18 +204,18 @@ var _ = Context("policy sync API tests", func() {
 					conn, err = grpc.Dial(hostWlSocketPath[i], opts...)
 					Expect(err).NotTo(HaveOccurred())
 					wlClient := proto.NewPolicySyncClient(conn)
-					return wlClient
+					return conn, wlClient
 				}
 
 				BeforeEach(func() {
-					ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 
 					for i := range w {
 						// Use the fact that anything we exec inside the Felix container runs as root to fix the
 						// permissions on the socket so the test process can connect.
 						Eventually(hostWlSocketPath[i]).Should(BeAnExistingFile())
 						felix.Exec("chmod", "a+rw", containerWlSocketPath[i])
-						wlClient[i] = createWorkloadConn(i)
+						wlConn[i], wlClient[i] = createWorkloadConn(i)
 					}
 				})
 
@@ -222,17 +228,21 @@ var _ = Context("policy sync API tests", func() {
 				Context("with mock clients syncing", func() {
 					var (
 						mockWlClient [3]*mockWorkloadClient
+						mockWlCancel [3]context.CancelFunc
 					)
 
 					BeforeEach(func() {
 						for i := range w {
-							client := newMockWorkloadClient()
-							client.StartSyncing(ctx, wlClient[i])
+							client := newMockWorkloadClient(fmt.Sprintf("workload-%d", i))
+							var wlCtx context.Context
+							wlCtx, mockWlCancel[i] = context.WithCancel(ctx)
+							client.StartSyncing(wlCtx, wlClient[i])
 							mockWlClient[i] = client
 						}
 					})
 
 					AfterEach(func() {
+						log.Info("AfterEach: cancelling main context")
 						cancel()
 						for _, c := range mockWlClient {
 							Eventually(c.Done).Should(BeClosed())
@@ -242,6 +252,7 @@ var _ = Context("policy sync API tests", func() {
 					It("workload 0's client should receive correct updates", func() {
 						Eventually(mockWlClient[0].InSync).Should(BeTrue())
 						Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+						// Should only hear about our own workload.
 						Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
 							map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
 					})
@@ -249,8 +260,58 @@ var _ = Context("policy sync API tests", func() {
 					It("workload 1's client should receive correct updates", func() {
 						Eventually(mockWlClient[1].InSync).Should(BeTrue())
 						Eventually(mockWlClient[1].ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+						// Should only hear about our own workload.
 						Eventually(mockWlClient[1].EndpointToPolicyOrder).Should(Equal(
 							map[string][]mock.TierInfo{"k8s/fv/fv-pod-1/eth0": {}}))
+					})
+
+					Context("after closing one client's gRPC connection", func() {
+						BeforeEach(func() {
+							// Sanity check that the connection is up before we close it.
+							Eventually(mockWlClient[2].InSync, "10s").Should(BeTrue())
+
+							// Close it and wait for the client to shut down.
+							wlConn[2].Close()
+							Eventually(mockWlClient[2].Done, "10s").Should(BeClosed())
+						})
+
+						doChurn := func(wlIndexes ...int) {
+							for i := 0; i < 100; i++ {
+								wlIdx := wlIndexes[i%len(wlIndexes)]
+								By(fmt.Sprintf("Churn %d; targetting workload %d", i, wlIdx))
+
+								policy := api.NewGlobalNetworkPolicy()
+								policy.SetName("policy-0")
+								policy.Spec.Selector = w[wlIdx].NameSelector()
+
+								policy, err = calicoClient.GlobalNetworkPolicies().Create(ctx, policy, utils.NoOptions)
+								Expect(err).NotTo(HaveOccurred())
+
+								if wlIdx != 2 {
+									policyID := proto.PolicyID{Name: "default.policy-0", Tier: "default"}
+									Eventually(mockWlClient[wlIdx].ActivePolicies).Should(Equal(set.From(policyID)))
+								}
+
+								_, err = calicoClient.GlobalNetworkPolicies().Delete(ctx, "policy-0", options.DeleteOptions{})
+								Expect(err).NotTo(HaveOccurred())
+
+								if wlIdx != 2 {
+									Eventually(mockWlClient[wlIdx].ActivePolicies).Should(Equal(set.New()))
+								}
+							}
+						}
+
+						It("churn affecting all endpoints should result in expected updates", func() {
+							// Send in some churn to ensure that we exhaust any buffers that might let
+							// one or two updates through.
+							doChurn(0, 1, 2)
+						})
+
+						It("churn affecting only active endpoints should result in expected updates", func() {
+							// Send in some churn to ensure that we exhaust any buffers that might let
+							// one or two updates through.
+							doChurn(0, 1)
+						})
 					})
 
 					Context("after adding a policy that applies to workload 0 only", func() {
@@ -373,7 +434,7 @@ var _ = Context("policy sync API tests", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					// Then create a new mock client.
-					client := newMockWorkloadClient()
+					client := newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, wlClient[0])
 
 					// The new client should take over, getting a full sync.
@@ -392,7 +453,7 @@ var _ = Context("policy sync API tests", func() {
 				})
 
 				It("a connection should get closed if the workload is removed", func() {
-					client := newMockWorkloadClient()
+					client := newMockWorkloadClient("workload-0")
 					client.StartSyncing(ctx, wlClient[0])
 
 					// Workload should be sent over the API.
@@ -416,11 +477,13 @@ func unixDialer(target string, timeout time.Duration) (net.Conn, error) {
 
 type mockWorkloadClient struct {
 	*mock.MockDataplane
+	name string
 	Done chan struct{}
 }
 
-func newMockWorkloadClient() *mockWorkloadClient {
+func newMockWorkloadClient(name string) *mockWorkloadClient {
 	return &mockWorkloadClient{
+		name:          name,
 		MockDataplane: mock.NewMockDataplane(),
 		Done:          make(chan struct{}),
 	}
@@ -435,10 +498,11 @@ func (c *mockWorkloadClient) StartSyncing(ctx context.Context, policySyncClient 
 func (c *mockWorkloadClient) loopReadingFromAPI(ctx context.Context, syncClient proto.PolicySync_SyncClient) {
 	defer GinkgoRecover()
 	defer close(c.Done)
+
 	for ctx.Err() == nil {
 		msg, err := syncClient.Recv()
 		if err != nil {
-			log.WithError(err).Warn("Recv failed.")
+			log.WithError(err).WithField("workload", c.name).Warn("Recv failed.")
 			return
 		}
 		log.WithField("msg", msg).Info("Received workload message")
