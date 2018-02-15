@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	// For statuses, this requires the consumer to explicitly expect the status updates
 	// to unblock the processing.
 	st.statusBlocker.Wait()
-	log.Info("OnStatusUpdated now unblocked")
+	log.Infof("OnStatusUpdated now unblocked waiting for: %s", status)
 
 }
 
@@ -196,7 +196,7 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 
 // ExpectCacheSize verifies that the cache size is as expected.
 func (st *SyncerTester) ExpectCacheSize(size int) {
-	EventuallyWithOffset(1, st.CacheSnapshot, 6*time.Second, 500*time.Millisecond).Should(HaveLen(size))
+	EventuallyWithOffset(1, st.CacheSnapshot, 6*time.Second, 1*time.Millisecond).Should(HaveLen(size))
 	ConsistentlyWithOffset(1, st.CacheSnapshot).Should(HaveLen(size), "Cache size incorrect")
 }
 
@@ -284,10 +284,7 @@ func (st *SyncerTester) GetCacheEntries() []model.KVPair {
 // OnUpdate events were received).
 // This removes all updates/onUpdate events from this receiver, so that the
 // next call to this just requires the next set of updates.
-//
-// Note that for this function to be useful, your test code needs to have
-// fine grained control over the order in which events occur.
-func (st *SyncerTester) ExpectUpdates(expected []api.Update) {
+func (st *SyncerTester) ExpectUpdates(expected []api.Update, checkOrder bool) {
 	log.Infof("Expecting updates of %v", expected)
 
 	// Poll until we have the correct number of updates to check.
@@ -304,7 +301,12 @@ func (st *SyncerTester) ExpectUpdates(expected []api.Update) {
 	updates := st.updates
 	st.updates = nil
 	st.onUpdates = nil
-	Expect(updates).To(Equal(expected))
+
+	if checkOrder {
+		Expect(updates).To(Equal(expected))
+	} else {
+		Expect(updates).To(ConsistOf(expected))
+	}
 }
 
 // Call to test which onUpdate events were received.

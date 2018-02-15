@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,73 +72,105 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 }
 
 // run creates the watcher and loops indefinitely reading from the watcher.
-func (wc *watcherCache) run() {
+func (wc *watcherCache) run(ctx context.Context) {
 	wc.logger.Debug("Watcher cache starting, start initial sync processing")
-	wc.resyncAndCreateWatcher()
+	wc.resyncAndCreateWatcher(ctx)
 
 	wc.logger.Debug("Starting main event processing loop")
+mainLoop:
 	for {
-		rc := wc.watch.ResultChan()
-		wc.logger.WithField("RC", rc).Debug("Reading event from results channel")
-		event, ok := <-rc
-		if !ok {
-			// If the channel is closed then resync/recreate the watch.
-			wc.logger.Info("Watch channel closed by remote - recreate watcher")
-			wc.resyncAndCreateWatcher()
-			continue
+		if wc.watch == nil {
+			// The watcher will be nil if the context cancelled during a resync.
+			wc.logger.Debug("Watch is nil. Returning")
+			break mainLoop
 		}
-
-		// Handle the specific event type.
-		switch event.Type {
-		case api.WatchAdded, api.WatchModified:
-			kvp := event.New
-			wc.handleWatchListEvent(kvp)
-		case api.WatchDeleted:
-			// Nil out the value to indicate a delete.
-			kvp := event.Old
-			kvp.Value = nil
-			wc.handleWatchListEvent(kvp)
-		case api.WatchError:
-			// Handle a WatchError.  First determine if the error type indicates that the
-			// watch has closed, and if so we'll need to resync and create a new watcher.
-			wc.results <- event.Error
-			if e, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
-				wc.logger.Debug("Received watch terminated error - recreate watcher")
-				if !e.ClosedByRemote {
-					// If the watcher was not closed by remote, reset the currentWatchRevision.  This will
-					// trigger a full resync rather than simply trying to watch from the last event
-					// revision.
-					wc.logger.Debug("Watch was not closed by remote - full resync required")
-					wc.currentWatchRevision = ""
-				}
-				wc.resyncAndCreateWatcher()
+		select {
+		case <-ctx.Done():
+			wc.logger.Debug("Context is done. Returning")
+			wc.cleanExistingWatcher()
+			break mainLoop
+		case event, ok := <-wc.watch.ResultChan():
+			if !ok {
+				// If the channel is closed then resync/recreate the watch.
+				wc.logger.Info("Watch channel closed by remote - recreate watcher")
+				wc.resyncAndCreateWatcher(ctx)
+				continue
 			}
-		default:
-			// Unknown event type - not much we can do other than log.
-			wc.logger.WithField("EventType", event.Type).Error("Unknown event type received from the datastore")
+			wc.logger.WithField("RC", wc.watch.ResultChan()).Debug("Reading event from results channel")
+
+			// Handle the specific event type.
+			switch event.Type {
+			case api.WatchAdded, api.WatchModified:
+				kvp := event.New
+				wc.handleWatchListEvent(kvp)
+			case api.WatchDeleted:
+				// Nil out the value to indicate a delete.
+				kvp := event.Old
+				kvp.Value = nil
+				wc.handleWatchListEvent(kvp)
+			case api.WatchError:
+				// Handle a WatchError.  First determine if the error type indicates that the
+				// watch has closed, and if so we'll need to resync and create a new watcher.
+				wc.results <- event.Error
+				if e, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
+					wc.logger.Debug("Received watch terminated error - recreate watcher")
+					if !e.ClosedByRemote {
+						// If the watcher was not closed by remote, reset the currentWatchRevision.  This will
+						// trigger a full resync rather than simply trying to watch from the last event
+						// revision.
+						wc.logger.Debug("Watch was not closed by remote - full resync required")
+						wc.currentWatchRevision = ""
+					}
+					wc.resyncAndCreateWatcher(ctx)
+				}
+			default:
+				// Unknown event type - not much we can do other than log.
+				wc.logger.WithField("EventType", event.Type).Errorf("Unknown event type received from the datastore")
+			}
 		}
+	}
+
+	// The watcher cache has exited. This can only mean that it has been shutdown, so emit all updates in the cache as
+	// delete events.
+	for _, value := range wc.resources {
+		wc.results <- []api.Update{{
+			UpdateType: api.UpdateTypeKVDeleted,
+			KVPair: model.KVPair{
+				Key: value.key,
+			},
+		}}
 	}
 }
 
 // resyncAndCreateWatcher loops performing resync processing until it successfully
 // completes a resync and starts a watcher.
-func (wc *watcherCache) resyncAndCreateWatcher() {
+func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
+	// The passed in context allows a resync to be stopped mid-resync. The resync should be stopped as quickly as
+	// possible, but there should be usable data available in wc.resources so that delete events can be sent.
+	// The strategy is to
+	// - cancel any long running functions calls made from here, i.e. pass ctx to the client.list() calls
+	//    - but if it finishes, then ensure that the listing gets processed.
+	// - cancel any sleeps if the context is cancelled
+
 	// Make sure any previous watcher is stopped.
 	wc.logger.Info("Starting watch sync/resync processing")
-	if wc.watch != nil {
-		wc.logger.Info("Stopping previous watcher")
-		wc.watch.Stop()
-		wc.watch = nil
-	}
+	wc.cleanExistingWatcher()
 
 	// If we don't have a currentWatchRevision then we need to perform a full resync.
 	performFullResync := wc.currentWatchRevision == ""
 
 	for {
-		// Start the resync.  This processing loops until we create the watcher.  If the
-		// watcher continuously fails then this loop effectively becomes a polling based
-		// syncer.
-		wc.logger.Debug("Starting main resync loop")
+		select {
+		case <-ctx.Done():
+			wc.logger.Debug("Context is done. Returning")
+			wc.cleanExistingWatcher()
+			return
+		default:
+			// Start the resync.  This processing loops until we create the watcher.  If the
+			// watcher continuously fails then this loop effectively becomes a polling based
+			// syncer.
+			wc.logger.Debug("Starting main resync loop")
+		}
 
 		if performFullResync {
 			wc.logger.Debug("Full resync is required")
@@ -150,14 +182,21 @@ func (wc *watcherCache) resyncAndCreateWatcher() {
 			}
 
 			// Start the sync by Listing the current resources.
-			l, err := wc.client.List(context.Background(), wc.resourceType.ListInterface, "")
+			l, err := wc.client.List(ctx, wc.resourceType.ListInterface, "")
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
-				time.Sleep(ListRetryInterval)
-				continue
+				select {
+				case <-time.After(ListRetryInterval):
+					continue
+				case <-ctx.Done():
+					wc.logger.Debug("Context is done. Returning")
+					wc.cleanExistingWatcher()
+					return
+				}
 			}
 
+			// Once this point is reached, it's important not to drop out if the context is cancelled.
 			// Move the current resources over to the oldResources
 			wc.oldResources = wc.resources
 			wc.resources = make(map[string]cacheEntry, 0)
@@ -179,15 +218,21 @@ func (wc *watcherCache) resyncAndCreateWatcher() {
 
 		// And now start watching from the revision returned by the List, or from a previous watch event
 		// (depending on whether we were performing a full resync).
-		w, err := wc.client.Watch(context.Background(), wc.resourceType.ListInterface, wc.currentWatchRevision)
+		w, err := wc.client.Watch(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
 		if err != nil {
 			// Failed to create the watcher - we'll need to retry.
 			if _, ok := err.(cerrors.ErrorOperationNotSupported); ok {
 				// Watch is not supported on this resource type, so pause for the watch poll interval.
 				// This loop effectively becomes a poll loop for this resource type.
 				wc.logger.Debug("Watch operation not supported")
-				time.Sleep(WatchPollInterval)
-				continue
+				select {
+				case <-time.After(WatchPollInterval):
+					continue
+				case <-ctx.Done():
+					wc.logger.Debug("Context is done. Returning")
+					wc.cleanExistingWatcher()
+					return
+				}
 			}
 
 			// We hit an error creating the Watch.  Trigger a full resync.
@@ -203,6 +248,14 @@ func (wc *watcherCache) resyncAndCreateWatcher() {
 		wc.logger.Debug("Resync completed, now watching for change events")
 		wc.watch = w
 		return
+	}
+}
+
+func (wc *watcherCache) cleanExistingWatcher() {
+	if wc.watch != nil {
+		wc.logger.Info("Stopping previous watcher")
+		wc.watch.Stop()
+		wc.watch = nil
 	}
 }
 

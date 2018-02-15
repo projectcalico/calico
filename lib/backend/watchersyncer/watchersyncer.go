@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@ package watchersyncer
 
 import (
 	log "github.com/sirupsen/logrus"
+
+	"context"
+	"sync"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -77,11 +80,41 @@ type watcherSyncer struct {
 	results       chan interface{}
 	numSynced     int
 	callbacks     api.SyncerCallbacks
+	wgwc          *sync.WaitGroup
+	cancel        context.CancelFunc
 }
 
 func (ws *watcherSyncer) Start() {
 	log.Info("Start called")
-	go ws.run()
+
+	// Create a context and a wait group.
+	// The context is passed to the run() method where it is passed on to all the watcher caches.
+	// The cancel function is stored off and when called it signals to the caches that they need to wrap up their work.
+	// watcher caches wait group (wswc) is used to signal the completion of all of the watcher cache goroutines.
+	ctx, cancel := context.WithCancel(context.Background())
+	ws.cancel = cancel
+	ws.wgwc = &sync.WaitGroup{}
+
+	go func() {
+		ws.run(ctx)
+		log.Debug("Watcher syncer run completed")
+	}()
+}
+
+// Stop the watcher syncer and all the watcher caches. Delete events are created for all items
+// in the watcher caches.
+func (ws *watcherSyncer) Stop() {
+	// Send a cancel to all the watcher caches, telling them to finish their work.
+	ws.cancel()
+	log.Debug("Waiting for watcher caches to stop")
+
+	// Block on the watcher cache wait group, waiting for the watcher caches to finish
+	ws.wgwc.Wait()
+	log.Debug("Watcher caches have stopped")
+
+	// Closing the results chan signals to the watchersyncer to shut itself down now that nothing else will write to
+	// the results chan
+	close(ws.results)
 }
 
 // Send a status update and store the status.
@@ -93,19 +126,21 @@ func (ws *watcherSyncer) sendStatusUpdate(status api.SyncStatus) {
 
 // run implements the main syncer loop that loops forever receiving watch events and translating
 // to syncer updates.
-func (ws *watcherSyncer) run() {
+func (ws *watcherSyncer) run(ctx context.Context) {
 	log.Debug("Sending initial status event and starting watchers")
 	ws.sendStatusUpdate(api.WaitForDatastore)
 	for _, wc := range ws.watcherCaches {
-		go wc.run()
+		ws.wgwc.Add(1)
+		go func(wc *watcherCache) {
+			wc.run(ctx)
+			log.Debug("Watcher cache run completed")
+			ws.wgwc.Done()
+		}(wc)
 	}
 
 	log.Info("Starting main event processing loop")
 	var updates []api.Update
-	for {
-		// Block until there is data.
-		result := <-ws.results
-
+	for result := range ws.results {
 		// Process the data - this will append the data in subsequent calls, and action
 		// it if we hit a non-update event.
 		updates := ws.processResult(updates, result)
@@ -186,7 +221,7 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result interface{})
 	return updates
 }
 
-// sendUpdates is used to send the consoidated set of updates.  Returns nil.
+// sendUpdates is used to send the consolidated set of updates.  Returns nil.
 func (ws *watcherSyncer) sendUpdates(updates []api.Update) []api.Update {
 	log.WithField("NumUpdates", len(updates)).Debug("Sending syncer updates (if any to send)")
 	if len(updates) > 0 {
