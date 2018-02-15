@@ -49,7 +49,7 @@ var _ = Context("policy sync API tests", func() {
 	var (
 		etcd               *containers.Container
 		felix              *containers.Felix
-		client             client.Interface
+		calicoClient       client.Interface
 		w                  [3]*workload.Workload
 		tempDir            string
 		hostMgmtSocketPath string
@@ -67,7 +67,7 @@ var _ = Context("policy sync API tests", func() {
 		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policy-mgmt.sock"
 		options.ExtraEnvVars["FELIX_PolicySyncWorkloadSocketPathPrefix"] = "/var/run/calico"
 		options.ExtraVolumes[tempDir] = "/var/run/calico"
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
+		felix, etcd, calicoClient = containers.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
@@ -79,7 +79,7 @@ var _ = Context("policy sync API tests", func() {
 			Action: api.Allow,
 			Source: api.EntityRule{Selector: "default == ''"},
 		}}
-		_, err = client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
+		_, err = calicoClient.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create three workloads, using that profile.
@@ -89,7 +89,7 @@ var _ = Context("policy sync API tests", func() {
 			w[ii].WorkloadEndpoint.Spec.Endpoint = "eth0"
 			w[ii].WorkloadEndpoint.Spec.Orchestrator = "k8s"
 			w[ii].WorkloadEndpoint.Spec.Pod = "fv-pod-" + iiStr
-			w[ii].Configure(client)
+			w[ii].Configure(calicoClient)
 		}
 
 		hostMgmtSocketPath = tempDir + "/policy-mgmt.sock"
@@ -128,72 +128,88 @@ var _ = Context("policy sync API tests", func() {
 			mgmtClient = nodeagentmgmt.ClientUds(hostMgmtSocketPath)
 		})
 
-		Context("after sending a workload creation", func() {
-			var (
-				hostWlSocketPath, containerWlSocketPath string
-			)
+		var (
+			hostWlSocketPath, containerWlSocketPath [3]string
+		)
 
-			createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
-				dirName := "/ps-" + wl.WorkloadEndpoint.Spec.Pod
-				hostWlDir := tempDir + dirName
-				os.MkdirAll(hostWlDir, 0777)
-				Eventually(func() error {
-					resp, err := mgmtClient.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
-						Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
-							Uid:       wl.WorkloadEndpoint.Spec.Pod,
-							Namespace: "fv",
-							Workload:  wl.WorkloadEndpoint.Spec.Pod,
-						},
-						Workloadpath: dirName,
-					})
-					log.WithField("response", resp).Info("WorkloadAdded response")
-					return err
-				}).ShouldNot(HaveOccurred())
+		dirNameForWorkload := func(wl *workload.Workload) string {
+			return "ps-" + wl.WorkloadEndpoint.Spec.Pod
+		}
 
-				return hostWlDir, "/var/run/calico/" + dirName
-			}
+		createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
+			dirName := dirNameForWorkload(wl)
+			hostWlDir := tempDir + "/" + dirName
+			os.MkdirAll(hostWlDir, 0777)
+			return hostWlDir, "/var/run/calico/" + dirName
+		}
 
+		sendCreate := func(wl *workload.Workload) (*mgmtintf_v1.Response, error) {
+			dirName := dirNameForWorkload(wl)
+
+			resp, err := mgmtClient.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
+				Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
+					Uid:       wl.WorkloadEndpoint.Spec.Pod,
+					Namespace: "fv",
+					Workload:  wl.WorkloadEndpoint.Spec.Pod,
+				},
+				Workloadpath: dirName,
+			})
+			log.WithField("response", resp).Info("WorkloadAdded response")
+			return resp, err
+		}
+
+		Context("after creating a client for each workload", func() {
 			BeforeEach(func() {
-				// Create the workload directory, this would normally be the responsibility of the
-				// flex volume driver.
-				hostWlDir, containerWlDir := createWorkloadDirectory(w[0])
-				hostWlSocketPath = hostWlDir + "/policysync.sock"
-				containerWlSocketPath = containerWlDir + "/policysync.sock"
+				for i, wl := range w {
+					// Create the workload directory, this would normally be the responsibility of the
+					// flex volume driver.
+					hostWlDir, containerWlDir := createWorkloadDirectory(wl)
+					hostWlSocketPath[i] = hostWlDir + "/policysync.sock"
+					containerWlSocketPath[i] = containerWlDir + "/policysync.sock"
+
+					// Tell Felix about the new directory.
+					_, err := sendCreate(wl)
+					Expect(err).NotTo(HaveOccurred())
+				}
 			})
 
-			It("should create the workload socket", func() {
-				Eventually(hostWlSocketPath).Should(BeAnExistingFile())
+			It("felix should create the workload socket", func() {
+				for _, p := range hostWlSocketPath {
+					Eventually(p).Should(BeAnExistingFile())
+				}
 			})
 
-			Context("with an open workload connection", func() {
+			Context("with open workload connections", func() {
 
 				// Then connect to it.
 				var (
-					wlClient proto.PolicySyncClient
-					err      error
+					wlClient [3]proto.PolicySyncClient
 					cancel   context.CancelFunc
 					ctx      context.Context
+					err      error
 				)
 
-				createWorkloadConn := func() proto.PolicySyncClient {
+				createWorkloadConn := func(i int) proto.PolicySyncClient {
 					var opts []grpc.DialOption
 					opts = append(opts, grpc.WithInsecure())
 					opts = append(opts, grpc.WithDialer(unixDialer))
 					var conn *grpc.ClientConn
-					conn, err = grpc.Dial(hostWlSocketPath, opts...)
+					conn, err = grpc.Dial(hostWlSocketPath[i], opts...)
 					Expect(err).NotTo(HaveOccurred())
-					wlClient = proto.NewPolicySyncClient(conn)
+					wlClient := proto.NewPolicySyncClient(conn)
 					return wlClient
 				}
 
 				BeforeEach(func() {
 					ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 
-					// Use the fact that anything we exec inside the Felix container runs as root to fix the
-					// permissions on the socket so the test process can connect.
-					Eventually(hostWlSocketPath).Should(BeAnExistingFile())
-					felix.Exec("chmod", "a+rw", containerWlSocketPath)
-					wlClient = createWorkloadConn()
+					for i := range w {
+						// Use the fact that anything we exec inside the Felix container runs as root to fix the
+						// permissions on the socket so the test process can connect.
+						Eventually(hostWlSocketPath[i]).Should(BeAnExistingFile())
+						felix.Exec("chmod", "a+rw", containerWlSocketPath[i])
+						wlClient[i] = createWorkloadConn(i)
+					}
 				})
 
 				AfterEach(func() {
@@ -202,21 +218,44 @@ var _ = Context("policy sync API tests", func() {
 					}
 				})
 
-				It("should reach the expected state", func() {
-					client := newMockWorkloadClient()
-					client.StartSyncing(ctx, wlClient)
+				Context("with mock clients syncing", func() {
+					var (
+						mockWlClient [3]*mockWorkloadClient
+					)
 
-					Eventually(client.InSync).Should(BeTrue())
-					Eventually(client.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
-					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+					BeforeEach(func() {
+						for i := range w {
+							client := newMockWorkloadClient()
+							client.StartSyncing(ctx, wlClient[i])
+							mockWlClient[i] = client
+						}
+					})
 
-					cancel()
-					Eventually(client.Done).Should(BeClosed())
+					AfterEach(func() {
+						cancel()
+						for _, c := range mockWlClient {
+							Eventually(c.Done).Should(BeClosed())
+						}
+					})
+
+					It("workload 0's client should receive correct updates", func() {
+						Eventually(mockWlClient[0].InSync).Should(BeTrue())
+						Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+						Eventually(mockWlClient[0].EndpointToPolicyOrder).Should(Equal(
+							map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+					})
+
+					It("workload 1's client should receive correct updates", func() {
+						Eventually(mockWlClient[1].InSync).Should(BeTrue())
+						Eventually(mockWlClient[1].ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+						Eventually(mockWlClient[1].EndpointToPolicyOrder).Should(Equal(
+							map[string][]mock.TierInfo{"k8s/fv/fv-pod-1/eth0": {}}))
+					})
 				})
 
-				It("should get closed if a second connection is created", func() {
+				It("a connection should get closed if a second connection is created", func() {
 					// Create first connection manually.
-					syncClient, err := wlClient.Sync(ctx, &proto.SyncRequest{})
+					syncClient, err := wlClient[0].Sync(ctx, &proto.SyncRequest{})
 					Expect(err).NotTo(HaveOccurred())
 					// Get something from the first connection to make sure it's up.
 					_, err = syncClient.Recv()
@@ -224,7 +263,7 @@ var _ = Context("policy sync API tests", func() {
 
 					// Then create a new mock client.
 					client := newMockWorkloadClient()
-					client.StartSyncing(ctx, wlClient)
+					client.StartSyncing(ctx, wlClient[0])
 
 					// The new client should take over, getting a full sync.
 					Eventually(client.InSync).Should(BeTrue())
@@ -238,6 +277,21 @@ var _ = Context("policy sync API tests", func() {
 					}).Should(HaveOccurred())
 
 					cancel()
+					Eventually(client.Done).Should(BeClosed())
+				})
+
+				It("a connection should get closed if the workload is removed", func() {
+					client := newMockWorkloadClient()
+					client.StartSyncing(ctx, wlClient[0])
+
+					// Workload should be sent over the API.
+					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+
+					// Deleting the workload from the datastore should send a delete on the sync
+					// socket and then close the connection.
+					w[0].RemoveFromDatastore(calicoClient)
+					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{}))
+
 					Eventually(client.Done).Should(BeClosed())
 				})
 			})
