@@ -196,74 +196,42 @@ var _ = Context("policy sync API tests", func() {
 				})
 
 				It("should reach the expected state", func() {
-					syncClient, err := wlClient.Sync(ctx, &proto.SyncRequest{})
-					Expect(err).NotTo(HaveOccurred())
+					client := newMockWorkloadClient()
+					client.StartSyncing(ctx, wlClient)
 
-					mockDataplane := mock.NewMockDataplane()
-					done := make(chan struct{})
-					go func() {
-						defer GinkgoRecover()
-						defer close(done)
-
-						for {
-							msg, err := syncClient.Recv()
-							if err != nil {
-								log.WithError(err).Warn("Recv failed.")
-								return
-							}
-							log.WithField("msg", msg).Info("Received workload message")
-							mockDataplane.OnEvent(reflect.ValueOf(msg.Payload).Elem().Field(0).Interface())
-						}
-					}()
-
-					Eventually(mockDataplane.InSync).Should(BeTrue())
-					Eventually(mockDataplane.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
-					Eventually(mockDataplane.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+					Eventually(client.InSync).Should(BeTrue())
+					Eventually(client.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
 
 					cancel()
-					Eventually(done).Should(BeClosed())
+					Eventually(client.Done).Should(BeClosed())
 				})
 
 				It("should get closed if a second connection is created", func() {
+					// Create first connection manually.
 					syncClient, err := wlClient.Sync(ctx, &proto.SyncRequest{})
 					Expect(err).NotTo(HaveOccurred())
 					// Get something from the first connection to make sure it's up.
 					_, err = syncClient.Recv()
 					Expect(err).NotTo(HaveOccurred())
 
-					// Make the new connection.
-					By("Creating second connection")
-					wlClient2 := createWorkloadConn()
-					syncClient2, err := wlClient2.Sync(ctx, &proto.SyncRequest{})
-					Expect(err).NotTo(HaveOccurred())
-					mockDataplane := mock.NewMockDataplane()
-					done := make(chan struct{})
-					go func() {
-						defer GinkgoRecover()
-						defer close(done)
+					// Then create a new mock client.
+					client := newMockWorkloadClient()
+					client.StartSyncing(ctx, wlClient)
 
-						for {
-							msg, err := syncClient2.Recv()
-							if err != nil {
-								log.WithError(err).Warn("Recv failed.")
-								return
-							}
-							log.WithField("msg", msg).Info("Received workload message")
-							mockDataplane.OnEvent(reflect.ValueOf(msg.Payload).Elem().Field(0).Interface())
-						}
-					}()
+					// The new client should take over, getting a full sync.
+					Eventually(client.InSync).Should(BeTrue())
+					Eventually(client.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
 
-					Eventually(mockDataplane.InSync).Should(BeTrue())
-					Eventually(mockDataplane.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
-					Eventually(mockDataplane.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
-
+					// The old connection should get killed.
 					Eventually(func() error {
 						_, err := syncClient.Recv()
 						return err
 					}).Should(HaveOccurred())
 
 					cancel()
-					Eventually(done).Should(BeClosed())
+					Eventually(client.Done).Should(BeClosed())
 				})
 			})
 		})
@@ -272,4 +240,36 @@ var _ = Context("policy sync API tests", func() {
 
 func unixDialer(target string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("unix", target, timeout)
+}
+
+type mockWorkloadClient struct {
+	*mock.MockDataplane
+	Done chan struct{}
+}
+
+func newMockWorkloadClient() *mockWorkloadClient {
+	return &mockWorkloadClient{
+		MockDataplane: mock.NewMockDataplane(),
+		Done:          make(chan struct{}),
+	}
+}
+
+func (c *mockWorkloadClient) StartSyncing(ctx context.Context, policySyncClient proto.PolicySyncClient) {
+	syncClient, err := policySyncClient.Sync(ctx, &proto.SyncRequest{})
+	Expect(err).NotTo(HaveOccurred())
+	go c.loopReadingFromAPI(ctx, syncClient)
+}
+
+func (c *mockWorkloadClient) loopReadingFromAPI(ctx context.Context, syncClient proto.PolicySync_SyncClient) {
+	defer GinkgoRecover()
+	defer close(c.Done)
+	for ctx.Err() == nil {
+		msg, err := syncClient.Recv()
+		if err != nil {
+			log.WithError(err).Warn("Recv failed.")
+			return
+		}
+		log.WithField("msg", msg).Info("Received workload message")
+		c.OnEvent(reflect.ValueOf(msg.Payload).Elem().Field(0).Interface())
+	}
 }
