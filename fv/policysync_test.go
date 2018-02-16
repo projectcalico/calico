@@ -31,6 +31,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/binder"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -73,6 +74,7 @@ var _ = Context("policy sync API tests", func() {
 		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
 		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico"
+		options.AlphaFeaturesToEnable = apiconfig.AlphaFeatureSA + "," + apiconfig.AlphaFeatureHTTP
 		felix, etcd, calicoClient = containers.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows workloads with this profile to talk to each
@@ -343,6 +345,9 @@ var _ = Context("policy sync API tests", func() {
 									Action: "Allow",
 									Source: api.EntityRule{
 										Selector: "all()",
+										ServiceAccounts: &api.ServiceAccountMatch{
+											Selector: "foo == 'bar'",
+										},
 									},
 								},
 							}
@@ -370,6 +375,43 @@ var _ = Context("policy sync API tests", func() {
 
 							Consistently(mockWlClient[1].ActivePolicies).Should(Equal(set.New()))
 							Consistently(mockWlClient[2].ActivePolicies).Should(Equal(set.New()))
+						})
+
+						It("should be correctly mapped to proto policy", func() {
+							Eventually(mockWlClient[0].ActivePolicies).Should(Equal(set.From(
+								policyID,
+							)))
+							policy := mockWlClient[0].ActivePolicy(policyID)
+							// The rule IDs are fairly random hashes, check they're there but
+							// ignore them for the comparison.
+							for _, r := range policy.InboundRules {
+								Expect(r.RuleId).NotTo(Equal(""))
+								r.RuleId = ""
+							}
+							for _, r := range policy.OutboundRules {
+								Expect(r.RuleId).NotTo(Equal(""))
+								r.RuleId = ""
+							}
+							Expect(policy).To(Equal(
+								&proto.Policy{
+									Namespace: "", // Global policy has no namespace
+									InboundRules: []*proto.Rule{
+										{
+											Action:              "allow",
+											OriginalSrcSelector: "all()",
+											SrcIpSetIds: []string{
+												utils.IPSetIDForSelector("all()"),
+											},
+											SrcServiceAccountSelector: "foo == 'bar'",
+										},
+									},
+									OutboundRules: []*proto.Rule{
+										{
+											Action: "allow",
+										},
+									},
+								},
+							))
 						})
 
 						It("should handle a deletion", func() {
