@@ -33,7 +33,7 @@ func init() {
 	ipv4 := 4
 	ipv6 := 6
 	strProtocol1 := numorstring.ProtocolFromString("TCP")
-	strProtocol2 := numorstring.ProtocolFromString("UDP")
+	strProtocolIcmpv6 := numorstring.ProtocolFromString("ICMPv6")
 	numProtocol1 := numorstring.ProtocolFromInt(240)
 
 	icmpType1 := 100
@@ -53,7 +53,6 @@ func init() {
 		Action:    "Allow",
 		IPVersion: &ipv4,
 		Protocol:  &strProtocol1,
-		ICMP:      &icmp1,
 		Source: apiv3.EntityRule{
 			Nets:     []string{cidr1},
 			Selector: "label1 == 'value1'",
@@ -68,7 +67,7 @@ func init() {
 	InRule2 = apiv3.Rule{
 		Action:    "Deny",
 		IPVersion: &ipv6,
-		Protocol:  &numProtocol1,
+		Protocol:  &strProtocolIcmpv6,
 		ICMP:      &icmp1,
 		Source: apiv3.EntityRule{
 			Nets:     []string{cidrv61},
@@ -80,7 +79,6 @@ func init() {
 		Action:    "Pass",
 		IPVersion: &ipv4,
 		Protocol:  &numProtocol1,
-		ICMP:      &icmp1,
 		Source: apiv3.EntityRule{
 			Nets:     []string{cidr2},
 			Selector: "all()",
@@ -90,7 +88,7 @@ func init() {
 	EgressRule2 = apiv3.Rule{
 		Action:    "Allow",
 		IPVersion: &ipv6,
-		Protocol:  &strProtocol2,
+		Protocol:  &strProtocolIcmpv6,
 		ICMP:      &icmp1,
 		Source: apiv3.EntityRule{
 			Nets:     []string{cidrv62},

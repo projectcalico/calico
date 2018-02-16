@@ -77,6 +77,7 @@ var (
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
 	overlapsV6LinkLocal   = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP"
+	protocolIcmpMsg       = "rules that specify ICMP fields must set protocol to ICMP"
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -692,6 +693,24 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
 				"Destination.NotPorts", "", reason(protocolPortsMsg))
+		}
+	}
+
+	icmp := numorstring.ProtocolFromString("ICMP")
+	icmpv6 := numorstring.ProtocolFromString("ICMPv6")
+	if rule.ICMP != nil && (rule.Protocol == nil || (*rule.Protocol != icmp && *rule.Protocol != icmpv6)) {
+		structLevel.ReportError(reflect.ValueOf(rule.ICMP), "ICMP", "", reason(protocolIcmpMsg))
+	}
+
+	// Check that the IPVersion of the protocol matches the IPVersion of the ICMP protocol.
+	if (rule.Protocol != nil && *rule.Protocol == icmp) || (rule.NotProtocol != nil && *rule.NotProtocol == icmp) {
+		if rule.IPVersion == nil || *rule.IPVersion != 4 {
+			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '4' with protocol icmp"))
+		}
+	}
+	if (rule.Protocol != nil && *rule.Protocol == icmpv6) || (rule.NotProtocol != nil && *rule.NotProtocol == icmpv6) {
+		if rule.IPVersion == nil || *rule.IPVersion != 6 {
+			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '6' with protocol icmpv6"))
 		}
 	}
 

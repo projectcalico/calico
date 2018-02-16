@@ -851,10 +851,65 @@ func init() {
 			}, true),
 		Entry("should accept Rule with empty dest !ports and protocol type ICMPv6",
 			api.Rule{
-				Action:   "Allow",
-				Protocol: protocolFromString("ICMPv6"),
+				Action:    "Allow",
+				IPVersion: &V6,
+				Protocol:  protocolFromString("ICMPv6"),
 				Destination: api.EntityRule{
 					NotPorts: []numorstring.Port{},
+				},
+			}, true),
+		Entry("should reject Rule with icmp fields and no protocol",
+			api.Rule{
+				Action:    "Allow",
+				IPVersion: &V4,
+				ICMP: &api.ICMPFields{
+					Type: &V0,
+				},
+			}, false),
+		Entry("should reject Rule with icmp fields and no ipversion",
+			api.Rule{
+				Action:   "Allow",
+				Protocol: protocolFromString("ICMP"),
+				ICMP: &api.ICMPFields{
+					Type: &V0,
+				},
+			}, false),
+		Entry("should reject Rule with icmpv6 fields and no ipversion",
+			api.Rule{
+				Action:   "Allow",
+				Protocol: protocolFromString("ICMPv6"),
+				ICMP: &api.ICMPFields{
+					Type: &V0,
+				},
+			}, false),
+		Entry("should reject Rule with mismatched ipversion for icmp",
+			api.Rule{
+				Action:    "Allow",
+				Protocol:  protocolFromString("ICMP"),
+				IPVersion: &V6,
+			}, false),
+		Entry("should reject Rule with mismatched ipversion for icmpv6",
+			api.Rule{
+				Action:    "Allow",
+				Protocol:  protocolFromString("ICMPv6"),
+				IPVersion: &V4,
+			}, false),
+		Entry("should allow Rule with correct ipversion for icmp",
+			api.Rule{
+				Action:    "Allow",
+				IPVersion: &V4,
+				Protocol:  protocolFromString("ICMP"),
+				ICMP: &api.ICMPFields{
+					Type: &V0,
+				},
+			}, true),
+		Entry("should allow Rule with correct ipversion for icmpv6",
+			api.Rule{
+				Action:    "Allow",
+				IPVersion: &V6,
+				Protocol:  protocolFromString("ICMPv6"),
+				ICMP: &api.ICMPFields{
+					Type: &V0,
 				},
 			}, true),
 		Entry("should reject Rule with source ports and protocol type 7",
@@ -883,8 +938,9 @@ func init() {
 			}, false),
 		Entry("should reject Rule with dest !ports and protocol type udp",
 			api.Rule{
-				Action:   "Allow",
-				Protocol: protocolFromString("icmp"),
+				Action:    "Allow",
+				IPVersion: &V4,
+				Protocol:  protocolFromString("icmp"),
 				Destination: api.EntityRule{
 					NotPorts: []numorstring.Port{numorstring.SinglePort(1)},
 				},
@@ -1044,6 +1100,18 @@ func init() {
 				Destination: api.EntityRule{
 					Nets: []string{netv6_1},
 				},
+			}, false),
+		Entry("should reject rule with an IPv6 protocol and a IPVersion=4",
+			api.Rule{
+				Action:    "Allow",
+				Protocol:  protocolFromString("ICMPv6"),
+				IPVersion: &V4,
+			}, false),
+		Entry("should reject rule with an IPv4 protocol and a IPVersion=6",
+			api.Rule{
+				Action:    "Allow",
+				Protocol:  protocolFromString("ICMP"),
+				IPVersion: &V6,
 			}, false),
 
 		// (API) BGPPeerSpec
