@@ -139,6 +139,14 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		}
 	}
 
+	var srcServiceAcctMatch, dstServiceAcctMatch apiv3.ServiceAccountMatch
+	if ar.Source.ServiceAccounts != nil {
+		srcServiceAcctMatch = *ar.Source.ServiceAccounts
+	}
+	if ar.Destination.ServiceAccounts != nil {
+		dstServiceAcctMatch = *ar.Destination.ServiceAccounts
+	}
+
 	return model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
@@ -169,6 +177,11 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		OriginalDstNamespaceSelector: ar.Destination.NamespaceSelector,
 		OriginalNotSrcSelector:       ar.Source.NotSelector,
 		OriginalNotDstSelector:       ar.Destination.NotSelector,
+
+		SrcServiceAccountNames:    srcServiceAcctMatch.Names,
+		SrcServiceAccountSelector: srcServiceAcctMatch.Selector,
+		DstServiceAccountNames:    dstServiceAcctMatch.Names,
+		DstServiceAccountSelector: dstServiceAcctMatch.Selector,
 	}
 }
 

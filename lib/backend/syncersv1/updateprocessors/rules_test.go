@@ -60,6 +60,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:     []string{"192.168.40.1/32"},
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
+				ServiceAccounts: &apiv3.ServiceAccountMatch{
+					Names:    []string{"a", "b"},
+					Selector: "servacctsel",
+				},
 			},
 			Destination: apiv3.EntityRule{
 				Nets:        []string{"10.100.1.1/32"},
@@ -68,6 +72,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:     []string{"192.168.80.1/32"},
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
+				ServiceAccounts: &apiv3.ServiceAccountMatch{
+					Names:    []string{"c", "d"},
+					Selector: "servacctsel2",
+				},
 			},
 		}
 		// Correct inbound rule
@@ -101,6 +109,11 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal(""))
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
+
+		Expect(rulev1.SrcServiceAccountSelector).To(Equal("servacctsel"))
+		Expect(rulev1.DstServiceAccountSelector).To(Equal("servacctsel2"))
+		Expect(rulev1.SrcServiceAccountNames).To(Equal([]string{"a", "b"}))
+		Expect(rulev1.DstServiceAccountNames).To(Equal([]string{"c", "d"}))
 
 		etype := 2
 		entype := 7
@@ -168,6 +181,11 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal("namespacelabel2 == 'value2'"))
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label2)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label1)"))
+
+		Expect(rulev1.SrcServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.DstServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.SrcServiceAccountNames).To(BeNil())
+		Expect(rulev1.DstServiceAccountNames).To(BeNil())
 
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")

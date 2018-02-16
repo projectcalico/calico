@@ -50,6 +50,12 @@ type Rule struct {
 	DstNets     []*net.IPNet       `json:"dst_nets,omitempty" validate:"omitempty"`
 	DstPorts    []numorstring.Port `json:"dst_ports,omitempty" validate:"omitempty,dive"`
 
+	// The (raw unmodified) service account match criteria from the V3 Datamodel.
+	SrcServiceAccountNames    []string `json:"src_service_acct_names,omitempty" validate:"omitempty,selector"`
+	SrcServiceAccountSelector string   `json:"src_service_acct_selector,omitempty" validate:"omitempty"`
+	DstServiceAccountNames    []string `json:"dst_service_acct_names,omitempty" validate:"omitempty"`
+	DstServiceAccountSelector string   `json:"dst_service_acct_selector,omitempty" validate:"omitempty"`
+
 	NotSrcTag      string             `json:"!src_tag,omitempty" validate:"omitempty,tag"`
 	NotSrcNet      *net.IPNet         `json:"!src_net,omitempty" validate:"omitempty"`
 	NotSrcNets     []*net.IPNet       `json:"!src_nets,omitempty" validate:"omitempty"`
