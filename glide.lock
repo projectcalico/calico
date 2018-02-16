@@ -17,13 +17,6 @@ imports:
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
-- name: github.com/colabsaumoh/proto-udsuspver
-  version: 81f7a4460994018fd0529c31df1ba43a26f7ee4f
-  subpackages:
-  - mgmtwlhintf
-  - nodeagentmgmt
-  - protos/mgmtintf_v1
-  - workloadhandler
 - name: github.com/containernetworking/cni
   version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
   subpackages:

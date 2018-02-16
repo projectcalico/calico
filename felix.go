@@ -36,16 +36,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/felix/policysync"
-
-	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
-
+	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
 	dp "github.com/projectcalico/felix/dataplane"
 	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/felix/policysync"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/statusrep"
 	"github.com/projectcalico/felix/usagerep"
@@ -313,8 +311,9 @@ configRetry:
 
 	// If enabled, create a server for the policy sync API.  This allows clients to connect to
 	// Felix over a socket and receive policy updates.
-	var policySyncServer *nam.Server
+	var policySyncServer *policysync.Server
 	var policySyncProcessor *policysync.Processor
+	var policySyncAPIBinder binder.Binder
 	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
 	if configParams.PolicySyncManagementSocketPath != "" {
 		log.WithField("managementSocket", configParams.PolicySyncManagementSocketPath).Info(
@@ -322,11 +321,12 @@ configRetry:
 		toPolicySync := make(chan interface{})
 		policySyncUIDAllocator := policysync.NewUIDAllocator()
 		policySyncProcessor = policysync.NewProcessor(toPolicySync)
-		policySyncServer = policysync.NewMgmtAPIServer(
+		policySyncServer = policysync.NewServer(
 			policySyncProcessor.JoinUpdates,
 			policySyncUIDAllocator.NextUID,
-			configParams.PolicySyncWorkloadSocketPathPrefix,
 		)
+		policySyncAPIBinder = binder.NewBinder(configParams.PolicySyncManagementSocketPath)
+		policySyncServer.RegisterGrpc(policySyncAPIBinder.Server())
 		calcGraphClientChannels = append(calcGraphClientChannels, toPolicySync)
 	}
 
@@ -473,7 +473,9 @@ configRetry:
 		log.WithField("managementSocket", configParams.PolicySyncManagementSocketPath).Info(
 			"Policy sync API enabled.  Starting the policy sync server.")
 		policySyncProcessor.Start()
-		policySyncServer.Serve(true, configParams.PolicySyncManagementSocketPath)
+		sc := make(chan bool)
+		stopSignalChans = append(stopSignalChans, sc)
+		go policySyncAPIBinder.SearchAndBind(sc)
 	}
 
 	// Send the opening message to the dataplane driver, giving it its
