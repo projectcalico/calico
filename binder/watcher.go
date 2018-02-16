@@ -17,6 +17,7 @@ package binder
 import (
 	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -61,7 +62,15 @@ func (p *pollWatcher) watch() <-chan workloadEvent {
 func (p *pollWatcher) poll(events chan<- workloadEvent) {
 	// The workloads we know about.
 	known := make(map[string]bool)
-	credPath := filepath.Join(p.path + CredentialsSubdir)
+	credPath := filepath.Join(p.path, CredentialsSubdir)
+	for {
+		if _, err := os.Stat(credPath); err != nil {
+			time.Sleep(PollSleepTime)
+		} else {
+			break
+		}
+	}
+	log.Println("Ready to parse credential directory")
 	for {
 		// list the contents of the directory
 		files, err := ioutil.ReadDir(credPath)
