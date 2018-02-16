@@ -48,8 +48,8 @@ func (key ReadyFlagKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key ReadyFlagKey) valueType() reflect.Type {
-	return typeReadyFlag
+func (key ReadyFlagKey) valueType() (reflect.Type, error) {
+	return typeReadyFlag, nil
 }
 
 func (key ReadyFlagKey) String() string {
@@ -76,8 +76,8 @@ func (key GlobalConfigKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key GlobalConfigKey) valueType() reflect.Type {
-	return typeGlobalConfig
+func (key GlobalConfigKey) valueType() (reflect.Type, error) {
+	return typeGlobalConfig, nil
 }
 
 func (key GlobalConfigKey) String() string {
@@ -136,8 +136,8 @@ func (key HostConfigKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key HostConfigKey) valueType() reflect.Type {
-	return typeHostConfig
+func (key HostConfigKey) valueType() (reflect.Type, error) {
+	return typeHostConfig, nil
 }
 
 func (key HostConfigKey) String() string {

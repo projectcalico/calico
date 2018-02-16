@@ -51,8 +51,8 @@ func (key NetworkSetKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key NetworkSetKey) valueType() reflect.Type {
-	return typeNetworkSet
+func (key NetworkSetKey) valueType() (reflect.Type, error) {
+	return typeNetworkSet, nil
 }
 
 func (key NetworkSetKey) String() string {

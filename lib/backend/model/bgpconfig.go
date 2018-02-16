@@ -52,8 +52,8 @@ func (key GlobalBGPConfigKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key GlobalBGPConfigKey) valueType() reflect.Type {
-	return typeGlobalBGPConfig
+func (key GlobalBGPConfigKey) valueType() (reflect.Type, error) {
+	return typeGlobalBGPConfig, nil
 }
 
 func (key GlobalBGPConfigKey) String() string {
@@ -115,8 +115,8 @@ func (key NodeBGPConfigKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key NodeBGPConfigKey) valueType() reflect.Type {
-	return typeNodeBGPConfig
+func (key NodeBGPConfigKey) valueType() (reflect.Type, error) {
+	return typeNodeBGPConfig, nil
 }
 
 func (key NodeBGPConfigKey) String() string {

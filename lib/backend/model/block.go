@@ -51,8 +51,8 @@ func (key BlockKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key BlockKey) valueType() reflect.Type {
-	return typeBlock
+func (key BlockKey) valueType() (reflect.Type, error) {
+	return typeBlock, nil
 }
 
 func (key BlockKey) String() string {

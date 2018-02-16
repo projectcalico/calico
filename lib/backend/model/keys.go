@@ -58,7 +58,7 @@ type Key interface {
 	defaultDeleteParentPaths() ([]string, error)
 
 	// valueType returns the object type associated with this key.
-	valueType() reflect.Type
+	valueType() (reflect.Type, error)
 
 	// String returns a unique string representation of this key.  The string
 	// returned by this method must uniquely identify this Key.
@@ -131,7 +131,7 @@ func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
 }
 
-func KeyToValueType(key Key) reflect.Type {
+func KeyToValueType(key Key) (reflect.Type, error) {
 	return key.valueType()
 }
 
@@ -261,7 +261,10 @@ func KeyFromDefaultPath(path string) Key {
 // PolicyKey as the first parameter, it will try to parse rawData into a
 // Policy struct.
 func ParseValue(key Key, rawData []byte) (interface{}, error) {
-	valueType := key.valueType()
+	valueType, err := key.valueType()
+	if err != nil {
+		return nil, err
+	}
 	if valueType == rawStringType {
 		return string(rawData), nil
 	}
@@ -283,7 +286,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		}
 	}
 	iface := value.Interface()
-	err := json.Unmarshal(rawData, iface)
+	err = json.Unmarshal(rawData, iface)
 	if err != nil {
 		log.Warningf("Failed to unmarshal %#v into value %#v",
 			string(rawData), value)
@@ -299,7 +302,10 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 // Serialize a value in the model to a []byte to stored in the datastore.  This
 // performs the opposite processing to ParseValue()
 func SerializeValue(d *KVPair) ([]byte, error) {
-	valueType := d.Key.valueType()
+	valueType, err := d.Key.valueType()
+	if err != nil {
+		return nil, err
+	}
 	if d.Value == nil {
 		return json.Marshal(nil)
 	}

@@ -49,8 +49,8 @@ func (key ActiveStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key ActiveStatusReportKey) valueType() reflect.Type {
-	return typeStatusReport
+func (key ActiveStatusReportKey) valueType() (reflect.Type, error) {
+	return typeStatusReport, nil
 }
 
 func (key ActiveStatusReportKey) String() string {
@@ -105,8 +105,8 @@ func (key LastStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key LastStatusReportKey) valueType() reflect.Type {
-	return typeStatusReport
+func (key LastStatusReportKey) valueType() (reflect.Type, error) {
+	return typeStatusReport, nil
 }
 
 func (key LastStatusReportKey) String() string {
