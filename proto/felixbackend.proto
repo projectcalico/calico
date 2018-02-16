@@ -236,6 +236,12 @@ message Rule {
   string original_not_src_selector = 118;
   string original_not_dst_selector = 119;
 
+  // Pass through of the v3 datamodel service account match criteria.
+  string src_service_account_selector = 120;
+  string dst_service_account_selector = 121;
+  repeated string src_service_account_names = 122;
+  repeated string dst_service_account_names = 123;
+
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";

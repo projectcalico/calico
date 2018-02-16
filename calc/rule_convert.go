@@ -112,6 +112,11 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		OriginalDstNamespaceSelector: in.OriginalDstNamespaceSelector,
 		OriginalNotSrcSelector:       in.OriginalNotSrcSelector,
 		OriginalNotDstSelector:       in.OriginalNotDstSelector,
+
+		SrcServiceAccountNames:    in.SrcServiceAccountNames,
+		SrcServiceAccountSelector: in.SrcServiceAccountSelector,
+		DstServiceAccountNames:    in.DstServiceAccountNames,
+		DstServiceAccountSelector: in.DstServiceAccountSelector,
 	}
 
 	// Fill in the ICMP fields.  We can't follow the pattern and make a

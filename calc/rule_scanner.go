@@ -297,6 +297,11 @@ type ParsedRule struct {
 	OriginalDstNamespaceSelector string
 	OriginalNotSrcSelector       string
 	OriginalNotDstSelector       string
+
+	SrcServiceAccountNames    []string
+	SrcServiceAccountSelector string
+	DstServiceAccountNames    []string
+	DstServiceAccountSelector string
 }
 
 func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IPSetData) {
@@ -396,6 +401,10 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 		OriginalDstNamespaceSelector: rule.OriginalDstNamespaceSelector,
 		OriginalNotSrcSelector:       rule.OriginalNotSrcSelector,
 		OriginalNotDstSelector:       rule.OriginalNotDstSelector,
+		SrcServiceAccountNames:       rule.SrcServiceAccountNames,
+		SrcServiceAccountSelector:    rule.SrcServiceAccountSelector,
+		DstServiceAccountNames:       rule.DstServiceAccountNames,
+		DstServiceAccountSelector:    rule.DstServiceAccountSelector,
 	}
 
 	allIPSets = append(allIPSets, srcNamedPortIPSets...)
