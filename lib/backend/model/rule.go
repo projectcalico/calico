@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,16 @@ type Rule struct {
 	NotDstNet      *net.IPNet         `json:"!dst_net,omitempty" validate:"omitempty"`
 	NotDstNets     []*net.IPNet       `json:"!dst_nets,omitempty" validate:"omitempty"`
 	NotDstPorts    []numorstring.Port `json:"!dst_ports,omitempty" validate:"omitempty,dive"`
+
+	// These fields allow us to pass through the raw selectors from the V3 datamodel unmodified.
+	// The selectors above are formed in the update processor layer by combining the original
+	// selectors and namespace selectors into one.
+	OriginalSrcSelector          string `json:"orig_src_selector,omitempty" validate:"omitempty,selector"`
+	OriginalSrcNamespaceSelector string `json:"orig_src_namespace_selector,omitempty" validate:"omitempty,selector"`
+	OriginalDstSelector          string `json:"orig_dst_selector,omitempty" validate:"omitempty,selector"`
+	OriginalDstNamespaceSelector string `json:"orig_dst_namespace_selector,omitempty" validate:"omitempty,selector"`
+	OriginalNotSrcSelector       string `json:"!orig_src_selector,omitempty" validate:"omitempty,selector"`
+	OriginalNotDstSelector       string `json:"!orig_dst_selector,omitempty" validate:"omitempty,selector"`
 
 	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
 }

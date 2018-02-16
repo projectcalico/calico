@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,6 +162,13 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		NotDstNets:     normalizeIPNets(ar.Destination.NotNets),
 		NotDstSelector: ar.Destination.NotSelector,
 		NotDstPorts:    ar.Destination.NotPorts,
+
+		OriginalSrcSelector:          ar.Source.Selector,
+		OriginalSrcNamespaceSelector: ar.Source.NamespaceSelector,
+		OriginalDstSelector:          ar.Destination.Selector,
+		OriginalDstNamespaceSelector: ar.Destination.NamespaceSelector,
+		OriginalNotSrcSelector:       ar.Source.NotSelector,
+		OriginalNotDstSelector:       ar.Destination.NotSelector,
 	}
 }
 
