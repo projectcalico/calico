@@ -130,26 +130,26 @@ func NewRuleScanner() *RuleScanner {
 }
 
 func (rs *RuleScanner) OnProfileActive(key model.ProfileRulesKey, profile *model.ProfileRules) {
-	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false)
+	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false, "")
 	rs.RulesUpdateCallbacks.OnProfileActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
-	rs.updateRules(key, nil, nil, false, false)
+	rs.updateRules(key, nil, nil, false, false, "")
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
 func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
-	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack, policy.PreDNAT)
+	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack, policy.PreDNAT, policy.Namespace)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
-	rs.updateRules(key, nil, nil, false, false)
+	rs.updateRules(key, nil, nil, false, false, "")
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
-func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool) (parsedRules *ParsedRules) {
+func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool, origNamespace string) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
 	// Extract all the new selectors/tags/named ports.
@@ -177,6 +177,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		}
 	}
 	parsedRules = &ParsedRules{
+		Namespace:     origNamespace,
 		InboundRules:  parsedInbound,
 		OutboundRules: parsedOutbound,
 		Untracked:     untracked,
@@ -241,6 +242,10 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 // the details of the active tags, selectors and named ports to the named port index, which
 // figures out the members that should be in those IP sets.
 type ParsedRules struct {
+	// For NetworkPolicies, Namespace is set to the original namespace of the NetworkPolicy.
+	// For GlobalNetworkPolicies and Profiles, "".
+	Namespace string
+
 	InboundRules  []*ParsedRule
 	OutboundRules []*ParsedRule
 
@@ -282,6 +287,16 @@ type ParsedRule struct {
 	NotICMPCode             *int
 	NotSrcIPSetIDs          []string
 	NotDstIPSetIDs          []string
+
+	// These fields allow us to pass through the raw selectors from the V3 datamodel unmodified.
+	// The selectors above are formed in the update processor layer by combining the original
+	// selectors and namespace selectors into one.
+	OriginalSrcSelector          string
+	OriginalSrcNamespaceSelector string
+	OriginalDstSelector          string
+	OriginalDstNamespaceSelector string
+	OriginalNotSrcSelector       string
+	OriginalNotDstSelector       string
 }
 
 func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IPSetData) {
@@ -373,6 +388,14 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 
 		NotICMPType: rule.NotICMPType,
 		NotICMPCode: rule.NotICMPCode,
+
+		// Pass through original values of some fields for the policy API.
+		OriginalSrcSelector:          rule.OriginalSrcSelector,
+		OriginalSrcNamespaceSelector: rule.OriginalSrcNamespaceSelector,
+		OriginalDstSelector:          rule.OriginalDstSelector,
+		OriginalDstNamespaceSelector: rule.OriginalDstNamespaceSelector,
+		OriginalNotSrcSelector:       rule.OriginalNotSrcSelector,
+		OriginalNotDstSelector:       rule.OriginalNotDstSelector,
 	}
 
 	allIPSets = append(allIPSets, srcNamedPortIPSets...)

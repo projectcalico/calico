@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,6 +104,14 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		NotDstNamedPortIpSetIds: in.NotDstNamedPortIPSetIDs,
 		NotSrcIpSetIds:          in.NotSrcIPSetIDs,
 		NotDstIpSetIds:          in.NotDstIPSetIDs,
+
+		// Pass through fields for the policy sync API.
+		OriginalSrcSelector:          in.OriginalSrcSelector,
+		OriginalSrcNamespaceSelector: in.OriginalSrcNamespaceSelector,
+		OriginalDstSelector:          in.OriginalDstSelector,
+		OriginalDstNamespaceSelector: in.OriginalDstNamespaceSelector,
+		OriginalNotSrcSelector:       in.OriginalNotSrcSelector,
+		OriginalNotDstSelector:       in.OriginalNotDstSelector,
 	}
 
 	// Fill in the ICMP fields.  We can't follow the pattern and make a

@@ -1,5 +1,5 @@
-hash: a288accceda7c3812c734a0d8d7565a8ce46690baa3f617163f2c4cee7cefff2
-updated: 2018-02-13T12:01:39.75445862Z
+hash: 9ef790d6871edbda875b6ce54d3eb01dfe32c29398e8673a142d0e7add6afe62
+updated: 2018-02-16T14:54:29.560952451Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -201,7 +201,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 13d015d6433fd53fb260dc2b3ab50340c34f5749
+  version: 0d067740d48272a24ea896a1af975acba6318b63
   subpackages:
   - lib
   - lib/apiconfig
@@ -275,7 +275,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: d35d6b58e1cb692b27b94fc403170bf44058ac3e
+  version: 25d2c79295b361cac34eb41cfae90d5c69078b2a
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -283,7 +283,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 9de5f2eaf759b4c4550b3db39fed2e9e5f86f45c
+  version: 650f4a345ab4e5b245a3034b110ebc7299e68186
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
