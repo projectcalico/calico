@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	pseudoGenericEndpointName = "caliPseudoGenericEndpoint"
+	// Use an invalid interface name for generic endpoint.
+	pseudoGenericEndpointName = "/cali/PseudoGeneric/Endpoint/"
 )
 
 // Endpoint Mark Mapper (EPM) provides set of functions to manage allocation/free endpoint mark bit

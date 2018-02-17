@@ -209,7 +209,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 	epMarkMapper := rules.NewEndpointMarkMapper(
 		config.RulesConfig.IptablesMarkEndpoint,
-		config.RulesConfig.IptablesMarkEndpointGeneric)
+		config.RulesConfig.IptablesMarkNonCaliEndpoint)
 
 	dp := &InternalDataplane{
 		toDataplane:       make(chan interface{}, msgPeekLimit),

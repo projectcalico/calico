@@ -136,7 +136,7 @@ func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chai
 		// packet has been through filter INPUT chain with a real ingress endpoint. There could be policies
 		// apply to its ingress interface, e.g. workload egress or host endpoint ingress policies.
 		Rule{
-			Match:  Match().MarkNotMatchesWithMask(r.IptablesMarkEndpointGeneric, r.IptablesMarkEndpoint),
+			Match:  Match().NotMarkMatchesWithMask(r.IptablesMarkNonCaliEndpoint, r.IptablesMarkEndpoint),
 			Action: JumpAction{Target: ChainDispatchFromEndPointMark},
 		},
 		// For any forward packet with an endpoint mark, apply host endpoint egress forward policies.
@@ -436,10 +436,19 @@ func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*Chain
 	)
 
 	if r.KubeIPVSSupportEnabled {
-		result = append(result, r.StaticFilterOutputForwardEndpointMarkChain())
+		result = append(result, r.StaticFilterOutputForwardEndpointMarkChain(), r.clearEndpointMarkChain())
 	}
 
 	return result
+}
+
+func (r *DefaultRuleRenderer) clearEndpointMarkChain() *Chain {
+	return &Chain{
+		Name: ChainDispatchClearEndPointMark,
+		Rules: []Rule{
+			Rule{Action: ClearMarkAction{Mark: r.IptablesMarkEndpoint}},
+		},
+	}
 }
 
 func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
@@ -448,6 +457,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
 
+	var toWorkloadReturnAction Action
 	if r.KubeIPVSSupportEnabled {
 		if ipVersion == 4 && r.IPIPEnabled {
 			// Auto-allow IPIP traffic from tunnel device to other host interface.
@@ -474,6 +484,12 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 				Action: JumpAction{Target: ChainForwardEndpointMark},
 			},
 		)
+
+		// If packet goes to a workload, action is clear endpoint mark and return.
+		toWorkloadReturnAction = GotoAction{Target: ChainDispatchClearEndPointMark}
+	} else {
+		// If packet goes to a workload, just return.
+		toWorkloadReturnAction = ReturnAction{}
 	}
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
@@ -492,18 +508,21 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 				Action: JumpAction{Target: ChainToWorkloadDispatch},
 			},
 			Rule{
+				// if packet goes to a workload endpoint. set return action properly.
 				Match:  Match().OutInterface(ifaceMatch),
-				Action: ReturnAction{},
+				Action: toWorkloadReturnAction,
 			},
 		)
 	}
 
-	// Return if endpoint mark is set (forward traffic).
+	// Clear endpoint mark and return if endpoint mark is set (forward traffic).
 	if r.KubeIPVSSupportEnabled {
 		rules = append(rules,
 			Rule{
-				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
-				Action: ReturnAction{},
+				Match: Match().MarkNotClear(r.IptablesMarkEndpoint),
+				Action: GotoAction{
+					Target: ChainDispatchClearEndPointMark,
+				},
 			},
 		)
 	}

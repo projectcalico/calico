@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ const (
 	ChainDispatchFromHostEndPointForward = ChainNamePrefix + "from-hep-forward"
 	ChainDispatchSetEndPointMark         = ChainNamePrefix + "set-endpoint-mark"
 	ChainDispatchFromEndPointMark        = ChainNamePrefix + "from-endpoint-mark"
+	ChainDispatchClearEndPointMark       = ChainNamePrefix + "clear-endpoint-mark"
 
 	ChainForwardCheck        = ChainNamePrefix + "forward-check"
 	ChainForwardEndpointMark = ChainNamePrefix + "forward-endpoint-mark"
@@ -222,7 +223,7 @@ type Config struct {
 	IptablesMarkScratch0        uint32
 	IptablesMarkScratch1        uint32
 	IptablesMarkEndpoint        uint32
-	IptablesMarkEndpointGeneric uint32 // an endpoint mark which is reserved to mark generic endpoints.
+	IptablesMarkNonCaliEndpoint uint32 // an endpoint mark which is reserved to mark generic endpoints.
 
 	KubeNodePortRanges     []numorstring.Port
 	KubeIPVSSupportEnabled bool
@@ -256,7 +257,7 @@ func (c *Config) validate() {
 	usedBits := uint32(0)
 	for i := 0; i < myValue.NumField(); i++ {
 		fieldName := myType.Field(i).Name
-		if strings.HasPrefix(fieldName, "IptablesMark") && fieldName != "IptablesMarkEndpointGeneric" {
+		if strings.HasPrefix(fieldName, "IptablesMark") && fieldName != "IptablesMarkNonCaliEndpoint" {
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(

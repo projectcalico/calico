@@ -76,7 +76,7 @@ func (m MatchCriteria) MarkMatchesWithMask(mark, mask uint32) MatchCriteria {
 	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mask))
 }
 
-func (m MatchCriteria) MarkNotMatchesWithMask(mark, mask uint32) MatchCriteria {
+func (m MatchCriteria) NotMarkMatchesWithMask(mark, mask uint32) MatchCriteria {
 	logCxt := log.WithFields(log.Fields{
 		"mark": mark,
 		"mask": mask,

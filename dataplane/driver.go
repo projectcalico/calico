@@ -61,14 +61,14 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 			}).Panic("Not enough mark bits available for endpoint mark.")
 		}
 		// Take first bit position (position 1) from endpoint mark mask as reserved generic endpoint mark.
-		markEndpointMarkGeneric := uint32(1) << uint(bits.TrailingZeros32(markEndpointMark))
+		markEndpointNonCaliEndpoint := uint32(1) << uint(bits.TrailingZeros32(markEndpointMark))
 		log.WithFields(log.Fields{
 			"acceptMark":          markAccept,
 			"passMark":            markPass,
 			"scratch0Mark":        markScratch0,
 			"scratch1Mark":        markScratch1,
 			"endpointMark":        markEndpointMark,
-			"endpointMarkGeneric": markEndpointMarkGeneric,
+			"endpointMarkGeneric": markEndpointNonCaliEndpoint,
 		}).Info("Calculated iptables mark bits")
 
 		dpConfig := intdataplane.Config{
@@ -103,7 +103,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 				IptablesMarkScratch0:        markScratch0,
 				IptablesMarkScratch1:        markScratch1,
 				IptablesMarkEndpoint:        markEndpointMark,
-				IptablesMarkEndpointGeneric: markEndpointMarkGeneric,
+				IptablesMarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
