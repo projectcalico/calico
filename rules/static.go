@@ -459,23 +459,6 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 
 	var toWorkloadReturnAction Action
 	if r.KubeIPVSSupportEnabled {
-		if ipVersion == 4 && r.IPIPEnabled {
-			// Auto-allow IPIP traffic from tunnel device to other host interface.
-			// If IPIP is enabled, the packet will be sent over to tunnel device and
-			// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain.
-			// We need to make sure packet been allowed to stop it going through from-endpoint-mark again with node ip.
-			rules = append(rules,
-				Rule{
-					Match: Match().ProtocolNum(ProtoIPIP).
-						SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDThisHostIPs)).
-						DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs)).
-						SrcAddrType(AddrTypeLocal, false),
-					Action:  r.filterAllowAction,
-					Comment: "Allow IPIP packets from tunnel device to other Calico hosts",
-				},
-			)
-		}
-
 		// Jump to forward-endpoint-mark chain if endpoint mark is not zero, which means
 		// packet has been through filter INPUT chain. There could be policies apply to its ingress interface.
 		rules = append(rules,
@@ -484,6 +467,10 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 				Action: JumpAction{Target: ChainForwardEndpointMark},
 			},
 		)
+
+		// If IPIP is enabled, the packet will be sent over to tunnel device and
+		// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain.
+		// We need to make sure packet been allowed to stop it going through from-endpoint-mark again with node ip.
 
 		// If packet goes to a workload, action is clear endpoint mark and return.
 		toWorkloadReturnAction = GotoAction{Target: ChainDispatchClearEndPointMark}

@@ -227,58 +227,41 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 	dispatchFromMarkEndpointChainName string,
 ) []*Chain {
 
-	// Sort names first, wlNames and hepNames will be used directly by rending from mark chain.
-	sort.Strings(wlNames)
-	sort.Strings(hepNames)
 	log.WithField("ifaceNames", append(wlNames, hepNames...)).Debug("Rendering endpoint mark dispatch chains")
 
 	// start rendering set mark rules.
+	rootSetMarkRules := make([]Rule, 0)
+	chains := make([]*Chain, 0)
+
 	// Since there can be >100 endpoints, putting them in a single list adds some latency to
 	// endpoints that are later in the chain.  To reduce that impact, we build a shallow tree of
 	// chains based on the prefixes of the chains.
 
 	// The workload and host endpoint share the same root chain. We also need to put an generic mark rules at the end.
 	// Work out child chains and root rules for workload and host endpoint separately and merge them back together.
+	for _, names := range [][]string{wlNames, hepNames} {
+		if len(names) > 0 {
+			commonPrefix, prefixes, prefixToNames := r.sortAndDivideEndpointNamesToPrefixTree(names)
 
-	// First work out workload endpoint chains.
-	commonPrefix, prefixes, prefixToNames := r.sortAndDivideEndpointNamesToPrefixTree(wlNames)
+			childChains, _, rootRules := r.buildSingleDispatchChains(
+				dispatchSetMarkEndpointChainName,
+				commonPrefix,
+				prefixes,
+				prefixToNames,
+				setMarkPfx,
+				func(name string) MatchCriteria { return Match().InInterface(name) },
+				func(pfx, name string) Action {
+					return GotoAction{
+						Target: EndpointChainName(pfx, name),
+					}
+				},
+				false,
+			)
 
-	wlChildChains, _, wlRootRules := r.buildSingleDispatchChains(
-		dispatchSetMarkEndpointChainName,
-		commonPrefix,
-		prefixes,
-		prefixToNames,
-		setMarkPfx,
-		func(name string) MatchCriteria { return Match().InInterface(name) },
-		func(pfx, name string) Action {
-			return GotoAction{
-				Target: EndpointChainName(pfx, name),
-			}
-		},
-		false,
-	)
-
-	// Then work out host endpoint chains.
-	commonPrefix, prefixes, prefixToNames = r.sortAndDivideEndpointNamesToPrefixTree(hepNames)
-
-	hepChildChains, _, hepRootRules := r.buildSingleDispatchChains(
-		dispatchSetMarkEndpointChainName,
-		commonPrefix,
-		prefixes,
-		prefixToNames,
-		setMarkPfx,
-		func(name string) MatchCriteria { return Match().InInterface(name) },
-		func(pfx, name string) Action {
-			return GotoAction{
-				Target: EndpointChainName(pfx, name),
-			}
-		},
-		false,
-	)
-
-	// Merge child chains and root rules.
-	chains := append(wlChildChains, hepChildChains...)
-	rootSetMarkRules := append(wlRootRules, hepRootRules...)
+			chains = append(chains, childChains...)
+			rootSetMarkRules = append(rootSetMarkRules, rootRules...)
+		}
+	}
 
 	// If a packet has an incoming interface as calixxx or tapxxx,
 	// but felix has not yet got an endpoint for it. Drop packet.
@@ -300,34 +283,32 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 		Comment: "Generic endpoint mark",
 	})
 
-	// start rendering from mark rules.
+	// start rendering from mark rules for workload and host endpoints.
 	rootFromMarkRules := make([]Rule, 0)
 
-	// Rendering rules for workload endpoints.
-	for _, name := range wlNames {
-		if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
-			// implement each name into root rules for from-endpoint-mark chain.
-			log.WithField("ifaceName", name).Debug("Adding rule to from mark chain")
-			rootFromMarkRules = append(rootFromMarkRules, Rule{
-				Match: Match().MarkMatchesWithMask(endPointMark, epMarkMapper.GetMask()),
-				Action: GotoAction{
-					Target: EndpointChainName(wlFromMarkPfx, name),
-				},
-			})
-		}
-	}
-
-	// Rendering rules for host endpoints.
-	for _, name := range hepNames {
-		if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
-			// implement each name into root rules for from-endpoint-mark chain.
-			log.WithField("ifaceName", name).Debug("Adding rule to from mark chain")
-			rootFromMarkRules = append(rootFromMarkRules, Rule{
-				Match: Match().MarkMatchesWithMask(endPointMark, epMarkMapper.GetMask()),
-				Action: GotoAction{
-					Target: EndpointChainName(hepFromMarkPfx, name),
-				},
-			})
+	fromMarkPrefixes := []string{wlFromMarkPfx, hepFromMarkPfx}
+	for index, names := range [][]string{wlNames, hepNames} {
+		// Rendering rules for endpoints.
+		sort.Strings(names)
+		lastName := ""
+		for _, name := range names {
+			if name == lastName {
+				log.WithField("ifaceName", name).Error(
+					"Multiple endpoints with same interface name detected. " +
+						"Incorrect policy may be applied.")
+				continue
+			}
+			if endPointMark, err := epMarkMapper.GetEndpointMark(name); err == nil {
+				// implement each name into root rules for from-endpoint-mark chain.
+				log.WithField("ifaceName", name).Debug("Adding rule to from mark chain")
+				rootFromMarkRules = append(rootFromMarkRules, Rule{
+					Match: Match().MarkMatchesWithMask(endPointMark, epMarkMapper.GetMask()),
+					Action: GotoAction{
+						Target: EndpointChainName(fromMarkPrefixes[index], name),
+					},
+				})
+			}
+			lastName = name
 		}
 	}
 
