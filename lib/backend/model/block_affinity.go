@@ -69,8 +69,8 @@ func (key BlockAffinityKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key BlockAffinityKey) valueType() reflect.Type {
-	return typeBlockAff
+func (key BlockAffinityKey) valueType() (reflect.Type, error) {
+	return typeBlockAff, nil
 }
 
 func (key BlockAffinityKey) String() string {

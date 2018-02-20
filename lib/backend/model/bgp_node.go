@@ -46,8 +46,8 @@ func (key BGPNodeKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key BGPNodeKey) valueType() reflect.Type {
-	return typeBGPNode
+func (key BGPNodeKey) valueType() (reflect.Type, error) {
+	return typeBGPNode, nil
 }
 
 func (key BGPNodeKey) String() string {

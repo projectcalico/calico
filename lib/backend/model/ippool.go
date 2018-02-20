@@ -53,8 +53,8 @@ func (key IPPoolKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key IPPoolKey) valueType() reflect.Type {
-	return typeIPPool
+func (key IPPoolKey) valueType() (reflect.Type, error) {
+	return typeIPPool, nil
 }
 
 func (key IPPoolKey) String() string {

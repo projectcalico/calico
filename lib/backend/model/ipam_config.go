@@ -35,8 +35,8 @@ func (key IPAMConfigKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key IPAMConfigKey) valueType() reflect.Type {
-	return typeIPAMConfig
+func (key IPAMConfigKey) valueType() (reflect.Type, error) {
+	return typeIPAMConfig, nil
 }
 
 func (key IPAMConfigKey) String() string {

@@ -73,8 +73,8 @@ func (key NodeKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, goerrors.New("Node is composite type, so not handled with a single path")
 }
 
-func (key NodeKey) valueType() reflect.Type {
-	return typeNode
+func (key NodeKey) valueType() (reflect.Type, error) {
+	return typeNode, nil
 }
 
 func (key NodeKey) String() string {
@@ -126,8 +126,8 @@ func (key HostMetadataKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key HostMetadataKey) valueType() reflect.Type {
-	return typeHostMetadata
+func (key HostMetadataKey) valueType() (reflect.Type, error) {
+	return typeHostMetadata, nil
 }
 
 func (key HostMetadataKey) String() string {
@@ -174,8 +174,8 @@ func (key HostIPKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key HostIPKey) valueType() reflect.Type {
-	return typeHostIp
+func (key HostIPKey) valueType() (reflect.Type, error) {
+	return typeHostIp, nil
 }
 
 func (key HostIPKey) String() string {
@@ -199,8 +199,8 @@ func (key OrchRefKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key OrchRefKey) valueType() reflect.Type {
-	return typeOrchRefs
+func (key OrchRefKey) valueType() (reflect.Type, error) {
+	return typeOrchRefs, nil
 }
 
 func (key OrchRefKey) String() string {

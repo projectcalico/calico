@@ -54,8 +54,8 @@ func (key ProfileKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key ProfileKey) valueType() reflect.Type {
-	return typeProfile
+func (key ProfileKey) valueType() (reflect.Type, error) {
+	return typeProfile, nil
 }
 
 func (key ProfileKey) String() string {
@@ -72,8 +72,8 @@ func (key ProfileRulesKey) defaultPath() (string, error) {
 	return e + "/rules", err
 }
 
-func (key ProfileRulesKey) valueType() reflect.Type {
-	return reflect.TypeOf(ProfileRules{})
+func (key ProfileRulesKey) valueType() (reflect.Type, error) {
+	return reflect.TypeOf(ProfileRules{}), nil
 }
 
 func (key ProfileRulesKey) String() string {
@@ -90,8 +90,8 @@ func (key ProfileTagsKey) defaultPath() (string, error) {
 	return e + "/tags", err
 }
 
-func (key ProfileTagsKey) valueType() reflect.Type {
-	return reflect.TypeOf([]string{})
+func (key ProfileTagsKey) valueType() (reflect.Type, error) {
+	return reflect.TypeOf([]string{}), nil
 }
 
 func (key ProfileTagsKey) String() string {
@@ -108,8 +108,8 @@ func (key ProfileLabelsKey) defaultPath() (string, error) {
 	return e + "/labels", err
 }
 
-func (key ProfileLabelsKey) valueType() reflect.Type {
-	return reflect.TypeOf(map[string]string{})
+func (key ProfileLabelsKey) valueType() (reflect.Type, error) {
+	return reflect.TypeOf(map[string]string{}), nil
 }
 
 func (key ProfileLabelsKey) String() string {
