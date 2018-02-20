@@ -62,11 +62,13 @@ type ipamClient struct {
 func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	// Determine the hostname to use - prefer the provided hostname if
 	// non-nil, otherwise use the hostname reported by os.
-	hostname := decideHostname(args.Hostname)
+	hostname, err := decideHostname(args.Hostname)
+	if err != nil {
+		return nil, nil, err
+	}
 	log.Infof("Auto-assign %d ipv4, %d ipv6 addrs for host '%s'", args.Num4, args.Num6, hostname)
 
 	var v4list, v6list []net.IP
-	var err error
 
 	if args.Num4 != 0 {
 		// Assign IPv4 addresses.
@@ -230,7 +232,10 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 // is already assigned, or if StrictAffinity is enabled and the address is within
 // a block that does not have affinity for the given host.
 func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
-	hostname := decideHostname(args.Hostname)
+	hostname, err := decideHostname(args.Hostname)
+	if err != nil {
+		return err
+	}
 	log.Infof("Assigning IP %s to host: %s", args.IP, hostname)
 
 	if !c.blockReaderWriter.withinConfiguredPools(args.IP) {
@@ -459,7 +464,10 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 	}
 
 	// Determine the hostname to use.
-	hostname := decideHostname(host)
+	hostname, err := decideHostname(host)
+	if err != nil {
+		return nil, nil, err
+	}
 	failed := []net.IPNet{}
 	claimed := []net.IPNet{}
 
@@ -508,7 +516,10 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	}
 
 	// Determine the hostname to use.
-	hostname := decideHostname(host)
+	hostname, err := decideHostname(host)
+	if err != nil {
+		return err
+	}
 
 	// Release all blocks within the given cidr.
 	blocks := blockGenerator(cidr)
@@ -532,7 +543,10 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.
 func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string) error {
-	hostname := decideHostname(host)
+	hostname, err := decideHostname(host)
+	if err != nil {
+		return err
+	}
 
 	versions := []ipVersion{ipv4, ipv6}
 	for _, version := range versions {
@@ -601,13 +615,16 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 // If an empty string is passed as the host, then the hostname is automatically detected.
 func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 	// Determine the hostname to use.
-	hostname := decideHostname(host)
+	hostname, err := decideHostname(host)
+	if err != nil {
+		return err
+	}
 
 	// Release affinities for this host.
 	c.ReleaseHostAffinities(ctx, hostname)
 
 	// Remove the host tree from the datastore.
-	_, err := c.client.Delete(ctx, model.IPAMHostKey{Host: hostname}, "")
+	_, err = c.client.Delete(ctx, model.IPAMHostKey{Host: hostname}, "")
 	if err != nil {
 		// Return the error unless the resource does not exist.
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -787,13 +804,13 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 	for i := 0; i < ipamEtcdRetries; i++ {
 		obj, err := c.client.Get(ctx, model.IPAMHandleKey{HandleID: handleID}, "")
 		if err != nil {
-			log.WithField("handleID", handleID).WithError(err).Panic("Can't decrement block because it doesn't exist")
+			return fmt.Errorf("Can't decrement block with handle '%+v' because it doesn't exist", handleID)
 		}
 		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 		_, err = handle.decrementBlock(blockCIDR, num)
 		if err != nil {
-			log.WithField("handleID", handleID).WithError(err).Panic("Can't decrement block - too few allocated")
+			return fmt.Errorf("Can't decrement block with handle '%+v': too few allocated", handleID)
 		}
 
 		// Update / Delete as appropriate.  Since we have been manipulating the
@@ -894,7 +911,7 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 	}
 }
 
-func decideHostname(host string) string {
+func decideHostname(host string) (string, error) {
 	// Determine the hostname to use - prefer the provided hostname if
 	// non-nil, otherwise use the hostname reported by os.
 	var hostname string
@@ -904,9 +921,9 @@ func decideHostname(host string) string {
 	} else {
 		hostname, err = names.Hostname()
 		if err != nil {
-			log.Panicf("Failed to acquire hostname")
+			return "", fmt.Errorf("Failed to acquire hostname: %+v", err)
 		}
 	}
 	log.Debugf("Using hostname=%s", hostname)
-	return hostname
+	return hostname, nil
 }
