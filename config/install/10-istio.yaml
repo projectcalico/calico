@@ -364,7 +364,7 @@ spec:
       - name: discovery
         image: docker.io/istio/pilot:0.6.0
         imagePullPolicy: IfNotPresent
-        args: ["discovery", "-v", "2", "--admission-service", "istio-pilot"]
+        args: ["discovery", "-v", "2", "--admission-service", "istio-pilot", "--webhookEndpoint", "unix:///var/run/calico/webhook.sock"]
         ports:
         - containerPort: 8080
         - containerPort: 443
@@ -384,6 +384,8 @@ spec:
         volumeMounts:
         - name: config-volume
           mountPath: /etc/istio/config
+        - name: webhook
+          mountPath: /var/run/calico
       - name: istio-proxy
         image: docker.io/istio/proxy:0.6.0
         imagePullPolicy: IfNotPresent
@@ -404,6 +406,15 @@ spec:
         - name: istio-certs
           mountPath: /etc/certs
           readOnly: true
+      - name: pilot-webhook
+        image: quay.io/calico/pilot-webhook:bd069d7
+        imagePullPolicy: Always
+        args:
+        - /var/run/calico/webhook.sock
+        - --debug
+        volumeMounts:
+        - name: webhook
+          mountPath: /var/run/calico
       volumes:
       - name: config-volume
         configMap:
@@ -412,6 +423,8 @@ spec:
         secret:
           secretName: istio.istio-pilot-service-account
           optional: true
+      - name: webhook
+        emptyDir: {}
 ---
 ################################
 # Istio ingress
