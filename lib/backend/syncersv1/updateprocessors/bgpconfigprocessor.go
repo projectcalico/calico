@@ -15,14 +15,12 @@
 package updateprocessors
 
 import (
-	"encoding/json"
 	"reflect"
 	"strings"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 // Create a new SyncerUpdateProcessor to sync BGPConfiguration data in v1 format for
@@ -52,17 +50,15 @@ var logLevelToBirdLogLevel = func(value interface{}) interface{} {
 	return l
 }
 
+var nodeToNodeMeshEnabled = "{\"enabled\":true}"
+var nodeToNodeMeshDisabled = "{\"enabled\":false}"
+
 // In v1, the node mesh enabled field was wrapped up in some JSON - wrap up the value to
 // return via the syncer.
 var nodeMeshToString = func(value interface{}) interface{} {
 	enabled := value.(bool)
-	d, err := json.Marshal(nodeToNodeMesh{Enabled: enabled})
-	cerrors.PanicIfErrored(err, "Unexpected error trying to marshal nodeToNodeMesh structure")
-	return string(d)
-}
-
-// nodeToNodeMesh is a struct containing whether node-to-node mesh is enabled.  It can be
-// JSON marshalled into the correct structure that is understood by the Calico BGP component.
-type nodeToNodeMesh struct {
-	Enabled bool `json:"enabled"`
+	if enabled {
+		return nodeToNodeMeshEnabled
+	}
+	return nodeToNodeMeshDisabled
 }
