@@ -115,7 +115,7 @@ func (wc *watcherCache) run() {
 			}
 		default:
 			// Unknown event type - not much we can do other than log.
-			wc.logger.WithField("EventType", event.Type).Panic("Unknown event type received from the datastore")
+			wc.logger.WithField("EventType", event.Type).Error("Unknown event type received from the datastore")
 		}
 	}
 }

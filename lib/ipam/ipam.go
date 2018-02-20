@@ -804,13 +804,13 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 	for i := 0; i < ipamEtcdRetries; i++ {
 		obj, err := c.client.Get(ctx, model.IPAMHandleKey{HandleID: handleID}, "")
 		if err != nil {
-			return fmt.Errorf("Can't decrement block with handle '+%v' because it doesn't exist", handleID)
+			return fmt.Errorf("Can't decrement block with handle '%+v' because it doesn't exist", handleID)
 		}
 		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 		_, err = handle.decrementBlock(blockCIDR, num)
 		if err != nil {
-			return fmt.Errorf("Can't decrement block with handle '+%v': too few allocated", handleID)
+			return fmt.Errorf("Can't decrement block with handle '%+v': too few allocated", handleID)
 		}
 
 		// Update / Delete as appropriate.  Since we have been manipulating the
@@ -921,7 +921,7 @@ func decideHostname(host string) (string, error) {
 	} else {
 		hostname, err = names.Hostname()
 		if err != nil {
-			return "", fmt.Errorf("Failed to acquire hostname: +%v", err)
+			return "", fmt.Errorf("Failed to acquire hostname: %+v", err)
 		}
 	}
 	log.Debugf("Using hostname=%s", hostname)
