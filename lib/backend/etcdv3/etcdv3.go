@@ -17,6 +17,7 @@ package etcdv3
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -130,7 +131,9 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	}
 
 	v, err := model.ParseValue(d.Key, []byte(value))
-	cerrors.PanicIfErrored(err, "Unexpected error parsing stored datastore entry: %v", value)
+	if err != nil {
+		return nil, cerrors.ErrorPartialFailure{Err: fmt.Errorf("Unexpected error parsing stored datastore entry '%v': %+v", value, err)}
+	}
 	d.Value = v
 	d.Revision = strconv.FormatInt(txnResp.Header.Revision, 10)
 

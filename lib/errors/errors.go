@@ -133,6 +133,17 @@ func (e ErrorResourceUpdateConflict) Error() string {
 	return fmt.Sprintf("update conflict: %v", e.Identifier)
 }
 
+// Error indicating that the operation may have partially succeeded, then
+// failed, without rolling back. A common example is when a function failed
+// in an acceptable way after it succesfully wrote some data to the datastore.
+type ErrorPartialFailure struct {
+	Err error
+}
+
+func (e ErrorPartialFailure) Error() string {
+	return "operation partially failed"
+}
+
 // UpdateErrorIdentifier modifies the supplied error to use the new resource
 // identifier.
 func UpdateErrorIdentifier(err error, id interface{}) error {
