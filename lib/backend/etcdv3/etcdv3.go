@@ -61,7 +61,11 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		CertFile: config.EtcdCertFile,
 		KeyFile:  config.EtcdKeyFile,
 	}
-	tls, _ := tlsInfo.ClientConfig()
+
+	tls, err := tlsInfo.ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize etcdv3 client: %+v", err)
+	}
 
 	// Build the etcdv3 config.
 	cfg := clientv3.Config{
