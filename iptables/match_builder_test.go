@@ -56,6 +56,7 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("MarkClear", Match().MarkNotClear(0x400a), "-m mark ! --mark 0/0x400a"),
 	Entry("MarkSingleBitSet", Match().MarkSingleBitSet(0x4000), "-m mark --mark 0x4000/0x4000"),
 	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "-m mark --mark 0x400a/0xf00f"),
+	Entry("NotMarkMatchesWithMask", Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "-m mark ! --mark 0x400a/0xf00f"),
 	// Conntrack.
 	Entry("ConntrackState", Match().ConntrackState("INVALID"), "-m conntrack --ctstate INVALID"),
 	// Interfaces.
