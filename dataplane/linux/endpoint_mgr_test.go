@@ -78,7 +78,7 @@ var wlDispatchEmpty = []*iptables.Chain{
 			},
 			{
 				Action:  iptables.SetMaskedMarkAction{Mark: 0x0100, Mask: 0xff00},
-				Comment: "Generic endpoint mark",
+				Comment: "Non-Cali endpoint mark",
 			},
 		},
 	},
@@ -446,7 +446,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			},
 			iptables.Rule{
 				Action:  iptables.SetMaskedMarkAction{Mark: 0x0100, Mask: 0xff00},
-				Comment: "Generic endpoint mark",
+				Comment: "Non-Cali endpoint mark",
 			},
 		)
 		epMarkFrom = append(epMarkFrom,

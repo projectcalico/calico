@@ -126,20 +126,23 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 	}
 }
 
-// With kube-proxy running in ipvs mode, forward traffic gets an endpoint mark in INPUT chain.
-// Forward endpoint mark chain implements rules to process forward packet with an endpoint mark in OUTPUT chain.
+// With kube-proxy running in ipvs mode, we categorise traffic going through OUTPUT chain into three classes.
+// Class 1. forwarded packet originated from a calico workload or host endpoint --> INPUT filter --> OUTPUT filter
+// Class 2. forwarded packet originated from a non calico endpoint              --> INPUT filter --> OUTPUT filter
+// Class 3. local process originated packet --> OUTPUT filter
+// This function handles traffic in Class 1 and Class 2.
 func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chain {
 	var fwRules []Rule
 
 	fwRules = append(fwRules,
-		// Jump to from-endpoint-mark dispatch chain if endpoint mark is not a generic mark, which means
-		// packet has been through filter INPUT chain with a real ingress endpoint. There could be policies
-		// apply to its ingress interface, e.g. workload egress or host endpoint ingress policies.
+		// Jump to from-endpoint-mark dispatch chain if endpoint mark is NOT a non-cali endpoint mark (Class 1). This means
+		// packet has been through filter INPUT chain with source endpoint being a real calico endpoint. There could
+		// be policies apply to its source endpoint, e.g. workload egress or host endpoint ingress policies.
 		Rule{
 			Match:  Match().NotMarkMatchesWithMask(r.IptablesMarkNonCaliEndpoint, r.IptablesMarkEndpoint),
 			Action: JumpAction{Target: ChainDispatchFromEndPointMark},
 		},
-		// For any forward packet with an endpoint mark, apply host endpoint egress forward policies.
+		// For any forwarded packet with an endpoint mark (Class 1 and Class 2), apply host endpoint egress forward policies.
 		Rule{
 			Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
 		},

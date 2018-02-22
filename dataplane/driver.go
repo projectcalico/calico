@@ -60,7 +60,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 				"MarkMask": configParams.IptablesMarkMask,
 			}).Panic("Not enough mark bits available for endpoint mark.")
 		}
-		// Take first bit position (position 1) from endpoint mark mask as reserved generic endpoint mark.
+		// Take lowest bit position (position 1) from endpoint mark mask reserved for non-calico endpoint.
 		markEndpointNonCaliEndpoint := uint32(1) << uint(bits.TrailingZeros32(markEndpointMark))
 		log.WithFields(log.Fields{
 			"acceptMark":          markAccept,
@@ -68,7 +68,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 			"scratch0Mark":        markScratch0,
 			"scratch1Mark":        markScratch1,
 			"endpointMark":        markEndpointMark,
-			"endpointMarkGeneric": markEndpointNonCaliEndpoint,
+			"endpointMarkNonCali": markEndpointNonCaliEndpoint,
 		}).Info("Calculated iptables mark bits")
 
 		dpConfig := intdataplane.Config{

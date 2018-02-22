@@ -51,7 +51,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	return result
 }
 
-// In some scenario, e.g. packet goes to an kuberentes ipvs service ip. Traffic goes through input/output filter chain
+// In some scenario, e.g. packet goes to an kubernetes ipvs service ip. Traffic goes through input/output filter chain
 // instead of forward filter chain. It is not feasible to match on an incoming workload/host interface with service ips.
 // Assemble a set-endpoint-mark chain to set the endpoint mark matching on the incoming workload/host interface and
 // a from-endpoint-mark chain to jump to a corresponding endpoint chain matching on its endpoint mark.
@@ -237,7 +237,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 	// endpoints that are later in the chain.  To reduce that impact, we build a shallow tree of
 	// chains based on the prefixes of the chains.
 
-	// The workload and host endpoint share the same root chain. We also need to put an generic mark rules at the end.
+	// The workload and host endpoint share the same root chain. We also need to put an non-cali mark rules at the end.
 	// Work out child chains and root rules for workload and host endpoint separately and merge them back together.
 	for _, names := range [][]string{wlNames, hepNames} {
 		if len(names) > 0 {
@@ -264,7 +264,8 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 	}
 
 	// If a packet has an incoming interface as calixxx or tapxxx,
-	// but felix has not yet got an endpoint for it. Drop packet.
+	// but felix has not yet got an endpoint for it, drop packet.
+	// For instance, cni created a pod but felix has not got the workload endpoint update yet.
 	for _, prefix := range r.WorkloadIfacePrefixes {
 		ifaceMatch := prefix + "+"
 		rootSetMarkRules = append(rootSetMarkRules, Rule{
@@ -274,13 +275,13 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 		})
 	}
 
-	// At the end of set mark chain, set generic endpoint mark. A generic endpoint mark is used when a forward packet
+	// At the end of set mark chain, set non-cali endpoint mark. A non-cali endpoint mark is used when a forward packet
 	// whose incoming interface is neither a workload nor a host endpoint.
 	rootSetMarkRules = append(rootSetMarkRules, Rule{
 		Action: SetMaskedMarkAction{
 			Mark: r.IptablesMarkNonCaliEndpoint,
 			Mask: epMarkMapper.GetMask()},
-		Comment: "Generic endpoint mark",
+		Comment: "Non-Cali endpoint mark",
 	})
 
 	// start rendering from mark rules for workload and host endpoints.

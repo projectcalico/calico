@@ -16,11 +16,10 @@ package rules
 
 import (
 	"net"
-
-	log "github.com/sirupsen/logrus"
-
 	"reflect"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ipsets"
@@ -223,7 +222,9 @@ type Config struct {
 	IptablesMarkScratch0        uint32
 	IptablesMarkScratch1        uint32
 	IptablesMarkEndpoint        uint32
-	IptablesMarkNonCaliEndpoint uint32 // an endpoint mark which is reserved to mark generic endpoints.
+	// IptablesMarkNonCaliEndpoint is an endpoint mark which is reserved
+	// to mark non-calico (workload or host) endpoint.
+	IptablesMarkNonCaliEndpoint uint32
 
 	KubeNodePortRanges     []numorstring.Port
 	KubeIPVSSupportEnabled bool

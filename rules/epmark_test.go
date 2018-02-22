@@ -29,13 +29,13 @@ func init() {
 	ErrMark := uint32(0)
 
 	DescribeTable("EndpointMarkMapper initialization",
-		func(mask, genericMark uint32) {
-			epmm := NewEndpointMarkMapperWithShim(mask, genericMark, &mockHash32{})
+		func(mask, nonCaliMark uint32) {
+			epmm := NewEndpointMarkMapperWithShim(mask, nonCaliMark, &mockHash32{})
 			Expect(epmm.GetMask()).To(Equal(mask))
 
-			mark, err := epmm.GetEndpointMark("/cali/PseudoGeneric/Endpoint/")
+			mark, err := epmm.GetEndpointMark("/cali/Pseudo/NonCali/Endpoint/")
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(mark).To(Equal(uint32(genericMark)))
+			Expect(mark).To(Equal(uint32(nonCaliMark)))
 		},
 		Entry("should initialise with one bit", uint32(0x10), uint32(0x10)),
 		Entry("should initialise with some bits", uint32(0x123f), uint32(0x01)),

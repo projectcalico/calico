@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	// Use an invalid interface name for generic endpoint.
-	pseudoGenericEndpointName = "/cali/PseudoGeneric/Endpoint/"
+	// Use an invalid interface name for non-cali endpoint.
+	pseudoNonCaliEndpointName = "/cali/Pseudo/NonCali/Endpoint/"
 )
 
 // Endpoint Mark Mapper (EPM) provides set of functions to manage allocation/free endpoint mark bit
@@ -50,11 +50,11 @@ type DefaultEPMarkManager struct {
 	activeMarkToEndpoint     map[uint32]string
 }
 
-func NewEndpointMarkMapper(markMask, genericMark uint32) EndpointMarkMapper {
-	return NewEndpointMarkMapperWithShim(markMask, genericMark, fnv.New32())
+func NewEndpointMarkMapper(markMask, nonCaliMark uint32) EndpointMarkMapper {
+	return NewEndpointMarkMapperWithShim(markMask, nonCaliMark, fnv.New32())
 }
 
-func NewEndpointMarkMapperWithShim(markMask, genericMark uint32, hash32 HashCalculator32) EndpointMarkMapper {
+func NewEndpointMarkMapperWithShim(markMask, nonCaliMark uint32, hash32 HashCalculator32) EndpointMarkMapper {
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
 	epmm := &DefaultEPMarkManager{
@@ -67,14 +67,14 @@ func NewEndpointMarkMapperWithShim(markMask, genericMark uint32, hash32 HashCalc
 		activeMarkToEndpoint:     map[uint32]string{},
 	}
 
-	// Reserve genericMark to pseudoGenericEndpoint. This mark is reserved for any traffic whose
+	// Reserve nonCaliMark to pseudoNonCaliEndpoint. This mark is reserved for any traffic whose
 	// incoming interface is neither a workload nor a host endpoint.
-	err := epmm.SetEndpointMark(pseudoGenericEndpointName, genericMark)
+	err := epmm.SetEndpointMark(pseudoNonCaliEndpointName, nonCaliMark)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"MarkMask":    markMask,
-			"GenericMark": genericMark,
-		}).Panic("Reserve generic endpoint mark failed.")
+			"NonCaliMark": nonCaliMark,
+		}).Panic("Reserve non-cali endpoint mark failed.")
 	}
 
 	return epmm
