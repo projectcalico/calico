@@ -217,11 +217,11 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept          uint32
-	IptablesMarkPass            uint32
-	IptablesMarkScratch0        uint32
-	IptablesMarkScratch1        uint32
-	IptablesMarkEndpoint        uint32
+	IptablesMarkAccept   uint32
+	IptablesMarkPass     uint32
+	IptablesMarkScratch0 uint32
+	IptablesMarkScratch1 uint32
+	IptablesMarkEndpoint uint32
 	// IptablesMarkNonCaliEndpoint is an endpoint mark which is reserved
 	// to mark non-calico (workload or host) endpoint.
 	IptablesMarkNonCaliEndpoint uint32
