@@ -34,7 +34,8 @@ from networking_calico import datamodel_v1
 from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
-from networking_calico.plugins.ml2.drivers.calico import t_etcd
+from networking_calico.plugins.ml2.drivers.calico import policy
+from networking_calico.plugins.ml2.drivers.calico import status
 
 _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
@@ -114,8 +115,12 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             self.recent_writes[key] = value
 
         if 'metadata' in self.recent_writes[key]:
-            # If this is an update, check that the metadata is unchanged.
+            # If this is an update, check that the metadata other than labels
+            # is unchanged.
             if existing_v3_metadata:
+                if 'labels' in self.recent_writes[key]['metadata']:
+                    existing_v3_metadata['labels'] = \
+                        self.recent_writes[key]['metadata']['labels']
                 self.assertEqual(existing_v3_metadata,
                                  self.recent_writes[key]['metadata'])
             # Now delete not-easily-predictable metadata fields from the data
@@ -285,24 +290,26 @@ class TestPluginEtcd(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
 
     sg_default_key_v3 = (
-        '/calico/resources/v3/projectcalico.org/profiles/' +
-        'openstack-sg-SGID-default')
+        '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+        'openstack/sg-SGID-default')
     sg_default_value_v3 = {
         'apiVersion': 'projectcalico.org/v3',
-        'kind': 'Profile',
-        'metadata': {'name': 'openstack-sg-SGID-default'},
+        'kind': 'NetworkPolicy',
+        'metadata': {'namespace': 'openstack', 'name': 'sg-SGID-default'},
         'spec': {'egress': [{'action': 'Allow',
                              'ipVersion': 4},
                             {'action': 'Allow',
                              'ipVersion': 6}],
                  'ingress': [{'action': 'Allow',
                               'ipVersion': 4,
-                              'source': {'selector': 'has(SGID-default)'}},
+                              'source': {'selector':
+                                         'has(ossg.SGID-default)'}},
                              {'action': 'Allow',
                               'ipVersion': 6,
                               'source': {
-                                  'selector': 'has(SGID-default)'}}],
-                 'labelsToApply': {'SGID-default': ''}}}
+                                  'selector':
+                                  'has(ossg.SGID-default)'}}],
+                 'selector': 'has(ossg.SGID-default)'}}
 
     initial_etcd3_writes = {
         '/calico/resources/v3/projectcalico.org/clusterinformations/default': {
@@ -367,7 +374,12 @@ class TestPluginEtcd(_TestEtcdBase):
                 },
                 'name': ('felix--host--1-openstack-instance' +
                          '--1-DEADBEEF--1234--5678'),
-                'namespace': 'openstack'
+                'namespace': 'openstack',
+                'labels': {
+                    'ossg.SGID-default': '',
+                    'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/orchestrator': 'openstack'
+                }
             },
             'spec': {'endpoint': 'DEADBEEF-1234-5678',
                      'interfaceName': 'tapDEADBEEF-12',
@@ -378,7 +390,6 @@ class TestPluginEtcd(_TestEtcdBase):
                      'mac': '00:11:22:33:44:55',
                      'node': 'felix-host-1',
                      'orchestrator': 'openstack',
-                     'profiles': ['openstack-sg-SGID-default'],
                      'workload': 'instance-1'}}
         ep_facebeef_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
@@ -390,7 +401,12 @@ class TestPluginEtcd(_TestEtcdBase):
                 },
                 'name': ('felix--host--1-openstack-instance' +
                          '--2-FACEBEEF--1234--5678'),
-                'namespace': 'openstack'
+                'namespace': 'openstack',
+                'labels': {
+                    'ossg.SGID-default': '',
+                    'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/orchestrator': 'openstack'
+                }
             },
             'spec': {'endpoint': 'FACEBEEF-1234-5678',
                      'interfaceName': 'tapFACEBEEF-12',
@@ -399,7 +415,6 @@ class TestPluginEtcd(_TestEtcdBase):
                      'mac': '00:11:22:33:44:66',
                      'node': 'felix-host-1',
                      'orchestrator': 'openstack',
-                     'profiles': ['openstack-sg-SGID-default'],
                      'workload': 'instance-2'}}
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
@@ -505,7 +520,12 @@ class TestPluginEtcd(_TestEtcdBase):
                 },
                 'name': ('felix--host--2-openstack-instance' +
                          '--3-HELLO--1234--5678'),
-                'namespace': 'openstack'
+                'namespace': 'openstack',
+                'labels': {
+                    'ossg.SGID-default': '',
+                    'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/orchestrator': 'openstack'
+                }
             },
             'spec': {'endpoint': 'HELLO-1234-5678',
                      'interfaceName': 'tapHELLO-1234-',
@@ -514,7 +534,6 @@ class TestPluginEtcd(_TestEtcdBase):
                      'mac': '00:11:22:33:44:66',
                      'node': 'felix-host-2',
                      'orchestrator': 'openstack',
-                     'profiles': ['openstack-sg-SGID-default'],
                      'workload': 'instance-3'}}
 
         expected_writes = {
@@ -622,20 +641,21 @@ class TestPluginEtcd(_TestEtcdBase):
         )
 
         sg_1_key_v3 = (
-            '/calico/resources/v3/projectcalico.org/profiles/' +
-            'openstack-sg-SG-1')
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/sg-SG-1')
         sg_1_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
-            'kind': 'Profile',
-            'metadata': {'name': 'openstack-sg-SG-1'},
+            'kind': 'NetworkPolicy',
+            'metadata': {'namespace': 'openstack', 'name': 'sg-SG-1'},
             'spec': {'egress': [],
                      'ingress': [{
                          'action': 'Allow',
                          'destination': {'ports': ['5060:5061']},
                          'ipVersion': 4,
-                         'source': {'selector': 'has(SGID-default)'}
+                         'source': {'selector':
+                                    'has(ossg.SGID-default)'}
                      }],
-                     'labelsToApply': {'SG-1': ''}}}
+                     'selector': 'has(ossg.SG-1)'}}
 
         self.assertEtcdWrites({sg_1_key_v3: sg_1_value_v3})
 
@@ -649,7 +669,10 @@ class TestPluginEtcd(_TestEtcdBase):
         })
         self.driver.update_port_postcommit(context)
 
-        ep_hello_value_v3['spec']['profiles'] = ["openstack-sg-SG-1"]
+        del ep_hello_value_v3['metadata']['labels'][
+            'ossg.SGID-default'
+        ]
+        ep_hello_value_v3['metadata']['labels']['ossg.SG-1'] = ''
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
             sg_1_key_v3: sg_1_value_v3
@@ -992,7 +1015,7 @@ class TestPluginEtcd(_TestEtcdBase):
         }), {
             'ipVersion': 4,
             'protocol': 123,
-            'destination': {'selector': 'has(foobar)'},
+            'destination': {'selector': 'has(ossg.foobar)'},
             'action': 'Allow',
         })
         # Type and code, IPv6.
@@ -1012,35 +1035,19 @@ class TestPluginEtcd(_TestEtcdBase):
         """Test that a driver that is not master does not resync."""
         # Initialize the state early to put the elector in place, then override
         # it to claim that the driver is not master.
-        self.driver._init_state()
-        self.driver.transport.elector.master = lambda *args: False
+        self.driver._post_fork_init()
 
-        # Allow the etcd transport's resync thread to run. Nothing will happen.
-        self.give_way()
-        self.simulated_time_advance(31)
-        self.assertEtcdWrites({})
+        with mock.patch.object(self.driver, "elector") as m_elector:
+            m_elector.master.return_value = False
 
-    def test_not_master_does_not_poll(self):
-        """Test that a driver that is not master does not poll.
-
-        Master would read through etcd db and handle updates
-        """
-        # Initialize the state early to put the elector in place, then override
-        # it to claim that the driver is not master.
-        self.driver._init_state()
-        self.driver.transport.elector.master = lambda *args: False
-
-        self.driver._register_initial_felixes = mock.Mock()
-        self.driver._handle_status_update = mock.Mock()
-
-        # Allow the etcd transport's resync thread to run. Nothing will happen.
-        self.give_way()
-        self.simulated_time_advance(31)
-        self.assertFalse(self.driver._register_initial_felixes.called)
-        self.assertFalse(self.driver._handle_status_update.called)
+            # Allow the etcd transport's resync thread to run. Nothing will
+            # happen.
+            self.give_way()
+            self.simulated_time_advance(31)
+            self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
-        etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
+        etcd_rule = policy._neutron_rule_to_etcd_rule(neutron_rule)
         self.assertEqual(exp_etcd_rule, etcd_rule)
 
     def test_profile_prefixing(self):
@@ -1048,10 +1055,10 @@ class TestPluginEtcd(_TestEtcdBase):
 
         # Check that we don't delete the other orchestrator's profile data.
         self.etcd_data = {
-            '/calico/resources/v3/projectcalico.org/profiles/' +
-            'mesos-profile-1': json.dumps({
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'mesos/profile-1': json.dumps({
                 'apiVersion': 'projectcalico.org/v3',
-                'kind': 'Profile',
+                'kind': 'NetworkPolicy',
                 'metadata': {'name': 'mesos-profile-1'},
                 'spec': {'egress': [{'action': 'Allow',
                                      'ipVersion': 4},
@@ -1060,12 +1067,14 @@ class TestPluginEtcd(_TestEtcdBase):
                          'ingress': [{'action': 'Allow',
                                       'ipVersion': 4,
                                       'source': {
-                                          'selector': 'has(SGID-default)'}},
+                                          'selector':
+                                          'has(ossg.SGID-default)'}},
                                      {'action': 'Allow',
                                       'ipVersion': 6,
                                       'source': {
-                                          'selector': 'has(SGID-default)'}}],
-                         'labelsToApply': {'SGID-default': ''}}}
+                                          'selector':
+                                          'has(ossg.SGID-default)'}}],
+                         'selector': 'has(ossg.SGID-default)'}}
             )}
         with lib.FixedUUID('uuid-profile-prefixing'):
             self.give_way()
@@ -1083,11 +1092,11 @@ class TestPluginEtcd(_TestEtcdBase):
 
         # Check that we clean it up.
         self.etcd_data = {
-            '/calico/resources/v3/projectcalico.org/profiles/' +
-            'openstack-sg-OLD': json.dumps({
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/sg-OLD': json.dumps({
                 'apiVersion': 'projectcalico.org/v3',
-                'kind': 'Profile',
-                'metadata': {'name': 'openstack-sg-OLD'},
+                'kind': 'NetworkPolicy',
+                'metadata': {'namespace': 'openstack', 'name': 'sg-OLD'},
                 'spec': {'egress': [{'action': 'Allow',
                                      'ipVersion': 4},
                                     {'action': 'Allow',
@@ -1096,13 +1105,13 @@ class TestPluginEtcd(_TestEtcdBase):
                                       'ipVersion': 4,
                                       'source': {
                                           'selector':
-                                          'has(openstack-sg-OLD)'}},
+                                          'has(ossg.OLD)'}},
                                      {'action': 'Allow',
                                       'ipVersion': 6,
                                       'source': {
                                           'selector':
-                                          'has(openstack-sg-OLD)'}}],
-                         'labelsToApply': {'openstack-sg-OLD': ''}}}
+                                          'has(ossg.OLD)'}}],
+                         'selector': 'has(ossg.OLD)'}}
             )}
         with lib.FixedUUID('uuid-old-data'):
             self.give_way()
@@ -1114,7 +1123,8 @@ class TestPluginEtcd(_TestEtcdBase):
             'default']['spec']['clusterGUID'] = 'uuid-old-data'
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set([
-            '/calico/resources/v3/projectcalico.org/profiles/openstack-sg-OLD'
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/sg-OLD'
         ]))
 
 
@@ -1122,7 +1132,6 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     """Tests of the driver's status reporting function."""
     def setUp(self):
         super(TestDriverStatusReporting, self).setUp()
-        self.driver.transport = mock.Mock(spec=t_etcd.CalicoTransportEtcd)
 
         # Mock out config.
         lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
@@ -1153,29 +1162,32 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.driver._epoch = 2
         self.driver._status_updating_thread(1)
 
-    @mock.patch("networking_calico.plugins.ml2.drivers.calico.t_etcd."
+    @mock.patch("networking_calico.plugins.ml2.drivers.calico.mech_calico."
                 "StatusWatcher",
                 autospec=True)
     def test_status_thread_mainline(self, m_StatusWatcher):
-        self.driver.transport.is_master = True
         count = [0]
 
-        def maybe_end_loop(*args, **kwargs):
-            if count[0] == 2:
-                # Thread dies, should be restarted.
-                self.driver._etcd_watcher_thread = False
-            if count[0] == 4:
-                # After a few loops, stop being the master...
-                self.driver.transport.is_master = False
-            if count[0] > 6:
-                # Then terminate the loop after a few more...
-                self.driver._epoch += 1
-            count[0] += 1
+        with mock.patch.object(self.driver, "elector") as m_elector:
+            m_elector.master.return_value = True
 
-        with mock.patch("eventlet.spawn") as m_spawn:
-            with mock.patch("eventlet.sleep") as m_sleep:
-                m_sleep.side_effect = maybe_end_loop
-                self.driver._status_updating_thread(0)
+            def maybe_end_loop(*args, **kwargs):
+                if count[0] == 2:
+                    # Thread dies, should be restarted.
+                    self.driver._etcd_watcher_thread = False
+                if count[0] == 4:
+                    # After a few loops, stop being the master...
+                    m_elector.master.return_value = False
+                if count[0] > 6:
+                    # Then terminate the loop after a few more...
+                    self.driver._epoch += 1
+                count[0] += 1
+
+            with mock.patch("eventlet.spawn") as m_spawn:
+                with mock.patch("eventlet.sleep") as m_sleep:
+                    m_sleep.side_effect = maybe_end_loop
+                    self.driver._status_updating_thread(0)
+
         m_watcher = m_StatusWatcher.return_value
         self.assertEqual(
             [
@@ -1331,13 +1343,13 @@ class TestStatusWatcher(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
         super(TestStatusWatcher, self).setUp()
         self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
-        self.watcher = t_etcd.StatusWatcher(self.driver)
+        self.watcher = status.StatusWatcher(self.driver)
 
     def test_tls(self):
         lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
         lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
-        self.watcher = t_etcd.StatusWatcher(self.driver)
+        self.watcher = status.StatusWatcher(self.driver)
 
     def test_snapshot(self):
         # Populate initial status tree data, for initial snapshot testing.

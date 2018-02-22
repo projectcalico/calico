@@ -169,11 +169,17 @@ class GrandDukeOfSalzburg(object):
 m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
     DriverBase
 
-# Replace the elector.
+# Import all mechanism driver modules so we can hook their logging.
+from networking_calico.plugins.ml2.drivers.calico import election
+from networking_calico.plugins.ml2.drivers.calico import endpoints
+from networking_calico.plugins.ml2.drivers.calico import mech_calico
+from networking_calico.plugins.ml2.drivers.calico import policy
+from networking_calico.plugins.ml2.drivers.calico import status
+from networking_calico.plugins.ml2.drivers.calico import subnets
+from networking_calico.plugins.ml2.drivers.calico import syncer
 
-import networking_calico.plugins.ml2.drivers.calico.mech_calico as mech_calico
-import networking_calico.plugins.ml2.drivers.calico.t_etcd as t_etcd
-t_etcd.Elector = GrandDukeOfSalzburg
+# Replace the elector.
+mech_calico.Elector = GrandDukeOfSalzburg
 
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
@@ -390,12 +396,19 @@ class Lib(object):
     def setUp_logging(self):
         """Setup to intercept and display logging by the code under test."""
         import logging
-        mech_calico.LOG = logging.getLogger(
-            'networking_calico.plugins.ml2.drivers.calico.mech_calico'
-        )
-        t_etcd.LOG = logging.getLogger(
-            'networking_calico.plugins.ml2.drivers.calico.t_etcd'
-        )
+        for module in [
+                election,
+                endpoints,
+                mech_calico,
+                policy,
+                status,
+                subnets,
+                syncer,
+        ]:
+            module.LOG = logging.getLogger(
+                'networking_calico.plugins.ml2.drivers.calico.' +
+                module.__name__
+            )
 
     # Tear down after each test case.
     def tearDown(self):

@@ -24,13 +24,29 @@ import greenlet
 import os
 import random
 import re
+import socket
 import sys
 
+from networking_calico.common import config as calico_config
+from networking_calico.compat import cfg
 from networking_calico.compat import log
 from networking_calico import etcdv3
 
 
 LOG = log.getLogger(__name__)
+
+
+# The node hostname is used as the default identity for leader election
+_hostname = socket.gethostname()
+
+# Elector configuration;
+elector_opt = cfg.StrOpt(
+    'elector_name', default=_hostname,
+    help="A unique name to identify this node in leader election"
+)
+
+# Register Calico related configuration options
+calico_config.register_options(cfg.CONF, additional_options=[elector_opt])
 
 
 ETCD_DELETE_ACTIONS = set(["delete", "expire", "compareAndDelete"])

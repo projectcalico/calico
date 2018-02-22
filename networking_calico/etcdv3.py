@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
+
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
 from etcd3gw.utils import _encode
@@ -75,48 +77,41 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
     client = _get_client()
     LOG.debug("etcdv3 put key=%s value=%s mod_revision=%r",
               key, value, mod_revision)
-    if mod_revision is not None:
+    txn = {}
+    if mod_revision == 0:
         base64_key = _encode(key)
-        base64_value = _encode(value)
-        txn = {
-            'compare': [{
-                'key': base64_key,
-                'result': 'EQUAL',
-                'target': 'MOD',
-                'mod_revision': mod_revision,
-            }],
-            'success': [{
-                'request_put': {
-                    'key': base64_key,
-                    'value': base64_value,
-                },
-            }],
-            'failure': [],
-        }
-        if lease is not None:
-            txn['success'][0]['request_put']['lease'] = lease.id
-        result = client.transaction(txn)
-        LOG.debug("transaction result %s", result)
-        succeeded = result.get('succeeded', False)
+        txn['compare'] = [{
+            'key': base64_key,
+            'result': 'EQUAL',
+            'target': 'VERSION',
+            'version': 0,
+        }]
+    elif mod_revision is not None:
+        base64_key = _encode(key)
+        txn['compare'] = [{
+            'key': base64_key,
+            'result': 'EQUAL',
+            'target': 'MOD',
+            'mod_revision': mod_revision,
+        }]
     elif existing_value is not None:
         base64_key = _encode(key)
-        base64_value = _encode(value)
         base64_existing = _encode(existing_value)
-        txn = {
-            'compare': [{
+        txn['compare'] = [{
+            'key': base64_key,
+            'result': 'EQUAL',
+            'target': 'VALUE',
+            'value': base64_existing,
+        }]
+    if txn:
+        base64_value = _encode(value)
+        txn['success'] = [{
+            'request_put': {
                 'key': base64_key,
-                'result': 'EQUAL',
-                'target': 'VALUE',
-                'value': base64_existing,
-            }],
-            'success': [{
-                'request_put': {
-                    'key': base64_key,
-                    'value': base64_value,
-                },
-            }],
-            'failure': [],
-        }
+                'value': base64_value,
+            },
+        }]
+        txn['failure'] = []
         if lease is not None:
             txn['success'][0]['request_put']['lease'] = lease.id
         result = client.transaction(txn)
@@ -285,6 +280,18 @@ def get_lease(ttl):
     """Get a lease for the specified TTL."""
     client = _get_client()
     return client.lease(ttl=ttl)
+
+
+def logging_exceptions(fn):
+    """Decorator to log (and reraise) Etcd3Exceptions."""
+    @functools.wraps(fn)
+    def wrapped(self, *args, **kwargs):
+        try:
+            return fn(self, *args, **kwargs)
+        except Etcd3Exception as e:
+            LOG.warning("Etcd3Exception, re-raising: %r", e)
+            raise
+    return wrapped
 
 
 # Internals.
