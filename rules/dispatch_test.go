@@ -51,7 +51,7 @@ var _ = Describe("Dispatch chains", func() {
 			Comment: "Unknown interface",
 		}
 
-		var smNonCaiSetMarkRule = iptables.Rule{
+		var smNonCaliSetMarkRule = iptables.Rule{
 			Action: iptables.SetMaskedMarkAction{
 				Mark: rrConfigNormal.IptablesMarkNonCaliEndpoint,
 				Mask: rrConfigNormal.IptablesMarkEndpoint,
@@ -130,7 +130,7 @@ var _ = Describe("Dispatch chains", func() {
 						Rules: []iptables.Rule{
 							smUnknownEndpointDropRule("cali"),
 							smUnknownEndpointDropRule("tap"),
-							smNonCaiSetMarkRule,
+							smNonCaliSetMarkRule,
 						},
 					},
 					{
@@ -171,7 +171,7 @@ var _ = Describe("Dispatch chains", func() {
 							inboundGotoRule("cali1234", "cali-sm-cali1234"),
 							smUnknownEndpointDropRule("cali"),
 							smUnknownEndpointDropRule("tap"),
-							smNonCaiSetMarkRule,
+							smNonCaliSetMarkRule,
 						},
 					},
 					{
@@ -247,7 +247,7 @@ var _ = Describe("Dispatch chains", func() {
 							inboundGotoRule("cali2+", "cali-set-endpoint-mark-2"),
 							smUnknownEndpointDropRule("cali"),
 							smUnknownEndpointDropRule("tap"),
-							smNonCaiSetMarkRule,
+							smNonCaliSetMarkRule,
 						},
 					},
 					{
@@ -371,7 +371,7 @@ var _ = Describe("Dispatch chains", func() {
 								inboundGotoRule("cali2+", "cali-set-endpoint-mark-2"),
 								smUnknownEndpointDropRule("cali"),
 								smUnknownEndpointDropRule("tap"),
-								smNonCaiSetMarkRule,
+								smNonCaliSetMarkRule,
 							},
 						},
 						{
@@ -464,7 +464,7 @@ var _ = Describe("Dispatch chains", func() {
 							inboundGotoRule("cali1234", "cali-sm-cali1234"),
 							smUnknownEndpointDropRule("cali"),
 							smUnknownEndpointDropRule("tap"),
-							smNonCaiSetMarkRule,
+							smNonCaliSetMarkRule,
 						},
 					},
 					{
