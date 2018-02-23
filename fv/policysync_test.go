@@ -18,18 +18,19 @@ package fv
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"time"
 
-	"github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
-	"github.com/colabsaumoh/proto-udsuspver/protos/mgmtintf_v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -49,25 +50,24 @@ import (
 var _ = Context("policy sync API tests", func() {
 
 	var (
-		etcd               *containers.Container
-		felix              *containers.Felix
-		calicoClient       client.Interface
-		w                  [3]*workload.Workload
-		tempDir            string
-		hostMgmtSocketPath string
+		etcd              *containers.Container
+		felix             *containers.Felix
+		calicoClient      client.Interface
+		w                 [3]*workload.Workload
+		tempDir           string
+		hostMgmtCredsPath string
 	)
 
 	BeforeEach(func() {
 		// Create a temporary directory to map into the container as /var/run/calico, which
-		// is where we tell Felix to put the policy sync management socket.
+		// is where we tell Felix to put the policy sync mounts and credentials.
 		var err error
 		tempDir, err = ioutil.TempDir("", "felixfv")
 		Expect(err).NotTo(HaveOccurred())
 
 		// Configure felix to enable the policy sync API.
 		options := containers.DefaultTopologyOptions()
-		options.ExtraEnvVars["FELIX_PolicySyncManagementSocketPath"] = "/var/run/calico/policy-mgmt.sock"
-		options.ExtraEnvVars["FELIX_PolicySyncWorkloadSocketPathPrefix"] = "/var/run/calico"
+		options.ExtraEnvVars["FELIX_PolicySyncPathPrefix"] = "/var/run/calico"
 		// To enable debug logs, uncomment these lines; watch out for timeouts caused by the
 		// resulting slow down!
 		// options.ExtraEnvVars["FELIX_DebugDisableLogDropping"] = "true"
@@ -98,7 +98,7 @@ var _ = Context("policy sync API tests", func() {
 			w[ii].Configure(calicoClient)
 		}
 
-		hostMgmtSocketPath = tempDir + "/policy-mgmt.sock"
+		hostMgmtCredsPath = filepath.Join(tempDir, binder.CredentialsSubdir)
 	})
 
 	AfterEach(func() {
@@ -120,48 +120,65 @@ var _ = Context("policy sync API tests", func() {
 		}
 	})
 
-	Context("with an open management socket", func() {
-		var (
-			mgmtClient *nodeagentmgmt.Client
-		)
-
-		BeforeEach(func() {
-			Eventually(hostMgmtSocketPath).Should(BeAnExistingFile())
-
-			// Use the fact that anything we exec inside the Felix container runs as root to fix the
-			// permissions on the socket so the test process can connect.
-			felix.Exec("chmod", "a+rw", "/var/run/calico/policy-mgmt.sock")
-			mgmtClient = nodeagentmgmt.ClientUds(hostMgmtSocketPath)
-		})
+	Context("with the binder", func() {
 
 		var (
 			hostWlSocketPath, containerWlSocketPath [3]string
 		)
 
 		dirNameForWorkload := func(wl *workload.Workload) string {
-			return "ps-" + wl.WorkloadEndpoint.Spec.Pod
+			return filepath.Join(binder.MountSubdir, wl.WorkloadEndpoint.Spec.Pod)
 		}
 
 		createWorkloadDirectory := func(wl *workload.Workload) (string, string) {
 			dirName := dirNameForWorkload(wl)
-			hostWlDir := tempDir + "/" + dirName
+			hostWlDir := filepath.Join(tempDir, dirName)
 			os.MkdirAll(hostWlDir, 0777)
-			return hostWlDir, "/var/run/calico/" + dirName
+			return hostWlDir, filepath.Join("/var/run/calico", dirName)
 		}
 
-		sendCreate := func(wl *workload.Workload) (*mgmtintf_v1.Response, error) {
-			dirName := dirNameForWorkload(wl)
+		writeCredentialsToFile := func(credentials *binder.Credentials) error {
+			var attrs []byte
+			attrs, err := json.Marshal(credentials)
+			if err != nil {
+				return err
+			}
 
-			resp, err := mgmtClient.WorkloadAdded(&mgmtintf_v1.WorkloadInfo{
-				Attrs: &mgmtintf_v1.WorkloadInfo_WorkloadAttributes{
-					Uid:       wl.WorkloadEndpoint.Spec.Pod,
-					Namespace: "fv",
-					Workload:  wl.WorkloadEndpoint.Spec.Pod,
-				},
-				Workloadpath: dirName,
-			})
-			log.WithField("response", resp).Info("WorkloadAdded response")
-			return resp, err
+			credentialFileName := credentials.Uid + binder.CredentialsExtension
+
+			credsFileTmp := filepath.Join(tempDir, credentialFileName)
+			err = ioutil.WriteFile(credsFileTmp, attrs, 0777)
+			if err != nil {
+				return err
+			}
+
+			// Lazy create the credential's directory
+			err = os.MkdirAll(hostMgmtCredsPath, 0777)
+			if err != nil {
+				return err
+			}
+
+			// Move it to the right location now.
+			credsFile := filepath.Join(hostMgmtCredsPath, credentialFileName)
+			return os.Rename(credsFileTmp, credsFile)
+		}
+
+		// Simulate the creation of credentials file for the workload.
+		// This is the responsibility of the flex volume driver.
+		sendCreate := func(wl *workload.Workload) (*binder.Credentials, error) {
+			credentials := &binder.Credentials{
+				Uid:       wl.WorkloadEndpoint.Spec.Pod,
+				Namespace: "fv",
+				Workload:  wl.WorkloadEndpoint.Spec.Pod,
+			}
+
+			err := writeCredentialsToFile(credentials)
+			if err != nil {
+				return nil, err
+			}
+
+			log.Info("Workload credentials written")
+			return credentials, err
 		}
 
 		Context("after creating a client for each workload", func() {
@@ -170,8 +187,8 @@ var _ = Context("policy sync API tests", func() {
 					// Create the workload directory, this would normally be the responsibility of the
 					// flex volume driver.
 					hostWlDir, containerWlDir := createWorkloadDirectory(wl)
-					hostWlSocketPath[i] = hostWlDir + "/policysync.sock"
-					containerWlSocketPath[i] = containerWlDir + "/policysync.sock"
+					hostWlSocketPath[i] = filepath.Join(hostWlDir, binder.SocketFilename)
+					containerWlSocketPath[i] = filepath.Join(containerWlDir, binder.SocketFilename)
 
 					// Tell Felix about the new directory.
 					_, err := sendCreate(wl)

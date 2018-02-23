@@ -20,11 +20,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/felix/proto"
 
-	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
-	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
-	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
 	"google.golang.org/grpc"
 )
 
@@ -34,61 +32,37 @@ const (
 	EndpointId     = "eth0"
 )
 
-// WorkloadAPIServer implements the API that each policy-sync agent connects to in order to get policy information.
-// There is a single instance of the WorkloadAPIServer, it disambiguates connections from different clients by the
+// Server implements the API that each policy-sync agent connects to in order to get policy information.
+// There is a single instance of the Server, it disambiguates connections from different clients by the
 // credentials present in the gRPC request.
-type WorkloadAPIServer struct {
+type Server struct {
 	JoinUpdates chan<- interface{}
 	nextJoinUID func() uint64
 }
 
-func NewWorkloadAPIServer(joins chan<- interface{}, allocUID func() uint64) *WorkloadAPIServer {
-	return &WorkloadAPIServer{
+func NewServer(joins chan<- interface{}, allocUID func() uint64) *Server {
+	return &Server{
 		JoinUpdates: joins,
 		nextJoinUID: allocUID,
 	}
 }
 
-// NewMgmtAPIServer creates a new server to listen for workload lifecycle events (i.e. workloads being created and
-// removed).  It opens and closes the per-workload socket accordingly, registering the workload API server with each
-// new socket.
-func NewMgmtAPIServer(joins chan<- interface{}, allocUID func() uint64, pathPrefix string) *nam.Server {
-	// Initialize the workload API server.
-	s := NewWorkloadAPIServer(joins, allocUID)
-	// The WlServer sets up/tears down the sockets, deferring the API implementation to the WorkloadAPIServer.
-	wls := &mwi.WlServer{
-		SockFile: SockName,
-		RegAPI:   s.RegisterGrpc,
-	}
-	// The workloadHandler handles the lifecycle events, invoking the WlServer's methods.
-	workloadHandler := mwi.NewWlHandler(
-		wls,
-		wlh.NewServer,
-	)
-	// The management API server will listen on the socket for lifecycle messages.
-	mgmtAPIServer := nam.NewServer(
-		pathPrefix,
-		workloadHandler,
-	)
-	return mgmtAPIServer
-}
-
-func (s *WorkloadAPIServer) RegisterGrpc(g *grpc.Server) {
+func (s *Server) RegisterGrpc(g *grpc.Server) {
 	log.Debug("Registering with grpc.Server")
 	proto.RegisterPolicySyncServer(g, s)
 }
 
-func (s *WorkloadAPIServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
+func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
 	log.Info("New policy sync connection")
 
 	// Extract the workload ID from the request.
 	cxt := stream.Context()
-	creds, ok := wlh.CallerFromContext(cxt)
+	creds, ok := binder.CallerFromContext(cxt)
 	if !ok {
-		return errors.New("Unable to authenticate client.")
+		return errors.New("unable to authenticate client")
 	}
 	// TODO Ensure names are correctly handled/namespaced
-	workloadID := creds.Namespace + "/" + creds.Name
+	workloadID := creds.Namespace + "/" + creds.Workload
 
 	// Allocate a new unique join ID, this allows the processor to disambiguate if there are multiple connections
 	// for the same workload, which can happen transiently over client restart.  In particular, if our "leave"
