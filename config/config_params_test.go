@@ -49,8 +49,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"IpInIpTunnelAddr",
 
 		// FIXME Remove this once libcalico-go supports policy-sync API!
-		"PolicySyncManagementSocketPath",
-		"PolicySyncWorkloadSocketPathPrefix",
+		"PolicySyncPathPrefix",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",
