@@ -3,7 +3,7 @@ title: calicoctl version
 canonical_url: 'https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/version'
 ---
 
-This sections describes the `calicoctl version` command.
+This section describes the `calicoctl version` command.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
 for a full list of calicoctl commands.
@@ -27,18 +27,17 @@ Description:
   Display the version of calicoctl.
 ```
 
-### Examples:
+### Example
 
-```
-$ calicoctl version
-Client Version:    v1.4.0
-Build date:        2017-07-21T19:33:04+0000
-Git commit:        d2babb6
-Cluster Version:   v2.4.0
-Cluster Type:      KDD,hosted
-```
+Use `calicoctl version` to obtain the following data.
+
+{% include {{page.version}}/calicoctl-version.md %}
+
+\* To obtain these values, you must configure `calicoctl` 
+   [to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
+
 
 ## See also
 
--  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) for details on configuring `calicoctl` to access
-   the {{site.prodname}} datastore.
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) 
+   for details on configuring `calicoctl` to access the {{site.prodname}} datastore.
