@@ -28,11 +28,10 @@ You must have a Kubernetes cluster, which meets the following requirements:
 
 ## Installation
 
-This document describes three installation options for {{site.prodname}} using Kubernetes API as the datastore:
+This document describes two installation options for {{site.prodname}} using Kubernetes API as the datastore:
 
 1. {{site.prodname}} policy with {{site.prodname}} networking (beta)
 2. {{site.prodname}} policy-only with user-supplied networking
-3. {{site.prodname}} policy-only with flannel networking
 
 Ensure you have a cluster which meets the above requirements.  There may be additional requirements based on the installation option you choose.
 
@@ -116,14 +115,6 @@ To install {{site.prodname}} in policy-only mode:
    {: .alert .alert-info}
 
 4. Apply the manifest: `kubectl apply -f calico.yaml`
-
-### Option 3: {{site.prodname}} policy-only with flannel networking
-
-The [Canal](https://github.com/projectcalico/canal) project provides a way to easily deploy
-{{site.prodname}} with flannel networking.
-
-Refer to the following [Kubernetes self-hosted install guide](https://github.com/projectcalico/canal/blob/master/k8s-install/README.md)
-in the Canal project for details on installing {{site.prodname}} with flannel.
 
 ### Enabling Typha
 
