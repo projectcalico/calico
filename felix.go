@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -35,7 +36,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/docopt/docopt-go"
 	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
@@ -316,7 +316,7 @@ configRetry:
 	var policySyncAPIBinder binder.Binder
 	calcGraphClientChannels := []chan<- interface{}{dpConnector.ToDataplane}
 	if configParams.PolicySyncPathPrefix != "" {
-		log.WithField("policy sync path prefix ", configParams.PolicySyncPathPrefix).Info(
+		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(
 			"Policy sync API enabled.  Creating the policy sync server.")
 		toPolicySync := make(chan interface{})
 		policySyncUIDAllocator := policysync.NewUIDAllocator()
@@ -470,7 +470,7 @@ configRetry:
 	dpConnector.Start()
 
 	if policySyncProcessor != nil {
-		log.WithField("policy sync directory", configParams.PolicySyncPathPrefix).Info(
+		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(
 			"Policy sync API enabled.  Starting the policy sync server.")
 		policySyncProcessor.Start()
 		sc := make(chan bool)

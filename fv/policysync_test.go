@@ -60,7 +60,7 @@ var _ = Context("policy sync API tests", func() {
 
 	BeforeEach(func() {
 		// Create a temporary directory to map into the container as /var/run/calico, which
-		// is where we tell Felix to put the policy sync management socket.
+		// is where we tell Felix to put the policy sync mounts and credentials.
 		var err error
 		tempDir, err = ioutil.TempDir("", "felixfv")
 		Expect(err).NotTo(HaveOccurred())
