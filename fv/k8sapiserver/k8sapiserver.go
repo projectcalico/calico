@@ -87,7 +87,7 @@ func SetUp() *Server {
 				log.Panic("Persistently failed to create k8s API server")
 			}
 			log.Info("Retrying...")
-			time.Sleep(1)
+			time.Sleep(1 * time.Second)
 		}
 	}
 
