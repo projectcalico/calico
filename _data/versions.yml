@@ -1,4 +1,74 @@
 v3.0:
+- title: v3.0.3
+  note: |
+    23 February 2018
+    
+    > **Important**: [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade. 
+    > You must upgrade to Calico v2.6.5 or later before you can upgrade to Calico v3.0.3.
+    {: .alert .alert-danger}
+
+    #### Bug Fixes 
+    
+    - Improved error messages when failing to initialize a connection to etcd [libcalico-go #794](https://github.com/projectcalico/libcalico-go/pull/794) (@ozdanborne)
+
+    - Ignore hidden files when checking for etcd certificates to copy over when installing CNI. [cni-plugin #473](https://github.com/projectcalico/cni-plugin/pull/473) (@tmjd)
+
+    #### Limitations
+
+    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the 
+      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
+      and are not supported. (Calico still supports Docker and rkt containers.) 
+      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker 
+      orchestrators in a future release.
+
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
+      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
+      for more information. We plan to resume support for GoBPG in a future release.
+    
+    - **Route reflectors cannot be clustered**: We plan to resume support for
+      this in a future release.
+
+  components:
+    felix:
+      version: 3.0.3
+      url: https://github.com/projectcalico/felix/releases/tag/3.0.3
+    typha:
+      version: v0.6.2
+      url: https://github.com/projectcalico/typha/releases/tag/v0.6.2
+    calicoctl:
+      version: v2.0.1
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.0.1
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.0.1/calicoctl
+    calico/node:
+      version: v3.0.3
+      url: https://github.com/projectcalico/calico/releases/tag/v3.0.3
+    calico/cni:
+      version: v2.0.1
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.0.1
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.1/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.1/calico-ipam
+    calico/kube-controllers:
+      version: v2.0.1
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.1
+    confd:
+      version: v1.0.2
+      url: https://github.com/projectcalico/confd/releases/tag/v1.0.2
+    calico-bird:
+      version: v0.3.2
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
+    calico/routereflector:
+      version: v0.5.0
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    networking-calico:
+      version: 1.4.3
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
+
 - title: v3.0.2
   note: |
     09 February 2018
