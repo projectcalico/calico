@@ -245,15 +245,12 @@ var _ = Context("policy sync API tests", func() {
 				Context("with mock clients syncing", func() {
 					var (
 						mockWlClient [3]*mockWorkloadClient
-						mockWlCancel [3]context.CancelFunc
 					)
 
 					BeforeEach(func() {
 						for i := range w {
 							client := newMockWorkloadClient(fmt.Sprintf("workload-%d", i))
-							var wlCtx context.Context
-							wlCtx, mockWlCancel[i] = context.WithCancel(ctx)
-							client.StartSyncing(wlCtx, wlClient[i])
+							client.StartSyncing(ctx, wlClient[i])
 							mockWlClient[i] = client
 						}
 					})
@@ -442,34 +439,113 @@ var _ = Context("policy sync API tests", func() {
 					})
 				})
 
-				It("a connection should get closed if a second connection is created", func() {
-					// Create first connection manually.
+				createExtraSyncClient := func(ctx context.Context) proto.PolicySync_SyncClient {
 					syncClient, err := wlClient[0].Sync(ctx, &proto.SyncRequest{})
 					Expect(err).NotTo(HaveOccurred())
 					// Get something from the first connection to make sure it's up.
 					_, err = syncClient.Recv()
 					Expect(err).NotTo(HaveOccurred())
+					return syncClient
+				}
+
+				expectFullSync := func(client *mockWorkloadClient) {
+					// The new client should take over, getting a full sync.
+					Eventually(client.InSync).Should(BeTrue())
+					Eventually(client.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
+					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+				}
+
+				expectSyncClientErr := func(syncClient proto.PolicySync_SyncClient) {
+					Eventually(func() error {
+						_, err := syncClient.Recv()
+						return err
+					}).Should(HaveOccurred())
+				}
+
+				It("a Sync stream should get closed if a second call to Sync() call is made", func() {
+					// Create first connection manually.
+					syncClient := createExtraSyncClient(ctx)
 
 					// Then create a new mock client.
 					client := newMockWorkloadClient("workload-0 second client")
 					client.StartSyncing(ctx, wlClient[0])
 
 					// The new client should take over, getting a full sync.
-					Eventually(client.InSync).Should(BeTrue())
-					Eventually(client.ActiveProfiles).Should(Equal(set.From(proto.ProfileID{Name: "default"})))
-					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+					expectFullSync(client)
 
 					// The old connection should get killed.
-					Eventually(func() error {
-						_, err := syncClient.Recv()
-						return err
-					}).Should(HaveOccurred())
+					expectSyncClientErr(syncClient)
 
 					cancel()
 					Eventually(client.Done).Should(BeClosed())
 				})
 
-				It("a connection should get closed if the workload is removed", func() {
+				It("a Sync stream should get closed if a new Sync call is made on a new gRPC socket", func() {
+					// Create first connection manually.
+					syncClient := createExtraSyncClient(ctx)
+
+					// Then create a new mock client with a new connection.
+					newWlConn, newWlClient := createWorkloadConn(0)
+					defer newWlConn.Close()
+					client := newMockWorkloadClient("workload-0 second client")
+					client.StartSyncing(ctx, newWlClient)
+
+					// The new client should take over, getting a full sync.
+					expectFullSync(client)
+
+					// The old connection should get killed.
+					expectSyncClientErr(syncClient)
+
+					cancel()
+					Eventually(client.Done).Should(BeClosed())
+				})
+
+				It("after closing the socket, a new Sync call should get a full snapshot", func() {
+					client := newMockWorkloadClient("workload-0")
+					client.StartSyncing(ctx, wlClient[0])
+
+					// Workload should be sent over the API.
+					Eventually(client.EndpointToPolicyOrder).Should(Equal(map[string][]mock.TierInfo{"k8s/fv/fv-pod-0/eth0": {}}))
+					wlConn[0].Close()
+					Eventually(client.Done).Should(BeClosed())
+
+					// Then create a new mock client with a new connection.
+					newWlConn, newWlClient := createWorkloadConn(0)
+					defer newWlConn.Close()
+					client = newMockWorkloadClient("workload-0 second client")
+					client.StartSyncing(ctx, newWlClient)
+
+					// The new client should take over, getting a full sync.
+					expectFullSync(client)
+
+					cancel()
+					Eventually(client.Done).Should(BeClosed())
+				})
+
+				It("after closing the Sync, a new Sync call should get a full snapshot", func() {
+					// Create and close first connection manually.
+					clientCtx, clientCancel := context.WithCancel(ctx)
+					syncClient := createExtraSyncClient(clientCtx)
+					_, err := syncClient.Recv()
+					Expect(err).NotTo(HaveOccurred())
+					clientCancel()
+					_, err = syncClient.Recv()
+					Expect(err).To(HaveOccurred())
+
+					// Then create a new mock client with a new connection.
+					newWlConn, newWlClient := createWorkloadConn(0)
+					defer newWlConn.Close()
+					client := newMockWorkloadClient("workload-0 second client")
+					client.StartSyncing(ctx, newWlClient)
+
+					// The new client should take over, getting a full sync.
+					expectFullSync(client)
+
+					cancel()
+					Eventually(client.Done).Should(BeClosed())
+				})
+
+				It("a sync client should get closed if the workload is removed", func() {
 					client := newMockWorkloadClient("workload-0")
 					client.StartSyncing(ctx, wlClient[0])
 
@@ -523,6 +599,13 @@ func (c *mockWorkloadClient) loopReadingFromAPI(ctx context.Context, syncClient 
 			return
 		}
 		log.WithField("msg", msg).Info("Received workload message")
-		c.OnEvent(reflect.ValueOf(msg.Payload).Elem().Field(0).Interface())
+
+		// msg.Payload is an interface holding a pointer to one of the ToDataplane_<MsgType> structs, which in turn
+		// hold the actual payload as their only field.  Since the protobuf compiler doesn't seem to generate a
+		// clean way to access the payload struct, unpack it with reflection.
+		ptrToPayloadWrapper := reflect.ValueOf(msg.Payload) // pointer to a ToDataplane_<MsgType>
+		payloadWrapper := ptrToPayloadWrapper.Elem()        // a ToDataplane_<MsgType> struct
+		payload := payloadWrapper.Field(0).Interface()      // pointer to an InSync/WorkloadEndpointUpdate/etc
+		c.OnEvent(payload)
 	}
 }

@@ -222,11 +222,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.ActivePolicyRemove:
 		policyID := *event.Id
 		for ep, allPols := range d.endpointToAllPolicyIDs {
-			for _, p := range allPols {
-				if policyID == p {
-					Fail(fmt.Sprintf("Policy %s removed while still in use by endpoint %s", p, ep))
-				}
-			}
+			Expect(allPols).NotTo(ContainElement(policyID),
+				fmt.Sprintf("Policy %s removed while still in use by endpoint %s", policyID, ep))
 		}
 		d.activePolicies.Discard(policyID)
 		d.activeUntrackedPolicies.Discard(policyID)
