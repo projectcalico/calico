@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -201,9 +201,15 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 	}
 
 	if k8sNode.Spec.PodCIDR != "" {
-		// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod
-		// CIDR.
-		bgpSpec.IPv4IPIPTunnelAddr = getTunnelIp(k8sNode)
+		_, cidr, err := net.ParseCIDR(k8sNode.Spec.PodCIDR)
+		if err != nil {
+			log.WithError(err).Errorf("PodCIDR %s did not parse successfully", k8sNode.Spec.PodCIDR)
+			return nil, errors.New("Invalid PodCIDR")
+		} else if cidr.Version() == 4 {
+			// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod
+			// CIDR.
+			bgpSpec.IPv4IPIPTunnelAddr = getTunnelIp(k8sNode)
+		}
 		calicoNode.Spec.BGP = bgpSpec
 	} else if bgpSpec.IPv4Address != "" || bgpSpec.IPv6Address != "" || bgpSpec.ASNumber != nil {
 		log.Warnf("Node %s does not have podCIDR to use to calculate the IPIP Tunnel Address", k8sNode.Name)
@@ -258,7 +264,8 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 }
 
 // Calculate the IPIP Tunnel IP address to use for a given Node.  We use the first IP in the
-// node CIDR for our tunnel address.
+// node CIDR for our tunnel address.  If an IPv4 address cannot be picked from the given
+// CIDR then an empty string will be returned.
 func getTunnelIp(n *kapiv1.Node) string {
 	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
 	if err != nil {
@@ -268,6 +275,10 @@ func getTunnelIp(n *kapiv1.Node) string {
 	// We need to get the IP for the podCIDR and increment it to the
 	// first IP in the CIDR.
 	tunIp := ip.To4()
+	if tunIp == nil {
+		log.WithField("podCIDR", n.Spec.PodCIDR).Infof("Cannot pick an IPv4 tunnel address from the given CIDR")
+		return ""
+	}
 	tunIp[3]++
 
 	return tunIp.String()
