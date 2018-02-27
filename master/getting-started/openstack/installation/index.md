@@ -1,5 +1,5 @@
 ---
-title: Calico with OpenStack
+title: Calico on OpenStack
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/'
 ---
 
@@ -15,23 +15,10 @@ You can install {{site.prodname}} via any of the following methods:
 - [RPM-based install for Red Hat Enterprise Linux 7 (RHEL
   7)]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/redhat)
 
-
-- [Canonical's Juju
-  Charms]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/juju)
-
-- [Mirantis
-  Fuel]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/fuel)
-
-- [DevStack]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/devstack)
-
-The [Chef
-installation]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/chef),
-which we used to recommend, is now very old and only supports Icehouse. We now
-recommend using one of the above methods instead.
+- [DevStack]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/devstack) (for development purposes only — not recommended for production!)
 
 In all cases, except DevStack, you will need at least two or three servers to
-get going: one OpenStack controller, one OpenStack compute node and, for
-Mirantis Fuel, a third node to serve as the Fuel master.
+get going: one OpenStack controller and one or more OpenStack compute nodes.
 
 ## Target platforms and OpenStack releases
 

@@ -188,7 +188,7 @@ For networks and subnets, see the sections on [Networks](#networks) and
 #### Tab: Network -&gt; Routers
 
 Tenants should be prevented from creating routers, as they serve no
-purpose in a Calico network. See [Layer 3 Routing](#routers) for more.
+purpose in a {{site.prodname}} network. See [Layer 3 Routing](#routers) for more.
 
 ### Section: Admin
 

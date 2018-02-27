@@ -54,7 +54,7 @@ These steps are detailed in this section.
 
 ### Install OpenStack
 
-If you haven't already done so, install Openstack with Neutron and ML2
+If you haven't already done so, install OpenStack with Neutron and ML2
 networking.
 
 ### Configure YUM repositories
@@ -272,7 +272,7 @@ On each control node, perform the following steps:
     read `core_plugin = calico`.
 
 1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by Calico's OpenStack driver but not yet
+    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver but not yet
     RPM-packaged, so you should install it with `pip`.  First check in case it
     has already been pulled in by your OpenStack installation.
 

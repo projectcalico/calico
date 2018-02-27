@@ -185,7 +185,7 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
 
 ### Step 5: Reconfigure compute nodes
 
-#### Openstack deployments
+#### OpenStack deployments
 
 If you used the `calico-gen-bird-conf.sh` script to configure your
 compute hosts, and you used the route reflector IP when you did, you do
