@@ -4,11 +4,17 @@
 # running with the Kubernetes datastore driver, driven by CRUD
 # operations through the k8s API server.
 
-# Config.
-#
-# What version of Felix (container image) to use.
-: ${FELIX_VERSION:=latest}
-#
+# Config check.
+if ! test -n "${FV_FELIXIMAGE}"; then
+    echo FV_FELIXIMAGE must be set to indicate the felix image to use.
+    exit -1
+fi
+
+if ! test -n "${FV_ETCDIMAGE}"; then
+    echo FV_ETCDIMAGE must be set to indicate the etcd image to use.
+    exit -1
+fi
+
 if ! test -n "${FV_K8SIMAGE}"; then
     echo FV_K8SIMAGE must be set to indicate the hyperkube image to use.
     exit -1
@@ -195,7 +201,7 @@ docker run --detach --privileged --name ${prefix}-felix \
        -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
-       calico/felix:${FELIX_VERSION}
+       $FV_FELIXIMAGE
 felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
 
