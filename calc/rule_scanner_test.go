@@ -277,15 +277,16 @@ var _ = Describe("ParsedRule", func() {
 	})
 	It("should have correct fields relative to proto.Rule", func() {
 		// We expect all the fields to have the same name, except for
-		// ICMP, which differ in structure.
+		// ICMP and service account matches, which differ in structure.
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
 		prFields := []string{}
 		for i := 0; i < numPRFields; i++ {
 			name := strings.ToLower(prType.Field(i).Name)
-			if strings.Index(name, "icmptype") >= 0 ||
-				strings.Index(name, "icmpcode") >= 0 {
-				// ICMP fields expected to differ.
+			if strings.Contains(name, "icmptype") ||
+				strings.Contains(name, "icmpcode") ||
+				strings.Contains(name, "serviceaccount") {
+				// expected to differ.
 				continue
 			}
 			if strings.HasSuffix(name, "nets") {
@@ -300,8 +301,9 @@ var _ = Describe("ParsedRule", func() {
 		protoFields := []string{}
 		for i := 0; i < numMRFields; i++ {
 			name := strings.ToLower(protoType.Field(i).Name)
-			if strings.Contains(name, "icmp") {
-				// ICMP fields expected to differ.
+			if strings.Contains(name, "icmp") ||
+				strings.Contains(name, "serviceaccount") {
+				// expected to differ.
 				continue
 			}
 			if strings.Contains(name, "ruleid") {

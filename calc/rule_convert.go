@@ -112,11 +112,20 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		OriginalDstNamespaceSelector: in.OriginalDstNamespaceSelector,
 		OriginalNotSrcSelector:       in.OriginalNotSrcSelector,
 		OriginalNotDstSelector:       in.OriginalNotDstSelector,
+	}
 
-		SrcServiceAccountNames:    in.SrcServiceAccountNames,
-		SrcServiceAccountSelector: in.SrcServiceAccountSelector,
-		DstServiceAccountNames:    in.DstServiceAccountNames,
-		DstServiceAccountSelector: in.DstServiceAccountSelector,
+	if len(in.SrcServiceAccountNames) > 0 || in.SrcServiceAccountSelector != "" {
+		out.SrcServiceAccountMatch = &proto.ServiceAccountMatch{
+			Selector: in.SrcServiceAccountSelector,
+			Names:    in.SrcServiceAccountNames,
+		}
+	}
+
+	if len(in.DstServiceAccountNames) > 0 || in.DstServiceAccountSelector != "" {
+		out.DstServiceAccountMatch = &proto.ServiceAccountMatch{
+			Selector: in.DstServiceAccountSelector,
+			Names:    in.DstServiceAccountNames,
+		}
 	}
 
 	// Fill in the ICMP fields.  We can't follow the pattern and make a

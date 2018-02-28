@@ -237,10 +237,8 @@ message Rule {
   string original_not_dst_selector = 119;
 
   // Pass through of the v3 datamodel service account match criteria.
-  string src_service_account_selector = 120;
-  string dst_service_account_selector = 121;
-  repeated string src_service_account_names = 122;
-  repeated string dst_service_account_names = 123;
+  ServiceAccountMatch src_service_account_match = 120;
+  ServiceAccountMatch dst_service_account_match = 121;
 
   // Changed to config option.
   reserved 200;
@@ -248,6 +246,11 @@ message Rule {
 
   // An opaque ID/hash for the rule.
   string rule_id = 201;
+}
+
+message ServiceAccountMatch {
+  string selector = 1;
+  repeated string names = 2;
 }
 
 message IcmpTypeAndCode {

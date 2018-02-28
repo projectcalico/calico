@@ -402,7 +402,9 @@ var _ = Context("policy sync API tests", func() {
 											SrcIpSetIds: []string{
 												utils.IPSetIDForSelector("all()"),
 											},
-											SrcServiceAccountSelector: "foo == 'bar'",
+											SrcServiceAccountMatch: &proto.ServiceAccountMatch{
+												Selector: "foo == 'bar'",
+											},
 										},
 									},
 									OutboundRules: []*proto.Rule{
