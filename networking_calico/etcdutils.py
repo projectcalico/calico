@@ -20,6 +20,7 @@ import logging
 import re
 from types import StringTypes
 
+from etcd3gw.exceptions import ConnectionFailedError
 from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 
@@ -130,10 +131,16 @@ class EtcdWatcher(object):
             # Get the current etcdv3 cluster ID and revision, so (a) we can
             # detect if the cluster ID changes, and (b) we know when to start
             # watching from.
-            cluster_id, last_revision = etcdv3.get_status()
-            last_revision = int(last_revision)
-            _log.info("Current cluster_id %s, revision %d",
-                      cluster_id, last_revision)
+            try:
+                cluster_id, last_revision = etcdv3.get_status()
+                last_revision = int(last_revision)
+                _log.info("Current cluster_id %s, revision %d",
+                          cluster_id, last_revision)
+            except ConnectionFailedError as e:
+                _log.debug("%r", e)
+                _log.warning("etcd not available, will retry in 5s")
+                eventlet.sleep(5)
+                continue
 
             # Allow subclass to do pre-snapshot processing, and to return any
             # data that it will need for reconciliation after the snapshot.

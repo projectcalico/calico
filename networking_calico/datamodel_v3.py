@@ -60,7 +60,6 @@ def put(resource_kind, name, spec, annotations={}, mod_revision=None):
       proceed if replacing an existing value with that mod_revision.
 
     Returns True if the write happened successfully; False if not.
-
     """
     key = _build_key(resource_kind, name)
     value = None
@@ -122,7 +121,7 @@ def get(resource_kind, name):
     return value['spec'], mod_revision
 
 
-def get_all(resource_kind):
+def get_all(resource_kind, with_labels_and_annotations=False):
     """Read all Calico v3 resources of a certain kind from etcdv3.
 
     - resource_kind (string): E.g. WorkloadEndpoint, Profile, etc.
@@ -145,17 +144,30 @@ def get_all(resource_kind):
     tuples = []
     for result in results:
         key, value, mod_revision = result
+        name = key.split('/')[-1]
+
+        # Decode the value.
+        spec = labels = annotations = None
         try:
             value_dict = json.loads(value)
             LOG.debug("value dict: %s", value_dict)
-            tuple = (
-                value_dict['metadata']['name'],
-                value_dict['spec'],
-                mod_revision
-            )
-            tuples.append(tuple)
+            spec = value_dict['spec']
+            labels = value_dict['metadata'].get('labels', {})
+            annotations = value_dict['metadata'].get('annotations', {})
         except ValueError:
-            LOG.warning("etcd value not valid JSON, so ignoring (%s)", value)
+            # When the value is not valid JSON, we still return a tuple for
+            # this key, with spec, labels and annotations all as None.  This is
+            # so that the caller can correctly differentiate between
+            # overwriting an existing value (which => a transaction with
+            # specified mod_revision) and creating a key that did not exist
+            # before (=> a transaction with version 0).
+            LOG.warning("etcd value not valid JSON (%s)", value)
+
+        if with_labels_and_annotations:
+            t = (name, (spec, labels, annotations), mod_revision)
+        else:
+            t = (name, spec, mod_revision)
+        tuples.append(t)
     return tuples
 
 

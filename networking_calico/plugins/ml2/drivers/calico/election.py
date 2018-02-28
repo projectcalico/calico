@@ -229,8 +229,19 @@ class Elector(object):
             while not self._stopped:
                 try:
                     LOG.debug("Refreshing master role")
+                    # Refresh the lease.
                     ttl = ttl_lease.refresh()
+                    # Also rewrite the key, so that non-masters see an event on
+                    # the key.
+                    if not etcdv3.put(self._key,
+                                      self.id_string,
+                                      lease=ttl_lease,
+                                      existing_value=self.id_string):
+                        LOG.warning("Key changed or deleted; restart election")
+                        raise RestartElection()
                     LOG.debug("Refreshed master role, TTL now is %d", ttl)
+                except RestartElection:
+                    raise
                 except Exception as e:
                     # This is a pretty broad except statement, but anything
                     # going wrong means this instance gives up being the
