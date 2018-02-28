@@ -19,13 +19,12 @@
 package v3
 
 import (
-	reflect "reflect"
-
 	apis_v1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	numorstring "github.com/projectcalico/libcalico-go/lib/numorstring"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	reflect "reflect"
 )
 
 func init() {
@@ -869,6 +868,28 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			if **in != nil {
 				in, out := *in, *out
 				*out = make([]ProtoPort, len(*in))
+				copy(*out, *in)
+			}
+		}
+	}
+	if in.KubeIPVSSupportEnabled != nil {
+		in, out := &in.KubeIPVSSupportEnabled, &out.KubeIPVSSupportEnabled
+		if *in == nil {
+			*out = nil
+		} else {
+			*out = new(bool)
+			**out = **in
+		}
+	}
+	if in.KubeNodePortRanges != nil {
+		in, out := &in.KubeNodePortRanges, &out.KubeNodePortRanges
+		if *in == nil {
+			*out = nil
+		} else {
+			*out = new([]numorstring.Port)
+			if **in != nil {
+				in, out := *in, *out
+				*out = make([]numorstring.Port, len(*in))
 				copy(*out, *in)
 			}
 		}
