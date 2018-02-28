@@ -207,7 +207,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if ruleRenderer == nil {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig)
 	}
-	epMarkMapper := rules.NewEndpointMarkMapper(config.RulesConfig.IptablesMarkEndpoint)
+	epMarkMapper := rules.NewEndpointMarkMapper(
+		config.RulesConfig.IptablesMarkEndpoint,
+		config.RulesConfig.IptablesMarkNonCaliEndpoint)
+
 	dp := &InternalDataplane{
 		toDataplane:       make(chan interface{}, msgPeekLimit),
 		fromDataplane:     make(chan interface{}, 100),
@@ -306,6 +309,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV4,
 		4,
 		epMarkMapper,
+		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
@@ -371,6 +375,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6,
 			6,
 			epMarkMapper,
+			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))

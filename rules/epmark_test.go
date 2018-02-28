@@ -29,20 +29,24 @@ func init() {
 	ErrMark := uint32(0)
 
 	DescribeTable("EndpointMarkMapper initialization",
-		func(mask uint32) {
-			epmm := NewEndpointMarkMapperWithShim(mask, &mockHash32{})
+		func(mask, nonCaliMark uint32) {
+			epmm := NewEndpointMarkMapperWithShim(mask, nonCaliMark, &mockHash32{})
 			Expect(epmm.GetMask()).To(Equal(mask))
+
+			mark, err := epmm.GetEndpointMark("/cali/Pseudo/NonCali/Endpoint/")
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(mark).To(Equal(uint32(nonCaliMark)))
 		},
-		Entry("should initialise with one bit", uint32(0x10)),
-		Entry("should initialise with some bits", uint32(0x123f)),
-		Entry("should initialise with max bits", uint32(0xffffffff)),
+		Entry("should initialise with one bit", uint32(0x10), uint32(0x10)),
+		Entry("should initialise with some bits", uint32(0x123f), uint32(0x01)),
+		Entry("should initialise with max bits", uint32(0xffffffff), uint32(0x01)),
 	)
 
 	Describe("EndpointMarkMapper allocation/release", func() {
 
 		var epmm EndpointMarkMapper
 		BeforeEach(func() {
-			epmm = NewEndpointMarkMapperWithShim(0x700, &mockHash32{})
+			epmm = NewEndpointMarkMapperWithShim(0x700, 0x100, &mockHash32{})
 		})
 		DescribeTable("EndpointMarkMapper allocation",
 			func(eps []string, expected []uint32) {
@@ -60,16 +64,16 @@ func init() {
 			},
 			Entry("should allocate sequentially and repeat",
 				[]string{"cali1", "cali2", "cali3", "cali1", "cali2", "cali7"},
-				[]uint32{0x100, 0x200, 0x300, 0x100, 0x200, 0x700}),
+				[]uint32{0x200, 0x300, 0x400, 0x200, 0x300, 0x700}),
 			Entry("should allocate with collision and fail correctly",
 				[]string{"cali1", "cali6", "cali3", "cali11", "cali22", "cali33", "cali8", "cali9"},
-				[]uint32{0x100, 0x600, 0x300, 0x200, 0x400, 0x500, 0x700, ErrMark}),
+				[]uint32{0x200, 0x600, 0x300, 0x400, 0x500, 0x700, ErrMark, ErrMark}),
 			Entry("should allocate/release with collision",
 				[]string{"cali1", "cali6", "cali3", "xcali1", "xcali2", "cali33", "cali11", "cali66"},
-				[]uint32{0x100, 0x600, 0x300, 0x400, 0x100, 0x700}),
+				[]uint32{0x200, 0x600, 0x300, 0x400, 0x200, 0x700}),
 			Entry("should allocate/fail/release/allocate",
 				[]string{"cali1", "cali6", "cali3", "cali11", "cali22", "cali33", "cali8", "cali5", "xcali3", "xcali6", "cali55", "cali66"},
-				[]uint32{0x100, 0x600, 0x300, 0x200, 0x400, 0x500, 0x700, ErrMark, 0x600, 0x300}),
+				[]uint32{0x200, 0x600, 0x300, 0x400, 0x500, 0x700, ErrMark, ErrMark, 0x600, 0x300}),
 		)
 	})
 
@@ -77,7 +81,7 @@ func init() {
 
 		var epmm EndpointMarkMapper
 		BeforeEach(func() {
-			epmm = NewEndpointMarkMapperWithShim(0x700, &mockHash32{})
+			epmm = NewEndpointMarkMapperWithShim(0x700, 0x100, &mockHash32{})
 		})
 		It("should not set mark with wrong value", func() {
 			err := epmm.SetEndpointMark("cali1", uint32(0x210))
@@ -104,13 +108,13 @@ func init() {
 		It("should not set mark with different endpoint", func() {
 			mark, err := epmm.GetEndpointMark("cali1")
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(mark).To(Equal(uint32(0x100)))
+			Expect(mark).To(Equal(uint32(0x200)))
 
-			err = epmm.SetEndpointMark("cali3", uint32(0x100))
+			err = epmm.SetEndpointMark("cali3", uint32(0x200))
 			Expect(err).Should(HaveOccurred())
 
 			epmm.ReleaseEndpointMark("cali1")
-			err = epmm.SetEndpointMark("cali3", uint32(0x100))
+			err = epmm.SetEndpointMark("cali3", uint32(0x200))
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 		It("should set mark and allocate", func() {

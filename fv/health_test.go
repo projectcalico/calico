@@ -221,7 +221,7 @@ var _ = Describe("health tests", func() {
 			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 			"-e", "FELIX_TYPHAADDR="+typhaAddr,
 			"-v", k8sAPIServer.CertFileName+":/tmp/apiserver.crt",
-			"calico/felix:latest",
+			utils.Config.FelixImage,
 		)
 		Expect(felixContainer).NotTo(BeNil())
 

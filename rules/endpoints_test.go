@@ -30,32 +30,34 @@ var _ = Describe("Endpoints", func() {
 	for _, trueOrFalse := range []bool{true, false} {
 		kubeIPVSEnabled := trueOrFalse
 		var rrConfigNormalMangleReturn = Config{
-			IPIPEnabled:               true,
-			IPIPTunnelAddress:         nil,
-			IPSetConfigV4:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:        0x8,
-			IptablesMarkPass:          0x10,
-			IptablesMarkScratch0:      0x20,
-			IptablesMarkScratch1:      0x40,
-			IptablesMarkEndpoint:      0xff00,
-			KubeIPVSSupportEnabled:    kubeIPVSEnabled,
-			IptablesMangleAllowAction: "RETURN",
+			IPIPEnabled:                 true,
+			IPIPTunnelAddress:           nil,
+			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			IptablesMarkAccept:          0x8,
+			IptablesMarkPass:            0x10,
+			IptablesMarkScratch0:        0x20,
+			IptablesMarkScratch1:        0x40,
+			IptablesMarkEndpoint:        0xff00,
+			IptablesMarkNonCaliEndpoint: 0x0100,
+			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
+			IptablesMangleAllowAction:   "RETURN",
 		}
 
 		var rrConfigConntrackDisabledReturnAction = Config{
-			IPIPEnabled:               true,
-			IPIPTunnelAddress:         nil,
-			IPSetConfigV4:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:        0x8,
-			IptablesMarkPass:          0x10,
-			IptablesMarkScratch0:      0x20,
-			IptablesMarkScratch1:      0x40,
-			IptablesMarkEndpoint:      0xff00,
-			KubeIPVSSupportEnabled:    kubeIPVSEnabled,
-			DisableConntrackInvalid:   true,
-			IptablesFilterAllowAction: "RETURN",
+			IPIPEnabled:                 true,
+			IPIPTunnelAddress:           nil,
+			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			IptablesMarkAccept:          0x8,
+			IptablesMarkPass:            0x10,
+			IptablesMarkScratch0:        0x20,
+			IptablesMarkScratch1:        0x40,
+			IptablesMarkEndpoint:        0xff00,
+			IptablesMarkNonCaliEndpoint: 0x0100,
+			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
+			DisableConntrackInvalid:     true,
+			IptablesFilterAllowAction:   "RETURN",
 		}
 
 		var renderer RuleRenderer
@@ -64,7 +66,8 @@ var _ = Describe("Endpoints", func() {
 		Context("with normal config", func() {
 			BeforeEach(func() {
 				renderer = NewRenderer(rrConfigNormalMangleReturn)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint)
+				epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint,
+					rrConfigNormalMangleReturn.IptablesMarkNonCaliEndpoint)
 			})
 
 			It("Song should render a minimal workload endpoint", func() {
@@ -245,7 +248,7 @@ var _ = Describe("Endpoints", func() {
 					epMarkMapper,
 					[]string{"ai", "bi"}, []string{"ae", "be"},
 					[]string{"afi", "bfi"}, []string{"afe", "bfe"},
-					[]string{"prof1", "prof2"})).To(Equal([]*Chain{
+					[]string{"prof1", "prof2"})).To(Equal(trimSMChain(kubeIPVSEnabled, []*Chain{
 					{
 						Name: "cali-th-eth0",
 						Rules: []Rule{
@@ -388,11 +391,17 @@ var _ = Describe("Endpoints", func() {
 								Comment: "Drop if no policies passed packet"},
 						},
 					},
-				}))
+					{
+						Name: "cali-sm-eth0",
+						Rules: []Rule{
+							{Action: SetMaskedMarkAction{Mark: 0xa200, Mask: 0xff00}},
+						},
+					},
+				})))
 			})
 
 			It("should render host endpoint raw chains with untracked policies", func() {
-				Expect(renderer.HostEndpointToRawChains("eth0", epMarkMapper, []string{"c"}, []string{"c"})).To(Equal([]*Chain{
+				Expect(renderer.HostEndpointToRawChains("eth0", []string{"c"}, []string{"c"})).To(Equal([]*Chain{
 					{
 						Name: "cali-th-eth0",
 						Rules: []Rule{
@@ -443,7 +452,6 @@ var _ = Describe("Endpoints", func() {
 			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 				Expect(renderer.HostEndpointToMangleChains(
 					"eth0",
-					epMarkMapper,
 					[]string{"c"},
 				)).To(Equal([]*Chain{
 					{
@@ -480,7 +488,8 @@ var _ = Describe("Endpoints", func() {
 		Describe("with ctstate=INVALID disabled", func() {
 			BeforeEach(func() {
 				renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.IptablesMarkEndpoint)
+				epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.IptablesMarkEndpoint,
+					rrConfigConntrackDisabledReturnAction.IptablesMarkNonCaliEndpoint)
 			})
 
 			It("should render a minimal workload endpoint", func() {
@@ -532,7 +541,6 @@ var _ = Describe("Endpoints", func() {
 			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
 				Expect(renderer.HostEndpointToMangleChains(
 					"eth0",
-					epMarkMapper,
 					[]string{"c"},
 				)).To(Equal([]*Chain{
 					{

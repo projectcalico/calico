@@ -76,6 +76,20 @@ func (m MatchCriteria) MarkMatchesWithMask(mark, mask uint32) MatchCriteria {
 	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mask))
 }
 
+func (m MatchCriteria) NotMarkMatchesWithMask(mark, mask uint32) MatchCriteria {
+	logCxt := log.WithFields(log.Fields{
+		"mark": mark,
+		"mask": mask,
+	})
+	if mask == 0 {
+		logCxt.Panic("Bug: mask is 0.")
+	}
+	if mark&mask != mark {
+		logCxt.Panic("Bug: mark is not contained in mask")
+	}
+	return append(m, fmt.Sprintf("-m mark ! --mark %#x/%#x", mark, mask))
+}
+
 func (m MatchCriteria) InInterface(ifaceMatch string) MatchCriteria {
 	return append(m, fmt.Sprintf("--in-interface %s", ifaceMatch))
 }

@@ -54,13 +54,14 @@ var _ = Describe("Static", func() {
 						{Protocol: "tcp", Port: 23},
 						{Protocol: "tcp", Port: 1023},
 					},
-					IptablesMarkAccept:     0x10,
-					IptablesMarkPass:       0x20,
-					IptablesMarkScratch0:   0x40,
-					IptablesMarkScratch1:   0x80,
-					IptablesMarkEndpoint:   0xff00,
-					KubeIPVSSupportEnabled: kubeIPVSEnabled,
-					KubeNodePortRanges:     []numorstring.Port{{30030, 30040, ""}},
+					IptablesMarkAccept:          0x10,
+					IptablesMarkPass:            0x20,
+					IptablesMarkScratch0:        0x40,
+					IptablesMarkScratch1:        0x80,
+					IptablesMarkEndpoint:        0xff00,
+					IptablesMarkNonCaliEndpoint: 0x100,
+					KubeIPVSSupportEnabled:      kubeIPVSEnabled,
+					KubeNodePortRanges:          []numorstring.Port{{30030, 30040, ""}},
 				}
 			})
 
@@ -119,6 +120,31 @@ var _ = Describe("Static", func() {
 								Action:  JumpAction{Target: ChainDispatchSetEndPointMark},
 								Comment: "To kubernetes service",
 							},
+						},
+					}
+
+					expForwardEndpointMark := &Chain{
+						Name: "cali-forward-endpoint-mark",
+						Rules: []Rule{
+							Rule{
+								Match:  Match().NotMarkMatchesWithMask(0x100, 0xff00),
+								Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+							},
+							Rule{
+								Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
+							},
+							Rule{
+								Match:   Match().MarkSingleBitSet(0x10),
+								Action:  AcceptAction{},
+								Comment: "Policy explicitly accepted packet.",
+							},
+						},
+					}
+
+					expClearEndpointMark := &Chain{
+						Name: "cali-clear-endpoint-mark",
+						Rules: []Rule{
+							Rule{Action: ClearMarkAction{Mark: 0xff00}},
 						},
 					}
 
@@ -215,13 +241,17 @@ var _ = Describe("Static", func() {
 
 									// From endpoint mark chain
 									{Match: Match().MarkNotClear(conf.IptablesMarkEndpoint),
-										Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+										Action: JumpAction{Target: ChainForwardEndpointMark},
 									},
-									{Action: ClearMarkAction{Mark: conf.IptablesMarkEndpoint}},
 
 									// To workload traffic.
 									{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-									{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+									{Match: Match().OutInterface("cali+"), Action: GotoAction{Target: ChainDispatchClearEndPointMark}},
+
+									// forward traffic clear endpoint mark and return.
+									{Match: Match().MarkNotClear(conf.IptablesMarkEndpoint),
+										Action: GotoAction{Target: ChainDispatchClearEndPointMark},
+									},
 
 									// Non-workload traffic, send to host chains.
 									{Action: ClearMarkAction{Mark: 0xf0}},
@@ -271,9 +301,23 @@ var _ = Describe("Static", func() {
 							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-check")).To(BeNil())
 						}
 					})
+					It("should include the expected forward-endpoint-mark chain in the filter chains", func() {
+						if kubeIPVSEnabled {
+							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-endpoint-mark")).To(Equal(expForwardEndpointMark))
+						} else {
+							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-endpoint-mark")).To(BeNil())
+						}
+					})
+					It("should include the expected clear-endpoint-mark chain in the filter chains", func() {
+						if kubeIPVSEnabled {
+							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-clear-endpoint-mark")).To(Equal(expClearEndpointMark))
+						} else {
+							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-clear-endpoint-mark")).To(BeNil())
+						}
+					})
 					It("should return only the expected filter chains", func() {
 						if kubeIPVSEnabled {
-							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(7))
+							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(9))
 						} else {
 							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(6))
 						}
@@ -401,17 +445,18 @@ var _ = Describe("Static", func() {
 			epMark := uint32(0xff00)
 			BeforeEach(func() {
 				conf = Config{
-					WorkloadIfacePrefixes:  []string{"cali"},
-					IPIPEnabled:            true,
-					IPIPTunnelAddress:      net.ParseIP("10.0.0.1"),
-					IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-					IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-					IptablesMarkAccept:     0x10,
-					IptablesMarkPass:       0x20,
-					IptablesMarkScratch0:   0x40,
-					IptablesMarkScratch1:   0x80,
-					IptablesMarkEndpoint:   epMark,
-					KubeIPVSSupportEnabled: kubeIPVSEnabled,
+					WorkloadIfacePrefixes:       []string{"cali"},
+					IPIPEnabled:                 true,
+					IPIPTunnelAddress:           net.ParseIP("10.0.0.1"),
+					IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+					IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+					IptablesMarkAccept:          0x10,
+					IptablesMarkPass:            0x20,
+					IptablesMarkScratch0:        0x40,
+					IptablesMarkScratch1:        0x80,
+					IptablesMarkEndpoint:        epMark,
+					IptablesMarkNonCaliEndpoint: 0x100,
+					KubeIPVSSupportEnabled:      kubeIPVSEnabled,
 				}
 			})
 
@@ -554,13 +599,17 @@ var _ = Describe("Static", func() {
 
 					// From endpoint mark chain
 					{Match: Match().MarkNotClear(epMark),
-						Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+						Action: JumpAction{Target: ChainForwardEndpointMark},
 					},
-					{Action: ClearMarkAction{Mark: epMark}},
 
 					// To workload traffic.
 					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+					{Match: Match().OutInterface("cali+"), Action: GotoAction{Target: ChainDispatchClearEndPointMark}},
+
+					// forward traffic clear endpoint mark and return.
+					{Match: Match().MarkNotClear(0xff00),
+						Action: GotoAction{Target: ChainDispatchClearEndPointMark},
+					},
 
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
@@ -623,13 +672,17 @@ var _ = Describe("Static", func() {
 
 					// From endpoint mark chain
 					{Match: Match().MarkNotClear(epMark),
-						Action: JumpAction{Target: ChainDispatchFromEndPointMark},
+						Action: JumpAction{Target: ChainForwardEndpointMark},
 					},
-					{Action: ClearMarkAction{Mark: epMark}},
 
 					// To workload traffic.
 					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+					{Match: Match().OutInterface("cali+"), Action: GotoAction{Target: ChainDispatchClearEndPointMark}},
+
+					// forward traffic clear endpoint mark and return.
+					{Match: Match().MarkNotClear(0xff00),
+						Action: GotoAction{Target: ChainDispatchClearEndPointMark},
+					},
 
 					// Non-workload traffic, send to host chains.
 					{Action: ClearMarkAction{Mark: 0xf0}},
@@ -727,15 +780,16 @@ var _ = Describe("Static", func() {
 	Describe("with multiple KubePortRanges", func() {
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes:  []string{"cali"},
-				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:     0x10,
-				IptablesMarkPass:       0x20,
-				IptablesMarkScratch0:   0x40,
-				IptablesMarkScratch1:   0x80,
-				IptablesMarkEndpoint:   0xff00,
-				KubeIPVSSupportEnabled: true,
+				WorkloadIfacePrefixes:       []string{"cali"},
+				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:          0x10,
+				IptablesMarkPass:            0x20,
+				IptablesMarkScratch0:        0x40,
+				IptablesMarkScratch1:        0x80,
+				IptablesMarkEndpoint:        0xff00,
+				IptablesMarkNonCaliEndpoint: 0x100,
+				KubeIPVSSupportEnabled:      true,
 				KubeNodePortRanges: []numorstring.Port{
 					{30030, 30040, ""},
 					{30130, 30140, ""},
@@ -832,6 +886,7 @@ var _ = Describe("Static", func() {
 				IptablesMarkScratch0:         0x40,
 				IptablesMarkScratch1:         0x80,
 				IptablesMarkEndpoint:         0xff00,
+				IptablesMarkNonCaliEndpoint:  0x100,
 			}
 		})
 
@@ -934,6 +989,7 @@ var _ = Describe("Static", func() {
 				IptablesMarkScratch0:         0x40,
 				IptablesMarkScratch1:         0x80,
 				IptablesMarkEndpoint:         0xff00,
+				IptablesMarkNonCaliEndpoint:  0x100,
 				IptablesFilterAllowAction:    "RETURN",
 			}
 		})
@@ -994,16 +1050,17 @@ var _ = Describe("Static", func() {
 		epMark := uint32(0xff00)
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes:     []string{"cali"},
-				IPSetConfigV4:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:             ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:        0x10,
-				IptablesMarkPass:          0x20,
-				IptablesMarkScratch0:      0x40,
-				IptablesMarkScratch1:      0x80,
-				IptablesMarkEndpoint:      epMark,
-				IptablesFilterAllowAction: "RETURN",
-				IptablesMangleAllowAction: "RETURN",
+				WorkloadIfacePrefixes:       []string{"cali"},
+				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:          0x10,
+				IptablesMarkPass:            0x20,
+				IptablesMarkScratch0:        0x40,
+				IptablesMarkScratch1:        0x80,
+				IptablesMarkEndpoint:        epMark,
+				IptablesMarkNonCaliEndpoint: 0x100,
+				IptablesFilterAllowAction:   "RETURN",
+				IptablesMangleAllowAction:   "RETURN",
 			}
 		})
 

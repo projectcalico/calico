@@ -64,8 +64,23 @@ var wlDispatchEmpty = []*iptables.Chain{
 		},
 	},
 	{
-		Name:  "cali-set-endpoint-mark",
-		Rules: []iptables.Rule{},
+		Name: "cali-set-endpoint-mark",
+		Rules: []iptables.Rule{
+			iptables.Rule{
+				Match:   iptables.Match().InInterface("cali+"),
+				Action:  iptables.DropAction{},
+				Comment: "Unknown endpoint",
+			},
+			iptables.Rule{
+				Match:   iptables.Match().InInterface("tap+"),
+				Action:  iptables.DropAction{},
+				Comment: "Unknown endpoint",
+			},
+			{
+				Action:  iptables.SetMaskedMarkAction{Mark: 0x0100, Mask: 0xff00},
+				Comment: "Non-Cali endpoint mark",
+			},
+		},
 	},
 }
 
@@ -137,6 +152,7 @@ func chainsForIfaces(ifaceMetadata []string,
 	epMarkSetName := "cali-set-endpoint-mark"
 	epMarkFromName := "cali-from-endpoint-mark"
 	epMarkSetOnePrefix := "cali-sm-"
+	epmarkFromPrefix := outPrefix[:6]
 
 	if host {
 		hostOrWlLetter = "h"
@@ -147,6 +163,7 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		outPrefix = "cali-to-"
 		inPrefix = "cali-from-"
+		epmarkFromPrefix = inPrefix[:6]
 	}
 	for _, ifaceMetadata := range ifaceMetadata {
 		var ifaceName, polName string
@@ -343,6 +360,7 @@ func chainsForIfaces(ifaceMetadata []string,
 				},
 			)
 		}
+
 		if host {
 			dispatchOut = append(dispatchOut,
 				iptables.Rule{
@@ -369,7 +387,9 @@ func chainsForIfaces(ifaceMetadata []string,
 					Action: iptables.GotoAction{Target: inPrefix[:6] + hostOrWlLetter + "-" + ifaceName},
 				},
 			)
+		}
 
+		if tableKind != "preDNAT" && tableKind != "untracked" {
 			chains = append(chains,
 				&iptables.Chain{
 					Name: epMarkSetOnePrefix + ifaceName,
@@ -389,10 +409,11 @@ func chainsForIfaces(ifaceMetadata []string,
 			epMarkFrom = append(epMarkFrom,
 				iptables.Rule{
 					Match:  iptables.Match().MarkMatchesWithMask(epMark, epMarkMapper.GetMask()),
-					Action: iptables.GotoAction{Target: outPrefix[:6] + hostOrWlLetter + "-" + ifaceName},
+					Action: iptables.GotoAction{Target: epmarkFromPrefix + hostOrWlLetter + "-" + ifaceName},
 				},
 			)
 		}
+
 	}
 	if !host {
 		dispatchOut = append(dispatchOut,
@@ -407,6 +428,25 @@ func chainsForIfaces(ifaceMetadata []string,
 				Match:   iptables.Match(),
 				Action:  iptables.DropAction{},
 				Comment: "Unknown interface",
+			},
+		)
+	}
+
+	if tableKind != "preDNAT" && tableKind != "untracked" {
+		epMarkSet = append(epMarkSet,
+			iptables.Rule{
+				Match:   iptables.Match().InInterface("cali+"),
+				Action:  iptables.DropAction{},
+				Comment: "Unknown endpoint",
+			},
+			iptables.Rule{
+				Match:   iptables.Match().InInterface("tap+"),
+				Action:  iptables.DropAction{},
+				Comment: "Unknown endpoint",
+			},
+			iptables.Rule{
+				Action:  iptables.SetMaskedMarkAction{Mark: 0x0100, Mask: 0xff00},
+				Comment: "Non-Cali endpoint mark",
 			},
 		)
 		epMarkFrom = append(epMarkFrom,
@@ -427,6 +467,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			},
 		)
 	}
+
 	if tableKind == "preDNAT" {
 		chains = append(chains,
 			&iptables.Chain{
@@ -446,6 +487,7 @@ func chainsForIfaces(ifaceMetadata []string,
 			},
 		)
 	}
+
 	return chains
 }
 
@@ -513,16 +555,18 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 		BeforeEach(func() {
 			rrConfigNormal = rules.Config{
-				IPIPEnabled:            true,
-				IPIPTunnelAddress:      nil,
-				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:     0x8,
-				IptablesMarkPass:       0x10,
-				IptablesMarkScratch0:   0x20,
-				IptablesMarkScratch1:   0x40,
-				IptablesMarkEndpoint:   0xff00,
-				KubeIPVSSupportEnabled: true,
+				IPIPEnabled:                 true,
+				IPIPTunnelAddress:           nil,
+				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:          0x8,
+				IptablesMarkPass:            0x10,
+				IptablesMarkScratch0:        0x20,
+				IptablesMarkScratch1:        0x40,
+				IptablesMarkEndpoint:        0xff00,
+				IptablesMarkNonCaliEndpoint: 0x0100,
+				KubeIPVSSupportEnabled:      true,
+				WorkloadIfacePrefixes:       []string{"cali", "tap"},
 			}
 			eth0Addrs = set.New()
 			eth0Addrs.Add(ipv4)
@@ -551,7 +595,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 				renderer,
 				routeTable,
 				ipVersion,
-				rules.NewEndpointMarkMapper(rrConfigNormal.IptablesMarkEndpoint),
+				rules.NewEndpointMarkMapper(rrConfigNormal.IptablesMarkEndpoint, rrConfigNormal.IptablesMarkNonCaliEndpoint),
+				rrConfigNormal.KubeIPVSSupportEnabled,
 				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
