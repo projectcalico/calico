@@ -160,7 +160,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Expect(pool2.IPNet.Contains(v4[0].IP)).To(BeTrue())
 			})
 
-			It("should assign from an existing affine block for the first host (even though pool is removed)", func() {
+			It("should not assign from an existing affine block for the first host since the pool is removed)", func() {
 				args := AutoAssignArgs{
 					Num4:     1,
 					Num6:     0,
@@ -168,7 +168,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				}
 				v4, _, outErr := ic.AutoAssign(context.Background(), args)
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(pool1.IPNet.Contains(v4[0].IP)).To(BeTrue())
+				Expect(pool2.IPNet.Contains(v4[0].IP)).To(BeTrue())
 			})
 		})
 	})
@@ -366,7 +366,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			}
 			v4, _, err := ic.AutoAssign(context.Background(), args)
 			log.Println("v4: %d IPs", len(v4))
-
+			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).Should(Equal("the given pool (40.0.0.0/24) does not exist, or is not enabled"))
 			Expect(len(v4)).To(Equal(0))
 		})

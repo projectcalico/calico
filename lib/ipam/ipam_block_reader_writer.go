@@ -17,7 +17,6 @@ package ipam
 import (
 	"context"
 	"errors"
-	"fmt"
 	"hash/fnv"
 	"math/big"
 	"math/rand"
@@ -74,46 +73,11 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 	return ids, nil
 }
 
-// findUnclaimedBlock finds a block cidr which does not yet exist. Note that the block may become claimed between receiving the cidr from this function and
-// attempting to claim the corresponding block as this function does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version ipVersion, requestedPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
-	// If requestedPools is not empty, use it.  Otherwise, default to all configured pools.
-	pools := []cnet.IPNet{}
-
-	// Get all the configured pools.
-	enabledPools, err := rw.pools.GetEnabledPools(version.Number)
-	if err != nil {
-		log.WithError(err).Errorf("Error reading configured pools")
-		return nil, err
-	}
-	log.Debugf("enabled IPPools: %v", enabledPools)
-
-	if len(requestedPools) > 0 {
-		log.Debugf("requested IPPools: %v", requestedPools)
-		for _, p := range enabledPools {
-			if isPoolInRequestedPools(p, requestedPools) {
-				pools = append(pools, p)
-			}
-		}
-	} else {
-		pools = enabledPools
-	}
-	log.Debugf("Finding an unclaimed block from pools: %v", pools)
-
-	// Build a map so we can lookup existing pools.
-	pm := map[string]bool{}
-	for _, p := range enabledPools {
-		pm[p.String()] = true
-	}
-
-	// Make sure each requested pool exists.
-	for _, rp := range requestedPools {
-		if _, ok := pm[rp.String()]; !ok {
-			// The requested pool doesn't exist.
-			return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
-		}
-	}
-
+// findUnclaimedBlock finds a block cidr which does not yet exist within the given list of pools. The provided pools
+// should already be sanitized and only enclude existing, enabled pools. Note that the block may become claimed
+// between receiving the cidr from this function and attempting to claim the corresponding block as this function
+// does not reserve the returned IPNet.
+func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version ipVersion, pools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
 		return nil, errors.New("no configured Calico pools")

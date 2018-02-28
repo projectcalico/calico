@@ -195,9 +195,52 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 	return b, nil
 }
 
-func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, pools []net.IPNet, version ipVersion, host string) ([]net.IP, error) {
+// determinePools compares a list of requested pools with the enabled pools
+// and returns the intersect. If any requested pool does not exist, or is not enabled, an error is returned.
+// If no pools are requested, all enabled pools are returned.
+func (c ipamClient) determinePools(requestedPools []net.IPNet, version ipVersion) ([]net.IPNet, error) {
+	enabledPools, err := c.pools.GetEnabledPools(version.Number)
+	if err != nil {
+		log.WithError(err).Errorf("Error reading configured pools")
+		return nil, err
+	}
+	log.Debugf("enabled IPPools: %v", enabledPools)
 
-	// Start by trying to assign from one of the host-affine blocks.  We
+	if len(requestedPools) > 0 {
+		log.Debugf("requested IPPools: %v", requestedPools)
+		// Build a map so we can lookup existing pools.
+		pm := map[string]bool{}
+		for _, p := range enabledPools {
+			pm[p.String()] = true
+		}
+
+		// Make sure each requested pool exists.
+		for _, rp := range requestedPools {
+			if _, ok := pm[rp.String()]; !ok {
+				// The requested pool doesn't exist.
+				return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
+			}
+		}
+
+		return requestedPools, nil
+	}
+
+	return enabledPools, nil
+}
+
+func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version ipVersion, host string) ([]net.IP, error) {
+	// Start by sanitizing the requestedPools.
+	pools, err := c.determinePools(requestedPools, version)
+	if err != nil {
+		return nil, err
+	}
+
+	// If there are no pools, we cannot assign addresses.
+	if len(pools) == 0 {
+		return nil, errors.New("no configured Calico pools")
+	}
+
+	// First, we try to assign addresses from one of the existing host-affine blocks.  We
 	// always do strict checking at this stage, so it doesn't matter whether
 	// globally we have strict_affinity or not.
 	logCtx := log.WithFields(log.Fields{"host": host})
@@ -262,7 +305,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	}
 
 	// If there are still addresses to allocate, then we've run out of
-	// blocks with affinity.  Before we can assign new blocks or assign in
+	// existing blocks with affinity to this host.  Before we can assign new blocks or assign in
 	// non-affine blocks, we need to check that our IPAM configuration
 	// allows that.
 	config, err := c.GetIPAMConfig(ctx)
