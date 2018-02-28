@@ -3,7 +3,6 @@
 default: all
 all: test
 test: ut
-deepcopy-gen: .deepcopy_gen
 
 # Define some constants
 #######################
@@ -30,12 +29,16 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
 VENDOR_REMADE := false
 
 .PHONY: static-checks
-static-checks: check-format
+static-checks: check-format check-gen-files
+
+.PHONY: check-gen-files
+check-gen-files: gen-files
+	git diff --exit-code || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
 
 .PHONY: check-format
 # Depends on the vendor directory because goimports needs to be able to resolve the imports.
 check-format: vendor/.up-to-date
-	@if $(DOCKER_GO_BUILD) goimports -l lib | grep .; then \
+	@if $(DOCKER_GO_BUILD) goimports -l lib | grep -v zz_generated | grep .; then \
 	  echo "Some files in ./lib are not goimported"; \
 	  false; \
 	else \
@@ -169,16 +172,17 @@ stop-etcd:
 
 .PHONY: clean
 ## Removes all .coverprofile files, the vendor dir, and .go-pkg-cache
-clean: clean-deepcopy-gen clean-bin
+clean:
 	find . -name '*.coverprofile' -type f -delete
 	rm -rf vendor .go-pkg-cache
+	rm -rf $(BINDIR)
 
-clean-deepcopy-gen:
-	rm -f .deepcopy_gen
-	find $(TOP_SRC_DIR) -name zz_generated* -exec rm {} \;
-
-clean-bin:
-	rm -rf $(BINDIR) .deepcopy_gen_exes
+.PHONY: clean-gen-files
+## Convenience target for devs to remove generated files and related utilities
+clean-gen-files:
+	rm -f $(BINDIR)/deepcopy-gen
+	rm -f ./lib/apis/v3/zz_generated.deepcopy.go
+	rm -f ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go
 
 .PHONY: help
 ## Display this help text
@@ -208,16 +212,27 @@ DOCKER_GO_BUILD := \
 		-w /go/src/github.com/projectcalico/libcalico-go \
 		$(CALICO_BUILD)
 
-.deepcopy_gen_exes: $(BINDIR)/deepcopy-gen
-	touch $@
-
-$(BINDIR)/deepcopy-gen:
+$(BINDIR)/deepcopy-gen: vendor/.up-to-date
 	$(DOCKER_GO_BUILD) \
 		sh -c 'go build -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
 
-# Regenerate all files if the gen exe(s) changed
-.deepcopy_gen: .deepcopy_gen_exes
-	# Generate deep copies
+# Create a list of files upon which the generated file depends, skip the generated file itself
+UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
+                             $(wildcard ./lib/upgrade/migrator/clients/v1/k8s/custom/*.go))
+
+./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: ${UPGRADE_SRCS}
+	$(DOCKER_GO_BUILD) \
+		sh -c '$(BINDIR)/deepcopy-gen \
+			--v 1 --logtostderr \
+			--go-header-file "./docs/boilerplate.go.txt" \
+			--input-dirs "$(LIBCALICO-GO_PKG)/lib/upgrade/migrator/clients/v1/k8s/custom" \
+			--bounding-dirs "github.com/projectcalico/libcalico-go" \
+			--output-file-base zz_generated.deepcopy'
+
+# Create a list of files upon which the generated file depends, skip the generated file itself
+APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
+
+./lib/apis/v3/zz_generated.deepcopy.go: ${APIS_SRCS}
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(BINDIR)/deepcopy-gen \
 			--v 1 --logtostderr \
@@ -225,3 +240,10 @@ $(BINDIR)/deepcopy-gen:
 			--input-dirs "$(LIBCALICO-GO_PKG)/lib/apis/v3" \
 			--bounding-dirs "github.com/projectcalico/libcalico-go" \
 			--output-file-base zz_generated.deepcopy'
+
+.PHONY: gen-files
+## Build generated-go utilities (e.g. deepcopy_gen) and generated files
+gen-files: $(BINDIR)/deepcopy-gen \
+           ./lib/apis/v3/zz_generated.deepcopy.go \
+           ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go
+
