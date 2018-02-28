@@ -20,7 +20,7 @@ import:
 - package: golang.org/x/net
   version: 66aacef3dd8a676686c7ae3716979581e8b03c47
 - package: golang.org/x/sys
-  version: 314a259e304ff91bd6985da2a7149bbf91237993
+  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
   subpackages:
   - unix
   - windows
@@ -46,7 +46,6 @@ import:
   - lib/upgrade
 - package: github.com/termie/go-shutil
 - package: google.golang.org/grpc
-  version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
 - package: github.com/coreos/etcd
   version: v3.3.0
 - package: github.com/prometheus/procfs
