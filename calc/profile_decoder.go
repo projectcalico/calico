@@ -33,21 +33,21 @@ const (
 	KindServiceAccount
 )
 
-// profileDecoder takes updates from a dispatcher, determines if the profile is a Kubernetes Service Account, and
+// ProfileDecoder takes updates from a dispatcher, determines if the profile is a Kubernetes Service Account, and
 // if it is, generates a dataplane update or remove for it.
-type profileDecoder struct {
+type ProfileDecoder struct {
 	callbacks passthruCallbacks
 }
 
-func NewProfileDecoder(callbacks passthruCallbacks) *profileDecoder {
-	return &profileDecoder{callbacks}
+func NewProfileDecoder(callbacks passthruCallbacks) *ProfileDecoder {
+	return &ProfileDecoder{callbacks}
 }
 
-func (p *profileDecoder) RegisterWith(d *dispatcher.Dispatcher) {
+func (p *ProfileDecoder) RegisterWith(d *dispatcher.Dispatcher) {
 	d.Register(model.ProfileKey{}, p.OnUpdate)
 }
 
-func (p *profileDecoder) OnUpdate(update api.Update) (filterOut bool) {
+func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 	// This type assertion is safe because we only registered for Profile updates.
 	key := update.Key.(model.ProfileKey)
 	id, kind := classifyProfile(key)
@@ -66,7 +66,7 @@ func (p *profileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 }
 
 func classifyProfile(key model.ProfileKey) (proto.ServiceAccountID, kind) {
-	if strings.HasPrefix(conversion.ServiceAccountProfileNamePrefix, key.Name) {
+	if strings.HasPrefix(key.Name, conversion.ServiceAccountProfileNamePrefix) {
 		c := strings.Split(key.Name, ".")
 		if len(c) == 3 {
 			return proto.ServiceAccountID{Name: c[2], Namespace: c[1]}, KindServiceAccount
