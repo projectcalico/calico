@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,6 +85,9 @@ func (_ Profile) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 
 	// Merge Tags and Labels into LabelsToApply.
 	combinedLabelsToApply := bp.Labels
+	if combinedLabelsToApply == nil && len(bp.Tags) != 0 {
+		combinedLabelsToApply = map[string]string{}
+	}
 	for _, t := range bp.Tags {
 		// Check to make sure the key doesn't already exist before merging it.
 		if val, ok := combinedLabelsToApply[t]; ok {

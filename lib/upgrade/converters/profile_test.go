@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,5 +155,56 @@ func TestExitOnTagLabelCollision(t *testing.T) {
 		_, err := p.BackendV1ToAPIV3(v1KVP)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(Equal(fmt.Sprintf("Tag: '%s' and Label '%s == %s' have the same value for Profile: %s. Change the Label key before proceeding", "covfefe", "covfefe", "hot", "makemake")))
+	})
+}
+
+func TestNoLabelsOnBackend(t *testing.T) {
+	t.Run("Profile conversion should succeed when there are no labels but there are tags", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		p := Profile{}
+
+		v1KVP := &model.KVPair{
+			Key: model.ProfileKey{
+				Name: "makemake",
+			},
+			Value: &model.Profile{
+				Rules: model.ProfileRules{
+					InboundRules:  []model.Rule{V1ModelInRule1, V1ModelInRule2},
+					OutboundRules: []model.Rule{},
+				},
+				Tags:   []string{"lalala", "covfefe", "meep"},
+				Labels: nil,
+			},
+		}
+
+		// Assert that converting v1 backend to v3 API returns an error.
+		_, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+	})
+}
+func TestNoLabelsOrTagsOnBackend(t *testing.T) {
+	t.Run("Profile conversion should succeed when there are no tags or labels", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		p := Profile{}
+
+		v1KVP := &model.KVPair{
+			Key: model.ProfileKey{
+				Name: "makemake",
+			},
+			Value: &model.Profile{
+				Rules: model.ProfileRules{
+					InboundRules:  []model.Rule{V1ModelInRule1, V1ModelInRule2},
+					OutboundRules: []model.Rule{},
+				},
+				Tags:   nil,
+				Labels: nil,
+			},
+		}
+
+		// Assert that converting v1 backend to v3 API returns an error.
+		_, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
