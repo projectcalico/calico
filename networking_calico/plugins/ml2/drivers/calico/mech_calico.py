@@ -1476,7 +1476,7 @@ def endpoint_spec(port):
 
 
 def endpoint_annotations(port):
-    annotations = {}
+    annotations = {datamodel_v3.ANN_KEY_NETWORK_ID: port['network_id']}
 
     # If the port has a DNS assignment, represent that as an FQDN annotation.
     dns_assignment = port.get('dns_assignment')

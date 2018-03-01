@@ -360,9 +360,15 @@ class TestPluginEtcd(_TestEtcdBase):
         ep_deadbeef_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'WorkloadEndpoint',
-            'metadata': {'name': 'felix--host--1-openstack-instance' +
-                         '--1-DEADBEEF--1234--5678',
-                         'namespace': 'openstack'},
+            'metadata': {
+                'annotations': {
+                    'openstack.projectcalico.org/network-id':
+                    'calico-network-id'
+                },
+                'name': ('felix--host--1-openstack-instance' +
+                         '--1-DEADBEEF--1234--5678'),
+                'namespace': 'openstack'
+            },
             'spec': {'endpoint': 'DEADBEEF-1234-5678',
                      'interfaceName': 'tapDEADBEEF-12',
                      'ipNATs': [{'externalIP': '192.168.0.1',
@@ -377,9 +383,15 @@ class TestPluginEtcd(_TestEtcdBase):
         ep_facebeef_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'WorkloadEndpoint',
-            'metadata': {'name': 'felix--host--1-openstack-instance' +
-                         '--2-FACEBEEF--1234--5678',
-                         'namespace': 'openstack'},
+            'metadata': {
+                'annotations': {
+                    'openstack.projectcalico.org/network-id':
+                    'calico-network-id'
+                },
+                'name': ('felix--host--1-openstack-instance' +
+                         '--2-FACEBEEF--1234--5678'),
+                'namespace': 'openstack'
+            },
             'spec': {'endpoint': 'FACEBEEF-1234-5678',
                      'interfaceName': 'tapFACEBEEF-12',
                      'ipNetworks': ['10.65.0.3/32'],
@@ -486,9 +498,15 @@ class TestPluginEtcd(_TestEtcdBase):
         ep_hello_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'WorkloadEndpoint',
-            'metadata': {'name': 'felix--host--2-openstack-instance' +
-                         '--3-HELLO--1234--5678',
-                         'namespace': 'openstack'},
+            'metadata': {
+                'annotations': {
+                    'openstack.projectcalico.org/network-id':
+                    'calico-network-id'
+                },
+                'name': ('felix--host--2-openstack-instance' +
+                         '--3-HELLO--1234--5678'),
+                'namespace': 'openstack'
+            },
             'spec': {'endpoint': 'HELLO-1234-5678',
                      'interfaceName': 'tapHELLO-1234-',
                      'ipNetworks': ['2001:db8:a41:2::12/128'],

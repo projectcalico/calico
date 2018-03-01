@@ -242,10 +242,14 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         fixed_ips = []
         dns_assignments = []
         fqdn = annotations.get(datamodel_v3.ANN_KEY_FQDN)
+        network_id = annotations.get(datamodel_v3.ANN_KEY_NETWORK_ID)
         for addrm in endpoint['ipNetworks']:
             ip_addr = addrm.split('/')[0]
             try:
-                subnet_id = self.subnet_watcher.get_subnet_id_for_addr(ip_addr)
+                subnet_id = self.subnet_watcher.get_subnet_id_for_addr(
+                    ip_addr,
+                    network_id
+                )
             except SubnetIDNotFound:
                 LOG.warning("Missing subnet data for one of port's IPs")
                 return
@@ -492,9 +496,13 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
             del self.subnets_by_id[subnet_id]
         return
 
-    def get_subnet_id_for_addr(self, ip_str):
+    def get_subnet_id_for_addr(self, ip_str, network_id):
         ip_addr = netaddr.IPAddress(ip_str)
         for subnet_id, subnet_data in self.subnets_by_id.iteritems():
+            # If we know we're looking within a given Neutron network, only
+            # consider this subnet if it belongs to that network.
+            if network_id and subnet_data['network_id'] != network_id:
+                continue
             if ip_addr in netaddr.IPNetwork(subnet_data['cidr']):
                 return subnet_id
         raise SubnetIDNotFound()
