@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -351,10 +351,16 @@ var filterGNP = func(k model.Key) bool {
 	return strings.HasPrefix(gk.Name, "knp.default.")
 }
 
-// Filter to filter out K8s (namespace) backed profiles
+// Filter to filter out K8s (namespace) and OpenStack backed profiles
 var filterProfile = func(k model.Key) bool {
 	gk := k.(model.ProfileKey)
-	return strings.HasPrefix(gk.Name, "k8s_ns.")
+	return strings.HasPrefix(gk.Name, "k8s_ns.") || strings.HasPrefix(gk.Name, "openstack-sg-")
+}
+
+// Filter to filter out OpenStack backed workload endpoints
+var filterWEP = func(k model.Key) bool {
+	gk := k.(model.WorkloadEndpointKey)
+	return gk.OrchestratorID == "openstack"
 }
 
 type ic interface {
@@ -473,7 +479,7 @@ func (m *migrationHelper) queryAndConvertResources() (*MigrationData, error) {
 		m.statusBullet("handling WorkloadEndpoint resources")
 		// Query and convert the WorkloadEndpoints
 		if err := m.queryAndConvertV1ToV3Resources(
-			data, model.WorkloadEndpointListOptions{}, converters.WorkloadEndpoint{}, noFilter,
+			data, model.WorkloadEndpointListOptions{}, converters.WorkloadEndpoint{}, filterWEP,
 		); err != nil {
 			return nil, err
 		}
