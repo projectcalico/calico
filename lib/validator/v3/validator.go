@@ -704,12 +704,12 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 
 	// Check that the IPVersion of the protocol matches the IPVersion of the ICMP protocol.
 	if (rule.Protocol != nil && *rule.Protocol == icmp) || (rule.NotProtocol != nil && *rule.NotProtocol == icmp) {
-		if rule.IPVersion == nil || *rule.IPVersion != 4 {
+		if rule.IPVersion != nil && *rule.IPVersion != 4 {
 			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '4' with protocol icmp"))
 		}
 	}
 	if (rule.Protocol != nil && *rule.Protocol == icmpv6) || (rule.NotProtocol != nil && *rule.NotProtocol == icmpv6) {
-		if rule.IPVersion == nil || *rule.IPVersion != 6 {
+		if rule.IPVersion != nil && *rule.IPVersion != 6 {
 			structLevel.ReportError(reflect.ValueOf(rule.ICMP), "IPVersion", "", reason("must set ipversion to '6' with protocol icmpv6"))
 		}
 	}

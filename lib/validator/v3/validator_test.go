@@ -866,22 +866,22 @@ func init() {
 					Type: &V0,
 				},
 			}, false),
-		Entry("should reject Rule with icmp fields and no ipversion",
+		Entry("should not reject Rule with icmp fields and no ipversion",
 			api.Rule{
 				Action:   "Allow",
 				Protocol: protocolFromString("ICMP"),
 				ICMP: &api.ICMPFields{
 					Type: &V0,
 				},
-			}, false),
-		Entry("should reject Rule with icmpv6 fields and no ipversion",
+			}, true),
+		Entry("should not reject Rule with icmpv6 fields and no ipversion",
 			api.Rule{
 				Action:   "Allow",
 				Protocol: protocolFromString("ICMPv6"),
 				ICMP: &api.ICMPFields{
 					Type: &V0,
 				},
-			}, false),
+			}, true),
 		Entry("should reject Rule with mismatched ipversion for icmp",
 			api.Rule{
 				Action:    "Allow",
