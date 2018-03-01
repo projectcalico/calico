@@ -529,8 +529,11 @@ var _ = Context("policy sync API tests", func() {
 					_, err := syncClient.Recv()
 					Expect(err).NotTo(HaveOccurred())
 					clientCancel()
-					_, err = syncClient.Recv()
-					Expect(err).To(HaveOccurred())
+
+					Eventually(func() error {
+						_, err = syncClient.Recv()
+						return err
+					}).Should(HaveOccurred())
 
 					// Then create a new mock client with a new connection.
 					newWlConn, newWlClient := createWorkloadConn(0)
