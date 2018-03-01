@@ -17,7 +17,7 @@ processed.  We compute policy based on a global store which is distributed to th
 This guide explains how to install Calico & Istio into your cluster, and use it to
 enforce authorization policies in a simple demo application.
  
-This demo will run on a Calico-enabled Kubernetes cluster. You will need a [Kubernetes][kubernetes] cluster running v1.8
+This demo will run on a Calico-enabled Kubernetes cluster. You will need a [Kubernetes][kubernetes] cluster running v1.8 or later
 with RBAC and [Initializers] enabled. 
  
 If you have Calico or Istio installed, remove them from the cluster.  This preview relies on the latest Calico build and
@@ -26,7 +26,7 @@ the demo.
 
 ### Starting a cluster with Vagrant
 
-If you do not have a test cluster running Kubernetes 1.8 with RBAC and Initializers, this section will walk you through
+If you do not have a test cluster running Kubernetes 1.8 or later with RBAC and Initializers, this section will walk you through
 creating one on your local machine using [Vagrant].
 
 If you already have a test cluster, you can skip to [installing Calico](#install-calico).
@@ -36,12 +36,12 @@ If you already have a test cluster, you can skip to [installing Calico](#install
  - [Vagrant]
  - [VirtualBox]
 
-Install Vagrant and Virtual box, then from the root directory of this repo
+Install Vagrant and VirtualBox, then from the root directory of this repo:
 
     cd config/cluster
     vagrant up
     
-This will create a 3-node Kubernetes cluster in 3 Virtual Box VMs.
+This will create a 3-node Kubernetes cluster in 3 VirtualBox VMs.
 
 **DO NOT USE THIS IN PRODUCTION**.  The API server is loaded with a certificate and keypair checked into this
 repository.  If you put this in production anyone will be able to impersonate your API server. 
@@ -52,7 +52,7 @@ network adapter you will use to communicate with your cluster.
 
 Add an IP address to this network adapter and bring it up.
 
-On Linux
+On Linux:
 
     sudo ip addr add 172.18.18.1/24 dev <adaptername>
     sudo ip link set <adaptername> up
@@ -74,9 +74,6 @@ Verify your kubeconfig is working, for example:
     
 
 ### Install Calico
-
-This technical preview relies on a master build of Calico at present.  This tutorial and associated manifests will be
-updated after the next Calico release.
 
 From the main project directory:
 
