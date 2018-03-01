@@ -34,5 +34,5 @@ utc = UTC()
 
 def timestamp_now():
     utc_now = datetime.datetime.now(utc)
-    return utc_now.isoformat('T')
-    # e.g. 2015-05-19T20:32:12.610841+00:00
+    return utc_now.strftime('%Y-%m-%dT%H:%M:%SZ')
+    # e.g. 2015-05-19T20:32:12Z
