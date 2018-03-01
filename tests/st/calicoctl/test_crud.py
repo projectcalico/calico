@@ -1864,6 +1864,7 @@ class InvalidData(TestBase):
                                         'ICMP': {'type': 256,  # max value 255
                                                  'code': 255},
                                         'action': 'Deny',
+                                        'protocol': 'ICMP',
                                         'destination': {},
                                         'source': {}}],
                        }
@@ -1882,6 +1883,7 @@ class InvalidData(TestBase):
                                         'ICMP': {'type': 19,
                                                  'code': 256},  # max value 255
                                         'action': 'Deny',
+                                        'protocol': 'ICMP',
                                         'destination': {},
                                         'source': {}}],
                        }
@@ -1912,6 +1914,7 @@ class InvalidData(TestBase):
                                         'ICMP': {'type': 256,  # 1-byte field
                                                  'code': 255},
                                         'action': 'Deny',
+                                        'protocol': 'ICMP',
                                         'destination': {},
                                         'source': {}}],
                            },

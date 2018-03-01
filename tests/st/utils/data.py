@@ -132,7 +132,6 @@ networkpolicy_name1_rev1 = {
         ],
         'ingress': [
             {
-                'notICMP': {'type': 19, 'code': 255},
                 'ipVersion': 4,
                 'action': 'Deny',
                 'destination': {
@@ -143,7 +142,6 @@ networkpolicy_name1_rev1 = {
                     'ports': ['100:200'],
                     'selector': "type=='application'",
                 },
-                'icmp': {'type': 10, 'code': 6},
                 'protocol': 'TCP',
                 'source': {
                     'notNets': ['10.1.0.0/16'],
@@ -260,7 +258,6 @@ globalnetworkpolicy_name1_rev1 = {
         ],
         'ingress': [
             {
-                'notICMP': {'type': 19, 'code': 255},
                 'ipVersion': 4,
                 'action': 'Deny',
                 'destination': {
@@ -271,7 +268,6 @@ globalnetworkpolicy_name1_rev1 = {
                     'ports': ['100:200'],
                     'selector': "type=='application'",
                 },
-                'icmp': {'type': 10, 'code': 6},
                 'protocol': 'TCP',
                 'source': {
                     'notNets': ['10.1.0.0/16'],
@@ -426,7 +422,6 @@ profile_name1_rev1 = {
         ],
         'ingress': [
             {
-                'notICMP': {'type': 19, 'code': 255},
                 'ipVersion': 4,
                 'action': 'Deny',
                 'destination': {
@@ -436,7 +431,6 @@ profile_name1_rev1 = {
                    'nets': ['10.2.0.0/16'],
                    'ports': ['100:200'],
                    'selector': "type=='application'"},
-                'icmp': {'type': 10, 'code': 6},
                 'protocol': 'TCP',
                 'source': {
                    'notNets': ['10.1.0.0/16'],

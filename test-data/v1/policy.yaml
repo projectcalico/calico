@@ -7,9 +7,6 @@
     ingress:
       - action: allow
         protocol: udp
-        icmp:
-          type: 10
-          code: 100
         source:
           tag: web
           net: 1.2.3.4/10
