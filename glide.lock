@@ -1,5 +1,5 @@
-hash: da81b204a5530902e69234a7975700b0945734a49ddf7e5f2694f7090fa27f30
-updated: 2018-02-06T22:04:19.497650831Z
+hash: fd0b0335477158b2620eb450b7d225483661eb8d3cb40761a723eda05344d8d1
+updated: 2018-03-01T22:03:37.505455228Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
   - pkg/transport
   - pkg/types
 - name: github.com/coreos/go-iptables
-  version: 259c8e6a4275d497442c721fa52204d7a58bde8b
+  version: b5b1876b170881a8259f036445ee89c8669db386
   subpackages:
   - iptables
 - name: github.com/davecgh/go-spew
@@ -191,7 +191,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
+  version: 2fa2887d917b41342f9beaae745dff2355e4f47c
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -236,7 +236,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 89604d197083d4781071d3c65855d24ecfb0a563
+  version: 6fb6fce6f8b75884b92e1889c150403fc0872c5e
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
