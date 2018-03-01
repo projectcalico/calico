@@ -71,7 +71,8 @@ func (b *binder) SearchPath() string {
 
 func (b *binder) SearchAndBind(stop <-chan bool) {
 	w := NewWatcher(b.searchPath)
-	events := w.watch()
+	stopWatch := make(chan bool)
+	events := w.watch(stopWatch)
 	var event workloadEvent
 	for {
 		select {
@@ -81,7 +82,9 @@ func (b *binder) SearchAndBind(stop <-chan bool) {
 			break
 		}
 	}
-	// Got stop signal! Close any open sockets
+	// Got stop signal! Stop directory watch.
+	stopWatch <- true
+	// Close any open sockets
 	for _, wl := range b.workloads.getAll() {
 		wl.listener.Close()
 	}
