@@ -41,6 +41,7 @@ type MockDataplane struct {
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
 	endpointToAllPolicyIDs         map[string][]proto.PolicyID
 	endpointToProfiles             map[string][]string
+	serviceAccounts                map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
 	config                         map[string]string
 }
 
@@ -129,6 +130,16 @@ func (d *MockDataplane) EndpointToPreDNATPolicyOrder() map[string][]TierInfo {
 
 	return copyPolOrder(d.endpointToPreDNATPolicyOrder)
 }
+func (d *MockDataplane) ServiceAccounts() map[proto.ServiceAccountID]*proto.ServiceAccountUpdate {
+	d.Lock()
+	defer d.Unlock()
+
+	copy := make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
+	for k, v := range d.serviceAccounts {
+		copy[k] = v
+	}
+	return copy
+}
 
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
 	copy := map[string][]TierInfo{}
@@ -171,6 +182,7 @@ func NewMockDataplane() *MockDataplane {
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
 		endpointToProfiles:             make(map[string][]string),
 		endpointToAllPolicyIDs:         make(map[string][]proto.PolicyID),
+		serviceAccounts:                make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
 	}
 	return s
 }
@@ -330,6 +342,10 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		delete(d.endpointToPolicyOrder, id.String())
 		delete(d.endpointToUntrackedPolicyOrder, id.String())
 		delete(d.endpointToPreDNATPolicyOrder, id.String())
+	case *proto.ServiceAccountUpdate:
+		d.serviceAccounts[*event.Id] = event
+	case *proto.ServiceAccountRemove:
+		delete(d.serviceAccounts, *event.Id)
 	}
 }
 

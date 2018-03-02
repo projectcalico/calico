@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/felix/dataplane/mock"
@@ -480,6 +481,34 @@ var _ = Context("policy sync API tests", func() {
 							Eventually(mockWlClient[0].ActiveProfiles).Should(Equal(set.From(notDefProfID)))
 
 							Consistently(mockWlClient[2].ActiveProfiles).Should(Equal(set.From(defProfID)))
+						})
+					})
+
+					Context("after adding a service account as profile", func() {
+						var saID proto.ServiceAccountID
+
+						BeforeEach(func() {
+							profile := api.NewProfile()
+							profile.SetName(conversion.ServiceAccountProfileNamePrefix + "sa-namespace.sa-name")
+							saID.Name = "sa-name"
+							saID.Namespace = "sa-namespace"
+							profile.SetLabels(map[string]string{
+								conversion.ServiceAccountLabelPrefix + "key.1": "value.1",
+								conversion.ServiceAccountLabelPrefix + "key_2": "value-2",
+							})
+							profile, err = calicoClient.Profiles().Create(ctx, profile, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						It("should sync service account to each workload", func() {
+							for _, c := range mockWlClient {
+								Eventually(c.ServiceAccounts()).Should(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{
+									saID: {
+										Id:     &saID,
+										Labels: map[string]string{"key.1": "value.1", "key/2": "value/2"},
+									},
+								}))
+							}
 						})
 					})
 				})
