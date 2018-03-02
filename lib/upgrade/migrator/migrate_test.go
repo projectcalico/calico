@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -114,15 +115,14 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	}
 
 	It("should not filter WorkloadEndpoints without openstack as OrchestratorID", func() {
-		clientv1 := fakeClientV1{}
-
-		kvps := []*model.KVPair{
-			&model.KVPair{
-				Key:   wk,
-				Value: &wv,
+		clientv1 := fakeClientV1{
+			kvps: []*model.KVPair{
+				&model.KVPair{
+					Key:   wk,
+					Value: &wv,
+				},
 			},
 		}
-		clientv1.kvps = kvps
 
 		// Convert the data back to a set of resources.
 		mh := &migrationHelper{clientv1: clientv1}
@@ -134,17 +134,16 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	})
 
 	It("should filter WorkloadEndpoints with openstack as OrchestratorID", func() {
-		clientv1 := fakeClientV1{}
-
 		wepOSKey := wk
-		wepOSKey.OrchestratorID = "openstack"
-		kvps := []*model.KVPair{
-			&model.KVPair{
-				Key:   wepOSKey,
-				Value: &wv,
+		wepOSKey.OrchestratorID = v3.OrchestratorOpenStack
+		clientv1 := fakeClientV1{
+			kvps: []*model.KVPair{
+				&model.KVPair{
+					Key:   wepOSKey,
+					Value: &wv,
+				},
 			},
 		}
-		clientv1.kvps = kvps
 
 		// Convert the data back to a set of resources.
 		mh := &migrationHelper{clientv1: clientv1}
@@ -156,23 +155,22 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	})
 
 	It("should not filter Profiles without openstack-sg", func() {
-		clientv1 := singleTypeClient{}
-
-		kvps := []*model.KVPair{
-			&model.KVPair{
-				Key: model.ProfileKey{
-					Name: "profileName",
-				},
-				Value: &model.Profile{
-					Rules: model.ProfileRules{
-						InboundRules: []model.Rule{converters.V1ModelInRule1},
+		clientv1 := singleTypeClient{
+			kvps: []*model.KVPair{
+				&model.KVPair{
+					Key: model.ProfileKey{
+						Name: "profileName",
 					},
-					Tags:   []string{},
-					Labels: map[string]string{"label1": "value1"},
+					Value: &model.Profile{
+						Rules: model.ProfileRules{
+							InboundRules: []model.Rule{converters.V1ModelInRule1},
+						},
+						Tags:   []string{},
+						Labels: map[string]string{"label1": "value1"},
+					},
 				},
 			},
 		}
-		clientv1.kvps = kvps
 
 		// Convert the data back to a set of resources.
 		mh := &migrationHelper{clientv1: clientv1}
@@ -182,24 +180,23 @@ var _ = Describe("Test OpenStack migration filters", func() {
 		By("Checking total conversion")
 		Expect(data.Resources).To(HaveLen(1), "Data %v", data)
 	})
-	It("should filter Profiles with openstack-sg", func() {
-		clientv1 := singleTypeClient{}
-
-		kvps := []*model.KVPair{
-			&model.KVPair{
-				Key: model.ProfileKey{
-					Name: "openstack-sg-profilename/rules",
-				},
-				Value: &model.Profile{
-					Rules: model.ProfileRules{
-						InboundRules: []model.Rule{converters.V1ModelInRule1},
+	It("should filter Profiles with openstack-sg- prefix", func() {
+		clientv1 := singleTypeClient{
+			kvps: []*model.KVPair{
+				&model.KVPair{
+					Key: model.ProfileKey{
+						Name: "openstack-sg-profilename/rules",
 					},
-					Tags:   []string{},
-					Labels: map[string]string{"label1": "value1"},
+					Value: &model.Profile{
+						Rules: model.ProfileRules{
+							InboundRules: []model.Rule{converters.V1ModelInRule1},
+						},
+						Tags:   []string{},
+						Labels: map[string]string{"label1": "value1"},
+					},
 				},
 			},
 		}
-		clientv1.kvps = kvps
 
 		// Convert the data back to a set of resources.
 		mh := &migrationHelper{clientv1: clientv1}
