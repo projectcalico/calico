@@ -34,7 +34,7 @@ if [ "$(ls ${SECRETS_MOUNT_DIR} 3>/dev/null)" ];
 then
 	echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
 	mkdir -p /host/etc/cni/net.d/calico-tls
-	cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+	cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
 fi
 
 # If the TLS assets actually exist, update the variables to populate into the
@@ -101,20 +101,38 @@ ${CNI_NETWORK_CONFIG:-}
 EOF
 fi
 
-# Write a kubeconfig file for the CNI plugin.  Do this
-# to skip TLS verification for now.  We should eventually support
-# writing more complete kubeconfig files. This is only used
-# if the provided CNI network config references it.
-cat > /host/etc/cni/net.d/calico-kubeconfig <<EOF
+# Pull out service account token.
+SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+
+# Check if we're running as a k8s pod.
+if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
+	# We're running as a k8d pod - expect some variables.
+	if [ -z ${KUBERNETES_SERVICE_HOST} ]; then 
+		echo "KUBERNETES_SERVICE_HOST not set"; exit 1;
+	fi
+	if [ -z ${KUBERNETES_SERVICE_PORT} ]; then
+		echo "KUBERNETES_SERVICE_PORT not set"; exit 1;
+	fi
+
+	# Write a kubeconfig file for the CNI plugin.  Do this
+	# to skip TLS verification for now.  We should eventually support
+	# writing more complete kubeconfig files. This is only used
+	# if the provided CNI network config references it.
+	touch /host/etc/cni/net.d/calico-kubeconfig
+	chmod ${KUBECONFIG_MODE:-600} /host/etc/cni/net.d/calico-kubeconfig
+	cat > /host/etc/cni/net.d/calico-kubeconfig <<EOF
 # Kubeconfig file for Calico CNI plugin.
 apiVersion: v1
 kind: Config
 clusters:
 - name: local
   cluster:
+    server: ${KUBERNETES_SERVICE_PROTOCOL:-https}://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT} 
     insecure-skip-tls-verify: true
 users:
 - name: calico
+  user:
+    token: "${SERVICEACCOUNT_TOKEN}" 
 contexts:
 - name: calico-context
   context:
@@ -123,8 +141,10 @@ contexts:
 current-context: calico-context
 EOF
 
+fi
+
+
 # Insert any of the supported "auto" parameters.
-SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 grep "__KUBERNETES_SERVICE_HOST__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_HOST__/${KUBERNETES_SERVICE_HOST}/g $TMP_CONF
 grep "__KUBERNETES_SERVICE_PORT__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_PORT__/${KUBERNETES_SERVICE_PORT}/g $TMP_CONF
 sed -i s/__KUBERNETES_NODE_NAME__/${KUBERNETES_NODE_NAME:-$(hostname)}/g $TMP_CONF
@@ -175,7 +195,7 @@ while [ "$should_sleep" == "true"  ]; do
         sleep 10;
         if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
             echo "Updating installed secrets at: $(date)"
-            cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+            cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
         fi
     else
         sleep 10
