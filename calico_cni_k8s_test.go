@@ -73,6 +73,7 @@ var _ = Describe("CalicoCni", func() {
 			    "k8s_api_root": "http://127.0.0.1:8080"
 			  },
 			  "policy": {"type": "k8s"},
+			  "nodename_file_optional": true,
 			  "log_level":"info"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
@@ -392,6 +393,7 @@ var _ = Describe("CalicoCni", func() {
 				  "name": "net2",
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
+			          "nodename_file_optional": true,
 				  "datastore_type": "%s",
 			 	  "ipam": {
 			    	 "type": "calico-ipam"
@@ -460,6 +462,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+			          "nodename_file_optional": true,
 			 	  "ipam": {},
 					"kubernetes": {
 					  "k8s_api_root": "http://127.0.0.1:8080"
@@ -560,6 +563,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+			          "nodename_file_optional": true,
 				  "ipam": {
 					   "type": "calico-ipam",
 					   "assign_ipv4": "true",
@@ -668,6 +672,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+			          "nodename_file_optional": true,
 				  "ipam": {
 					   "type": "calico-ipam",
 					   "assign_ipv4": "true",
@@ -774,6 +779,7 @@ var _ = Describe("CalicoCni", func() {
 				  {
 					"cniVersion": "%s",
 					"name": "net6",
+           			          "nodename_file_optional": true,
 					  "type": "calico",
 					  "etcd_endpoints": "http://%s:2379",
 					  "datastore_type": "%s",
@@ -867,6 +873,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+           			  "nodename_file_optional": true,
 			 	  "ipam": {
 			    	 "type": "calico-ipam"
 			         },
@@ -1032,6 +1039,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+           			  "nodename_file_optional": true,
 			 	  "ipam": {
 			    	 "type": "calico-ipam"
 			         },
@@ -1190,6 +1198,7 @@ var _ = Describe("CalicoCni", func() {
 							"type": "calico",
 							"etcd_endpoints": "http://%s:2379",
 							"datastore_type": "%s",
+           			                        "nodename_file_optional": true,
 							"ipam": {
 									"type": "calico-ipam"
 									},
@@ -1357,6 +1366,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+           			  "nodename_file_optional": true,
 			 	  "ipam": {},
 					"kubernetes": {
 					  "k8s_api_root": "http://127.0.0.1:8080"
@@ -1414,6 +1424,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
+           			  "nodename_file_optional": true,
 				  "log_level": "debug",
 			 	  "ipam": {
 				    "type": "calico-ipam"

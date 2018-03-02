@@ -45,6 +45,7 @@ var _ = Describe("CalicoCni", func() {
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
 			  "log_level": "debug",
+			  "nodename_file_optional": true,
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -262,6 +263,7 @@ var _ = Describe("CalicoCni", func() {
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
 			  "hostname": "named-hostname.somewhere",
+			  "nodename_file_optional": true,
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -315,6 +317,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "hostname": "named-hostname.somewhere",
+			          "nodename_file_optional": true,
 				  "ipam": {
 					"type": "host-local",
 					"subnet": "10.0.0.0/8"
@@ -363,6 +366,7 @@ var _ = Describe("CalicoCni", func() {
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "hostname": "named-hostname.somewhere",
+			          "nodename_file_optional": true,
 				  "ipam": {
 					"type": "host-local",
 					"subnet": "10.0.0.0/8"
@@ -415,6 +419,7 @@ var _ = Describe("CalicoCni", func() {
 			  "etcd_endpoints": "http://%s:2379",
 			  "hostname": "named-hostname",
 			  "nodename": "named-nodename",
+			  "nodename_file_optional": true,
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -468,6 +473,7 @@ var _ = Describe("CalicoCni", func() {
 			"name": "net1",
 			"type": "calico",
 			"etcd_endpoints": "http://%s:2379",
+			"nodename_file_optional": true,
 			"datastore_type": "%s",
 			"ipam": {
 				"type": "host-local",
@@ -505,6 +511,7 @@ var _ = Describe("CalicoCni", func() {
 		  "etcd_endpoints": "http://%s:2379",
 		  "datastore_type": "%s",
 		  "log_level": "debug",
+	          "nodename_file_optional": true,
 		  "ipam": { "type": "calico-ipam" }
 		}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
@@ -672,6 +679,7 @@ var _ = Describe("CalicoCni", func() {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/8"
 			  },
+			  "nodename_file_optional": true,
 			  "log_level":"debug"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
