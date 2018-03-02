@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,9 +174,16 @@ func (fc fakeClientV1) Get(k model.Key) (*model.KVPair, error) {
 
 func (fc fakeClientV1) List(l model.ListInterface) ([]*model.KVPair, error) {
 	r := []*model.KVPair{}
+	_, isPL := l.(model.ProfileListOptions)
 	for _, kvp := range fc.kvps {
 		p, _ := model.KeyToDefaultPath(kvp.Key)
 		if l.KeyFromDefaultPath(p) != nil {
+			r = append(r, kvp)
+			// This profile specific check allows adding a ProfileKey in the kvps
+			// that does not get matched with the above To/From DefaultPath check.
+			// The normal client would return a ProfileKey as it does the work of
+			// combining the rules/tags/labels.
+		} else if _, ok := kvp.Key.(model.ProfileKey); ok && isPL {
 			r = append(r, kvp)
 		}
 	}

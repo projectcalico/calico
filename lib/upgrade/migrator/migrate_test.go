@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
@@ -65,36 +64,6 @@ var _ = Describe("UT for checking the version for migration.", func() {
 		Entry("Expect 1.2.3.4.5 to not migrate", "1.2.3.4.5", false, true),
 	)
 })
-
-type singleTypeClient struct {
-	kdd  bool
-	kvps []*model.KVPair
-}
-
-func (stc singleTypeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
-	return nil, nil
-}
-
-func (stc singleTypeClient) Get(k model.Key) (*model.KVPair, error) {
-	ks := k.String()
-	for _, kvp := range stc.kvps {
-		if kvp.Key.String() == ks {
-			return kvp, nil
-		}
-	}
-	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
-}
-
-func (stc singleTypeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
-	if _, ok := l.(model.ProfileListOptions); ok {
-		return stc.kvps, nil
-	}
-	return nil, nil
-}
-
-func (stc singleTypeClient) IsKDD() bool {
-	return stc.kdd
-}
 
 func convertAndCheckResourcesConverted(client clients.V1ClientInterface, expectedConversionCount int) {
 	// Convert the data back to a set of resources.
@@ -154,11 +123,11 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	})
 
 	It("should not filter Profiles without openstack-sg prefix", func() {
-		clientv1 := singleTypeClient{
+		clientv1 := fakeClientV1{
 			kvps: []*model.KVPair{
 				&model.KVPair{
 					Key: model.ProfileKey{
-						Name: "profileName",
+						Name: "profilename",
 					},
 					Value: &model.Profile{
 						Rules: model.ProfileRules{
@@ -174,11 +143,11 @@ var _ = Describe("Test OpenStack migration filters", func() {
 		convertAndCheckResourcesConverted(clientv1, 1)
 	})
 	It("should filter Profiles with openstack-sg- prefix", func() {
-		clientv1 := singleTypeClient{
+		clientv1 := fakeClientV1{
 			kvps: []*model.KVPair{
 				&model.KVPair{
 					Key: model.ProfileKey{
-						Name: "openstack-sg-profilename/rules",
+						Name: "openstack-sg-profilename",
 					},
 					Value: &model.Profile{
 						Rules: model.ProfileRules{
