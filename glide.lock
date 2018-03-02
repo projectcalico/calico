@@ -1,5 +1,5 @@
-hash: 2b522a54a37e705c848c6c5c788d4567756f2086c87417e6f2aa9e10d4db11d6
-updated: 2018-03-01T15:05:49.945405744-08:00
+hash: 6fbdd2dd331ba309fb7a1e62e1f38bce2db36be2157f3aef9c514175c6649977
+updated: 2018-03-02T18:51:32.732286071Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/containernetworking/cni
@@ -139,7 +139,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/Microsoft/go-winio
@@ -201,7 +201,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2fa2887d917b41342f9beaae745dff2355e4f47c
+  version: 16a16d0960511310db4772874de7650ab2967827
   subpackages:
   - lib
   - lib/apiconfig
@@ -240,7 +240,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: c499c3c376d4209c496851b5b38d6876d1249d55
+  version: edfcfd8e008cf14b4a1fa471d00a251e63d0fa6f
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -251,11 +251,11 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 6fb6fce6f8b75884b92e1889c150403fc0872c5e
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -275,15 +275,15 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: 5236321576c0c97ab02c078e60f9b1c5c1828807
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: 91a49db82a88618983a78a06c1cbd4e00ab749ab
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
