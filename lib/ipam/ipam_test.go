@@ -196,7 +196,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		It("should have assigned an IP address with no error", func() {
 			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
-			Expect(len(v4) == 1).To(BeTrue())
+			Expect(len(v4)).To(Equal(1))
 		})
 	})
 
