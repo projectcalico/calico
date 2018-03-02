@@ -66,10 +66,11 @@ func NewProcessor(updates <-chan interface{}) *Processor {
 		// Updates from the calculation graph.
 		Updates: updates,
 		// JoinUpdates from the new servers that have started.
-		JoinUpdates:   make(chan interface{}, 10),
-		endpointsByID: make(map[proto.WorkloadEndpointID]*EndpointInfo),
-		policyByID:    make(map[proto.PolicyID]*proto.Policy),
-		profileByID:   make(map[proto.ProfileID]*proto.Profile),
+		JoinUpdates:        make(chan interface{}, 10),
+		endpointsByID:      make(map[proto.WorkloadEndpointID]*EndpointInfo),
+		policyByID:         make(map[proto.PolicyID]*proto.Policy),
+		profileByID:        make(map[proto.ProfileID]*proto.Profile),
+		serviceAccountByID: make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
 	}
 }
 
@@ -124,6 +125,7 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	// Any updates to service accounts will be synced, but the endpoint needs to know about any existing service
 	// accounts that were updated before it joined.
 	p.sendServiceAccounts(ei)
+	logCxt.Debug("Done with join")
 }
 
 func (p *Processor) handleLeave(leaveReq LeaveRequest) {
@@ -429,6 +431,10 @@ func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
 // sendServiceAccounts sends all known ServiceAccounts to the endpoint
 func (p *Processor) sendServiceAccounts(ei *EndpointInfo) {
 	for _, update := range p.serviceAccountByID {
+		log.WithFields(log.Fields{
+			"serviceAccount": update.Id.String(),
+			"endpoint":       ei.endpointUpd.GetEndpoint().String(),
+		}).Debug("sending ServiceAccountUpdate")
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{update}}
 	}
 }
