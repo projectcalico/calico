@@ -87,7 +87,7 @@ def put(resource_kind, name, spec, annotations={}, mod_revision=None):
         value['metadata']['creationTimestamp'] = timestamp_now()
     # Ensure that there is a UID.
     if 'uid' not in value['metadata']:
-        value['metadata']['uid'] = uuid.uuid4().get_hex()
+        value['metadata']['uid'] = str(uuid.uuid4())
     # Merge any annotations that have been specified.
     if annotations:
         existing = value['metadata'].get('annotations', {})

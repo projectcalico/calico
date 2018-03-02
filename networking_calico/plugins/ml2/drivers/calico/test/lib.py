@@ -561,6 +561,7 @@ class FixedUUID(object):
     def __enter__(self):
         guid = mock.MagicMock()
         guid.get_hex.return_value = self.uuid
+        guid.__str__.return_value = self.uuid
         uuid4 = self.uuid4_p.start()
         uuid4.return_value = guid
 
