@@ -25,6 +25,7 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
+	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 )
 
 var _ = Describe("UT for checking the version for migration.", func() {
@@ -95,6 +96,16 @@ func (stc singleTypeClient) IsKDD() bool {
 	return stc.kdd
 }
 
+func convertAndCheckResourcesConverted(client clients.V1ClientInterface, expectedConversionCount int) {
+	// Convert the data back to a set of resources.
+	mh := &migrationHelper{clientv1: client}
+	data, err := mh.queryAndConvertResources()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(data.ConversionErrors).To(HaveLen(0))
+	By("Checking total conversion")
+	Expect(data.Resources).To(HaveLen(expectedConversionCount))
+}
+
 var _ = Describe("Test OpenStack migration filters", func() {
 
 	wk := model.WorkloadEndpointKey{
@@ -124,13 +135,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 			},
 		}
 
-		// Convert the data back to a set of resources.
-		mh := &migrationHelper{clientv1: clientv1}
-		data, err := mh.queryAndConvertResources()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(data.ConversionErrors).To(HaveLen(0))
-		By("Checking total conversion")
-		Expect(data.Resources).To(HaveLen(1))
+		convertAndCheckResourcesConverted(clientv1, 1)
 	})
 
 	It("should filter WorkloadEndpoints with openstack as OrchestratorID", func() {
@@ -145,16 +150,10 @@ var _ = Describe("Test OpenStack migration filters", func() {
 			},
 		}
 
-		// Convert the data back to a set of resources.
-		mh := &migrationHelper{clientv1: clientv1}
-		data, err := mh.queryAndConvertResources()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(data.ConversionErrors).To(HaveLen(0))
-		By("Checking total conversion")
-		Expect(data.Resources).To(HaveLen(0))
+		convertAndCheckResourcesConverted(clientv1, 0)
 	})
 
-	It("should not filter Profiles without openstack-sg", func() {
+	It("should not filter Profiles without openstack-sg prefix", func() {
 		clientv1 := singleTypeClient{
 			kvps: []*model.KVPair{
 				&model.KVPair{
@@ -172,13 +171,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 			},
 		}
 
-		// Convert the data back to a set of resources.
-		mh := &migrationHelper{clientv1: clientv1}
-		data, err := mh.queryAndConvertResources()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(data.ConversionErrors).To(HaveLen(0))
-		By("Checking total conversion")
-		Expect(data.Resources).To(HaveLen(1), "Data %v", data)
+		convertAndCheckResourcesConverted(clientv1, 1)
 	})
 	It("should filter Profiles with openstack-sg- prefix", func() {
 		clientv1 := singleTypeClient{
@@ -198,12 +191,6 @@ var _ = Describe("Test OpenStack migration filters", func() {
 			},
 		}
 
-		// Convert the data back to a set of resources.
-		mh := &migrationHelper{clientv1: clientv1}
-		data, err := mh.queryAndConvertResources()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(data.ConversionErrors).To(HaveLen(0))
-		By("Checking total conversion")
-		Expect(data.Resources).To(HaveLen(0), "Data %v", data)
+		convertAndCheckResourcesConverted(clientv1, 0)
 	})
 })

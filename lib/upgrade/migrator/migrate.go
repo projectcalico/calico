@@ -360,7 +360,7 @@ var filterProfile = func(k model.Key) bool {
 // Filter to filter out OpenStack backed workload endpoints
 var filterWEP = func(k model.Key) bool {
 	gk := k.(model.WorkloadEndpointKey)
-	return gk.OrchestratorID == "openstack"
+	return gk.OrchestratorID == apiv3.OrchestratorOpenStack
 }
 
 type ic interface {
