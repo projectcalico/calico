@@ -114,17 +114,17 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		OriginalNotDstSelector:       in.OriginalNotDstSelector,
 	}
 
-	if len(in.SrcServiceAccountNames) > 0 || in.SrcServiceAccountSelector != "" {
+	if len(in.OriginalSrcServiceAccountNames) > 0 || in.OriginalSrcServiceAccountSelector != "" {
 		out.SrcServiceAccountMatch = &proto.ServiceAccountMatch{
-			Selector: in.SrcServiceAccountSelector,
-			Names:    in.SrcServiceAccountNames,
+			Selector: in.OriginalSrcServiceAccountSelector,
+			Names:    in.OriginalSrcServiceAccountNames,
 		}
 	}
 
-	if len(in.DstServiceAccountNames) > 0 || in.DstServiceAccountSelector != "" {
+	if len(in.OriginalDstServiceAccountNames) > 0 || in.OriginalDstServiceAccountSelector != "" {
 		out.DstServiceAccountMatch = &proto.ServiceAccountMatch{
-			Selector: in.DstServiceAccountSelector,
-			Names:    in.DstServiceAccountNames,
+			Selector: in.OriginalDstServiceAccountSelector,
+			Names:    in.OriginalDstServiceAccountNames,
 		}
 	}
 

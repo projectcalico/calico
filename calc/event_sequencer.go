@@ -221,27 +221,32 @@ func (buf *EventSequencer) OnPolicyActive(key model.PolicyKey, rules *ParsedRule
 }
 
 func (buf *EventSequencer) flushPolicyUpdates() {
-	for key, rulesOrNil := range buf.pendingPolicyUpdates {
-		buf.Callback(&proto.ActivePolicyUpdate{
-			Id: &proto.PolicyID{
-				Tier: "default",
-				Name: key.Name,
-			},
-			Policy: &proto.Policy{
-				InboundRules: parsedRulesToProtoRules(
-					rulesOrNil.InboundRules,
-					"pol-in-default/"+key.Name,
-				),
-				OutboundRules: parsedRulesToProtoRules(
-					rulesOrNil.OutboundRules,
-					"pol-out-default/"+key.Name,
-				),
-				Untracked: rulesOrNil.Untracked,
-				PreDnat:   rulesOrNil.PreDNAT,
-			},
-		})
+	for key, rules := range buf.pendingPolicyUpdates {
+		buf.Callback(ParsedRulesToActivePolicyUpdate(key, rules))
 		buf.sentPolicies.Add(key)
 		delete(buf.pendingPolicyUpdates, key)
+	}
+}
+
+func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *proto.ActivePolicyUpdate {
+	return &proto.ActivePolicyUpdate{
+		Id: &proto.PolicyID{
+			Tier: "default",
+			Name: key.Name,
+		},
+		Policy: &proto.Policy{
+			Namespace: rules.Namespace,
+			InboundRules: parsedRulesToProtoRules(
+				rules.InboundRules,
+				"pol-in-default/"+key.Name,
+			),
+			OutboundRules: parsedRulesToProtoRules(
+				rules.OutboundRules,
+				"pol-out-default/"+key.Name,
+			),
+			Untracked: rules.Untracked,
+			PreDnat:   rules.PreDNAT,
+		},
 	}
 }
 

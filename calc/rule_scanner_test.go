@@ -141,10 +141,10 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 	Entry("OriginalNotSrcSelector", model.Rule{OriginalNotSrcSelector: "has(foo)"}, ParsedRule{OriginalNotSrcSelector: "has(foo)"}),
 	Entry("OriginalNotDstSelector", model.Rule{OriginalNotDstSelector: "has(foo)"}, ParsedRule{OriginalNotDstSelector: "has(foo)"}),
 
-	Entry("SrcServiceAccountNames", model.Rule{SrcServiceAccountNames: []string{"a"}}, ParsedRule{SrcServiceAccountNames: []string{"a"}}),
-	Entry("DstServiceAccountNames", model.Rule{DstServiceAccountNames: []string{"a"}}, ParsedRule{DstServiceAccountNames: []string{"a"}}),
-	Entry("SrcServiceAccountSelector", model.Rule{SrcServiceAccountSelector: "all()"}, ParsedRule{SrcServiceAccountSelector: "all()"}),
-	Entry("DstServiceAccountSelector", model.Rule{DstServiceAccountSelector: "all()"}, ParsedRule{DstServiceAccountSelector: "all()"}),
+	Entry("OriginalSrcServiceAccountNames", model.Rule{OriginalSrcServiceAccountNames: []string{"a"}}, ParsedRule{OriginalSrcServiceAccountNames: []string{"a"}}),
+	Entry("OriginalDstServiceAccountNames", model.Rule{OriginalDstServiceAccountNames: []string{"a"}}, ParsedRule{OriginalDstServiceAccountNames: []string{"a"}}),
+	Entry("OriginalSrcServiceAccountSelector", model.Rule{OriginalSrcServiceAccountSelector: "all()"}, ParsedRule{OriginalSrcServiceAccountSelector: "all()"}),
+	Entry("OriginalDstServiceAccountSelector", model.Rule{OriginalDstServiceAccountSelector: "all()"}, ParsedRule{OriginalDstServiceAccountSelector: "all()"}),
 
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),

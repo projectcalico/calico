@@ -78,11 +78,11 @@ var fullyLoadedParsedRule = ParsedRule{
 	OriginalSrcNamespaceSelector: "ns == 'src'",
 	OriginalDstNamespaceSelector: "ns == 'dst'",
 
-	SrcServiceAccountSelector: "has(sa-src)",
-	SrcServiceAccountNames:    []string{"src-1"},
+	OriginalSrcServiceAccountSelector: "has(sa-src)",
+	OriginalSrcServiceAccountNames:    []string{"src-1"},
 
-	DstServiceAccountSelector: "has(sa-dst)",
-	DstServiceAccountNames:    []string{"dst-1"},
+	OriginalDstServiceAccountSelector: "has(sa-dst)",
+	OriginalDstServiceAccountNames:    []string{"dst-1"},
 }
 
 var fullyLoadedProtoRule = proto.Rule{

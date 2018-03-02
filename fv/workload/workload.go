@@ -30,8 +30,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 

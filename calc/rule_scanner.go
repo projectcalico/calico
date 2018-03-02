@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -288,20 +288,19 @@ type ParsedRule struct {
 	NotSrcIPSetIDs          []string
 	NotDstIPSetIDs          []string
 
-	// These fields allow us to pass through the raw selectors from the V3 datamodel unmodified.
-	// The selectors above are formed in the update processor layer by combining the original
-	// selectors and namespace selectors into one.
-	OriginalSrcSelector          string
-	OriginalSrcNamespaceSelector string
-	OriginalDstSelector          string
-	OriginalDstNamespaceSelector string
-	OriginalNotSrcSelector       string
-	OriginalNotDstSelector       string
-
-	SrcServiceAccountNames    []string
-	SrcServiceAccountSelector string
-	DstServiceAccountNames    []string
-	DstServiceAccountSelector string
+	// These fields allow us to pass through the raw match criteria from the V3 datamodel,
+	// unmodified. The selectors above are formed in the update processor layer by combining the
+	// original selectors, namespace selectors an service account matches into one.
+	OriginalSrcSelector               string
+	OriginalSrcNamespaceSelector      string
+	OriginalDstSelector               string
+	OriginalDstNamespaceSelector      string
+	OriginalNotSrcSelector            string
+	OriginalNotDstSelector            string
+	OriginalSrcServiceAccountNames    []string
+	OriginalSrcServiceAccountSelector string
+	OriginalDstServiceAccountNames    []string
+	OriginalDstServiceAccountSelector string
 }
 
 func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IPSetData) {
@@ -395,16 +394,16 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 		NotICMPCode: rule.NotICMPCode,
 
 		// Pass through original values of some fields for the policy API.
-		OriginalSrcSelector:          rule.OriginalSrcSelector,
-		OriginalSrcNamespaceSelector: rule.OriginalSrcNamespaceSelector,
-		OriginalDstSelector:          rule.OriginalDstSelector,
-		OriginalDstNamespaceSelector: rule.OriginalDstNamespaceSelector,
-		OriginalNotSrcSelector:       rule.OriginalNotSrcSelector,
-		OriginalNotDstSelector:       rule.OriginalNotDstSelector,
-		SrcServiceAccountNames:       rule.SrcServiceAccountNames,
-		SrcServiceAccountSelector:    rule.SrcServiceAccountSelector,
-		DstServiceAccountNames:       rule.DstServiceAccountNames,
-		DstServiceAccountSelector:    rule.DstServiceAccountSelector,
+		OriginalSrcSelector:               rule.OriginalSrcSelector,
+		OriginalSrcNamespaceSelector:      rule.OriginalSrcNamespaceSelector,
+		OriginalDstSelector:               rule.OriginalDstSelector,
+		OriginalDstNamespaceSelector:      rule.OriginalDstNamespaceSelector,
+		OriginalNotSrcSelector:            rule.OriginalNotSrcSelector,
+		OriginalNotDstSelector:            rule.OriginalNotDstSelector,
+		OriginalSrcServiceAccountNames:    rule.OriginalSrcServiceAccountNames,
+		OriginalSrcServiceAccountSelector: rule.OriginalSrcServiceAccountSelector,
+		OriginalDstServiceAccountNames:    rule.OriginalDstServiceAccountNames,
+		OriginalDstServiceAccountSelector: rule.OriginalDstServiceAccountSelector,
 	}
 
 	allIPSets = append(allIPSets, srcNamedPortIPSets...)

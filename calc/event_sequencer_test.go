@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
 package calc_test
 
 import (
+	"fmt"
+	"reflect"
+
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
@@ -60,6 +64,66 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		Ipv6Nat: []*proto.NatInfo{},
 	}),
 )
+
+var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
+	var (
+		fullyLoadedParsedRules = calc.ParsedRules{
+			Namespace: "namespace",
+			OutboundRules: []*calc.ParsedRule{
+				{Action: "Allow"},
+			},
+			InboundRules: []*calc.ParsedRule{
+				{Action: "Deny"},
+			},
+			PreDNAT:   true,
+			Untracked: true,
+		}
+		fullyLoadedProtoRules = proto.ActivePolicyUpdate{
+			Id: &proto.PolicyID{
+				Tier: "default",
+				Name: "a-policy",
+			},
+			Policy: &proto.Policy{
+				Namespace:     "namespace",
+				InboundRules:  []*proto.Rule{{Action: "Deny"}},
+				OutboundRules: []*proto.Rule{{Action: "Allow"}},
+				Untracked:     true,
+				PreDnat:       true,
+			},
+		}
+	)
+
+	It("a fully-loaded ParsedRules struct should result in all fields being set in the protobuf rules", func() {
+		// We use reflection to scan all the fields in the protobuf rule to make sure that they're
+		// all filled in.  If any are still at their zero value, either hte test is out of date
+		// or we forgot to add conversion logic for that field.
+		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
+		protoPolicy := *protoUpdate.Policy
+		protoPolicyValue := reflect.ValueOf(protoPolicy)
+		numFields := protoPolicyValue.NumField()
+		for i := 0; i < numFields; i++ {
+			field := protoPolicyValue.Field(i)
+			fieldName := reflect.TypeOf(protoPolicy).Field(i).Name
+			Expect(field.Interface()).NotTo(Equal(reflect.Zero(field.Type()).Interface()),
+				fmt.Sprintf("Field %s in the protobuf struct was still at its zero value; "+
+					"missing from conversion or fully-loaded rule?", fieldName))
+		}
+	})
+
+	It("should convert the fully-loaded rule", func() {
+		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
+		// Check the rule IDs are filled in but ignore them for comparisons.
+		for _, r := range protoUpdate.Policy.InboundRules {
+			Expect(r.RuleId).ToNot(Equal(""))
+			r.RuleId = ""
+		}
+		for _, r := range protoUpdate.Policy.OutboundRules {
+			Expect(r.RuleId).ToNot(Equal(""))
+			r.RuleId = ""
+		}
+		Expect(protoUpdate).To(Equal(&fullyLoadedProtoRules))
+	})
+})
 
 var _ = DescribeTable("ModelHostEndpointToProto",
 	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo, expected proto.HostEndpoint) {

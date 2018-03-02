@@ -30,11 +30,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+
 	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 
 	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/libcalico-go/lib/set"
