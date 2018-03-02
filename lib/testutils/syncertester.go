@@ -159,7 +159,7 @@ func (st *SyncerTester) ExpectStatusUpdate(status api.SyncStatus) {
 		defer st.lock.Unlock()
 		return st.status
 	}
-	Eventually(cs, 6*time.Second, 500*time.Millisecond).Should(Equal(status))
+	Eventually(cs, 6*time.Second, time.Millisecond).Should(Equal(status))
 	Consistently(cs).Should(Equal(status))
 
 	log.Infof("Status is at expected status: %s", status)
@@ -190,7 +190,7 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 		defer st.lock.Unlock()
 		return st.statusChanged
 	}
-	Eventually(sc, 6*time.Second, 500*time.Millisecond).Should(BeFalse())
+	Eventually(sc, 6*time.Second, time.Millisecond).Should(BeFalse())
 	Consistently(sc).Should(BeFalse(), "Status changed unexpectedly")
 }
 
@@ -211,13 +211,13 @@ func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 		value := func() interface{} {
 			return st.GetCacheValue(key)
 		}
-		Eventually(value, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp.Value))
+		Eventually(value, 6*time.Second, time.Millisecond).Should(Equal(kvp.Value))
 		Consistently(value).Should(Equal(kvp.Value), "KVPair data was incorrect")
 	} else {
 		kv := func() interface{} {
 			return st.GetCacheKVPair(key)
 		}
-		Eventually(kv, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp))
+		Eventually(kv, 6*time.Second, time.Millisecond).Should(Equal(kvp))
 		Consistently(kv).Should(Equal(kvp), "KVPair data (or revision) was incorrect")
 	}
 }
@@ -231,7 +231,7 @@ func (st *SyncerTester) ExpectValueMatches(k model.Key, match gomegatypes.Gomega
 		return st.GetCacheValue(key)
 	}
 
-	Eventually(value, 6*time.Second, 500*time.Millisecond).Should(match)
+	Eventually(value, 6*time.Second, time.Millisecond).Should(match)
 	Consistently(value).Should(match)
 }
 
