@@ -23,6 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/workload"
@@ -34,14 +35,16 @@ import (
 var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 
 	var (
-		etcd    *containers.Container
-		felixes []*containers.Felix
-		hostW   [2]*workload.Workload
-		client  client.Interface
-		cc      *workload.ConnectivityChecker
+		etcd        *containers.Container
+		felixes     []*containers.Felix
+		hostW       [2]*workload.Workload
+		client      client.Interface
+		cc          *workload.ConnectivityChecker
+		dumpedDiags bool
 	)
 
 	BeforeEach(func() {
+		dumpedDiags = false
 		options := containers.DefaultTopologyOptions()
 		felixes, etcd, client = containers.StartNNodeEtcdTopology(2, options)
 		cc = &workload.ConnectivityChecker{}
@@ -53,42 +56,72 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 				fmt.Sprintf("host%d", ii),
 				"", // No interface name means "run in the host's namespace"
 				felixes[ii].IP,
-				"8055",
+				"8055,2379,22", // Extra ports are out/in and inbound failsafes.
 				"tcp")
 		}
 	})
 
-	AfterEach(func() {
-
-		if CurrentGinkgoTestDescription().Failed {
-			felixes[0].Exec("iptables-save", "-c")
-			felixes[0].Exec("ip", "r")
+	// Utility function to dump diags if the test failed.  Should be called in the inner-most
+	// AfterEach() to dump diags before the test is torn down.  Only the first call for a given
+	// test has any effect.
+	dumpDiags := func() {
+		if !CurrentGinkgoTestDescription().Failed || dumpedDiags {
+			return
 		}
-
 		for ii := range felixes {
-			felixes[ii].Stop()
+			iptSave, err := felixes[ii].ExecOutput("iptables-save", "-c")
+			if err == nil {
+				log.WithField("felix", ii).Info("iptables-save:\n" + iptSave)
+			}
+			ipR, err := felixes[ii].ExecOutput("ip", "r")
+			if err == nil {
+				log.WithField("felix", ii).Info("ip route:\n" + ipR)
+			}
 		}
+		etcd.Exec("etcdctl", "ls", "--recursive", "/")
 
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+	}
+
+	AfterEach(func() {
+		dumpDiags()
+		for _, f := range felixes {
+			f.Stop()
 		}
 		etcd.Stop()
 	})
 
+	expectFullConnectivity := func() {
+		cc.ResetExpectations()
+		cc.ExpectSome(felixes[0], hostW[1].Port(8055))
+		cc.ExpectSome(felixes[1], hostW[0].Port(8055))
+		cc.ExpectSome(felixes[0], hostW[1].Port(2379))
+		cc.ExpectSome(felixes[1], hostW[0].Port(2379))
+		cc.ExpectSome(felixes[0], hostW[1].Port(22))
+		cc.ExpectSome(felixes[1], hostW[0].Port(22))
+		cc.ExpectSome(etcd, hostW[1].Port(22))
+		cc.ExpectSome(etcd, hostW[0].Port(22))
+		cc.CheckConnectivityOffset(1)
+	}
+
 	It("before adding policy, should have connectivity between hosts", func() {
-		cc.ExpectSome(felixes[0], hostW[1])
-		cc.ExpectSome(felixes[1], hostW[0])
-		cc.CheckConnectivity()
+		expectFullConnectivity()
 	})
 
 	Context("after adding host endpoints", func() {
+		var (
+			ctx    context.Context
+			cancel context.CancelFunc
+		)
+
 		BeforeEach(func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
+			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 
 			for _, f := range felixes {
 				hep := api.NewHostEndpoint()
 				hep.Name = "eth0-" + f.Name
+				hep.Labels = map[string]string{
+					"name": hep.Name,
+				}
 				hep.Spec.Node = f.Hostname
 				hep.Spec.ExpectedIPs = []string{f.IP}
 				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
@@ -96,43 +129,147 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 			}
 		})
 
-		It("have no connectivity between hosts", func() {
-			cc.ExpectNone(felixes[0], hostW[1])
-			cc.ExpectNone(felixes[1], hostW[0])
+		AfterEach(func() {
+			dumpDiags()
+			cancel()
+		})
+
+		It("should implement untracked policy correctly", func() {
+			// This test covers both normal connectivity and failsafe connectivity.  We combine the
+			// tests because we rely on the changes of normal connectivity at each step to make sure
+			// that the policy has actually flowed through to the dataplane.
+
+			By("having only failsafe connectivity to start with")
+			cc.ExpectNone(felixes[0], hostW[1].Port(8055))
+			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
+			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
+			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
+			// Port 22 is inbound-only so it'll be blocked by the (lack of egress policy).
+			cc.ExpectNone(felixes[0], hostW[1].Port(22))
+			cc.ExpectNone(felixes[1], hostW[0].Port(22))
+			// But etcd should still be able to access it...
+			cc.ExpectSome(etcd, hostW[1].Port(22))
+			cc.ExpectSome(etcd, hostW[0].Port(22))
+			cc.CheckConnectivity()
+
+			host0Selector := fmt.Sprintf("name == 'eth0-%s'", felixes[0].Name)
+			host1Selector := fmt.Sprintf("name == 'eth0-%s'", felixes[1].Name)
+
+			By("Having connectivity after installing bidirectional policies")
+			host0Pol := api.NewGlobalNetworkPolicy()
+			host0Pol.Name = "host-0-pol"
+			host0Pol.Spec.Selector = host0Selector
+			host0Pol.Spec.DoNotTrack = true
+			host0Pol.Spec.ApplyOnForward = true
+			host0Pol.Spec.Ingress = []api.Rule{
+				{
+					Action: api.Allow,
+					Source: api.EntityRule{
+						Selector: host1Selector,
+					},
+				},
+			}
+			host0Pol.Spec.Egress = []api.Rule{
+				{
+					Action: api.Allow,
+					Destination: api.EntityRule{
+						Selector: host1Selector,
+					},
+				},
+			}
+			host0Pol, err := client.GlobalNetworkPolicies().Create(ctx, host0Pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			host1Pol := api.NewGlobalNetworkPolicy()
+			host1Pol.Name = "host-1-pol"
+			host1Pol.Spec.Selector = host1Selector
+			host1Pol.Spec.DoNotTrack = true
+			host1Pol.Spec.ApplyOnForward = true
+			host1Pol.Spec.Ingress = []api.Rule{
+				{
+					Action: api.Allow,
+					Source: api.EntityRule{
+						Selector: host0Selector,
+					},
+				},
+			}
+			host1Pol.Spec.Egress = []api.Rule{
+				{
+					Action: api.Allow,
+					Destination: api.EntityRule{
+						Selector: host0Selector,
+					},
+				},
+			}
+			host1Pol, err = client.GlobalNetworkPolicies().Create(ctx, host1Pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			expectFullConnectivity()
+
+			By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
+			// Since there's no conntrack, removing rules in one direction is enough to prevent
+			// connectivity in either direction.
+			host0Pol.Spec.Egress = []api.Rule{
+				{
+					Action: api.Deny,
+					Destination: api.EntityRule{
+						Selector: host0Selector,
+					},
+				},
+			}
+			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			host1Pol, err = client.GlobalNetworkPolicies().Update(ctx, host1Pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			cc.ResetExpectations()
+			cc.ExpectNone(felixes[0], hostW[1].Port(8055))
+			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
+			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
+			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
+			cc.ExpectNone(felixes[0], hostW[1].Port(22)) // Now blocked (lack of egress).
+			cc.ExpectSome(felixes[1], hostW[0].Port(22)) // Still open due to failsafe.
+			cc.ExpectSome(etcd, hostW[1].Port(22))       // Allowed by failsafe
+			cc.ExpectSome(etcd, hostW[0].Port(22))       // Allowed by failsafe
+			cc.CheckConnectivity()
+
+			By("Having full connectivity after putting them back")
+			host0Pol.Spec.Egress = []api.Rule{
+				{
+					Action: api.Allow,
+					Destination: api.EntityRule{
+						Selector: host1Selector,
+					},
+				},
+			}
+			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			expectFullConnectivity()
+
+			By("Having only failsafe connectivity after replacing host-0's ingress rules with Deny")
+			host0Pol.Spec.Ingress = []api.Rule{
+				{
+					Action: api.Deny,
+					Destination: api.EntityRule{
+						Selector: host0Selector,
+					},
+				},
+			}
+			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			cc.ResetExpectations()
+			cc.ExpectNone(felixes[0], hostW[1].Port(8055))
+			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
+			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
+			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
+			cc.ExpectNone(felixes[0], hostW[1].Port(22)) // Response traffic blocked by policy
+			cc.ExpectSome(felixes[1], hostW[0].Port(22)) // Allowed by failsafe
+			cc.ExpectSome(etcd, hostW[1].Port(22))       // Allowed by failsafe
+			cc.ExpectSome(etcd, hostW[0].Port(22))       // Allowed by failsafe
 			cc.CheckConnectivity()
 		})
 	})
-
-	//
-	//Context("with pre-DNAT policy to prevent access from outside", func() {
-	//	BeforeEach(func() {
-	//		policy := api.NewGlobalNetworkPolicy()
-	//		policy.Name = "deny-ingress"
-	//		order := float64(20)
-	//		policy.Spec.Order = &order
-	//		policy.Spec.PreDNAT = true
-	//		policy.Spec.ApplyOnForward = true
-	//		policy.Spec.Ingress = []api.Rule{{Action: api.Deny}}
-	//		policy.Spec.Selector = "has(host-endpoint)"
-	//		_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-	//		Expect(err).NotTo(HaveOccurred())
-	//
-	//		hostEp := api.NewHostEndpoint()
-	//		hostEp.Name = "felix-eth0"
-	//		hostEp.Spec.Node = felix.Hostname
-	//		hostEp.Labels = map[string]string{"host-endpoint": "true"}
-	//		hostEp.Spec.InterfaceName = "eth0"
-	//		_, err = client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
-	//		Expect(err).NotTo(HaveOccurred())
-	//	})
-	//
-	//	It("etcd cannot connect", func() {
-	//		cc := &workload.ConnectivityChecker{}
-	//		cc.ExpectSome(w[0], w[1], 32011)
-	//		cc.ExpectSome(w[1], w[0], 32010)
-	//		cc.ExpectNone(etcd, w[1], 32011)
-	//		cc.ExpectNone(etcd, w[0], 32010)
-	//		cc.CheckConnectivity()
-	//	})
-	//})
 })

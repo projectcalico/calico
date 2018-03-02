@@ -458,11 +458,19 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 	return result
 }
 
+func (c *ConnectivityChecker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(offset+2, 10*time.Second, optionalDescription...)
+}
+
 func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeout(10*time.Second, optionalDescription...)
+	c.CheckConnectivityWithTimeoutOffset(2, 10*time.Second, optionalDescription...)
 }
 
 func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, optionalDescription ...interface{}) {
 	expConnectivity := c.ExpectedConnectivity()
 	start := time.Now()
 
@@ -492,5 +500,5 @@ func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration
 		strings.Join(actualConn, "\n    "),
 		strings.Join(expConnectivity, "\n    "),
 	)
-	Fail(message, 1)
+	Fail(message, callerSkip)
 }
