@@ -178,10 +178,10 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		OriginalNotSrcSelector:       ar.Source.NotSelector,
 		OriginalNotDstSelector:       ar.Destination.NotSelector,
 
-		SrcServiceAccountNames:    srcServiceAcctMatch.Names,
-		SrcServiceAccountSelector: srcServiceAcctMatch.Selector,
-		DstServiceAccountNames:    dstServiceAcctMatch.Names,
-		DstServiceAccountSelector: dstServiceAcctMatch.Selector,
+		OriginalSrcServiceAccountNames:    srcServiceAcctMatch.Names,
+		OriginalSrcServiceAccountSelector: srcServiceAcctMatch.Selector,
+		OriginalDstServiceAccountNames:    dstServiceAcctMatch.Names,
+		OriginalDstServiceAccountSelector: dstServiceAcctMatch.Selector,
 	}
 }
 

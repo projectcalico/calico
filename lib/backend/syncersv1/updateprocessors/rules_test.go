@@ -110,10 +110,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
 
-		Expect(rulev1.SrcServiceAccountSelector).To(Equal("servacctsel"))
-		Expect(rulev1.DstServiceAccountSelector).To(Equal("servacctsel2"))
-		Expect(rulev1.SrcServiceAccountNames).To(Equal([]string{"a", "b"}))
-		Expect(rulev1.DstServiceAccountNames).To(Equal([]string{"c", "d"}))
+		Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal("servacctsel"))
+		Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal("servacctsel2"))
+		Expect(rulev1.OriginalSrcServiceAccountNames).To(Equal([]string{"a", "b"}))
+		Expect(rulev1.OriginalDstServiceAccountNames).To(Equal([]string{"c", "d"}))
 
 		etype := 2
 		entype := 7
@@ -182,10 +182,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label2)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label1)"))
 
-		Expect(rulev1.SrcServiceAccountSelector).To(Equal(""))
-		Expect(rulev1.DstServiceAccountSelector).To(Equal(""))
-		Expect(rulev1.SrcServiceAccountNames).To(BeNil())
-		Expect(rulev1.DstServiceAccountNames).To(BeNil())
+		Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcServiceAccountNames).To(BeNil())
+		Expect(rulev1.OriginalDstServiceAccountNames).To(BeNil())
 
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")

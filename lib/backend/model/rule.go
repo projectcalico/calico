@@ -50,12 +50,6 @@ type Rule struct {
 	DstNets     []*net.IPNet       `json:"dst_nets,omitempty" validate:"omitempty"`
 	DstPorts    []numorstring.Port `json:"dst_ports,omitempty" validate:"omitempty,dive"`
 
-	// The (raw unmodified) service account match criteria from the V3 Datamodel.
-	SrcServiceAccountNames    []string `json:"src_service_acct_names,omitempty" validate:"omitempty,selector"`
-	SrcServiceAccountSelector string   `json:"src_service_acct_selector,omitempty" validate:"omitempty"`
-	DstServiceAccountNames    []string `json:"dst_service_acct_names,omitempty" validate:"omitempty"`
-	DstServiceAccountSelector string   `json:"dst_service_acct_selector,omitempty" validate:"omitempty"`
-
 	NotSrcTag      string             `json:"!src_tag,omitempty" validate:"omitempty,tag"`
 	NotSrcNet      *net.IPNet         `json:"!src_net,omitempty" validate:"omitempty"`
 	NotSrcNets     []*net.IPNet       `json:"!src_nets,omitempty" validate:"omitempty"`
@@ -67,15 +61,19 @@ type Rule struct {
 	NotDstNets     []*net.IPNet       `json:"!dst_nets,omitempty" validate:"omitempty"`
 	NotDstPorts    []numorstring.Port `json:"!dst_ports,omitempty" validate:"omitempty,dive"`
 
-	// These fields allow us to pass through the raw selectors from the V3 datamodel unmodified.
+	// These fields allow us to pass through the raw match criteria from the V3 datamodel unmodified.
 	// The selectors above are formed in the update processor layer by combining the original
-	// selectors and namespace selectors into one.
-	OriginalSrcSelector          string `json:"orig_src_selector,omitempty" validate:"omitempty,selector"`
-	OriginalSrcNamespaceSelector string `json:"orig_src_namespace_selector,omitempty" validate:"omitempty,selector"`
-	OriginalDstSelector          string `json:"orig_dst_selector,omitempty" validate:"omitempty,selector"`
-	OriginalDstNamespaceSelector string `json:"orig_dst_namespace_selector,omitempty" validate:"omitempty,selector"`
-	OriginalNotSrcSelector       string `json:"!orig_src_selector,omitempty" validate:"omitempty,selector"`
-	OriginalNotDstSelector       string `json:"!orig_dst_selector,omitempty" validate:"omitempty,selector"`
+	// selectors, namespace selectors and service account selectors into one.
+	OriginalSrcSelector               string   `json:"orig_src_selector,omitempty" validate:"omitempty,selector"`
+	OriginalSrcNamespaceSelector      string   `json:"orig_src_namespace_selector,omitempty" validate:"omitempty,selector"`
+	OriginalDstSelector               string   `json:"orig_dst_selector,omitempty" validate:"omitempty,selector"`
+	OriginalDstNamespaceSelector      string   `json:"orig_dst_namespace_selector,omitempty" validate:"omitempty,selector"`
+	OriginalNotSrcSelector            string   `json:"!orig_src_selector,omitempty" validate:"omitempty,selector"`
+	OriginalNotDstSelector            string   `json:"!orig_dst_selector,omitempty" validate:"omitempty,selector"`
+	OriginalSrcServiceAccountNames    []string `json:"orig_src_service_acct_names,omitempty" validate:"omitempty,selector"`
+	OriginalSrcServiceAccountSelector string   `json:"orig_src_service_acct_selector,omitempty" validate:"omitempty"`
+	OriginalDstServiceAccountNames    []string `json:"orig_dst_service_acct_names,omitempty" validate:"omitempty"`
+	OriginalDstServiceAccountSelector string   `json:"orig_dst_service_acct_selector,omitempty" validate:"omitempty"`
 
 	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
 }
