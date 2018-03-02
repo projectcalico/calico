@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,6 +75,89 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(bgpIpv4Address).To(Equal(ip.String()))
 		Expect(ipInIpAddr).To(Equal("10.0.0.2"))
 		Expect(asn.String()).To(Equal("2546"))
+	})
+
+	It("should parse a k8s Node to a Calico Node with IPv6", func() {
+		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
+		node := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNode",
+				Labels:          l,
+				ResourceVersion: "1234",
+				Annotations: map[string]string{
+					nodeBgpIpv6AddrAnnotation: "fd10::10",
+					nodeBgpAsnAnnotation:      "2546",
+				},
+			},
+			Status: k8sapi.NodeStatus{
+				Addresses: []k8sapi.NodeAddress{
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeInternalIP,
+						Address: "fd10::10",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeExternalIP,
+						Address: "fd20::100",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeHostName,
+						Address: "fd10-10",
+					},
+				},
+			},
+			Spec: k8sapi.NodeSpec{
+				PodCIDR: "feee::/122",
+			},
+		}
+
+		n, err := K8sNodeToCalico(&node)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Ensure we got the correct values.
+		bgpIpv6Address := n.Value.(*apiv3.Node).Spec.BGP.IPv6Address
+		ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+
+		ip := net.ParseIP("fd10::10")
+
+		Expect(bgpIpv6Address).To(Equal(ip.String()))
+		Expect(ipInIpAddr).To(Equal(""))
+	})
+
+	It("should fail to parse a k8s Node to a Calico Node with bad PodCIDR", func() {
+		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
+		node := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNode",
+				Labels:          l,
+				ResourceVersion: "1234",
+				Annotations: map[string]string{
+					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
+					nodeBgpAsnAnnotation:      "2546",
+				},
+			},
+			Status: k8sapi.NodeStatus{
+				Addresses: []k8sapi.NodeAddress{
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeInternalIP,
+						Address: "172.17.17.10",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeExternalIP,
+						Address: "192.168.1.100",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeHostName,
+						Address: "172-17-17-10",
+					},
+				},
+			},
+			Spec: k8sapi.NodeSpec{
+				PodCIDR: "10.0.a.1/24",
+			},
+		}
+
+		_, err := K8sNodeToCalico(&node)
+		Expect(err).To(HaveOccurred())
 	})
 
 	It("should parse a k8s Node to a Calico Node with podCIDR but no BGP config", func() {
