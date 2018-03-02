@@ -30,7 +30,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 13d015d6433fd53fb260dc2b3ab50340c34f5749
+  version: feature-policy-api
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -42,6 +42,9 @@ import:
 - package: github.com/gogo/protobuf
   version: ^0.5.0
 - package: github.com/vishvananda/netlink
+- package: golang.org/x/sys
+  # Current master, pinned for github.com/vishvananda/netlink
+  version: dd2ff4accc098aceecb86b36eaa7829b2a17b1c9
 - package: github.com/onsi/ginkgo
   version: ^1.4.0
 - package: github.com/onsi/gomega
@@ -49,7 +52,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 4ab01481018b09155c39708a81165a01c5277c4b
+  version: feature-policy-api
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful

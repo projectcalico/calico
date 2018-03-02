@@ -169,6 +169,10 @@ message PolicyID {
 }
 
 message Policy {
+  // If the Policy represents a NetworkPolicy, this contains the namespace that the policy came
+  // from.  Otherwise, empty.
+  string namespace = 5;
+
   repeated Rule inbound_rules = 1;
   repeated Rule outbound_rules = 2;
   bool untracked = 3;
@@ -223,12 +227,30 @@ message Rule {
   repeated string not_src_named_port_ip_set_ids = 112;
   repeated string not_dst_named_port_ip_set_ids = 113;
 
+  // These fields pass through the original selectors from the v3 datamodel unmodified as required
+  // for the policy sync API.
+  string original_src_selector = 114;
+  string original_dst_selector = 115;
+  string original_src_namespace_selector = 116;
+  string original_dst_namespace_selector = 117;
+  string original_not_src_selector = 118;
+  string original_not_dst_selector = 119;
+
+  // Pass through of the v3 datamodel service account match criteria.
+  ServiceAccountMatch src_service_account_match = 120;
+  ServiceAccountMatch dst_service_account_match = 121;
+
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";
 
   // An opaque ID/hash for the rule.
   string rule_id = 201;
+}
+
+message ServiceAccountMatch {
+  string selector = 1;
+  repeated string names = 2;
 }
 
 message IcmpTypeAndCode {

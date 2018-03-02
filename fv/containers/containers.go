@@ -502,10 +502,11 @@ func RunFelix(etcdIP string, options TopologyOptions) *Felix {
 }
 
 type TopologyOptions struct {
-	FelixLogSeverity string
-	EnableIPv6       bool
-	ExtraEnvVars     map[string]string
-	ExtraVolumes     map[string]string
+	FelixLogSeverity      string
+	EnableIPv6            bool
+	ExtraEnvVars          map[string]string
+	ExtraVolumes          map[string]string
+	AlphaFeaturesToEnable string
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -551,7 +552,7 @@ func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd
 	etcd = RunEtcd()
 
 	// Connect to etcd.
-	client = utils.GetEtcdClient(etcd.IP)
+	client = utils.GetEtcdClient(etcd.IP, opts.AlphaFeaturesToEnable)
 	mustInitDatastore(client)
 
 	if n > 1 {
