@@ -88,9 +88,15 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		UID:               ns.UID,
 	}
 	profile.Spec = apiv3.ProfileSpec{
-		Ingress:       []apiv3.Rule{{Action: apiv3.Allow}},
-		Egress:        []apiv3.Rule{{Action: apiv3.Allow}},
-		LabelsToApply: labels,
+		Ingress: []apiv3.Rule{{Action: apiv3.Allow}},
+		Egress:  []apiv3.Rule{{Action: apiv3.Allow}},
+	}
+
+	// Only set labels to apply when there are actually labels. This makes the
+	// result of this function consistent with the struct as loaded directly
+	// from etcd, which uses nil for the empty map.
+	if len(labels) != 0 {
+		profile.Spec.LabelsToApply = labels
 	}
 
 	// Embed the profile in a KVPair.
