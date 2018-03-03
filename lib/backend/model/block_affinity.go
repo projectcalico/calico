@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -36,11 +37,13 @@ const (
 	StateConfirmed       BlockAffinityState = "confirmed"
 	StatePending         BlockAffinityState = "pending"
 	StatePendingDeletion BlockAffinityState = "pendingDeletion"
+	StateDeleted         BlockAffinityState = "deleted"
 )
 
 type BlockAffinityKey struct {
-	CIDR net.IPNet `json:"-" validate:"required,name"`
-	Host string    `json:"-"`
+	CIDR net.IPNet  `json:"-" validate:"required,name"`
+	Host string     `json:"-"`
+	UID  *types.UID `json:"-"`
 }
 
 type BlockAffinity struct {

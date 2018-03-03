@@ -66,7 +66,7 @@ func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) 
 	return c.patchPodIP(ctx, kvp)
 }
 
-func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on WorkloadEndpoint type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,

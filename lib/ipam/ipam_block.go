@@ -166,16 +166,18 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 
 	// Determine the ordinals that need to be released and the
 	// attributes that need to be cleaned up.
+	log.Debugf("Releasing addresses from block: %v", uniqueAddresses)
 	for ipStr, _ := range uniqueAddresses {
 		ip := cnet.MustParseIP(ipStr)
-
 		// Convert to an ordinal.
 		ordinal, err := ipToOrdinal(ip, *b)
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Debugf("Address %s is ordinal %d", ip, ordinal)
 
 		// Check if allocated.
+		log.Debugf("Checking if allocated: %v", b.Allocations)
 		attrIdx := b.Allocations[ordinal]
 		if attrIdx == nil {
 			log.Debugf("Asked to release address that was not allocated")
@@ -183,6 +185,7 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 			continue
 		}
 		ordinals = append(ordinals, ordinal)
+		log.Debugf("%s is allocated, ordinals to release are now %v", ip, ordinals)
 
 		// Increment referece counting for attributes.
 		cnt := 1
@@ -190,17 +193,22 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 			cnt = cur + 1
 		}
 		delRefCounts[*attrIdx] = cnt
+		log.Debugf("delRefCounts: %v", delRefCounts)
 
 		// Increment count of addresses by handle if a handle
 		// exists.
+		log.Debugf("Looking up attribute with index %d", *attrIdx)
 		handleID := b.Attributes[*attrIdx].AttrPrimary
 		if handleID != nil {
+			log.Debugf("HandleID is %s", *handleID)
 			handleCount := 0
 			if count, ok := countByHandle[*handleID]; !ok {
 				handleCount = count
 			}
+			log.Debugf("Handle ref count is %d, incrementing", handleCount)
 			handleCount += 1
 			countByHandle[*handleID] = handleCount
+			log.Debugf("countByHandle %v", countByHandle)
 		}
 	}
 
@@ -208,7 +216,9 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 	// reference counting.  If we're deleting the last reference to
 	// a given attribute, then it needs to be cleaned up.
 	refCounts := b.attributeRefCounts()
+	log.Debugf("Cleaning up attributes, refCounts: %v", refCounts)
 	for idx, refs := range delRefCounts {
+		log.Debugf("Checking ref count index %d", idx)
 		if refCounts[idx] == refs {
 			attrsToDelete = append(attrsToDelete, idx)
 		}
@@ -219,7 +229,10 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 	}
 
 	// Release requested addresses.
+	log.Debugf("Allocations: %v", b.Allocations)
+	log.Debugf("Releasing ordinals: %v", ordinals)
 	for _, ordinal := range ordinals {
+		log.Debugf("Releasing ordinal %d", ordinal)
 		b.Allocations[ordinal] = nil
 		b.Unallocated = append(b.Unallocated, ordinal)
 	}

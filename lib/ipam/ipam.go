@@ -123,13 +123,13 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 
 	// Get the block referenced by this affinity.
 	logCtx.Info("Attempting to load block")
-	b, err := c.client.Get(ctx, model.BlockKey{CIDR: cidr}, "")
+	b, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: cidr}, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// The block referenced by the affinity doesn't exist. Try to create it.
 			logCtx.Info("The referenced block doesn't exist, trying to create it")
 			aff.Value.(*model.BlockAffinity).State = model.StatePending
-			aff, err = c.client.Update(ctx, aff)
+			aff, err = c.blockReaderWriter.updateAffinity(ctx, aff)
 			if err != nil {
 				logCtx.WithError(err).Warn("Error updating block affinity")
 				return nil, err
@@ -160,7 +160,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 	blockAffinity := b.Value.(*model.AllocationBlock).Affinity
 	if blockAffinity == nil || *blockAffinity != fmt.Sprintf("host:%s", host) {
 		logCtx.WithField("blockAffinity", blockAffinity).Warn("Block does not match the provided affinity, deleting stale affinity")
-		_, err := c.client.Delete(ctx, aff.Key, aff.Revision)
+		err := c.blockReaderWriter.deleteAffinity(ctx, aff)
 		if err != nil {
 			logCtx.WithError(err).Warn("Error deleting stale affinity")
 			return nil, err
@@ -174,7 +174,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 		// Write the affinity as pending.
 		logCtx.Info("Affinity has not been confirmed - attempt to confirm it")
 		aff.Value.(*model.BlockAffinity).State = model.StatePending
-		aff, err = c.client.Update(ctx, aff)
+		aff, err = c.blockReaderWriter.updateAffinity(ctx, aff)
 		if err != nil {
 			logCtx.WithError(err).Warn("Error marking affinity as pending as part of confirmation process")
 			return nil, err
@@ -183,7 +183,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 		// CAS the block to get a new revision and invalidate any other instances
 		// that might be trying to operate on the block.
 		logCtx.Info("Writing block to get a new revision")
-		b, err = c.client.Update(ctx, b)
+		b, err = c.blockReaderWriter.updateBlock(ctx, b)
 		if err != nil {
 			logCtx.WithError(err).Debug("Error writing block")
 			return nil, err
@@ -192,7 +192,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 		// Confirm the affinity.
 		logCtx.Info("Attempting to confirm affinity")
 		aff.Value.(*model.BlockAffinity).State = model.StateConfirmed
-		aff, err = c.client.Update(ctx, aff)
+		aff, err = c.blockReaderWriter.updateAffinity(ctx, aff)
 		if err != nil {
 			logCtx.WithError(err).Debug("Error confirming affinity")
 			return nil, err
@@ -364,7 +364,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		for i := 0; i < ipamEtcdRetries; i++ {
 			// Get the affinity.
 			logCtx.Infof("Trying affinity for %s", cidr)
-			aff, err := c.client.Get(ctx, model.BlockAffinityKey{Host: host, CIDR: cidr}, "")
+			aff, err := c.blockReaderWriter.queryAffinity(ctx, model.BlockAffinityKey{Host: host, CIDR: cidr}, "")
 			if err != nil {
 				logCtx.WithError(err).Warnf("Error getting affinity")
 				break
@@ -522,7 +522,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 				}
 
 				for i := 0; i < ipamEtcdRetries; i++ {
-					b, err := c.client.Get(ctx, model.BlockKey{CIDR: *blockCIDR}, "")
+					b, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: *blockCIDR}, "")
 					if err != nil {
 						logCtx.WithError(err).Warn("Failed to get non-affine block")
 						break
@@ -575,7 +575,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	blockCIDR := getBlockCIDRForAddress(args.IP, pool)
 	log.Debugf("IP %s is in block '%s'", args.IP.String(), blockCIDR.String())
 	for i := 0; i < ipamEtcdRetries; i++ {
-		obj, err := c.client.Get(ctx, model.BlockKey{blockCIDR}, "")
+		obj, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				log.WithError(err).Error("Error getting block")
@@ -628,7 +628,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		// Update the block using the original KVPair to do a CAS.  No need to
 		// update the Value since we have been manipulating the Value pointed to
 		// in the KVPair.
-		_, err = c.client.Update(ctx, obj)
+		_, err = c.blockReaderWriter.updateBlock(ctx, obj)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 				log.WithError(err).Debug("CAS error assigning IP - retry")
@@ -707,7 +707,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 		logCtx.Info("Getting block so we can release IPs")
 
 		// Get allocation block for cidr.
-		obj, err := c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
+		obj, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				// The block does not exist - all addresses must be unassigned.
@@ -738,10 +738,10 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 		var updateErr error
 		if b.empty() && b.Affinity == nil {
 			logCtx.Info("Deleting non-affine block")
-			_, updateErr = c.client.Delete(ctx, obj.Key, obj.Revision)
+			updateErr = c.blockReaderWriter.deleteBlock(ctx, obj)
 		} else {
 			logCtx.Info("Updating assignments in block")
-			_, updateErr = c.client.Update(ctx, obj)
+			_, updateErr = c.blockReaderWriter.updateBlock(ctx, obj)
 		}
 
 		if updateErr != nil {
@@ -802,7 +802,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	// KVPair.
 	logCtx.Info("Writing block in order to claim IPs")
 	block.Value = b.AllocationBlock
-	_, err = c.client.Update(ctx, block)
+	_, err = c.blockReaderWriter.updateBlock(ctx, block)
 	if err != nil {
 		logCtx.WithError(err).Infof("Failed to update block")
 		if handleID != nil {
@@ -1039,6 +1039,11 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 		k := model.IPAMHostKey{Host: hostname}
 		kvp, err := c.client.Get(ctx, k, "")
 		if err != nil {
+			if _, ok := err.(cerrors.ErrorOperationNotSupported); ok {
+				// KDD mode doesn't have this object - this is a no-op.
+				logCtx.Debugf("No need to remove IPAM host for this datastore")
+				return nil
+			}
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				logCtx.WithError(err).Errorf("Failed to get IPAM host")
 				return err
@@ -1109,7 +1114,7 @@ func (c ipamClient) IPsByHandle(ctx context.Context, handleID string) ([]net.IP,
 	assignments := []net.IP{}
 	for k, _ := range handle.Block {
 		_, blockCIDR, _ := net.ParseCIDR(k)
-		obj, err := c.client.Get(ctx, model.BlockKey{*blockCIDR}, "")
+		obj, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: *blockCIDR}, "")
 		if err != nil {
 			log.Warningf("Couldn't read block %s referenced by handle %s", blockCIDR, handleID)
 			continue
@@ -1145,7 +1150,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 	logCtx := log.WithFields(log.Fields{"handle": handleID, "cidr": blockCIDR})
 	for i := 0; i < ipamEtcdRetries; i++ {
 		logCtx.Info("Querying block so we can release IPs by handle")
-		obj, err := c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
+		obj, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				// Block doesn't exist, so all addresses are already
@@ -1170,7 +1175,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 
 		if block.empty() && block.Affinity == nil {
 			logCtx.Info("Deleting block because it is now empty and has no affinity")
-			_, err = c.client.Delete(ctx, model.BlockKey{blockCIDR}, obj.Revision)
+			err = c.blockReaderWriter.deleteBlock(ctx, obj)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					logCtx.Debug("CAD error deleting block - retry")
@@ -1189,7 +1194,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 			// KVPair read from before.  No need to update the Value since we
 			// have been directly manipulating the value referenced by the KVPair.
 			logCtx.Info("Updating block to release IPs")
-			_, err = c.client.Update(ctx, obj)
+			_, err = c.blockReaderWriter.updateBlock(ctx, obj)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					// Comparison failed - retry.
@@ -1309,7 +1314,7 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (m
 		return nil, errors.New(fmt.Sprintf("%s is not part of a configured pool", addr))
 	}
 	blockCIDR := getBlockCIDRForAddress(addr, pool)
-	obj, err := c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
+	obj, err := c.blockReaderWriter.queryBlock(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 	if err != nil {
 		log.Errorf("Error reading block %s: %v", blockCIDR, err)
 		return nil, errors.New(fmt.Sprintf("%s is not assigned", addr))

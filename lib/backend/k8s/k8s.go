@@ -111,6 +111,8 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	}
 
 	// Create the clientset
+	config.QPS = float32(500)
+	config.Burst = 500
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
@@ -207,8 +209,26 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.BlockAffinityKey{}),
 		reflect.TypeOf(model.BlockAffinityListOptions{}),
+		apiv3.KindBlockAffinity,
+		resources.NewAffinityBlockClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.BlockKey{}),
+		reflect.TypeOf(model.BlockListOptions{}),
+		apiv3.KindIPAMBlock,
+		resources.NewIPAMBlockClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.IPAMHandleKey{}),
+		reflect.TypeOf(model.IPAMHandleListOptions{}),
+		apiv3.KindIPAMHandle,
+		resources.NewIPAMHandleClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.IPAMConfigKey{}),
+		nil,
 		"",
-		resources.NewAffinityBlockClient(cs),
+		resources.NewIPAMConfigClient(cs, crdClientV1),
 	)
 
 	return kubeClient, nil
@@ -287,6 +307,40 @@ func (c *KubeClient) Clean() error {
 				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
 					log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
 				}
+			}
+		}
+	}
+
+	// And clean up IPAM data.
+	lo := model.BlockListOptions{}
+	if rs, err := c.List(ctx, lo, ""); err != nil {
+		log.WithField("Kind", lo).Warning("Failed to list resources")
+	} else {
+		for _, r := range rs.KVPairs {
+			if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
+				log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+			}
+		}
+	}
+
+	balo := model.BlockAffinityListOptions{}
+	if rs, err := c.List(ctx, balo, ""); err != nil {
+		log.WithField("Kind", balo).Warning("Failed to list resources")
+	} else {
+		for _, r := range rs.KVPairs {
+			if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
+				log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+			}
+		}
+	}
+
+	halo := model.BlockAffinityListOptions{}
+	if rs, err := c.List(ctx, halo, ""); err != nil {
+		log.WithField("Kind", halo).Warning("Failed to list resources")
+	} else {
+		for _, r := range rs.KVPairs {
+			if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
+				log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
 			}
 		}
 	}
@@ -427,7 +481,7 @@ func (c *KubeClient) Delete(ctx context.Context, k model.Key, revision string) (
 			Operation:  "Delete",
 		}
 	}
-	return client.Delete(ctx, k, revision)
+	return client.Delete(ctx, k, revision, nil)
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.

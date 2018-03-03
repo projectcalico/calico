@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -31,7 +32,8 @@ var (
 )
 
 type BlockKey struct {
-	CIDR net.IPNet `json:"-" validate:"required,name"`
+	CIDR net.IPNet  `json:"-" validate:"required,name"`
+	UID  *types.UID `json:"-"`
 }
 
 func (key BlockKey) defaultPath() (string, error) {
@@ -90,6 +92,7 @@ type AllocationBlock struct {
 	Allocations    []*int                `json:"allocations"`
 	Unallocated    []int                 `json:"unallocated"`
 	Attributes     []AllocationAttribute `json:"attributes"`
+	Deleting       bool                  `json:"deleting"`
 
 	// HostAffinity is deprecated in favor of Affinity.
 	// This is only to keep compatiblity with existing deployments.

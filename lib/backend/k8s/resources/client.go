@@ -18,6 +18,7 @@ import (
 	"context"
 
 	apiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -45,7 +46,7 @@ type K8sResourceClient interface {
 	// Delete removes the object specified by the KVPair.  If the KVPair
 	// contains revision information, the delete only succeeds if the
 	// revision is still current.
-	Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
+	Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error)
 
 	// Get returns the object identified by the given key as a KVPair with
 	// revision information.
