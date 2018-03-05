@@ -184,7 +184,7 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		OriginalDstServiceAccountSelector: dstServiceAcctMatch.Selector,
 	}
 	if ar.HTTP != nil {
-		r.HTTPRule = &model.HTTPRule{Methods: ar.HTTP.Methods}
+		r.HTTPMatch = &model.HTTPMatch{Methods: ar.HTTP.Methods}
 	}
 	return r
 }

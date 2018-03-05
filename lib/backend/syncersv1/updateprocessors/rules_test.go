@@ -77,7 +77,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 					Selector: "servacctsel2",
 				},
 			},
-			HTTP: &apiv3.HTTPRule{
+			HTTP: &apiv3.HTTPMatch{
 				Methods: []string{"GET", "PUT"},
 			},
 		}
@@ -118,7 +118,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalSrcServiceAccountNames).To(Equal([]string{"a", "b"}))
 		Expect(rulev1.OriginalDstServiceAccountNames).To(Equal([]string{"c", "d"}))
 
-		Expect(rulev1.HTTPRule.Methods).To(Equal([]string{"GET", "PUT"}))
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"GET", "PUT"}))
 
 		etype := 2
 		entype := 7
@@ -155,7 +155,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotSelector:       "has(label1)",
 				NotPorts:          []numorstring.Port{port443},
 			},
-			HTTP: &apiv3.HTTPRule{
+			HTTP: &apiv3.HTTPMatch{
 				Methods: []string{"HEAD", "POST"},
 			},
 		}
@@ -195,7 +195,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalSrcServiceAccountNames).To(BeNil())
 		Expect(rulev1.OriginalDstServiceAccountNames).To(BeNil())
 
-		Expect(rulev1.HTTPRule.Methods).To(Equal([]string{"HEAD", "POST"}))
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"HEAD", "POST"}))
 
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
@@ -230,7 +230,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
 
-		Expect(rulev1.HTTPRule.Methods).To(Equal([]string{"GET", "PUT"}))
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"GET", "PUT"}))
 
 		rulev1 = rulesv1[1]
 		Expect(rulev1.IPVersion).To(Equal(&v4))
@@ -263,7 +263,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label2)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label1)"))
 
-		Expect(rulev1.HTTPRule.Methods).To(Equal([]string{"HEAD", "POST"}))
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"HEAD", "POST"}))
 	})
 
 	It("should parse a profile rule with no namespace", func() {

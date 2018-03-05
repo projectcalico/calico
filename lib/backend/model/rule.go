@@ -76,12 +76,12 @@ type Rule struct {
 	OriginalDstServiceAccountSelector string   `json:"orig_dst_service_acct_selector,omitempty" validate:"omitempty"`
 
 	// These fields allow us to pass through application layer selectors from the V3 datamodel.
-	HTTPRule *HTTPRule `json:"http,omitempty" validate:"omitempty"`
+	HTTPMatch *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
 
 	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
 }
 
-type HTTPRule struct {
+type HTTPMatch struct {
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`
 }
 
