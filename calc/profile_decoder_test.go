@@ -44,7 +44,7 @@ var _ = Describe("profileDecoder", func() {
 			uut.RegisterWith(disp)
 		})
 
-		It("should Register for Profiles only", func() {
+		It("should Register for ProfileLabels only", func() {
 			disp.OnUpdate(api.Update{
 				KVPair:     model.KVPair{Key: model.HostEndpointKey{}},
 				UpdateType: api.UpdateTypeKVNew,
@@ -55,20 +55,11 @@ var _ = Describe("profileDecoder", func() {
 	Describe("OnUpdate", func() {
 
 		It("should pass k8s service account update", func() {
-			update := api.Update{
-				KVPair: model.KVPair{
-					Key: model.ProfileKey{
-						Name: conversion.ServiceAccountProfileNamePrefix +
-							"test_namespace.test_serviceaccount"},
-					Value: &model.Profile{
-						Labels: map[string]string{
-							conversion.ServiceAccountLabelPrefix + "k1": "v1",
-							conversion.ServiceAccountLabelPrefix + "k2": "v2",
-						},
-					},
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}
+			update := addUpdate(conversion.ServiceAccountProfileNamePrefix+"test_namespace.test_serviceaccount",
+				map[string]string{
+					conversion.ServiceAccountLabelPrefix + "k1": "v1",
+					conversion.ServiceAccountLabelPrefix + "k2": "v2",
+				})
 			uut.OnUpdate(update)
 			Expect(callbacks.updates).To(Equal([]*proto.ServiceAccountUpdate{
 				{
@@ -82,26 +73,13 @@ var _ = Describe("profileDecoder", func() {
 		})
 
 		It("should not pass non service account profile updates", func() {
-			update := api.Update{
-				KVPair: model.KVPair{
-					Key:   model.ProfileKey{Name: "test_profile"},
-					Value: &model.Profile{Labels: map[string]string{"k1": "v1", "k2": "v2"}},
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}
+			update := addUpdate("test_profile", map[string]string{"k1": "v1", "k2": "v2"})
 			uut.OnUpdate(update)
 			Expect(callbacks.updates).To(BeNil())
 		})
 
 		It("should send k8s service account profile remove", func() {
-			update := api.Update{
-				KVPair: model.KVPair{
-					Key: model.ProfileKey{
-						Name: conversion.ServiceAccountProfileNamePrefix +
-							"test_namespace.test_serviceaccount"},
-				},
-				UpdateType: api.UpdateTypeKVDeleted,
-			}
+			update := removeUpdate(conversion.ServiceAccountProfileNamePrefix + "test_namespace.test_serviceaccount")
 			uut.OnUpdate(update)
 			Expect(callbacks.removes).To(Equal([]proto.ServiceAccountID{
 				{Name: "test_serviceaccount", Namespace: "test_namespace"},
@@ -109,29 +87,17 @@ var _ = Describe("profileDecoder", func() {
 		})
 
 		It("should not send non-service account profile remove", func() {
-			update := api.Update{
-				KVPair:     model.KVPair{Key: model.ProfileKey{Name: "test_profile"}},
-				UpdateType: api.UpdateTypeKVDeleted,
-			}
+			update := removeUpdate("test_profile")
 			uut.OnUpdate(update)
 			Expect(callbacks.removes).To(BeNil())
 		})
 
 		It("should not send malformed k8s service account profile update", func() {
-			update := api.Update{
-				KVPair: model.KVPair{
-					Key: model.ProfileKey{
-						Name: conversion.ServiceAccountProfileNamePrefix +
-							"test_namespace-test_serviceaccount"},
-					Value: &model.Profile{
-						Labels: map[string]string{
-							conversion.ServiceAccountLabelPrefix + "k1": "v1",
-							conversion.ServiceAccountLabelPrefix + "k2": "v2",
-						},
-					},
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}
+			update := addUpdate(conversion.ServiceAccountProfileNamePrefix+"test_namespace-test_serviceaccount",
+				map[string]string{
+					conversion.ServiceAccountLabelPrefix + "k1": "v1",
+					conversion.ServiceAccountLabelPrefix + "k2": "v2",
+				})
 			uut.OnUpdate(update)
 			Expect(callbacks.updates).To(BeNil())
 		})
@@ -165,4 +131,26 @@ func (p *passthruCallbackRecorder) OnServiceAccountUpdate(update *proto.ServiceA
 
 func (p *passthruCallbackRecorder) OnServiceAccountRemove(id proto.ServiceAccountID) {
 	p.removes = append(p.removes, id)
+}
+
+func labelsKV(name string, labels interface{}) model.KVPair {
+	return model.KVPair{
+		Key: model.ProfileLabelsKey{
+			ProfileKey: model.ProfileKey{Name: name}},
+		Value: labels,
+	}
+}
+
+func addUpdate(name string, labels map[string]string) api.Update {
+	return api.Update{
+		KVPair:     labelsKV(name, labels),
+		UpdateType: api.UpdateTypeKVNew,
+	}
+}
+
+func removeUpdate(name string) api.Update {
+	return api.Update{
+		KVPair:     labelsKV(name, nil),
+		UpdateType: api.UpdateTypeKVDeleted,
+	}
 }

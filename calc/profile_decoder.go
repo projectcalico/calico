@@ -44,12 +44,13 @@ func NewProfileDecoder(callbacks passthruCallbacks) *ProfileDecoder {
 }
 
 func (p *ProfileDecoder) RegisterWith(d *dispatcher.Dispatcher) {
-	d.Register(model.ProfileKey{}, p.OnUpdate)
+	d.Register(model.ProfileLabelsKey{}, p.OnUpdate)
 }
 
 func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
-	// This type assertion is safe because we only registered for Profile updates.
-	key := update.Key.(model.ProfileKey)
+	// This type assertion is safe because we only registered for ProfileLabels updates.
+	key := update.Key.(model.ProfileLabelsKey)
+	log.WithField("key", key.String()).Debug("Decoding ProfileLabels")
 	id, kind := classifyProfile(key)
 	if kind == KindUnknown {
 		// We only care about Profiles that are service accounts.
@@ -58,14 +59,14 @@ func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 	if update.Value == nil {
 		p.callbacks.OnServiceAccountRemove(id)
 	} else {
-		profile := update.Value.(*model.Profile)
-		msg := proto.ServiceAccountUpdate{Id: &id, Labels: decodeServiceAccountLabels(profile.Labels)}
+		labels := update.Value.(map[string]string)
+		msg := proto.ServiceAccountUpdate{Id: &id, Labels: decodeServiceAccountLabels(labels)}
 		p.callbacks.OnServiceAccountUpdate(&msg)
 	}
 	return false
 }
 
-func classifyProfile(key model.ProfileKey) (proto.ServiceAccountID, kind) {
+func classifyProfile(key model.ProfileLabelsKey) (proto.ServiceAccountID, kind) {
 	if strings.HasPrefix(key.Name, conversion.ServiceAccountProfileNamePrefix) {
 		c := strings.Split(key.Name, ".")
 		if len(c) == 3 {

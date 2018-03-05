@@ -134,11 +134,11 @@ func (d *MockDataplane) ServiceAccounts() map[proto.ServiceAccountID]*proto.Serv
 	d.Lock()
 	defer d.Unlock()
 
-	copy := make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
+	cpy := make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
 	for k, v := range d.serviceAccounts {
-		copy[k] = v
+		cpy[k] = v
 	}
-	return copy
+	return cpy
 }
 
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
