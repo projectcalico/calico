@@ -16,6 +16,8 @@ service PolicySync {
   //  - WorkloadEndpointRemove
   //  - ServiceAccountUpdate
   //  - ServiceAccountRemove
+  //  - NamespaceUpdate
+  //  - NamespaceRemove
   rpc Sync(SyncRequest) returns (stream ToDataplane);
 }
 
