@@ -22,8 +22,6 @@ import (
 
 	"github.com/projectcalico/felix/policysync"
 	"github.com/projectcalico/felix/proto"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("Processor", func() {
@@ -31,6 +29,8 @@ var _ = Describe("Processor", func() {
 	var updates chan interface{}
 	var updateServiceAccount func(name, namespace string)
 	var removeServiceAccount func(name, namespace string)
+	var updateNamespace func(name string)
+	var removeNamespace func(name string)
 	var join func(w string) (chan proto.ToDataplane, policysync.JoinMetadata)
 
 	BeforeEach(func() {
@@ -47,9 +47,19 @@ var _ = Describe("Processor", func() {
 			msg := &proto.ServiceAccountRemove{
 				Id: &proto.ServiceAccountID{Name: name, Namespace: namespace},
 			}
-			log.Info("sending remove")
 			updates <- msg
-			log.Info("Sent remove")
+		}
+		updateNamespace = func(name string) {
+			msg := &proto.NamespaceUpdate{
+				Id: &proto.NamespaceID{Name: name},
+			}
+			updates <- msg
+		}
+		removeNamespace = func(name string) {
+			msg := &proto.NamespaceRemove{
+				Id: &proto.NamespaceID{Name: name},
+			}
+			updates <- msg
 		}
 		join = func(w string) (chan proto.ToDataplane, policysync.JoinMetadata) {
 			// Buffer outputs so that Processor won't block.
@@ -179,6 +189,108 @@ var _ = Describe("Processor", func() {
 							&proto.ServiceAccountRemove{
 								Id: &proto.ServiceAccountID{Name: "t23", Namespace: "t2"},
 							},
+						},
+					}))
+				})
+
+			})
+		})
+
+		Describe("Namespace update/remove", func() {
+
+			Context("updates before any join", func() {
+
+				BeforeEach(func() {
+					// Add, delete, re-add
+					updateNamespace("test_namespace0")
+					removeNamespace("test_namespace0")
+					updateNamespace("test_namespace0")
+
+					// Some simple adds
+					updateNamespace("test_namespace1")
+					updateNamespace("test_namespace2")
+
+					// Add, delete
+					updateNamespace("removed")
+					removeNamespace("removed")
+				})
+
+				Context("on new join", func() {
+					var output chan proto.ToDataplane
+					var joinMeta policysync.JoinMetadata
+					var accounts [3]proto.NamespaceID
+
+					BeforeEach(func() {
+						output, joinMeta = join("test")
+						for i := 0; i < 3; i++ {
+							msg := <-output
+							accounts[i] = *msg.GetNamespaceUpdate().Id
+						}
+					})
+
+					It("should get 3 updates", func() {
+						Expect(accounts).To(ContainElement(proto.NamespaceID{Name: "test_namespace0"}))
+						Expect(accounts).To(ContainElement(proto.NamespaceID{Name: "test_namespace1"}))
+						Expect(accounts).To(ContainElement(proto.NamespaceID{Name: "test_namespace2"}))
+					})
+
+					It("should pass updates", func() {
+						updateNamespace("t0")
+						msg := <-output
+						Expect(msg.GetNamespaceUpdate().GetId()).To(Equal(&proto.NamespaceID{Name: "t0"}))
+					})
+
+					It("should pass removes", func() {
+						removeNamespace("test_namespace0")
+						msg := <-output
+						Expect(msg.GetNamespaceRemove().GetId()).To(Equal(&proto.NamespaceID{Name: "test_namespace0"}))
+					})
+				})
+			})
+
+			Context("with two joined endpoints", func() {
+				var output [2]chan proto.ToDataplane
+				var joinMeta [2]policysync.JoinMetadata
+
+				BeforeEach(func() {
+					for i := 0; i < 2; i++ {
+						w := fmt.Sprintf("test%d", i)
+						d := testId(w)
+						output[i], joinMeta[i] = join(w)
+
+						// Ensure the joins are completed by sending a workload endpoint for each.
+						updates <- &proto.WorkloadEndpointUpdate{
+							Id:       &d,
+							Endpoint: &proto.WorkloadEndpoint{},
+						}
+						<-output[i]
+					}
+				})
+
+				It("should forward updates to both endpoints", func() {
+					updateNamespace("t23")
+					Eventually(output[0]).Should(Receive(&proto.ToDataplane{
+						Payload: &proto.ToDataplane_NamespaceUpdate{
+							&proto.NamespaceUpdate{Id: &proto.NamespaceID{Name: "t23"}},
+						},
+					}))
+					Eventually(output[1]).Should(Receive(&proto.ToDataplane{
+						Payload: &proto.ToDataplane_NamespaceUpdate{
+							&proto.NamespaceUpdate{Id: &proto.NamespaceID{Name: "t23"}},
+						},
+					}))
+				})
+
+				It("should forward removes to both endpoints", func() {
+					removeNamespace("t23")
+					Eventually(output[0]).Should(Receive(&proto.ToDataplane{
+						Payload: &proto.ToDataplane_NamespaceRemove{
+							&proto.NamespaceRemove{Id: &proto.NamespaceID{Name: "t23"}},
+						},
+					}))
+					Eventually(output[1]).Should(Receive(&proto.ToDataplane{
+						Payload: &proto.ToDataplane_NamespaceRemove{
+							&proto.NamespaceRemove{Id: &proto.NamespaceID{Name: "t23"}},
 						},
 					}))
 				})
