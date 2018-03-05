@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,12 +51,19 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 
 		// Start a host networked workload on each host for connectivity checks.
 		for ii := range felixes {
+			// We tell each workload to open:
+			// - its normal (uninteresting) port, 8055
+			// - port 2379, which is both an inbound and an outbound failsafe port
+			// - port 22, which is an inbound failsafe port.
+			// This allows us to test the interaction between do-not-track policy and failsafe
+			// ports.
+			const portsToOpen = "8055,2379,22"
 			hostW[ii] = workload.Run(
 				felixes[ii],
 				fmt.Sprintf("host%d", ii),
 				"", // No interface name means "run in the host's namespace"
 				felixes[ii].IP,
-				"8055,2379,22", // Extra ports are out/in and inbound failsafes.
+				portsToOpen,
 				"tcp")
 		}
 	})
@@ -218,9 +225,6 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 				},
 			}
 			host0Pol, err = client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			host1Pol, err = client.GlobalNetworkPolicies().Update(ctx, host1Pol, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			cc.ResetExpectations()
