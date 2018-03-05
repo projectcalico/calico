@@ -75,7 +75,14 @@ type Rule struct {
 	OriginalDstServiceAccountNames    []string `json:"orig_dst_service_acct_names,omitempty" validate:"omitempty"`
 	OriginalDstServiceAccountSelector string   `json:"orig_dst_service_acct_selector,omitempty" validate:"omitempty"`
 
+	// These fields allow us to pass through application layer selectors from the V3 datamodel.
+	HTTPRule *HTTPRule `json:"http,omitempty" validate:"omitempty"`
+
 	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
+}
+
+type HTTPRule struct {
+	Methods []string `json:"methods,omitempty" validate:"omitempty"`
 }
 
 func combineNets(n *net.IPNet, nets []*net.IPNet) []*net.IPNet {
