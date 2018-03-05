@@ -175,6 +175,61 @@ class EtcdWatcher(object):
                     event_stream, cancel = etcdv3.watch_subtree(
                         self.prefix,
                         str(last_revision + 1))
+
+                    # It is possible for that watch call to be affected by an
+                    # etcd compaction, if there is a sequence of events as
+                    # follows.
+                    #
+                    # 1. EtcdWatcher calls get_status (47 lines above) and
+                    # finds that the etcd revision at that time is N.
+                    #
+                    # 2. There are at least 2 changes to the database (by any
+                    # etcd writer, including other threads/forks of the Neutron
+                    # server), such that the etcd revision is >= N+2, before
+                    # our watch call.
+                    #
+                    # 3. etcd is then compacted at revision >= N+2, also before
+                    # our watch call.
+                    #
+                    # 4. Our watch call then tries to create a watch starting
+                    # at revision N+1, which is no longer available.
+                    #
+                    # If that happens, the etcd server sends these responses to
+                    # the etcd3gw client, and then does NOT send any events for
+                    # the prefix that we are monitoring:
+                    #
+                    # {"result":{"header":{"cluster_id":"14841639068965178418",
+                    # "member_id":"10276657743932975437","revision":"33",
+                    # "raft_term":"2"},"created":true}}
+                    #
+                    # {"result":{"header":{"cluster_id":"14841639068965178418",
+                    # "member_id":"10276657743932975437","raft_term":"2"},
+                    # "compact_revision":"32"}}
+                    #
+                    # Both of those response lines are consumed by the etcd3gw
+                    # client/watch code, with nothing reported up to this code
+                    # here.  Hence the next thing that will happen here is
+                    # timing out after WATCH_TIMEOUT_SECS (10s).  Then we'll
+                    # loop round, get the current revision, and start watching
+                    # again from there.
+                    #
+                    # Given the things that EtcdWatcher is used for, I think
+                    # that's good enough without more specific handling.
+                    # EtcdWatcher is used for:
+                    #
+                    # - agent status, where the impacts are placing a VM on a
+                    #   compute host where Felix has died, or not using a
+                    #   compute host where Felix has just become available.
+                    #   For Felix death there is a window (TTL) of 90s anyway,
+                    #   so another 10s doesn't make a big difference.
+                    #
+                    # - port status, where the impact is just correct
+                    #   presentation in the OpenStack UI.
+                    #
+                    # - DHCP info, where the impact is dnsmasq not being able
+                    #   to answer a DHCP request.  But any sensible guest OS
+                    #   will retry anyway for at least 10s, so I think we're
+                    #   still OK.
                 except Exception:
                     # Log and handle by breaking out to the wider loop, which
                     # means we'll get the tree again and then try watching
