@@ -10,7 +10,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
-| NODENAME | A unique identifier for this host.  If not specified this defaults to use the system hostname (converted to lowercase) | lowercase string |
+| NODENAME | A unique identifier for this host.  See [node name determination](#node-name-determination) for more details. | lowercase string |
 | NO_DEFAULT_POOLS | Prevents  {{site.prodname}} from creating a default pool if one does not exist. [Default: `false`] | boolean |
 | IP | The IPv4 address to assign this host. When specified, the address is saved in the [node resource configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node) for this host, overriding any previously configured value. When omitted, if an address **has** been saved in the node resource, then that value will be used. When omitted, if an address **has not** yet been configured in the node resource, the node will auto-detect an IPv4 address and configure the node resource with that address. This autodetection can be forced (even if a value has already been set in the node resource) by setting IP to "autodetect". Doing so will overwrite any value configured in the node resource. | IPv4 |
 | IP6 | The IPv6 address for {{site.prodname}} will bind to. When specified, the address is saved in the  [node resource configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node) for this host, overriding any previously configured value. When omitted, if an address has not yet been configured in the node resource, IPv6 routing is not enabled. When omitted, if an IPv6 address has been previously configured in the node resource, IPv6 is enabled using the already configured address. | IPv6 |
@@ -50,6 +50,31 @@ In addition to the above, `{{site.nodecontainer}}` also supports [the standard F
 > and all of the IP selection options (IP, IP6, IP_AUTODETECTION_METHOD, IP6_AUTODETECTION_METHOD).
 >
 {: .alert .alert-info}
+
+### Node name determination
+
+The `{{site.nodecontainer}}` must know the name of the node on which it is running. The node name is used to
+retrieve the [Node resource](../calicoctl/resources/node) configured for this node if it exists, or to create a new node resource representing the node if it does not. It is
+also used to associate the node with per-node [BGP configuration](../calicoctl/resources/bgpconfig), [felix configuration](../calicoctl/resources/felixconfig), and endpoints.
+
+When launched, the `{{side.nodecontainer}}` container sets the node name according to the following order of precedence:
+
+1. The value specified in the `NODENAME` environment variable, if set.
+1. The value specified in `/var/lib/calico/nodename`, if it exists.
+1. The value specified in the `HOSTNAME` environment variable, if set.
+1. The hostname as returned by the operating system, converted to lowercase.
+
+Once the node has determined its name, the value will be cached in `/var/lib/calico/nodename` for future use.
+
+For example, if given the following conditions:
+
+- `NODENAME=""`
+- `/var/lib/calico/nodename` does not exist
+- `HOSTNAME="host-A"`
+- The operating system returns "host-A.internal.myorg.com" for the hostname
+
+{{site.nodecontainer}} will use "host-a" for its name and will write the value in `/var/lib/calico/nodename`. If {{site.nodecontainer}}
+is then restarted, it will use the cached value of "host-a" read from the file on disk.
 
 ### IP Autodetection methods
 
