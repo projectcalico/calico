@@ -18,6 +18,7 @@ data:
   # below.  We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is
   # essential.
   typha_service_name: "none"
+
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
@@ -31,16 +32,14 @@ data:
           "nodename": "__KUBERNETES_NODE_NAME__",
           "mtu": 1500,
           "ipam": {
-              "type": "host-local",
-              "subnet": "usePodCidr"
+            "type": "host-local",
+            "subnet": "usePodCidr"
           },
           "policy": {
-              "type": "k8s",
-              "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
+            "type": "k8s"
           },
           "kubernetes": {
-              "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
-              "kubeconfig": "__KUBECONFIG_FILEPATH__"
+            "kubeconfig": "__KUBECONFIG_FILEPATH__"
           }
         },
         {
@@ -192,7 +191,7 @@ spec:
         - key: CriticalAddonsOnly
           operator: Exists
         - effect: NoExecute
-          operator: Exists 
+          operator: Exists
       serviceAccountName: calico-node
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
