@@ -513,6 +513,35 @@ var _ = Context("policy sync API tests", func() {
 							}
 						})
 					})
+
+					Context("after adding a namespace as profile", func() {
+						var nsID proto.NamespaceID
+
+						BeforeEach(func() {
+							log.Info("Adding Namespace Profile")
+							profile := api.NewProfile()
+							profile.SetName(conversion.NamespaceProfileNamePrefix + "ns1")
+							nsID.Name = "ns1"
+							profile.Spec.LabelsToApply = map[string]string{
+								conversion.NamespaceLabelPrefix + "key.1": "value.1",
+								conversion.NamespaceLabelPrefix + "key_2": "value-2",
+							}
+							profile, err = calicoClient.Profiles().Create(ctx, profile, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+							log.Info("Done adding profile")
+						})
+
+						It("should sync namespace to each workload", func() {
+							for _, c := range mockWlClient {
+								Eventually(c.Namespaces).Should(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{
+									nsID: {
+										Id:     &nsID,
+										Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
+									},
+								}))
+							}
+						})
+					})
 				})
 
 				createExtraSyncClient := func(ctx context.Context) proto.PolicySync_SyncClient {

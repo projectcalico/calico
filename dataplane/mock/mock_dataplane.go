@@ -42,6 +42,7 @@ type MockDataplane struct {
 	endpointToAllPolicyIDs         map[string][]proto.PolicyID
 	endpointToProfiles             map[string][]string
 	serviceAccounts                map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
+	namespaces                     map[proto.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
 }
 
@@ -130,12 +131,24 @@ func (d *MockDataplane) EndpointToPreDNATPolicyOrder() map[string][]TierInfo {
 
 	return copyPolOrder(d.endpointToPreDNATPolicyOrder)
 }
+
 func (d *MockDataplane) ServiceAccounts() map[proto.ServiceAccountID]*proto.ServiceAccountUpdate {
 	d.Lock()
 	defer d.Unlock()
 
 	cpy := make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
 	for k, v := range d.serviceAccounts {
+		cpy[k] = v
+	}
+	return cpy
+}
+
+func (d *MockDataplane) Namespaces() map[proto.NamespaceID]*proto.NamespaceUpdate {
+	d.Lock()
+	defer d.Unlock()
+
+	cpy := make(map[proto.NamespaceID]*proto.NamespaceUpdate)
+	for k, v := range d.namespaces {
 		cpy[k] = v
 	}
 	return cpy
@@ -183,6 +196,7 @@ func NewMockDataplane() *MockDataplane {
 		endpointToProfiles:             make(map[string][]string),
 		endpointToAllPolicyIDs:         make(map[string][]proto.PolicyID),
 		serviceAccounts:                make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
+		namespaces:                     make(map[proto.NamespaceID]*proto.NamespaceUpdate),
 	}
 	return s
 }
@@ -348,6 +362,12 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		id := *event.Id
 		Expect(d.serviceAccounts).To(HaveKey(id))
 		delete(d.serviceAccounts, id)
+	case *proto.NamespaceUpdate:
+		d.namespaces[*event.Id] = event
+	case *proto.NamespaceRemove:
+		id := *event.Id
+		Expect(d.namespaces).To(HaveKey(id))
+		delete(d.namespaces, id)
 	}
 }
 
