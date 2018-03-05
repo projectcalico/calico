@@ -65,6 +65,8 @@ type EventSequencer struct {
 	pendingHostConfig            map[string]string
 	pendingServiceAccountUpdates map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
 	pendingServiceAccountDeletes set.Set
+	pendingNamespaceUpdates      map[proto.NamespaceID]*proto.NamespaceUpdate
+	pendingNamespaceDeletes      set.Set
 
 	// Sets to record what we've sent downstream.  Updated whenever we flush.
 	sentIPSets          set.Set
@@ -74,6 +76,7 @@ type EventSequencer struct {
 	sentHostIPs         set.Set
 	sentIPPools         set.Set
 	sentServiceAccounts set.Set
+	sentNamespaces      set.Set
 
 	Callback EventHandler
 }
@@ -109,6 +112,8 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingIPPoolDeletes:         set.New(),
 		pendingServiceAccountUpdates: map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{},
 		pendingServiceAccountDeletes: set.New(),
+		pendingNamespaceUpdates:      map[proto.NamespaceID]*proto.NamespaceUpdate{},
+		pendingNamespaceDeletes:      set.New(),
 
 		// Sets to record what we've sent downstream.  Updated whenever we flush.
 		sentIPSets:          set.New(),
@@ -118,6 +123,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentHostIPs:         set.New(),
 		sentIPPools:         set.New(),
 		sentServiceAccounts: set.New(),
+		sentNamespaces:      set.New(),
 	}
 	return buf
 }
@@ -558,8 +564,9 @@ func (buf *EventSequencer) Flush() {
 	buf.flushPolicyDeletes()
 	buf.flushRemovedIPSets()
 
-	// Flush ServiceAccount updates. These have no particular ordering compared with other updates.
+	// Flush ServiceAccount and Namespace updates. These have no particular ordering compared with other updates.
 	buf.flushServiceAccounts()
+	buf.flushNamespaces()
 
 	// Flush (rare) cluster-wide updates.  There's no particular ordering to these so we might
 	// as well do deletions first to minimise occupancy.
@@ -649,6 +656,48 @@ func (buf *EventSequencer) flushServiceAccounts() {
 	}
 	buf.pendingServiceAccountUpdates = make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
 	log.Debug("Done flushing Service Accounts")
+}
+
+func (buf *EventSequencer) OnNamespaceUpdate(update *proto.NamespaceUpdate) {
+	// We trust the caller not to send us an update with nil ID, so safe to dereference.
+	id := *update.Id
+	log.WithFields(log.Fields{
+		"key":    id,
+		"labels": update.GetLabels(),
+	}).Debug("Namespace update")
+	buf.pendingNamespaceDeletes.Discard(id)
+	buf.pendingNamespaceUpdates[id] = update
+}
+
+func (buf *EventSequencer) OnNamespaceRemove(id proto.NamespaceID) {
+	log.WithFields(log.Fields{
+		"key": id,
+	}).Debug("Namespace removed")
+	delete(buf.pendingNamespaceUpdates, id)
+	if buf.sentNamespaces.Contains(id) {
+		buf.pendingNamespaceDeletes.Add(id)
+	}
+}
+
+func (buf *EventSequencer) flushNamespaces() {
+	// Order doesn't matter, but send removes first to reduce max occupancy
+	buf.pendingNamespaceDeletes.Iter(func(item interface{}) error {
+		id := item.(proto.NamespaceID)
+		msg := proto.NamespaceRemove{Id: &id}
+		buf.Callback(&msg)
+		buf.sentNamespaces.Discard(id)
+		return nil
+	})
+	buf.pendingNamespaceDeletes.Clear()
+	for _, msg := range buf.pendingNamespaceUpdates {
+		buf.Callback(msg)
+		id := msg.Id
+		// We safely dereferenced the Id in OnNamespaceUpdate before adding it to the pending updates map, so
+		// it is safe to do so here.
+		buf.sentNamespaces.Add(*id)
+	}
+	buf.pendingNamespaceUpdates = make(map[proto.NamespaceID]*proto.NamespaceUpdate)
+	log.Debug("Done flushing Namespaces")
 }
 
 func cidrToIPPoolID(cidr ip.CIDR) string {

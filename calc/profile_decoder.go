@@ -31,16 +31,18 @@ type kind int
 const (
 	KindUnknown kind = iota
 	KindServiceAccount
+	KindNamespace
 )
 
-// ProfileDecoder takes updates from a dispatcher, determines if the profile is a Kubernetes Service Account, and
-// if it is, generates a dataplane update or remove for it.
+// ProfileDecoder takes updates from a dispatcher, determines if the profile is a Kubernetes Service Account or
+// Kubernetes Namespace, and if it is, generates a dataplane update or remove for it.
 type ProfileDecoder struct {
 	callbacks passthruCallbacks
+	converter conversion.Converter
 }
 
 func NewProfileDecoder(callbacks passthruCallbacks) *ProfileDecoder {
-	return &ProfileDecoder{callbacks}
+	return &ProfileDecoder{callbacks: callbacks, converter: conversion.Converter{true}}
 }
 
 func (p *ProfileDecoder) RegisterWith(d *dispatcher.Dispatcher) {
@@ -51,41 +53,56 @@ func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 	// This type assertion is safe because we only registered for ProfileLabels updates.
 	key := update.Key.(model.ProfileLabelsKey)
 	log.WithField("key", key.String()).Debug("Decoding ProfileLabels")
-	id, kind := classifyProfile(key)
-	if kind == KindUnknown {
-		// We only care about Profiles that are service accounts.
-		return false
-	}
-	if update.Value == nil {
-		p.callbacks.OnServiceAccountRemove(id)
-	} else {
-		labels := update.Value.(map[string]string)
-		msg := proto.ServiceAccountUpdate{Id: &id, Labels: decodeServiceAccountLabels(labels)}
-		p.callbacks.OnServiceAccountUpdate(&msg)
+	id, knd := p.classifyProfile(key)
+	switch knd {
+	case KindUnknown:
+		log.WithField("key", key.String()).Debug("Ignoring ProfileLabels")
+	case KindServiceAccount:
+		id := id.(proto.ServiceAccountID)
+		if update.Value == nil {
+			p.callbacks.OnServiceAccountRemove(id)
+		} else {
+			labels := update.Value.(map[string]string)
+			msg := proto.ServiceAccountUpdate{Id: &id, Labels: decodeLabels(knd, labels)}
+			p.callbacks.OnServiceAccountUpdate(&msg)
+		}
+	case KindNamespace:
+		id := id.(proto.NamespaceID)
+		if update.Value == nil {
+			p.callbacks.OnNamespaceRemove(id)
+		} else {
+			labels := update.Value.(map[string]string)
+			msg := proto.NamespaceUpdate{Id: &id, Labels: decodeLabels(knd, labels)}
+			p.callbacks.OnNamespaceUpdate(&msg)
+		}
 	}
 	return false
 }
 
-func classifyProfile(key model.ProfileLabelsKey) (proto.ServiceAccountID, kind) {
-	if strings.HasPrefix(key.Name, conversion.ServiceAccountProfileNamePrefix) {
-		c := strings.Split(key.Name, ".")
-		if len(c) == 3 {
-			return proto.ServiceAccountID{Name: c[2], Namespace: c[1]}, KindServiceAccount
-		} else {
-			log.WithField("name", key.Name).Warn("Profile with SA prefix could not be parsed.")
-			return proto.ServiceAccountID{}, KindUnknown
-		}
-	} else {
-		return proto.ServiceAccountID{}, KindUnknown
+func (p *ProfileDecoder) classifyProfile(key model.ProfileLabelsKey) (interface{}, kind) {
+	namespace, name, err := p.converter.ProfileNameToServiceAccount(key.Name)
+	if err == nil {
+		return proto.ServiceAccountID{Name: name, Namespace: namespace}, KindServiceAccount
 	}
+	name, err = p.converter.ProfileNameToNamespace(key.Name)
+	if err == nil {
+		return proto.NamespaceID{Name: name}, KindNamespace
+	}
+	return nil, KindUnknown
 }
 
-// decodeServiceAccountLabels strips the special prefix we add to Service Account labels when converting it to a
-// Profile. This gives us the original labels on the ServiceAccount object.
-func decodeServiceAccountLabels(in map[string]string) map[string]string {
+// decodeLabels strips the special prefix we add to Profile labels when converting. This gives us the original labels on
+// the ServiceAccount or Namespace object.
+func decodeLabels(k kind, in map[string]string) map[string]string {
+	var prefix string
+	if k == KindServiceAccount {
+		prefix = conversion.ServiceAccountLabelPrefix
+	} else if k == KindNamespace {
+		prefix = conversion.NamespaceLabelPrefix
+	}
 	out := make(map[string]string)
 	for k, v := range in {
-		k = strings.TrimPrefix(k, conversion.ServiceAccountLabelPrefix)
+		k = strings.TrimPrefix(k, prefix)
 		out[k] = v
 	}
 	return out

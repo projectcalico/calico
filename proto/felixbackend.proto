@@ -410,3 +410,16 @@ message ServiceAccountID {
   string namespace = 1;
   string name = 2;
 }
+
+message NamespaceUpdate {
+  NamespaceID id = 1;
+  map<string, string> labels = 2;
+}
+
+message NamespaceRemove {
+  NamespaceID id = 1;
+}
+
+message NamespaceID {
+  string name = 1;
+}

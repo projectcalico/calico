@@ -262,6 +262,77 @@ var _ = Describe("ServiceAccount update/remove", func() {
 	})
 })
 
+var _ = Describe("Namespace update/remove", func() {
+	var uut *calc.EventSequencer
+	var recorder *dataplaneRecorder
+
+	BeforeEach(func() {
+		uut = calc.NewEventSequencer(&dummyConfigInterface{})
+		recorder = &dataplaneRecorder{}
+		uut.Callback = recorder.record
+	})
+
+	It("should flush latest update", func() {
+		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v2"},
+		})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{
+			&proto.NamespaceUpdate{
+				Id:     &proto.NamespaceID{Name: "test"},
+				Labels: map[string]string{"k1": "v2"},
+			}}))
+	})
+
+	It("should coalesce add + remove", func() {
+		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.Flush()
+		Expect(recorder.Messages).To(BeNil())
+	})
+
+	It("should coalesce remove + add", func() {
+		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		}}))
+	})
+
+	It("should send remove for flushed accounts", func() {
+		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceUpdate{
+			Id:     &proto.NamespaceID{Name: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		}}))
+		// Clear messages
+		recorder.Messages = make([]interface{}, 0)
+
+		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceRemove{
+			Id: &proto.NamespaceID{Name: "test"},
+		}}))
+	})
+})
+
 type dataplaneRecorder struct {
 	Messages []interface{}
 }
