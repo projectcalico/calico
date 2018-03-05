@@ -78,7 +78,6 @@ const (
 	ChainDispatchFromHostEndPointForward = ChainNamePrefix + "from-hep-forward"
 	ChainDispatchSetEndPointMark         = ChainNamePrefix + "set-endpoint-mark"
 	ChainDispatchFromEndPointMark        = ChainNamePrefix + "from-endpoint-mark"
-	ChainDispatchClearEndPointMark       = ChainNamePrefix + "clear-endpoint-mark"
 
 	ChainForwardCheck        = ChainNamePrefix + "forward-check"
 	ChainForwardEndpointMark = ChainNamePrefix + "forward-endpoint-mark"
