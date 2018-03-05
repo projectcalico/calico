@@ -4,7 +4,7 @@
 # Make our URLs look nice. We're not a blog with dated posts, we just want the title.
 permalink:     /:title.html
 
-gems:
+plugins:
   - jekyll-redirect-from
   - jekyll-seo-tag
 
