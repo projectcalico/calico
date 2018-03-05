@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,7 @@ func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error)
 
 func convertGlobalPolicyV2ToV1Spec(spec apiv3.GlobalNetworkPolicySpec) (*model.Policy, error) {
 	v1value := &model.Policy{
+		Namespace:      "", // Empty string used to signal a GlobalNetworkPolicy.
 		Order:          spec.Order,
 		InboundRules:   RulesAPIV2ToBackend(spec.Ingress, ""),
 		OutboundRules:  RulesAPIV2ToBackend(spec.Egress, ""),

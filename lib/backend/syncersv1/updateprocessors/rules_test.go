@@ -1,3 +1,17 @@
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package updateprocessors_test
 
 import (
@@ -46,6 +60,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:     []string{"192.168.40.1/32"},
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
+				ServiceAccounts: &apiv3.ServiceAccountMatch{
+					Names:    []string{"a", "b"},
+					Selector: "servacctsel",
+				},
 			},
 			Destination: apiv3.EntityRule{
 				Nets:        []string{"10.100.1.1/32"},
@@ -54,6 +72,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:     []string{"192.168.80.1/32"},
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
+				ServiceAccounts: &apiv3.ServiceAccountMatch{
+					Names:    []string{"c", "d"},
+					Selector: "servacctsel2",
+				},
 			},
 		}
 		// Correct inbound rule
@@ -80,6 +102,18 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.80.1/32")}))
 		Expect(rulev1.NotDstSelector).To(Equal("has(label2)"))
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port80}))
+
+		Expect(rulev1.OriginalSrcSelector).To(Equal("mylabel = value1"))
+		Expect(rulev1.OriginalDstSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcNamespaceSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal(""))
+		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
+		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
+
+		Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal("servacctsel"))
+		Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal("servacctsel2"))
+		Expect(rulev1.OriginalSrcServiceAccountNames).To(Equal([]string{"a", "b"}))
+		Expect(rulev1.OriginalDstServiceAccountNames).To(Equal([]string{"c", "d"}))
 
 		etype := 2
 		entype := 7
@@ -141,6 +175,18 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstSelector).To(Equal("has(label1)"))
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port443}))
 
+		Expect(rulev1.OriginalSrcSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcNamespaceSelector).To(Equal("namespacelabel1 == 'value1'"))
+		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal("namespacelabel2 == 'value2'"))
+		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label2)"))
+		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label1)"))
+
+		Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcServiceAccountNames).To(BeNil())
+		Expect(rulev1.OriginalDstServiceAccountNames).To(BeNil())
+
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
 		rulev1 = rulesv1[0]
@@ -167,6 +213,13 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstSelector).To(Equal("has(label2)"))
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port80}))
 
+		Expect(rulev1.OriginalSrcSelector).To(Equal("mylabel = value1"))
+		Expect(rulev1.OriginalDstSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcNamespaceSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal(""))
+		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
+		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
+
 		rulev1 = rulesv1[1]
 		Expect(rulev1.IPVersion).To(Equal(&v4))
 		Expect(rulev1.Protocol).To(Equal(&eproto))
@@ -190,6 +243,13 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.NotDstNets).To(Equal([]*cnet.IPNet{mustParseCIDR("192.168.40.1/32")}))
 		Expect(rulev1.NotDstSelector).To(Equal("has(label1)"))
 		Expect(rulev1.NotDstPorts).To(Equal([]numorstring.Port{port443}))
+
+		Expect(rulev1.OriginalSrcSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcNamespaceSelector).To(Equal("namespacelabel1 == 'value1'"))
+		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal("namespacelabel2 == 'value2'"))
+		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label2)"))
+		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label1)"))
 	})
 
 	It("should parse a profile rule with no namespace", func() {

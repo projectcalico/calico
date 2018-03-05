@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -139,6 +139,14 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		}
 	}
 
+	var srcServiceAcctMatch, dstServiceAcctMatch apiv3.ServiceAccountMatch
+	if ar.Source.ServiceAccounts != nil {
+		srcServiceAcctMatch = *ar.Source.ServiceAccounts
+	}
+	if ar.Destination.ServiceAccounts != nil {
+		dstServiceAcctMatch = *ar.Destination.ServiceAccounts
+	}
+
 	return model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
@@ -162,6 +170,18 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		NotDstNets:     normalizeIPNets(ar.Destination.NotNets),
 		NotDstSelector: ar.Destination.NotSelector,
 		NotDstPorts:    ar.Destination.NotPorts,
+
+		OriginalSrcSelector:          ar.Source.Selector,
+		OriginalSrcNamespaceSelector: ar.Source.NamespaceSelector,
+		OriginalDstSelector:          ar.Destination.Selector,
+		OriginalDstNamespaceSelector: ar.Destination.NamespaceSelector,
+		OriginalNotSrcSelector:       ar.Source.NotSelector,
+		OriginalNotDstSelector:       ar.Destination.NotSelector,
+
+		OriginalSrcServiceAccountNames:    srcServiceAcctMatch.Names,
+		OriginalSrcServiceAccountSelector: srcServiceAcctMatch.Selector,
+		OriginalDstServiceAccountNames:    dstServiceAcctMatch.Names,
+		OriginalDstServiceAccountSelector: dstServiceAcctMatch.Selector,
 	}
 }
 

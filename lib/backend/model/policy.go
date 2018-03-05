@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,6 +89,7 @@ func (options PolicyListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type Policy struct {
+	Namespace      string            `json:"namespace,omitempty" validate:"omitempty"`
 	Order          *float64          `json:"order,omitempty" validate:"omitempty"`
 	InboundRules   []Rule            `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
 	OutboundRules  []Rule            `json:"outbound_rules,omitempty" validate:"omitempty,dive"`

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,6 +78,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key: v1NetworkPolicyKey1,
 			Value: &model.Policy{
+				Namespace:      ns1,
 				Selector:       "projectcalico.org/namespace == 'namespace1'",
 				ApplyOnForward: true,
 			},
@@ -187,6 +188,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			{
 				Key: v1NetworkPolicyKey2,
 				Value: &model.Policy{
+					Namespace:      ns2,
 					Order:          &order,
 					InboundRules:   []model.Rule{v1irule},
 					OutboundRules:  []model.Rule{v1erule},
@@ -294,6 +296,7 @@ var expected1 = []*model.KVPair{
 	&model.KVPair{
 		Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
 		Value: &model.Policy{
+			Namespace:      "default",
 			Order:          &order,
 			Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",
 			Types:          []string{"egress"},
