@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,14 @@ func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Ti
 		ifaceName:   map[int]string{},
 		ifaceAddrs:  map[int]set.Set{},
 	}
+}
+
+func IsInterfacePresent(name string) bool {
+	link, _ := netlink.LinkByName(name)
+	if link != nil {
+		return true
+	}
+	return false
 }
 
 func (m *InterfaceMonitor) MonitorInterfaces() {
@@ -216,14 +224,6 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	attrs := link.Attrs()
 	ifIndex := attrs.Index
 	newName := attrs.Name
-	if m.isExcludedInterface(newName) {
-		if ifaceExists {
-			m.ifaceName[ifIndex] = newName
-		} else {
-			delete(m.ifaceName, ifIndex)
-		}
-		return
-	}
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
 		"link":        link,
@@ -254,9 +254,12 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	if ifaceExists {
 		m.ifaceName[ifIndex] = ifaceName
 	} else {
-		log.Debug("Notify link non-existence to address callback consumers")
-		delete(m.ifaceAddrs, ifIndex)
-		m.notifyIfaceAddrs(ifIndex)
+		if !m.isExcludedInterface(ifaceName) {
+			// for excluded interfaces, e.g. kube-ipvs0, we ignore all ip address changes.
+			log.Debug("Notify link non-existence to address callback consumers")
+			delete(m.ifaceAddrs, ifIndex)
+			m.notifyIfaceAddrs(ifIndex)
+		}
 		delete(m.ifaceName, ifIndex)
 	}
 
@@ -284,7 +287,8 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	// channels.  We deliberately do this regardless of the link state, as in some cases this
 	// will allow us to secure a Host Endpoint interface _before_ it comes up, and so eliminate
 	// a small window of insecurity.
-	if ifaceExists {
+	if ifaceExists && !m.isExcludedInterface(ifaceName) {
+		// Notify address changes for non excluded interfaces.
 		newAddrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 			addrs, err := m.netlinkStub.AddrList(link, family)

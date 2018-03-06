@@ -358,7 +358,7 @@ var _ = Describe("ifacemonitor", func() {
 	})
 
 	It("should skip netlink address updates for ipvs", func() {
-		// Should not receives any callbacks.
+		// Should not receives any address callbacks.
 		nl.addLink("kube-ipvs0")
 		resyncC <- time.Time{}
 		dp.notExpectAddrStateCb()
@@ -367,12 +367,16 @@ var _ = Describe("ifacemonitor", func() {
 		dp.notExpectAddrStateCb()
 
 		nl.changeLinkState("kube-ipvs0", "up")
-		dp.notExpectLinkStateCb()
+		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateUp)
 		nl.changeLinkState("kube-ipvs0", "down")
-		dp.notExpectLinkStateCb()
+		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateDown)
+
+		// Should notify down from up on deletion.
+		nl.changeLinkState("kube-ipvs0", "up")
+		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateUp)
 		nl.delLink("kube-ipvs0")
 		dp.notExpectAddrStateCb()
-		dp.notExpectLinkStateCb()
+		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateDown)
 
 		// Check it can be added again.
 		nl.addLink("kube-ipvs0")
@@ -384,7 +388,6 @@ var _ = Describe("ifacemonitor", func() {
 		nl.delLink("kube-ipvs0")
 		dp.notExpectAddrStateCb()
 		dp.notExpectLinkStateCb()
-
 	})
 
 	It("should handle mainline netlink updates", func() {

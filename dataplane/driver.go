@@ -34,9 +34,20 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
-func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.HealthAggregator) (DataplaneDriver, *exec.Cmd) {
+func StartDataplaneDriver(configParams *config.Config,
+	healthAggregator *health.HealthAggregator,
+	configChangedRestartCallback func()) (DataplaneDriver, *exec.Cmd) {
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal (linux) dataplane driver.")
+		// If kube ipvs interface is present, enable ipvs support.
+		kubeIPVSSupportEnabled := ifacemonitor.IsInterfacePresent(intdataplane.KubeIPVSInterface)
+		if kubeIPVSSupportEnabled {
+			log.Info("Kube-proxy in ipvs mode, enabling felix kube-proxy ipvs support.")
+		}
+		if configChangedRestartCallback == nil {
+			log.Panic("Starting dataplane with nil callback func.")
+		}
+
 		markBitsManager := markbits.NewMarkBitsManager(configParams.IptablesMarkMask, "felix-iptables")
 		// Dedicated mark bits for accept and pass actions.  These are long lived bits
 		// that we use for communicating between chains.
@@ -54,7 +65,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 
 		// Mark bits for end point mark. Currently felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
-		if configParams.KubeIPVSSupportEnabled && allocated == 0 {
+		if kubeIPVSSupportEnabled && allocated == 0 {
 			log.WithFields(log.Fields{
 				"Name":     "felix-iptables",
 				"MarkMask": configParams.IptablesMarkMask,
@@ -92,7 +103,7 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 				),
 
 				KubeNodePortRanges:     configParams.KubeNodePortRanges,
-				KubeIPVSSupportEnabled: configParams.KubeIPVSSupportEnabled,
+				KubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 
 				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),
 				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
@@ -133,6 +144,8 @@ func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 
 			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
+
+			ConfigChangedRestartCallback: configChangedRestartCallback,
 
 			PostInSyncCallback:              func() { logutils.DumpHeapMemoryProfile(configParams) },
 			HealthAggregator:                healthAggregator,
