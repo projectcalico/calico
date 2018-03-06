@@ -13,6 +13,11 @@ ifeq ($(ARCH),ppc64le)
 	GO_BUILD_VER:=latest
 endif
 
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER:=latest
+endif
+
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
 .SUFFIXES:
