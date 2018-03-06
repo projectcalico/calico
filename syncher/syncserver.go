@@ -89,6 +89,14 @@ func processUpdate(store *policystore.PolicyStore, update *proto.ToDataplane) {
 		processWorkloadEndpointUpdate(store, payload.WorkloadEndpointUpdate)
 	case *proto.ToDataplane_WorkloadEndpointRemove:
 		processWorkloadEndpointRemove(store, payload.WorkloadEndpointRemove)
+	case *proto.ToDataplane_ServiceAccountUpdate:
+		processServiceAccountUpdate(store, payload.ServiceAccountUpdate)
+	case *proto.ToDataplane_ServiceAccountRemove:
+		processServiceAccountRemove(store, payload.ServiceAccountRemove)
+	case *proto.ToDataplane_NamespaceUpdate:
+		processNamespaceUpdate(store, payload.NamespaceUpdate)
+	case *proto.ToDataplane_NamespaceRemove:
+		processNamespaceRemove(store, payload.NamespaceRemove)
 	default:
 		panic(fmt.Sprintf("unknown payload %v", update.String()))
 	}
@@ -199,4 +207,40 @@ func processWorkloadEndpointRemove(store *policystore.PolicyStore, update *proto
 		"endpointID":     update.GetId().GetEndpointId(),
 	}).Warning("Processing WorkloadEndpointRemove")
 	store.Endpoint = nil
+}
+
+func processServiceAccountUpdate(store *policystore.PolicyStore, update *proto.ServiceAccountUpdate) {
+	log.WithField("id", update.Id).Debug("Processing ServiceAccountUpdate")
+	if update.Id == nil {
+		log.Error("got ServiceAccountUpdate with nil ServiceAccountID")
+		panic("got ServiceAccountUpdate with nil ServiceAccountID")
+	}
+	store.ServiceAccountByID[*update.Id] = update
+}
+
+func processServiceAccountRemove(store *policystore.PolicyStore, update *proto.ServiceAccountRemove) {
+	log.WithField("id", update.Id).Debug("Processing ServiceAccountRemove")
+	if update.Id == nil {
+		log.Error("got ServiceAccountRemove with nil ServiceAccountID")
+		panic("got ServiceAccountRemove with nil ServiceAccountID")
+	}
+	delete(store.ServiceAccountByID, *update.Id)
+}
+
+func processNamespaceUpdate(store *policystore.PolicyStore, update *proto.NamespaceUpdate) {
+	log.WithField("id", update.Id).Debug("Processing NamespaceUpdate")
+	if update.Id == nil {
+		log.Error("got NamespaceUpdate with nil NamespaceID")
+		panic("got NamespaceUpdate with nil NamespaceID")
+	}
+	store.NamespaceByID[*update.Id] = update
+}
+
+func processNamespaceRemove(store *policystore.PolicyStore, update *proto.NamespaceRemove) {
+	log.WithField("id", update.Id).Debug("Processing NamespaceRemove")
+	if update.Id == nil {
+		log.Error("got NamespaceRemove with nil NamespaceID")
+		panic("got NamespaceRemove with nil NamespaceID")
+	}
+	delete(store.NamespaceByID, *update.Id)
 }

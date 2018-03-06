@@ -29,18 +29,23 @@ type PolicyStore struct {
 	// Helper methods Write() and Read() encapsulate the correct locking logic.
 	RWMutex sync.RWMutex
 
-	PolicyByID  map[proto.PolicyID]*proto.Policy
-	ProfileByID map[proto.ProfileID]*proto.Profile
-	IPSetByID   map[string]IPSet
-	Endpoint    *proto.WorkloadEndpoint
+	PolicyByID         map[proto.PolicyID]*proto.Policy
+	ProfileByID        map[proto.ProfileID]*proto.Profile
+	IPSetByID          map[string]IPSet
+	Endpoint           *proto.WorkloadEndpoint
+	ServiceAccountByID map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
+	NamespaceByID      map[proto.NamespaceID]*proto.NamespaceUpdate
 }
 
 func NewPolicyStore() *PolicyStore {
 	return &PolicyStore{
-		RWMutex:     sync.RWMutex{},
-		IPSetByID:   make(map[string]IPSet),
-		ProfileByID: make(map[proto.ProfileID]*proto.Profile),
-		PolicyByID:  make(map[proto.PolicyID]*proto.Policy)}
+		RWMutex:            sync.RWMutex{},
+		IPSetByID:          make(map[string]IPSet),
+		ProfileByID:        make(map[proto.ProfileID]*proto.Profile),
+		PolicyByID:         make(map[proto.PolicyID]*proto.Policy),
+		ServiceAccountByID: make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
+		NamespaceByID:      make(map[proto.NamespaceID]*proto.NamespaceUpdate),
+	}
 }
 
 // Write to/update the PolicyStore, handling locking logic.

@@ -91,6 +91,14 @@ var endpoint1 = &proto.WorkloadEndpoint{
 	Name:       "wep",
 	ProfileIds: []string{"profile1", "profile2"},
 }
+var serviceAccount1 = &proto.ServiceAccountUpdate{
+	Id:     &proto.ServiceAccountID{Name: "serviceAccount1", Namespace: "test"},
+	Labels: map[string]string{"k1": "v1", "k2": "v2"},
+}
+var namespace1 = &proto.NamespaceUpdate{
+	Id:     &proto.NamespaceID{Name: "namespace1"},
+	Labels: map[string]string{"k1": "v1", "k2": "v2"},
+}
 
 // IPSetUpdate with a new ID
 func TestIPSetUpdateNew(t *testing.T) {
@@ -523,6 +531,78 @@ func TestWorkloadEndpointRemoveDispatch(t *testing.T) {
 		WorkloadEndpointRemove: &proto.WorkloadEndpointRemove{},
 	}}
 	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+}
+
+func TestServiceAccountUpdateDispatch(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+
+	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{serviceAccount1}}
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{
+		*serviceAccount1.Id: serviceAccount1,
+	}))
+}
+
+func TestServiceAccountUpdateNilId(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+
+	Expect(func() { processServiceAccountUpdate(store, &proto.ServiceAccountUpdate{}) }).To(Panic())
+}
+
+func TestServiceAccountRemoveDispatch(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+	store.ServiceAccountByID[*serviceAccount1.Id] = serviceAccount1
+
+	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{
+		ServiceAccountRemove: &proto.ServiceAccountRemove{Id: serviceAccount1.Id}}}
+	Expect(func() { processUpdate(store, remove) }).ToNot(Panic())
+	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{}))
+}
+
+func TestServiceAccountRemoveNilId(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+
+	Expect(func() { processServiceAccountRemove(store, &proto.ServiceAccountRemove{}) }).To(Panic())
+}
+
+func TestNamespaceUpdateDispatch(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+
+	update := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{namespace1}}
+	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{
+		*namespace1.Id: namespace1,
+	}))
+}
+
+func TestNamespaceUpdateNilId(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+
+	Expect(func() { processNamespaceUpdate(store, &proto.NamespaceUpdate{}) }).To(Panic())
+}
+
+func TestNamespaceRemoveDispatch(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+	store.NamespaceByID[*namespace1.Id] = namespace1
+
+	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{
+		NamespaceRemove: &proto.NamespaceRemove{Id: namespace1.Id}}}
+	Expect(func() { processUpdate(store, remove) }).ToNot(Panic())
+	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{}))
+}
+
+func TestNamespaceRemoveNilId(t *testing.T) {
+	RegisterTestingT(t)
+	store := policystore.NewPolicyStore()
+
+	Expect(func() { processNamespaceRemove(store, &proto.NamespaceRemove{}) }).To(Panic())
 }
 
 // processUpdate handles InSync
