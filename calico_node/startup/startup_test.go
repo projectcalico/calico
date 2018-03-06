@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/set"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -36,9 +37,9 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
 var exitCode int
@@ -94,6 +95,10 @@ type EnvItem struct {
 	value string
 }
 
+const (
+	randomULAPool = "<random ULA pool>"
+)
+
 var _ = Describe("FV tests against a real etcd", func() {
 	ctx := context.Background()
 	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING", "IP", "CLUSTER_TYPE", "CALICO_K8S_NODE_REF", "CALICO_UNKNOWN_NODE_REF"}
@@ -146,7 +151,15 @@ var _ = Describe("FV tests against a real etcd", func() {
 				if pool.Spec.CIDR == expectedIPv4 {
 					foundv4Expected = true
 				}
-				if pool.Spec.CIDR == expectedIPv6 {
+				if expectedIPv6 == randomULAPool {
+					_, ipNet, err := net.ParseCIDR(pool.Spec.CIDR)
+					Expect(err).NotTo(HaveOccurred(), "Pool had invalid CIDR: "+pool.Spec.CIDR)
+					ones, bits := ipNet.Mask.Size()
+					// The ULA pool should be 48 bits and have prefix fd00::/8.
+					if ones == 48 && bits == 128 && ipNet.IP[0] == 0xfd {
+						foundv6Expected = true
+					}
+				} else if pool.Spec.CIDR == expectedIPv6 {
 					foundv6Expected = true
 				}
 				if _, cidr, _ := net.ParseCIDR(pool.Spec.CIDR); cidr.Version() == 6 {
@@ -175,10 +188,10 @@ var _ = Describe("FV tests against a real etcd", func() {
 		},
 
 		Entry("No env variables set", []EnvItem{},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+			"192.168.0.0/16", randomULAPool, "Off", true, false),
 		Entry("IPv4 Pool env var set",
 			[]EnvItem{{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"}},
-			"172.16.0.0/24", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+			"172.16.0.0/24", randomULAPool, "Off", true, false),
 		Entry("IPv6 Pool env var set",
 			[]EnvItem{{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"}},
 			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "Off", true, false),
@@ -189,21 +202,21 @@ var _ = Describe("FV tests against a real etcd", func() {
 			},
 			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "Off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "off"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+			"192.168.0.0/16", randomULAPool, "Off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set Off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Off"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+			"192.168.0.0/16", randomULAPool, "Off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set Never", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Never"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Never", true, false),
+			"192.168.0.0/16", randomULAPool, "Never", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set empty string", []EnvItem{{"CALICO_IPV4POOL_IPIP", ""}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+			"192.168.0.0/16", randomULAPool, "Off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "always"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Always", true, false),
+			"192.168.0.0/16", randomULAPool, "Always", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set Always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "Always"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Always", true, false),
+			"192.168.0.0/16", randomULAPool, "Always", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set cross-subnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "cross-subnet"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "CrossSubnet", true, false),
+			"192.168.0.0/16", randomULAPool, "CrossSubnet", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set CrossSubnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "CrossSubnet"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "CrossSubnet", true, false),
+			"192.168.0.0/16", randomULAPool, "CrossSubnet", true, false),
 		Entry("IPv6 Pool and IPIP set",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
@@ -213,21 +226,21 @@ var _ = Describe("FV tests against a real etcd", func() {
 		Entry("IPv6 NATOutgoing Set Enabled",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, true),
+			"192.168.0.0/16", randomULAPool, "Off", true, true),
 		Entry("IPv6 NATOutgoing Set Disabled",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "false"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", true, false),
+			"192.168.0.0/16", randomULAPool, "Off", true, false),
 		Entry("IPv4 NATOutgoing Set Disabled",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", false, false),
+			"192.168.0.0/16", randomULAPool, "Off", false, false),
 		Entry("IPv6 NAT OUTGOING and IPV4 NAT OUTGOING SET",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"},
 				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"},
 			},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "Off", false, true),
+			"192.168.0.0/16", randomULAPool, "Off", false, true),
 	)
 
 	Describe("Test clearing of node IPs", func() {
@@ -905,4 +918,36 @@ var _ = Describe("UT for node name determination", func() {
 		Entry("No NODENAME, no HOSTNAME", "", "", hn),
 		Entry("Whitespace NODENAME and HOSTNAME", "  ", "  ", hn),
 	)
+})
+
+var _ = Describe("UT for GenerateIPv6ULAPrefix", func() {
+	It("should generate a different address each time", func() {
+		seen := set.New()
+		for i := 0; i < 100; i++ {
+			newAddr, err := GenerateIPv6ULAPrefix()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(seen.Contains(newAddr)).To(BeFalse())
+			seen.Add(newAddr)
+		}
+	})
+
+	It("should generate a valid /48 CIDR", func() {
+		cidrStr, err := GenerateIPv6ULAPrefix()
+		Expect(err).NotTo(HaveOccurred())
+		ip, ipNet, err := net.ParseCIDR(cidrStr)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip.To4()).To(BeNil())
+		Expect(ip.To16().String()).To(Equal(ip.String()))
+		ones, bits := ipNet.Mask.Size()
+		Expect(ones).To(Equal(48))
+		Expect(bits).To(Equal(128))
+		Expect([]byte(ip.IP)[0]).To(Equal(uint8(0xfd)))
+
+		for _, b := range []byte(ip.IP)[1:] {
+			if b != 0 {
+				return
+			}
+		}
+		Fail("random bits were all zeros")
+	})
 })
