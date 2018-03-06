@@ -78,6 +78,26 @@ var _ = Describe("Static", func() {
 					}
 					portRanges = append(portRanges, portRange)
 
+					expRawFailsafeIn := &Chain{
+						Name: "cali-failsafe-in",
+						Rules: []Rule{
+							{Match: Match().Protocol("tcp").DestPorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1022), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1023), Action: AcceptAction{}},
+						},
+					}
+
+					expRawFailsafeOut := &Chain{
+						Name: "cali-failsafe-out",
+						Rules: []Rule{
+							{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1022), Action: AcceptAction{}},
+						},
+					}
+
 					expFailsafeIn := &Chain{
 						Name: "cali-failsafe-in",
 						Rules: []Rule{
@@ -340,10 +360,10 @@ var _ = Describe("Static", func() {
 						}))
 					})
 					It("Should return expected raw failsafe in chain", func() {
-						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-in")).To(Equal(expFailsafeIn))
+						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-in")).To(Equal(expRawFailsafeIn))
 					})
 					It("Should return expected raw failsafe out chain", func() {
-						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expFailsafeOut))
+						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expRawFailsafeOut))
 					})
 					It("should return only the expected raw chains", func() {
 						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(4))
