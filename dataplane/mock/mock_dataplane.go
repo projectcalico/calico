@@ -345,7 +345,9 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.ServiceAccountUpdate:
 		d.serviceAccounts[*event.Id] = event
 	case *proto.ServiceAccountRemove:
-		delete(d.serviceAccounts, *event.Id)
+		id := *event.Id
+		Expect(d.serviceAccounts).To(HaveKey(id))
+		delete(d.serviceAccounts, id)
 	}
 }
 

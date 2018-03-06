@@ -276,7 +276,7 @@ func (p *Processor) handleActiveProfileUpdate(update *proto.ActiveProfileUpdate)
 
 func (p *Processor) handleActiveProfileRemove(update *proto.ActiveProfileRemove) {
 	pId := *update.Id
-	log.WithFields(log.Fields{"ProfileID": pId.String()}).Debug("Processing ActiveProfileRemove")
+	log.WithFields(log.Fields{"ProfileID": pId}).Debug("Processing ActiveProfileRemove")
 
 	// Push the update to any endpoints it was synced to
 	for _, ei := range p.updateableEndpoints() {
@@ -290,7 +290,7 @@ func (p *Processor) handleActiveProfileRemove(update *proto.ActiveProfileRemove)
 
 func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 	pId := *update.Id
-	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyUpdate")
+	log.WithFields(log.Fields{"PolicyID": pId}).Debug("Processing ActivePolicyUpdate")
 	policy := update.GetPolicy()
 	p.policyByID[pId] = policy
 
@@ -311,7 +311,7 @@ func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 
 func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 	pId := *update.Id
-	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyRemove")
+	log.WithFields(log.Fields{"PolicyID": pId}).Debug("Processing ActivePolicyRemove")
 
 	// Push the update to any endpoints it was synced to
 	for _, ei := range p.updateableEndpoints() {
@@ -325,7 +325,7 @@ func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 
 func (p *Processor) handleServiceAccountUpdate(update *proto.ServiceAccountUpdate) {
 	id := *update.Id
-	log.WithField("ServiceAccountID", id.String()).Debug("Processing ServiceAccountUpdate")
+	log.WithField("ServiceAccountID", id).Debug("Processing ServiceAccountUpdate")
 
 	for _, ei := range p.updateableEndpoints() {
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{update}}
@@ -336,7 +336,7 @@ func (p *Processor) handleServiceAccountUpdate(update *proto.ServiceAccountUpdat
 
 func (p *Processor) handleServiceAccountRemove(update *proto.ServiceAccountRemove) {
 	id := *update.Id
-	log.WithField("ServiceAccountID", id.String()).Debug("Processing ServiceAccountRemove")
+	log.WithField("ServiceAccountID", id).Debug("Processing ServiceAccountRemove")
 
 	for _, ei := range p.updateableEndpoints() {
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{update}}
@@ -432,8 +432,8 @@ func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
 func (p *Processor) sendServiceAccounts(ei *EndpointInfo) {
 	for _, update := range p.serviceAccountByID {
 		log.WithFields(log.Fields{
-			"serviceAccount": update.Id.String(),
-			"endpoint":       ei.endpointUpd.GetEndpoint().String(),
+			"serviceAccount": update.Id,
+			"endpoint":       ei.endpointUpd.GetEndpoint(),
 		}).Debug("sending ServiceAccountUpdate")
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{update}}
 	}

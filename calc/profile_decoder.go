@@ -80,6 +80,8 @@ func classifyProfile(key model.ProfileLabelsKey) (proto.ServiceAccountID, kind) 
 	}
 }
 
+// decodeServiceAccountLabels strips the special prefix we add to Service Account labels when converting it to a
+// Profile. This gives us the original labels on the ServiceAccount object.
 func decodeServiceAccountLabels(in map[string]string) map[string]string {
 	out := make(map[string]string)
 	for k, v := range in {
