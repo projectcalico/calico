@@ -288,6 +288,7 @@ class TestPluginEtcd(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
         lib.m_compat.cfg.CONF.calico.etcd_key_file = None
         lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
+        lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
 
     sg_default_key_v3 = (
         '/calico/resources/v3/projectcalico.org/networkpolicies/' +

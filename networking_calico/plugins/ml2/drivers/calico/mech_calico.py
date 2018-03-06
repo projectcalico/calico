@@ -82,6 +82,16 @@ calico_opts = [
     cfg.IntOpt('num_port_status_threads', default=4,
                help="Number of threads to use for writing port status "
                     "updates to the database."),
+    cfg.IntOpt('etcd_compaction_period_mins', default=60,
+               help="Interval in minutes between periodic etcd compactions. "
+                    "A setting of 0 tells this Calico driver not to request "
+                    "any etcd compaction; in that case the deployment must "
+                    "take its own steps to prevent the etcd database from "
+                    "growing without any disk usage bound."),
+    cfg.IntOpt('etcd_compaction_min_revisions', default=1000,
+               help="The minimum number of revisions to keep when requesting "
+                    "an etcd compaction.  We also keep at least the history "
+                    "of the previous etcd_compaction_period_mins interval."),
 ]
 cfg.CONF.register_opts(calico_opts, 'calico')
 
@@ -823,6 +833,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
                         # Resync ClusterInformation and FelixConfiguration.
                         self.provide_felix_config()
+
+                        # Possibly request an etcd compaction.
+                        check_request_etcd_compaction()
                     except Exception:
                         LOG.exception("Error in periodic resync thread.")
                     # Reschedule ourselves.
@@ -1028,3 +1041,187 @@ def felix_agent_state(hostname, start_flag=False):
         # neutron, which will use it to reset its view of the uptime.
         state['start_flag'] = True
     return state
+
+
+COMPACTION_PREFIX = "/calico/compaction/v1/"
+COMPACTION_TRIGGER_KEY = COMPACTION_PREFIX + "trigger"
+COMPACTION_LAST_KEY = COMPACTION_PREFIX + "last"
+
+
+def check_request_etcd_compaction():
+    """Possibly request an etcd compaction.
+
+    Without any compaction, etcd's disk usage will grow without bound because
+    of it retaining previous revisions for all known keys.  Compaction, at a
+    particular revision, tells etcd to forget the detailed information for all
+    revisions before that, and so keeps etcd memory usage in check.
+
+    By default, therefore, networking-calico requests an etcd compaction every
+    60 minutes.  This period is controlled by the etcd_compaction_period_mins
+    config setting, and requesting compaction can be disabled by setting that
+    to 0.
+
+    Each time we consider a compaction, we ensure that we retain history for
+    the previous etcd_compaction_period_mins interval, and also for at least
+    the last etcd_compaction_min_revisions revisions.
+
+    We piggyback on the master election infrastructure so that only one thread
+    of the Neutron server requests compaction, each time that it becomes due.
+    """
+    # If periodic etcd compaction is disabled, do nothing here.
+    if cfg.CONF.calico.etcd_compaction_period_mins == 0:
+        return
+
+    try:
+        # Try to read the compaction trigger key.
+        try:
+            _, _, lease = etcdv3.get(COMPACTION_TRIGGER_KEY, with_lease=True)
+
+            # No exception, so the key still exists.  Check that it still has a
+            # lease and TTL as expected.  (For example, the lease could be
+            # missing or have an unreasonably large TTL, if the etcd cluster
+            # has been restarted after restoring from an incomplete or corrupt
+            # backup.)
+            if lease is None:
+                # Start from scratch as though neither of the compaction keys
+                # is present.
+                LOG.warning("Compaction key has lost its lease; rewriting")
+                write_compaction_keys(0)
+                return
+            ttl = lease.ttl()
+            if ttl > cfg.CONF.calico.etcd_compaction_period_mins * 60:
+                # Start from scratch as though neither of the compaction keys
+                # is present.
+                LOG.warning("Unreasonably large lease TTL (%r)", ttl)
+                write_compaction_keys(0)
+                return
+
+            # Lease is there and TTL is reasonable: just wait for more time to
+            # pass then.
+            return
+        except etcdv3.KeyNotFound:
+            # The key has timed out, so etcd_compaction_period_mins has passed
+            # since the last time we considered compaction.  (Or else the key
+            # has never existed yet.)
+            pass
+
+        # Find out when the last compaction happened, and what the current
+        # revision was etcd_compaction_period_mins ago.
+        try:
+            last_compaction_rev, last_check_rev = etcdv3.get(
+                COMPACTION_LAST_KEY
+            )
+            last_compaction_rev = int(last_compaction_rev)
+            last_check_rev = int(last_check_rev)
+            LOG.info("Last compaction %r, last check %r",
+                     last_compaction_rev, last_check_rev)
+        except etcdv3.KeyNotFound:
+            # This is the first time we've checked for compaction.  No
+            # possibility of compacting this time, because we always want to
+            # keep history for at least one etcd_compaction_period_mins
+            # interval, and we can't yet tell what that means.  Write the keys
+            # so that we will be able to tell this next time round.
+            LOG.info("First check")
+            write_compaction_keys(0)
+            return
+
+        # Get the current revision.
+        _, current_revision = etcdv3.get_status()
+        current_revision = int(current_revision)
+        LOG.info("Current etcd revision is %r", current_revision)
+
+        # Defensive sanity check that the read last_compaction_rev is less than
+        # the current revision.  Conceivably a user could restore from backup
+        # and throw off the revisions.  In that case, rewrite the keys with
+        # last_compaction 0 and returning without compacting.  (Note: it isn't
+        # possible for last_check_rev to be similarly bogus, because it is
+        # current etcd cluster metadata from the same source as
+        # current_revision.)
+        if last_compaction_rev > current_revision:
+            LOG.info("Bogus last compaction revision (%r > %r)",
+                     last_compaction_rev,
+                     current_revision)
+            write_compaction_keys(0)
+            return
+
+        # We must keep at least etcd_compaction_min_revisions of history.  If
+        # there aren't that many yet, we can't compact.
+        if current_revision <= cfg.CONF.calico.etcd_compaction_min_revisions:
+            LOG.info("Not enough revisions to compact yet (%r <= %r)",
+                     current_revision,
+                     cfg.CONF.calico.etcd_compaction_min_revisions)
+            # Note: there could still be a non-zero last_compaction_rev here,
+            # if the Neutron server has been restarted with an increased value
+            # of etcd_compaction_min_revisions.
+            write_compaction_keys(last_compaction_rev)
+            return
+
+        # Calculate the amount of history to keep.  This must be at least
+        # etcd_compaction_min_revisions.
+        keep_revisions = cfg.CONF.calico.etcd_compaction_min_revisions
+        # But must also be at least the history of the whole previous
+        # etcd_compaction_period_mins interval.
+        if keep_revisions < (current_revision - last_check_rev):
+            keep_revisions = current_revision - last_check_rev
+
+        # So that would mean compacting at:
+        compact_revision = current_revision - keep_revisions
+
+        if compact_revision <= last_compaction_rev:
+            # We've already compacted at or after that revision.  Wait for more
+            # time to pass, or history to accumulate.
+            LOG.info("No compactable history yet (%r <= %r)",
+                     compact_revision, last_compaction_rev)
+            write_compaction_keys(last_compaction_rev)
+            return
+
+        # Request compaction at that revision.
+        LOG.info("Request compaction at %r", compact_revision)
+        try:
+            etcdv3.request_compaction(compact_revision)
+        except etcdv3.Etcd3Exception:
+            # An exception here most likely means that the revision we're
+            # asking to compact at has already been compacted - which means
+            # that there is some other service in the deployment which is also
+            # taking some responsibility for etcd compaction.  (For example, it
+            # could be libcalico-go.)
+            #
+            # In that case, and given that it isn't straightforward for us to
+            # discover exactly what the current compacted revision is, just
+            # imagine that it's the same as the current revision.  That means
+            # that this code won't consider compacting again until another
+            # etcd_compaction_min_revisions revisions and
+            # etcd_compaction_period_mins minutes have passed.
+            #
+            # (On the other hand, if the exception is for some other reason
+            # such as connectivity to the etcd cluster, the following write
+            # will hit that too, and that will be handled below.)
+            LOG.info("Someone else has requested etcd compaction")
+            write_compaction_keys(current_revision)
+            return
+
+        # Record the new compaction revision.
+        write_compaction_keys(compact_revision)
+    except Exception:
+        # Something wrong with etcd connectivity; clearly then we can't do any
+        # compaction.  Just log, and we'll try again on the next resync.
+        LOG.exception("Failed to check/request compaction")
+
+
+def write_compaction_keys(compaction_revision):
+    # Write the last key to record the last compaction and check revisions (the
+    # latter implicitly, as mod_revision).
+    if not etcdv3.put(COMPACTION_LAST_KEY, str(compaction_revision)):
+        # Writing should always succeed; but in case it doesn't we will retry
+        # as part of the next resync, so just a warning is sufficient here.
+        LOG.warning("Failed to write %s", COMPACTION_LAST_KEY)
+
+    # Write the trigger key, with TTL such that it will disappear again after
+    # etcd_compaction_period_mins.
+    lease = etcdv3.get_lease(
+        cfg.CONF.calico.etcd_compaction_period_mins * 60
+    )
+    if not etcdv3.put(COMPACTION_TRIGGER_KEY, str(os.getpid()), lease=lease):
+        # Writing should always succeed; but in case it doesn't we will retry
+        # as part of the next resync, so just a warning is sufficient here.
+        LOG.warning("Failed to write %s", COMPACTION_TRIGGER_KEY)

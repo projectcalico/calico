@@ -17,6 +17,7 @@ import functools
 
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
+from etcd3gw.lease import Lease
 from etcd3gw.utils import _encode
 
 from networking_calico.compat import cfg
@@ -30,17 +31,22 @@ class KeyNotFound(Etcd3Exception):
     pass
 
 
-def get(key):
+def get(key, with_lease=False):
     """Read a value from etcdv3.
 
     - key (string): The key to read.
 
-    Returns (value, mod_revision) where
+    - with_lease (boolean): Indicates also to return the key's lease.
+
+    Returns (value, mod_revision) or (value, mod_revision, lease) where
 
     - value is the key's value
 
     - mod_revision is the etcdv3 revision at which the key was last
-      modified.
+      modified
+
+    - lease is an etcd3gw.lease.Lease object representing the key's lease, if
+      it has one; or else None.
 
     Raises KeyNotFound if there is no resource with that kind and name.
     """
@@ -50,7 +56,13 @@ def get(key):
     if len(results) != 1:
         raise KeyNotFound()
     value, item = results[0]
-    return value, item['mod_revision']
+    if with_lease:
+        lease = None
+        if 'lease' in item:
+            lease = Lease(int(item['lease']), client)
+        return value, item['mod_revision'], lease
+    else:
+        return value, item['mod_revision']
 
 
 def put(key, value, mod_revision=None, lease=None, existing_value=None):
@@ -263,6 +275,15 @@ def get_status():
     return status['header']['cluster_id'], status['header']['revision']
 
 
+def request_compaction(revision):
+    """Request compaction at the specified revision."""
+    client = _get_client()
+    LOG.debug("request etcdv3 compaction at %r", revision)
+    response = client.post(client.get_url("/kv/compaction"),
+                           json={"revision": str(revision)})
+    LOG.debug("=> %s", response)
+
+
 def watch_once(key, timeout=None, **kwargs):
     """Watch a key and stop after the first event.
 
@@ -277,7 +298,7 @@ def watch_once(key, timeout=None, **kwargs):
 
 
 def get_lease(ttl):
-    """Get a lease for the specified TTL."""
+    """Get a lease for the specified TTL (in seconds)."""
     client = _get_client()
     return client.lease(ttl=ttl)
 

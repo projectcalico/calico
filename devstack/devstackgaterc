@@ -77,6 +77,9 @@ export TEMPEST_CONCURRENCY=1
 function gate_hook {
     echo "Hi, this is networking-calico's gate hook"
 
+    # Request etcd compaction every minute during the Tempest test.
+    export CALICO_ETCD_COMPACTION_PERIOD_MINS=1
+
     # Run the normal gate hook and record its status.
     $BASE/new/devstack-gate/devstack-vm-gate.sh
     status=$?

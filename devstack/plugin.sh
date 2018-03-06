@@ -53,7 +53,7 @@ EtcdEndpoints = http://${SERVICE_HOST}:${ETCD_PORT}
 EOF
 		    if [ "${ENABLE_DEBUG_LOG_LEVEL}" = True ]; then
 			sudo sh -c "cat >> /etc/calico/felix.cfg" << EOF
-LogSeverityFile = debug
+LogSeverityFile = info
 EOF
 		    fi
 		    install_package calico-felix
@@ -104,6 +104,13 @@ EOF
 		    # at the etcd server.
 		    iniset $NEUTRON_CONF calico etcd_host $SERVICE_HOST
 		    iniset $NEUTRON_CONF calico etcd_port $ETCD_PORT
+
+		    # If CALICO_ETCD_COMPACTION_PERIOD_MINS is
+		    # defined, set that as the value of the
+		    # etcd_compaction_period_mins setting.
+		    if test -n "$CALICO_ETCD_COMPACTION_PERIOD_MINS"; then
+			iniset $NEUTRON_CONF calico etcd_compaction_period_mins $CALICO_ETCD_COMPACTION_PERIOD_MINS
+		    fi
 		    ;;
 
 		extra)
