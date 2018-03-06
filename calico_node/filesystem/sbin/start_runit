@@ -10,7 +10,7 @@ then
     exit $retval
 fi
 
-# Source any additional environment that was added by the startup script
-. ./startup.env
+# Export the nodename set by the startup script. 
+export NODENAME=$(cat /var/lib/calico/nodename)
 
 exec /sbin/runsvdir -P /etc/service/enabled
