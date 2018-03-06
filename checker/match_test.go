@@ -93,7 +93,7 @@ func TestMatchServiceAccoutLabels(t *testing.T) {
 func TestMatchServiceAccountBadSpiffe(t *testing.T) {
 	RegisterTestingT(t)
 
-	selector := &proto.ServiceAccountSelector{}
+	selector := &proto.ServiceAccountMatch{}
 	peer := &auth.AttributeContext_Peer{
 		Principal: "http://foo.com",
 	}
@@ -137,10 +137,10 @@ func TestMatchRule(t *testing.T) {
 	RegisterTestingT(t)
 
 	rule := &proto.Rule{
-		SrcServiceAccount: &proto.ServiceAccountSelector{
+		SrcServiceAccountMatch: &proto.ServiceAccountMatch{
 			Names: []string{"john", "stevie", "sam"},
 		},
-		Http: &proto.HTTPSelector{
+		HttpMatch: &proto.HTTPMatch{
 			Methods: []string{"GET", "POST"},
 		},
 	}

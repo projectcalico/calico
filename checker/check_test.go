@@ -57,19 +57,19 @@ func TestCheckPolicyRules(t *testing.T) {
 	policy := &proto.Policy{InboundRules: []*proto.Rule{
 		{
 			Action: "log",
-			Http: &proto.HTTPSelector{
+			HttpMatch: &proto.HTTPMatch{
 				Methods: []string{"GET", "POST"},
 			},
 		},
 		{
 			Action: "allow",
-			Http: &proto.HTTPSelector{
+			HttpMatch: &proto.HTTPMatch{
 				Methods: []string{"POST"},
 			},
 		},
 		{
 			Action: "deny",
-			Http: &proto.HTTPSelector{
+			HttpMatch: &proto.HTTPMatch{
 				Methods: []string{"GET"},
 			},
 		},
@@ -145,16 +145,16 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "deny",
-				Http:   &proto.HTTPSelector{Methods: []string{"HEAD"}},
+				Action:    "deny",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"HEAD"}},
 			},
 		},
 	}
 	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "allow",
-				Http:   &proto.HTTPSelector{Methods: []string{"GET"}},
+				Action:    "allow",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
 			},
 		},
 	}
@@ -190,16 +190,16 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "Deny",
-				Http:   &proto.HTTPSelector{Methods: []string{"HEAD"}},
+				Action:    "Deny",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"HEAD"}},
 			},
 		},
 	}
 	store.ProfileByID[proto.ProfileID{Name: "profile2"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "allow",
-				Http:   &proto.HTTPSelector{Methods: []string{"GET"}},
+				Action:    "allow",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
 			},
 		},
 	}
@@ -240,16 +240,16 @@ func TestCheckStorePass(t *testing.T) {
 	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "pass",
-				Http:   &proto.HTTPSelector{Methods: []string{"GET"}},
+				Action:    "pass",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
 			},
 		},
 	}
 	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "deny",
-				Http:   &proto.HTTPSelector{Methods: []string{"GET"}},
+				Action:    "deny",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
 			},
 		},
 	}
@@ -258,8 +258,8 @@ func TestCheckStorePass(t *testing.T) {
 	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
-				Action: "allow",
-				Http:   &proto.HTTPSelector{Methods: []string{"HEAD", "GET"}},
+				Action:    "allow",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"HEAD", "GET"}},
 			},
 		},
 	}

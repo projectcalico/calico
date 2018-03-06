@@ -2,6 +2,24 @@ syntax = "proto3";
 package felix;
 option go_package = "proto";
 
+service PolicySync {
+  // On this API, only the following payloads will be sent:
+  //  - InSync
+  //  - IPSetUpdate
+  //  - IPSetDeltaUpdate
+  //  - IPSetRemove
+  //  - ActiveProfileUpdate
+  //  - ActiveProfileRemove
+  //  - ActivePolicyUpdate
+  //  - ActivePolicyRemove
+  //  - WorkloadEndpointUpdate
+  //  - WorkloadEndpointRemove
+  rpc Sync(SyncRequest) returns (stream ToDataplane);
+}
+
+message SyncRequest {
+}
+
 // Rationale for having explicit Remove messages rather than sending and update
 // with empty payload (which is the convention we used to use in Felix):
 // protobuf and golang use zero values to indicate missing data and that makes
@@ -102,7 +120,8 @@ message IPSetUpdate {
   repeated string members = 2;
   enum IPSetType {
     IP = 0;           // Each member is an IP address in dotted-decimal or IPv6 format.
-    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp):<port-number>"
+    IP_AND_PORT = 1;  // Each member is "<IP>,(tcp|udp):port".
+    NET = 2;          // Each member is a CIDR in dotted-decimal or IPv6 format.
   }
   IPSetType type = 3;
 }
@@ -150,6 +169,10 @@ message PolicyID {
 }
 
 message Policy {
+  // If the Policy represents a NetworkPolicy, this contains the namespace that the policy came
+  // from.  Otherwise, empty.
+  string namespace = 5;
+
   repeated Rule inbound_rules = 1;
   repeated Rule outbound_rules = 2;
   bool untracked = 3;
@@ -189,17 +212,6 @@ message Rule {
   repeated string src_ip_set_ids = 10;
   repeated string dst_ip_set_ids = 11;
 
-  // Selector for the namespace.  Ignored by iptables dataplane, since it is already encoded in the ipsets.
-  NamespaceSelector src_namespace = 14;
-  NamespaceSelector dst_namespace = 15;
-
-  // Selector for service accounts. Ignored by iptables dataplane, since it is already encoded in the ipsets.
-  ServiceAccountSelector src_service_account = 16;
-  ServiceAccountSelector dst_service_account = 17;
-
-  // Selector for HTTP request info
-  HTTPSelector http = 18;
-
   Protocol not_protocol = 102;
 
   repeated string not_src_net = 103;
@@ -215,12 +227,37 @@ message Rule {
   repeated string not_src_named_port_ip_set_ids = 112;
   repeated string not_dst_named_port_ip_set_ids = 113;
 
+  // These fields pass through the original selectors from the v3 datamodel unmodified as required
+  // for the policy sync API.
+  string original_src_selector = 114;
+  string original_dst_selector = 115;
+  string original_src_namespace_selector = 116;
+  string original_dst_namespace_selector = 117;
+  string original_not_src_selector = 118;
+  string original_not_dst_selector = 119;
+
+  // Pass through of the v3 datamodel service account match criteria.
+  ServiceAccountMatch src_service_account_match = 120;
+  ServiceAccountMatch dst_service_account_match = 121;
+
+  // Pass through of the v3 datamodel HTTP match criteria.
+  HTTPMatch http_match = 122;
+
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";
 
   // An opaque ID/hash for the rule.
   string rule_id = 201;
+}
+
+message ServiceAccountMatch {
+  string selector = 1;
+  repeated string names = 2;
+}
+
+message HTTPMatch {
+  repeated string methods = 1;
 }
 
 message IcmpTypeAndCode {
@@ -239,23 +276,6 @@ message Protocol {
 message PortRange {
   int32 first = 1;
   int32 last = 2;
-}
-
-message NamespaceSelector {
-  // Label selector expression that matches namespace labels.
-  string label_selector = 1;
-}
-
-message ServiceAccountSelector {
-  // Label selector expression that matches service account labels.
-  string label_selector = 1;
-
-  // List of service account names to match.
-  repeated string names = 2;
-}
-
-message HTTPSelector {
-  repeated string methods = 1;
 }
 
 message WorkloadEndpointID {

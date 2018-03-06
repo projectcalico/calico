@@ -39,15 +39,15 @@ func match(rule *proto.Rule, req *authz.CheckRequest) bool {
 
 func matchSource(r *proto.Rule, peer *authz.AttributeContext_Peer) bool {
 	// TODO IPSets
-	return matchServiceAccounts(r.GetSrcServiceAccount(), peer)
+	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), peer)
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
 	log.WithField("request", req).Debug("Matching request.")
-	return matchHTTP(rule.GetHttp(), req.GetHttp())
+	return matchHTTP(rule.GetHttpMatch(), req.GetHttp())
 }
 
-func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.AttributeContext_Peer) bool {
+func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, peer *authz.AttributeContext_Peer) bool {
 	principle := peer.GetPrincipal()
 	labels := peer.GetLabels()
 	log.WithFields(log.Fields{
@@ -72,7 +72,7 @@ func matchServiceAccounts(saMatch *proto.ServiceAccountSelector, peer *authz.Att
 		return true
 	}
 	return matchServiceAccountName(saMatch.GetNames(), accountName) &&
-		matchServiceAccountLabels(saMatch.GetLabelSelector(), labels)
+		matchServiceAccountLabels(saMatch.GetSelector(), labels)
 }
 
 // parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
@@ -124,7 +124,7 @@ func matchServiceAccountLabels(selectorStr string, labels map[string]string) boo
 
 }
 
-func matchHTTP(rule *proto.HTTPSelector, req *authz.AttributeContext_HTTPRequest) bool {
+func matchHTTP(rule *proto.HTTPMatch, req *authz.AttributeContext_HTTPRequest) bool {
 	log.WithFields(log.Fields{
 		"rule": rule,
 	}).Debug("Matching HTTP.")
