@@ -1,3 +1,4 @@
 #!/bin/bash -ex
 
+export FV_FELIXIMAGE="calico/felix-amd64:latest"
 exec ginkgo "$@" --tags fvtests .
