@@ -150,7 +150,6 @@ func processActiveProfileUpdate(store *policystore.PolicyStore, update *proto.Ac
 		"id": update.Id,
 	}).Debug("Processing ActiveProfileUpdate")
 	if update.Id == nil {
-		log.Error("got ActiveProfileUpdate with nil ProfileID")
 		panic("got ActiveProfileUpdate with nil ProfileID")
 	}
 	store.ProfileByID[*update.Id] = update.Profile
@@ -161,7 +160,6 @@ func processActiveProfileRemove(store *policystore.PolicyStore, update *proto.Ac
 		"id": update.Id,
 	}).Debug("Processing ActiveProfileRemove")
 	if update.Id == nil {
-		log.Error("got ActiveProfileRemove with nil ProfileID")
 		panic("got ActiveProfileRemove with nil ProfileID")
 	}
 	delete(store.ProfileByID, *update.Id)
@@ -172,7 +170,6 @@ func processActivePolicyUpdate(store *policystore.PolicyStore, update *proto.Act
 		"id": update.Id,
 	}).Debug("Processing ActivePolicyUpdate")
 	if update.Id == nil {
-		log.Error("got ActivePolicyUpdate with nil PolicyID")
 		panic("got ActivePolicyUpdate with nil PolicyID")
 	}
 	store.PolicyByID[*update.Id] = update.Policy
@@ -183,7 +180,6 @@ func processActivePolicyRemove(store *policystore.PolicyStore, update *proto.Act
 		"id": update.Id,
 	}).Debug("Processing ActivePolicyRemove")
 	if update.Id == nil {
-		log.Error("got ActivePolicyRemove with nil PolicyID")
 		panic("got ActivePolicyRemove with nil PolicyID")
 	}
 	delete(store.PolicyByID, *update.Id)
@@ -212,7 +208,6 @@ func processWorkloadEndpointRemove(store *policystore.PolicyStore, update *proto
 func processServiceAccountUpdate(store *policystore.PolicyStore, update *proto.ServiceAccountUpdate) {
 	log.WithField("id", update.Id).Debug("Processing ServiceAccountUpdate")
 	if update.Id == nil {
-		log.Error("got ServiceAccountUpdate with nil ServiceAccountID")
 		panic("got ServiceAccountUpdate with nil ServiceAccountID")
 	}
 	store.ServiceAccountByID[*update.Id] = update
@@ -221,7 +216,6 @@ func processServiceAccountUpdate(store *policystore.PolicyStore, update *proto.S
 func processServiceAccountRemove(store *policystore.PolicyStore, update *proto.ServiceAccountRemove) {
 	log.WithField("id", update.Id).Debug("Processing ServiceAccountRemove")
 	if update.Id == nil {
-		log.Error("got ServiceAccountRemove with nil ServiceAccountID")
 		panic("got ServiceAccountRemove with nil ServiceAccountID")
 	}
 	delete(store.ServiceAccountByID, *update.Id)
@@ -230,7 +224,6 @@ func processServiceAccountRemove(store *policystore.PolicyStore, update *proto.S
 func processNamespaceUpdate(store *policystore.PolicyStore, update *proto.NamespaceUpdate) {
 	log.WithField("id", update.Id).Debug("Processing NamespaceUpdate")
 	if update.Id == nil {
-		log.Error("got NamespaceUpdate with nil NamespaceID")
 		panic("got NamespaceUpdate with nil NamespaceID")
 	}
 	store.NamespaceByID[*update.Id] = update
@@ -239,7 +232,6 @@ func processNamespaceUpdate(store *policystore.PolicyStore, update *proto.Namesp
 func processNamespaceRemove(store *policystore.PolicyStore, update *proto.NamespaceRemove) {
 	log.WithField("id", update.Id).Debug("Processing NamespaceRemove")
 	if update.Id == nil {
-		log.Error("got NamespaceRemove with nil NamespaceID")
 		panic("got NamespaceRemove with nil NamespaceID")
 	}
 	delete(store.NamespaceByID, *update.Id)

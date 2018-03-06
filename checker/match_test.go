@@ -129,7 +129,7 @@ func TestMatchRule(t *testing.T) {
 		},
 	}}
 
-	reqCache := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(reqCache.InitPeers()).To(Succeed())
+	reqCache, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(err).To(Succeed())
 	Expect(match(rule, reqCache)).To(BeTrue())
 }

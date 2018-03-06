@@ -38,12 +38,15 @@ func TestInitSourceBadSpiffe(t *testing.T) {
 		Source: &authz.AttributeContext_Peer{
 			Principal: "http://foo.bar.com/ns/sandwich/sa/bacon",
 		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sub/sa/ham",
+		},
 	}}
-	uut := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(uut.InitSource()).ToNot(Succeed())
+	_, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(err).ToNot(Succeed())
 }
 
-func TestInitSourceRequestLabels(t *testing.T) {
+func TestInitPeerRequestLabels(t *testing.T) {
 	RegisterTestingT(t)
 
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
@@ -51,20 +54,31 @@ func TestInitSourceRequestLabels(t *testing.T) {
 			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
 			Labels:    map[string]string{"k1": "v1", "k2": "v2"},
 		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sub/sa/ham",
+			Labels:    map[string]string{"k3": "v3", "k4": "v4"},
+		},
 	}}
-	uut := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(uut.InitSource()).To(Succeed())
+	uut, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(err).To(Succeed())
 	Expect(uut.Source().Name).To(Equal("bacon"))
 	Expect(uut.Source().Namespace).To(Equal("sandwich"))
 	Expect(uut.Source().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2"}))
+	Expect(uut.Destination().Name).To(Equal("ham"))
+	Expect(uut.Destination().Namespace).To(Equal("sub"))
+	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k3": "v3", "k4": "v4"}))
 }
 
-func TestInitSourceStoreLabels(t *testing.T) {
+func TestInitPeerStoreLabels(t *testing.T) {
 	RegisterTestingT(t)
 
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
+			Labels:    map[string]string{},
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sub/sa/ham",
 			Labels:    map[string]string{},
 		},
 	}}
@@ -74,20 +88,32 @@ func TestInitSourceStoreLabels(t *testing.T) {
 		Id:     &id,
 		Labels: map[string]string{"k5": "v5", "k6": "v6"},
 	}
-	uut := NewRequestCache(store, req)
-	Expect(uut.InitSource()).To(Succeed())
+	id = proto.ServiceAccountID{Name: "ham", Namespace: "sub"}
+	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
+		Id:     &id,
+		Labels: map[string]string{"k7": "v7", "k8": "v8"},
+	}
+	uut, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
 	Expect(uut.Source().Name).To(Equal("bacon"))
 	Expect(uut.Source().Namespace).To(Equal("sandwich"))
 	Expect(uut.Source().Labels).To(Equal(map[string]string{"k5": "v5", "k6": "v6"}))
+	Expect(uut.Destination().Name).To(Equal("ham"))
+	Expect(uut.Destination().Namespace).To(Equal("sub"))
+	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k7": "v7", "k8": "v8"}))
 }
 
-func TestInitSourceBothLabels(t *testing.T) {
+func TestInitPeerBothLabels(t *testing.T) {
 	RegisterTestingT(t)
 
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
 			Labels:    map[string]string{"k1": "v1", "k2": "v2", "k5": "v5old"},
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sub/sa/ham",
+			Labels:    map[string]string{"k3": "v3", "k4": "v4", "k7": "v7old"},
 		},
 	}}
 	store := policystore.NewPolicyStore()
@@ -96,107 +122,33 @@ func TestInitSourceBothLabels(t *testing.T) {
 		Id:     &id,
 		Labels: map[string]string{"k5": "v5", "k6": "v6"},
 	}
-	uut := NewRequestCache(store, req)
-	Expect(uut.InitSource()).To(Succeed())
+	id = proto.ServiceAccountID{Name: "ham", Namespace: "sub"}
+	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
+		Id:     &id,
+		Labels: map[string]string{"k7": "v7", "k8": "v8"},
+	}
+	uut, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
 	Expect(uut.Source().Name).To(Equal("bacon"))
 	Expect(uut.Source().Namespace).To(Equal("sandwich"))
 	Expect(uut.Source().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2", "k5": "v5", "k6": "v6"}))
-
-	// Repeat to test Idempotency of InitSource()
-	Expect(uut.InitSource()).To(Succeed())
-	Expect(uut.Source().Name).To(Equal("bacon"))
-	Expect(uut.Source().Namespace).To(Equal("sandwich"))
-	Expect(uut.Source().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2", "k5": "v5", "k6": "v6"}))
-}
-
-func TestSourceBeforeInitSource(t *testing.T) {
-	RegisterTestingT(t)
-
-	uut := NewRequestCache(policystore.NewPolicyStore(), &authz.CheckRequest{})
-	Expect(func() { _ = uut.Source() }).To(Panic())
+	Expect(uut.Destination().Name).To(Equal("ham"))
+	Expect(uut.Destination().Namespace).To(Equal("sub"))
+	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k3": "v3", "k4": "v4", "k7": "v7", "k8": "v8"}))
 }
 
 func TestInitDestinationBadSpiffe(t *testing.T) {
 	RegisterTestingT(t)
 
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
+			Labels:    map[string]string{},
+		},
 		Destination: &authz.AttributeContext_Peer{
 			Principal: "http://foo.bar.com/ns/sandwich/sa/bacon",
 		},
 	}}
-	uut := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(uut.InitDestination()).ToNot(Succeed())
-}
-
-func TestInitDestinationRequestLabels(t *testing.T) {
-	RegisterTestingT(t)
-
-	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
-		Destination: &authz.AttributeContext_Peer{
-			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
-			Labels:    map[string]string{"k1": "v1", "k2": "v2"},
-		},
-	}}
-	uut := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(uut.InitDestination()).To(Succeed())
-	Expect(uut.Destination().Name).To(Equal("bacon"))
-	Expect(uut.Destination().Namespace).To(Equal("sandwich"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2"}))
-}
-
-func TestInitDestinationStoreLabels(t *testing.T) {
-	RegisterTestingT(t)
-
-	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
-		Destination: &authz.AttributeContext_Peer{
-			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
-			Labels:    map[string]string{},
-		},
-	}}
-	store := policystore.NewPolicyStore()
-	id := proto.ServiceAccountID{Name: "bacon", Namespace: "sandwich"}
-	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
-		Id:     &id,
-		Labels: map[string]string{"k5": "v5", "k6": "v6"},
-	}
-	uut := NewRequestCache(store, req)
-	Expect(uut.InitDestination()).To(Succeed())
-	Expect(uut.Destination().Name).To(Equal("bacon"))
-	Expect(uut.Destination().Namespace).To(Equal("sandwich"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k5": "v5", "k6": "v6"}))
-}
-
-func TestInitDestinationBothLabels(t *testing.T) {
-	RegisterTestingT(t)
-
-	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
-		Destination: &authz.AttributeContext_Peer{
-			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
-			Labels:    map[string]string{"k1": "v1", "k2": "v2", "k5": "v5old"},
-		},
-	}}
-	store := policystore.NewPolicyStore()
-	id := proto.ServiceAccountID{Name: "bacon", Namespace: "sandwich"}
-	store.ServiceAccountByID[id] = &proto.ServiceAccountUpdate{
-		Id:     &id,
-		Labels: map[string]string{"k5": "v5", "k6": "v6"},
-	}
-	uut := NewRequestCache(store, req)
-	Expect(uut.InitDestination()).To(Succeed())
-	Expect(uut.Destination().Name).To(Equal("bacon"))
-	Expect(uut.Destination().Namespace).To(Equal("sandwich"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2", "k5": "v5", "k6": "v6"}))
-
-	// Repeat to test Idempotency of InitDestination()
-	Expect(uut.InitDestination()).To(Succeed())
-	Expect(uut.Destination().Name).To(Equal("bacon"))
-	Expect(uut.Destination().Namespace).To(Equal("sandwich"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2", "k5": "v5", "k6": "v6"}))
-}
-
-func TestDestinationBeforeInitDestination(t *testing.T) {
-	RegisterTestingT(t)
-
-	uut := NewRequestCache(policystore.NewPolicyStore(), &authz.CheckRequest{})
-	Expect(func() { _ = uut.Destination() }).To(Panic())
+	_, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(err).ToNot(Succeed())
 }

@@ -43,7 +43,7 @@ func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
 	return matchHTTP(rule.GetHttpMatch(), req.GetHttp())
 }
 
-func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, peer Peer) bool {
+func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, peer peer) bool {
 	log.WithFields(log.Fields{
 		"name":      peer.Name,
 		"namespace": peer.Namespace,

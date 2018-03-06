@@ -45,8 +45,17 @@ func TestCheckPolicyNoRules(t *testing.T) {
 
 	policy := &proto.Policy{}
 	store := policystore.NewPolicyStore()
-	req := NewRequestCache(store, &authz.CheckRequest{})
-	Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sue",
+		},
+	}}
+	reqCache, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
+	Expect(checkPolicy(policy, reqCache)).To(Equal(NO_MATCH))
 }
 
 // If rules exist, but none match, we should get NO_MATCH
@@ -86,8 +95,8 @@ func TestCheckPolicyRules(t *testing.T) {
 			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
 		},
 	}}
-	reqCache := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(reqCache.InitPeers()).To(Succeed())
+	reqCache, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(err).To(Succeed())
 	Expect(checkPolicy(policy, reqCache)).To(Equal(NO_MATCH))
 
 	http := req.GetAttributes().GetRequest().GetHttp()

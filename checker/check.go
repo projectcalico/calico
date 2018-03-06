@@ -49,10 +49,9 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		log.Warning("CheckRequest before we synced Endpoint information.")
 		return
 	}
-	reqCache := NewRequestCache(store, req)
-	err := reqCache.InitPeers()
+	reqCache, err := NewRequestCache(store, req)
 	if err != nil {
-		log.WithField("error", err).Error("Failed to Init() requestCache")
+		log.WithField("error", err).Error("Failed to init requestCache")
 		return
 	}
 	if len(ep.Tiers) > 0 {
