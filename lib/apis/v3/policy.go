@@ -59,10 +59,10 @@ type Rule struct {
 	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
 
 	// HTTP contains match criteria that apply to HTTP requests.
-	HTTP *HTTPRule `json:"http,omitempty" validate:"omitempty"`
+	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
 }
 
-type HTTPRule struct {
+type HTTPMatch struct {
 	// Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed
 	// HTTP Methods (e.g. GET, PUT, etc.)
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`

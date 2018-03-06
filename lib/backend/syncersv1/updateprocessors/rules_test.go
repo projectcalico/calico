@@ -77,6 +77,9 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 					Selector: "servacctsel2",
 				},
 			},
+			HTTP: &apiv3.HTTPMatch{
+				Methods: []string{"GET", "PUT"},
+			},
 		}
 		// Correct inbound rule
 		rulev1 := updateprocessors.RuleAPIV2ToBackend(irule, "namespace2")
@@ -115,6 +118,8 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalSrcServiceAccountNames).To(Equal([]string{"a", "b"}))
 		Expect(rulev1.OriginalDstServiceAccountNames).To(Equal([]string{"c", "d"}))
 
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"GET", "PUT"}))
+
 		etype := 2
 		entype := 7
 		ecode := 5
@@ -149,6 +154,9 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:           []string{"192.168.40.1"},
 				NotSelector:       "has(label1)",
 				NotPorts:          []numorstring.Port{port443},
+			},
+			HTTP: &apiv3.HTTPMatch{
+				Methods: []string{"HEAD", "POST"},
 			},
 		}
 		// Correct outbound rule
@@ -187,6 +195,8 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalSrcServiceAccountNames).To(BeNil())
 		Expect(rulev1.OriginalDstServiceAccountNames).To(BeNil())
 
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"HEAD", "POST"}))
+
 		By("Converting multiple rules")
 		rulesv1 := updateprocessors.RulesAPIV2ToBackend([]apiv3.Rule{irule, erule}, "namespace1")
 		rulev1 = rulesv1[0]
@@ -220,6 +230,8 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
 
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"GET", "PUT"}))
+
 		rulev1 = rulesv1[1]
 		Expect(rulev1.IPVersion).To(Equal(&v4))
 		Expect(rulev1.Protocol).To(Equal(&eproto))
@@ -250,6 +262,8 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalDstNamespaceSelector).To(Equal("namespacelabel2 == 'value2'"))
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label2)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label1)"))
+
+		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"HEAD", "POST"}))
 	})
 
 	It("should parse a profile rule with no namespace", func() {

@@ -147,7 +147,7 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		dstServiceAcctMatch = *ar.Destination.ServiceAccounts
 	}
 
-	return model.Rule{
+	r := model.Rule{
 		Action:      ruleActionAPIV2ToBackend(ar.Action),
 		IPVersion:   ar.IPVersion,
 		Protocol:    convertV3ProtocolToV1(ar.Protocol),
@@ -183,6 +183,10 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		OriginalDstServiceAccountNames:    dstServiceAcctMatch.Names,
 		OriginalDstServiceAccountSelector: dstServiceAcctMatch.Selector,
 	}
+	if ar.HTTP != nil {
+		r.HTTPMatch = &model.HTTPMatch{Methods: ar.HTTP.Methods}
+	}
+	return r
 }
 
 // parseSelectorAttachPrefix takes a v3 selector and returns the appropriate v1 representation
