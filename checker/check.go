@@ -49,6 +49,12 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		log.Warning("CheckRequest before we synced Endpoint information.")
 		return
 	}
+	reqCache := NewRequestCache(store, req)
+	err := reqCache.InitSource()
+	if err != nil {
+		log.WithField("error", err).Error("Failed to Init Source")
+		return
+	}
 	if len(ep.Tiers) > 0 {
 		// We only support a single tier.
 		log.Debug("Checking policy tier 1.")
@@ -59,7 +65,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		for i, name := range policies {
 			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
-			action := checkPolicy(policy, req)
+			action := checkPolicy(policy, reqCache)
 			log.WithFields(log.Fields{
 				"ordinal":  i,
 				"PolicyID": pID,
@@ -88,7 +94,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		for i, name := range ep.ProfileIds {
 			pID := proto.ProfileID{Name: name}
 			profile := store.ProfileByID[pID]
-			action := checkProfile(profile, req)
+			action := checkProfile(profile, reqCache)
 			log.WithFields(log.Fields{
 				"ordinal":   i,
 				"ProfileID": pID,
@@ -115,16 +121,16 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 }
 
 // checkPolicy checks if the policy matches the request data, and returns the action.
-func checkPolicy(policy *proto.Policy, req *authz.CheckRequest) (action Action) {
+func checkPolicy(policy *proto.Policy, req *requestCache) (action Action) {
 	// Note that we support only inbound policy.
 	return checkRules(policy.InboundRules, req)
 }
 
-func checkProfile(p *proto.Profile, req *authz.CheckRequest) (action Action) {
+func checkProfile(p *proto.Profile, req *requestCache) (action Action) {
 	return checkRules(p.InboundRules, req)
 }
 
-func checkRules(rules []*proto.Rule, req *authz.CheckRequest) (action Action) {
+func checkRules(rules []*proto.Rule, req *requestCache) (action Action) {
 	for _, r := range rules {
 		if match(r, req) {
 			log.Debugf("Rule matched.")

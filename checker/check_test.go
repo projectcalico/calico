@@ -44,7 +44,8 @@ func TestCheckPolicyNoRules(t *testing.T) {
 	RegisterTestingT(t)
 
 	policy := &proto.Policy{}
-	req := &authz.CheckRequest{}
+	store := policystore.NewPolicyStore()
+	req := NewRequestCache(store, &authz.CheckRequest{})
 	Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
 }
 
@@ -82,14 +83,16 @@ func TestCheckPolicyRules(t *testing.T) {
 			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
 		},
 	}}
-	Expect(checkPolicy(policy, req)).To(Equal(NO_MATCH))
+	reqCache := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(reqCache.InitSource()).To(Succeed())
+	Expect(checkPolicy(policy, reqCache)).To(Equal(NO_MATCH))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "POST"
-	Expect(checkPolicy(policy, req)).To(Equal(ALLOW))
+	Expect(checkPolicy(policy, reqCache)).To(Equal(ALLOW))
 
 	http.Method = "GET"
-	Expect(checkPolicy(policy, req)).To(Equal(DENY))
+	Expect(checkPolicy(policy, reqCache)).To(Equal(DENY))
 }
 
 // CheckStore when the store has no endpoint should deny requests.
@@ -275,4 +278,29 @@ func TestCheckStorePass(t *testing.T) {
 
 	status := checkStore(store, req)
 	Expect(status.Code).To(Equal(OK))
+}
+
+func TestCheckStoreInitSourceFails(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{{
+			Name:            "tier1",
+			IngressPolicies: []string{"policy1", "policy2"},
+		}},
+		ProfileIds: []string{"profile1"},
+	}
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://malformed",
+		},
+		Request: &authz.AttributeContext_Request{
+			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
+		},
+	}}
+
+	status := checkStore(store, req)
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }

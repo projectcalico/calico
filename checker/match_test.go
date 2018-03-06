@@ -21,28 +21,9 @@ import (
 
 	"github.com/envoyproxy/data-plane-api/api/auth"
 
+	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 )
-
-// Successful parse should return name and namespace.
-func TestParseSpiffeIdOk(t *testing.T) {
-	RegisterTestingT(t)
-
-	id := "spiffe://foo.bar.com/ns/sandwich/sa/bacon"
-	name, namespace, err := parseSpiffeId(id)
-	Expect(name).To(Equal("bacon"))
-	Expect(namespace).To(Equal("sandwich"))
-	Expect(err).To(BeNil())
-}
-
-// Unsuccessful parse should return an error.
-func TestParseSpiffeIdFail(t *testing.T) {
-	RegisterTestingT(t)
-
-	id := "http://foo.bar.com/ns/sandwich/sa/bacon"
-	_, _, err := parseSpiffeId(id)
-	Expect(err).ToNot(BeNil())
-}
 
 // If no service account names are given, the clause matches any name.
 func TestMatchServiceAccountName(t *testing.T) {
@@ -86,19 +67,6 @@ func TestMatchServiceAccoutLabels(t *testing.T) {
 			Expect(result).To(Equal(tc.result))
 		})
 	}
-}
-
-// If the Principle on the request cannot be parsed as a SPIFFE ID, service
-// account clause cannot match (even if empty).
-func TestMatchServiceAccountBadSpiffe(t *testing.T) {
-	RegisterTestingT(t)
-
-	selector := &proto.ServiceAccountMatch{}
-	peer := &auth.AttributeContext_Peer{
-		Principal: "http://foo.com",
-	}
-	result := matchServiceAccounts(selector, peer)
-	Expect(result).To(BeFalse())
 }
 
 // HTTP Methods clause with empty list will match any method.
@@ -154,5 +122,8 @@ func TestMatchRule(t *testing.T) {
 			},
 		},
 	}}
-	Expect(match(rule, req)).To(BeTrue())
+
+	reqCache := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(reqCache.InitSource()).To(Succeed())
+	Expect(match(rule, reqCache)).To(BeTrue())
 }

@@ -15,9 +15,6 @@
 package checker
 
 import (
-	"fmt"
-	"regexp"
-
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
@@ -25,21 +22,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// SPIFFE_ID_PATTERN is a regular expression to match SPIFFE ID URIs, e.g. spiffe://cluster.local/ns/default/sa/foo
-const SPIFFE_ID_PATTERN = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
-
-var spiffeIdRegExp *regexp.Regexp
-
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
-func match(rule *proto.Rule, req *authz.CheckRequest) bool {
+func match(rule *proto.Rule, req *requestCache) bool {
 	log.Debugf("Checking rule %v on request %v", rule, req)
-	attr := req.GetAttributes()
-	return matchSource(rule, attr.GetSource()) && matchRequest(rule, attr.GetRequest())
+	attr := req.Request.GetAttributes()
+	return matchSource(rule, req) && matchRequest(rule, attr.GetRequest())
 }
 
-func matchSource(r *proto.Rule, peer *authz.AttributeContext_Peer) bool {
+func matchSource(r *proto.Rule, req *requestCache) bool {
 	// TODO IPSets
-	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), peer)
+	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.Source())
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
@@ -47,49 +39,19 @@ func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
 	return matchHTTP(rule.GetHttpMatch(), req.GetHttp())
 }
 
-func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, peer *authz.AttributeContext_Peer) bool {
-	principle := peer.GetPrincipal()
-	labels := peer.GetLabels()
+func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, peer Peer) bool {
 	log.WithFields(log.Fields{
-		"peer":   principle,
-		"labels": labels,
-		"rule":   saMatch},
+		"name":      peer.Name,
+		"namespace": peer.Namespace,
+		"labels":    peer.Labels,
+		"rule":      saMatch},
 	).Debug("Matching service account.")
-	accountName, namespace, err := parseSpiffeId(principle)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"principle": principle,
-			"msg":       err,
-		}).Warn("Unable to parse authenticated principle as SPIFFE ID.")
-		return false
-	}
-	log.WithFields(log.Fields{
-		"name":      accountName,
-		"namespace": namespace,
-	}).Debug("Parsed SPIFFE ID.")
 	if saMatch == nil {
 		log.Debug("nil ServiceAccountMatch.  Return true.")
 		return true
 	}
-	return matchServiceAccountName(saMatch.GetNames(), accountName) &&
-		matchServiceAccountLabels(saMatch.GetSelector(), labels)
-}
-
-// parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
-func parseSpiffeId(id string) (name, namespace string, err error) {
-	// Init the regexp the first time this is called, and store it in the package namespace.
-	if spiffeIdRegExp == nil {
-		// We drop the returned error here, since we are compiling
-		spiffeIdRegExp, _ = regexp.Compile(SPIFFE_ID_PATTERN)
-	}
-	match := spiffeIdRegExp.FindStringSubmatch(id)
-	if match == nil {
-		err = fmt.Errorf("expected match %s, got %s", SPIFFE_ID_PATTERN, id)
-	} else {
-		name = match[2]
-		namespace = match[1]
-	}
-	return
+	return matchServiceAccountName(saMatch.GetNames(), peer.Name) &&
+		matchServiceAccountLabels(saMatch.GetSelector(), peer.Labels)
 }
 
 func matchServiceAccountName(names []string, name string) bool {
