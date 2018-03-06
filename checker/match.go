@@ -26,12 +26,16 @@ import (
 func match(rule *proto.Rule, req *requestCache) bool {
 	log.Debugf("Checking rule %v on request %v", rule, req)
 	attr := req.Request.GetAttributes()
-	return matchSource(rule, req) && matchRequest(rule, attr.GetRequest())
+	return matchSource(rule, req) && matchDestination(rule, req) && matchRequest(rule, attr.GetRequest())
 }
 
 func matchSource(r *proto.Rule, req *requestCache) bool {
 	// TODO IPSets
 	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.Source())
+}
+
+func matchDestination(r *proto.Rule, req *requestCache) bool {
+	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.Destination())
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {

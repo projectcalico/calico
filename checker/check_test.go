@@ -79,12 +79,15 @@ func TestCheckPolicyRules(t *testing.T) {
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
 		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sue",
+		},
 		Request: &authz.AttributeContext_Request{
 			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
 		},
 	}}
 	reqCache := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(reqCache.InitSource()).To(Succeed())
+	Expect(reqCache.InitPeers()).To(Succeed())
 	Expect(checkPolicy(policy, reqCache)).To(Equal(NO_MATCH))
 
 	http := req.GetAttributes().GetRequest().GetHttp()

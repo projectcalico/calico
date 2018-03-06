@@ -108,6 +108,9 @@ func TestMatchRule(t *testing.T) {
 		SrcServiceAccountMatch: &proto.ServiceAccountMatch{
 			Names: []string{"john", "stevie", "sam"},
 		},
+		DstServiceAccountMatch: &proto.ServiceAccountMatch{
+			Names: []string{"ian"},
+		},
 		HttpMatch: &proto.HTTPMatch{
 			Methods: []string{"GET", "POST"},
 		},
@@ -115,6 +118,9 @@ func TestMatchRule(t *testing.T) {
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
 		Source: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/sam",
+		},
+		Destination: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/ian",
 		},
 		Request: &auth.AttributeContext_Request{
 			Http: &auth.AttributeContext_HTTPRequest{
@@ -124,6 +130,6 @@ func TestMatchRule(t *testing.T) {
 	}}
 
 	reqCache := NewRequestCache(policystore.NewPolicyStore(), req)
-	Expect(reqCache.InitSource()).To(Succeed())
+	Expect(reqCache.InitPeers()).To(Succeed())
 	Expect(match(rule, reqCache)).To(BeTrue())
 }
