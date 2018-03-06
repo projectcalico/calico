@@ -14,6 +14,10 @@ service PolicySync {
   //  - ActivePolicyRemove
   //  - WorkloadEndpointUpdate
   //  - WorkloadEndpointRemove
+  //  - ServiceAccountUpdate
+  //  - ServiceAccountRemove
+  //  - NamespaceUpdate
+  //  - NamespaceRemove
   rpc Sync(SyncRequest) returns (stream ToDataplane);
 }
 
@@ -83,6 +87,16 @@ message ToDataplane {
     IPAMPoolUpdate ipam_pool_update = 16;
     // IPAMPoolRemove is sent when an IPAM pool is removed.
     IPAMPoolRemove ipam_pool_remove = 17;
+
+    // ServiceAccountUpdate is sent when a ServiceAccount is added/updated.
+    ServiceAccountUpdate service_account_update = 19;
+    // ServiceAccountRemove is sent when a ServiceAccount is removed.
+    ServiceAccountRemove service_account_remove = 20;
+
+    // NamespaceUpdate is sent when a Namespace is added/updated.
+    NamespaceUpdate namespace_update = 21;
+    // NamespaceRemove is sent when a Namespace is removed.
+    NamespaceRemove namespace_remove = 22;
   }
 }
 
@@ -395,4 +409,31 @@ message IPAMPoolRemove {
 message IPAMPool {
   string cidr = 1;
   bool masquerade = 2;
+}
+
+message ServiceAccountUpdate {
+  ServiceAccountID id = 1;
+  map<string, string> labels = 2;
+}
+
+message ServiceAccountRemove {
+  ServiceAccountID id = 1;
+}
+
+message ServiceAccountID {
+  string namespace = 1;
+  string name = 2;
+}
+
+message NamespaceUpdate {
+  NamespaceID id = 1;
+  map<string, string> labels = 2;
+}
+
+message NamespaceRemove {
+  NamespaceID id = 1;
+}
+
+message NamespaceID {
+  string name = 1;
 }
