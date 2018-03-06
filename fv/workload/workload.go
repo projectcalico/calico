@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -293,4 +295,49 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
 	}
 	return result
+}
+
+func (c *ConnectivityChecker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(offset+2, 10*time.Second, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(2, 10*time.Second, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, optionalDescription ...interface{}) {
+	expConnectivity := c.ExpectedConnectivity()
+	start := time.Now()
+
+	// Track the number of attempts. If the first connectivity check fails, we want to
+	// do at least one retry before we time out.  That covers the case where the first
+	// connectivity check takes longer than the timeout.
+	completedAttempts := 0
+	var actualConn []string
+	for time.Since(start) < timeout || completedAttempts < 2 {
+		actualConn = c.ActualConnectivity()
+		if reflect.DeepEqual(actualConn, expConnectivity) {
+			return
+		}
+		completedAttempts++
+	}
+
+	// Build a concise description of the incorrect connectivity.
+	for i := range actualConn {
+		if actualConn[i] != expConnectivity[i] {
+			actualConn[i] += " <---- WRONG"
+			expConnectivity[i] += " <----"
+		}
+	}
+
+	message := fmt.Sprintf(
+		"Connectivity was incorrect:\n\nExpected\n    %s\nto match\n    %s",
+		strings.Join(actualConn, "\n    "),
+		strings.Join(expConnectivity, "\n    "),
+	)
+	Fail(message, callerSkip)
 }
