@@ -25,9 +25,10 @@ import (
 
 // requestCache contains the CheckRequest and cached copies of computed information about the request
 type requestCache struct {
-	Request *authz.CheckRequest
-	store   *policystore.PolicyStore
-	source  *Peer
+	Request     *authz.CheckRequest
+	store       *policystore.PolicyStore
+	source      *Peer
+	destination *Peer
 }
 
 type Peer struct {
@@ -45,12 +46,21 @@ func NewRequestCache(store *policystore.PolicyStore, req *authz.CheckRequest) *r
 	return &requestCache{Request: req, store: store}
 }
 
-// SourceName returns the cached source name. You must call InitSource() before calling this method.
+// Source returns the cached source Peer. You must call Init() or InitSource() before calling this method.
 func (r *requestCache) Source() Peer {
 	if r.source == nil {
 		panic("Called Source() before InitSource()")
 	}
 	return *r.source
+}
+
+// Destination returns the cached destination Peer. You must call Init() or InitDestination() before calling this
+// method.
+func (r *requestCache) Destination() Peer {
+	if r.destination == nil {
+		panic("Called Destination() before InitDestination()")
+	}
+	return *r.destination
 }
 
 // InitSource initializes the source peer. It parses the SPIFFE ID of the source peer, and stores the result.  It
@@ -59,14 +69,45 @@ func (r *requestCache) InitSource() error {
 	if r.source != nil {
 		return nil
 	}
-	src := r.Request.GetAttributes().GetSource()
-	peer, err := parseSpiffeID(src.GetPrincipal())
+	peer, err := r.initPeer(r.Request.GetAttributes().GetSource())
 	if err != nil {
 		return err
 	}
+	r.source = peer
+	return nil
+}
+
+// InitSource initializes the destination peer. It parses the SPIFFE ID of the destination peer, and stores the result.
+// It accesses labels from the store and merges them with the request (if any).  Idempotent.
+func (r *requestCache) InitDestination() error {
+	if r.destination != nil {
+		return nil
+	}
+	peer, err := r.initPeer(r.Request.GetAttributes().GetDestination())
+	if err != nil {
+		return err
+	}
+	r.destination = peer
+	return nil
+}
+
+// InitPeers initializes the source and destination peers.
+func (r *requestCache) InitPeers() error {
+	err := r.InitSource()
+	if err != nil {
+		return err
+	}
+	return r.InitDestination()
+}
+
+func (r *requestCache) initPeer(aPeer *authz.AttributeContext_Peer) (*Peer, error) {
+	peer, err := parseSpiffeID(aPeer.GetPrincipal())
+	if err != nil {
+		return nil, err
+	}
 	// Copy any labels from the request.
 	peer.Labels = make(map[string]string)
-	for k, v := range src.GetLabels() {
+	for k, v := range aPeer.GetLabels() {
 		peer.Labels[k] = v
 	}
 
@@ -78,8 +119,7 @@ func (r *requestCache) InitSource() error {
 			peer.Labels[k] = v
 		}
 	}
-	r.source = &peer
-	return nil
+	return &peer, nil
 }
 
 // parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.

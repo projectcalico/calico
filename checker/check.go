@@ -50,9 +50,9 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		return
 	}
 	reqCache := NewRequestCache(store, req)
-	err := reqCache.InitSource()
+	err := reqCache.InitPeers()
 	if err != nil {
-		log.WithField("error", err).Error("Failed to Init Source")
+		log.WithField("error", err).Error("Failed to Init() requestCache")
 		return
 	}
 	if len(ep.Tiers) > 0 {

@@ -104,6 +104,9 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
 		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
 		Request: &authz.AttributeContext_Request{
 			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
 		},
@@ -122,6 +125,9 @@ func TestCheckStoreNoTiers(t *testing.T) {
 	}
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
 		},
 		Request: &authz.AttributeContext_Request{
@@ -165,6 +171,9 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sally",
 		},
 		Request: &authz.AttributeContext_Request{
 			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
@@ -210,6 +219,9 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/quinn",
 		},
 		Request: &authz.AttributeContext_Request{
 			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
@@ -271,6 +283,9 @@ func TestCheckStorePass(t *testing.T) {
 		Source: &authz.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
 		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/molly",
+		},
 		Request: &authz.AttributeContext_Request{
 			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
 		},
@@ -280,7 +295,7 @@ func TestCheckStorePass(t *testing.T) {
 	Expect(status.Code).To(Equal(OK))
 }
 
-func TestCheckStoreInitSourceFails(t *testing.T) {
+func TestCheckStoreInitFails(t *testing.T) {
 	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
