@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/felix/dataplane/mock"
@@ -482,6 +483,36 @@ var _ = Context("policy sync API tests", func() {
 							Consistently(mockWlClient[2].ActiveProfiles).Should(Equal(set.From(defProfID)))
 						})
 					})
+
+					Context("after adding a service account as profile", func() {
+						var saID proto.ServiceAccountID
+
+						BeforeEach(func() {
+							log.Info("Adding Service Account Profile")
+							profile := api.NewProfile()
+							profile.SetName(conversion.ServiceAccountProfileNamePrefix + "sa-namespace.sa-name")
+							saID.Name = "sa-name"
+							saID.Namespace = "sa-namespace"
+							profile.Spec.LabelsToApply = map[string]string{
+								conversion.ServiceAccountLabelPrefix + "key.1": "value.1",
+								conversion.ServiceAccountLabelPrefix + "key_2": "value-2",
+							}
+							profile, err = calicoClient.Profiles().Create(ctx, profile, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+							log.Info("Done adding profile")
+						})
+
+						It("should sync service account to each workload", func() {
+							for _, c := range mockWlClient {
+								Eventually(c.ServiceAccounts).Should(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{
+									saID: {
+										Id:     &saID,
+										Labels: map[string]string{"key.1": "value.1", "key_2": "value-2"},
+									},
+								}))
+							}
+						})
+					})
 				})
 
 				createExtraSyncClient := func(ctx context.Context) proto.PolicySync_SyncClient {
@@ -646,7 +677,7 @@ func (c *mockWorkloadClient) loopReadingFromAPI(ctx context.Context, syncClient 
 			log.WithError(err).WithField("workload", c.name).Warn("Recv failed.")
 			return
 		}
-		log.WithField("msg", msg).Info("Received workload message")
+		log.WithFields(log.Fields{"msg": msg, "name": c.name}).Info("Received workload message")
 
 		// msg.Payload is an interface holding a pointer to one of the ToDataplane_<MsgType> structs, which in turn
 		// hold the actual payload as their only field.  Since the protobuf compiler doesn't seem to generate a

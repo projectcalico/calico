@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -189,3 +190,92 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		},
 	),
 )
+
+var _ = Describe("ServiceAccount update/remove", func() {
+	var uut *calc.EventSequencer
+	var recorder *dataplaneRecorder
+
+	BeforeEach(func() {
+		uut = calc.NewEventSequencer(&dummyConfigInterface{})
+		recorder = &dataplaneRecorder{}
+		uut.Callback = recorder.record
+	})
+
+	It("should flush latest update", func() {
+		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v2"},
+		})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{
+			&proto.ServiceAccountUpdate{
+				Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+				Labels: map[string]string{"k1": "v2"},
+			}}))
+	})
+
+	It("should coalesce add + remove", func() {
+		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.Flush()
+		Expect(recorder.Messages).To(BeNil())
+	})
+
+	It("should coalesce remove + add", func() {
+		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		}}))
+	})
+
+	It("should send remove for flushed accounts", func() {
+		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountUpdate{
+			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+			Labels: map[string]string{"k1": "v1"},
+		}}))
+		// Clear messages
+		recorder.Messages = make([]interface{}, 0)
+
+		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.Flush()
+		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountRemove{
+			Id: &proto.ServiceAccountID{Name: "test", Namespace: "test"},
+		}}))
+	})
+})
+
+type dataplaneRecorder struct {
+	Messages []interface{}
+}
+
+func (d *dataplaneRecorder) record(message interface{}) {
+	d.Messages = append(d.Messages, message)
+}
+
+type dummyConfigInterface struct{}
+
+func (i *dummyConfigInterface) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
+	return false, nil
+}
+
+func (i *dummyConfigInterface) RawValues() map[string]string {
+	return nil
+}

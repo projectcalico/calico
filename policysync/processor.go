@@ -23,12 +23,13 @@ import (
 )
 
 type Processor struct {
-	Updates        <-chan interface{}
-	JoinUpdates    chan interface{}
-	endpointsByID  map[proto.WorkloadEndpointID]*EndpointInfo
-	policyByID     map[proto.PolicyID]*proto.Policy
-	profileByID    map[proto.ProfileID]*proto.Profile
-	receivedInSync bool
+	Updates            <-chan interface{}
+	JoinUpdates        chan interface{}
+	endpointsByID      map[proto.WorkloadEndpointID]*EndpointInfo
+	policyByID         map[proto.PolicyID]*proto.Policy
+	profileByID        map[proto.ProfileID]*proto.Profile
+	serviceAccountByID map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
+	receivedInSync     bool
 }
 
 type EndpointInfo struct {
@@ -65,10 +66,11 @@ func NewProcessor(updates <-chan interface{}) *Processor {
 		// Updates from the calculation graph.
 		Updates: updates,
 		// JoinUpdates from the new servers that have started.
-		JoinUpdates:   make(chan interface{}, 10),
-		endpointsByID: make(map[proto.WorkloadEndpointID]*EndpointInfo),
-		policyByID:    make(map[proto.PolicyID]*proto.Policy),
-		profileByID:   make(map[proto.ProfileID]*proto.Profile),
+		JoinUpdates:        make(chan interface{}, 10),
+		endpointsByID:      make(map[proto.WorkloadEndpointID]*EndpointInfo),
+		policyByID:         make(map[proto.PolicyID]*proto.Policy),
+		profileByID:        make(map[proto.ProfileID]*proto.Profile),
+		serviceAccountByID: make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
 	}
 }
 
@@ -119,6 +121,11 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	ei.syncedProfiles = map[proto.ProfileID]bool{}
 
 	p.maybeSyncEndpoint(ei)
+
+	// Any updates to service accounts will be synced, but the endpoint needs to know about any existing service
+	// accounts that were updated before it joined.
+	p.sendServiceAccounts(ei)
+	logCxt.Debug("Done with join")
 }
 
 func (p *Processor) handleLeave(leaveReq LeaveRequest) {
@@ -166,6 +173,10 @@ func (p *Processor) handleDataplane(update interface{}) {
 		p.handleActivePolicyUpdate(update)
 	case *proto.ActivePolicyRemove:
 		p.handleActivePolicyRemove(update)
+	case *proto.ServiceAccountUpdate:
+		p.handleServiceAccountUpdate(update)
+	case *proto.ServiceAccountRemove:
+		p.handleServiceAccountRemove(update)
 	default:
 		log.WithFields(log.Fields{
 			"update": update,
@@ -265,7 +276,7 @@ func (p *Processor) handleActiveProfileUpdate(update *proto.ActiveProfileUpdate)
 
 func (p *Processor) handleActiveProfileRemove(update *proto.ActiveProfileRemove) {
 	pId := *update.Id
-	log.WithFields(log.Fields{"ProfileID": pId.String()}).Debug("Processing ActiveProfileRemove")
+	log.WithFields(log.Fields{"ProfileID": pId}).Debug("Processing ActiveProfileRemove")
 
 	// Push the update to any endpoints it was synced to
 	for _, ei := range p.updateableEndpoints() {
@@ -279,7 +290,7 @@ func (p *Processor) handleActiveProfileRemove(update *proto.ActiveProfileRemove)
 
 func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 	pId := *update.Id
-	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyUpdate")
+	log.WithFields(log.Fields{"PolicyID": pId}).Debug("Processing ActivePolicyUpdate")
 	policy := update.GetPolicy()
 	p.policyByID[pId] = policy
 
@@ -300,7 +311,7 @@ func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 
 func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 	pId := *update.Id
-	log.WithFields(log.Fields{"PolicyID": pId.String()}).Debug("Processing ActivePolicyRemove")
+	log.WithFields(log.Fields{"PolicyID": pId}).Debug("Processing ActivePolicyRemove")
 
 	// Push the update to any endpoints it was synced to
 	for _, ei := range p.updateableEndpoints() {
@@ -310,6 +321,27 @@ func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 		}
 	}
 	delete(p.policyByID, pId)
+}
+
+func (p *Processor) handleServiceAccountUpdate(update *proto.ServiceAccountUpdate) {
+	id := *update.Id
+	log.WithField("ServiceAccountID", id).Debug("Processing ServiceAccountUpdate")
+
+	for _, ei := range p.updateableEndpoints() {
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{update}}
+	}
+	p.serviceAccountByID[id] = update
+	return
+}
+
+func (p *Processor) handleServiceAccountRemove(update *proto.ServiceAccountRemove) {
+	id := *update.Id
+	log.WithField("ServiceAccountID", id).Debug("Processing ServiceAccountRemove")
+
+	for _, ei := range p.updateableEndpoints() {
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{update}}
+	}
+	delete(p.serviceAccountByID, id)
 }
 
 func (p *Processor) syncAddedPolicies(ei *EndpointInfo) {
@@ -393,6 +425,17 @@ func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
 			&proto.ActiveProfileRemove{Id: &polID},
 		}}
+	}
+}
+
+// sendServiceAccounts sends all known ServiceAccounts to the endpoint
+func (p *Processor) sendServiceAccounts(ei *EndpointInfo) {
+	for _, update := range p.serviceAccountByID {
+		log.WithFields(log.Fields{
+			"serviceAccount": update.Id,
+			"endpoint":       ei.endpointUpd.GetEndpoint(),
+		}).Debug("sending ServiceAccountUpdate")
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{update}}
 	}
 }
 
