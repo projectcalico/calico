@@ -128,6 +128,10 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		}
 	}
 
+	if in.HTTPMatch != nil {
+		out.HttpMatch = &proto.HTTPMatch{Methods: in.HTTPMatch.Methods}
+	}
+
 	// Fill in the ICMP fields.  We can't follow the pattern and make a
 	// convertICMP() function because we can't name the return type of the
 	// function (it's private to the protobuf package).

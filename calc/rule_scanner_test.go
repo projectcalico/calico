@@ -146,6 +146,8 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 	Entry("OriginalSrcServiceAccountSelector", model.Rule{OriginalSrcServiceAccountSelector: "all()"}, ParsedRule{OriginalSrcServiceAccountSelector: "all()"}),
 	Entry("OriginalDstServiceAccountSelector", model.Rule{OriginalDstServiceAccountSelector: "all()"}, ParsedRule{OriginalDstServiceAccountSelector: "all()"}),
 
+	Entry("HTTPMatch", model.Rule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}}}, ParsedRule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}}}),
+
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),
 	Entry("dest tag", model.Rule{DstTag: "tag1"}, ParsedRule{DstIPSetIDs: []string{tag1ID}}),
