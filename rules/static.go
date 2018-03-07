@@ -135,18 +135,59 @@ func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chai
 	var fwRules []Rule
 
 	fwRules = append(fwRules,
-		// Jump to from-endpoint-mark dispatch chain if endpoint mark is NOT a non-cali endpoint mark (Class 1). This means
-		// packet has been through filter INPUT chain with source endpoint being a real calico endpoint. There could
-		// be policies apply to its source endpoint, e.g. workload egress or host endpoint ingress policies.
+		// Only packets that we know are really being forwarded reach this chain. However, since
+		// we're called from the OUTPUT chain, we're forbidden from using the input interface match.
+		// Instead, we rely on the INPUT chain to mark the packet with a per-endpoint mark value
+		// and do our dispatch on that mark value.  So that we don't touch "Class 2" packets, we
+		// mark them with mark pattern IptablesMarkNonCaliEndpoint and exclude them here.  This
+		// prevents the default drop at the end of the dispatch chain from dropping non-Calico
+		// traffic.
 		Rule{
 			Match:  Match().NotMarkMatchesWithMask(r.IptablesMarkNonCaliEndpoint, r.IptablesMarkEndpoint),
 			Action: JumpAction{Target: ChainDispatchFromEndPointMark},
 		},
-		// For any forwarded packet with an endpoint mark (Class 1 and Class 2), apply host endpoint egress forward policies.
+	)
+
+	// The packet may be going to a workload interface.  Send any such packets to the normal,
+	// interface-name-based dispatch chains.
+	for _, prefix := range r.WorkloadIfacePrefixes {
+		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
+		ifaceMatch := prefix + "+"
+		fwRules = append(fwRules,
+			Rule{
+				Match:  Match().OutInterface(ifaceMatch),
+				Action: JumpAction{Target: ChainToWorkloadDispatch},
+			},
+		)
+	}
+
+	fwRules = append(fwRules,
+		// The packet may be going to a host endpoint, send it to the host endpoint
+		// apply-on-forward dispatch chain. That chain returns any packets that are not going to a
+		// known host endpoint for further processing.
 		Rule{
 			Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
 		},
-		// Accept packet if policies above set ACCEPT mark.
+
+		// Before we ACCEPT the packet, clear the per-interface mark bit.  This is required because
+		// the packet may get encapsulated and pass through iptables again.  Since the new encapped
+		// packet would inherit the mark bits, it would be (incorrectly) treated as a forwarded
+		// packet.
+		Rule{
+			Action: ClearMarkAction{Mark: r.IptablesMarkEndpoint},
+		},
+
+		// If a packet reaches here, one of the following must be true:
+		//
+		// - it is going to a workload endpoint and it has passed that endpoint's policy
+		// - it is going to a host interface with a Calico host endpoint and it has passed that
+		//   endpoint's policy
+		// - it is going to a host interface with no Calico host endpoint.
+		//
+		// In the first two cases, the policy will have set the accept bit in the mark and we "own"
+		// the packet so it's right for us to ACCEPT it here (unless configured otherwise).  In
+		// the other case, we don't own the packet so we always return it to the OUTPUT chain
+		// for further processing.
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
@@ -469,47 +510,32 @@ func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*Chain
 	)
 
 	if r.KubeIPVSSupportEnabled {
-		result = append(result, r.StaticFilterOutputForwardEndpointMarkChain(), r.clearEndpointMarkChain())
+		result = append(result, r.StaticFilterOutputForwardEndpointMarkChain())
 	}
 
 	return result
 }
 
-func (r *DefaultRuleRenderer) clearEndpointMarkChain() *Chain {
-	return &Chain{
-		Name: ChainDispatchClearEndPointMark,
-		Rules: []Rule{
-			Rule{Action: ClearMarkAction{Mark: r.IptablesMarkEndpoint}},
-		},
-	}
-}
-
 func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
-	rules := []Rule{}
+	var rules []Rule
 
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
 
-	var toWorkloadReturnAction Action
 	if r.KubeIPVSSupportEnabled {
-		// Jump to forward-endpoint-mark chain if endpoint mark is not zero, which means
-		// packet has been through filter INPUT chain. There could be policies apply to its ingress interface.
+		// Special case: packets that are forwarded through IPVS hit the INPUT and OUTPUT chains
+		// instead of FORWARD.  In the INPUT chain, we mark such packets with a per-interface ID.
+		// Divert those packets to a chain that handles them as we would if they had hit the FORWARD
+		// chain.
+		//
+		// We use a goto so that a RETURN from that chain will continue execution in the OUTPUT
+		// chain.
 		rules = append(rules,
 			Rule{
 				Match:  Match().MarkNotClear(r.IptablesMarkEndpoint),
-				Action: JumpAction{Target: ChainForwardEndpointMark},
+				Action: GotoAction{Target: ChainForwardEndpointMark},
 			},
 		)
-
-		// If IPIP is enabled, the packet will be sent over to tunnel device and
-		// come back with encapsulated format ( include mark bits been copied over) through OUTPUT filter chain.
-		// We need to make sure packet been allowed to stop it going through from-endpoint-mark again with node ip.
-
-		// If packet goes to a workload, action is clear endpoint mark and return.
-		toWorkloadReturnAction = GotoAction{Target: ChainDispatchClearEndPointMark}
-	} else {
-		// If packet goes to a workload, just return.
-		toWorkloadReturnAction = ReturnAction{}
 	}
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
@@ -524,31 +550,15 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		ifaceMatch := prefix + "+"
 		rules = append(rules,
 			Rule{
-				Match:  Match().OutInterface(ifaceMatch).IPVSConnection(),
-				Action: JumpAction{Target: ChainToWorkloadDispatch},
-			},
-			Rule{
 				// if packet goes to a workload endpoint. set return action properly.
 				Match:  Match().OutInterface(ifaceMatch),
-				Action: toWorkloadReturnAction,
-			},
-		)
-	}
-
-	// Clear endpoint mark and return if endpoint mark is set (forward traffic).
-	if r.KubeIPVSSupportEnabled {
-		rules = append(rules,
-			Rule{
-				Match: Match().MarkNotClear(r.IptablesMarkEndpoint),
-				Action: GotoAction{
-					Target: ChainDispatchClearEndPointMark,
-				},
+				Action: ReturnAction{},
 			},
 		)
 	}
 
 	// If we reach here, the packet is not going to a workload so it must be going to a
-	// host endpoint. It also has no endpoint mark so it must be going to local process.
+	// host endpoint. It also has no endpoint mark so it must be going from a process.
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// When IPIP is enabled, auto-allow IPIP traffic to other Calico nodes.  Without this,
