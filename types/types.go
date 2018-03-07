@@ -69,23 +69,24 @@ type NetConf struct {
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
 	} `json:"ipam,omitempty"`
-	MTU            int        `json:"mtu"`
-	Hostname       string     `json:"hostname"`
-	Nodename       string     `json:"nodename"`
-	DatastoreType  string     `json:"datastore_type"`
-	EtcdAuthority  string     `json:"etcd_authority"`
-	EtcdEndpoints  string     `json:"etcd_endpoints"`
-	LogLevel       string     `json:"log_level"`
-	Policy         Policy     `json:"policy"`
-	Kubernetes     Kubernetes `json:"kubernetes"`
-	Args           Args       `json:"args"`
-	EtcdScheme     string     `json:"etcd_scheme"`
-	EtcdKeyFile    string     `json:"etcd_key_file"`
-	EtcdCertFile   string     `json:"etcd_cert_file"`
-	EtcdCaCertFile string     `json:"etcd_ca_cert_file"`
+	MTU                  int        `json:"mtu"`
+	Hostname             string     `json:"hostname"`
+	Nodename             string     `json:"nodename"`
+	NodenameFileOptional bool       `json:"nodename_file_optional"`
+	DatastoreType        string     `json:"datastore_type"`
+	EtcdAuthority        string     `json:"etcd_authority"`
+	EtcdEndpoints        string     `json:"etcd_endpoints"`
+	LogLevel             string     `json:"log_level"`
+	Policy               Policy     `json:"policy"`
+	Kubernetes           Kubernetes `json:"kubernetes"`
+	Args                 Args       `json:"args"`
+	EtcdScheme           string     `json:"etcd_scheme"`
+	EtcdKeyFile          string     `json:"etcd_key_file"`
+	EtcdCertFile         string     `json:"etcd_cert_file"`
+	EtcdCaCertFile       string     `json:"etcd_ca_cert_file"`
 }
 
-// CNITestArgs is the CNI_ARGS used for test purpose.
+// CNITestArgs is the CNI_ARGS used for test purposes.
 type CNITestArgs struct {
 	types.CommonArgs
 	CNI_TEST_NAMESPACE types.UnmarshallableString

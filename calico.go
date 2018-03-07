@@ -38,8 +38,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var nodename string
-
 func init() {
 	// This ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -56,8 +54,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	utils.ConfigureLogging(conf.LogLevel)
 
-	// Allow the nodename to be overridden by the network config
-	nodename = utils.DetermineNodename(conf)
+	if !conf.NodenameFileOptional {
+		// Configured to wait for the nodename file - don't start until it exists.
+		if _, err := os.Stat("/var/lib/calico/nodename"); err != nil {
+			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
+			return fmt.Errorf(s, err)
+		}
+		logrus.Debug("/var/lib/calico/nodename exists")
+	}
+
+	// Determine which node name to use.
+	nodename := utils.DetermineNodename(conf)
 
 	// Extract WEP identifiers such as pod name, pod namespace (for k8s), containerID, IfName.
 	wepIDs, err := utils.GetIdentifiers(args, nodename)
@@ -374,7 +381,16 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	utils.ConfigureLogging(conf.LogLevel)
 
-	// Allow the nodename to be overridden by the network config
+	if !conf.NodenameFileOptional {
+		// Configured to wait for the nodename file - don't start until it exists.
+		if _, err := os.Stat("/var/lib/calico/nodename"); err != nil {
+			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
+			return fmt.Errorf(s, err)
+		}
+		logrus.Debug("/var/lib/calico/nodename exists")
+	}
+
+	// Determine which node name to use.
 	nodename := utils.DetermineNodename(conf)
 
 	epIDs, err := utils.GetIdentifiers(args, nodename)

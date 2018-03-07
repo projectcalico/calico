@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"regexp"
@@ -57,10 +58,32 @@ func DetermineNodename(conf types.NetConf) string {
 		nodename = conf.Hostname
 		logrus.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
 	}
+	if nff := nodenameFromFile(); nff != "" {
+		logrus.Debugf("Read node name from file: %s", nff)
+		nodename = nff
+	}
 	if conf.Nodename != "" {
+		logrus.Debugf("Read node name from CNI conf: %s", conf.Nodename)
 		nodename = conf.Nodename
 	}
+	logrus.Debugf("Using node name %s", nodename)
 	return nodename
+}
+
+// nodenameFromFile reads the /var/lib/calico/nodename file if it exists and
+// returns the nodename within.
+func nodenameFromFile() string {
+	data, err := ioutil.ReadFile("/var/lib/calico/nodename")
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return empty string.
+			logrus.Info("File /var/lib/calico/nodename does not exist")
+			return ""
+		}
+		logrus.WithError(err).Error("Failed to read /var/lib/calico/nodename")
+		return ""
+	}
+	return string(data)
 }
 
 // CreateOrUpdate creates the WorkloadEndpoint if ResourceVersion is not specified,
