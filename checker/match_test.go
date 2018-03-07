@@ -26,7 +26,7 @@ import (
 )
 
 // If no service account names are given, the clause matches any name.
-func TestMatchServiceAccountName(t *testing.T) {
+func TestMatchName(t *testing.T) {
 	testCases := []struct {
 		title  string
 		names  []string
@@ -41,14 +41,14 @@ func TestMatchServiceAccountName(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			RegisterTestingT(t)
-			result := matchServiceAccountName(tc.names, tc.name)
+			result := matchName(tc.names, tc.name)
 			Expect(result).To(Equal(tc.result))
 		})
 	}
 }
 
 // An empty label selector matches any set of labels.
-func TestMatchServiceAccoutLabels(t *testing.T) {
+func TestMatchLabels(t *testing.T) {
 	testCases := []struct {
 		title    string
 		selector string
@@ -63,7 +63,7 @@ func TestMatchServiceAccoutLabels(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			RegisterTestingT(t)
-			result := matchServiceAccountLabels(tc.selector, tc.labels)
+			result := matchLabels(tc.selector, tc.labels)
 			Expect(result).To(Equal(tc.result))
 		})
 	}
@@ -131,5 +131,76 @@ func TestMatchRule(t *testing.T) {
 
 	reqCache, err := NewRequestCache(policystore.NewPolicyStore(), req)
 	Expect(err).To(Succeed())
-	Expect(match(rule, reqCache)).To(BeTrue())
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+}
+
+// Test namespace selectors are handled correctly
+func TestMatchRuleNamespaceSelectors(t *testing.T) {
+	RegisterTestingT(t)
+
+	rule := &proto.Rule{
+		OriginalSrcNamespaceSelector: "place == 'src'",
+		OriginalDstNamespaceSelector: "place == 'dst'",
+	}
+	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
+		Source: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/src/sa/sam",
+		},
+		Destination: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/dst/sa/ian",
+		},
+		Request: &auth.AttributeContext_Request{
+			Http: &auth.AttributeContext_HTTPRequest{
+				Method: "GET",
+			},
+		},
+	}}
+
+	store := policystore.NewPolicyStore()
+	id := proto.NamespaceID{Name: "src"}
+	store.NamespaceByID[id] = &proto.NamespaceUpdate{Id: &id, Labels: map[string]string{"place": "src"}}
+	id = proto.NamespaceID{Name: "dst"}
+	store.NamespaceByID[id] = &proto.NamespaceUpdate{Id: &id, Labels: map[string]string{"place": "dst"}}
+	reqCache, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+}
+
+// Test that rules only match same namespace if pod selector or service account is set
+func TestMatchRulePolicyNamespace(t *testing.T) {
+	RegisterTestingT(t)
+
+	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
+		Source: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/testns/sa/sam",
+		},
+		Destination: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/testns/sa/ian",
+		},
+		Request: &auth.AttributeContext_Request{
+			Http: &auth.AttributeContext_HTTPRequest{
+				Method: "GET",
+			},
+		},
+	}}
+
+	store := policystore.NewPolicyStore()
+	reqCache, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
+
+	// With pod selector
+	rule := &proto.Rule{
+		OriginalSrcSelector: "has(app)",
+	}
+	Expect(match(rule, reqCache, "different")).To(BeFalse())
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+
+	// With no pod selector or SA selector
+	rule.OriginalSrcSelector = ""
+	Expect(match(rule, reqCache, "different")).To(BeTrue())
+
+	// With SA selector
+	rule.SrcServiceAccountMatch = &proto.ServiceAccountMatch{Names: []string{"sam"}}
+	Expect(match(rule, reqCache, "different")).To(BeFalse())
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
 }
