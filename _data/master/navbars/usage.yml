@@ -29,7 +29,7 @@ toc:
     path: /usage/routereflector/bird-rr-config
   - title: The calico/routereflector container
     path: /usage/routereflector/calico-routereflector
-- title: IPv6
+- title: Enabling IPv6 Support
   path: /usage/ipv6
 - title: External Connectivity
   path: /usage/external-connectivity
