@@ -40,7 +40,12 @@ class PolicySyncer(ResourceSyncer):
                                            "NetworkPolicy")
 
     def get_all_from_etcd(self):
-        return datamodel_v3.get_all(self.resource_kind)
+        results = []
+        for r in datamodel_v3.get_all(self.resource_kind):
+            name, _, _ = r
+            if name.startswith(SG_NAME_PREFIX):
+                results.append(r)
+        return results
 
     def create_in_etcd(self, name, spec):
         return datamodel_v3.put(self.resource_kind, name, spec, mod_revision=0)

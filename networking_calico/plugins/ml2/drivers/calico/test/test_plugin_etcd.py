@@ -1087,6 +1087,52 @@ class TestPluginEtcd(_TestEtcdBase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
+    def test_policy_coexistence(self):
+        """Coexistence with other policy data in the 'openstack' namespace.
+
+        Check that we _do_ clean up old policy data that has our prefix, but
+        _don't_ touch policies without our prefix.
+        """
+
+        # Start up with two existing policies in the 'openstack' namespace.
+        self.etcd_data = {
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/customer-policy-1': json.dumps({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'NetworkPolicy',
+                'metadata': {
+                    'name': 'customer-policy-2',
+                    'namespace': 'openstack',
+                },
+                'spec': {'selector': 'has(ossg.SGID-default)'}}
+            ),
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/sg-SOME_OLD_SG': json.dumps({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'NetworkPolicy',
+                'metadata': {
+                    'name': 'sg-SOME_OLD_SG',
+                    'namespace': 'openstack',
+                },
+                'spec': {'selector': 'has(ossg.SOME_OLD_SG)'}}
+            ),
+        }
+        with lib.FixedUUID('uuid-profile-prefixing'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
+        expected_writes = copy.deepcopy(self.initial_etcd3_writes)
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-profile-prefixing'
+        self.assertEtcdWrites(expected_writes)
+
+        # We should clean up the old 'sg-' policy, but not the customer one.
+        self.assertEtcdDeletes(set([
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/sg-SOME_OLD_SG'
+        ]))
+
     def test_old_openstack_data(self):
         """Startup with existing but old OpenStack profile data."""
 
