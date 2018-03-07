@@ -107,7 +107,7 @@ SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 # Check if we're running as a k8s pod.
 if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
 	# We're running as a k8d pod - expect some variables.
-	if [ -z ${KUBERNETES_SERVICE_HOST} ]; then 
+	if [ -z ${KUBERNETES_SERVICE_HOST} ]; then
 		echo "KUBERNETES_SERVICE_HOST not set"; exit 1;
 	fi
 	if [ -z ${KUBERNETES_SERVICE_PORT} ]; then
@@ -127,12 +127,12 @@ kind: Config
 clusters:
 - name: local
   cluster:
-    server: ${KUBERNETES_SERVICE_PROTOCOL:-https}://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT} 
+    server: ${KUBERNETES_SERVICE_PROTOCOL:-https}://[${KUBERNETES_SERVICE_HOST}]:${KUBERNETES_SERVICE_PORT}
     insecure-skip-tls-verify: true
 users:
 - name: calico
   user:
-    token: "${SERVICEACCOUNT_TOKEN}" 
+    token: "${SERVICEACCOUNT_TOKEN}"
 contexts:
 - name: calico-context
   context:
