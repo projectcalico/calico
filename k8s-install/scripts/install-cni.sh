@@ -8,6 +8,11 @@
 # Ensure all variables are defined, and that the script fails when an error is hit.
 set -u -e
 
+# Capture the usual signals and exit from the script
+trap 'echo "SIGINT received, simply exiting..."; exit 0' SIGINT
+trap 'echo "SIGTERM received, simply exiting..."; exit 0' SIGTERM
+trap 'echo "SIGHUP received, simply exiting..."; exit 0' SIGHUP
+
 # The directory on the host where CNI networks are installed. Defaults to
 # /etc/cni/net.d, but can be overridden by setting CNI_NET_DIR.  This is used
 # for populating absolute paths in the CNI network config to assets
