@@ -61,7 +61,7 @@ var _ = Describe("profileDecoder", func() {
 					conversion.ServiceAccountLabelPrefix + "k2": "v2",
 				})
 			uut.OnUpdate(update)
-			Expect(callbacks.updates).To(Equal([]*proto.ServiceAccountUpdate{
+			Expect(callbacks.saUpdates).To(Equal([]*proto.ServiceAccountUpdate{
 				{
 					Id: &proto.ServiceAccountID{
 						Namespace: "test_namespace",
@@ -72,24 +72,49 @@ var _ = Describe("profileDecoder", func() {
 			}))
 		})
 
-		It("should not pass non service account profile updates", func() {
+		It("should pass k8s namespace update", func() {
+			update := addUpdate(conversion.NamespaceProfileNamePrefix+"test_namespace",
+				map[string]string{
+					conversion.NamespaceLabelPrefix + "k1": "v1",
+					conversion.NamespaceLabelPrefix + "k2": "v2",
+				})
+			uut.OnUpdate(update)
+			Expect(callbacks.nsUpdates).To(Equal([]*proto.NamespaceUpdate{
+				{
+					Id: &proto.NamespaceID{
+						Name: "test_namespace",
+					},
+					Labels: map[string]string{"k1": "v1", "k2": "v2"},
+				},
+			}))
+		})
+
+		It("should not pass non-recognized updates", func() {
 			update := addUpdate("test_profile", map[string]string{"k1": "v1", "k2": "v2"})
 			uut.OnUpdate(update)
-			Expect(callbacks.updates).To(BeNil())
+			Expect(callbacks.saUpdates).To(BeNil())
 		})
 
 		It("should send k8s service account profile remove", func() {
 			update := removeUpdate(conversion.ServiceAccountProfileNamePrefix + "test_namespace.test_serviceaccount")
 			uut.OnUpdate(update)
-			Expect(callbacks.removes).To(Equal([]proto.ServiceAccountID{
+			Expect(callbacks.saRemoves).To(Equal([]proto.ServiceAccountID{
 				{Name: "test_serviceaccount", Namespace: "test_namespace"},
 			}))
 		})
 
-		It("should not send non-service account profile remove", func() {
+		It("should send k8s namespace remove", func() {
+			update := removeUpdate(conversion.NamespaceProfileNamePrefix + "test_namespace")
+			uut.OnUpdate(update)
+			Expect(callbacks.nsRemoves).To(Equal([]proto.NamespaceID{
+				{Name: "test_namespace"},
+			}))
+		})
+
+		It("should not send non-recognized remove", func() {
 			update := removeUpdate("test_profile")
 			uut.OnUpdate(update)
-			Expect(callbacks.removes).To(BeNil())
+			Expect(callbacks.saRemoves).To(BeNil())
 		})
 
 		It("should not send malformed k8s service account profile update", func() {
@@ -99,14 +124,16 @@ var _ = Describe("profileDecoder", func() {
 					conversion.ServiceAccountLabelPrefix + "k2": "v2",
 				})
 			uut.OnUpdate(update)
-			Expect(callbacks.updates).To(BeNil())
+			Expect(callbacks.saUpdates).To(BeNil())
 		})
 	})
 })
 
 type passthruCallbackRecorder struct {
-	updates []*proto.ServiceAccountUpdate
-	removes []proto.ServiceAccountID
+	saUpdates []*proto.ServiceAccountUpdate
+	saRemoves []proto.ServiceAccountID
+	nsUpdates []*proto.NamespaceUpdate
+	nsRemoves []proto.NamespaceID
 }
 
 func (p *passthruCallbackRecorder) OnHostIPUpdate(hostname string, ip *net.IP) {
@@ -126,11 +153,19 @@ func (p *passthruCallbackRecorder) OnIPPoolRemove(model.IPPoolKey) {
 }
 
 func (p *passthruCallbackRecorder) OnServiceAccountUpdate(update *proto.ServiceAccountUpdate) {
-	p.updates = append(p.updates, update)
+	p.saUpdates = append(p.saUpdates, update)
 }
 
 func (p *passthruCallbackRecorder) OnServiceAccountRemove(id proto.ServiceAccountID) {
-	p.removes = append(p.removes, id)
+	p.saRemoves = append(p.saRemoves, id)
+}
+
+func (p *passthruCallbackRecorder) OnNamespaceUpdate(update *proto.NamespaceUpdate) {
+	p.nsUpdates = append(p.nsUpdates, update)
+}
+
+func (p *passthruCallbackRecorder) OnNamespaceRemove(id proto.NamespaceID) {
+	p.nsRemoves = append(p.nsRemoves, id)
 }
 
 func labelsKV(name string, labels interface{}) model.KVPair {

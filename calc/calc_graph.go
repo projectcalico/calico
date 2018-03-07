@@ -74,6 +74,8 @@ type passthruCallbacks interface {
 	OnIPPoolRemove(model.IPPoolKey)
 	OnServiceAccountUpdate(*proto.ServiceAccountUpdate)
 	OnServiceAccountRemove(proto.ServiceAccountID)
+	OnNamespaceUpdate(*proto.NamespaceUpdate)
+	OnNamespaceRemove(proto.NamespaceID)
 }
 
 type PipelineCallbacks interface {
@@ -292,7 +294,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 
 	// The profile decoder identifies objects with special dataplane significance which have
 	// been encoded as profiles by libcalico-go. At present this includes Kubernetes Service
-	// Accounts, but will also include Kubernetes Namespaces in the future.
+	// Accounts and Kubernetes Namespaces.
 	//        ...
 	//     Dispatcher (all updates)
 	//         |

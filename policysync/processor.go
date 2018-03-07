@@ -29,6 +29,7 @@ type Processor struct {
 	policyByID         map[proto.PolicyID]*proto.Policy
 	profileByID        map[proto.ProfileID]*proto.Profile
 	serviceAccountByID map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
+	namespaceByID      map[proto.NamespaceID]*proto.NamespaceUpdate
 	receivedInSync     bool
 }
 
@@ -71,6 +72,7 @@ func NewProcessor(updates <-chan interface{}) *Processor {
 		policyByID:         make(map[proto.PolicyID]*proto.Policy),
 		profileByID:        make(map[proto.ProfileID]*proto.Profile),
 		serviceAccountByID: make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
+		namespaceByID:      make(map[proto.NamespaceID]*proto.NamespaceUpdate),
 	}
 }
 
@@ -125,6 +127,7 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	// Any updates to service accounts will be synced, but the endpoint needs to know about any existing service
 	// accounts that were updated before it joined.
 	p.sendServiceAccounts(ei)
+	p.sendNamespaces(ei)
 	logCxt.Debug("Done with join")
 }
 
@@ -177,6 +180,10 @@ func (p *Processor) handleDataplane(update interface{}) {
 		p.handleServiceAccountUpdate(update)
 	case *proto.ServiceAccountRemove:
 		p.handleServiceAccountRemove(update)
+	case *proto.NamespaceUpdate:
+		p.handleNamespaceUpdate(update)
+	case *proto.NamespaceRemove:
+		p.handleNamespaceRemove(update)
 	default:
 		log.WithFields(log.Fields{
 			"update": update,
@@ -344,6 +351,27 @@ func (p *Processor) handleServiceAccountRemove(update *proto.ServiceAccountRemov
 	delete(p.serviceAccountByID, id)
 }
 
+func (p *Processor) handleNamespaceUpdate(update *proto.NamespaceUpdate) {
+	id := *update.Id
+	log.WithField("NamespaceID", id).Debug("Processing NamespaceUpdate")
+
+	for _, ei := range p.updateableEndpoints() {
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{update}}
+	}
+	p.namespaceByID[id] = update
+	return
+}
+
+func (p *Processor) handleNamespaceRemove(update *proto.NamespaceRemove) {
+	id := *update.Id
+	log.WithField("NamespaceID", id).Debug("Processing NamespaceRemove")
+
+	for _, ei := range p.updateableEndpoints() {
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{update}}
+	}
+	delete(p.namespaceByID, id)
+}
+
 func (p *Processor) syncAddedPolicies(ei *EndpointInfo) {
 	ei.iteratePolicies(func(pId proto.PolicyID) bool {
 		if !ei.syncedPolicies[pId] {
@@ -436,6 +464,17 @@ func (p *Processor) sendServiceAccounts(ei *EndpointInfo) {
 			"endpoint":       ei.endpointUpd.GetEndpoint(),
 		}).Debug("sending ServiceAccountUpdate")
 		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{update}}
+	}
+}
+
+// sendNamespaces sends all known Namespaces to the endpoint
+func (p *Processor) sendNamespaces(ei *EndpointInfo) {
+	for _, update := range p.namespaceByID {
+		log.WithFields(log.Fields{
+			"namespace": update.Id,
+			"endpoint":  ei.endpointUpd.GetEndpoint(),
+		}).Debug("sending NamespaceUpdate")
+		ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{update}}
 	}
 }
 
