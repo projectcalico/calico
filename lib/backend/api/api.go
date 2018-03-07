@@ -100,12 +100,6 @@ type Client interface {
 	// input list options.
 	Watch(ctx context.Context, list model.ListInterface, revision string) (WatchInterface, error)
 
-	// Syncer creates an object that generates a series of KVPair updates,
-	// which paint an eventually-consistent picture of the full state of
-	// the datastore and then generates subsequent KVPair updates for
-	// changes to the datastore.
-	Syncer(callbacks SyncerCallbacks) Syncer
-
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.
 	EnsureInitialized() error

@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 
 	log "github.com/sirupsen/logrus"
 
@@ -290,7 +291,7 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 		Lock:       &sync.Mutex{},
 		updateChan: updateChan,
 	}
-	syncer := c.Syncer(callback)
+	syncer := felixsyncer.New(c, callback)
 	return c.(*KubeClient), &callback, syncer
 }
 
