@@ -152,3 +152,33 @@ func TestInitDestinationBadSpiffe(t *testing.T) {
 	_, err := NewRequestCache(policystore.NewPolicyStore(), req)
 	Expect(err).ToNot(Succeed())
 }
+
+func TestNamespaceLabels(t *testing.T) {
+	RegisterTestingT(t)
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sandwich/sa/bacon",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://foo.bar.com/ns/sub/sa/ham",
+		},
+	}}
+	store := policystore.NewPolicyStore()
+	id := proto.NamespaceID{Name: "sandwich"}
+	store.NamespaceByID[id] = &proto.NamespaceUpdate{
+		Id:     &id,
+		Labels: map[string]string{"k5": "v5", "k6": "v6"},
+	}
+	id = proto.NamespaceID{Name: "sub"}
+	store.NamespaceByID[id] = &proto.NamespaceUpdate{
+		Id:     &id,
+		Labels: map[string]string{"k7": "v7", "k8": "v8"},
+	}
+	uut, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
+	Expect(uut.SourceNamespace().Name).To(Equal("sandwich"))
+	Expect(uut.SourceNamespace().Labels).To(Equal(map[string]string{"k5": "v5", "k6": "v6"}))
+	Expect(uut.DestinationNamespace().Name).To(Equal("sub"))
+	Expect(uut.DestinationNamespace().Labels).To(Equal(map[string]string{"k7": "v7", "k8": "v8"}))
+}

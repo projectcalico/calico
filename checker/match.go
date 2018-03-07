@@ -55,6 +55,7 @@ func computeNamespaceMatch(
 		// In all cases, if a namespace label selector is present, it takes precedence.
 		nsMatch.Selector = nsSelector
 	} else {
+		// NetworkPolicies have `policyNamespace` set, GlobalNetworkPolicy and Profiles have it set to empty string.
 		// If this is a NetworkPolicy and there is pod label selector (or not selector) or service account match, then
 		// we must only accept connections from this namespace.  GlobalNetworkPolicy, Profile, or those without a pod
 		// selector/service account match can match any namespace.
