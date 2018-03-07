@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ var (
 	genError     = errors.New("Generic error")
 )
 
-var _ = Describe("Test the backend datstore multi-watch syncer", func() {
+var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 	r1 := watchersyncer.ResourceType{
 		ListInterface: model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy},
@@ -277,7 +277,7 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 				KVPair:     *eventL2Added2.New,
 				UpdateType: api.UpdateTypeKVNew,
 			},
-		})
+		}, true)
 
 		By("Checking that resource 3 can reconnect and then receive events")
 		rs.clientListResponse(r3, emptyList)
@@ -288,7 +288,7 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 				KVPair:     *eventL3Added1.New,
 				UpdateType: api.UpdateTypeKVNew,
 			},
-		})
+		}, true)
 	})
 
 	It("Should not resend add events during a resync and should delete stale entries", func() {
@@ -358,7 +358,7 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 				},
 				UpdateType: api.UpdateTypeKVDeleted,
 			},
-		})
+		}, true)
 
 		By("Sending a watch event updating one of the entries and deleting another")
 		rs.sendEvent(r1, eventL1Modified4)
@@ -399,7 +399,7 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 				KVPair:     *eventL1Modified4_2.New,
 				UpdateType: api.UpdateTypeKVUpdated,
 			},
-		})
+		}, true)
 	})
 
 	It("Should accumulate updates into a single update when the handler thread is blocked", func() {
@@ -515,6 +515,59 @@ var _ = Describe("Test the backend datstore multi-watch syncer", func() {
 			},
 		})
 		rs.ExpectParseError("abcdef", "aabbccdd")
+	})
+
+	It("should emit all events when stop is called", func() {
+		eventL1Added1 := addEvent(l1Key1)
+		eventL2Added1 := addEvent(l2Key1)
+		eventL2Added2 := addEvent(l2Key2)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, emptyList)
+		rs.clientListResponse(r2, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+		rs.clientWatchResponse(r2, nil)
+
+		rs.sendEvent(r1, eventL1Added1)
+		rs.sendEvent(r2, eventL2Added1)
+		rs.sendEvent(r2, eventL2Added2)
+
+		rs.ExpectUpdates([]api.Update{
+			{
+				KVPair:     *eventL1Added1.New,
+				UpdateType: api.UpdateTypeKVNew,
+			},
+			{
+				KVPair:     *eventL2Added1.New,
+				UpdateType: api.UpdateTypeKVNew,
+			},
+			{
+				KVPair:     *eventL2Added2.New,
+				UpdateType: api.UpdateTypeKVNew,
+			},
+		}, false)
+
+		// Now stop it and check that deleted events are sent
+		rs.watcherSyncer.Stop()
+		rs.ExpectUpdates([]api.Update{
+			{
+				KVPair:     model.KVPair{Key: eventL1Added1.New.Key},
+				UpdateType: api.UpdateTypeKVDeleted,
+			},
+			{
+				KVPair:     model.KVPair{Key: eventL2Added1.New.Key},
+				UpdateType: api.UpdateTypeKVDeleted,
+			},
+			{
+				KVPair:     model.KVPair{Key: eventL2Added2.New.Key},
+				UpdateType: api.UpdateTypeKVDeleted,
+			},
+		}, false)
+
 	})
 
 	It("Should invoke the supplied converter to alter the update", func() {

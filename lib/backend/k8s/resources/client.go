@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ type K8sResourceClient interface {
 	// Non-zero fields in the struct are used as filters.
 	List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
 
-	// Watch returns a WatchInterface used for watching a resources matching the
+	// Watch returns a WatchInterface used for watching resources matching the
 	// input list options.
 	Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error)
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	// For statuses, this requires the consumer to explicitly expect the status updates
 	// to unblock the processing.
 	st.statusBlocker.Wait()
-	log.Info("OnStatusUpdated now unblocked")
+	log.Infof("OnStatusUpdated now unblocked waiting for: %s", status)
 
 }
 
@@ -159,7 +159,7 @@ func (st *SyncerTester) ExpectStatusUpdate(status api.SyncStatus) {
 		defer st.lock.Unlock()
 		return st.status
 	}
-	Eventually(cs, 6*time.Second, 500*time.Millisecond).Should(Equal(status))
+	Eventually(cs, 6*time.Second, time.Millisecond).Should(Equal(status))
 	Consistently(cs).Should(Equal(status))
 
 	log.Infof("Status is at expected status: %s", status)
@@ -190,13 +190,13 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 		defer st.lock.Unlock()
 		return st.statusChanged
 	}
-	Eventually(sc, 6*time.Second, 500*time.Millisecond).Should(BeFalse())
+	Eventually(sc, 6*time.Second, time.Millisecond).Should(BeFalse())
 	Consistently(sc).Should(BeFalse(), "Status changed unexpectedly")
 }
 
 // ExpectCacheSize verifies that the cache size is as expected.
 func (st *SyncerTester) ExpectCacheSize(size int) {
-	EventuallyWithOffset(1, st.CacheSnapshot, 6*time.Second, 500*time.Millisecond).Should(HaveLen(size))
+	EventuallyWithOffset(1, st.CacheSnapshot, 6*time.Second, 1*time.Millisecond).Should(HaveLen(size))
 	ConsistentlyWithOffset(1, st.CacheSnapshot).Should(HaveLen(size), "Cache size incorrect")
 }
 
@@ -211,13 +211,13 @@ func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 		value := func() interface{} {
 			return st.GetCacheValue(key)
 		}
-		Eventually(value, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp.Value))
+		Eventually(value, 6*time.Second, time.Millisecond).Should(Equal(kvp.Value))
 		Consistently(value).Should(Equal(kvp.Value), "KVPair data was incorrect")
 	} else {
 		kv := func() interface{} {
 			return st.GetCacheKVPair(key)
 		}
-		Eventually(kv, 6*time.Second, 500*time.Millisecond).Should(Equal(kvp))
+		Eventually(kv, 6*time.Second, time.Millisecond).Should(Equal(kvp))
 		Consistently(kv).Should(Equal(kvp), "KVPair data (or revision) was incorrect")
 	}
 }
@@ -231,7 +231,7 @@ func (st *SyncerTester) ExpectValueMatches(k model.Key, match gomegatypes.Gomega
 		return st.GetCacheValue(key)
 	}
 
-	Eventually(value, 6*time.Second, 500*time.Millisecond).Should(match)
+	Eventually(value, 6*time.Second, time.Millisecond).Should(match)
 	Consistently(value).Should(match)
 }
 
@@ -284,10 +284,7 @@ func (st *SyncerTester) GetCacheEntries() []model.KVPair {
 // OnUpdate events were received).
 // This removes all updates/onUpdate events from this receiver, so that the
 // next call to this just requires the next set of updates.
-//
-// Note that for this function to be useful, your test code needs to have
-// fine grained control over the order in which events occur.
-func (st *SyncerTester) ExpectUpdates(expected []api.Update) {
+func (st *SyncerTester) ExpectUpdates(expected []api.Update, checkOrder bool) {
 	log.Infof("Expecting updates of %v", expected)
 
 	// Poll until we have the correct number of updates to check.
@@ -304,7 +301,12 @@ func (st *SyncerTester) ExpectUpdates(expected []api.Update) {
 	updates := st.updates
 	st.updates = nil
 	st.onUpdates = nil
-	Expect(updates).To(Equal(expected))
+
+	if checkOrder {
+		Expect(updates).To(Equal(expected))
+	} else {
+		Expect(updates).To(ConsistOf(expected))
+	}
 }
 
 // Call to test which onUpdate events were received.

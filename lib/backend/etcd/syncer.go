@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,6 +158,10 @@ func (syn *etcdSyncer) Start() {
 	}
 	go syn.readSnapshotsFromEtcd(snapshotUpdateC, snapshotRequestC)
 	go syn.mergeUpdates(snapshotUpdateC, watcherUpdateC, snapshotRequestC)
+}
+
+func (sync *etcdSyncer) Stop() {
+	panic("Not implemented")
 }
 
 // readSnapshotsFromEtcd is a goroutine that, when requested, reads a new
