@@ -61,12 +61,12 @@ func TestInitPeerRequestLabels(t *testing.T) {
 	}}
 	uut, err := NewRequestCache(policystore.NewPolicyStore(), req)
 	Expect(err).To(Succeed())
-	Expect(uut.Source().Name).To(Equal("bacon"))
-	Expect(uut.Source().Namespace).To(Equal("sandwich"))
-	Expect(uut.Source().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2"}))
-	Expect(uut.Destination().Name).To(Equal("ham"))
-	Expect(uut.Destination().Namespace).To(Equal("sub"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k3": "v3", "k4": "v4"}))
+	Expect(uut.SourcePeer().Name).To(Equal("bacon"))
+	Expect(uut.SourcePeer().Namespace).To(Equal("sandwich"))
+	Expect(uut.SourcePeer().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2"}))
+	Expect(uut.DestinationPeer().Name).To(Equal("ham"))
+	Expect(uut.DestinationPeer().Namespace).To(Equal("sub"))
+	Expect(uut.DestinationPeer().Labels).To(Equal(map[string]string{"k3": "v3", "k4": "v4"}))
 }
 
 func TestInitPeerStoreLabels(t *testing.T) {
@@ -95,12 +95,12 @@ func TestInitPeerStoreLabels(t *testing.T) {
 	}
 	uut, err := NewRequestCache(store, req)
 	Expect(err).To(Succeed())
-	Expect(uut.Source().Name).To(Equal("bacon"))
-	Expect(uut.Source().Namespace).To(Equal("sandwich"))
-	Expect(uut.Source().Labels).To(Equal(map[string]string{"k5": "v5", "k6": "v6"}))
-	Expect(uut.Destination().Name).To(Equal("ham"))
-	Expect(uut.Destination().Namespace).To(Equal("sub"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k7": "v7", "k8": "v8"}))
+	Expect(uut.SourcePeer().Name).To(Equal("bacon"))
+	Expect(uut.SourcePeer().Namespace).To(Equal("sandwich"))
+	Expect(uut.SourcePeer().Labels).To(Equal(map[string]string{"k5": "v5", "k6": "v6"}))
+	Expect(uut.DestinationPeer().Name).To(Equal("ham"))
+	Expect(uut.DestinationPeer().Namespace).To(Equal("sub"))
+	Expect(uut.DestinationPeer().Labels).To(Equal(map[string]string{"k7": "v7", "k8": "v8"}))
 }
 
 func TestInitPeerBothLabels(t *testing.T) {
@@ -129,12 +129,12 @@ func TestInitPeerBothLabels(t *testing.T) {
 	}
 	uut, err := NewRequestCache(store, req)
 	Expect(err).To(Succeed())
-	Expect(uut.Source().Name).To(Equal("bacon"))
-	Expect(uut.Source().Namespace).To(Equal("sandwich"))
-	Expect(uut.Source().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2", "k5": "v5", "k6": "v6"}))
-	Expect(uut.Destination().Name).To(Equal("ham"))
-	Expect(uut.Destination().Namespace).To(Equal("sub"))
-	Expect(uut.Destination().Labels).To(Equal(map[string]string{"k3": "v3", "k4": "v4", "k7": "v7", "k8": "v8"}))
+	Expect(uut.SourcePeer().Name).To(Equal("bacon"))
+	Expect(uut.SourcePeer().Namespace).To(Equal("sandwich"))
+	Expect(uut.SourcePeer().Labels).To(Equal(map[string]string{"k1": "v1", "k2": "v2", "k5": "v5", "k6": "v6"}))
+	Expect(uut.DestinationPeer().Name).To(Equal("ham"))
+	Expect(uut.DestinationPeer().Namespace).To(Equal("sub"))
+	Expect(uut.DestinationPeer().Labels).To(Equal(map[string]string{"k3": "v3", "k4": "v4", "k7": "v7", "k8": "v8"}))
 }
 
 func TestInitDestinationBadSpiffe(t *testing.T) {

@@ -22,20 +22,53 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type namespaceMatch struct {
+	Names    []string
+	Selector string
+}
+
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
-func match(rule *proto.Rule, req *requestCache) bool {
+func match(rule *proto.Rule, req *requestCache, policyNamespace string) bool {
 	log.Debugf("Checking rule %v on request %v", rule, req)
 	attr := req.Request.GetAttributes()
-	return matchSource(rule, req) && matchDestination(rule, req) && matchRequest(rule, attr.GetRequest())
+	return matchSource(rule, req, policyNamespace) &&
+		matchDestination(rule, req, policyNamespace) &&
+		matchRequest(rule, attr.GetRequest())
 }
 
-func matchSource(r *proto.Rule, req *requestCache) bool {
-	// TODO IPSets
-	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.Source())
+func matchSource(r *proto.Rule, req *requestCache, policyNamespace string) bool {
+	nsMatch := computeNamespaceMatch(
+		policyNamespace,
+		r.GetOriginalSrcNamespaceSelector(),
+		r.GetOriginalSrcSelector(),
+		r.GetOriginalNotSrcSelector())
+	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.SourcePeer()) &&
+		matchNamespace(nsMatch, req.SourceNamespace())
 }
 
-func matchDestination(r *proto.Rule, req *requestCache) bool {
-	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.Destination())
+func computeNamespaceMatch(policyNamespace, nsSelector, podSelector, notPodSelector string) *namespaceMatch {
+	nsMatch := &namespaceMatch{}
+	if nsSelector != "" {
+		// In all cases, if a namespace label selector is present, it takes precedence.
+		nsMatch.Selector = nsSelector
+	} else {
+		// If this is a NetworkPolicy and there is pod label selector (or not selector), then we must only accept
+		// connections from this namespace.  GlobalNetworkPolicy, Profile, or those without a pod selector
+		if policyNamespace != "" && (podSelector != "" || notPodSelector != "") {
+			nsMatch.Names = []string{policyNamespace}
+		}
+	}
+	return nsMatch
+}
+
+func matchDestination(r *proto.Rule, req *requestCache, policyNamespace string) bool {
+	nsMatch := computeNamespaceMatch(
+		policyNamespace,
+		r.GetOriginalDstNamespaceSelector(),
+		r.GetOriginalDstSelector(),
+		r.GetOriginalNotDstSelector())
+	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.DestinationPeer()) &&
+		matchNamespace(nsMatch, req.DestinationNamespace())
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
@@ -43,28 +76,28 @@ func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
 	return matchHTTP(rule.GetHttpMatch(), req.GetHttp())
 }
 
-func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, peer peer) bool {
+func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, p peer) bool {
 	log.WithFields(log.Fields{
-		"name":      peer.Name,
-		"namespace": peer.Namespace,
-		"labels":    peer.Labels,
+		"name":      p.Name,
+		"namespace": p.Namespace,
+		"labels":    p.Labels,
 		"rule":      saMatch},
 	).Debug("Matching service account.")
 	if saMatch == nil {
 		log.Debug("nil ServiceAccountMatch.  Return true.")
 		return true
 	}
-	return matchServiceAccountName(saMatch.GetNames(), peer.Name) &&
-		matchServiceAccountLabels(saMatch.GetSelector(), peer.Labels)
+	return matchName(saMatch.GetNames(), p.Name) &&
+		matchLabels(saMatch.GetSelector(), p.Labels)
 }
 
-func matchServiceAccountName(names []string, name string) bool {
+func matchName(names []string, name string) bool {
 	log.WithFields(log.Fields{
 		"names": names,
 		"name":  name,
-	}).Debug("Matching service account name")
+	}).Debug("Matching name")
 	if len(names) == 0 {
-		log.Debug("No service account names on rule.")
+		log.Debug("No names on rule.")
 		return true
 	}
 	for _, n := range names {
@@ -75,19 +108,27 @@ func matchServiceAccountName(names []string, name string) bool {
 	return false
 }
 
-func matchServiceAccountLabels(selectorStr string, labels map[string]string) bool {
+func matchLabels(selectorStr string, labels map[string]string) bool {
 	log.WithFields(log.Fields{
 		"selector": selectorStr,
 		"labels":   labels,
-	}).Debug("Matching service account labels.")
+	}).Debug("Matching labels.")
 	sel, err := selector.Parse(selectorStr)
 	if err != nil {
-		log.Warnf("Could not parse policy selector %v, %v", selectorStr, err)
+		log.Warnf("Could not parse label selector %v, %v", selectorStr, err)
 		return false
 	}
 	log.Debugf("Parsed selector.", sel)
 	return sel.Evaluate(labels)
+}
 
+func matchNamespace(nsMatch *namespaceMatch, ns namespace) bool {
+	log.WithFields(log.Fields{
+		"namespace": ns.Name,
+		"labels":    ns.Labels,
+		"rule":      nsMatch},
+	).Debug("Matching namespace.")
+	return matchName(nsMatch.Names, ns.Name) && matchLabels(nsMatch.Selector, ns.Labels)
 }
 
 func matchHTTP(rule *proto.HTTPMatch, req *authz.AttributeContext_HTTPRequest) bool {

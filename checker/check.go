@@ -122,16 +122,16 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 // checkPolicy checks if the policy matches the request data, and returns the action.
 func checkPolicy(policy *proto.Policy, req *requestCache) (action Action) {
 	// Note that we support only inbound policy.
-	return checkRules(policy.InboundRules, req)
+	return checkRules(policy.InboundRules, req, policy.Namespace)
 }
 
 func checkProfile(p *proto.Profile, req *requestCache) (action Action) {
-	return checkRules(p.InboundRules, req)
+	return checkRules(p.InboundRules, req, "")
 }
 
-func checkRules(rules []*proto.Rule, req *requestCache) (action Action) {
+func checkRules(rules []*proto.Rule, req *requestCache, policyNamespace string) (action Action) {
 	for _, r := range rules {
-		if match(r, req) {
+		if match(r, req, policyNamespace) {
 			log.Debugf("Rule matched.")
 			a := actionFromString(r.Action)
 			if a != LOG {

@@ -25,10 +25,12 @@ import (
 
 // requestCache contains the CheckRequest and cached copies of computed information about the request
 type requestCache struct {
-	Request     *authz.CheckRequest
-	store       *policystore.PolicyStore
-	source      *peer
-	destination *peer
+	Request              *authz.CheckRequest
+	store                *policystore.PolicyStore
+	source               *peer
+	destination          *peer
+	sourceNamespace      *namespace
+	destinationNamespace *namespace
 }
 
 // peer is derived from the request Service Account and any label information we have about the account
@@ -37,6 +39,11 @@ type peer struct {
 	Name      string
 	Namespace string
 	Labels    map[string]string
+}
+
+type namespace struct {
+	Name   string
+	Labels map[string]string
 }
 
 // SPIFFE_ID_PATTERN is a regular expression to match SPIFFE ID URIs, e.g. spiffe://cluster.local/ns/default/sa/foo
@@ -53,14 +60,32 @@ func NewRequestCache(store *policystore.PolicyStore, req *authz.CheckRequest) (*
 	return r, nil
 }
 
-// Source returns the cached source peer.
-func (r *requestCache) Source() peer {
+// SourcePeer returns the cached source peer.
+func (r *requestCache) SourcePeer() peer {
 	return *r.source
 }
 
-// Destination returns the cached destination peer.
-func (r *requestCache) Destination() peer {
+// DestinationPeer returns the cached destination peer.
+func (r *requestCache) DestinationPeer() peer {
 	return *r.destination
+}
+
+func (r *requestCache) SourceNamespace() namespace {
+	if r.sourceNamespace != nil {
+		return *r.sourceNamespace
+	}
+	src := r.initNamespace(r.source.Namespace)
+	r.sourceNamespace = src
+	return *src
+}
+
+func (r *requestCache) DestinationNamespace() namespace {
+	if r.destinationNamespace != nil {
+		return *r.destinationNamespace
+	}
+	dst := r.initNamespace(r.destination.Namespace)
+	r.destinationNamespace = dst
+	return *dst
 }
 
 // initPeers initializes the source and destination peers.
@@ -98,6 +123,20 @@ func (r *requestCache) initPeer(aPeer *authz.AttributeContext_Peer) (*peer, erro
 		}
 	}
 	return &peer, nil
+}
+
+func (r *requestCache) initNamespace(name string) *namespace {
+	ns := &namespace{Name: name}
+	// If the namespace is in the store, copy labels over.
+	id := proto.NamespaceID{Name: name}
+	msg, ok := r.store.NamespaceByID[id]
+	if ok {
+		ns.Labels = make(map[string]string)
+		for k, v := range msg.GetLabels() {
+			ns.Labels[k] = v
+		}
+	}
+	return ns
 }
 
 // parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
