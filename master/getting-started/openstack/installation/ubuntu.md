@@ -43,13 +43,13 @@ found at <http://docs.openstack.org>.
 
 {% include ppa_repo_name %}
 
-Configure APT to use the Calico PPA:
+Configure APT to use the {{site.prodname}} PPA:
 
 ```
     add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
 ```
 
-With Kilo, Calico also needs patched versions of Nova and Neutron that are
+With Kilo, {{site.prodname}} also needs patched versions of Nova and Neutron that are
 provided by our 'kilo' PPA.  So if you are using Kilo:
 
 ```
@@ -193,7 +193,7 @@ perform the following steps:
     to `dnsmasq`. (OpenStack updates are not needed for Liberty.)
 
 1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by Calico's OpenStack driver but not yet
+    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver but not yet
     packaged for Ubuntu, so you should install it with `pip`.  First check in
     case it has already been pulled in by your OpenStack installation.
 
