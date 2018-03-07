@@ -56,7 +56,6 @@ type NodeController struct {
 }
 
 type nodeData struct {
-	string
 }
 
 // NewNodeController Constructor for NodeController
@@ -117,7 +116,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 			// Use an empty value here because the only thing we care about is the kuberneteNodeName,
 			// so there's no other relevant information we want to store in the cache besides the name (which
 			// is unavailable at this time because the calicoNode is created after the k8sNode).
-			k8sResourceCache.Set(nodeName, nodeData{nodeName})
+			k8sResourceCache.Set(nodeName, nodeData{})
 		},
 	}, corecache.Indexers{})
 

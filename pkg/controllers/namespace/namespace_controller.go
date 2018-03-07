@@ -243,7 +243,7 @@ func (c *namespaceController) syncToDatastore(key string) error {
 
 		// The profile already exists, update it and write it back to the datastore.
 		gp.Spec = p.Spec
-		clog.Infof("Update Profile in Calico datastore with resource version %s", p.ResourceVersion)
+		clog.Infof("Update Profile in Calico datastore with resource version %s", gp.ResourceVersion)
 		_, err = c.calicoClient.Profiles().Update(c.ctx, gp, options.SetOptions{})
 		if err != nil {
 			clog.WithError(err).Warning("Failed to update profile")
