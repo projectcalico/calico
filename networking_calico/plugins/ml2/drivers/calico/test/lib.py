@@ -28,7 +28,7 @@ import sys
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.
 #
-# logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.DEBUG)
 
 _log = logging.getLogger(__name__)
 
@@ -169,7 +169,10 @@ class GrandDukeOfSalzburg(object):
 m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
     DriverBase
 
-# Import all mechanism driver modules so we can hook their logging.
+# Import all modules used by the mechanism driver so we can hook their logging.
+from networking_calico import datamodel_v3
+from networking_calico import etcdutils
+from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -394,7 +397,11 @@ class Lib(object):
         eventlet.spawn_after = simulated_spawn_after
 
     def setUp_logging(self):
-        """Setup to intercept and display logging by the code under test."""
+        """Setup to intercept and display logging by the code under test.
+
+        To see this logging, you also need to uncomment the logging.basicConfig
+        call near the top of this file.
+        """
         import logging
         for module in [
                 election,
@@ -404,11 +411,12 @@ class Lib(object):
                 status,
                 subnets,
                 syncer,
+                datamodel_v3,
+                etcdutils,
+                etcdv3,
         ]:
-            module.LOG = logging.getLogger(
-                'networking_calico.plugins.ml2.drivers.calico.' +
-                module.__name__
-            )
+            module.LOG = logging.getLogger("\t%-15s\t" %
+                                           module.__name__.split('.')[-1])
 
     # Tear down after each test case.
     def tearDown(self):

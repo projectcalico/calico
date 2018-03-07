@@ -827,6 +827,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     # Shorter sleep interval before we check if we've become
                     # the master.  Avoids waiting a whole RESYNC_INTERVAL_SECS
                     # if we just miss the master update.
+                    LOG.debug("I am not master")
                     eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
         except Exception:
             # TODO(nj) Should we tear down the process.
