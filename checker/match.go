@@ -41,20 +41,28 @@ func matchSource(r *proto.Rule, req *requestCache, policyNamespace string) bool 
 		policyNamespace,
 		r.GetOriginalSrcNamespaceSelector(),
 		r.GetOriginalSrcSelector(),
-		r.GetOriginalNotSrcSelector())
+		r.GetOriginalNotSrcSelector(),
+		r.GetSrcServiceAccountMatch())
 	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.SourcePeer()) &&
 		matchNamespace(nsMatch, req.SourceNamespace())
 }
 
-func computeNamespaceMatch(policyNamespace, nsSelector, podSelector, notPodSelector string) *namespaceMatch {
+func computeNamespaceMatch(
+	policyNamespace, nsSelector, podSelector, notPodSelector string, saMatch *proto.ServiceAccountMatch,
+) *namespaceMatch {
 	nsMatch := &namespaceMatch{}
 	if nsSelector != "" {
 		// In all cases, if a namespace label selector is present, it takes precedence.
 		nsMatch.Selector = nsSelector
 	} else {
-		// If this is a NetworkPolicy and there is pod label selector (or not selector), then we must only accept
-		// connections from this namespace.  GlobalNetworkPolicy, Profile, or those without a pod selector
-		if policyNamespace != "" && (podSelector != "" || notPodSelector != "") {
+		// If this is a NetworkPolicy and there is pod label selector (or not selector) or service account match, then
+		// we must only accept connections from this namespace.  GlobalNetworkPolicy, Profile, or those without a pod
+		// selector/service account match can match any namespace.
+		if policyNamespace != "" &&
+			(podSelector != "" ||
+				notPodSelector != "" ||
+				len(saMatch.GetNames()) != 0 ||
+				saMatch.GetSelector() != "") {
 			nsMatch.Names = []string{policyNamespace}
 		}
 	}
@@ -66,7 +74,8 @@ func matchDestination(r *proto.Rule, req *requestCache, policyNamespace string) 
 		policyNamespace,
 		r.GetOriginalDstNamespaceSelector(),
 		r.GetOriginalDstSelector(),
-		r.GetOriginalNotDstSelector())
+		r.GetOriginalNotDstSelector(),
+		r.GetDstServiceAccountMatch())
 	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.DestinationPeer()) &&
 		matchNamespace(nsMatch, req.DestinationNamespace())
 }

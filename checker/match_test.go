@@ -166,13 +166,10 @@ func TestMatchRuleNamespaceSelectors(t *testing.T) {
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 }
 
-// Test that rules only match same namespace if pod selector is set
+// Test that rules only match same namespace if pod selector or service account is set
 func TestMatchRulePolicyNamespace(t *testing.T) {
 	RegisterTestingT(t)
 
-	rule := &proto.Rule{
-		OriginalSrcSelector: "has(app)",
-	}
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
 		Source: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/testns/sa/sam",
@@ -190,8 +187,20 @@ func TestMatchRulePolicyNamespace(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	reqCache, err := NewRequestCache(store, req)
 	Expect(err).To(Succeed())
+
+	// With pod selector
+	rule := &proto.Rule{
+		OriginalSrcSelector: "has(app)",
+	}
 	Expect(match(rule, reqCache, "different")).To(BeFalse())
 	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+
+	// With no pod selector or SA selector
 	rule.OriginalSrcSelector = ""
 	Expect(match(rule, reqCache, "different")).To(BeTrue())
+
+	// With SA selector
+	rule.SrcServiceAccountMatch = &proto.ServiceAccountMatch{Names: []string{"sam"}}
+	Expect(match(rule, reqCache, "different")).To(BeFalse())
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
 }
