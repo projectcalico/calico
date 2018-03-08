@@ -100,11 +100,10 @@ var _ = Describe("Processor", func() {
 
 				Context("on new join", func() {
 					var output chan proto.ToDataplane
-					var joinMeta policysync.JoinMetadata
 					var accounts [3]proto.ServiceAccountID
 
 					BeforeEach(func() {
-						output, joinMeta = join("test")
+						output, _ = join("test")
 						for i := 0; i < 3; i++ {
 							msg := <-output
 							accounts[i] = *msg.GetServiceAccountUpdate().Id
@@ -140,13 +139,12 @@ var _ = Describe("Processor", func() {
 
 			Context("with two joined endpoints", func() {
 				var output [2]chan proto.ToDataplane
-				var joinMeta [2]policysync.JoinMetadata
 
 				BeforeEach(func() {
 					for i := 0; i < 2; i++ {
 						w := fmt.Sprintf("test%d", i)
 						d := testId(w)
-						output[i], joinMeta[i] = join(w)
+						output[i], _ = join(w)
 
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						updates <- &proto.WorkloadEndpointUpdate{
@@ -217,11 +215,10 @@ var _ = Describe("Processor", func() {
 
 				Context("on new join", func() {
 					var output chan proto.ToDataplane
-					var joinMeta policysync.JoinMetadata
 					var accounts [3]proto.NamespaceID
 
 					BeforeEach(func() {
-						output, joinMeta = join("test")
+						output, _ = join("test")
 						for i := 0; i < 3; i++ {
 							msg := <-output
 							accounts[i] = *msg.GetNamespaceUpdate().Id
@@ -250,13 +247,12 @@ var _ = Describe("Processor", func() {
 
 			Context("with two joined endpoints", func() {
 				var output [2]chan proto.ToDataplane
-				var joinMeta [2]policysync.JoinMetadata
 
 				BeforeEach(func() {
 					for i := 0; i < 2; i++ {
 						w := fmt.Sprintf("test%d", i)
 						d := testId(w)
-						output[i], joinMeta[i] = join(w)
+						output[i], _ = join(w)
 
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						updates <- &proto.WorkloadEndpointUpdate{
