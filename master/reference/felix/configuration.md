@@ -4,7 +4,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.0/reference/felix/configuratio
 ---
 
 Configuration for Felix is read from one of four possible locations, in
-order, as follows. 
+order, as follows.
 
 1.  Environment variables.
 2.  The Felix configuration file.
@@ -12,16 +12,16 @@ order, as follows.
 4.  The global `FelixConfiguration` resource (`default`).
 
 The value of any configuration parameter is the value read from the
-*first* location containing a value. For example, if an environment variable 
+*first* location containing a value. For example, if an environment variable
 contains a value, it takes top precedence.
 
-If not set in any of these locations, most configuration parameters have 
+If not set in any of these locations, most configuration parameters have
 defaults, and it should be rare to have to explicitly set them.
 
 The full list of parameters which can be set is as follows.
 
-> **Note**: The following tables detail the configuration file and 
-> environment variable parameters. For `FelixConfiguration` resource settings, 
+> **Note**: The following tables detail the configuration file and
+> environment variable parameters. For `FelixConfiguration` resource settings,
 > refer to [Felix Configuration Resource](../calicoctl/resources/felixconfig).
 {: .alert .alert-info}
 
@@ -61,7 +61,7 @@ The full list of parameters which can be set is as follows.
 
 #### Kubernetes datastore configuration
 
-The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables. 
+The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables.
 
 #### iptables dataplane configuration
 
@@ -78,13 +78,26 @@ The Kubernetes datastore driver reads its configuration from Kubernetes-provided
 | `IptablesLockProbeIntervalMillis`    | `FELIX_IPTABLESLOCKPROBEINTERVALMILLIS`    | Time, in milliseconds, that Felix will wait between attempts to acquire the iptables lock if it is not available.  Lower values make Felix more responsive when the lock is contended, but use more CPU. [Default: `50`]  | int |
 | `IptablesLockTimeoutSecs`            | `FELIX_IPTABLESLOCKTIMEOUTSECS`            | Time, in seconds, that Felix will wait for the iptables lock, or 0, to disable. To use this feature, Felix must share the iptables lock file with all other processes that also take the lock.  When running Felix inside a container, this requires the /run directory of the host to be mounted into the `{{site.nodecontainer}}` or `calico/felix` container. [Default: `0` disabled] | int |
 | `IptablesMangleAllowAction`          | `FELIX_IPTABLESALLOWACTION`                | This parameter controls what happens to traffic that is allowed by a Felix policy chain in the iptables mangle table (i.e., a pre-DNAT policy chain). The default will immediately `Accept` the traffic. Use `Return` to send the traffic back up to the system chains for further processing. [Default: `Accept`]  | `Accept`, `Return` |
-| `IptablesMarkMask`                   | `FELIX_IPTABLESMARKMASK`                                     | Mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: `0xff000000`] | netmask |
+| `IptablesMarkMask`                   | `FELIX_IPTABLESMARKMASK`                   | Mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system.  When using {{site.prodname}} with Kubernetes' `kube-proxy` in IPVS mode, [we recommend allowing at least 16 bits](#ipvs-bits). [Default: `0xffff0000`] | netmask |
 | `IptablesPostWriteCheckIntervalSecs` | `FELIX_IPTABLESPOSTWRITECHECKINTERVALSECS` | Period, in seconds, after Felix has done a write to the dataplane that it schedules an extra read back in order to check the write was not clobbered by another process.  This should only occur if another application on the system doesn't respect the iptables lock. [Default: `1`] | int |
 | `IptablesRefreshInterval`            | `FELIX_IPTABLESREFRESHINTERVAL`            | Period, in seconds, at which Felix re-checks all iptables state to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable iptables refresh. [Default: `90`] | int |
 | `LogPrefix`                          | `FELIX_LOGPREFIX`                          | The log prefix that Felix uses when rendering LOG rules. [Default: `calico-packet`] | string |
 | `MaxIpsetSize`                       | `FELIX_MAXIPSETSIZE`                       | Maximum size for the ipsets used by Felix to implement tags. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a tag. [Default: `1048576`] | int |
 | `NetlinkTimeoutSecs`                 | `FELIX_NETLINKTIMEOUTSECS`                 | Time, in seconds, that Felix will wait for netlink (i.e. routing table list/update) operations to complete before giving up and retrying. [Default: `10`] | float |
 | `RouteRefreshIntervalSecs`           | `FELIX_ROUTEREFRESHINTERVAL`               | Period, in seconds, at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. [Default: `90`] | int |
+
+#### Kubernetes-specific configuration
+
+| Configuration parameter | Environment variable       | Description  | Schema |
+| ------------------------|----------------------------| ------------ | ------ |
+| `KubeNodePortRanges`    | `FELIX_KUBENODEPORTRANGES` | A list of port ranges that Felix should treat as Kubernetes node ports.  Only when `kube-proxy` is configured to use IPVS mode:  Felix assumes that traffic arriving at the host one one of these ports will ultimately be forwarded instead of being terminated by a host process.  [Default: `30000:32767`] <a id="ipvs-portranges"></a>  | Comma-delimited list of `<min>:<max>` port ranges or single ports. |
+
+
+> **Note**: <a id="ipvs-bits"></a> When using {{site.prodname}} with Kubernetes' `kube-proxy` in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint.
+> For example, the default `IptablesMarkMask` value, `0xffff0000` gives {{site.prodname}} 16 bits, up to 6 of which are used for internal purposes, leaving 10 bits for endpoint IDs.
+> 10 bits is enough for 1024 different values and {{site.prodname}} uses 2 of those for internal purposes, leaving enough for 1022 endpoints on the host.
+{: .alert .alert-info}
+
 
 #### OpenStack-specific configuration
 

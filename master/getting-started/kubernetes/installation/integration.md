@@ -234,16 +234,18 @@ for more details.
 
 ### Configuring the kube-proxy
 
-In order to use {{site.prodname}} policy with Kubernetes, the `kube-proxy` component must
-be configured to leave the source address of service bound traffic intact.
-This feature is first officially supported in Kubernetes v1.1.0 and is the default mode starting
-in Kubernetes v1.2.0.
+In order to use {{site.prodname}} policy with Kubernetes, the `kube-proxy` component must be
+configured
 
-We highly recommend using the latest stable Kubernetes release, but if you're using an older release
-there are two ways to enable this behavior.
+- in either `iptables` or (beta) `ipvs` proxy mode
+- to disable its "masquerade-all" feature
+- with a "cluster CIDR" that is equal to (or contains) the {{site.prodname}} IP pool.
 
-- Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
-- Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
+This ensures that the source address of service-bound packets is preserved.  `iptables` 
+mode is the default as of Kubernetes v1.2.0.  {{site.prodname}}'s `ipvs` mode support requires at 
+least Kubernetes v1.9.3 and it has [some limitations](../installation/#kube-proxy-ipvs-mode).
 
-See the [kube-proxy reference documentation](http://kubernetes.io/docs/admin/kube-proxy/)
-for more details.
+The Kubernetes team is in the process of migrating kube-proxy from command-line argument
+configuration to a configuration file.  At the time of writing, the required options are
+controlled by command line arguments `--proxy-mode`, `--masquerade-all`, and `--cluster-cidr`,
+as detailed in the [kube-proxy reference documentation](http://kubernetes.io/docs/admin/kube-proxy/).
