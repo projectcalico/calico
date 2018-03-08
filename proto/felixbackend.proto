@@ -254,6 +254,9 @@ message Rule {
   ServiceAccountMatch src_service_account_match = 120;
   ServiceAccountMatch dst_service_account_match = 121;
 
+  // Pass through of the v3 datamodel HTTP match criteria.
+  HTTPMatch http_match = 122;
+
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";
@@ -265,6 +268,10 @@ message Rule {
 message ServiceAccountMatch {
   string selector = 1;
   repeated string names = 2;
+}
+
+message HTTPMatch {
+  repeated string methods = 1;
 }
 
 message IcmpTypeAndCode {
