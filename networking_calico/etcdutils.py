@@ -16,15 +16,15 @@ import collections
 import eventlet
 import functools
 import json
-import logging
 import re
 from types import StringTypes
 
 from etcd3gw.exceptions import ConnectionFailedError
+from networking_calico.compat import log
 from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 
-_log = logging.getLogger(__name__)
+LOG = log.getLogger(__name__)
 
 # Map etcd event actions to the effects we care about.
 ACTION_MAPPING = {
@@ -45,7 +45,7 @@ class PathDispatcher(object):
         self.handler_root = {}
 
     def register(self, path, on_set=None, on_del=None):
-        _log.info("Registering path %s set=%s del=%s", path, on_set, on_del)
+        LOG.info("Registering path %s set=%s del=%s", path, on_set, on_del)
         parts = path.strip("/").split("/")
         node = self.handler_root
         for part in parts:
@@ -68,7 +68,7 @@ class PathDispatcher(object):
 
         :param EtcdResponse: A python-etcd response object for a watch.
         """
-        _log.debug("etcd event %s for key %s", response.action, response.key)
+        LOG.debug("etcd event %s for key %s", response.action, response.key)
         key_parts = response.key.strip("/").split("/")
         self._handle(key_parts, response, self.handler_root, {})
 
@@ -81,17 +81,17 @@ class PathDispatcher(object):
             elif next_part in handler_node:
                 handler_node = handler_node[next_part]
             else:
-                _log.debug("No matching sub-handler for %s", response.key)
+                LOG.debug("No matching sub-handler for %s", response.key)
                 return
         # We've reached the end of the key.
         action = ACTION_MAPPING.get(response.action)
         if action in handler_node:
-            _log.debug("Found handler for event %s for %s, captures: %s",
-                       action, response.key, captures)
+            LOG.debug("Found handler for event %s for %s, captures: %s",
+                      action, response.key, captures)
             handler_node[action](response, **captures)
         else:
-            _log.debug("No handler for event %s on %s. Handler node %s.",
-                       action, response.key, handler_node)
+            LOG.debug("No handler for event %s on %s. Handler node %s.",
+                      action, response.key, handler_node)
 
 
 Response = collections.namedtuple(
@@ -109,7 +109,7 @@ class EtcdWatcher(object):
     """
 
     def __init__(self, prefix):
-        _log.debug("Creating EtcdWatcher for %s", prefix)
+        LOG.debug("Creating EtcdWatcher for %s", prefix)
         self.prefix = prefix
         self.dispatcher = PathDispatcher()
         self._stopped = False
@@ -124,7 +124,7 @@ class EtcdWatcher(object):
         pass
 
     def start(self):
-        _log.info("Start watching %s", self.prefix)
+        LOG.info("Start watching %s", self.prefix)
         self._stopped = False
 
         while not self._stopped:
@@ -134,11 +134,11 @@ class EtcdWatcher(object):
             try:
                 cluster_id, last_revision = etcdv3.get_status()
                 last_revision = int(last_revision)
-                _log.info("Current cluster_id %s, revision %d",
-                          cluster_id, last_revision)
+                LOG.info("Current cluster_id %s, revision %d",
+                         cluster_id, last_revision)
             except ConnectionFailedError as e:
-                _log.debug("%r", e)
-                _log.warning("etcd not available, will retry in 5s")
+                LOG.debug("%r", e)
+                LOG.warning("etcd not available, will retry in 5s")
                 eventlet.sleep(5)
                 continue
 
@@ -155,7 +155,7 @@ class EtcdWatcher(object):
                     key=key,
                     value=value,
                 )
-                _log.info("status event: %s", response)
+                LOG.info("status event: %s", response)
                 self.dispatcher.handle_event(response)
 
             # Allow subclass to do post-snapshot reconciliation.
@@ -166,9 +166,9 @@ class EtcdWatcher(object):
                 try:
                     # Check for cluster ID changing.
                     cluster_id_now, _ = etcdv3.get_status()
-                    _log.debug("Now cluster_id is %s", cluster_id_now)
+                    LOG.debug("Now cluster_id is %s", cluster_id_now)
                     if cluster_id_now != cluster_id:
-                        _log.info("Cluster ID changed, resync")
+                        LOG.info("Cluster ID changed, resync")
                         break
 
                     # Start a watch from just after the last known revision.
@@ -236,7 +236,7 @@ class EtcdWatcher(object):
                     # again.  E.g. it could be that the DB has just been
                     # compacted and so the revision is no longer available that
                     # we asked to start watching from.
-                    _log.exception("Exception watching status tree")
+                    LOG.exception("Exception watching status tree")
                     break
 
                 # Record time of last activity on the successfully created
@@ -250,8 +250,8 @@ class EtcdWatcher(object):
                         time_to_next_timeout = (last_event_time +
                                                 WATCH_TIMEOUT_SECS -
                                                 monotonic_time())
-                        _log.debug("Time to next timeout is %ds",
-                                   time_to_next_timeout)
+                        LOG.debug("Time to next timeout is %ds",
+                                  time_to_next_timeout)
                         if time_to_next_timeout < 1:
                             break
                         else:
@@ -270,20 +270,20 @@ class EtcdWatcher(object):
                 eventlet.spawn(_cancel_watch_if_inactive)
 
                 for event in event_stream:
-                    _log.debug("Event: %s", event)
+                    LOG.debug("Event: %s", event)
                     last_event_time = monotonic_time()
 
                     # If the EtcdWatcher has been stopped, return from the
                     # whole loop.
                     if self._stopped:
-                        _log.info("EtcdWatcher has been stopped")
+                        LOG.info("EtcdWatcher has been stopped")
                         return
 
                     # Otherwise a None event means that the watch has been
                     # cancelled owing to inactivity.  In that case we break out
                     # from this loop, and the watch will be restarted.
                     if event is None:
-                        _log.debug("Watch cancelled owing to inactivity")
+                        LOG.debug("Watch cancelled owing to inactivity")
                         break
 
                     # An event at this point has a form like
@@ -319,18 +319,18 @@ class EtcdWatcher(object):
                         key=event['kv']['key'],
                         value=event['kv'].get('value', ''),
                     )
-                    _log.info("Event: %s", response)
+                    LOG.info("Event: %s", response)
                     self.dispatcher.handle_event(response)
 
                     # Update last known revision.
                     mod_revision = int(event['kv'].get('mod_revision', '0'))
                     if mod_revision > last_revision:
                         last_revision = mod_revision
-                        _log.info("Last known revision is now %d",
-                                  last_revision)
+                        LOG.info("Last known revision is now %d",
+                                 last_revision)
 
     def stop(self):
-        _log.info("Stop watching status tree")
+        LOG.info("Stop watching status tree")
         self._stopped = True
 
 
@@ -408,6 +408,6 @@ def safe_decode_json(raw_json, log_tag=None):
     try:
         return json_decoder.decode(raw_json)
     except (TypeError, ValueError):
-        _log.warning("Failed to decode JSON for %s: %r.  Returning None.",
-                     log_tag, raw_json)
+        LOG.warning("Failed to decode JSON for %s: %r.  Returning None.",
+                    log_tag, raw_json)
         return None

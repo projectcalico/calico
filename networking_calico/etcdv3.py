@@ -24,8 +24,6 @@ from networking_calico.compat import log
 
 
 LOG = log.getLogger(__name__)
-import logging
-logging.getLogger(__name__).setLevel(logging.DEBUG)
 
 
 class KeyNotFound(Etcd3Exception):
