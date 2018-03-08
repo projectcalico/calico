@@ -178,12 +178,8 @@ type FelixConfigurationSpec struct {
 	// does not get cut off from etcd as well as allowing DHCP and DNS. [Default: tcp:2379, tcp:2380, tcp:4001, tcp:7001, udp:53, udp:67]
 	FailsafeOutboundHostPorts *[]ProtoPort `json:"failsafeOutboundHostPorts,omitempty"`
 
-	// KubeIPVSSupportEnabled must be set (only) if using Calico with Kubernetes and kube-proxy is running in ipvs mode.  It changes the way
-	// Felix renders iptables policy to be compatible with the ipvs packet flow. [Default: false]
-	KubeIPVSSupportEnabled *bool `json:"kubeIPVSSupportEnabled,omitempty"`
-
-	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if ipvs support is enabled.  Felix uses these
-	// ranges to separate host and workload traffic. [Default: 30000:32767].
+	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
+	// Felix uses these ranges to separate host and workload traffic. [Default: 30000:32767].
 	KubeNodePortRanges *[]numorstring.Port `json:"kubeNodePortRanges,omitempty" validate:"omitempty,dive"`
 
 	// UsageReportingEnabled reports anonymous Calico version number and cluster size to projectcalico.org. Logs warnings returned by the usage

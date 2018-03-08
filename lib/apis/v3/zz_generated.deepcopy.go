@@ -872,15 +872,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			}
 		}
 	}
-	if in.KubeIPVSSupportEnabled != nil {
-		in, out := &in.KubeIPVSSupportEnabled, &out.KubeIPVSSupportEnabled
-		if *in == nil {
-			*out = nil
-		} else {
-			*out = new(bool)
-			**out = **in
-		}
-	}
 	if in.KubeNodePortRanges != nil {
 		in, out := &in.KubeNodePortRanges, &out.KubeNodePortRanges
 		if *in == nil {
