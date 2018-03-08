@@ -30,15 +30,27 @@ import (
 type MockDataplane struct {
 	sync.Mutex
 
+	inSync                         bool
 	ipSets                         map[string]set.Set
-	activePolicies                 set.Set
+	activePolicies                 map[proto.PolicyID]*proto.Policy
 	activeUntrackedPolicies        set.Set
 	activePreDNATPolicies          set.Set
 	activeProfiles                 set.Set
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
+	endpointToAllPolicyIDs         map[string][]proto.PolicyID
+	endpointToProfiles             map[string][]string
+	serviceAccounts                map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
+	namespaces                     map[proto.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
+}
+
+func (d *MockDataplane) InSync() bool {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.inSync
 }
 
 func (d *MockDataplane) IPSets() map[string]set.Set {
@@ -56,8 +68,21 @@ func (d *MockDataplane) ActivePolicies() set.Set {
 	d.Lock()
 	defer d.Unlock()
 
-	return d.activePolicies.Copy()
+	policyIDs := set.New()
+	for k := range d.activePolicies {
+		policyIDs.Add(k)
+	}
+
+	return policyIDs
 }
+
+func (d *MockDataplane) ActivePolicy(k proto.PolicyID) *proto.Policy {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.activePolicies[k]
+}
+
 func (d *MockDataplane) ActiveUntrackedPolicies() set.Set {
 	d.Lock()
 	defer d.Unlock()
@@ -76,6 +101,18 @@ func (d *MockDataplane) ActiveProfiles() set.Set {
 
 	return d.activeProfiles.Copy()
 }
+func (d *MockDataplane) EndpointToProfiles() map[string][]string {
+	d.Lock()
+	defer d.Unlock()
+
+	epToProfCopy := map[string][]string{}
+	for k, v := range d.endpointToProfiles {
+		profCopy := append([]string{}, v...)
+		epToProfCopy[k] = profCopy
+	}
+
+	return epToProfCopy
+}
 func (d *MockDataplane) EndpointToPolicyOrder() map[string][]TierInfo {
 	d.Lock()
 	defer d.Unlock()
@@ -93,6 +130,28 @@ func (d *MockDataplane) EndpointToPreDNATPolicyOrder() map[string][]TierInfo {
 	defer d.Unlock()
 
 	return copyPolOrder(d.endpointToPreDNATPolicyOrder)
+}
+
+func (d *MockDataplane) ServiceAccounts() map[proto.ServiceAccountID]*proto.ServiceAccountUpdate {
+	d.Lock()
+	defer d.Unlock()
+
+	cpy := make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
+	for k, v := range d.serviceAccounts {
+		cpy[k] = v
+	}
+	return cpy
+}
+
+func (d *MockDataplane) Namespaces() map[proto.NamespaceID]*proto.NamespaceUpdate {
+	d.Lock()
+	defer d.Unlock()
+
+	cpy := make(map[proto.NamespaceID]*proto.NamespaceUpdate)
+	for k, v := range d.namespaces {
+		cpy[k] = v
+	}
+	return cpy
 }
 
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
@@ -127,34 +186,40 @@ func (d *MockDataplane) Config() map[string]string {
 func NewMockDataplane() *MockDataplane {
 	s := &MockDataplane{
 		ipSets:                         make(map[string]set.Set),
-		activePolicies:                 set.New(),
+		activePolicies:                 map[proto.PolicyID]*proto.Policy{},
 		activeProfiles:                 set.New(),
 		activeUntrackedPolicies:        set.New(),
 		activePreDNATPolicies:          set.New(),
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
+		endpointToProfiles:             make(map[string][]string),
+		endpointToAllPolicyIDs:         make(map[string][]proto.PolicyID),
+		serviceAccounts:                make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
+		namespaces:                     make(map[proto.NamespaceID]*proto.NamespaceUpdate),
 	}
 	return s
 }
 
-func (s *MockDataplane) OnEvent(event interface{}) {
-	s.Lock()
-	defer s.Unlock()
+func (d *MockDataplane) OnEvent(event interface{}) {
+	d.Lock()
+	defer d.Unlock()
 
 	evType := reflect.TypeOf(event).String()
 	fmt.Fprintf(GinkgoWriter, "       <- Event: %v %v\n", evType, event)
 	Expect(event).NotTo(BeNil())
 	Expect(reflect.TypeOf(event).Kind()).To(Equal(reflect.Ptr))
 	switch event := event.(type) {
+	case *proto.InSync:
+		d.inSync = true
 	case *proto.IPSetUpdate:
 		newMembers := set.New()
 		for _, ip := range event.Members {
 			newMembers.Add(ip)
 		}
-		s.ipSets[event.Id] = newMembers
+		d.ipSets[event.Id] = newMembers
 	case *proto.IPSetDeltaUpdate:
-		members, ok := s.ipSets[event.Id]
+		members, ok := d.ipSets[event.Id]
 		if !ok {
 			Fail(fmt.Sprintf("IP set delta to missing ipset %v", event.Id))
 			return
@@ -173,53 +238,91 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			members.Discard(ip)
 		}
 	case *proto.IPSetRemove:
-		_, ok := s.ipSets[event.Id]
+		_, ok := d.ipSets[event.Id]
 		if !ok {
 			Fail(fmt.Sprintf("IP set remove for unknown ipset %v", event.Id))
 			return
 		}
-		delete(s.ipSets, event.Id)
+		delete(d.ipSets, event.Id)
 	case *proto.ActivePolicyUpdate:
 		// TODO: check rules against expected rules
 		policyID := *event.Id
-		s.activePolicies.Add(policyID)
+		d.activePolicies[policyID] = event.Policy
 		if event.Policy.Untracked {
-			s.activeUntrackedPolicies.Add(policyID)
+			d.activeUntrackedPolicies.Add(policyID)
 		} else {
-			s.activeUntrackedPolicies.Discard(policyID)
+			d.activeUntrackedPolicies.Discard(policyID)
 		}
 		if event.Policy.PreDnat {
-			s.activePreDNATPolicies.Add(policyID)
+			d.activePreDNATPolicies.Add(policyID)
 		} else {
-			s.activePreDNATPolicies.Discard(policyID)
+			d.activePreDNATPolicies.Discard(policyID)
 		}
 	case *proto.ActivePolicyRemove:
 		policyID := *event.Id
-		s.activePolicies.Discard(policyID)
-		s.activeUntrackedPolicies.Discard(policyID)
-		s.activePreDNATPolicies.Discard(policyID)
+		for ep, allPols := range d.endpointToAllPolicyIDs {
+			Expect(allPols).NotTo(ContainElement(policyID),
+				fmt.Sprintf("Policy %s removed while still in use by endpoint %s", policyID, ep))
+		}
+		delete(d.activePolicies, policyID)
+		d.activeUntrackedPolicies.Discard(policyID)
+		d.activePreDNATPolicies.Discard(policyID)
 	case *proto.ActiveProfileUpdate:
 		// TODO: check rules against expected rules
-		s.activeProfiles.Add(*event.Id)
+		d.activeProfiles.Add(*event.Id)
 	case *proto.ActiveProfileRemove:
-		s.activeProfiles.Discard(*event.Id)
+		for ep, profs := range d.endpointToProfiles {
+			for _, p := range profs {
+				if p == event.Id.Name {
+					Fail(fmt.Sprintf("Profile %s removed while still in use by endpoint %s", p, ep))
+				}
+			}
+		}
+		d.activeProfiles.Discard(*event.Id)
 	case *proto.WorkloadEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]TierInfo, len(tiers))
+		var allPolsIDs []proto.PolicyID
 		for i, tier := range event.Endpoint.Tiers {
 			tierInfos[i].Name = tier.Name
 			tierInfos[i].IngressPolicyNames = tier.IngressPolicies
 			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
+
+			// Check that all the policies referenced by the endpoint are already present, which
+			// is one of the guarantees provided by the EventSequencer.
+			var combinedPolNames []string
+			combinedPolNames = append(combinedPolNames, tier.IngressPolicies...)
+			combinedPolNames = append(combinedPolNames, tier.EgressPolicies...)
+			for _, polName := range combinedPolNames {
+				polID := proto.PolicyID{Tier: tier.Name, Name: polName}
+				allPolsIDs = append(allPolsIDs, polID)
+				Expect(d.activePolicies).To(HaveKey(polID),
+					fmt.Sprintf("Expected policy %v referenced by workload endpoint "+
+						"update %v to be active", polID, event))
+			}
 		}
 		id := workloadId(*event.Id)
-		s.endpointToPolicyOrder[id.String()] = tierInfos
-		s.endpointToUntrackedPolicyOrder[id.String()] = []TierInfo{}
-		s.endpointToPreDNATPolicyOrder[id.String()] = []TierInfo{}
+		d.endpointToPolicyOrder[id.String()] = tierInfos
+		d.endpointToUntrackedPolicyOrder[id.String()] = []TierInfo{}
+		d.endpointToPreDNATPolicyOrder[id.String()] = []TierInfo{}
+		d.endpointToAllPolicyIDs[id.String()] = allPolsIDs
+
+		// Check that all the profiles referenced by the endpoint are already present, which
+		// is one of the guarantees provided by the EventSequencer.
+		for _, profName := range event.Endpoint.ProfileIds {
+			profID := proto.ProfileID{Name: profName}
+			Expect(d.activeProfiles.Contains(profID)).To(BeTrue(),
+				fmt.Sprintf("Expected profile %v referenced by workload endpoint "+
+					"update %v to be active", profID, event))
+		}
+		d.endpointToProfiles[id.String()] = event.Endpoint.ProfileIds
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(*event.Id)
-		delete(s.endpointToPolicyOrder, id.String())
-		delete(s.endpointToUntrackedPolicyOrder, id.String())
-		delete(s.endpointToPreDNATPolicyOrder, id.String())
+		delete(d.endpointToPolicyOrder, id.String())
+		delete(d.endpointToUntrackedPolicyOrder, id.String())
+		delete(d.endpointToPreDNATPolicyOrder, id.String())
+		delete(d.endpointToProfiles, id.String())
+		delete(d.endpointToAllPolicyIDs, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]TierInfo, len(tiers))
@@ -229,7 +332,7 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			tierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
 		id := hostEpId(*event.Id)
-		s.endpointToPolicyOrder[id.String()] = tierInfos
+		d.endpointToPolicyOrder[id.String()] = tierInfos
 
 		uTiers := event.Endpoint.UntrackedTiers
 		uTierInfos := make([]TierInfo, len(uTiers))
@@ -238,7 +341,7 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			uTierInfos[i].IngressPolicyNames = tier.IngressPolicies
 			uTierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
-		s.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
+		d.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
 
 		pTiers := event.Endpoint.PreDnatTiers
 		pTierInfos := make([]TierInfo, len(pTiers))
@@ -247,21 +350,33 @@ func (s *MockDataplane) OnEvent(event interface{}) {
 			pTierInfos[i].IngressPolicyNames = tier.IngressPolicies
 			pTierInfos[i].EgressPolicyNames = tier.EgressPolicies
 		}
-		s.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
+		d.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
 	case *proto.HostEndpointRemove:
 		id := hostEpId(*event.Id)
-		delete(s.endpointToPolicyOrder, id.String())
-		delete(s.endpointToUntrackedPolicyOrder, id.String())
-		delete(s.endpointToPreDNATPolicyOrder, id.String())
+		delete(d.endpointToPolicyOrder, id.String())
+		delete(d.endpointToUntrackedPolicyOrder, id.String())
+		delete(d.endpointToPreDNATPolicyOrder, id.String())
+	case *proto.ServiceAccountUpdate:
+		d.serviceAccounts[*event.Id] = event
+	case *proto.ServiceAccountRemove:
+		id := *event.Id
+		Expect(d.serviceAccounts).To(HaveKey(id))
+		delete(d.serviceAccounts, id)
+	case *proto.NamespaceUpdate:
+		d.namespaces[*event.Id] = event
+	case *proto.NamespaceRemove:
+		id := *event.Id
+		Expect(d.namespaces).To(HaveKey(id))
+		delete(d.namespaces, id)
 	}
 }
 
-func (s *MockDataplane) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
+func (d *MockDataplane) UpdateFrom(map[string]string, config.Source) (changed bool, err error) {
 	return
 }
 
-func (s *MockDataplane) RawValues() map[string]string {
-	return s.Config()
+func (d *MockDataplane) RawValues() map[string]string {
+	return d.Config()
 }
 
 type TierInfo struct {

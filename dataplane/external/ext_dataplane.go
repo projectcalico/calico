@@ -165,6 +165,14 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 		envelope.Payload = &proto.ToDataplane_IpamPoolUpdate{msg}
 	case *proto.IPAMPoolRemove:
 		envelope.Payload = &proto.ToDataplane_IpamPoolRemove{msg}
+	case *proto.ServiceAccountUpdate:
+		envelope.Payload = &proto.ToDataplane_ServiceAccountUpdate{msg}
+	case *proto.ServiceAccountRemove:
+		envelope.Payload = &proto.ToDataplane_ServiceAccountRemove{msg}
+	case *proto.NamespaceUpdate:
+		envelope.Payload = &proto.ToDataplane_NamespaceUpdate{msg}
+	case *proto.NamespaceRemove:
+		envelope.Payload = &proto.ToDataplane_NamespaceRemove{msg}
 	default:
 		log.WithField("msg", msg).Panic("Unknown message type")
 	}

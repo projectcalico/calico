@@ -10,6 +10,9 @@ import:
   subpackages:
   - client
   - pkg/transport
+# gRPC version that etcd requires.
+- package: google.golang.org/grpc
+  version: v1.7.5
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/ghodss/yaml
@@ -32,7 +35,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 16a16d0960511310db4772874de7650ab2967827
+  version: 3be72c2105351f081f6e5c71e1fe036ca71ec343
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
@@ -40,24 +43,24 @@ import:
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
-  version: ^0.9.0-pre1
+  version: v0.9.0-pre1
 - package: github.com/gogo/protobuf
-  version: ^0.3.0
+  version: ^0.5.0
 - package: github.com/vishvananda/netlink
 - package: github.com/onsi/ginkgo
-  version: f40a49d81e5c12e90400620b6242fb29a8e7c9
+  version: ^1.4.0
+- package: github.com/onsi/gomega
+  version: ^1.1.0
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: edfcfd8e008cf14b4a1fa471d00a251e63d0fa6f
+  version: ad2633003df694deb8ebaf345c10a53452632258
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
   version: v1.2
 - package: github.com/containernetworking/cni
   version: v0.5.2
-- package: github.com/onsi/gomega
-  version: ^1.1.0
 - package: github.com/jbenet/go-reuseport
   repo: https://github.com/fasaxc/go-reuseport.git
   version: disable-dial-check
@@ -69,6 +72,9 @@ import:
   version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
 - package: github.com/Microsoft/hcsshim
   version: 34a629f78a5d50f7de07727e41a948685c45e026
+- package: google.golang.org/genproto
+  subpackages:
+  - googleapis
 - package: github.com/prometheus/procfs
   version: f98634e408857669d61064b283c4cde240622865
   subpackages:

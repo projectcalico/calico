@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,6 +120,8 @@ type Config struct {
 	IptablesLockProbeIntervalMillis    time.Duration `config:"millis;50"`
 	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
 	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
+
+	PolicySyncPathPrefix string `config:"file;;"`
 
 	NetlinkTimeoutSecs time.Duration `config:"seconds;10"`
 

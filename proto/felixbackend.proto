@@ -2,6 +2,28 @@ syntax = "proto3";
 package felix;
 option go_package = "proto";
 
+service PolicySync {
+  // On this API, only the following payloads will be sent:
+  //  - InSync
+  //  - IPSetUpdate
+  //  - IPSetDeltaUpdate
+  //  - IPSetRemove
+  //  - ActiveProfileUpdate
+  //  - ActiveProfileRemove
+  //  - ActivePolicyUpdate
+  //  - ActivePolicyRemove
+  //  - WorkloadEndpointUpdate
+  //  - WorkloadEndpointRemove
+  //  - ServiceAccountUpdate
+  //  - ServiceAccountRemove
+  //  - NamespaceUpdate
+  //  - NamespaceRemove
+  rpc Sync(SyncRequest) returns (stream ToDataplane);
+}
+
+message SyncRequest {
+}
+
 // Rationale for having explicit Remove messages rather than sending and update
 // with empty payload (which is the convention we used to use in Felix):
 // protobuf and golang use zero values to indicate missing data and that makes
@@ -65,6 +87,16 @@ message ToDataplane {
     IPAMPoolUpdate ipam_pool_update = 16;
     // IPAMPoolRemove is sent when an IPAM pool is removed.
     IPAMPoolRemove ipam_pool_remove = 17;
+
+    // ServiceAccountUpdate is sent when a ServiceAccount is added/updated.
+    ServiceAccountUpdate service_account_update = 19;
+    // ServiceAccountRemove is sent when a ServiceAccount is removed.
+    ServiceAccountRemove service_account_remove = 20;
+
+    // NamespaceUpdate is sent when a Namespace is added/updated.
+    NamespaceUpdate namespace_update = 21;
+    // NamespaceRemove is sent when a Namespace is removed.
+    NamespaceRemove namespace_remove = 22;
   }
 }
 
@@ -151,6 +183,10 @@ message PolicyID {
 }
 
 message Policy {
+  // If the Policy represents a NetworkPolicy, this contains the namespace that the policy came
+  // from.  Otherwise, empty.
+  string namespace = 5;
+
   repeated Rule inbound_rules = 1;
   repeated Rule outbound_rules = 2;
   bool untracked = 3;
@@ -205,12 +241,37 @@ message Rule {
   repeated string not_src_named_port_ip_set_ids = 112;
   repeated string not_dst_named_port_ip_set_ids = 113;
 
+  // These fields pass through the original selectors from the v3 datamodel unmodified as required
+  // for the policy sync API.
+  string original_src_selector = 114;
+  string original_dst_selector = 115;
+  string original_src_namespace_selector = 116;
+  string original_dst_namespace_selector = 117;
+  string original_not_src_selector = 118;
+  string original_not_dst_selector = 119;
+
+  // Pass through of the v3 datamodel service account match criteria.
+  ServiceAccountMatch src_service_account_match = 120;
+  ServiceAccountMatch dst_service_account_match = 121;
+
+  // Pass through of the v3 datamodel HTTP match criteria.
+  HTTPMatch http_match = 122;
+
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";
 
   // An opaque ID/hash for the rule.
   string rule_id = 201;
+}
+
+message ServiceAccountMatch {
+  string selector = 1;
+  repeated string names = 2;
+}
+
+message HTTPMatch {
+  repeated string methods = 1;
 }
 
 message IcmpTypeAndCode {
@@ -348,4 +409,31 @@ message IPAMPoolRemove {
 message IPAMPool {
   string cidr = 1;
   bool masquerade = 2;
+}
+
+message ServiceAccountUpdate {
+  ServiceAccountID id = 1;
+  map<string, string> labels = 2;
+}
+
+message ServiceAccountRemove {
+  ServiceAccountID id = 1;
+}
+
+message ServiceAccountID {
+  string namespace = 1;
+  string name = 2;
+}
+
+message NamespaceUpdate {
+  NamespaceID id = 1;
+  map<string, string> labels = 2;
+}
+
+message NamespaceRemove {
+  NamespaceID id = 1;
+}
+
+message NamespaceID {
+  string name = 1;
 }

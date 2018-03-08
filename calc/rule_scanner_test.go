@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,6 +96,27 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 				OutboundRules: []*ParsedRule{&expectedParsedRule},
 			},
 		}))
+
+		rs.OnProfileInactive(profileKey)
+		Expect(ur.activeRules).To(Equal(map[model.Key]*ParsedRules{}))
+
+		By("correctly translating InboundRules in a policy")
+		policyKey := model.PolicyKey{Name: "policy"}
+		policy := &model.Policy{
+			Namespace:     "namespace",
+			InboundRules:  []model.Rule{modelRule},
+			OutboundRules: []model.Rule{},
+		}
+		rs.OnPolicyActive(policyKey, policy)
+		Expect(ur.activeRules).To(Equal(map[model.Key]*ParsedRules{
+			policyKey: {
+				Namespace:     "namespace",
+				InboundRules:  []*ParsedRule{&expectedParsedRule},
+				OutboundRules: []*ParsedRule{},
+			},
+		}))
+		rs.OnPolicyInactive(policyKey)
+		Expect(ur.activeRules).To(Equal(map[model.Key]*ParsedRules{}))
 	},
 	Entry("Empty rule", model.Rule{}, ParsedRule{}),
 
@@ -112,6 +133,20 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 	Entry("!dest net", model.Rule{NotDstNet: &cidr}, ParsedRule{NotDstNets: []*net.IPNet{&cidr}}),
 	Entry("!source Ports", model.Rule{NotSrcPorts: ports}, ParsedRule{NotSrcPorts: ports}),
 	Entry("!dest Ports", model.Rule{NotDstPorts: ports}, ParsedRule{NotDstPorts: ports}),
+
+	Entry("OriginalSrcSelector", model.Rule{OriginalSrcSelector: "has(foo)"}, ParsedRule{OriginalSrcSelector: "has(foo)"}),
+	Entry("OriginalSrcNamespaceSelector", model.Rule{OriginalSrcNamespaceSelector: "has(foo)"}, ParsedRule{OriginalSrcNamespaceSelector: "has(foo)"}),
+	Entry("OriginalDstSelector", model.Rule{OriginalDstSelector: "has(foo)"}, ParsedRule{OriginalDstSelector: "has(foo)"}),
+	Entry("OriginalDstNamespaceSelector", model.Rule{OriginalDstNamespaceSelector: "has(foo)"}, ParsedRule{OriginalDstNamespaceSelector: "has(foo)"}),
+	Entry("OriginalNotSrcSelector", model.Rule{OriginalNotSrcSelector: "has(foo)"}, ParsedRule{OriginalNotSrcSelector: "has(foo)"}),
+	Entry("OriginalNotDstSelector", model.Rule{OriginalNotDstSelector: "has(foo)"}, ParsedRule{OriginalNotDstSelector: "has(foo)"}),
+
+	Entry("OriginalSrcServiceAccountNames", model.Rule{OriginalSrcServiceAccountNames: []string{"a"}}, ParsedRule{OriginalSrcServiceAccountNames: []string{"a"}}),
+	Entry("OriginalDstServiceAccountNames", model.Rule{OriginalDstServiceAccountNames: []string{"a"}}, ParsedRule{OriginalDstServiceAccountNames: []string{"a"}}),
+	Entry("OriginalSrcServiceAccountSelector", model.Rule{OriginalSrcServiceAccountSelector: "all()"}, ParsedRule{OriginalSrcServiceAccountSelector: "all()"}),
+	Entry("OriginalDstServiceAccountSelector", model.Rule{OriginalDstServiceAccountSelector: "all()"}, ParsedRule{OriginalDstServiceAccountSelector: "all()"}),
+
+	Entry("HTTPMatch", model.Rule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}}}, ParsedRule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}}}),
 
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),
@@ -216,7 +251,7 @@ var _ = Describe("ParsedRule", func() {
 		prFields := set.New()
 		for i := 0; i < numPRFields; i++ {
 			name := prType.Field(i).Name
-			if strings.Index(name, "IPSetIDs") >= 0 {
+			if strings.Contains(name, "IPSetIDs") {
 				continue
 			}
 			prFields.Add(name)
@@ -226,9 +261,11 @@ var _ = Describe("ParsedRule", func() {
 		mrFields := set.New()
 		for i := 0; i < numMRFields; i++ {
 			name := mrType.Field(i).Name
-			if strings.Index(name, "Tag") >= 0 ||
-				strings.Index(name, "LogPrefix") >= 0 ||
-				strings.Index(name, "Selector") >= 0 {
+			if strings.Contains(name, "Tag") ||
+				strings.Contains(name, "LogPrefix") ||
+				(strings.Contains(name, "Selector") &&
+					!strings.Contains(name, "Original") &&
+					!strings.Contains(name, "Service")) {
 				continue
 			}
 			if strings.HasSuffix(name, "Net") {
@@ -242,15 +279,16 @@ var _ = Describe("ParsedRule", func() {
 	})
 	It("should have correct fields relative to proto.Rule", func() {
 		// We expect all the fields to have the same name, except for
-		// ICMP, which differ in structure.
+		// ICMP and service account matches, which differ in structure.
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
 		prFields := []string{}
 		for i := 0; i < numPRFields; i++ {
 			name := strings.ToLower(prType.Field(i).Name)
-			if strings.Index(name, "icmptype") >= 0 ||
-				strings.Index(name, "icmpcode") >= 0 {
-				// ICMP fields expected to differ.
+			if strings.Contains(name, "icmptype") ||
+				strings.Contains(name, "icmpcode") ||
+				strings.Contains(name, "serviceaccount") {
+				// expected to differ.
 				continue
 			}
 			if strings.HasSuffix(name, "nets") {
@@ -265,8 +303,9 @@ var _ = Describe("ParsedRule", func() {
 		protoFields := []string{}
 		for i := 0; i < numMRFields; i++ {
 			name := strings.ToLower(protoType.Field(i).Name)
-			if strings.Contains(name, "icmp") {
-				// ICMP fields expected to differ.
+			if strings.Contains(name, "icmp") ||
+				strings.Contains(name, "serviceaccount") {
+				// expected to differ.
 				continue
 			}
 			if strings.Contains(name, "ruleid") {

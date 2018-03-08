@@ -296,7 +296,7 @@ protobuf: proto/felixbackend.pb.go
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}/proto:/src:rw \
 	              $(PROTOC_CONTAINER) \
-	              --gogofaster_out=. \
+	              --gogofaster_out=plugins=grpc:. \
 	              felixbackend.proto
 
 # Update the vendored dependencies with the latest upstream versions matching
@@ -402,7 +402,7 @@ check-licenses/dependency-licenses.txt: vendor/.up-to-date
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_GO_BUILD) ./utils/run-coverage
+	$(DOCKER_GO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
 
 FV_TESTS=$(subst _suite_test.go,.test,$(shell find fv -name "*_suite_test.go"))
 
@@ -473,12 +473,12 @@ static-checks:
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_OPTIONS)
+	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_OPTIONS)
+	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser

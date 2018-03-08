@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -53,6 +54,11 @@ var fullyLoadedParsedRule = ParsedRule{
 	SrcIPSetIDs: []string{"srcID1", "srcID2"},
 	DstIPSetIDs: []string{"dstID1", "dstID2"},
 
+	SrcNamedPortIPSetIDs:    []string{"srcNP1"},
+	DstNamedPortIPSetIDs:    []string{"dstNP1"},
+	NotSrcNamedPortIPSetIDs: []string{"notSrcNP"},
+	NotDstNamedPortIPSetIDs: []string{"notDstNP"},
+
 	NotProtocol: &protoTCP,
 
 	NotSrcNets:  []*net.IPNet{mustParseCalicoIPNet("12.0.0.0/8")},
@@ -65,6 +71,21 @@ var fullyLoadedParsedRule = ParsedRule{
 
 	NotSrcIPSetIDs: []string{"srcID3", "srcID4"},
 	NotDstIPSetIDs: []string{"dstID3", "dstID4"},
+
+	OriginalSrcSelector:          "has(original-src)",
+	OriginalDstSelector:          "has(original-dst)",
+	OriginalNotSrcSelector:       "has(original-not-src)",
+	OriginalNotDstSelector:       "has(original-not-dst)",
+	OriginalSrcNamespaceSelector: "ns == 'src'",
+	OriginalDstNamespaceSelector: "ns == 'dst'",
+
+	OriginalSrcServiceAccountSelector: "has(sa-src)",
+	OriginalSrcServiceAccountNames:    []string{"src-1"},
+
+	OriginalDstServiceAccountSelector: "has(sa-dst)",
+	OriginalDstServiceAccountNames:    []string{"dst-1"},
+
+	HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "POST"}},
 }
 
 var fullyLoadedProtoRule = proto.Rule{
@@ -97,6 +118,11 @@ var fullyLoadedProtoRule = proto.Rule{
 	NotDstNet:   []string{"13.0.0.0/16"},
 	NotDstPorts: []*proto.PortRange{{First: 678, Last: 910}},
 
+	SrcNamedPortIpSetIds:    []string{"srcNP1"},
+	DstNamedPortIpSetIds:    []string{"dstNP1"},
+	NotSrcNamedPortIpSetIds: []string{"notSrcNP"},
+	NotDstNamedPortIpSetIds: []string{"notDstNP"},
+
 	NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{
 		Type: 11,
 		Code: 13,
@@ -104,6 +130,24 @@ var fullyLoadedProtoRule = proto.Rule{
 
 	NotSrcIpSetIds: []string{"srcID3", "srcID4"},
 	NotDstIpSetIds: []string{"dstID3", "dstID4"},
+
+	OriginalSrcSelector:          "has(original-src)",
+	OriginalDstSelector:          "has(original-dst)",
+	OriginalNotSrcSelector:       "has(original-not-src)",
+	OriginalNotDstSelector:       "has(original-not-dst)",
+	OriginalSrcNamespaceSelector: "ns == 'src'",
+	OriginalDstNamespaceSelector: "ns == 'dst'",
+
+	SrcServiceAccountMatch: &proto.ServiceAccountMatch{
+		Selector: "has(sa-src)",
+		Names:    []string{"src-1"},
+	},
+	DstServiceAccountMatch: &proto.ServiceAccountMatch{
+		Selector: "has(sa-dst)",
+		Names:    []string{"dst-1"},
+	},
+
+	HttpMatch: &proto.HTTPMatch{Methods: []string{"GET", "POST"}},
 }
 
 var _ = DescribeTable("ParsedRulesToProtoRules",
