@@ -299,10 +299,11 @@ Description:
 		containerPath string
 	}
 
-	// vols is a slice of read only volume bindings.
+	// vols is a slice of volume bindings.
 	vols := []vol{
 		{hostPath: logDir, containerPath: "/var/log/calico"},
 		{hostPath: "/var/run/calico", containerPath: "/var/run/calico"},
+		{hostPath: "/var/lib/calico", containerPath: "/var/lib/calico"},
 		{hostPath: "/lib/modules", containerPath: "/lib/modules"},
 		{hostPath: "/run", containerPath: "/run"},
 	}
