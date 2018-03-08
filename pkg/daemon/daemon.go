@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
@@ -391,7 +392,7 @@ type ClientV3Shim struct {
 }
 
 func (s ClientV3Shim) SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return s.Backend().Syncer(callbacks)
+	return felixsyncer.New(s.Backend(), callbacks)
 }
 
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
