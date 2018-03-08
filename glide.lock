@@ -1,5 +1,5 @@
-hash: 7649b13bae7a29285e72dc4fd63014aea9b7c353951295938eb1b0787be6d2f9
-updated: 2018-03-08T16:44:12.291369623Z
+hash: fd91e516bf87ae5d00b7383974b103231ee5ff5526b475797ec3d2af23db16e5
+updated: 2018-03-08T16:20:39.938448495-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -201,7 +201,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5f90a75a16b8c4b94fd045afbfbb545194b451ac
+  version: 923caf2c8a7aef307fff7c30435bbf5fbbdf1d9f
   subpackages:
   - lib
   - lib/apiconfig
@@ -240,7 +240,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 5f958fbfe89745a33cb9e862890195b0d9723be5
+  version: 0f925aee6171b956c3a33530e6901e3813a20a81
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -251,11 +251,11 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 6fb6fce6f8b75884b92e1889c150403fc0872c5e
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -283,7 +283,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 85f98707c97e11569271e4d9b3d397e079c4f4d0
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -338,7 +338,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: 9d8544a6b2c7df9cff240fcf92d7b2f59bc13416
   subpackages:
   - internal
   - internal/app_identity
@@ -350,7 +350,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: df60624c1e9b9d2973e889c7a1cff73155da81c4
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
   - googleapis
   - googleapis/rpc/status
