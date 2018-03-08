@@ -336,3 +336,7 @@ type dummySyncer struct {
 func (*dummySyncer) Start() {
 
 }
+
+func (*dummySyncer) Stop() {
+
+}
