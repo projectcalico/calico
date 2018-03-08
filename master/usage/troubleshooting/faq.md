@@ -60,9 +60,9 @@ cali\* interfaces.
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
 
 Yes! The Kubernetes [`NetworkPolicy`](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
-API added support for egress policies in v1.8. You can also use `calicoctl` 
-to configure egress policy to prevent Kubernetes pods from initiating outgoing 
-connections based on the full set of supported {{site.prodname}} policy primitives 
+API added support for egress policies in v1.8. You can also use `calicoctl`
+to configure egress policy to prevent Kubernetes pods from initiating outgoing
+connections based on the full set of supported {{site.prodname}} policy primitives
 including labels, Kubernetes namespaces, CIDRs, and ports.
 
 ## I've heard {{site.prodname}} uses proxy ARP, doesn't proxy ARP cause a lot of problems?
