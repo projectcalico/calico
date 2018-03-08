@@ -465,17 +465,12 @@ type ifaceUpdate struct {
 // If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
 // or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
 // restart felix to pick up correct ipvs support mode.
-func (d *InternalDataplane) checkIPVSConfigOnIfaceUpdate(update *ifaceUpdate) {
-	if update.Name != KubeIPVSInterface {
-		return
-	}
-
-	if (!d.config.RulesConfig.KubeIPVSSupportEnabled && update.State == ifacemonitor.StateUp) ||
-		(d.config.RulesConfig.KubeIPVSSupportEnabled && update.State == ifacemonitor.StateDown) {
+func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.State) {
+	if (!d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateUp) ||
+		(d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateDown) {
 		log.WithFields(log.Fields{
-			"ifaceName":   update.Name,
-			"ifaceStatus": update.State,
-			"ipvsSupport": d.config.RulesConfig.KubeIPVSSupportEnabled,
+			"ipvsIfaceState": state,
+			"ipvsSupport":    d.config.RulesConfig.KubeIPVSSupportEnabled,
 		}).Info("kube-proxy mode changed. Restart felix.")
 		d.config.ConfigChangedRestartCallback()
 	}
@@ -630,7 +625,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	processIfaceUpdate := func(ifaceUpdate *ifaceUpdate) {
 		log.WithField("msg", ifaceUpdate).Info("Received interface update")
 		if ifaceUpdate.Name == KubeIPVSInterface {
-			d.checkIPVSConfigOnIfaceUpdate(ifaceUpdate)
+			d.checkIPVSConfigOnStateUpdate(ifaceUpdate.State)
 			return
 		}
 
