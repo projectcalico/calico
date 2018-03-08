@@ -1,4 +1,4 @@
-FROM alpine:3.4
+FROM alpine:3.7
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
@@ -16,7 +16,7 @@ RUN apk --no-cache add wget ca-certificates libgcc && \
     rm -f glibc-2.23-r3.apk glibc-bin-2.23-r3.apk
 
 # Install Felix's dependencies.
-RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools 
+RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools
 
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper usr/bin

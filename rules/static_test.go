@@ -78,6 +78,26 @@ var _ = Describe("Static", func() {
 					}
 					portRanges = append(portRanges, portRange)
 
+					expRawFailsafeIn := &Chain{
+						Name: "cali-failsafe-in",
+						Rules: []Rule{
+							{Match: Match().Protocol("tcp").DestPorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1022), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1023), Action: AcceptAction{}},
+						},
+					}
+
+					expRawFailsafeOut := &Chain{
+						Name: "cali-failsafe-out",
+						Rules: []Rule{
+							{Match: Match().Protocol("tcp").DestPorts(23), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").DestPorts(1023), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(22), Action: AcceptAction{}},
+							{Match: Match().Protocol("tcp").SourcePorts(1022), Action: AcceptAction{}},
+						},
+					}
+
 					expFailsafeIn := &Chain{
 						Name: "cali-failsafe-in",
 						Rules: []Rule{
@@ -126,25 +146,25 @@ var _ = Describe("Static", func() {
 					expForwardEndpointMark := &Chain{
 						Name: "cali-forward-endpoint-mark",
 						Rules: []Rule{
-							Rule{
+							{
 								Match:  Match().NotMarkMatchesWithMask(0x100, 0xff00),
 								Action: JumpAction{Target: ChainDispatchFromEndPointMark},
 							},
-							Rule{
+							{
+								Match:  Match().OutInterface("cali+"),
+								Action: JumpAction{Target: ChainToWorkloadDispatch},
+							},
+							{
 								Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
 							},
-							Rule{
+							{
+								Action: ClearMarkAction{Mark: 0xff00},
+							},
+							{
 								Match:   Match().MarkSingleBitSet(0x10),
 								Action:  AcceptAction{},
 								Comment: "Policy explicitly accepted packet.",
 							},
-						},
-					}
-
-					expClearEndpointMark := &Chain{
-						Name: "cali-clear-endpoint-mark",
-						Rules: []Rule{
-							Rule{Action: ClearMarkAction{Mark: 0xff00}},
 						},
 					}
 
@@ -241,17 +261,11 @@ var _ = Describe("Static", func() {
 
 									// From endpoint mark chain
 									{Match: Match().MarkNotClear(conf.IptablesMarkEndpoint),
-										Action: JumpAction{Target: ChainForwardEndpointMark},
+										Action: GotoAction{Target: ChainForwardEndpointMark},
 									},
 
 									// To workload traffic.
-									{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-									{Match: Match().OutInterface("cali+"), Action: GotoAction{Target: ChainDispatchClearEndPointMark}},
-
-									// forward traffic clear endpoint mark and return.
-									{Match: Match().MarkNotClear(conf.IptablesMarkEndpoint),
-										Action: GotoAction{Target: ChainDispatchClearEndPointMark},
-									},
+									{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 									// Non-workload traffic, send to host chains.
 									{Action: ClearMarkAction{Mark: 0xf0}},
@@ -273,7 +287,6 @@ var _ = Describe("Static", func() {
 									},
 
 									// To workload traffic.
-									{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 									{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 									// Non-workload traffic, send to host chains.
@@ -308,16 +321,9 @@ var _ = Describe("Static", func() {
 							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-forward-endpoint-mark")).To(BeNil())
 						}
 					})
-					It("should include the expected clear-endpoint-mark chain in the filter chains", func() {
-						if kubeIPVSEnabled {
-							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-clear-endpoint-mark")).To(Equal(expClearEndpointMark))
-						} else {
-							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-clear-endpoint-mark")).To(BeNil())
-						}
-					})
 					It("should return only the expected filter chains", func() {
 						if kubeIPVSEnabled {
-							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(9))
+							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(8))
 						} else {
 							Expect(len(rr.StaticFilterTableChains(ipVersion))).To(Equal(6))
 						}
@@ -340,10 +346,10 @@ var _ = Describe("Static", func() {
 						}))
 					})
 					It("Should return expected raw failsafe in chain", func() {
-						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-in")).To(Equal(expFailsafeIn))
+						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-in")).To(Equal(expRawFailsafeIn))
 					})
 					It("Should return expected raw failsafe out chain", func() {
-						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expFailsafeOut))
+						Expect(findChain(rr.StaticRawTableChains(ipVersion), "cali-failsafe-out")).To(Equal(expRawFailsafeOut))
 					})
 					It("should return only the expected raw chains", func() {
 						Expect(len(rr.StaticRawTableChains(ipVersion))).To(Equal(4))
@@ -599,17 +605,11 @@ var _ = Describe("Static", func() {
 
 					// From endpoint mark chain
 					{Match: Match().MarkNotClear(epMark),
-						Action: JumpAction{Target: ChainForwardEndpointMark},
+						Action: GotoAction{Target: ChainForwardEndpointMark},
 					},
 
 					// To workload traffic.
-					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-					{Match: Match().OutInterface("cali+"), Action: GotoAction{Target: ChainDispatchClearEndPointMark}},
-
-					// forward traffic clear endpoint mark and return.
-					{Match: Match().MarkNotClear(0xff00),
-						Action: GotoAction{Target: ChainDispatchClearEndPointMark},
-					},
+					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
@@ -639,7 +639,6 @@ var _ = Describe("Static", func() {
 						Action: AcceptAction{}},
 
 					// To workload traffic.
-					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 					// Auto-allow IPIP traffic to other Calico hosts.
@@ -672,17 +671,11 @@ var _ = Describe("Static", func() {
 
 					// From endpoint mark chain
 					{Match: Match().MarkNotClear(epMark),
-						Action: JumpAction{Target: ChainForwardEndpointMark},
+						Action: GotoAction{Target: ChainForwardEndpointMark},
 					},
 
 					// To workload traffic.
-					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
-					{Match: Match().OutInterface("cali+"), Action: GotoAction{Target: ChainDispatchClearEndPointMark}},
-
-					// forward traffic clear endpoint mark and return.
-					{Match: Match().MarkNotClear(0xff00),
-						Action: GotoAction{Target: ChainDispatchClearEndPointMark},
-					},
+					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 					// Non-workload traffic, send to host chains.
 					{Action: ClearMarkAction{Mark: 0xf0}},
@@ -703,7 +696,6 @@ var _ = Describe("Static", func() {
 						Action: AcceptAction{}},
 
 					// To workload traffic.
-					{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 					{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 					// Non-workload traffic, send to host chains.
@@ -1122,7 +1114,6 @@ var _ = Describe("Static", func() {
 							Action: ReturnAction{}},
 
 						// To workload traffic.
-						{Match: Match().OutInterface("cali+").IPVSConnection(), Action: JumpAction{Target: "cali-to-wl-dispatch"}},
 						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
 
 						// Non-workload traffic, send to host chains.

@@ -1,5 +1,5 @@
-hash: 09c709ac5c97939531514c55c3af71fb6dfc82f243f1e0e2af1cf868817f6260
-updated: 2018-03-02T11:05:01.106648595Z
+hash: dccac4dcca4560ddb151295ff9cf33aca844156e7cbeda27162d79f00ac8aa48
+updated: 2018-03-08T13:28:24.228018383Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -51,7 +51,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a
+  version: 6333e38ac20b8949a8dd68baa3650f4dee8f39f0
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -201,7 +201,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4b03e4787e79a341d3d830684a5373cc01328cb6
+  version: 3be72c2105351f081f6e5c71e1fe036ca71ec343
   subpackages:
   - lib
   - lib/apiconfig
@@ -240,7 +240,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 44154bc0d49ce6d711e2d8f656898859d7e845c2
+  version: ad2633003df694deb8ebaf345c10a53452632258
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -283,7 +283,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 91a49db82a88618983a78a06c1cbd4e00ab749ab
+  version: 85f98707c97e11569271e4d9b3d397e079c4f4d0
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -308,7 +308,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: dd2ff4accc098aceecb86b36eaa7829b2a17b1c9
+  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
   subpackages:
   - unix
   - windows
@@ -350,7 +350,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 2c5e7ac708aaa719366570dd82bda44541ca2a63
+  version: df60624c1e9b9d2973e889c7a1cff73155da81c4
   subpackages:
   - googleapis
   - googleapis/rpc/status
