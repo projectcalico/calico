@@ -2404,7 +2404,7 @@ master:
       version: master
       url: ""
      calicoctl:
-      version: master
+      version: v2.0.0-28-g4ce1100f
       url: "https://www.projectcalico.org/builds/calicoctl"
       download_url: "https://www.projectcalico.org/builds/calicoctl"
      calico/node:
