@@ -21,6 +21,8 @@ toc:
   path: /usage/configuration/as-service
 - title: Configuring BGP Peers
   path: /usage/configuration/bgp
+- title: Changing IP Pools
+  path: /usage/changing-ip-pools
 - title: Route Reflector
   section:
   - title: Configuring BIRD
