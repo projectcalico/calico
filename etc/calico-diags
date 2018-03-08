@@ -49,8 +49,8 @@ done
 ip link show > ip_link
 ip addr show > ip_addr
 netstat -an > netstat
-iptables-save > iptables
-ip6tables-save > ip6tables
+iptables-save -c > iptables
+ip6tables-save -c > ip6tables
 ipset list > ipset
 ip -6 neigh > ip6neigh
 birdc show protocols > bird_protocols 2>&1
