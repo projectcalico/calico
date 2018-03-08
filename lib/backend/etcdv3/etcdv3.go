@@ -29,7 +29,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 )
 
@@ -434,11 +433,6 @@ func (c *etcdV3Client) IsClean() (bool, error) {
 
 	// The datastore is clean if no results were enumerated.
 	return len(resp.Kvs) == 0, nil
-}
-
-// Syncer returns a v1 Syncer used to stream resource updates.
-func (c *etcdV3Client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return felixsyncer.New(c, callbacks, apiconfig.EtcdV3)
 }
 
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.

@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -53,7 +54,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Create a SyncerTester to receive the BGP syncer callback events and to allow us
 			// to assert state.
 			syncTester := testutils.NewSyncerTester()
-			syncer := be.Syncer(syncTester)
+			syncer := felixsyncer.New(be, syncTester)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -299,7 +300,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = be.Syncer(syncTester)
+			syncer = felixsyncer.New(be, syncTester)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous

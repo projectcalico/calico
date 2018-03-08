@@ -15,7 +15,6 @@
 package felixsyncer
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -23,9 +22,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 )
 
-// New creates a new Felix v1 Syncer.  Currently only the etcdv3 backend is supported
-// since KDD does not yet fully support Watchers.
-func New(client api.Client, callbacks api.SyncerCallbacks, datastoreType apiconfig.DatastoreType) api.Syncer {
+// New creates a new Felix v1 Syncer.
+func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 	// Create the set of ResourceTypes required for Felix.  Since the update processors
 	// also cache state, we need to create individual ones per syncer rather than create
 	// a common global set.

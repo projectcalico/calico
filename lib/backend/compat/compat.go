@@ -266,10 +266,6 @@ func (c *ModelAdaptor) Watch(ctx context.Context, l model.ListInterface, revisio
 	return c.client.Watch(ctx, l, revision)
 }
 
-func (c *ModelAdaptor) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return c.client.Syncer(callbacks)
-}
-
 // getProfile gets the composite profile by getting the individual components
 // and joining the results together.
 func (c *ModelAdaptor) getProfile(ctx context.Context, k model.Key) (*model.KVPair, error) {
