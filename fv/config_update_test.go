@@ -24,12 +24,20 @@ import (
 
 	"context"
 
+	"errors"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/metrics"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
+)
+
+const (
+	kubeIPVSInterface     = "kube-ipvs0"
+	kubeProxyModeIPVS     = "ipvs"
+	kubeProxyModeIptables = "iptables"
 )
 
 var _ = Context("Config update tests, after starting felix", func() {
@@ -119,6 +127,9 @@ var _ = Context("Config update tests, after starting felix", func() {
 	shouldExitAfterADelay := func() {
 		Consistently(felix.GetFelixPIDs, "1s", "100ms").Should(ContainElement(felixPID))
 		Eventually(felix.GetFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
+
+		// Update felix pid after restart.
+		felixPID = felix.GetSinglePID("calico-felix")
 	}
 
 	Context("after updating config that should trigger a restart", func() {
@@ -156,6 +167,44 @@ var _ = Context("Config update tests, after starting felix", func() {
 			It("should exit after a delay", shouldExitAfterADelay)
 		})
 	})
+
+	Context("after switching kube-proxy mode that should trigger a restart", func() {
+		// This test simulate kube-proxy switching between iptables to ipvs mode by adding/removing
+		// kube-ipvs0 dummy interface.
+		var proxy *kubeProxy
+
+		BeforeEach(func() {
+			waitForFelixInSync(felix)
+			proxy = newKubeProxy(felix)
+		})
+
+		Context("after switch to ipvs mode that should trigger a restart", func() {
+			BeforeEach(func() {
+				err := proxy.switchToMode(kubeProxyModeIPVS)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should exit after a delay", shouldExitAfterADelay)
+		})
+
+		Context("after switch to iptables mode that should trigger a restart", func() {
+			BeforeEach(func() {
+				// First switch to ipvs mode.
+				err := proxy.switchToMode(kubeProxyModeIPVS)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Wait felix in sync again.
+				shouldExitAfterADelay()
+				waitForFelixInSync(felix)
+
+				// Back to iptables mode.
+				err = proxy.switchToMode(kubeProxyModeIptables)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should exit after a delay", shouldExitAfterADelay)
+		})
+	})
 })
 
 func waitForFelixInSync(felix *containers.Felix) {
@@ -167,4 +216,39 @@ func waitForFelixInSync(felix *containers.Felix) {
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_int_dataplane_apply_time_seconds_count")
 	}).Should(BeNumerically(">", 0))
+}
+
+// kubeProxy object for felix container
+type kubeProxy struct {
+	mode  string
+	felix *containers.Felix
+}
+
+func newKubeProxy(felix *containers.Felix) *kubeProxy {
+	// Default mode for kube-proxy is iptables.
+	return &kubeProxy{mode: "iptables", felix: felix}
+}
+
+func (k *kubeProxy) getCurrentMode() string {
+	return k.mode
+}
+
+func (k *kubeProxy) switchToMode(mode string) error {
+	if mode == k.mode {
+		// nothing to do
+		return nil
+	}
+
+	switch mode {
+	case kubeProxyModeIPVS:
+		k.felix.Exec("ip", "link", "add", "dev", kubeIPVSInterface, "type", "dummy")
+		k.felix.Exec("ip", "link", "set", kubeIPVSInterface, "up")
+	case kubeProxyModeIptables:
+		k.felix.Exec("ip", "link", "del", kubeIPVSInterface)
+	default:
+		return errors.New("Invalid mode to switch.")
+	}
+
+	k.mode = mode
+	return nil
 }
