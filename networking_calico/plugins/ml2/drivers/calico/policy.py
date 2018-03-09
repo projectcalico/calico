@@ -25,11 +25,11 @@ LOG = log.getLogger(__name__)
 # 'has(<security-group-label>)' represents the VMs that belong to that security
 # group.
 #
-# The label for each security group is 'ossg.' followed by the security group
-# ID, and the name of the NetworkPolicy for each security group is 'sg-'
-# followed by the security group ID.
-SG_LABEL_PREFIX = 'ossg.'
-SG_NAME_PREFIX = 'sg-'
+# The label for each security group is 'sg.projectcalico.org/openstack-'
+# followed by the security group ID, and the name of the NetworkPolicy for each
+# security group is 'ossg.default.'  followed by the security group ID.
+SG_LABEL_PREFIX = 'sg.projectcalico.org/openstack-'
+SG_NAME_PREFIX = 'ossg.default.'
 
 
 class PolicySyncer(ResourceSyncer):
