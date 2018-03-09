@@ -21,8 +21,47 @@ you can achieve fine-grained control over communications
 between containers, virtual machine workloads, and 
 bare metal host endpoints.
 
-Proven in production at scale, {{site.prodname}} features 
-integrations with Kubernetes, OpenShift, Docker, 
-Mesos, DC/OS, and OpenStack.
+Proven in production at scale, {{site.prodname}} v3.0 features 
+integrations with Kubernetes, OpenShift, and OpenStack.
 
-<a href="/{{page.version}}/getting-started/" class="btn btn-primary btn-lg">Get started</a>
+> **Note**: For integrations with the  Mesos, DC/OS, and Docker 
+> orchestrators, use [Calico v2.6](/v2.6/introduction/). We plan 
+> to resume support for these orchestrators in a future 
+> v3.x release.
+{: .alert .alert-info}
+
+# Get started
+
+<div class="row">
+  <div class="col-xs-6 col-md-3">
+    <a href="/{{page.version}}/getting-started/kubernetes/" class="thumbnail">
+      <img src="{{site.baseurl}}/images/kubernetes-button.svg" alt="Kubernetes" width="40%">
+    </a>
+  </div>
+  <div class="col-xs-6 col-md-3">
+    <a href="/{{page.version}}/getting-started/openshift/installation" class="thumbnail">
+      <img src="{{site.baseurl}}/images/openshift-button.svg" alt="OpenShift" width="35%">
+    </a>
+  </div>
+  <div class="col-xs-6 col-md-3">
+    <a href="/{{page.version}}/getting-started/openstack/" class="thumbnail">
+      <img src="{{site.baseurl}}/images/openstack-button.svg" alt="OpenStack" width="40%">
+    </a>
+  </div>
+</div>
+
+
+# How it works
+
+![{{site.prodname}} overview diagram]({{site.baseurl}}/images/calico-arch-gen.svg){: width="60%" }
+
+<br>
+{{site.prodname}} leverages the routing and iptables firewall capabilities native to the Linux kernel. All traffic to and from individual containers, virtual machines, and hosts traverses these in-kernel rules before being routed to its destination.
+
+- **calicoctl**: allows you to achieve advanced policies and networking from a simple, command-line interface.
+
+- **orchestrator plugins**: provide close integration and synchronization with a variety of popular orchestrators.
+
+- **key/value store**: holds {{site.prodname}}'s policy and network configuration state.
+
+- **{{site.nodecontainer}}**: runs on each host, reads relevant policy and network configuration information from the key/value store, and implements it in the Linux kernel.
