@@ -320,6 +320,41 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		go cb.ProcessUpdates()
 	})
 
+	AfterEach(func() {
+		// Clean up all Calico resources.
+		err := c.Clean()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Clean up any k8s network policy left over by the test.
+		nps := networkingv1.NetworkPolicyList{}
+		err = c.clientSet.NetworkingV1().RESTClient().
+			Get().
+			Resource("networkpolicies").
+			Timeout(10 * time.Second).
+			Do().Into(&nps)
+		Expect(err).NotTo(HaveOccurred())
+
+		for _, np := range nps.Items {
+			result := c.clientSet.NetworkingV1().RESTClient().
+				Delete().
+				Resource("networkpolicies").
+				Namespace(np.Namespace).
+				Name(np.Name).
+				Timeout(10 * time.Second).
+				Do()
+			Expect(result.Error()).NotTo(HaveOccurred())
+		}
+
+		// Clean up any pods left over by the test.
+		pods, err := c.clientSet.CoreV1().Pods("").List(metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		for _, p := range pods.Items {
+			err = c.clientSet.CoreV1().Pods(p.Namespace).Delete(p.Name, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+	})
+
 	It("should handle a Namespace with DefaultDeny (v1beta annotation for namespace isolation)", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -330,12 +365,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				Labels: map[string]string{"label": "value"},
 			},
 		}
-
-		// Make sure we clean up.  Don't check for errors since we attempt
-		// to delete as part of the test below.
-		defer func() {
-			c.clientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
-		}()
 
 		By("Creating a namespace", func() {
 			_, err := c.clientSet.CoreV1().Namespaces().Create(&ns)
@@ -383,12 +412,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				Labels:      map[string]string{"label": "value"},
 			},
 		}
-
-		// Make sure we clean up after ourselves.  Don't check for errors since we attempt
-		// to delete as part of the test below.
-		defer func() {
-			c.clientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
-		}()
 
 		// Check to see if the create succeeded.
 		By("Creating a namespace", func() {
@@ -466,17 +489,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Body(&np).
 			Do()
 
-		// Make sure we clean up after ourselves.
-		defer func() {
-			res := c.clientSet.NetworkingV1().RESTClient().
-				Delete().
-				Resource("networkpolicies").
-				Namespace("default").
-				Name(np.ObjectMeta.Name).
-				Do()
-			Expect(res.Error()).NotTo(HaveOccurred())
-		}()
-
 		// Check to see if the create succeeded.
 		Expect(res.Error()).NotTo(HaveOccurred())
 
@@ -492,38 +504,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}, "")
 		Expect(err).NotTo(HaveOccurred())
 	})
-
-	// Add a defer to wait for policies to clean up.
-	defer func() {
-		log.Warnf("[TEST] Waiting for policies to tear down")
-		It("should clean up all policies", func() {
-			nps := networkingv1.NetworkPolicyList{}
-			err := c.clientSet.NetworkingV1().RESTClient().
-				Get().
-				Resource("networkpolicies").
-				Namespace("default").
-				Timeout(10 * time.Second).
-				Do().Into(&nps)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Loop until no network policies exist.
-			for i := 0; i < 10; i++ {
-				if len(nps.Items) == 0 {
-					return
-				}
-				nps := networkingv1.NetworkPolicyList{}
-				err := c.clientSet.NetworkingV1().RESTClient().
-					Get().
-					Resource("networkpolicies").
-					Namespace("default").
-					Timeout(10 * time.Second).
-					Do().Into(&nps)
-				Expect(err).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-			}
-			panic(fmt.Sprintf("Failed to clean up policies: %+v", nps))
-		})
-	}()
 
 	It("should handle a CRUD of Global Network Policy", func() {
 		var kvpRes *model.KVPair
@@ -588,13 +568,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				Spec: calicoDisallowPolicyModelSpec,
 			},
 		}
-
-		// Make sure we clean up after ourselves.  We allow this to fail because
-		// part of our explicit testing below is to delete the resource.
-		defer func() {
-			gnpClient.Delete(ctx, kvp1a.Key, "")
-			gnpClient.Delete(ctx, kvp2a.Key, "")
-		}()
 
 		// Check our syncer has the correct GNP entries for the two
 		// System Network Protocols that this test manipulates.  Neither
@@ -774,13 +747,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		var kvpRes *model.KVPair
 		var err error
 
-		// Make sure we clean up after ourselves.  We allow this to fail because
-		// part of our explicit testing below is to delete the resource.
-		defer func() {
-			c.Delete(ctx, kvp1a.Key, "")
-			c.Delete(ctx, kvp2a.Key, "")
-		}()
-
 		By("Creating a Host Endpoint", func() {
 			kvpRes, err = c.Create(ctx, kvp1a)
 			Expect(err).NotTo(HaveOccurred())
@@ -934,13 +900,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		var kvpRes *model.KVPair
 		var err error
 
-		// Make sure we clean up after ourselves.  We allow this to fail because
-		// part of our explicit testing below is to delete the resource.
-		defer func() {
-			c.Delete(ctx, kvp1a.Key, "")
-			c.Delete(ctx, kvp2a.Key, "")
-		}()
-
 		By("Creating a BGP Peer", func() {
 			kvpRes, err = c.Create(ctx, kvp1a)
 			Expect(err).NotTo(HaveOccurred())
@@ -1028,20 +987,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	It("should handle a CRUD of Node BGP Peer", func() {
 		var kvp1a, kvp1b, kvp2a, kvp2b, kvpRes *model.KVPair
 		var nodename, peername1, peername2 string
-
-		// Make sure we clean up after ourselves.  We allow this to fail because
-		// part of our explicit testing below is to delete the resource.
-		defer func() {
-			log.Debug("Deleting Node BGP Peers")
-			if peers, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindBGPPeer}, ""); err == nil {
-				log.WithField("Peers", peers).Debug("Deleting resources")
-				for _, peer := range peers.KVPairs {
-					log.WithField("Key", peer.Key).Debug("Deleting resource")
-					peer.Revision = ""
-					_, _ = c.Delete(ctx, peer.Key, "")
-				}
-			}
-		}()
 
 		By("Listing all Nodes to find a suitable Node name", func() {
 			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, "")
@@ -1257,12 +1202,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		_, err := c.clientSet.CoreV1().Pods("default").Create(&pod)
 		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
 
-		// Make sure we clean up after ourselves.  This might fail if we reach the
-		// test below which deletes this pod, but that's OK.
-		defer func() {
-			log.Warnf("[TEST] Cleaning up test pod: %s", pod.ObjectMeta.Name)
-			_ = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
-		}()
 		By("Creating a pod", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -1374,12 +1313,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		pod, err := c.clientSet.CoreV1().Pods("default").Create(pod)
 		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
 
-		// Make sure we clean up after ourselves.  This might fail if we reach the
-		// test below which deletes this pod, but that's OK.
-		defer func() {
-			log.Warnf("[TEST] Cleaning up test pod: %s", pod.ObjectMeta.Name)
-			_ = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
-		}()
 		By("Creating a pod", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -1479,26 +1412,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	})
 
-	// Add a defer to wait for all pods to clean up.
-	defer func() {
-		It("should clean up all pods", func() {
-			log.Warnf("[TEST] Waiting for pods to tear down")
-			pods, err := c.clientSet.CoreV1().Pods("default").List(metav1.ListOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			// Wait up to 60s for pod cleanup to occur.
-			for i := 0; i < 60; i++ {
-				if len(pods.Items) == 0 {
-					return
-				}
-				pods, err = c.clientSet.CoreV1().Pods("default").List(metav1.ListOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				time.Sleep(1 * time.Second)
-			}
-			panic(fmt.Sprintf("Failed to clean up pods: %+v", pods))
-		})
-	}()
-
 	It("should error on unsupported List() calls", func() {
 		objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 		Expect(err).To(HaveOccurred())
@@ -1541,12 +1454,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 		var updFC *model.KVPair
 		var err error
-
-		defer func() {
-			// Always make sure we tidy up after ourselves.  Ignore
-			// errors since the test itself should delete what it created.
-			_, _ = c.Delete(ctx, fc.Key, "")
-		}()
 
 		By("creating a new object", func() {
 			updFC, err = c.Create(ctx, fc)
