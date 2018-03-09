@@ -122,9 +122,9 @@ func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[st
 	}
 
 	// Convert to an ordinal.
-	ordinal := ipToOrdinal(address, *b)
-	if (ordinal < 0) || (ordinal > blockSize) {
-		return errors.New("IP address not in block")
+	ordinal, err := ipToOrdinal(address, *b)
+	if err != nil {
+		return err
 	}
 
 	// Check if already allocated.
@@ -173,9 +173,9 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 	// attributes that need to be cleaned up.
 	for _, ip := range addresses {
 		// Convert to an ordinal.
-		ordinal := ipToOrdinal(ip, *b)
-		if (ordinal < 0) || (ordinal > blockSize) {
-			return nil, nil, errors.New("IP address not in block")
+		ordinal, err := ipToOrdinal(ip, *b)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		// Check if allocated.
@@ -330,9 +330,9 @@ func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
 
 func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
 	// Convert to an ordinal.
-	ordinal := ipToOrdinal(ip, b)
-	if (ordinal < 0) || (ordinal > blockSize) {
-		return nil, errors.New(fmt.Sprintf("IP %s not in block %s", ip, b.AllocationBlock.CIDR))
+	ordinal, err := ipToOrdinal(ip, b)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check if allocated.
@@ -416,15 +416,14 @@ func incrementIP(ip cnet.IP, increment *big.Int) cnet.IP {
 	return intToIP(sum)
 }
 
-func ipToOrdinal(ip cnet.IP, b allocationBlock) int {
+func ipToOrdinal(ip cnet.IP, b allocationBlock) (int, error) {
 	ip_int := ipToInt(ip)
 	base_int := ipToInt(cnet.IP{b.CIDR.IP})
 	ord := big.NewInt(0).Sub(ip_int, base_int).Int64()
 	if ord < 0 || ord >= blockSize {
-		// IP address not in the given block.
-		log.Panicf("IP %s not in block %s", ip, b.CIDR)
+		return 0, fmt.Errorf("IP %s not in block %s", ip, b.CIDR)
 	}
-	return int(ord)
+	return int(ord), nil
 }
 
 func ordinalToIP(ord int, b allocationBlock) cnet.IP {
