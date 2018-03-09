@@ -60,6 +60,12 @@ ifeq ($(ARCH),ppc64le)
 	FV_TYPHAIMAGE?=calico/typha-ppc64le:latest
 endif
 
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER?=latest
+	FV_TYPHAIMAGE?=calico/typha-s390x:latest
+endif
+
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 PROTOC_CONTAINER?=calico/protoc$(ARCHTAG):$(PROTOC_VER)
 
