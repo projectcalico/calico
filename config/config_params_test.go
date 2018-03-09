@@ -312,10 +312,6 @@ var _ = DescribeTable("Config parsing",
 			{Protocol: "tcp", Port: 6667},
 		},
 	),
-	Entry("KubeIPVSSupportEnabled empty", "KubeIPVSSupportEnabled", "", false),
-	Entry("KubeIPVSSupportEnabled true", "KubeIPVSSupportEnabled", "true", true),
-	Entry("KubeIPVSSupportEnabled false", "KubeIPVSSupportEnabled", "false", false),
-
 	Entry("KubeNodePortRanges empty", "KubeNodePortRanges", "",
 		[]numorstring.Port{
 			{30000, 32767, ""},

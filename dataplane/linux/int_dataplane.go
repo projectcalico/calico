@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,6 +43,9 @@ const (
 	// channel before we apply the changes.  Higher values allow us to batch up more work on
 	// the channel for greater throughput when we're under load (at cost of higher latency).
 	msgPeekLimit = 100
+
+	// Interface name used by kube-proxy to bind service ips.
+	KubeIPVSInterface = "kube-ipvs0"
 )
 
 var (
@@ -111,6 +114,8 @@ type Config struct {
 	IfaceMonitorConfig ifacemonitor.Config
 
 	StatusReportingInterval time.Duration
+
+	ConfigChangedRestartCallback func()
 
 	PostInSyncCallback func()
 	HealthAggregator   *health.HealthAggregator
@@ -456,6 +461,21 @@ type ifaceUpdate struct {
 	State ifacemonitor.State
 }
 
+// Check if current felix ipvs config is correct when felix gets an kube-ipvs0 interface update.
+// If KubeIPVSInterface is UP and felix ipvs support is disabled (kube-proxy switched from iptables to ipvs mode),
+// or if KubeIPVSInterface is DOWN and felix ipvs support is enabled (kube-proxy switched from ipvs to iptables mode),
+// restart felix to pick up correct ipvs support mode.
+func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.State) {
+	if (!d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateUp) ||
+		(d.config.RulesConfig.KubeIPVSSupportEnabled && state == ifacemonitor.StateDown) {
+		log.WithFields(log.Fields{
+			"ipvsIfaceState": state,
+			"ipvsSupport":    d.config.RulesConfig.KubeIPVSSupportEnabled,
+		}).Info("kube-proxy mode changed. Restart felix.")
+		d.config.ConfigChangedRestartCallback()
+	}
+}
+
 // onIfaceAddrsChange is our interface address monitor callback.  It gets called
 // from the monitor's thread.
 func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) {
@@ -604,6 +624,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 	processIfaceUpdate := func(ifaceUpdate *ifaceUpdate) {
 		log.WithField("msg", ifaceUpdate).Info("Received interface update")
+		if ifaceUpdate.Name == KubeIPVSInterface {
+			d.checkIPVSConfigOnStateUpdate(ifaceUpdate.State)
+			return
+		}
+
 		for _, mgr := range d.allManagers {
 			mgr.OnUpdate(ifaceUpdate)
 		}

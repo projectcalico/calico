@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -296,11 +296,14 @@ configRetry:
 	var dpDriver dp.DataplaneDriver
 	var dpDriverCmd *exec.Cmd
 
-	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator)
+	failureReportChan := make(chan string)
+	configChangedRestartCallback := func() { failureReportChan <- reasonConfigChanged }
+
+	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator, configChangedRestartCallback)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
-	failureReportChan := make(chan string)
+
 	var connToUsageRepUpdChan chan map[string]string
 	if configParams.UsageReportingEnabled {
 		// Make a channel for the connector to use to send updates to the usage reporter.

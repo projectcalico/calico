@@ -24,7 +24,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
-func StartDataplaneDriver(configParams *config.Config, healthAggregator *health.HealthAggregator) (DataplaneDriver, *exec.Cmd) {
+func StartDataplaneDriver(configParams *config.Config,
+	healthAggregator *health.HealthAggregator,
+	configChangedRestartCallback func()) (DataplaneDriver, *exec.Cmd) {
 	log.Info("Using Windows dataplane driver.")
 
 	dpConfig := windataplane.Config{
