@@ -5,6 +5,7 @@
 | notProtocol | Negative protocol match.                   | `TCP`, `UDP`, `ICMP`, `ICMPv6`, `SCTP`, `UDPLite`, `1`-`255`      | string \| integer         |            |
 | icmp        | ICMP match criteria.                       |                                                                   | [ICMP](#icmp)             |            |
 | notICMP     | Negative match on ICMP.                    |                                                                   | [ICMP](#icmp)             |            |
+| ipVersion   | Positive IP version match.                 | `4`, `6`                                                          | integer                   |            |
 | source      | Source match parameters.                   |                                                                   | [EntityRule](#entityrule) |            |
 | destination | Destination match parameters.              |                                                                   | [EntityRule](#entityrule) |            |
 

@@ -88,6 +88,7 @@ for how `doNotTrack` and `preDNAT` can be useful for host endpoints.
 | notProtocol | Negative protocol match. | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
 | icmp        | ICMP match criteria.     | | [ICMP](#icmp) | |
 | notICMP     | Negative match on ICMP. | | [ICMP](#icmp) | |
+| ipVersion   | Positive IP version match. | `4`, `6` | integer | |
 | source      | Source match parameters. |  | [EntityRule](#entityrule) | |
 | destination | Destination match parameters. |  | [EntityRule](#entityrule) | |
 
