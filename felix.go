@@ -51,6 +51,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	errors2 "github.com/projectcalico/libcalico-go/lib/errors"
@@ -367,7 +368,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		syncer = backendClient.Syncer(syncerToValidator)
+		syncer = felixsyncer.New(backendClient, syncerToValidator)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 
