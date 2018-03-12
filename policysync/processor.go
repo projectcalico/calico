@@ -22,14 +22,23 @@ import (
 	"github.com/projectcalico/felix/proto"
 )
 
+// MaxMembersPerMessage sets the limit on how many IP Set members to include in an outgoing gRPC message, which has a
+// size limit of 4MB (4194304 bytes).  Worst case, an IP Set member would be an IPv6 address including a port and
+// protocol.
+// 2001:0db8:0000:0000:0000:ff00:0042:8329,tcp:65535 = 49 characters
+// Protobuf strings have 2 extra bytes of key/length (for lengths < 128), which gives 51 bytes per member, worst case.
+// 4194304 / 51 = 82241, which we round down to 82200, giving about 2kB for the rest of the message.
+const MaxMembersPerMessage = 82200
+
 type Processor struct {
 	Updates            <-chan interface{}
 	JoinUpdates        chan interface{}
 	endpointsByID      map[proto.WorkloadEndpointID]*EndpointInfo
-	policyByID         map[proto.PolicyID]*proto.Policy
-	profileByID        map[proto.ProfileID]*proto.Profile
+	policyByID         map[proto.PolicyID]*policyInfo
+	profileByID        map[proto.ProfileID]*profileInfo
 	serviceAccountByID map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
 	namespaceByID      map[proto.NamespaceID]*proto.NamespaceUpdate
+	ipSetsByID         map[string]*ipSetInfo
 	receivedInSync     bool
 }
 
@@ -40,6 +49,7 @@ type EndpointInfo struct {
 	endpointUpd    *proto.WorkloadEndpointUpdate
 	syncedPolicies map[proto.PolicyID]bool
 	syncedProfiles map[proto.ProfileID]bool
+	syncedIPSets   map[string]bool
 }
 
 type JoinMetadata struct {
@@ -69,10 +79,11 @@ func NewProcessor(updates <-chan interface{}) *Processor {
 		// JoinUpdates from the new servers that have started.
 		JoinUpdates:        make(chan interface{}, 10),
 		endpointsByID:      make(map[proto.WorkloadEndpointID]*EndpointInfo),
-		policyByID:         make(map[proto.PolicyID]*proto.Policy),
-		profileByID:        make(map[proto.ProfileID]*proto.Profile),
+		policyByID:         make(map[proto.PolicyID]*policyInfo),
+		profileByID:        make(map[proto.ProfileID]*profileInfo),
 		serviceAccountByID: make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
 		namespaceByID:      make(map[proto.NamespaceID]*proto.NamespaceUpdate),
+		ipSetsByID:         make(map[string]*ipSetInfo),
 	}
 }
 
@@ -121,6 +132,7 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	ei.output = joinReq.C
 	ei.syncedPolicies = map[proto.PolicyID]bool{}
 	ei.syncedProfiles = map[proto.ProfileID]bool{}
+	ei.syncedIPSets = map[string]bool{}
 
 	p.maybeSyncEndpoint(ei)
 
@@ -160,7 +172,7 @@ func (p *Processor) handleLeave(leaveReq LeaveRequest) {
 }
 
 func (p *Processor) handleDataplane(update interface{}) {
-	log.WithFields(log.Fields{"update": update, "type": reflect.TypeOf(update)}).Info("Dataplane update")
+	log.WithFields(log.Fields{"update": update, "type": reflect.TypeOf(update)}).Debug("Dataplane update")
 	switch update := update.(type) {
 	case *proto.InSync:
 		p.handleInSync(update)
@@ -184,6 +196,12 @@ func (p *Processor) handleDataplane(update interface{}) {
 		p.handleNamespaceUpdate(update)
 	case *proto.NamespaceRemove:
 		p.handleNamespaceRemove(update)
+	case *proto.IPSetUpdate:
+		p.handleIPSetUpdate(update)
+	case *proto.IPSetDeltaUpdate:
+		p.handleIPSetDeltaUpdate(update)
+	case *proto.IPSetRemove:
+		p.handleIPSetRemove(update)
 	default:
 		log.WithFields(log.Fields{
 			"update": update,
@@ -236,14 +254,17 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 		return
 	}
 
-	// The calc graph sends us policies and profiles before endpoint updates, but the Processor doesn't know
-	// which endpoints need them until now.  Send any unsynced profiles & policies referenced
+	// The calc graph sends us IP sets, policies and profiles before endpoint updates, but the Processor doesn't know
+	// which endpoints need them until now.  Send any unsynced, IP sets, profiles & policies referenced
+	doAdd, doDel := p.getIPSetsSync(ei)
+	doAdd()
 	p.syncAddedPolicies(ei)
 	p.syncAddedProfiles(ei)
 	ei.output <- proto.ToDataplane{
 		Payload: &proto.ToDataplane_WorkloadEndpointUpdate{ei.endpointUpd}}
 	p.syncRemovedPolicies(ei)
 	p.syncRemovedProfiles(ei)
+	doDel()
 	if p.receivedInSync {
 		log.WithField("channel", ei.output).Debug("Already in sync with the datastore, sending in-sync message to client")
 		ei.output <- proto.ToDataplane{
@@ -265,14 +286,17 @@ func (p *Processor) handleWorkloadEndpointRemove(update *proto.WorkloadEndpointR
 func (p *Processor) handleActiveProfileUpdate(update *proto.ActiveProfileUpdate) {
 	pId := *update.Id
 	profile := update.GetProfile()
-	p.profileByID[pId] = profile
+	p.profileByID[pId] = newProfileInfo(profile)
 
 	// Update any endpoints that reference this profile
 	for _, ei := range p.updateableEndpoints() {
 		action := func(other proto.ProfileID) bool {
 			if other == pId {
+				doAdd, doDel := p.getIPSetsSync(ei)
+				doAdd()
 				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{update}}
 				ei.syncedProfiles[pId] = true
+				doDel()
 				return true
 			}
 			return false
@@ -299,15 +323,18 @@ func (p *Processor) handleActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
 	pId := *update.Id
 	log.WithFields(log.Fields{"PolicyID": pId}).Debug("Processing ActivePolicyUpdate")
 	policy := update.GetPolicy()
-	p.policyByID[pId] = policy
+	p.policyByID[pId] = newPolicyInfo(policy)
 
 	// Update any endpoints that reference this policy
 	for _, ei := range p.updateableEndpoints() {
 		// Closure of the action to take on each policy on the endpoint.
 		action := func(other proto.PolicyID) bool {
 			if other == pId {
+				doAdd, doDel := p.getIPSetsSync(ei)
+				doAdd()
 				ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{update}}
 				ei.syncedPolicies[pId] = true
+				doDel()
 				return true
 			}
 			return false
@@ -372,10 +399,68 @@ func (p *Processor) handleNamespaceRemove(update *proto.NamespaceRemove) {
 	delete(p.namespaceByID, id)
 }
 
+func (p *Processor) handleIPSetUpdate(update *proto.IPSetUpdate) {
+	id := update.Id
+	logCxt := log.WithField("ID", id)
+	logCxt.Debug("Processing IPSetUpdate")
+	s, ok := p.ipSetsByID[id]
+	if !ok {
+		logCxt.Info("Adding new IP Set")
+		s = newIPSet(update)
+		p.ipSetsByID[id] = s
+
+		// Since the calc graph will always send IPSets before any policies/profiles
+		// that reference them, we don't know which endpoints will need this IPSet yet,
+		// so we can stop processing here.
+		return
+	}
+	logCxt.Info("Updating existing IPSet")
+	s.replaceMembers(update)
+
+	// gRPC has limits on message size, so break up large update if necessary.
+	updates := splitIPSetUpdate(update)
+	for _, ei := range p.updateableEndpoints() {
+		if p.referencesIPSet(ei, id) {
+			ei.syncedIPSets[id] = true
+			for _, u := range updates {
+				ei.output <- u
+			}
+		}
+	}
+}
+
+func (p *Processor) handleIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) {
+	id := update.Id
+	log.WithField("ID", id).Debug("Processing IPSetDeltaUpdate")
+
+	// We trust the calc graph to never send us Delta updates for non-existent sets.
+	s := p.ipSetsByID[id]
+	s.deltaUpdate(update)
+
+	// gRPC has limits on message size, so break up large update if necessary.
+	updates := splitIPSetDeltaUpdate(update)
+	for _, ei := range p.updateableEndpoints() {
+		if p.referencesIPSet(ei, id) {
+			for _, u := range updates {
+				ei.output <- u
+			}
+		}
+	}
+}
+
+func (p *Processor) handleIPSetRemove(update *proto.IPSetRemove) {
+	id := update.Id
+	log.WithField("ID", id).Debug("Processing IPSetRemove")
+	delete(p.ipSetsByID, id)
+
+	// No need to send the update to any endpoints, since that will happen
+	// as soon as the endpoint no longer has a reference to the IPSet.
+}
+
 func (p *Processor) syncAddedPolicies(ei *EndpointInfo) {
 	ei.iteratePolicies(func(pId proto.PolicyID) bool {
 		if !ei.syncedPolicies[pId] {
-			policy := p.policyByID[pId]
+			policy := p.policyByID[pId].p
 			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 				&proto.ActivePolicyUpdate{
 					Id:     &pId,
@@ -417,7 +502,7 @@ func (p *Processor) syncRemovedPolicies(ei *EndpointInfo) {
 func (p *Processor) syncAddedProfiles(ei *EndpointInfo) {
 	ei.iterateProfiles(func(pId proto.ProfileID) bool {
 		if !ei.syncedProfiles[pId] {
-			profile := p.profileByID[pId]
+			profile := p.profileByID[pId].p
 			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
 				&proto.ActiveProfileUpdate{
 					Id:      &pId,
@@ -489,6 +574,90 @@ func (p *Processor) updateableEndpoints() []*EndpointInfo {
 	return out
 }
 
+// referencesIPSet determines whether the endpoint's policies or profiles reference a given IPSet
+func (p *Processor) referencesIPSet(ei *EndpointInfo, id string) bool {
+	var found = false
+	ei.iterateProfiles(func(pid proto.ProfileID) bool {
+		pi := p.profileByID[pid]
+		if pi.referencesIPSet(id) {
+			found = true
+			return true
+		}
+		return false
+	})
+	// bail out here if we found a ref
+	if found {
+		return true
+	}
+	// otherwise, check policies
+	ei.iteratePolicies(func(pid proto.PolicyID) bool {
+		pi := p.policyByID[pid]
+		if pi.referencesIPSet(id) {
+			found = true
+			return true
+		}
+		return false
+	})
+	return found
+}
+
+// syncIPSets computes IPSets to be added and removed for an endpoint. Returns closures that do the
+// add and remove since we often want to sequence these around other operations.
+func (p *Processor) getIPSetsSync(ei *EndpointInfo) (func(), func()) {
+	// Compute all the IPSets that should be synced.
+	newS := map[string]bool{}
+	ei.iterateProfiles(func(id proto.ProfileID) bool {
+		pi := p.profileByID[id]
+		for ipset := range pi.refs {
+			newS[ipset] = true
+		}
+		return false
+	})
+	ei.iteratePolicies(func(id proto.PolicyID) bool {
+		pi := p.policyByID[id]
+		for ipset := range pi.refs {
+			newS[ipset] = true
+		}
+		return false
+	})
+
+	oldS := ei.syncedIPSets
+	var toAdd []string
+	for ipset := range newS {
+		if !oldS[ipset] {
+			toAdd = append(toAdd, ipset)
+		}
+		delete(oldS, ipset)
+	}
+	// oldS now only contains items to be deleted
+	ei.syncedIPSets = newS
+
+	doAdd := func() {
+		for _, ipset := range toAdd {
+			p.sendIPSetUpdate(ei, ipset)
+		}
+	}
+
+	doDel := func() {
+		for ipset := range oldS {
+			p.sendIPSetRemove(ei, ipset)
+		}
+	}
+	return doAdd, doDel
+}
+
+func (p *Processor) sendIPSetUpdate(ei *EndpointInfo, id string) {
+	si := p.ipSetsByID[id]
+	updates := splitIPSetUpdate(si.getIPSetUpdate())
+	for _, u := range updates {
+		ei.output <- u
+	}
+}
+
+func (p *Processor) sendIPSetRemove(ei *EndpointInfo, id string) {
+	ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_IpsetRemove{IpsetRemove: &proto.IPSetRemove{Id: id}}}
+}
+
 // Perform the action on every policy on the Endpoint, breaking if the action returns true.
 func (ei *EndpointInfo) iteratePolicies(action func(id proto.PolicyID) (stop bool)) {
 	var pId proto.PolicyID
@@ -518,4 +687,85 @@ func (ei *EndpointInfo) iterateProfiles(action func(id proto.ProfileID) (stop bo
 			return
 		}
 	}
+}
+
+// splitIPSetUpdate splits updates that would not fit into a single gRPC message into several smaller ones.
+func splitIPSetUpdate(update *proto.IPSetUpdate) []proto.ToDataplane {
+	mPerMsg := splitMembers(update.GetMembers())
+	numMsg := len(mPerMsg)
+	out := make([]proto.ToDataplane, numMsg)
+
+	// First message is always IPSetUpdate, and always is included.
+	out[0].Payload = &proto.ToDataplane_IpsetUpdate{IpsetUpdate: &proto.IPSetUpdate{
+		Id:      update.Id,
+		Type:    update.Type,
+		Members: mPerMsg[0],
+	}}
+
+	// If there are additional messages, they are IPSetDeltaUpdates
+	for i := 1; i < numMsg; i++ {
+		out[i].Payload = &proto.ToDataplane_IpsetDeltaUpdate{IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{
+			Id:           update.Id,
+			AddedMembers: mPerMsg[i],
+		}}
+	}
+	return out
+}
+
+// splitIPSetDeltaUpdate splits updates that would not fit into a single gRPC message into smaller ones.
+func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []proto.ToDataplane {
+	adds := splitMembers(update.GetAddedMembers())
+	dels := splitMembers(update.GetRemovedMembers())
+
+	var out []proto.ToDataplane
+	for len(adds)+len(dels) > 0 {
+		msg := proto.ToDataplane{Payload: &proto.ToDataplane_IpsetDeltaUpdate{
+			IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{Id: update.GetId()}}}
+		out = append(out, msg)
+		update := msg.GetIpsetDeltaUpdate()
+		if len(adds) > 0 {
+			update.AddedMembers = adds[0]
+			adds = adds[1:]
+		}
+
+		// Put removes on the message if they fit, but work from end end of the list since that is where
+		// partial slices will be.
+		end := len(dels) - 1
+		log.Errorf("end %d", end)
+		if len(dels) > 0 && (len(update.AddedMembers)+len(dels[end])) <= MaxMembersPerMessage {
+			update.RemovedMembers = dels[end]
+			dels = dels[0:end]
+		}
+	}
+	return out
+}
+
+func splitMembers(members []string) [][]string {
+	// We handle this very simply with a conservative maximum number of members. We could spin through and add up the
+	// actual member lengths, which could mean fewer messages, since few members will have the max length (IPv6 + port
+	// + protocol).  However, that would make this code more complex and slow message generation down, which would
+	// offset gains we might get with fewer messages.
+	out := make([][]string, 0)
+	first := 0
+	remains := len(members)
+
+	if remains == 0 {
+		// Special case handling an empty slice as input because we always want to return at least one element in the
+		// output (a slice containing and empty slice). This simplifies calling code that has to send a different
+		// initial message.
+		return [][]string{{}}
+	}
+
+	for remains > 0 {
+		numThis := MaxMembersPerMessage
+		if remains < numThis {
+			numThis = remains
+		}
+		end := first + numThis
+		sliceThis := members[first:end]
+		out = append(out, sliceThis)
+		first = end
+		remains = remains - numThis
+	}
+	return out
 }
