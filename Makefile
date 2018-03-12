@@ -76,7 +76,14 @@ FELIX_IMAGE_NAME?=calico/felix$(ARCHTAG):latest
 FV_FELIXIMAGE?=$(FELIX_IMAGE_NAME)
 FV_ETCDIMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube$(ARCHTAG):v1.7.5
-FV_GINKGO_NODES?=4
+
+# Total number of ginkgo batches to run.  The CI system sets this according to the number
+# of jobs that it divides the FVs into.
+FV_NUM_BATCHES?=3
+# Space-delimited list of FV batches to run in parallel.  Defaults to running all batches
+# in parallel on this host.  The CI system runs a subset of batches in each parallel job.
+FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
+FV_SLOW_SPEC_THRESH=90
 
 help:
 	@echo "Felix Makefile"
@@ -410,34 +417,28 @@ ut combined.coverprofile: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
 
-FV_TESTS=$(subst _suite_test.go,.test,$(shell find fv -name "*_suite_test.go"))
-
-$(FV_TESTS): vendor/.up-to-date $(FELIX_GO_FILES)
+fv/fv.test: vendor/.up-to-date $(FELIX_GO_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_GO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
-fv fv/latency.log: calico/felix bin/iptables-locker bin/test-workload bin/test-connection $(FV_TESTS)
-	# Copy the ginkgo binary out of the container since we need to run the fv tests directly
-	# on the host (because they need to be able to manipulate docker).  It'd be even nicer
-	# if we could give the build container access to the docker API but we've so-far struggled
-	# to get that working.
-	@echo Running Go FVs.
-	$(DOCKER_GO_BUILD) cp /go/bin/ginkgo bin/ginkgo
-	rm -rf fv/latency.log
-	for t in $(FV_TESTS); do \
-	    cd $(TOPDIR)/`dirname $$t` && \
-	    FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
-	    FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
-	    FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
-	    FV_K8SIMAGE=$(FV_K8SIMAGE) \
-	    $(TOPDIR)/bin/ginkgo $(GINKGO_ARGS) -slowSpecThreshold 80 -nodes $(FV_GINKGO_NODES) ./`basename $$t` || exit; \
-	done
-	@echo
-	@echo "Latency results:"
-	@echo
-	-@cat fv/latency.log
+fv fv/latency.log: calico/felix bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
+	cd fv && \
+	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
+	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
+	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	  FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
+	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
+	  GINKGO_ARGS='$(GINKGO_ARGS)' \
+	  ./run-batches
+	@if [ -e fv/latency.log ]; then \
+	   echo; \
+	   echo "Latency results:"; \
+	   echo; \
+	   cat fv/latency.log; \
+	fi
 
 bin/check-licenses: $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"
