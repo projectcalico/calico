@@ -29,8 +29,11 @@ import:
   subpackages:
   - ssh/terminal
 - package: github.com/projectcalico/go-yaml-wrapper
+# v1.0.5 seems to have a bad interaction with our logging hooks.
+- package: github.com/sirupsen/logrus
+  version: v1.0.4
 - package: github.com/projectcalico/libcalico-go
-  version: 16a16d0960511310db4772874de7650ab2967827
+  version: 49c0d0164441316a4bc430da232a8a6d7703275d
   subpackages:
   - lib/apis/v3
   - lib/clientv3
