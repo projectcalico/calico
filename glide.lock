@@ -1,5 +1,5 @@
-hash: 577ba9cfe1bbbfa00f4c625ecaa4c8195753dfbfd34387692d506a6914987ee2
-updated: 2018-03-02T18:53:48.958550334Z
+hash: 6eef23170517627d0869a1841d0ca342572d0d0eb5554a216822e6fb041d1133
+updated: 2018-03-12T15:55:35.757382055Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -121,7 +121,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: af1c35b4a213f41a7c51d643237e621b6d42e215
+  version: 335aa4cdb7e7919c119f6f1bc4bd29b0bdacd04b
   subpackages:
   - client/v2
   - models
@@ -141,7 +141,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/mattn/go-runewidth
-  version: 97311d9f7767e3d6f422ea06661bc2c7a19e8a5d
+  version: a9d6d1e4dc51df2130326793d49971f238839169
 - name: github.com/matttproud/golang_protobuf_extensions
   version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
   subpackages:
@@ -217,7 +217,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 16a16d0960511310db4772874de7650ab2967827
+  version: 49c0d0164441316a4bc430da232a8a6d7703275d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -230,9 +230,6 @@ imports:
   - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
-  - lib/backend/syncersv1/felixsyncer
-  - lib/backend/syncersv1/updateprocessors
-  - lib/backend/watchersyncer
   - lib/client
   - lib/clientv3
   - lib/errors
@@ -298,11 +295,11 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: 5236321576c0c97ab02c078e60f9b1c5c1828807
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
