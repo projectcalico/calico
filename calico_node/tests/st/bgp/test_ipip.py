@@ -172,7 +172,7 @@ class TestIPIP(TestBase):
 
     @parameterized.expand([
         ('bird',),
-        #('gobgp',),  # See issue https://github.com/projectcalico/calico-bgp-daemon/issues/37
+        ('gobgp',),
     ])
     def test_issue_1584(self, backend):
         """
@@ -231,8 +231,6 @@ class TestIPIP(TestBase):
                 # the node was shut down without removing the routes.  Check tunnel usage based
                 # on the current IPIP mode (only a mode of Always will use the tunnel).
                 host1.execute("docker rm -f calico-node")
-                self.assert_ipip_routing(host1, workload_host1, workload_host2,
-                                         modes[-1] == "always")
 
                 # Update the IPIP mode.
                 self.pool_action(host1, "replace", DEFAULT_IPV4_POOL_CIDR, mode is not None, ipip_mode=mode)
