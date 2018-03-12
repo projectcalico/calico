@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"context"
@@ -473,9 +474,9 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 	// prefix.
 	nameNormalizationTests := []TableEntry{
 		// OpenStack names should round-trip, including their prefix.
-		Entry("OpenStack policy", "ossg.default.group1"),
+		Entry("OpenStack policy", "ossg.default.group1", "ossg.default.group1"),
 		// As should normal names.
-		Entry("OpenStack policy", "foo-bar"),
+		Entry("OpenStack policy", "foo-bar", "default.foo-bar"),
 	}
 	if config.Spec.DatastoreType != "kubernetes" {
 		// Only test writing a knp-prefixed policy if we're not backed by KDD.  In KDD,
@@ -483,11 +484,11 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		// to write them through our API.
 		knpName := "knp.default.a-name"
 		nameNormalizationTests = append(nameNormalizationTests,
-			Entry("KDD policy", knpName),
+			Entry("KDD policy", knpName, knpName),
 		)
 	}
 	DescribeTable("name round-tripping tests",
-		func(name string) {
+		func(name, backendName string) {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -505,12 +506,19 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			Expect(inNp.GetName()).To(Equal(name), "Create() shouldn't touch input data")
 			Expect(np.GetName()).To(Equal(name), "Create() should return the data as we'd read it")
 
-			By("Getting the right policy with either name")
-			np, err = c.NetworkPolicies().Get(ctx, namespace1, name, options.GetOptions{})
+			By("Reading back the raw data with its normalized name: " + backendName)
+			// Make sure that, where the name and the storage name differ, we do the write with
+			// the storage name.  Then the assertions below verify that all the CRUD methods
+			// do the right conversion too.
+			kv, err := be.Get(ctx, model.ResourceKey{
+				Kind:      apiv3.KindNetworkPolicy,
+				Namespace: namespace1,
+				Name:      backendName,
+			}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(np.GetName()).To(Equal(name))
-			Expect(np.Spec).To(Equal(ingressTypesSpec1))
+			Expect(kv.Value.(*apiv3.NetworkPolicy).Spec).To(Equal(ingressTypesSpec1))
 
+			By("Getting the right policy by name")
 			np, err = c.NetworkPolicies().Get(ctx, namespace1, name, options.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(np.GetName()).To(Equal(name))
