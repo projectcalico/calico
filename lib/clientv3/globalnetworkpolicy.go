@@ -208,12 +208,20 @@ func convertPolicyNameForStorage(name string) string {
 	if strings.HasPrefix(name, "knp.") {
 		return name
 	}
+	// Similarly for "ossg."
+	if strings.HasPrefix(name, "ossg.") {
+		return name
+	}
 	return "default." + name
 }
 
 func convertPolicyNameFromStorage(name string) string {
 	// Do nothing on names prefixed with "knp."
 	if strings.HasPrefix(name, "knp.") {
+		return name
+	}
+	// Similarly for "ossg."
+	if strings.HasPrefix(name, "ossg.") {
 		return name
 	}
 	parts := strings.SplitN(name, ".", 2)
