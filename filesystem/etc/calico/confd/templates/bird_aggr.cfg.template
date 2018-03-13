@@ -17,7 +17,6 @@ function calico_aggr ()
 {{$parts := split . "-"}}
 {{$cidr := join $parts "/"}}
 {{$affinity := json (getv (printf "/%s" .))}}
-
   {{if $affinity.state}}
       # Block {{$cidr}} is {{$affinity.state}}
     {{if eq $affinity.state "confirmed"}}
@@ -29,6 +28,5 @@ function calico_aggr ()
       if ( net = {{$cidr}} ) then { accept; }
       if ( net ~ {{$cidr}} ) then { reject; }
   {{ end }}
-
 {{end}}
 }
