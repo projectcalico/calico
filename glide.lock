@@ -1,5 +1,5 @@
 hash: cae3a4cb0659060d77a3ed472d50c6abd2d5f0905e6243633c9ceada91ff732a
-updated: 2018-02-23T01:26:51.094590959Z
+updated: 2018-03-13T19:40:40.385167304Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -41,7 +41,7 @@ imports:
 - name: github.com/eapache/channels
   version: 47238d5aae8c0fefd518ef2bee46290909cf8263
 - name: github.com/eapache/queue
-  version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
+  version: 093482f3f8ce946c05bcba64badd2c82369e084d
 - name: github.com/emicklei/go-restful
   version: ff4f55a206334ef123e4f79bbf348980da81ca46
   subpackages:
@@ -121,7 +121,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 89a88d218e3a79bdaa35e45a53b0a5fe6a5f3bd0
+  version: d4282317f31c77b42be3e1b8ac190615167ee035
   subpackages:
   - client/v2
   - models
@@ -141,7 +141,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/mattn/go-runewidth
-  version: 97311d9f7767e3d6f422ea06661bc2c7a19e8a5d
+  version: a9d6d1e4dc51df2130326793d49971f238839169
 - name: github.com/matttproud/golang_protobuf_extensions
   version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
   subpackages:
@@ -205,7 +205,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/pelletier/go-toml
-  version: acdc4509485b587f5e675510c4f2c63e90ff68a8
+  version: 05bcc0fb0d3e60da4b8dd5bd7e0ea563eb4ca943
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/go-json
@@ -217,7 +217,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 436fe7649ee70f5f669e24790c73252c355bfba7
+  version: 702958166ffb80d63ee9c19355e7d89537d77841
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -282,7 +282,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
-  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
+  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: github.com/spf13/afero
   version: bbf41cb36dffe15dff5bf7e18c447801e7ffe163
   subpackages:
