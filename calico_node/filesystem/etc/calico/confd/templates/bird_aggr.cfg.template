@@ -13,10 +13,11 @@ protocol static {
 # Aggregation of routes on this host; export the block, nothing beneath it.
 function calico_aggr ()
 {
-{{range gets "/"}}
-{{$parts := split .Key "-"}}
+{{range ls "/"}}
+{{$parts := split . "-"}}
 {{$cidr := join $parts "/"}}
-{{$affinity := json .Value}}
+{{$affinity := json (getv (printf "/%s" .))}}
+
   {{if $affinity.state}}
       # Block {{$cidr}} is {{$affinity.state}}
     {{if eq $affinity.state "confirmed"}}
@@ -28,5 +29,6 @@ function calico_aggr ()
       if ( net = {{$cidr}} ) then { accept; }
       if ( net ~ {{$cidr}} ) then { reject; }
   {{ end }}
+
 {{end}}
 }
