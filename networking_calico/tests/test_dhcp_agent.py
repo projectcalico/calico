@@ -250,6 +250,28 @@ class TestDhcpAgent(base.BaseTestCase):
             # Check DHCP driver was not asked to do anything.
             call_driver.assert_not_called()
 
+    def test_endpoint_no_ipnetworks(self):
+        # Create the DHCP agent.
+        agent = CalicoDhcpAgent()
+
+        with mock.patch.object(agent, 'call_driver') as call_driver:
+            with mock.patch.object(agent.etcd, 'on_endpoint_delete') as ep_del:
+                # Notify an endpoint that is valid but has no ipNetworks.
+                agent.etcd.on_endpoint_set(EtcdResponse(value=json.dumps({
+                    'spec': {
+                        'interfaceName': 'tapfe166512-33',
+                        'mac': 'fe:16:65:12:33:44',
+                        'ipNetworks': []
+                    }})),
+                    make_endpoint_name('endpoint-1')
+                )
+
+                # Check handled as a deletion.
+                ep_del.assert_called()
+
+            # Check DHCP driver was not asked to do anything.
+            call_driver.assert_not_called()
+
     def test_no_subnet_data(self):
         # Create the DHCP agent.
         agent = CalicoDhcpAgent()

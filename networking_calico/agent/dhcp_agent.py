@@ -231,12 +231,21 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
                 'interfaceName' in endpoint['spec'] and
                 'ipNetworks' in endpoint['spec'] and
                 'mac' in endpoint['spec']):
-            # Endpoint data is invalid.
+            # Endpoint data is invalid; treat as deletion.
             LOG.warning("Invalid endpoint data: %s => %s",
                         response.value, endpoint)
+            self.on_endpoint_delete(None, name)
             return
         annotations = endpoint.get('metadata', {}).get('annotations', {})
         endpoint = endpoint['spec']
+
+        # If the endpoint has no ipNetworks, treat as deletion.  This happens
+        # when a resync from the mechanism driver overlaps with a port/VM being
+        # deleted.
+        if not endpoint['ipNetworks']:
+            LOG.info("Endpoint has no ipNetworks")
+            self.on_endpoint_delete(None, name)
+            return
 
         # Construct NetModel port equivalent of Calico's endpoint data.
         fixed_ips = []
@@ -399,7 +408,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             self.agent.cache.remove(net)
             self.agent.call_driver('disable', net)
 
-    def on_endpoint_delete(self, response, name):
+    def on_endpoint_delete(self, response_ignored, name):
         """Handler for endpoint deletion."""
         try:
             hostname, orchestrator, workload_id, endpoint_id = \
