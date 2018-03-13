@@ -34,7 +34,11 @@ import uuid
 import eventlet
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
-from neutron.common import topics
+try:
+    from neutron_lib.agent import topics
+except ImportError:
+    # Neutron code prior to d996758fb4 (13th March 2018).
+    from neutron.common import topics
 try:
     from neutron_lib import context as ctx
 except ImportError:

@@ -615,5 +615,13 @@ def main():
     calico_config.register_options(cfg.CONF)
     common_config.init(sys.argv[1:])
     setup_logging()
+    try:
+        # Neutron agent code has been migrating from rootwrap to privsep.
+        # Initialize the privsep system if it is available.
+        config.setup_privsep()
+    except Exception as e:
+        # But don't worry if it isn't; that means we are running with older
+        # Neutron code.
+        LOG.info("Couldn't setup_privsep(): %r", e)
     agent = CalicoDhcpAgent()
     agent.run()

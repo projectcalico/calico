@@ -54,6 +54,7 @@ r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_up
 r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_hotplug_nic.*)"
 r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_multiple_security_groups.*)"
 r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_port_security_disable_security_group.*)"
+r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_cross_tenant_traffic.*)"
 
 # End list of exclusions.
 r="$r)"
@@ -81,8 +82,12 @@ function gate_hook {
     status=$?
 
     # Do things to get at the Felix logs.
-    ls -lrt /var/log/calico
-    cat /var/log/calico/felix.log
+    if test -d /var/log/calico; then
+	ls -lrt /var/log/calico
+	if test -f /var/log/calico/felix.log; then
+	    cat /var/log/calico/felix.log
+	fi
+    fi
 
     # Return the normal gate hook's status.
     return $status
