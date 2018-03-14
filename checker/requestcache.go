@@ -21,6 +21,8 @@ import (
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // requestCache contains the CheckRequest and cached copies of computed information about the request
@@ -137,6 +139,15 @@ func (r *requestCache) initNamespace(name string) *namespace {
 		}
 	}
 	return ns
+}
+
+// GetIPSet returns the given IPSet from the store.
+func (r *requestCache) GetIPSet(ipset string) policystore.IPSet {
+	s, ok := r.store.IPSetByID[ipset]
+	if !ok {
+		log.WithField("ipset", ipset).Panic("could not find IP set")
+	}
+	return s
 }
 
 // parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.

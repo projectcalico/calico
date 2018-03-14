@@ -144,3 +144,145 @@ func TestIpPortContainsAddress(t *testing.T) {
 	Expect(uut.ContainsAddress(&addrTCP)).To(BeFalse())
 	Expect(uut.ContainsAddress(&addrIp)).To(BeTrue())
 }
+
+func TestIPNet(t *testing.T) {
+	RegisterTestingT(t)
+
+	uut := NewIPSet(proto.IPSetUpdate_NET)
+	uut.AddString("192.168.8.0/24")
+	addr192_168_8_1 := makeIpAddr("192.168.8.1")
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+
+	uut.AddString("192.168.0.0/16")
+	addr192_168_20_1 := makeIpAddr("192.168.20.1")
+	Expect(uut.ContainsAddress(&addr192_168_20_1)).To(BeTrue())
+
+	uut.RemoveString("192.168.0.0/16")
+	Expect(uut.ContainsAddress(&addr192_168_20_1)).To(BeFalse())
+
+	// Idempotency
+	uut.AddString("192.168.8.0/24")
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_20_1)).To(BeFalse())
+}
+
+func TestIPNetAddIP(t *testing.T) {
+	RegisterTestingT(t)
+
+	uut := NewIPSet(proto.IPSetUpdate_NET)
+	uut.AddString("192.168.8.8/32")
+	addr192_168_8_1 := makeIpAddr("192.168.8.1")
+	addr192_168_8_8 := makeIpAddr("192.168.8.8")
+	addr10_10_4_1 := makeIpAddr("10.10.4.1")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr10_10_4_1)).To(BeFalse())
+
+	// Idempotency
+	uut.AddString("192.168.8.8/32")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr10_10_4_1)).To(BeFalse())
+
+	// Remove
+	uut.RemoveString("192.168.8.8/32")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr10_10_4_1)).To(BeFalse())
+
+	// Check cleanup
+	internals := uut.(ipNetSet)
+	Expect(internals.v4.children).To(Equal([2]*trieNode{nil, nil}))
+	Expect(internals.v6.children).To(Equal([2]*trieNode{nil, nil}))
+}
+
+func TestIPNetAddAboveBelowMax(t *testing.T) {
+	RegisterTestingT(t)
+
+	uut := NewIPSet(proto.IPSetUpdate_NET)
+	addr192_168_8_1 := makeIpAddr("192.168.8.1")
+	addr192_168_8_8 := makeIpAddr("192.168.8.8")
+	addr192_168_255_1 := makeIpAddr("192.168.255.1")
+	uut.AddString("192.168.0.0/16")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeTrue())
+
+	uut.AddString("192.168.8.0/24")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeTrue())
+
+	uut.AddString("192.168.8.8/30")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeTrue())
+
+	uut.AddString("192.168.8.8/32")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeTrue())
+
+	uut.RemoveString("192.168.0.0/16")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeFalse())
+
+	uut.RemoveString("192.168.8.0/24")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeFalse())
+
+	uut.RemoveString("192.168.8.8/30")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeFalse())
+
+	uut.RemoveString("192.168.8.8/32")
+	Expect(uut.ContainsAddress(&addr192_168_8_8)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr192_168_8_1)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr192_168_255_1)).To(BeFalse())
+
+	// Check cleanup
+	internals := uut.(ipNetSet)
+	Expect(internals.v4.children).To(Equal([2]*trieNode{nil, nil}))
+	Expect(internals.v6.children).To(Equal([2]*trieNode{nil, nil}))
+}
+
+// Test that the trie uses most-significant bits first
+func TestIPNetBitOrder(t *testing.T) {
+	RegisterTestingT(t)
+
+	uut := NewIPSet(proto.IPSetUpdate_NET)
+	addr128 := makeIpAddr("129.0.0.1")
+	addr1 := makeIpAddr("1.0.0.1")
+	uut.AddString("1.0.0.0/2")
+	Expect(uut.ContainsAddress(&addr128)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addr1)).To(BeTrue())
+}
+
+func TestIPNetV6(t *testing.T) {
+	RegisterTestingT(t)
+
+	uut := NewIPSet(proto.IPSetUpdate_NET)
+	uut.AddString("fe80:23af:77bd::/49")
+	addrfe80_23af_77bd_34 := makeIpAddr("fe80:23af:77bd::34")
+	addrfe81_23af_77bd_fe80 := makeIpAddr("fe81:23af:77bd::fe80")
+	Expect(uut.ContainsAddress(&addrfe80_23af_77bd_34)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addrfe81_23af_77bd_fe80)).To(BeFalse())
+
+	uut.AddString("fe80:23af::/32")
+	addrfe80_23af_22 := makeIpAddr("fe80:23af::22")
+	Expect(uut.ContainsAddress(&addrfe80_23af_22)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addrfe81_23af_77bd_fe80)).To(BeFalse())
+
+	uut.RemoveString("fe80:23af::/32")
+	Expect(uut.ContainsAddress(&addrfe80_23af_22)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addrfe81_23af_77bd_fe80)).To(BeFalse())
+
+	// Idempotency
+	uut.AddString("fe80:23af:77bd::/48")
+	Expect(uut.ContainsAddress(&addrfe80_23af_77bd_34)).To(BeTrue())
+	Expect(uut.ContainsAddress(&addrfe80_23af_22)).To(BeFalse())
+	Expect(uut.ContainsAddress(&addrfe81_23af_77bd_fe80)).To(BeFalse())
+}

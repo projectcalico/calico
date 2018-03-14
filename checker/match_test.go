@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/envoyproxy/data-plane-api/api"
 	"github.com/envoyproxy/data-plane-api/api/auth"
 
 	"github.com/projectcalico/app-policy/policystore"
@@ -103,6 +104,8 @@ func TestMatchHTTPNil(t *testing.T) {
 // Matching a whole rule should require matching all subclauses.
 func TestMatchRule(t *testing.T) {
 	RegisterTestingT(t)
+	srcAddr := "192.168.4.22"
+	dstAddr := "10.54.44.23"
 
 	rule := &proto.Rule{
 		SrcServiceAccountMatch: &proto.ServiceAccountMatch{
@@ -111,6 +114,11 @@ func TestMatchRule(t *testing.T) {
 		DstServiceAccountMatch: &proto.ServiceAccountMatch{
 			Names: []string{"ian"},
 		},
+		SrcIpSetIds:    []string{"src0", "src1"},
+		NotSrcIpSetIds: []string{"notSrc0", "notSrc1"},
+		DstIpSetIds:    []string{"dst0", "dst1"},
+		NotDstIpSetIds: []string{"notDst0", "notDst1"},
+
 		HttpMatch: &proto.HTTPMatch{
 			Methods: []string{"GET", "POST"},
 		},
@@ -118,9 +126,21 @@ func TestMatchRule(t *testing.T) {
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
 		Source: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/sam",
+			Address: &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
+				SocketAddress: &envoy_api_v2.SocketAddress{
+					Address:       srcAddr,
+					Protocol:      envoy_api_v2.SocketAddress_TCP,
+					PortSpecifier: &envoy_api_v2.SocketAddress_PortValue{PortValue: 8458},
+				}}},
 		},
 		Destination: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/ian",
+			Address: &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
+				SocketAddress: &envoy_api_v2.SocketAddress{
+					Address:       dstAddr,
+					Protocol:      envoy_api_v2.SocketAddress_TCP,
+					PortSpecifier: &envoy_api_v2.SocketAddress_PortValue{PortValue: 80},
+				}}},
 		},
 		Request: &auth.AttributeContext_Request{
 			Http: &auth.AttributeContext_HTTPRequest{
@@ -129,7 +149,16 @@ func TestMatchRule(t *testing.T) {
 		},
 	}}
 
-	reqCache, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	store := policystore.NewPolicyStore()
+	addIPSet(store, "src0", srcAddr)
+	addIPSet(store, "src1", srcAddr, dstAddr)
+	addIPSet(store, "notSrc0", "5.6.7.8", dstAddr)
+	addIPSet(store, "notSrc1", "5.6.7.8")
+	addIPSet(store, "dst0", dstAddr)
+	addIPSet(store, "dst1", srcAddr, dstAddr)
+	addIPSet(store, "notDst0", "5.6.7.8")
+	addIPSet(store, "notDst1", "5.6.7.8", srcAddr)
+	reqCache, err := NewRequestCache(store, req)
 	Expect(err).To(Succeed())
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 }
@@ -203,4 +232,12 @@ func TestMatchRulePolicyNamespace(t *testing.T) {
 	rule.SrcServiceAccountMatch = &proto.ServiceAccountMatch{Names: []string{"sam"}}
 	Expect(match(rule, reqCache, "different")).To(BeFalse())
 	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+}
+
+func addIPSet(store *policystore.PolicyStore, id string, addr ...string) {
+	s := policystore.NewIPSet(proto.IPSetUpdate_IP)
+	for _, a := range addr {
+		s.AddString(a)
+	}
+	store.IPSetByID[id] = s
 }
