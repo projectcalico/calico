@@ -303,7 +303,6 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 	}
 
 	log.Debugf("Returning %d results", len(values))
-	log.Infof("VALUES: %v", values)
 
 	return values, nil
 }

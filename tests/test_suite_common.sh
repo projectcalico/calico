@@ -214,13 +214,13 @@ compare_templates() {
     testdir=$1
     output=$2
     rc=0
-    for f in `ls /tests/compiled_templates/${testdir}`; do
-        if ! diff -q /tests/compiled_templates/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
+    for f in `ls /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}`; do
+        if ! diff -q /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
             rc=1
             if [ $output -ne 0 ]; then
                 echo "Failed: $f templates do not match, showing diff of expected vs received"
                 set +e
-                diff /tests/compiled_templates/${testdir}/${f} /etc/calico/confd/config/${f}
+                diff /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f}
                 echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
                 cp /etc/calico/confd/config/${f} ${LOGPATH}/rendered/${f}
                 set -e
