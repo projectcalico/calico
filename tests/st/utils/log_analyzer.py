@@ -142,8 +142,8 @@ class LogAnalyzer(object):
         Extract the time of the first log in the file.  This is used to
         determine whether a file has flipped during a test.
         """
-        cmd = "head -100 %s" % self.filename
-        for log in self._parse_logs(cmd):
+        cmd = "head -100 %s"
+        for log in self._parse_logs(cmd, self.filename):
             return log.timestamp
         return None
 
@@ -200,14 +200,13 @@ class LogAnalyzer(object):
         if first_log_time != self.init_log_time or \
                 not self.init_log_lines:
             _log.debug("Log file is new")
-            cmd = "cat %s" % self.filename
+            cmd = "cat %s"
         else:
             _log.debug("Check appended logs")
-            cmd = "tail -n +%s %s" % (self.init_log_lines + 1,
-                                      self.filename)
-        return self._parse_logs(cmd)
+            cmd = "tail -n +%s %s" % (self.init_log_lines + 1)
+        return self._parse_logs(cmd, self.filename)
 
-    def _parse_logs(self, cmd):
+    def _parse_logs(self, cmd, filename):
         """
         Parse the logs from the output of the supplied command, returning a
         generator that iterates through the logs.
@@ -218,7 +217,7 @@ class LogAnalyzer(object):
         """
         last_log = None
         try:
-            for line in self.host.execute_readline(cmd):
+            for line in self.host.execute_readline(cmd, filename):
                 log = self._process_log_line(line, last_log)
 
                 # Logs may be continued, in which case we only return the log
