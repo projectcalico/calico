@@ -109,7 +109,7 @@ func (c *AffinityBlockClient) List(ctx context.Context, list model.ListInterface
 				CIDR: *cidr,
 				Host: bl.Host,
 			},
-			Value:    "{}",
+			Value:    &model.BlockAffinity{State: model.StateConfirmed},
 			Revision: node.ResourceVersion,
 		})
 
