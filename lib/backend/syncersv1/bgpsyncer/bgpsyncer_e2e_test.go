@@ -90,7 +90,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.BlockAffinityKey{Host: "127.0.0.1", CIDR: net.MustParseCIDR("10.10.10.0/24")},
-					Value: "{}",
+					Value: &model.BlockAffinity{State: model.StateConfirmed},
 				})
 			}
 
