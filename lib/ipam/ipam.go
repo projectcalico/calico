@@ -290,8 +290,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 			// Assign IPs from the block.
 			newIPs, err = c.assignFromExistingBlock(ctx, b, num, handleID, attrs, host, true)
 			if err != nil {
-				logCtx.WithError(err).Info("Couldn't assign from existing block")
-				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); !ok {
+				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					logCtx.WithError(err).Debug("CAS error assigning from affine block - retry")
 					continue
 				}
