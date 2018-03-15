@@ -1,0 +1,23 @@
+# The order of packages is significant, because pip processes them in the order
+# of appearance. Changing the order has an impact on the overall integration
+# process, which may cause wedges in the gate later.
+
+setuptools!=24.0.0,!=34.0.0,!=34.0.1,!=34.0.2,!=34.0.3,!=34.1.0,!=34.1.1,!=34.2.0,!=34.3.0,!=34.3.1,!=34.3.2,!=36.2.0,>=21.0.0 # PSF/ZPL
+
+hacking<0.11,>=0.10.0
+
+coverage!=4.4,>=4.0 # Apache-2.0
+kombu!=4.0.2,>=4.0.0 # BSD
+python-subunit>=1.0.0 # Apache-2.0/BSD
+docutils>=0.11 # OSI-Approved Open Source, Public Domain
+Jinja2>=2.10 # BSD License (3 clause)
+sphinx!=1.6.6,!=1.6.7,>=1.6.2 # BSD
+oslosphinx>=4.7.0 # Apache-2.0
+oslotest>=3.2.0 # Apache-2.0
+testrepository>=0.0.18 # Apache-2.0/BSD
+testscenarios>=0.4 # Apache-2.0/BSD
+testtools>=2.2.0 # MIT
+
+# This is installed from git in OpenStackCI for jobs that add
+# the project to required-projects.
+neutron>=12.0.0 # Apache-2.0
