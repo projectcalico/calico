@@ -543,6 +543,7 @@ func (s *PolicySets) NewHostRule(isInbound bool) *hns.ACLPolicy {
 		RuleType:  hns.Host,
 		Action:    hns.Allow,
 		Direction: direction,
+		Priority:  100,
 		Protocol:  256, // Any
 	}
 }
@@ -561,14 +562,6 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 		}
 		filtered = append(filtered, net)
 		filteredAll = false
-	}
-	return
-}
-
-// AppendPrefixToPolicyNames appends a prefix to each policy name
-func AppendPrefixToPolicyNames(prefix string, policyNames []string) (appendedNames []string) {
-	for _, policyName := range policyNames {
-		appendedNames = append(appendedNames, prefix+policyName)
 	}
 	return
 }

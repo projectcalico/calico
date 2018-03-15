@@ -160,8 +160,8 @@ func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
 		profilesApply := true
 
 		if len(workload.Tiers) > 0 {
-			activePolicyNames = append(activePolicyNames, policysets.AppendPrefixToPolicyNames(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
-			activePolicyNames = append(activePolicyNames, policysets.AppendPrefixToPolicyNames(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
+			activePolicyNames = append(activePolicyNames, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
+			activePolicyNames = append(activePolicyNames, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
 
 			if len(workload.Tiers[0].IngressPolicies) > 0 && len(workload.Tiers[0].EgressPolicies) > 0 {
 				profilesApply = false
@@ -169,7 +169,7 @@ func (m *endpointManager) ProcessIpSetUpdate(ipSetId string) {
 		}
 
 		if profilesApply && len(workload.ProfileIds) > 0 {
-			activePolicyNames = append(activePolicyNames, policysets.AppendPrefixToPolicyNames(policysets.ProfileNamePrefix, workload.ProfileIds)...)
+			activePolicyNames = append(activePolicyNames, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)...)
 		}
 
 	Policies:
@@ -223,18 +223,18 @@ func (m *endpointManager) CompleteDeferredWork() error {
 
 			if len(workload.Tiers) > 0 && len(workload.Tiers[0].IngressPolicies) > 0 {
 				logCxt.Debug("Workload Tier Policies will be applied Inbound")
-				inboundPolicyIds = append(inboundPolicyIds, policysets.AppendPrefixToPolicyNames(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
+				inboundPolicyIds = append(inboundPolicyIds, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].IngressPolicies)...)
 			} else if len(workload.ProfileIds) > 0 {
 				logCxt.Debug("Profiles will be applied Inbound")
-				inboundPolicyIds = append(inboundPolicyIds, policysets.AppendPrefixToPolicyNames(policysets.ProfileNamePrefix, workload.ProfileIds)...)
+				inboundPolicyIds = append(inboundPolicyIds, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)...)
 			}
 
 			if len(workload.Tiers) > 0 && len(workload.Tiers[0].EgressPolicies) > 0 {
 				logCxt.Debug("Workload Tier Policies will be applied Outbound")
-				outboundPolicyIds = append(outboundPolicyIds, policysets.AppendPrefixToPolicyNames(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
+				outboundPolicyIds = append(outboundPolicyIds, prependAll(policysets.PolicyNamePrefix, workload.Tiers[0].EgressPolicies)...)
 			} else if len(workload.ProfileIds) > 0 {
 				logCxt.Debug("Profiles will be applied Outbound")
-				outboundPolicyIds = append(outboundPolicyIds, policysets.AppendPrefixToPolicyNames(policysets.ProfileNamePrefix, workload.ProfileIds)...)
+				outboundPolicyIds = append(outboundPolicyIds, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)...)
 			}
 
 			err := m.applyRules(id, endpointId, inboundPolicyIds, outboundPolicyIds)
@@ -315,4 +315,12 @@ func (m *endpointManager) getHnsEndpointId(ip string) (string, error) {
 
 	log.WithField("ip", ip).Info("Could not resolve hns endpoint id")
 	return "", ErrorUnknownEndpoint
+}
+
+// prependAll prepends a string to all of the provided input strings
+func prependAll(prefix string, in []string) (out []string) {
+	for _, s := range in {
+		out = append(out, prefix+s)
+	}
+	return
 }
