@@ -37,6 +37,8 @@ func newIPSet(update *proto.IPSetUpdate) *ipSetInfo {
 		s.Type = ipsets.IPSetTypeHashIPPort
 	case proto.IPSetUpdate_NET:
 		s.Type = ipsets.IPSetTypeHashNet
+	default:
+		panic("unknown IPSetType")
 	}
 
 	s.SetID = update.GetId()
@@ -80,14 +82,14 @@ type ruleList interface {
 
 func addIPSetsRuleList(rl ruleList, s map[string]bool) {
 	for _, rule := range rl.GetInboundRules() {
-		addIPSetsRule(rule, s)
+		AddIPSetsRule(rule, s)
 	}
 	for _, rule := range rl.GetOutboundRules() {
-		addIPSetsRule(rule, s)
+		AddIPSetsRule(rule, s)
 	}
 }
 
-func addIPSetsRule(r *proto.Rule, s map[string]bool) {
+func AddIPSetsRule(r *proto.Rule, s map[string]bool) {
 	addAll(r.SrcIpSetIds, s)
 	addAll(r.DstIpSetIds, s)
 	addAll(r.SrcNamedPortIpSetIds, s)

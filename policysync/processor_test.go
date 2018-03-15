@@ -15,13 +15,19 @@
 package policysync_test
 
 import (
+	"errors"
 	"fmt"
-	"strconv"
-	"strings"
+	"net"
+	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
+	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/felix/policysync"
 	"github.com/projectcalico/felix/proto"
 )
@@ -319,12 +325,14 @@ var _ = Describe("Processor", func() {
 						Id:       &refdId,
 						Endpoint: &proto.WorkloadEndpoint{},
 					}
-					<-refdOutput
+					g := <-refdOutput
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&refdId))
 					updates <- &proto.WorkloadEndpointUpdate{
 						Id:       &unrefdId,
 						Endpoint: &proto.WorkloadEndpoint{},
 					}
-					<-unrefdOutput
+					g = <-unrefdOutput
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&unrefdId))
 
 					// Send the IPSet, a Profile referring to it, and a WEP update referring to the
 					// Profile. This "activates" the WEP relative to the IPSet
@@ -343,9 +351,12 @@ var _ = Describe("Processor", func() {
 						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
 					}
 					// All three updates get pushed to the active endpoint (1)
-					<-refdOutput
-					<-refdOutput
-					<-refdOutput
+					g = <-refdOutput
+					Expect(g.GetIpsetUpdate().GetId()).To(Equal(IPSetName))
+					g = <-refdOutput
+					Expect(g.GetActiveProfileUpdate().GetId().GetName()).To(Equal(ProfileName))
+					g = <-refdOutput
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&refdId))
 
 					assertInactiveNoUpdate = func() {
 						// Send a WEP update for the inactive and check we get it from the output
@@ -372,17 +383,6 @@ var _ = Describe("Processor", func() {
 					close(done)
 				})
 
-				It("should split large IPSetUpdate", func(done Done) {
-					msg := updateIpSet(IPSetName, 82250)
-					updates <- msg
-
-					out := <-refdOutput
-					Expect(len(out.GetIpsetUpdate().GetMembers())).To(Equal(82200))
-					out = <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(50))
-					close(done)
-				})
-
 				It("should send IPSetDeltaUpdate to ref'd endpoint", func(done Done) {
 
 					// Try combinations of adds, removes, and both to ensure the splitting logic
@@ -400,59 +400,17 @@ var _ = Describe("Processor", func() {
 					// Split these tests to separate expects for add and delete so that
 					// we don't distinguish nil vs [] for empty lists.
 					Expect(g.GetIpsetDeltaUpdate().GetAddedMembers()).To(Equal(msg2.AddedMembers))
-					Expect(len(g.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(0))
+					Expect(g.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
 
 					msg2 = deltaUpdateIpSet(IPSetName, 0, 2)
 					updates <- msg2
 					g = <-refdOutput
 					// Split these tests to separate expects for add and delete so that
 					// we don't distinguish nil vs [] for empty lists.
-					Expect(len(g.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(0))
+					Expect(g.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
 					Expect(g.GetIpsetDeltaUpdate().GetRemovedMembers()).To(Equal(msg2.RemovedMembers))
 
 					assertInactiveNoUpdate()
-
-					close(done)
-				})
-
-				It("should split IpSetDeltaUpdates with large adds", func(done Done) {
-					msg2 := deltaUpdateIpSet(IPSetName, 82250, 0)
-					updates <- msg2
-					out := <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(82200))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(0))
-					out = <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(50))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(0))
-
-					close(done)
-				})
-
-				It("should split IpSetDeltaUpdates with large removes", func(done Done) {
-					msg2 := deltaUpdateIpSet(IPSetName, 0, 82250)
-					updates <- msg2
-					out := <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(0))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(50))
-					out = <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(0))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(82200))
-
-					close(done)
-				})
-
-				It("should split IpSetDeltaUpdates with both large adds and removes", func(done Done) {
-					msg2 := deltaUpdateIpSet(IPSetName, 82250, 82250)
-					updates <- msg2
-					out := <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(82200))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(0))
-					out = <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(50))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(50))
-					out = <-refdOutput
-					Expect(len(out.GetIpsetDeltaUpdate().GetAddedMembers())).To(Equal(0))
-					Expect(len(out.GetIpsetDeltaUpdate().GetRemovedMembers())).To(Equal(82200))
 
 					close(done)
 				})
@@ -464,7 +422,7 @@ var _ = Describe("Processor", func() {
 					}
 					g := <-unrefdOutput
 					Expect(g.GetIpsetUpdate().GetId()).To(Equal(IPSetName))
-					Expect(len(g.GetIpsetUpdate().GetMembers())).To(Equal(0))
+					Expect(g.GetIpsetUpdate().GetMembers()).To(HaveLen(0))
 					<-unrefdOutput // should also send WEP Update
 
 					close(done)
@@ -512,7 +470,7 @@ var _ = Describe("Processor", func() {
 					// We should get the IPSetUpdate first, then the Profile that newly references it.
 					g := <-refdOutput
 					Expect(g.GetIpsetUpdate().GetId()).To(Equal(newSetName))
-					Expect(len(g.GetIpsetUpdate().GetMembers())).To(Equal(6))
+					Expect(g.GetIpsetUpdate().GetMembers()).To(HaveLen(6))
 
 					g = <-refdOutput
 					Expect(g.GetActiveProfileUpdate().GetId().GetName()).To(Equal(ProfileName))
@@ -535,6 +493,35 @@ var _ = Describe("Processor", func() {
 					// We should get ActiveProfileUpdate first, then IPSetRemove.
 					g := <-refdOutput
 					Expect(g.GetActiveProfileUpdate().GetId().GetName()).To(Equal(ProfileName))
+					g = <-refdOutput
+					Expect(g.GetIpsetRemove().GetId()).To(Equal(IPSetName))
+
+					assertInactiveNoUpdate()
+
+					close(done)
+				})
+
+				It("should send Update & remove profile update changes IPSet", func(done Done) {
+					newSetName := "new-set"
+					updates <- updateIpSet(newSetName, 6)
+					updates <- &proto.ActiveProfileUpdate{
+						Id: &proto.ProfileID{Name: ProfileName},
+						Profile: &proto.Profile{
+							InboundRules: []*proto.Rule{
+								{Action: "allow", SrcIpSetIds: []string{newSetName}},
+							},
+						},
+					}
+
+					// We should get the IPSetUpdate first, then the Profile that newly references it.
+					g := <-refdOutput
+					Expect(g.GetIpsetUpdate().GetId()).To(Equal(newSetName))
+					Expect(g.GetIpsetUpdate().GetMembers()).To(HaveLen(6))
+
+					g = <-refdOutput
+					Expect(g.GetActiveProfileUpdate().GetId().GetName()).To(Equal(ProfileName))
+
+					// Lastly, it should clean up the no-longer referenced set.
 					g = <-refdOutput
 					Expect(g.GetIpsetRemove().GetId()).To(Equal(IPSetName))
 
@@ -604,6 +591,215 @@ var _ = Describe("Processor", func() {
 					close(done)
 				})
 
+				It("should send IPSetUpdate/Remove when policy changes IPset", func(done Done) {
+					// Create policy referencing the existing IPSet and link to the unreferenced WEP
+					policyID := &proto.PolicyID{Tier: "tier0", Name: "testpolicy"}
+					updates <- &proto.ActivePolicyUpdate{
+						Id: policyID,
+						Policy: &proto.Policy{
+							OutboundRules: []*proto.Rule{
+								{Action: "allow", SrcIpSetIds: []string{IPSetName}},
+							},
+						},
+					}
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id: &unrefdId,
+						Endpoint: &proto.WorkloadEndpoint{
+							Tiers: []*proto.TierInfo{
+								{
+									Name:            policyID.Tier,
+									IngressPolicies: []string{policyID.Name},
+								},
+							},
+						},
+					}
+					g := <-unrefdOutput
+					Expect(g.GetIpsetUpdate().GetId()).To(Equal(IPSetName))
+					g = <-unrefdOutput
+					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(policyID))
+					g = <-unrefdOutput
+					Expect(g.GetWorkloadEndpointUpdate()).ToNot(BeNil())
+
+					// Now the WEP has an active policy that references the old IPSet.  Create the new IPset and
+					// then point the policy to it.
+					newSetName := "new-set"
+					updates <- updateIpSet(newSetName, 6)
+					updates <- &proto.ActivePolicyUpdate{
+						Id: policyID,
+						Policy: &proto.Policy{
+							OutboundRules: []*proto.Rule{
+								{Action: "allow", SrcIpSetIds: []string{newSetName}},
+							},
+						},
+					}
+
+					// Should get IPSetUpdate, followed by Policy update, followed by remove of old IPSet.
+					g = <-unrefdOutput
+					Expect(g.GetIpsetUpdate().GetId()).To(Equal(newSetName))
+					g = <-unrefdOutput
+					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(policyID))
+					g = <-unrefdOutput
+					Expect(g.GetIpsetRemove().GetId()).To(Equal(IPSetName))
+					close(done)
+				})
+
+			})
+
+			Context("with SyncServer", func() {
+				var syncServer *policysync.Server
+				var gRPCServer *grpc.Server
+				var listener net.Listener
+
+				BeforeEach(func() {
+					uidAllocator := policysync.NewUIDAllocator()
+					syncServer = policysync.NewServer(uut.JoinUpdates, uidAllocator.NextUID)
+
+					gRPCServer = grpc.NewServer(grpc.Creds(testCreds{}))
+					proto.RegisterPolicySyncServer(gRPCServer, syncServer)
+					listener = openListener()
+					go func() {
+						defer GinkgoRecover()
+						err := gRPCServer.Serve(listener)
+
+						// When we close down the listener, the server will return an error that it is closed. This is
+						// expected behavior.
+						Expect(err).To(BeAssignableToTypeOf(&net.OpError{}))
+						opErr, ok := err.(*net.OpError)
+						Expect(ok).To(BeTrue())
+						Expect(opErr.Err.Error()).To(Equal("use of closed network connection"))
+					}()
+				})
+
+				AfterEach(func() {
+					listener.Close()
+				})
+
+				Context("with joined, active endpoint", func() {
+					var wepId proto.WorkloadEndpointID
+					var syncClient proto.PolicySyncClient
+					var clientConn *grpc.ClientConn
+					var syncContext context.Context
+					var clientCancel func()
+					var syncStream proto.PolicySync_SyncClient
+
+					BeforeEach(func(done Done) {
+						wepId = testId("default/withsync")
+
+						opts := getDialOptions()
+						var err error
+						clientConn, err = grpc.Dial(ListenerPath, opts...)
+						Expect(err).ToNot(HaveOccurred())
+
+						syncClient = proto.NewPolicySyncClient(clientConn)
+						syncContext, clientCancel = context.WithCancel(context.Background())
+						syncStream, err = syncClient.Sync(syncContext, &proto.SyncRequest{})
+						Expect(err).ToNot(HaveOccurred())
+
+						// Send the IPSet, a Profile referring to it, and a WEP update referring to the
+						// Profile. This "activates" the WEP relative to the IPSet
+						updates <- updateIpSet(IPSetName, 0)
+						updates <- &proto.ActiveProfileUpdate{
+							Id: &proto.ProfileID{Name: ProfileName},
+							Profile: &proto.Profile{InboundRules: []*proto.Rule{
+								{
+									Action:      "allow",
+									SrcIpSetIds: []string{IPSetName},
+								},
+							}},
+						}
+						updates <- &proto.WorkloadEndpointUpdate{
+							Id:       &wepId,
+							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
+						}
+						// All three updates get pushed
+						var g *proto.ToDataplane
+						g, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(g.GetIpsetUpdate().GetId()).To(Equal(IPSetName))
+						g, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(g.GetActiveProfileUpdate().GetId().GetName()).To(Equal(ProfileName))
+						g, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+						close(done)
+					})
+
+					It("should split large IPSetUpdate", func(done Done) {
+						msg := updateIpSet(IPSetName, 82250)
+						updates <- msg
+
+						out, err := syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetUpdate().GetMembers()).To(HaveLen(82200))
+
+						out, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
+						close(done)
+					})
+
+					It("should split IpSetDeltaUpdates with both large adds and removes", func(done Done) {
+						msg2 := deltaUpdateIpSet(IPSetName, 82250, 82250)
+						updates <- msg2
+						out, err := syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(82200))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
+
+						out, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(50))
+
+						out, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
+
+						close(done)
+					})
+
+					It("should split IpSetDeltaUpdates with large adds", func(done Done) {
+						msg2 := deltaUpdateIpSet(IPSetName, 82250, 0)
+						updates <- msg2
+
+						out, err := syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(82200))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
+
+						out, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
+
+						close(done)
+					})
+
+					It("should split IpSetDeltaUpdates with large removes", func(done Done) {
+						msg2 := deltaUpdateIpSet(IPSetName, 0, 82250)
+						updates <- msg2
+
+						out, err := syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(50))
+
+						out, err = syncStream.Recv()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
+						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
+
+						close(done)
+					})
+
+					AfterEach(func() {
+						clientCancel()
+						clientConn.Close()
+					})
+				})
 			})
 		})
 	})
@@ -611,19 +807,19 @@ var _ = Describe("Processor", func() {
 
 func testId(w string) proto.WorkloadEndpointID {
 	return proto.WorkloadEndpointID{
-		OrchestratorId: "test",
+		OrchestratorId: policysync.OrchestratorId,
 		WorkloadId:     w,
-		EndpointId:     "test",
+		EndpointId:     policysync.EndpointId,
 	}
 }
 
 func updateIpSet(id string, num int) *proto.IPSetUpdate {
 	msg := &proto.IPSetUpdate{
 		Id:   id,
-		Type: proto.IPSetUpdate_IP,
+		Type: proto.IPSetUpdate_IP_AND_PORT,
 	}
 	for i := 0; i < num; i++ {
-		msg.Members = append(msg.Members, makeIP(i))
+		msg.Members = append(msg.Members, makeIPAndPort(i))
 	}
 	return msg
 }
@@ -640,19 +836,74 @@ func deltaUpdateIpSet(id string, add, del int) *proto.IPSetDeltaUpdate {
 		Id: id,
 	}
 	for i := 0; i < add; i++ {
-		msg.AddedMembers = append(msg.AddedMembers, makeIP(i))
+		msg.AddedMembers = append(msg.AddedMembers, makeIPAndPort(i))
 	}
 	for i := add; i < add+del; i++ {
-		msg.RemovedMembers = append(msg.RemovedMembers, makeIP(i))
+		msg.RemovedMembers = append(msg.RemovedMembers, makeIPAndPort(i))
 	}
 	return msg
 }
 
-func makeIP(i int) string {
-	o := make([]string, 4)
-	o[0] = strconv.Itoa(i & 0xff000000 >> 24)
-	o[1] = strconv.Itoa(i & 0x00ff0000 >> 16)
-	o[2] = strconv.Itoa(i & 0x0000ff00 >> 8)
-	o[3] = strconv.Itoa(i & 0x000000ff)
-	return strings.Join(o, ".")
+func makeIPAndPort(i int) string {
+	// Goal here is to make the IPSet members as long as possible when stringified.
+	// assume 20 bits of variable and 108 bits of fixed prefix
+	lsbHex := fmt.Sprintf("%05x", i)
+
+	return "fe80:1111:2222:3333:4444:5555:666" + string(lsbHex[0]) + ":" + lsbHex[1:] + ",tcp:65535"
 }
+
+func getDialOptions() []grpc.DialOption {
+	return []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithDialer(getDialer("unix"))}
+}
+
+func getDialer(proto string) func(string, time.Duration) (net.Conn, error) {
+	return func(target string, timeout time.Duration) (net.Conn, error) {
+		return net.DialTimeout(proto, target, timeout)
+	}
+}
+
+const ListenerDir = "/tmp/felixut"
+const ListenerPath = "/tmp/felixut/policysync.sock"
+
+func openListener() net.Listener {
+	Expect(os.MkdirAll(ListenerDir, 0777)).To(Succeed())
+	_, err := os.Stat(ListenerPath)
+	if !os.IsNotExist(err) {
+		// file exists, try to delete it.
+		Expect(os.Remove(ListenerPath)).To(Succeed())
+	}
+	lis, err := net.Listen("unix", ListenerPath)
+	Expect(err).ToNot(HaveOccurred())
+	return lis
+}
+
+type testCreds struct {
+}
+
+func (t testCreds) ClientHandshake(cxt context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return conn, binder.Credentials{}, errors.New("client handshake unsupported")
+}
+func (t testCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return conn, binder.Credentials{
+		Uid:            "test",
+		Workload:       "withsync",
+		Namespace:      "default",
+		ServiceAccount: "default",
+	}, nil
+}
+
+func (t testCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{
+		SecurityProtocol: "felixut",
+		SecurityVersion:  "test",
+		ServerName:       "test",
+	}
+}
+
+func (t testCreds) Clone() credentials.TransportCredentials {
+	return t
+}
+
+func (t testCreds) OverrideServerName(string) error { return nil }
