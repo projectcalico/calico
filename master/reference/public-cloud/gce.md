@@ -25,11 +25,11 @@ routes.
 
 ## Enabling Workload-to-WAN Traffic
 
-To allow Calico networked containers to reach resources outside of GCE,
-you must configure outgoing NAT on your [Calico IP pool][IPPool].
+To allow {{site.prodname}} networked containers to reach resources outside of GCE,
+you must configure outgoing NAT on your [{{site.prodname}} IP pool][IPPool].
 
 GCE will perform outbound NAT on any traffic which has the source address of a virtual
-machine instance.  By enabling outgoing NAT on your Calico IP pool, Calico will
+machine instance.  By enabling outgoing NAT on your {{site.prodname}} IP pool, {{site.prodname}} will
 NAT any outbound traffic from the containers hosted on the virtual machine instances.
 
 [IPIP]: {{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip
