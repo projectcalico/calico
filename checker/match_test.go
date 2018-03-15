@@ -26,6 +26,24 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 )
 
+var (
+	socketAddressProtocolTCP = &envoy_api_v2.Address{
+		&envoy_api_v2.Address_SocketAddress{
+			&envoy_api_v2.SocketAddress{
+				Protocol: envoy_api_v2.SocketAddress_TCP,
+			},
+		},
+	}
+
+	socketAddressProtocolUDP = &envoy_api_v2.Address{
+		&envoy_api_v2.Address_SocketAddress{
+			&envoy_api_v2.SocketAddress{
+				Protocol: envoy_api_v2.SocketAddress_UDP,
+			},
+		},
+	}
+)
+
 // If no service account names are given, the clause matches any name.
 func TestMatchName(t *testing.T) {
 	testCases := []struct {
@@ -121,6 +139,11 @@ func TestMatchRule(t *testing.T) {
 
 		HttpMatch: &proto.HTTPMatch{
 			Methods: []string{"GET", "POST"},
+		},
+		Protocol: &proto.Protocol{
+			&proto.Protocol_Name{
+				Name: "TCP",
+			},
 		},
 	}
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
@@ -240,4 +263,83 @@ func addIPSet(store *policystore.PolicyStore, id string, addr ...string) {
 		s.AddString(a)
 	}
 	store.IPSetByID[id] = s
+}
+
+// Test that rules match L4 protocol.
+func TestMatchL4Protocol(t *testing.T) {
+	RegisterTestingT(t)
+
+	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
+		Source: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/testns/sa/sam",
+		},
+		Destination: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/testns/sa/ian",
+		},
+		Request: &auth.AttributeContext_Request{
+			Http: &auth.AttributeContext_HTTPRequest{
+				Method: "GET",
+			},
+		},
+	}}
+
+	store := policystore.NewPolicyStore()
+	reqCache, err := NewRequestCache(store, req)
+	Expect(err).To(Succeed())
+
+	// With empty rule and default request.
+	rule := &proto.Rule{}
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+
+	// With empty rule and UDP request
+	req.GetAttributes().GetDestination().Address = socketAddressProtocolUDP
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+	req.GetAttributes().GetDestination().Address = nil
+
+	// With Protocol=TCP rule and default request
+	rule.Protocol = &proto.Protocol{
+		&proto.Protocol_Name{
+			Name: "TCP",
+		},
+	}
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+	rule.Protocol = nil
+
+	// With Protocol=6 rule and default request
+	rule.Protocol = &proto.Protocol{
+		&proto.Protocol_Number{
+			Number: 6,
+		},
+	}
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+	rule.Protocol = nil
+
+	// With Protocol=17 rule and default request
+	rule.Protocol = &proto.Protocol{
+		&proto.Protocol_Number{
+			Number: 17,
+		},
+	}
+	Expect(match(rule, reqCache, "testns")).To(BeFalse())
+	rule.Protocol = nil
+
+	// With Protocol!=UDP rule and default request
+	rule.NotProtocol = &proto.Protocol{
+		&proto.Protocol_Name{
+			Name: "UDP",
+		},
+	}
+	Expect(match(rule, reqCache, "testns")).To(BeTrue())
+	rule.NotProtocol = nil
+
+	// With Protocol!=6 rule and TCP request
+	rule.NotProtocol = &proto.Protocol{
+		&proto.Protocol_Number{
+			Number: 6,
+		},
+	}
+	req.GetAttributes().GetDestination().Address = socketAddressProtocolTCP
+	Expect(match(rule, reqCache, "testns")).To(BeFalse())
+	req.GetAttributes().GetDestination().Address = nil
+	rule.NotProtocol = nil
 }
