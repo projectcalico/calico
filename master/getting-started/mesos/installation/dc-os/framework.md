@@ -38,11 +38,9 @@ This concludes the installation of {{site.prodname}} for DC/OS! Before you start
 launching IP-per-container applications with {{site.prodname}} policy,
 review the following information which may apply to your deployment.
 
-#### AWS
+#### Amazon Web Services
 
-DC/OS users on Amazon Web Services should view
-[{{site.prodname}}'s AWS reference]({{site.baseurl}}/{{page.version}}/reference/public-cloud/aws)
-for information on how to configure AWS networking for use with {{site.prodname}}.
+DC/OS users on Amazon Web Services should view [AWS configuration guide](../../../../reference/public-cloud/aws) for information on how to configure AWS networking for use with {{site.prodname}}.
 
 #### Note on Cluster Impact
 

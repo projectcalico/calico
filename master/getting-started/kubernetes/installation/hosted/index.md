@@ -3,44 +3,44 @@ title: Calico Kubernetes Hosted Install
 canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/'
 ---
 
-Calico can be installed on a Kubernetes cluster with a single command.
+{{site.prodname}} can be installed on a Kubernetes cluster with a single command.
 
 ```
 kubectl apply -f calico.yaml
 ```
 
 We maintain several manifests.  Which one you use depends on the specific
-requirements of your Calico installation:
+requirements of your {{site.prodname}} installation:
 
 #### [Standard Hosted Install](hosted)
 
-This manifest installs Calico for use with an existing etcd cluster.  This is
-the recommended hosted approach for deploying Calico in production.
+This manifest installs {{site.prodname}} for use with an existing etcd cluster.  This is
+the recommended hosted approach for deploying {{site.prodname}} in production.
 
 #### [Kubeadm Hosted Install](kubeadm/)
 
-This manifest installs Calico as well as a single node etcd cluster.  This is the recommended hosted approach
-for getting started quickly with Calico in conjunction with tools like kubeadm.
+This manifest installs {{site.prodname}} as well as a single node etcd cluster.  This is the recommended hosted approach
+for getting started quickly with {{site.prodname}} in conjunction with tools like kubeadm.
 
-#### [Kubernetes Datastore](kubernetes-datastore/)
+#### [Kubernetes API Datastore](kubernetes-datastore/)
 
-This manifest installs Calico in a mode where it does not require its own etcd cluster.
+This manifest installs {{site.prodname}} in a mode where it does not require its own etcd cluster.
 
 ## How it works
 
-Each manifest contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
+Each manifest contains all the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster.
 
 It installs the following Kubernetes resources:
 
 - The `calico-config` ConfigMap, which contains parameters for configuring the install.
 - Installs the `{{site.nodecontainer}}` container on each host using a daemon set.
-- Installs the Calico CNI binaries and network config on each host using a daemon set.
+- Installs the {{site.prodname}} CNI binaries and network config on each host using a daemon set.
 - Runs `calico/kube-controllers` as a deployment.
 - The `calico-etcd-secrets` secret, which optionally allows for providing etcd TLS assets.
 
 ## Configuration options
 
-The ConfigMap in `calico.yaml` provides a way to configure a Calico self-hosted installation.  It exposes
+The ConfigMap in `calico.yaml` provides a way to configure a {{site.prodname}} self-hosted installation.  It exposes
 the following configuration parameters:
 
 ### Configuring the Pod IP range
@@ -89,9 +89,9 @@ To use these manifests with a TLS enabled etcd cluster you must do the following
 
 ### Authorization Options
 
-Calico's manifests assign its components one of two service accounts.
+{{site.prodname}}'s manifests assign its components one of two service accounts.
 Depending on your cluster's authorization mode, you'll want to back these
-ServiceAccounts with the neccessary permissions.
+ServiceAccounts with the necessary permissions.
 
 ### Other Configuration Options
 

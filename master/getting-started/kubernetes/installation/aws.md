@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/i
 There are a number of solutions for deploying {{site.prodname}} and Kubernetes on AWS.  We recommend taking
 a look at the following solutions and guides which install {{site.prodname}} for networking and network policy on AWS.
 
-Make sure you've read the [{{site.prodname}} AWS reference guide][aws-reference] for details on how to configure {{site.prodname}} and AWS.
+Make sure you've read the [AWS configuration guide](../../../reference/public-cloud/aws) for details on how to configure {{site.prodname}} and AWS.
 
 #### Popular guides and tools
 
@@ -37,5 +37,3 @@ on AWS using one of our [self-hosted manifests][self-hosted], or by [integrating
 
 [self-hosted]: hosted
 [integration-guide]: integration
-
-[aws-reference]: {{site.baseurl}}/{{page.version}}/reference/public-cloud/aws
