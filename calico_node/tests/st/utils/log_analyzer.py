@@ -200,7 +200,8 @@ class LogAnalyzer(object):
         if first_log_time != self.init_log_time or \
                 not self.init_log_lines:
             _log.debug("Log file is new")
-            cmd = "cat %s" % self.filename
+            cmd = "timeout -t 10 cat %s" % self.filename
+            #cmd = "if [ -f %s ]; then timeout -t 10 cat %s; else echo file does not exist; fi" % (self.filename, self.filename)
         else:
             _log.debug("Check appended logs")
             cmd = "tail -n +%s %s" % (self.init_log_lines + 1,
