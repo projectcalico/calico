@@ -327,7 +327,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Clean up any k8s network policy left over by the test.
 		nps := networkingv1.NetworkPolicyList{}
-		err = c.clientSet.NetworkingV1().RESTClient().
+		err = c.ClientSet.NetworkingV1().RESTClient().
 			Get().
 			Resource("networkpolicies").
 			Timeout(10 * time.Second).
@@ -335,7 +335,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, np := range nps.Items {
-			result := c.clientSet.NetworkingV1().RESTClient().
+			result := c.ClientSet.NetworkingV1().RESTClient().
 				Delete().
 				Resource("networkpolicies").
 				Namespace(np.Namespace).
@@ -346,11 +346,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 
 		// Clean up any pods left over by the test.
-		pods, err := c.clientSet.CoreV1().Pods("").List(metav1.ListOptions{})
+		pods, err := c.ClientSet.CoreV1().Pods("").List(metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, p := range pods.Items {
-			err = c.clientSet.CoreV1().Pods(p.Namespace).Delete(p.Name, &metav1.DeleteOptions{})
+			err = c.ClientSet.CoreV1().Pods(p.Namespace).Delete(p.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
 	})
@@ -367,7 +367,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 
 		By("Creating a namespace", func() {
-			_, err := c.clientSet.CoreV1().Namespaces().Create(&ns)
+			_, err := c.ClientSet.CoreV1().Namespaces().Create(&ns)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -393,7 +393,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Deleting the namespace", func() {
-			err := c.clientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
+			err := c.ClientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -415,7 +415,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Check to see if the create succeeded.
 		By("Creating a namespace", func() {
-			_, err := c.clientSet.CoreV1().Namespaces().Create(&ns)
+			_, err := c.ClientSet.CoreV1().Namespaces().Create(&ns)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -444,7 +444,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("deleting a namespace", func() {
-			err := c.clientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
+			err := c.ClientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -482,7 +482,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		res := c.clientSet.NetworkingV1().RESTClient().
+		res := c.ClientSet.NetworkingV1().RESTClient().
 			Post().
 			Resource("networkpolicies").
 			Namespace("default").
@@ -508,7 +508,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	It("should handle a CRUD of Global Network Policy", func() {
 		var kvpRes *model.KVPair
 
-		gnpClient := c.getResourceClientFromResourceKind(apiv3.KindGlobalNetworkPolicy)
+		gnpClient := c.GetResourceClientFromResourceKind(apiv3.KindGlobalNetworkPolicy)
 		kvp1Name := "my-test-gnp"
 		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name}
 		kvp1a := &model.KVPair{
@@ -1199,7 +1199,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		_, err := c.clientSet.CoreV1().Pods("default").Create(&pod)
+		_, err := c.ClientSet.CoreV1().Pods("default").Create(&pod)
 		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
 
 		By("Creating a pod", func() {
@@ -1210,7 +1210,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			// Update the Pod to have an IP and be running.
 			pod.Status.PodIP = "192.168.1.1"
 			pod.Status.Phase = k8sapi.PodRunning
-			_, err = c.clientSet.CoreV1().Pods("default").UpdateStatus(&pod)
+			_, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(&pod)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1218,7 +1218,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			// Wait up to 120s for pod to start running.
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
 			for i := 0; i < 120; i++ {
-				p, err := c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+				p, err := c.ClientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				if p.Status.Phase == k8sapi.PodRunning {
 					// Pod is running
@@ -1226,7 +1226,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				}
 				time.Sleep(1 * time.Second)
 			}
-			p, err := c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			p, err := c.ClientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(p.Status.Phase).To(Equal(k8sapi.PodRunning))
 		})
@@ -1284,7 +1284,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Deleting the Pod and expecting the wep to be deleted", func() {
-			err = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
+			err = c.ClientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			cb.ExpectDeleted([]model.KVPair{expectedKVP})
 		})
@@ -1310,7 +1310,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 		// Note: assigning back to pod variable in order to pick up revision information. If we don't do that then
 		// the call to UpdateStatus() below would succeed, but it would overwrite our annotation patch.
-		pod, err := c.clientSet.CoreV1().Pods("default").Create(pod)
+		pod, err := c.ClientSet.CoreV1().Pods("default").Create(pod)
 		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
 
 		By("Creating a pod", func() {
@@ -1331,7 +1331,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the pod through the k8s API to check the annotation has appeared.
-			p, err := c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			p, err := c.ClientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(p.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
 
@@ -1345,14 +1345,14 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			// Try to update the pod using the old revision; this should fail because our patch made it
 			// stale.
 			pod.Status.Phase = k8sapi.PodRunning
-			_, err = c.clientSet.CoreV1().Pods("default").UpdateStatus(pod)
+			_, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).To(HaveOccurred())
 
 			// Re-get the pod and try again...
-			pod, err = c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			pod, err = c.ClientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			pod.Status.Phase = k8sapi.PodRunning
-			pod, err = c.clientSet.CoreV1().Pods("default").UpdateStatus(pod)
+			pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1361,7 +1361,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
 
 			for i := 0; i < 120; i++ {
-				p, err := c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+				p, err := c.ClientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				if p.Status.Phase == k8sapi.PodRunning {
 					// Pod is running
@@ -1370,7 +1370,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				time.Sleep(1 * time.Second)
 			}
 
-			pod, err = c.clientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+			pod, err = c.ClientSet.CoreV1().Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pod.Status.Phase).To(Equal(k8sapi.PodRunning))
 			Expect(pod.Annotations["cni.projectcalico.org/podIP"]).To(Equal("192.168.1.1"))
@@ -1396,7 +1396,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Deleting the Pod and expecting the wep to be deleted", func() {
-			err = c.clientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
+			err = c.ClientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			cb.ExpectDeleted([]model.KVPair{expectedKVP})
 		})

@@ -50,7 +50,7 @@ var (
 
 type KubeClient struct {
 	// Main Kubernetes clients.
-	clientSet *kubernetes.Clientset
+	ClientSet *kubernetes.Clientset
 
 	// Client for interacting with CustomResourceDefinition.
 	crdClientV1 *rest.RESTClient
@@ -117,7 +117,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
 	}
-	log.Debugf("Created k8s clientSet: %+v", cs)
+	log.Debugf("Created k8s ClientSet: %+v", cs)
 
 	crdClientV1, err := buildCRDClientV1(*config)
 	if err != nil {
@@ -125,7 +125,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	}
 
 	kubeClient := &KubeClient{
-		clientSet:             cs,
+		ClientSet:             cs,
 		crdClientV1:           crdClientV1,
 		disableNodePoll:       ca.K8sDisableNodePoll,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
@@ -229,7 +229,7 @@ func (c *KubeClient) registerResourceClient(keyType, listType reflect.Type, reso
 }
 
 // getResourceClientFromKey returns the appropriate resource client for the v3 resource kind.
-func (c *KubeClient) getResourceClientFromResourceKind(kind string) resources.K8sResourceClient {
+func (c *KubeClient) GetResourceClientFromResourceKind(kind string) resources.K8sResourceClient {
 	return c.clientsByResourceKind[kind]
 }
 
@@ -493,7 +493,7 @@ func (c *KubeClient) listHostConfig(ctx context.Context, l model.HostConfigListO
 
 	// First see if we were handed a specific host, if not list all Nodes
 	if l.Hostname == "" {
-		nodes, err := c.clientSet.CoreV1().Nodes().List(metav1.ListOptions{})
+		nodes, err := c.ClientSet.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
 			return nil, resources.K8sErrorToCalico(err, l)
 		}
@@ -507,7 +507,7 @@ func (c *KubeClient) listHostConfig(ctx context.Context, l model.HostConfigListO
 			kvps = append(kvps, kvp)
 		}
 	} else {
-		node, err := c.clientSet.CoreV1().Nodes().Get(l.Hostname, metav1.GetOptions{})
+		node, err := c.ClientSet.CoreV1().Nodes().Get(l.Hostname, metav1.GetOptions{})
 		if err != nil {
 			return nil, resources.K8sErrorToCalico(err, l)
 		}
