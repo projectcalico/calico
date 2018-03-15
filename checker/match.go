@@ -18,6 +18,7 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
+	"github.com/envoyproxy/data-plane-api/api"
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	log "github.com/sirupsen/logrus"
 )
@@ -44,7 +45,8 @@ func matchSource(r *proto.Rule, req *requestCache, policyNamespace string) bool 
 		r.GetOriginalNotSrcSelector(),
 		r.GetSrcServiceAccountMatch())
 	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.SourcePeer()) &&
-		matchNamespace(nsMatch, req.SourceNamespace())
+		matchNamespace(nsMatch, req.SourceNamespace()) &&
+		matchSrcIPSets(r, req)
 }
 
 func computeNamespaceMatch(
@@ -78,7 +80,8 @@ func matchDestination(r *proto.Rule, req *requestCache, policyNamespace string) 
 		r.GetOriginalNotDstSelector(),
 		r.GetDstServiceAccountMatch())
 	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.DestinationPeer()) &&
-		matchNamespace(nsMatch, req.DestinationNamespace())
+		matchNamespace(nsMatch, req.DestinationNamespace()) &&
+		matchDstIPSets(r, req)
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
@@ -173,4 +176,46 @@ func matchHTTPMethods(methods []string, reqMethod string) bool {
 	}
 	log.Debug("HTTP Method not matched.")
 	return false
+}
+
+func matchSrcIPSets(r *proto.Rule, req *requestCache) bool {
+	log.WithFields(log.Fields{
+		"SrcIpSetIds":    r.SrcIpSetIds,
+		"NotSrcIpSetIds": r.NotSrcIpSetIds,
+	}).Debug("matching source IP sets")
+	addr := req.Request.GetAttributes().GetSource().GetAddress()
+	return matchIPSetsAll(r.SrcIpSetIds, req, addr) &&
+		matchIPSetsNotAny(r.NotSrcIpSetIds, req, addr)
+}
+
+func matchDstIPSets(r *proto.Rule, req *requestCache) bool {
+	log.WithFields(log.Fields{
+		"DstIpSetIds":    r.DstIpSetIds,
+		"NotDstIpSetIds": r.NotDstIpSetIds,
+	}).Debug("matching destination IP sets")
+	addr := req.Request.GetAttributes().GetDestination().GetAddress()
+	return matchIPSetsAll(r.DstIpSetIds, req, addr) &&
+		matchIPSetsNotAny(r.NotDstIpSetIds, req, addr)
+}
+
+// matchIPSetsAll returns true if the address matches all of the IP set ids, false otherwise.
+func matchIPSetsAll(ids []string, req *requestCache, addr *envoy_api_v2.Address) bool {
+	for _, id := range ids {
+		s := req.GetIPSet(id)
+		if !s.ContainsAddress(addr) {
+			return false
+		}
+	}
+	return true
+}
+
+// matchIPSetsNotAny returns true if the address does not match any of the ipset ids, false otherwise.
+func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2.Address) bool {
+	for _, id := range ids {
+		s := req.GetIPSet(id)
+		if s.ContainsAddress(addr) {
+			return false
+		}
+	}
+	return true
 }
