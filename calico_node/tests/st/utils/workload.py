@@ -125,7 +125,8 @@ class Workload(object):
                    '"type":"calico-cni-plugin",' +
                    etcd_json +
                    labels_json +
-                   '"ipam":{"type":"calico-ipam-plugin"%s}' % ip_json +
+                   '"ipam":{"type":"calico-ipam-plugin"%s},' % ip_json +
+                   '"nodename_file_optional":true' +
                    '}\' | ' +
                    'CNI_COMMAND=%s ' % add_or_del +
                    'CNI_CONTAINERID=%s ' % container_id +
