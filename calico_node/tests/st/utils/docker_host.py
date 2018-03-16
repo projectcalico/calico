@@ -19,7 +19,8 @@ import tempfile
 import uuid
 import yaml
 from functools import partial
-from subprocess import CalledProcessError, Popen, PIPE
+import subprocess
+from subprocess import CalledProcessError
 
 from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
 from network import DockerNetwork, DummyNetwork, global_setting, \
@@ -225,21 +226,30 @@ class DockerHost(object):
             command = self.escape_shell_single_quotes(command)
             command = "docker exec -it %s sh -c '%s'" % (self.name,
                                                          command)
-        logger.debug("Final command: %s", command)
-        proc = Popen(command, stdout=PIPE, shell=True)
+        # Get the output of the command.
+        logger.debug("Final command: %s", command.split(" "))
 
         try:
-            # Read and return one line at a time until no more data is
-            # returned.
-            for line in proc.stdout:
-                yield line
-        finally:
-            status = proc.wait()
-            logger.debug("- return: %s", status)
+            out = subprocess.check_output(command.split(" "))
+        except Exception:
+            logger.exception("Error executing command")
+            raise
 
-        if status:
-            raise Exception("Command %s returned non-zero exit code %s" %
-                            (command, status))
+        # Return a list containing the lines in the file.
+        return out.split("\n")
+
+        #try:
+        #    # Read and return one line at a time until no more data is
+        #    # returned.
+        #    for line in proc.stdout:
+        #        yield line
+        #finally:
+        #    status = proc.wait()
+        #    logger.debug("- return: %s", status)
+
+        #if status:
+        #    raise Exception("Command %s returned non-zero exit code %s" %
+        #                    (command, status))
 
     def calicoctl(self, command, version=None, raise_exception_on_failure=True):
         """
