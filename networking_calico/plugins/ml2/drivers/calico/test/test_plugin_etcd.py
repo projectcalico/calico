@@ -1484,8 +1484,7 @@ class TestStatusWatcher(_TestEtcdBase):
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
         self.watcher.start()
-        self.driver.on_felix_alive.assert_called_once_with("hostname",
-                                                           new=True)
+        self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
             mock.call("unknown", "ep2", {"status": "up"}),
             mock.call("hostname", "ep1", {"status": "up"}),
@@ -1498,8 +1497,7 @@ class TestStatusWatcher(_TestEtcdBase):
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
         self.watcher.start()
-        self.driver.on_felix_alive.assert_called_once_with("hostname",
-                                                           new=True)
+        self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
             mock.call("unknown", "ep2", None),
             mock.call("hostname", "ep1", {"status": "up"}),

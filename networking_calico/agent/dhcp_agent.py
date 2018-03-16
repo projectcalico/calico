@@ -162,6 +162,10 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # changes, the subnet watcher will tell _this_ watcher to resync.
         self.subnet_watcher = SubnetWatcher(self)
 
+        # Cache of the ports that we've asked Dnsmasq to handle, for each
+        # network ID.
+        self._last_dnsmasq_ports = {}
+
     def start(self):
         eventlet.spawn(self.subnet_watcher.start)
         super(CalicoEtcdWatcher, self).start()
@@ -399,14 +403,27 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         net = self.agent.cache.get_network_by_id(network_id)
         LOG.debug("Net: %s", net)
 
-        # Start, restart or stop Dnsmasq for that network ID.
-        if [port for port in net.ports if port.device_id.startswith('tap')]:
-            self.agent.call_driver('restart', net)
-        else:
-            # No ports left, so also remove this network from the cache.
-            self._fix_network_cache_port_lookup(net.id)
-            self.agent.cache.remove(net)
-            self.agent.call_driver('disable', net)
+        # Compute the set of ports that we need Dnsmasq to handle for this
+        # network ID.
+        ports_needed = [
+            port for port in net.ports if port.device_id.startswith('tap')
+        ]
+        ports_needed.sort(key=lambda port: port.id)
+
+        # Compare that against what we've last asked Dnsmasq to handle.
+        if ports_needed != self._last_dnsmasq_ports.get(network_id):
+            # Requirements have changed, so start, restart or stop Dnsmasq for
+            # that network ID.
+            if ports_needed:
+                self.agent.call_driver('restart', net)
+            else:
+                # No ports left, so also remove this network from the cache.
+                self._fix_network_cache_port_lookup(net.id)
+                self.agent.cache.remove(net)
+                self.agent.call_driver('disable', net)
+
+            # Remember what we've asked Dnsmasq for.
+            self._last_dnsmasq_ports[network_id] = ports_needed
 
     def on_endpoint_delete(self, response_ignored, name):
         """Handler for endpoint deletion."""

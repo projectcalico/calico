@@ -149,9 +149,24 @@ class Elector(object):
             # We know another instance is the master. Wait until something
             # changes, giving long enough that it really should do (i.e. we
             # expect this read always to return, never to time out).
+            #
+            # There are small windows where an etcd compaction can occur in
+            # between (a) this code being aware of what it thinks is a current
+            # DB revision and (b) this code starting a watch from that
+            # revision.  Those windows are (1) between the etcdv3.get above and
+            # the following etcdv3.watch_once, and (2) between learning a new
+            # mod_revision from a watch event and then calling
+            # etcdv3.watch_once again.  If there is a compaction in one of
+            # those windows, the next watch request will be invalid, and the
+            # effect is that etcdv3.watch_once won't report any events, and
+            # will raise WatchTimedOut after self._interval * 2 seconds (which
+            # is 20s).  That exception will be handled by the Etcd3Exception
+            # case below, which means we jump out to _run and then loop round
+            # and back into _vote again, rereading the current revision and so
+            # ensuring that the next watch will be good.
             try:
                 event = etcdv3.watch_once(self._key,
-                                          timeout=self._ttl * 2,
+                                          timeout=self._interval * 2,
                                           start_revision=mod_revision + 1)
                 LOG.debug("election event: %s", event)
                 action = event.get('type', 'SET').lower()

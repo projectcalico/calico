@@ -370,7 +370,6 @@ class TestDnsmasqRouted(base.BaseTestCase):
             'dnsmasq',
             '--no-hosts',
             '--no-resolv',
-            '--strict-order',
             '--except-interface=lo',
             '--pid-file=/run/pid_file',
             '--dhcp-hostsfile=/run/calico/host',

@@ -181,7 +181,7 @@ class ExpectedException(Exception):
 
 
 def _rsp_to_tuple(rsp):
-    item = {'key': rsp.key, 'mod_revision': '10'}
+    item = {'key': rsp.key, 'mod_revision': rsp.mod_revision}
     return (rsp.value, item)
 
 
@@ -195,37 +195,28 @@ class TestEtcdWatcher(unittest.TestCase):
         self.watcher.dispatcher = self.m_dispatcher
 
     def test_mainline(self):
-        # Set up 4 iterations through the watcher's main loop.
+        # Set up 3 iterations through the watcher's main loop.
         #
         # 1. No data for snapshot.  Watch throws exception.
         #
         # 2. Data for snapshot.  Watch throws exception.
         #
-        # 3. Same data for snapshot.  Cluster ID changes just before starting
-        #    watch.
-        #
-        # 4. Throw ExpectedException(), to exit.
+        # 3. Throw ExpectedException(), to exit.
         status = {'header': {'cluster_id': '1234', 'revision': '10'}}
-        status_new_cluster_id = {
-            'header': {'cluster_id': '12345', 'revision': '10'}
-        }
         self.m_client.status.side_effect = iter([
             # Iteration 1.
             status,
-            status,
             # Iteration 2.
-            status,
             status,
             # Iteration 3.
             status,
-            status_new_cluster_id,
-            # Iteration 4.
-            status,
         ])
-        rsp1 = Response(action='set', key='foo', value='bar')
+        rsp1 = Response(action='set',
+                        key='foo',
+                        value='bar',
+                        mod_revision='12')
         self.m_client.get_prefix.side_effect = iter([
             [],
-            [_rsp_to_tuple(rsp1)],
             [_rsp_to_tuple(rsp1)],
             ExpectedException()
         ])
@@ -239,11 +230,10 @@ class TestEtcdWatcher(unittest.TestCase):
                 self.assertRaises(ExpectedException, self.watcher.start)
 
         # _pre_snapshot_hook() called 3 times.
-        self.assertEqual(m_pre.mock_calls, [call(), call(), call(), call()])
+        self.assertEqual(m_pre.mock_calls, [call(), call(), call()])
 
         # _post_snapshot_hook() called twice.
-        self.assertEqual(m_post.mock_calls,
-                         [call(None), call(None), call(None)])
+        self.assertEqual(m_post.mock_calls, [call(None), call(None)])
 
         # watch_prefix called twice.
         self.assertEqual(self.m_client.watch_prefix.mock_calls, [
@@ -251,9 +241,9 @@ class TestEtcdWatcher(unittest.TestCase):
             call('/calico', start_revision='11')
         ])
 
-        # Snapshot event dispatched twice.
+        # Snapshot event dispatched once.
         self.assertEqual(self.m_dispatcher.handle_event.mock_calls,
-                         [call(rsp1), call(rsp1)])
+                         [call(rsp1)])
 
     def test_register(self):
         self.watcher.register_path("key", foo="bar")

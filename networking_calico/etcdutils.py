@@ -66,7 +66,7 @@ class PathDispatcher(object):
     def handle_event(self, response):
         """handle_event
 
-        :param EtcdResponse: A python-etcd response object for a watch.
+        :param Response: A python-etcd response object for a watch.
         """
         LOG.debug("etcd event %s for key %s", response.action, response.key)
         key_parts = response.key.strip("/").split("/")
@@ -95,7 +95,7 @@ class PathDispatcher(object):
 
 
 Response = collections.namedtuple(
-    'Response', ['action', 'key', 'value']
+    'Response', ['action', 'key', 'value', 'mod_revision']
 )
 
 
@@ -108,9 +108,10 @@ class EtcdWatcher(object):
     - watcher.stop()
     """
 
-    def __init__(self, prefix):
+    def __init__(self, prefix, round_trip_suffix=None):
         LOG.debug("Creating EtcdWatcher for %s", prefix)
         self.prefix = prefix
+        self.round_trip_suffix = round_trip_suffix
         self.dispatcher = PathDispatcher()
         self._stopped = False
 
@@ -127,6 +128,9 @@ class EtcdWatcher(object):
         LOG.info("Start watching %s", self.prefix)
         self._stopped = False
 
+        # The current etcd cluster ID.
+        current_cluster_id = None
+
         while not self._stopped:
             # Get the current etcdv3 cluster ID and revision, so (a) we can
             # detect if the cluster ID changes, and (b) we know when to start
@@ -136,6 +140,18 @@ class EtcdWatcher(object):
                 last_revision = int(last_revision)
                 LOG.info("Current cluster_id %s, revision %d",
                          cluster_id, last_revision)
+                if cluster_id != current_cluster_id:
+                    # No particular handling here; but keep track of the
+                    # current cluster ID and log if it changes.  (In the
+                    # circumstances that can cause a cluster ID change, our
+                    # watch (below) for the old cluster ID would have timed out
+                    # - either because of connection loss, or because of no
+                    # further events coming - and then we would have looped
+                    # back round to here; and the next watch will be created
+                    # against the new cluster.)
+                    if current_cluster_id is not None:
+                        LOG.warning("Cluster ID changed")
+                    current_cluster_id = cluster_id
             except ConnectionFailedError as e:
                 LOG.debug("%r", e)
                 LOG.warning("etcd not available, will retry in 5s")
@@ -148,12 +164,13 @@ class EtcdWatcher(object):
 
             # Get all existing values and process them through the dispatcher.
             for result in etcdv3.get_prefix(self.prefix):
-                key, value, _ = result
+                key, value, mod_revision = result
                 # Convert to what the dispatcher expects - see below.
                 response = Response(
                     action='set',
                     key=key,
                     value=value,
+                    mod_revision=mod_revision,
                 )
                 LOG.info("status event: %s", response)
                 self.dispatcher.handle_event(response)
@@ -162,172 +179,173 @@ class EtcdWatcher(object):
             self._post_snapshot_hook(snapshot_data)
 
             # Now watch for any changes, starting after the revision above.
-            while not self._stopped:
-                try:
-                    # Check for cluster ID changing.
-                    cluster_id_now, _ = etcdv3.get_status()
-                    LOG.debug("Now cluster_id is %s", cluster_id_now)
-                    if cluster_id_now != cluster_id:
-                        LOG.info("Cluster ID changed, resync")
+            try:
+                # Start a watch from just after the last known revision.
+                event_stream, cancel = etcdv3.watch_subtree(
+                    self.prefix,
+                    str(last_revision + 1))
+
+                # It is possible for that watch call to be affected by an etcd
+                # compaction, if there is a sequence of events as follows.
+                #
+                # 1. EtcdWatcher calls get_status (39 lines above) and finds
+                # that the etcd revision at that time is N.
+                #
+                # 2. There are at least 2 changes to the database (by any etcd
+                # writer, including other threads/forks of the Neutron server),
+                # such that the etcd revision is >= N+2, before our watch call.
+                #
+                # 3. etcd is then compacted at revision >= N+2, also before our
+                # watch call.
+                #
+                # 4. Our watch call then tries to create a watch starting at
+                # revision N+1, which is no longer available.
+                #
+                # If that happens, the etcd server sends these responses to the
+                # etcd3gw client, and then does NOT send any events for the
+                # prefix that we are monitoring:
+                #
+                # {"result":{"header":{"cluster_id":"14841639068965178418",
+                # "member_id":"10276657743932975437","revision":"33",
+                # "raft_term":"2"},"created":true}}
+                #
+                # {"result":{"header":{"cluster_id":"14841639068965178418",
+                # "member_id":"10276657743932975437","raft_term":"2"},
+                # "compact_revision":"32"}}
+                #
+                # Both of those response lines are consumed by the etcd3gw
+                # client/watch code, with nothing reported up to this code
+                # here.  Hence the next thing that will happen here is timing
+                # out after WATCH_TIMEOUT_SECS (10s).  Then we'll loop round,
+                # get the current revision, and start watching again from
+                # there.
+                #
+                # Given the things that EtcdWatcher is used for, I think that's
+                # good enough without more specific handling.  EtcdWatcher is
+                # used for:
+                #
+                # - agent status, where the impacts are placing a VM on a
+                #   compute host where Felix has died, or not using a compute
+                #   host where Felix has just become available.  For Felix
+                #   death there is a window (TTL) of 90s anyway, so another 10s
+                #   doesn't make a big difference.
+                #
+                # - port status, where the impact is just correct presentation
+                #   in the OpenStack UI.
+                #
+                # - DHCP info, where the impact is dnsmasq not being able to
+                #   answer a DHCP request.  But any sensible guest OS will
+                #   retry anyway for at least 10s, so I think we're still OK.
+            except Exception:
+                # Log and handle by restarting the loop, which means we'll get
+                # the tree again and then try watching again.  E.g. it could be
+                # that the DB has just been compacted and so the revision is no
+                # longer available that we asked to start watching from.
+                LOG.exception("Exception watching status tree")
+                continue
+
+            # Record time of last activity on the successfully created watch.
+            # (This is updated below as we see watch events.)
+            last_event_time = monotonic_time()
+
+            def _cancel_watch_if_broken():
+                # Loop until we should cancel the watch, either because of
+                # inactivity or because of stop() having been called.
+                while not self._stopped:
+                    # If WATCH_TIMEOUT_SECS has now passed since the last watch
+                    # event, break out of this loop.  As we are also writing a
+                    # key within the tree every WATCH_TIMEOUT_SECS / 3 seconds,
+                    # this can only happen either if there is some roundtrip
+                    # connectivity problem, or if the watch is invalid because
+                    # of a recent compaction; and in either case we need to
+                    # terminate this watch and take a new overall status and
+                    # snapshot of the tree.
+                    time_now = monotonic_time()
+                    if time_now > last_event_time + WATCH_TIMEOUT_SECS:
+                        LOG.warning("Watch is not working")
                         break
 
-                    # Start a watch from just after the last known revision.
-                    event_stream, cancel = etcdv3.watch_subtree(
-                        self.prefix,
-                        str(last_revision + 1))
+                    if self.round_trip_suffix is not None:
+                        # Write to a key in the tree that we are watching.  If
+                        # the watch is working normally, it will report this
+                        # event.
+                        etcdv3.put(self.prefix + self.round_trip_suffix,
+                                   str(time_now))
 
-                    # It is possible for that watch call to be affected by an
-                    # etcd compaction, if there is a sequence of events as
-                    # follows.
-                    #
-                    # 1. EtcdWatcher calls get_status (47 lines above) and
-                    # finds that the etcd revision at that time is N.
-                    #
-                    # 2. There are at least 2 changes to the database (by any
-                    # etcd writer, including other threads/forks of the Neutron
-                    # server), such that the etcd revision is >= N+2, before
-                    # our watch call.
-                    #
-                    # 3. etcd is then compacted at revision >= N+2, also before
-                    # our watch call.
-                    #
-                    # 4. Our watch call then tries to create a watch starting
-                    # at revision N+1, which is no longer available.
-                    #
-                    # If that happens, the etcd server sends these responses to
-                    # the etcd3gw client, and then does NOT send any events for
-                    # the prefix that we are monitoring:
-                    #
-                    # {"result":{"header":{"cluster_id":"14841639068965178418",
-                    # "member_id":"10276657743932975437","revision":"33",
-                    # "raft_term":"2"},"created":true}}
-                    #
-                    # {"result":{"header":{"cluster_id":"14841639068965178418",
-                    # "member_id":"10276657743932975437","raft_term":"2"},
-                    # "compact_revision":"32"}}
-                    #
-                    # Both of those response lines are consumed by the etcd3gw
-                    # client/watch code, with nothing reported up to this code
-                    # here.  Hence the next thing that will happen here is
-                    # timing out after WATCH_TIMEOUT_SECS (10s).  Then we'll
-                    # loop round, get the current revision, and start watching
-                    # again from there.
-                    #
-                    # Given the things that EtcdWatcher is used for, I think
-                    # that's good enough without more specific handling.
-                    # EtcdWatcher is used for:
-                    #
-                    # - agent status, where the impacts are placing a VM on a
-                    #   compute host where Felix has died, or not using a
-                    #   compute host where Felix has just become available.
-                    #   For Felix death there is a window (TTL) of 90s anyway,
-                    #   so another 10s doesn't make a big difference.
-                    #
-                    # - port status, where the impact is just correct
-                    #   presentation in the OpenStack UI.
-                    #
-                    # - DHCP info, where the impact is dnsmasq not being able
-                    #   to answer a DHCP request.  But any sensible guest OS
-                    #   will retry anyway for at least 10s, so I think we're
-                    #   still OK.
-                except Exception:
-                    # Log and handle by breaking out to the wider loop, which
-                    # means we'll get the tree again and then try watching
-                    # again.  E.g. it could be that the DB has just been
-                    # compacted and so the revision is no longer available that
-                    # we asked to start watching from.
-                    LOG.exception("Exception watching status tree")
-                    break
+                    # Sleep until time for next write.
+                    eventlet.sleep(WATCH_TIMEOUT_SECS / 3)
+                    LOG.debug("Checked %s watch at %r", self.prefix, time_now)
 
-                # Record time of last activity on the successfully created
-                # watch.  (This is updated below as we see watch events.)
+                # Cancel the watch
+                cancel()
+                return
+
+            # Spawn a greenlet to cancel the watch if it stops working, or if
+            # stop() is called.  Cancelling the watch adds None to the event
+            # stream, so the following for loop will see that.
+            eventlet.spawn(_cancel_watch_if_broken)
+
+            for event in event_stream:
+                LOG.debug("Event: %s", event)
                 last_event_time = monotonic_time()
 
-                def _cancel_watch_if_inactive():
-                    # Loop until we should cancel the watch, either because of
-                    # inactivity or because of stop() having been called.
-                    while not self._stopped:
-                        time_to_next_timeout = (last_event_time +
-                                                WATCH_TIMEOUT_SECS -
-                                                monotonic_time())
-                        LOG.debug("Time to next timeout is %ds",
-                                  time_to_next_timeout)
-                        if time_to_next_timeout < 1:
-                            break
-                        else:
-                            # Sleep until when we might next have to cancel
-                            # (but won't if a watch event has occurred in the
-                            # meantime).
-                            eventlet.sleep(time_to_next_timeout)
-
-                    # Cancel the watch
-                    cancel()
+                # If the EtcdWatcher has been stopped, return from the whole
+                # loop.
+                if self._stopped:
+                    LOG.info("EtcdWatcher has been stopped")
                     return
 
-                # Spawn a greenlet to cancel the watch if it's inactive, or if
-                # stop() is called.  Cancelling the watch adds None to the
-                # event stream, so the following for loop will see that.
-                eventlet.spawn(_cancel_watch_if_inactive)
+                # Otherwise a None event means that the watch has been
+                # cancelled owing to inactivity.  In that case we break out
+                # from this loop, and the watch will be restarted.
+                if event is None:
+                    LOG.debug("Watch cancelled owing to inactivity")
+                    break
 
-                for event in event_stream:
-                    LOG.debug("Event: %s", event)
-                    last_event_time = monotonic_time()
+                # An event at this point has a form like
+                #
+                # {u'kv': {
+                #     u'mod_revision': u'4',
+                #     u'value': '...',
+                #     u'create_revision': u'4',
+                #     u'version': u'1',
+                #     u'key': '/calico/felix/v1/host/ubuntu-xenial...'
+                # }}
+                #
+                # when a key/value pair is created or updated, and like
+                #
+                # {u'type': u'DELETE',
+                #  u'kv': {
+                #     u'mod_revision': u'88',
+                #     u'key': '/calico/felix/v1/host/ubuntu-xenial-...'
+                # }}
+                #
+                # when a key/value pair is deleted.
+                #
+                # Convert that to the form that the dispatcher expects;
+                # namely a response object, with:
+                # - response.key giving the etcd key
+                # - response.action being "set" or "delete"
+                # - whole response being passed on to the handler method.
+                # Handler methods here expect
+                # - response.key
+                # - response.value
+                key = event['kv']['key']
+                mod_revision = int(event['kv'].get('mod_revision', '0'))
+                response = Response(
+                    action=event.get('type', 'SET').lower(),
+                    key=key,
+                    value=event['kv'].get('value', ''),
+                    mod_revision=mod_revision,
+                )
+                LOG.info("Event: %s", response)
+                self.dispatcher.handle_event(response)
 
-                    # If the EtcdWatcher has been stopped, return from the
-                    # whole loop.
-                    if self._stopped:
-                        LOG.info("EtcdWatcher has been stopped")
-                        return
-
-                    # Otherwise a None event means that the watch has been
-                    # cancelled owing to inactivity.  In that case we break out
-                    # from this loop, and the watch will be restarted.
-                    if event is None:
-                        LOG.debug("Watch cancelled owing to inactivity")
-                        break
-
-                    # An event at this point has a form like
-                    #
-                    # {u'kv': {
-                    #     u'mod_revision': u'4',
-                    #     u'value': '...',
-                    #     u'create_revision': u'4',
-                    #     u'version': u'1',
-                    #     u'key': '/calico/felix/v1/host/ubuntu-xenial...'
-                    # }}
-                    #
-                    # when a key/value pair is created or updated, and like
-                    #
-                    # {u'type': u'DELETE',
-                    #  u'kv': {
-                    #     u'mod_revision': u'88',
-                    #     u'key': '/calico/felix/v1/host/ubuntu-xenial-...'
-                    # }}
-                    #
-                    # when a key/value pair is deleted.
-                    #
-                    # Convert that to the form that the dispatcher expects;
-                    # namely a response object, with:
-                    # - response.key giving the etcd key
-                    # - response.action being "set" or "delete"
-                    # - whole response being passed on to the handler method.
-                    # Handler methods here expect
-                    # - response.key
-                    # - response.value
-                    response = Response(
-                        action=event.get('type', 'SET').lower(),
-                        key=event['kv']['key'],
-                        value=event['kv'].get('value', ''),
-                    )
-                    LOG.info("Event: %s", response)
-                    self.dispatcher.handle_event(response)
-
-                    # Update last known revision.
-                    mod_revision = int(event['kv'].get('mod_revision', '0'))
-                    if mod_revision > last_revision:
-                        last_revision = mod_revision
-                        LOG.info("Last known revision is now %d",
-                                 last_revision)
+                # Update last known revision.
+                if mod_revision > last_revision:
+                    last_revision = mod_revision
+                    LOG.info("Last known revision is now %d",
+                             last_revision)
 
     def stop(self):
         LOG.info("Stop watching status tree")
