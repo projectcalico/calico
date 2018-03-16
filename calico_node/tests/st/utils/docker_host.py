@@ -19,7 +19,7 @@ import tempfile
 import uuid
 import yaml
 from functools import partial
-from subprocess import CalledProcessError, Popen, PIPE
+from subprocess import CalledProcessError, check_output, PIPE
 
 from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
 from network import DockerNetwork, DummyNetwork, global_setting, \
@@ -209,37 +209,46 @@ class DockerHost(object):
 
         return log_and_run(command, raise_exception_on_failure=raise_exception_on_failure)
 
-    def execute_readline(self, command):
+    def execute_readline(self, command, filename):
         """
-        Execute a command and return individual lines as a generator.
+        Execute a command and return a list of the lines in the file. If
+        running dind, the file to read will be copied to the host before
+        reading since docker exec can be unreliable when piping large
+        amounts of data.
+
         Raises an exception if the return code is non-zero.  Stderr is ignored.
 
         Use this rather than execute if the command outputs a large amount of
         data that cannot be handled as a single string.
 
-        :return: Generator of individual lines.
+        :return: List of individual lines.
         """
         logger.debug("Running command on %s", self.name)
-        logger.debug("  - Command: %s", command)
+        logger.debug("  - Command: %s", command % filename)
+
         if self.dind:
-            command = self.escape_shell_single_quotes(command)
-            command = "docker exec -it %s sh -c '%s'" % (self.name,
-                                                         command)
-        logger.debug("Final command: %s", command)
-        proc = Popen(command, stdout=PIPE, shell=True)
+            # Copy file to host before reading.
+            logger.debug("Running dind, copy file to host first")
 
-        try:
-            # Read and return one line at a time until no more data is
-            # returned.
-            for line in proc.stdout:
-                yield line
-        finally:
-            status = proc.wait()
-            logger.debug("- return: %s", status)
+            # Make a tmp directory where we can place the file.
+            log_and_run("mkdir -p /tmp/%s" % self.name, raise_exception_on_failure=True)
 
-        if status:
-            raise Exception("Command %s returned non-zero exit code %s" %
-                            (command, status))
+            # Generate the filename to use on the host.
+            # /var/log/calico/felix/current becomes /tmp/<host>/var-log-calico-felix-current.
+            hostfile = "/tmp/%s/%s" % (self.name, filename.strip("/").replace("/", "-"))
+
+            # Copy to the host.
+            c = "docker cp %s:%s %s" % (self.name, filename, hostfile)
+            log_and_run(c, raise_exception_on_failure=True)
+            logger.debug("Copied file from container to %s" % hostfile)
+            command = command % hostfile
+        else:
+            # Otherwise just run the provided command.
+            command = command % filename
+
+        logger.debug("Final command: %s", command.split(" "))
+        out = check_output(command.split(" "))
+        return out.split("\n")
 
     def calicoctl(self, command, version=None, raise_exception_on_failure=True):
         """
