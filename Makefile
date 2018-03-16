@@ -14,6 +14,14 @@ ifeq ($(ARCH),ppc64le)
 	GO_BUILD_VER?=latest
 endif
 
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER?=latest
+endif
+
+# Select which release branch to test.
+RELEASE_BRANCH?=release-v3.0
+
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
 .SUFFIXES:
@@ -91,6 +99,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/allocate-ipip-addr bin/ca
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
+		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
 		$(GO_BUILD_CONTAINER) /tests/test_suite_kdd.sh
 
@@ -100,6 +109,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/allocate-ipip-addr bin/c
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
+		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
 		$(GO_BUILD_CONTAINER) /tests/test_suite_etcd.sh
 

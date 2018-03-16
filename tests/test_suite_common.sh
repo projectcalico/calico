@@ -163,8 +163,8 @@ run_individual_test_oneshot() {
 download_templates_from_calico() {
     repo_dir="/node-repo"
     if [ ! -d ${repo_dir} ]; then
-        echo "Getting latest confd templates from calico repo"
-        git clone https://github.com/projectcalico/calico.git ${repo_dir}
+        echo "Getting latest confd templates from calico repo, branch=${RELEASE_BRANCH}"
+        git clone https://github.com/projectcalico/calico.git ${repo_dir} -b ${RELEASE_BRANCH}
         ln -s ${repo_dir}/calico_node/filesystem/etc/calico/ /etc/calico
     fi
 }
@@ -214,13 +214,13 @@ compare_templates() {
     testdir=$1
     output=$2
     rc=0
-    for f in `ls /tests/compiled_templates/${testdir}`; do
-        if ! diff -q /tests/compiled_templates/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
+    for f in `ls /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}`; do
+        if ! diff -q /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
             rc=1
             if [ $output -ne 0 ]; then
                 echo "Failed: $f templates do not match, showing diff of expected vs received"
                 set +e
-                diff /tests/compiled_templates/${testdir}/${f} /etc/calico/confd/config/${f}
+                diff /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f}
                 echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
                 cp /etc/calico/confd/config/${f} ${LOGPATH}/rendered/${f}
                 set -e
