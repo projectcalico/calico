@@ -25,6 +25,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	// Envoy supports TCP only. Add a k:v into this map if more protocol is supported in the future.
+	protocolMapL4 = map[int32]string{6: "tcp"}
+)
+
 type namespaceMatch struct {
 	Names    []string
 	Selector string
@@ -220,46 +225,47 @@ func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2.Addre
 			return false
 		}
 	}
+	return true
 }
 
 func matchL4Protocol(rule *proto.Rule, dest *authz.AttributeContext_Peer) bool {
 	// Extract L4 protocol type of socket address for destination peer context. Match against rules.
 	if dest == nil {
-		log.Warn("nil request destination peer.")
+		log.Warn("Matching L4 protocol. nil request destination peer.")
 		return false
 	}
 
-	// default protocol is TCP
-	reqProtocol := "TCP"
-	if a := dest.GetAddress(); a != nil {
-		if sa := a.GetSocketAddress(); sa != nil {
-			reqProtocol = sa.GetProtocol().String()
-		}
-	}
+	// Default protocol is TCP. Convert to lowercase.
+	reqProtocol := strings.ToLower(dest.GetAddress().GetSocketAddress().GetProtocol().String())
+	log.WithFields(log.Fields{
+		"isProtocol":      rule.GetProtocol(),
+		"isNotProtocol":   rule.NotProtocol,
+		"requestProtocol": reqProtocol,
+	}).Debug("Matching L4 protocol")
 
 	checkStringInRuleProtocol := func(p *proto.Protocol, s string) bool {
 		// Check if given protocol string matches what is specified in rule.
+		// Note we compare names in lowercase.
 		if name := p.GetName(); name != "" {
-			return strings.ToLower(name) == strings.ToLower(s)
+			return strings.ToLower(name) == s
 		}
 
-		// Envoy supports TCP only. Add a k:v into the map if more protocol is supported in the future.
-		protocolMap := map[int32]string{6: "TCP"}
-		if name, ok := protocolMap[p.GetNumber()]; ok {
-			return strings.ToLower(name) == strings.ToLower(s)
+		if name, ok := protocolMapL4[p.GetNumber()]; ok {
+			return name == s
 		}
 
 		return false
 	}
 
-	// Check protocol in rule first.
-	if protocal := rule.GetProtocol(); protocal != nil {
-		return checkStringInRuleProtocol(protocal, reqProtocol)
-	}
-
-	// Check notProtocol.
+	// Check rule.NotProtocol first.
+	// If we get same value on both rule.Protocol and rule.NotProtocol, it is not a match.
 	if protocal := rule.GetNotProtocol(); protocal != nil {
 		return !checkStringInRuleProtocol(protocal, reqProtocol)
+	}
+
+	// Check rule.Protocol.
+	if protocal := rule.GetProtocol(); protocal != nil {
+		return checkStringInRuleProtocol(protocal, reqProtocol)
 	}
 
 	// Match all protocols.
