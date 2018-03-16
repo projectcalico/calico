@@ -19,7 +19,8 @@ import tempfile
 import uuid
 import yaml
 from functools import partial
-from subprocess import CalledProcessError, Popen, PIPE
+import subprocess
+from subprocess import CalledProcessError
 
 from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
 from network import DockerNetwork, DummyNetwork, global_setting, \
