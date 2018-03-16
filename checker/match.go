@@ -243,7 +243,11 @@ func matchL4Protocol(rule *proto.Rule, dest *authz.AttributeContext_Peer) bool {
 		"requestProtocol": reqProtocol,
 	}).Debug("Matching L4 protocol")
 
-	checkStringInRuleProtocol := func(p *proto.Protocol, s string) bool {
+	checkStringInRuleProtocol := func(p *proto.Protocol, s string, defaultResult bool) bool {
+		if p == nil {
+			return defaultResult
+		}
+
 		// Check if given protocol string matches what is specified in rule.
 		// Note we compare names in lowercase.
 		if name := p.GetName(); name != "" {
@@ -257,17 +261,6 @@ func matchL4Protocol(rule *proto.Rule, dest *authz.AttributeContext_Peer) bool {
 		return false
 	}
 
-	// Check rule.NotProtocol first.
-	// If we get same value on both rule.Protocol and rule.NotProtocol, it is not a match.
-	if protocal := rule.GetNotProtocol(); protocal != nil {
-		return !checkStringInRuleProtocol(protocal, reqProtocol)
-	}
-
-	// Check rule.Protocol.
-	if protocal := rule.GetProtocol(); protocal != nil {
-		return checkStringInRuleProtocol(protocal, reqProtocol)
-	}
-
-	// Match all protocols.
-	return true
+	return checkStringInRuleProtocol(rule.GetProtocol(), reqProtocol, true) &&
+		!checkStringInRuleProtocol(rule.GetNotProtocol(), reqProtocol, false)
 }

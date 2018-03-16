@@ -358,4 +358,20 @@ func TestMatchL4Protocol(t *testing.T) {
 	Expect(match(rule, reqCache, "testns")).To(BeFalse())
 	req.GetAttributes().GetDestination().Address = nil
 	rule.NotProtocol = nil
+
+	// With Protocol!=TCP and Protocol == TCP rule and UDP request
+	rule.NotProtocol = &proto.Protocol{
+		&proto.Protocol_Name{
+			Name: "TCP",
+		},
+	}
+	rule.Protocol = &proto.Protocol{
+		&proto.Protocol_Name{
+			Name: "TCP",
+		},
+	}
+	req.GetAttributes().GetDestination().Address = socketAddressProtocolUDP
+	Expect(match(rule, reqCache, "testns")).To(BeFalse())
+	req.GetAttributes().GetDestination().Address = nil
+	rule.NotProtocol = nil
 }
