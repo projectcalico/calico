@@ -15,12 +15,19 @@
 package checker
 
 import (
+	"strings"
+
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
 	"github.com/envoyproxy/data-plane-api/api"
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	log "github.com/sirupsen/logrus"
+)
+
+var (
+	// Envoy supports TCP only. Add a k:v into this map if more protocol is supported in the future.
+	protocolMapL4 = map[int32]string{6: "tcp"}
 )
 
 type namespaceMatch struct {
@@ -34,7 +41,8 @@ func match(rule *proto.Rule, req *requestCache, policyNamespace string) bool {
 	attr := req.Request.GetAttributes()
 	return matchSource(rule, req, policyNamespace) &&
 		matchDestination(rule, req, policyNamespace) &&
-		matchRequest(rule, attr.GetRequest())
+		matchRequest(rule, attr.GetRequest()) &&
+		matchL4Protocol(rule, attr.GetDestination())
 }
 
 func matchSource(r *proto.Rule, req *requestCache, policyNamespace string) bool {
@@ -218,4 +226,41 @@ func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2.Addre
 		}
 	}
 	return true
+}
+
+func matchL4Protocol(rule *proto.Rule, dest *authz.AttributeContext_Peer) bool {
+	// Extract L4 protocol type of socket address for destination peer context. Match against rules.
+	if dest == nil {
+		log.Warn("Matching L4 protocol. nil request destination peer.")
+		return false
+	}
+
+	// Default protocol is TCP. Convert to lowercase.
+	reqProtocol := strings.ToLower(dest.GetAddress().GetSocketAddress().GetProtocol().String())
+	log.WithFields(log.Fields{
+		"isProtocol":      rule.GetProtocol(),
+		"isNotProtocol":   rule.NotProtocol,
+		"requestProtocol": reqProtocol,
+	}).Debug("Matching L4 protocol")
+
+	checkStringInRuleProtocol := func(p *proto.Protocol, s string, defaultResult bool) bool {
+		if p == nil {
+			return defaultResult
+		}
+
+		// Check if given protocol string matches what is specified in rule.
+		// Note we compare names in lowercase.
+		if name := p.GetName(); name != "" {
+			return strings.ToLower(name) == s
+		}
+
+		if name, ok := protocolMapL4[p.GetNumber()]; ok {
+			return name == s
+		}
+
+		return false
+	}
+
+	return checkStringInRuleProtocol(rule.GetProtocol(), reqProtocol, true) &&
+		!checkStringInRuleProtocol(rule.GetNotProtocol(), reqProtocol, false)
 }
