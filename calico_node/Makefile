@@ -12,6 +12,11 @@ ifeq ($(ARCH),ppc64le)
 	ARCHTAG:=-ppc64le
 	GO_BUILD_VER?=latest
 endif
+
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER?=latest
+endif
 ###############################################################################
 # vX.Y format: redefine during a release, e.g. "RELEASE_STREAM=v3.1 make release"
 RELEASE_STREAM ?= master
