@@ -20,6 +20,8 @@ import (
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type ipSetInfo struct {
@@ -38,7 +40,7 @@ func newIPSet(update *proto.IPSetUpdate) *ipSetInfo {
 	case proto.IPSetUpdate_NET:
 		s.Type = ipsets.IPSetTypeHashNet
 	default:
-		panic("unknown IPSetType")
+		log.WithField("IPSetType", update.GetType()).Panic("unknown IPSetType")
 	}
 
 	s.SetID = update.GetId()
