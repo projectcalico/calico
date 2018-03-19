@@ -4,7 +4,7 @@ homepage: https://projectcalico.org
 license: Apache-2.0
 import:
 - package: github.com/sirupsen/logrus
-  version: ^1.0.3
+  version: v1.0.4
 - package: github.com/kelseyhightower/envconfig
   version: ~1.3.0
 - package: k8s.io/apiserver

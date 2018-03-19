@@ -1,5 +1,5 @@
-hash: 99beb0f6b0f0fc19e5952f788c912e3c01ee9676fd6a18c618d96842917b7a7e
-updated: 2018-03-16T18:54:25.568548624Z
+hash: 6769f39c7a799fb139f998ee35954d5b224c2741954ab6d3e671f96625eb7194
+updated: 2018-03-19T15:25:20.305535562Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -240,7 +240,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
-  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
