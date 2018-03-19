@@ -20,7 +20,7 @@ ifeq ($(ARCH),s390x)
 endif
 
 # Select which release branch to test.
-RELEASE_BRANCH?=master
+RELEASE_BRANCH?=release-v3.1
 
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
