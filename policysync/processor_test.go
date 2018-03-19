@@ -17,11 +17,10 @@ package policysync_test
 import (
 	"errors"
 	"fmt"
-	"math/rand"
+	"io/ioutil"
 	"net"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -652,7 +651,7 @@ var _ = Describe("Processor", func() {
 				var syncServer *policysync.Server
 				var gRPCServer *grpc.Server
 				var listener net.Listener
-				var socketPath string
+				var socketDir string
 
 				BeforeEach(func() {
 					uidAllocator := policysync.NewUIDAllocator()
@@ -660,8 +659,8 @@ var _ = Describe("Processor", func() {
 
 					gRPCServer = grpc.NewServer(grpc.Creds(testCreds{}))
 					proto.RegisterPolicySyncServer(gRPCServer, syncServer)
-					socketPath = makeTmpListenerDir()
-					listener = openListener(socketPath)
+					socketDir = makeTmpListenerDir()
+					listener = openListener(socketDir)
 					go func() {
 						defer GinkgoRecover()
 						err := gRPCServer.Serve(listener)
@@ -677,6 +676,7 @@ var _ = Describe("Processor", func() {
 
 				AfterEach(func() {
 					listener.Close()
+					os.RemoveAll(socketDir)
 				})
 
 				Context("with joined, active endpoint", func() {
@@ -692,7 +692,7 @@ var _ = Describe("Processor", func() {
 
 						opts := getDialOptions()
 						var err error
-						clientConn, err = grpc.Dial(socketPath, opts...)
+						clientConn, err = grpc.Dial(path.Join(socketDir, ListenerSocket), opts...)
 						Expect(err).ToNot(HaveOccurred())
 
 						syncClient = proto.NewPolicySyncClient(clientConn)
@@ -869,24 +869,17 @@ func getDialer(proto string) func(string, time.Duration) (net.Conn, error) {
 	}
 }
 
-const ListenerDir = "/tmp/felixut"
 const ListenerSocket = "policysync.sock"
 
-// Single source of random numbers insures repeated calls to makeTmpListenDir get unique paths.  But! source is not
-// threadsafe so we protect it with a Mutex. Not the most idiomatic, but simple and fast.
-var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-var rngLock = sync.Mutex{}
-
 func makeTmpListenerDir() string {
-	rngLock.Lock()
-	dirPath := path.Join(ListenerDir, fmt.Sprintf("%0h", rng.Uint64()))
-	rngLock.Unlock()
-	Expect(os.MkdirAll(dirPath, 0777)).To(Succeed())
-	return path.Join(dirPath, ListenerSocket)
+	dirPath, err := ioutil.TempDir("/tmp", "felixut")
+	Expect(err).ToNot(HaveOccurred())
+	return dirPath
 }
 
-func openListener(path string) net.Listener {
-	lis, err := net.Listen("unix", path)
+func openListener(dir string) net.Listener {
+	socketPath := path.Join(dir, ListenerSocket)
+	lis, err := net.Listen("unix", socketPath)
 	Expect(err).ToNot(HaveOccurred())
 	return lis
 }
