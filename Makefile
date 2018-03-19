@@ -21,7 +21,7 @@ endif
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.8.0-beta.1
 ETCD_IMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 
-.PHONY: all binary test clean help docker-image
+.PHONY: all binary build test clean help image
 default: help
 
 # Makefile configuration options 
@@ -50,7 +50,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
 # Build targets 
 ###############################################################################
 ## Builds the controller binary and docker image.
-docker-image: image.created$(ARCHTAG)
+image: image.created$(ARCHTAG)
 image.created$(ARCHTAG): dist/kube-controllers-linux-$(ARCH)
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
@@ -59,8 +59,10 @@ image.created$(ARCHTAG): dist/kube-controllers-linux-$(ARCH)
 dist/kube-controllers-linux-$(ARCH):
 	$(MAKE) OS=linux ARCH=$(ARCH) binary-containerized
 
-## Populates the vendor directory.
-vendor: glide.yaml
+# Populates the vendor directory.
+.PHONY: vendor
+vendor: vendor/.up-to-date
+vendor/.up-to-date: glide.yaml
 	# Ensure that the glide cache directory exists.
 	mkdir -p $(HOME)/.glide
 
@@ -75,11 +77,9 @@ vendor: glide.yaml
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		$(CALICO_BUILD) \
 		/bin/sh -c 'cd /go/src/$(PACKAGE_NAME) && glide install -strip-vendor'
+	touch vendor/.up-to-date
 
-ut: vendor
-	./run-uts
-
-# Build the controller binary.
+# Builds the controller binary.
 binary: vendor
 	# Don't try to "install" the intermediate build files (.a .o) when not on linux
 	# since there are no write permissions for them in our linux build container.
@@ -89,7 +89,8 @@ binary: vendor
 	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/kube-controllers-$(OS)-$(ARCH) \
 	-ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
 
-## Build the controller binary in a container.
+## Builds the controller binary in a container.
+build: binary-containerized
 binary-containerized: vendor
 	mkdir -p dist
 	-mkdir -p .go-pkg-cache
@@ -107,35 +108,35 @@ binary-containerized: vendor
 # Test targets 
 ###############################################################################
 
-## Runs all tests - good for CI. 
-ci: clean docker-image check-copyright ut-containerized fv
+## Builds the code and runs all tests.
+ci: clean image check-copyright ut fv
 
-## Run the tests in a container. Useful for CI, Mac dev.
-ut-containerized: vendor 
+## Run the unit tests in a container.
+ut: vendor
 	-mkdir -p .go-pkg-cache
 	docker run --rm --privileged --net=host \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make WHAT=$(WHAT) SKIP=$(SKIP) ut'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && WHAT=$(WHAT) SKIP=$(SKIP) ./run-uts'
 
-tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
-	# We pre-build the test binary so that we can run it outside a container and allow it
-	# to interact with docker.
-	$(DOCKER_GO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
-		
 .PHONY: fv
-fv: tests/fv/fv.test docker-image
+## Build and run the FV tests.
+fv: tests/fv/fv.test image
 	@echo Running Go FVs.
 	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME) ./fv.test -ginkgo.slowSpecThreshold 30
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
-
 ## Runs system tests.
-st: docker-image run-etcd run-k8s-apiserver
+st: image run-etcd run-k8s-apiserver
 	./tests/system/apiserver-reconnection.sh $(ARCHTAG)
 	$(MAKE) stop-k8s-apiserver stop-etcd
+
+tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
+	# We pre-build the test binary so that we can run it outside a container and allow it
+	# to interact with docker.
+	$(DOCKER_GO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
 
 .PHONY: run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
 run-k8s-apiserver: stop-k8s-apiserver
@@ -167,32 +168,88 @@ check-copyright:
 ###############################################################################
 # Release targets 
 ###############################################################################
-release: clean
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
+## Produces a git tag for the release.
+release-tag: release-prereqs
 	git tag $(VERSION)
-	$(MAKE) image.created
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make release-build VERSION=$(VERSION)"
+	@echo ""
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
+endif
+
+	$(MAKE) image
 	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
 
 	# Generate the `latest` images.
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
 
-# Ensure reported version is correct.
-	if ! docker run $(CONTAINER_NAME):$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	@echo "Now verify the release and push the git tag and artifacts:"
+	@echo ""
+	@echo "  make release-verify release-publish VERSION=$(VERSION)"
+	@echo ""
+	@echo "If this is the latest stable release, also push latest images:"
+	@echo ""
+	@echo "  make release-publish-latest VERSION=$(VERSION)" 
 
-	@echo "Now push the tag and images."
-	@echo ""
-	@echo "  git push $(VERSION)"
-	@echo "  docker push calico/kube-controllers:$(VERSION)"
-	@echo "  docker push quay.io/calico/kube-controllers:$(VERSION)"
-	@echo ""
-	@echo "If this is a stable release, also push the latest images."
-	@echo ""
-	@echo "  docker push calico/kube-controllers:latest"
-	@echo "  docker push quay.io/calico/kube-controllers:latest"
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	if ! docker run calico/kube-controllers:$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-controllers:$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/calico/kube-controllers:$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/kube-controllers:$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
+	# Run FV tests against the produced image.
+	$(MAKE) CONTAINER_NAME=calico/kube-controllers:$(VERSION) st
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
+
+	# Push images.
+	docker push calico/kube-controllers:$(VERSION)
+	docker push quay.io/calico/kube-controllers:$(VERSION)
+
+	# Make a draft of the release notes.
+	$(MAKE) release-notes
+
+	@echo "Complete the release process on GitHub"
+
+# Run gren in a container in order to generate a GitHub release with the correct
+# release notes. See here for more info: https://github.com/github-tools/github-release-notes
+release-notes: release-prereqs
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN is undefined - run using make release-notes GITHUB_TOKEN=X)
+endif
+	docker run -ti --rm \
+		-v $(PWD):/code \
+		-e GREN_GITHUB_TOKEN=$(GITHUB_TOKEN) \
+		-e VERSION=$(VERSION) \
+		node bash -c "npm install github-release-notes -g && cd /code && gren release -d -t $(VERSION)"
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check latest versions match.
+	if ! docker run calico/kube-controllers:latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-controllers:latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/calico/kube-controllers:latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/kube-controllers:latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+
+	docker push calico/kube-controllers:latest
+	docker push quay.io/calico/kube-controllers:latest
+
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
 
 ## Removes all build artifacts.
 clean:
@@ -200,6 +257,10 @@ clean:
 	-docker rmi $(CONTAINER_NAME)
 	rm -f st-kubeconfig.yaml
 	rm -f tests/fv/fv.test
+
+###############################################################################
+# Utilities 
+###############################################################################
 
 .PHONY: help
 ## Display this help text.
@@ -217,10 +278,6 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
-
-###############################################################################
-# Utilities 
-###############################################################################
 
 goimports:
 	goimports -l -w ./pkg
