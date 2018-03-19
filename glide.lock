@@ -1,5 +1,5 @@
-hash: 4f38979e8897f46a6dab791c11396ebf9f134eec2239a02a6e386d65d4d2fb66
-updated: 2018-03-02T18:53:05.89555363Z
+hash: d4afca3941d016f3a87002d04880efcc7f46b7c7bd9958767ae44ee61caaf584
+updated: 2018-03-19T15:37:04.363700904Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -348,7 +348,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 - name: k8s.io/api
-  version: 389dfa299845bcf399c16af89987e8775718ea48
+  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -391,7 +391,7 @@ imports:
   - tools/cache
   - tools/clientcmd
 - name: k8s.io/apimachinery
-  version: 4972c8e335e32ab65ba45bde0a99c6544c8a8e4c
+  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
