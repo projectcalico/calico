@@ -1,5 +1,5 @@
-hash: cae3a4cb0659060d77a3ed472d50c6abd2d5f0905e6243633c9ceada91ff732a
-updated: 2018-03-16T18:55:12.917206631Z
+hash: dabbe2797792fb8fdb0b05d1a3aae90dc740ef470bcfbaf184dc500bca147fb7
+updated: 2018-03-19T17:07:55.988118064Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -37,7 +37,7 @@ imports:
 - name: github.com/dgrijalva/jwt-go
   version: d2709f9f1f31ebcda9651b03077758c1f3a0018c
 - name: github.com/docopt/docopt-go
-  version: ee0de3bc6815ee19d4a46c7eb90f829db0e014b1
+  version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/eapache/channels
   version: 47238d5aae8c0fefd518ef2bee46290909cf8263
 - name: github.com/eapache/queue
@@ -282,7 +282,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
-  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/afero
   version: bbf41cb36dffe15dff5bf7e18c447801e7ffe163
   subpackages:
@@ -298,11 +298,11 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: 25d2c79295b361cac34eb41cfae90d5c69078b2a
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
