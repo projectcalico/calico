@@ -46,6 +46,7 @@
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
+ARCHES=$(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
 
 
 # BUILDARCH is the host architecture
@@ -72,7 +73,7 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-GO_BUILD_VER ?= latest
+GO_BUILD_VER ?= v0.10
 # for building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
@@ -108,6 +109,15 @@ help:
 	@echo "Note: initial builds can be slow because they generate docker-based"
 	@echo "build environments."
 	@echo
+	@echo "For any target, set ARCH=<target> to build for a given target."
+	@echo "For example, to build for arm64:"
+	@echo
+	@echo "  make calico/felix ARCH=arm64"
+	@echo
+	@echo "By default, builds for the architecture on which it is running. Cross-building is supported"
+	@echo "only on amd64, i.e. building for other architectures when running on amd64."
+	@echo "Supported target ARCH options:       $(ARCHES)"
+	@echo
 	@echo "Initial set-up:"
 	@echo
 	@echo "  make update-tools  Update/install the go build dependencies."
@@ -132,13 +142,13 @@ help:
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 	@echo "-----------------------------------------"
-	@echo ARCH (target): 	  $(ARCH)
-	@echo BUILDARCH (host):   $(BUILDARCH)
-	@echo GO_BUILD_CONTAINER: $(GO_BUILD_CONTAINER)
-	@echo PROTOC_CONTAINER:   $(PROTOC_CONTAINER)
-	@echo FV_ETCDIMAGE:       $(FV_ETCDIMAGE)
-	@echo FV_K8SIMAGE:        $(FV_K8SIMAGE)
-	@echo FV_TYPHAIMAGE:      $(FV_TYPHAIMAGE)
+	@echo "ARCH (target):          $(ARCH)"
+	@echo "BUILDARCH (host):       $(BUILDARCH)"
+	@echo "GO_BUILD_CONTAINER:     $(GO_BUILD_CONTAINER)"
+	@echo "PROTOC_CONTAINER:       $(PROTOC_CONTAINER)"
+	@echo "FV_ETCDIMAGE:           $(FV_ETCDIMAGE)"
+	@echo "FV_K8SIMAGE:            $(FV_K8SIMAGE)"
+	@echo "FV_TYPHAIMAGE:          $(FV_TYPHAIMAGE)"
 	@echo "-----------------------------------------"
 
 TOPDIR:=$(shell pwd)
@@ -650,7 +660,7 @@ release-once-tagged:
 	@echo
 	@echo "Felix release artifacts have been built:"
 	@echo
-	@echo "- Binary:                 bin/calico-felix"
+	@echo "- Binary:                 bin/calico-felix-$(ARCH)"
 	@echo "- Docker container image: calico/felix:$(VERSION)-$(ARCH)"
 	@echo "- Same, tagged for Quay:  quay.io/calico/felix:$(VERSION)-$(ARCH)"
     ifeq ($(ARCH),amd64)
