@@ -141,9 +141,17 @@ func TestMatchRule(t *testing.T) {
 			Methods: []string{"GET", "POST"},
 		},
 		Protocol: &proto.Protocol{
-			&proto.Protocol_Name{
+			NumberOrName: &proto.Protocol_Name{
 				Name: "TCP",
 			},
+		},
+		SrcPorts: []*proto.PortRange{
+			{First: 8458, Last: 8460},
+			{First: 12, Last: 12},
+		},
+		DstPorts: []*proto.PortRange{
+			{First: 76, Last: 80},
+			{First: 70, Last: 79},
 		},
 	}
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
@@ -183,6 +191,76 @@ func TestMatchRule(t *testing.T) {
 	addIPSet(store, "notDst1", "5.6.7.8", srcAddr)
 	reqCache, err := NewRequestCache(store, req)
 	Expect(err).To(Succeed())
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// SrcServiceAccountMatch
+	ossan := rule.SrcServiceAccountMatch.Names
+	rule.SrcServiceAccountMatch.Names = []string{"wendy"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.SrcServiceAccountMatch.Names = ossan
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// DstServiceAccountMatch
+	odsan := rule.DstServiceAccountMatch.Names
+	rule.DstServiceAccountMatch.Names = []string{"wendy"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.DstServiceAccountMatch.Names = odsan
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// SrcIpSetIds
+	osipi := rule.SrcIpSetIds
+	rule.SrcIpSetIds = []string{"notSrc0"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.SrcIpSetIds = osipi
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// DstIpSetIds
+	odipi := rule.DstIpSetIds
+	rule.DstIpSetIds = []string{"notDst0"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.DstIpSetIds = odipi
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// NotSrcIpSetIds
+	onsipi := rule.NotSrcIpSetIds
+	rule.NotSrcIpSetIds = []string{"src0"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.NotSrcIpSetIds = onsipi
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// NotDstIpSetIds
+	ondipi := rule.NotDstIpSetIds
+	rule.NotDstIpSetIds = []string{"dst0"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.NotDstIpSetIds = ondipi
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// HTTPMatch
+	ohm := rule.HttpMatch.Methods
+	rule.HttpMatch.Methods = []string{"HEAD"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.HttpMatch.Methods = ohm
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// Protocol
+	op := rule.Protocol.GetName()
+	rule.Protocol.NumberOrName = &proto.Protocol_Name{"UDP"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.Protocol.NumberOrName = &proto.Protocol_Name{op}
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// SrcPorts
+	osp := rule.SrcPorts
+	rule.SrcPorts = []*proto.PortRange{{First: 25, Last: 25}}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.SrcPorts = osp
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// DstPorts
+	odp := rule.DstPorts
+	rule.DstPorts = []*proto.PortRange{{First: 25, Last: 25}}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.DstPorts = odp
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 }
 
@@ -374,4 +452,178 @@ func TestMatchL4Protocol(t *testing.T) {
 	Expect(match(rule, reqCache, "testns")).To(BeFalse())
 	req.GetAttributes().GetDestination().Address = nil
 	rule.NotProtocol = nil
+}
+
+func TestMatchPort(t *testing.T) {
+
+	testCases := []struct {
+		title    string
+		ranges   []*proto.PortRange
+		ipSetIds []string
+		ip       string
+		port     uint32
+		match    bool
+	}{
+		{
+			title:    "empty match",
+			ranges:   nil,
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     12,
+			match:    true,
+		},
+		{
+			title:    "single numeric port match",
+			ranges:   []*proto.PortRange{{First: 12, Last: 12}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     12,
+			match:    true,
+		},
+		{
+			title:    "single numeric range match",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     13,
+			match:    true,
+		},
+		{
+			title:    "single numeric port no match",
+			ranges:   []*proto.PortRange{{First: 12, Last: 12}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     11,
+			match:    false,
+		},
+		{
+			title:    "single numeric range no match",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     21,
+			match:    false,
+		},
+		{
+			title:    "range lower inclusive",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     10,
+			match:    true,
+		},
+		{
+			title:    "range upper inclusive",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     20,
+			match:    true,
+		},
+		{
+			title:    "range overlapping in both",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}, {First: 15, Last: 25}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     19,
+			match:    true,
+		},
+		{
+			title:    "range overlapping in one",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}, {First: 15, Last: 25}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     11,
+			match:    true,
+		},
+		{
+			title:    "range overlapping in none",
+			ranges:   []*proto.PortRange{{First: 10, Last: 20}, {First: 15, Last: 25}},
+			ipSetIds: nil,
+			ip:       "192.168.4.5",
+			port:     26,
+			match:    false,
+		},
+		{
+			title:    "single set match",
+			ranges:   nil,
+			ipSetIds: []string{"set26"},
+			ip:       "192.168.4.5",
+			port:     26,
+			match:    true,
+		},
+		{
+			title:    "single set no match",
+			ranges:   nil,
+			ipSetIds: []string{"set12"},
+			ip:       "192.168.4.5",
+			port:     26,
+			match:    false,
+		},
+		{
+			title:    "multi set match",
+			ranges:   nil,
+			ipSetIds: []string{"set12", "set26"},
+			ip:       "192.168.4.5",
+			port:     26,
+			match:    true,
+		},
+		{
+			title:    "set no match, range match",
+			ranges:   []*proto.PortRange{{First: 26, Last: 26}},
+			ipSetIds: []string{"set12"},
+			ip:       "192.168.4.5",
+			port:     26,
+			match:    true,
+		},
+		{
+			title:    "set match, range no match",
+			ranges:   []*proto.PortRange{{First: 26, Last: 26}},
+			ipSetIds: []string{"set12"},
+			ip:       "192.168.4.5",
+			port:     12,
+			match:    true,
+		},
+		{
+			title:    "set no match, range no match",
+			ranges:   []*proto.PortRange{{First: 26, Last: 26}},
+			ipSetIds: []string{"set12"},
+			ip:       "192.168.4.5",
+			port:     112,
+			match:    false,
+		},
+	}
+	store := policystore.NewPolicyStore()
+	set12 := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	set12.AddString("192.168.4.5,tcp:12")
+	set26 := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	set26.AddString("192.168.4.5,tcp:26")
+	store.IPSetByID["set12"] = set12
+	store.IPSetByID["set26"] = set26
+	r := &auth.CheckRequest{Attributes: &auth.AttributeContext{
+		Source: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/testns/sa/sam",
+		},
+		Destination: &auth.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/testns/sa/ian",
+		},
+	}}
+
+	req, err := NewRequestCache(store, r)
+	Expect(err).ToNot(HaveOccurred())
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			addr := envoy_api_v2.Address{
+				Address: &envoy_api_v2.Address_SocketAddress{
+					SocketAddress: &envoy_api_v2.SocketAddress{
+						Address:       tc.ip,
+						PortSpecifier: &envoy_api_v2.SocketAddress_PortValue{tc.port},
+					},
+				},
+			}
+			Expect(matchPort("test", tc.ranges, tc.ipSetIds, req, &addr)).To(Equal(tc.match))
+		})
+	}
 }
