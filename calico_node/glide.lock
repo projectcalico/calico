@@ -1,5 +1,5 @@
-hash: e27939d4cbcfe152c55fa216efafa8477dff9c971e973a836f519c55a166b978
-updated: 2018-03-16T18:56:15.614493319Z
+hash: 93ea2bd5417653c14c4833321189e92f80d1d48d79ff689776d373bd9363dc50
+updated: 2018-03-19T15:30:49.096997254Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -240,7 +240,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
-  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
@@ -273,7 +273,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 314a259e304ff91bd6985da2a7149bbf91237993
+  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
   subpackages:
   - unix
   - windows
