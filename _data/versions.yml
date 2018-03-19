@@ -2391,27 +2391,27 @@ v2.1:
 
 
 # The master release stream is used to generate the master version of the docs,
-# as well as for builds of `calico/node:master` via CI.  Submit PRs to update the
+# as well as for builds of `calico/node:release-v3.1` via CI.  Submit PRs to update the
 # versions when a component changes.
 master:
 - title: master
   note: ""
   components:
      felix:
-      version: master
+      version: release-v3.1
       url: ""
      typha:
-      version: master
+      version: release-v3.1
       url: ""
      calicoctl:
-      version: master
+      version: release-v3.1
       url: "https://www.projectcalico.org/builds/calicoctl"
       download_url: "https://www.projectcalico.org/builds/calicoctl"
      calico/node:
-      version: master
+      version: release-v3.1
       url: ""
      calico/cni:
-      version: master
+      version: release-v3.1
       url: ""
       download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
@@ -2419,7 +2419,7 @@ master:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
      confd:
-      version: master
+      version: release-v3.1
      calico-bgp-daemon:
       version: v0.2.2
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.2
@@ -2427,7 +2427,7 @@ master:
       version: master
       url: ""
      calico/kube-controllers:
-      version: master
+      version: release-v3.1
       url: ""
      networking-calico:
       version: master
