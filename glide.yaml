@@ -31,7 +31,7 @@ import:
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
-  version: ^1.0.3
+  version: v1.0.4
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
@@ -39,12 +39,13 @@ import:
 - package: github.com/gogo/protobuf
   version: ^0.3.0
 - package: github.com/vishvananda/netlink
+  version: 25d2c79295b361cac34eb41cfae90d5c69078b2a
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: de7fffa84ba95539179f0881e2dfe41521ebbe02
+  version: release-v3.0
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
