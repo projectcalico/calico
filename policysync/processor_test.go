@@ -36,6 +36,8 @@ import (
 
 const IPSetName = "testset"
 const ProfileName = "testpro"
+const TierName = "testtier"
+const PolicyName = "testpolicy"
 
 var _ = Describe("Processor", func() {
 	var uut *policysync.Processor
@@ -44,7 +46,8 @@ var _ = Describe("Processor", func() {
 	var removeServiceAccount func(name, namespace string)
 	var updateNamespace func(name string)
 	var removeNamespace func(name string)
-	var join func(w string) (chan proto.ToDataplane, policysync.JoinMetadata)
+	var join func(w string, jid uint64) (chan proto.ToDataplane, policysync.JoinMetadata)
+	var leave func(jm policysync.JoinMetadata)
 
 	BeforeEach(func() {
 		updates = make(chan interface{})
@@ -74,15 +77,20 @@ var _ = Describe("Processor", func() {
 			}
 			updates <- msg
 		}
-		join = func(w string) (chan proto.ToDataplane, policysync.JoinMetadata) {
+		join = func(w string, jid uint64) (chan proto.ToDataplane, policysync.JoinMetadata) {
 			// Buffer outputs so that Processor won't block.
 			output := make(chan proto.ToDataplane, 100)
 			joinMeta := policysync.JoinMetadata{
 				EndpointID: testId(w),
+				JoinUID:    jid,
 			}
 			jr := policysync.JoinRequest{JoinMetadata: joinMeta, C: output}
 			uut.JoinUpdates <- jr
 			return output, joinMeta
+		}
+		leave = func(jm policysync.JoinMetadata) {
+			lr := policysync.LeaveRequest{JoinMetadata: jm}
+			uut.JoinUpdates <- lr
 		}
 	})
 
@@ -116,7 +124,7 @@ var _ = Describe("Processor", func() {
 					var accounts [3]proto.ServiceAccountID
 
 					BeforeEach(func() {
-						output, _ = join("test")
+						output, _ = join("test", 1)
 						for i := 0; i < 3; i++ {
 							msg := <-output
 							accounts[i] = *msg.GetServiceAccountUpdate().Id
@@ -157,7 +165,7 @@ var _ = Describe("Processor", func() {
 					for i := 0; i < 2; i++ {
 						w := fmt.Sprintf("test%d", i)
 						d := testId(w)
-						output[i], _ = join(w)
+						output[i], _ = join(w, uint64(i))
 
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						updates <- &proto.WorkloadEndpointUpdate{
@@ -231,7 +239,7 @@ var _ = Describe("Processor", func() {
 					var accounts [3]proto.NamespaceID
 
 					BeforeEach(func() {
-						output, _ = join("test")
+						output, _ = join("test", 1)
 						for i := 0; i < 3; i++ {
 							msg := <-output
 							accounts[i] = *msg.GetNamespaceUpdate().Id
@@ -265,7 +273,7 @@ var _ = Describe("Processor", func() {
 					for i := 0; i < 2; i++ {
 						w := fmt.Sprintf("test%d", i)
 						d := testId(w)
-						output[i], _ = join(w)
+						output[i], _ = join(w, uint64(i))
 
 						// Ensure the joins are completed by sending a workload endpoint for each.
 						updates <- &proto.WorkloadEndpointUpdate{
@@ -318,9 +326,9 @@ var _ = Describe("Processor", func() {
 
 				BeforeEach(func(done Done) {
 					refdId = testId("refd")
-					refdOutput, _ = join("refd")
+					refdOutput, _ = join("refd", 1)
 					unrefdId = testId("unrefd")
-					unrefdOutput, _ = join("unrefd")
+					unrefdOutput, _ = join("unrefd", 2)
 
 					// Ensure the joins are completed by sending a workload endpoint for each.
 					updates <- &proto.WorkloadEndpointUpdate{
@@ -642,9 +650,14 @@ var _ = Describe("Processor", func() {
 					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(policyID))
 					g = <-unrefdOutput
 					Expect(g.GetIpsetRemove().GetId()).To(Equal(IPSetName))
+
+					// Updates of new IPSet should be sent to the endpoint.
+					updates <- updateIpSet(newSetName, 12)
+					g = <-unrefdOutput
+					Expect(g.GetIpsetUpdate().GetId()).To(Equal(newSetName))
+
 					close(done)
 				})
-
 			})
 
 			Context("with SyncServer", func() {
@@ -805,6 +818,450 @@ var _ = Describe("Processor", func() {
 						clientConn.Close()
 					})
 				})
+			})
+		})
+
+		Describe("Profile & Policy updates", func() {
+
+			Context("with two joined endpoints", func() {
+				var output [2]chan proto.ToDataplane
+				var wepID [2]proto.WorkloadEndpointID
+				var assertNoUpdate func(i int)
+
+				BeforeEach(func() {
+					assertNoUpdate = func(i int) {
+						updates <- &proto.WorkloadEndpointUpdate{
+							Id:       &wepID[i],
+							Endpoint: &proto.WorkloadEndpoint{},
+						}
+						g := <-output[i]
+						Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepID[i]))
+					}
+
+					for i := 0; i < 2; i++ {
+						w := fmt.Sprintf("test%d", i)
+						wepID[i] = testId(w)
+						output[i], _ = join(w, uint64(i))
+
+						// Ensure the joins are completed by sending a workload endpoint for each.
+						assertNoUpdate(i)
+					}
+
+				})
+
+				Context("with active profile", func() {
+					var profileID = proto.ProfileID{Name: ProfileName}
+
+					BeforeEach(func() {
+						updates <- &proto.ActiveProfileUpdate{
+							Id: &profileID,
+						}
+					})
+
+					It("should add & remove profile when ref'd or not by WEP", func(done Done) {
+						msg := &proto.WorkloadEndpointUpdate{
+							Id:       &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
+						}
+						updates <- msg
+						g := <-output[0]
+						Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&profileID))
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg))
+
+						// Remove reference
+						msg.GetEndpoint().ProfileIds = []string{}
+						updates <- msg
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg))
+						g = <-output[0]
+						Expect(g.GetActiveProfileRemove().GetId()).To(Equal(&profileID))
+
+						assertNoUpdate(1)
+
+						// Calc graph removes the profile, but we should not get another Remove.
+						updates <- &proto.ActiveProfileRemove{Id: &profileID}
+
+						// Test that there isn't a remove waiting by repeating the WEP update and getting it.
+						updates <- msg
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg))
+
+						close(done)
+					})
+
+					It("should add new & remove old when ref changes", func(done Done) {
+						// Add new profile
+						newName := "new-profile-name"
+						newProfileID := proto.ProfileID{Name: newName}
+						msg := &proto.ActiveProfileUpdate{Id: &newProfileID}
+						updates <- msg
+
+						msg2 := &proto.WorkloadEndpointUpdate{
+							Id:       &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
+						}
+						updates <- msg2
+						g := <-output[0]
+						Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&profileID))
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg2))
+
+						// Switch profiles
+						msg2.GetEndpoint().ProfileIds = []string{newName}
+						updates <- msg2
+
+						g = <-output[0]
+						Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&newProfileID))
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg2))
+
+						g = <-output[0]
+						Expect(g.GetActiveProfileRemove().GetId()).To(Equal(&profileID))
+
+						assertNoUpdate(1)
+
+						// Calc graph removes old profile, but we should not get another remove.
+						updates <- &proto.ActiveProfileRemove{Id: &profileID}
+
+						// Test that there isn't a remove queued by sending a WEP update
+						updates <- msg2
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg2))
+
+						close(done)
+					})
+				})
+
+				Context("with active policy", func() {
+					var policyID = proto.PolicyID{Tier: TierName, Name: PolicyName}
+
+					BeforeEach(func() {
+						updates <- &proto.ActivePolicyUpdate{
+							Id: &policyID,
+						}
+					})
+
+					It("should add & remove policy when ref'd or not by WEP", func(done Done) {
+						msg := &proto.WorkloadEndpointUpdate{
+							Id: &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
+								{
+									Name:            TierName,
+									IngressPolicies: []string{PolicyName},
+								},
+							}},
+						}
+						updates <- msg
+						g := <-output[0]
+						Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&policyID))
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg))
+
+						// Remove reference
+						msg.GetEndpoint().GetTiers()[0].IngressPolicies = nil
+						updates <- msg
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg))
+						g = <-output[0]
+						Expect(g.GetActivePolicyRemove().GetId()).To(Equal(&policyID))
+
+						assertNoUpdate(1)
+
+						// Calc graph removes the policy.
+						updates <- &proto.ActivePolicyRemove{Id: &policyID}
+
+						// Test we don't get another remove by sending another WEP update
+						updates <- msg
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg))
+
+						close(done)
+					})
+
+					It("should add new & remove old when ref changes", func(done Done) {
+						// Add new policy
+						newName := "new-policy-name"
+						newPolicyID := proto.PolicyID{Tier: TierName, Name: newName}
+						msg := &proto.ActivePolicyUpdate{Id: &newPolicyID}
+						updates <- msg
+
+						msg2 := &proto.WorkloadEndpointUpdate{
+							Id: &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
+								{
+									Name:           TierName,
+									EgressPolicies: []string{PolicyName},
+								},
+							}},
+						}
+						updates <- msg2
+						g := <-output[0]
+						Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&policyID))
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg2))
+
+						// Switch profiles
+						msg2.GetEndpoint().GetTiers()[0].EgressPolicies = []string{newName}
+						updates <- msg2
+
+						g = <-output[0]
+						Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&newPolicyID))
+
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg2))
+
+						g = <-output[0]
+						Expect(g.GetActivePolicyRemove().GetId()).To(Equal(&policyID))
+
+						// Calc graph removes the old policy.
+						updates <- &proto.ActivePolicyRemove{Id: &policyID}
+
+						// Test we don't get another remove by sending another WEP update
+						updates <- msg2
+						g = <-output[0]
+						Expect(g.GetWorkloadEndpointUpdate()).To(Equal(msg2))
+
+						close(done)
+					})
+
+				})
+			})
+
+			Context("with profile & wep added before joining", func() {
+				var profileID = proto.ProfileID{Name: ProfileName}
+				var wepId = testId("test")
+
+				BeforeEach(func() {
+					updates <- &proto.ActiveProfileUpdate{
+						Id: &profileID,
+					}
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id:       &wepId,
+						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{ProfileName}},
+					}
+				})
+
+				It("should sync profile & wep when wep joins", func(done Done) {
+					output, _ := join("test", 1)
+
+					g := <-output
+					Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&profileID))
+
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+
+				It("should resync profile & wep", func(done Done) {
+					output, jm := join("test", 1)
+					g := <-output
+					Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&profileID))
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					// Leave
+					leave(jm)
+
+					output, jm = join("test", 2)
+					g = <-output
+					Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&profileID))
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+
+				It("should not resync removed profile", func(done Done) {
+					output, jm := join("test", 1)
+					g := <-output
+					Expect(g.GetActiveProfileUpdate().GetId()).To(Equal(&profileID))
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					// Leave
+					leave(jm)
+
+					// Remove reference to profile from WEP
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id:       &wepId,
+						Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{}},
+					}
+
+					output, jm = join("test", 2)
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+
+			})
+
+			Context("with policy & wep added before joining", func() {
+				var policyID = proto.PolicyID{Tier: TierName, Name: PolicyName}
+				var wepId = testId("test")
+
+				BeforeEach(func() {
+					updates <- &proto.ActivePolicyUpdate{
+						Id: &policyID,
+					}
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id: &wepId,
+						Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
+							{
+								Name:           TierName,
+								EgressPolicies: []string{PolicyName},
+							},
+						}},
+					}
+				})
+
+				It("should sync policy & wep when wep joins", func(done Done) {
+					output, _ := join("test", 1)
+
+					g := <-output
+					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&policyID))
+
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+
+				It("should resync policy & wep", func(done Done) {
+					output, jm := join("test", 1)
+					g := <-output
+					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&policyID))
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					// Leave
+					leave(jm)
+
+					output, jm = join("test", 2)
+					g = <-output
+					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&policyID))
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+
+				It("should not resync removed policy", func(done Done) {
+					output, jm := join("test", 1)
+					g := <-output
+					Expect(g.GetActivePolicyUpdate().GetId()).To(Equal(&policyID))
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					// Leave
+					leave(jm)
+
+					// Remove reference to policy from WEP
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id: &wepId,
+					}
+
+					output, jm = join("test", 2)
+					g = <-output
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+			})
+		})
+
+		Describe("join / leave processing", func() {
+
+			Context("with WEP before any join", func() {
+				var wepId = testId("test")
+
+				BeforeEach(func() {
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id: &wepId,
+					}
+				})
+
+				It("should close old channel on new join", func(done Done) {
+					oldChan, _ := join("test", 1)
+					g := <-oldChan
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					newChan, _ := join("test", 2)
+					g = <-newChan
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					Expect(oldChan).To(BeClosed())
+
+					close(done)
+				})
+
+				It("should ignore stale leave requests", func(done Done) {
+					oldChan, oldMeta := join("test", 1)
+					g := <-oldChan
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					newChan, _ := join("test", 2)
+					g = <-newChan
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					leave(oldMeta)
+
+					// New channel should still be open.
+					updates <- &proto.WorkloadEndpointUpdate{
+						Id: &wepId,
+					}
+					g = <-newChan
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					close(done)
+				})
+
+				It("should close active connection on clean leave", func(done Done) {
+					c, m := join("test", 1)
+
+					g := <-c
+					Expect(g.GetWorkloadEndpointUpdate().GetId()).To(Equal(&wepId))
+
+					updates <- &proto.WorkloadEndpointRemove{Id: &wepId}
+					g = <-c
+					Expect(g.GetWorkloadEndpointRemove().GetId()).To(Equal(&wepId))
+
+					leave(m)
+
+					Eventually(c).Should(BeClosed())
+
+					close(done)
+				})
+			})
+
+			It("should handle join & leave without WEP update", func() {
+				c, m := join("test", 1)
+				leave(m)
+				Eventually(c).Should(BeClosed())
+			})
+		})
+
+		Describe("InSync processing", func() {
+			It("should send InSync on all open outputs", func(done Done) {
+				var c [2]chan proto.ToDataplane
+				for i := 0; i < 2; i++ {
+					c[i], _ = join(fmt.Sprintf("test%d", i), uint64(i))
+				}
+				updates <- &proto.InSync{}
+				for i := 0; i < 2; i++ {
+					g := <-c[i]
+					Expect(g.Payload).To(BeAssignableToTypeOf(&proto.ToDataplane_InSync{}))
+				}
+				close(done)
 			})
 		})
 	})

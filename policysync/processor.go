@@ -140,6 +140,12 @@ func (p *Processor) handleJoin(joinReq JoinRequest) {
 	// accounts that were updated before it joined.
 	p.sendServiceAccounts(ei)
 	p.sendNamespaces(ei)
+
+	if p.receivedInSync {
+		log.WithField("channel", ei.output).Debug("Already in sync with the datastore, sending in-sync message to client")
+		ei.output <- proto.ToDataplane{
+			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+	}
 	logCxt.Debug("Done with join")
 }
 
@@ -217,11 +223,9 @@ func (p *Processor) handleInSync(update *proto.InSync) {
 	}
 	log.Info("Now in sync with the calculation graph")
 	p.receivedInSync = true
-	for _, ei := range p.endpointsByID {
-		if ei.output != nil {
-			ei.output <- proto.ToDataplane{
-				Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
-		}
+	for _, ei := range p.updateableEndpoints() {
+		ei.output <- proto.ToDataplane{
+			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
 	}
 	return
 }
@@ -265,11 +269,6 @@ func (p *Processor) maybeSyncEndpoint(ei *EndpointInfo) {
 	p.syncRemovedPolicies(ei)
 	p.syncRemovedProfiles(ei)
 	doDel()
-	if p.receivedInSync {
-		log.WithField("channel", ei.output).Debug("Already in sync with the datastore, sending in-sync message to client")
-		ei.output <- proto.ToDataplane{
-			Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
-	}
 }
 
 func (p *Processor) handleWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
@@ -309,13 +308,8 @@ func (p *Processor) handleActiveProfileRemove(update *proto.ActiveProfileRemove)
 	pId := *update.Id
 	log.WithFields(log.Fields{"ProfileID": pId}).Debug("Processing ActiveProfileRemove")
 
-	// Push the update to any endpoints it was synced to
-	for _, ei := range p.updateableEndpoints() {
-		if ei.syncedProfiles[pId] {
-			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{update}}
-			delete(ei.syncedProfiles, pId)
-		}
-	}
+	// We trust the Calc graph to remove all references to the Profile before sending the Remove, thus we will have
+	// already sent the ActiveProfileRemove to any connected endpoints that are affected.
 	delete(p.profileByID, pId)
 }
 
@@ -347,13 +341,8 @@ func (p *Processor) handleActivePolicyRemove(update *proto.ActivePolicyRemove) {
 	pId := *update.Id
 	log.WithFields(log.Fields{"PolicyID": pId}).Debug("Processing ActivePolicyRemove")
 
-	// Push the update to any endpoints it was synced to
-	for _, ei := range p.updateableEndpoints() {
-		if ei.syncedPolicies[pId] {
-			ei.output <- proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{update}}
-			delete(ei.syncedPolicies, pId)
-		}
-	}
+	// We trust the Calc graph to remove all references to the Policy before sending the Remove, thus we will have
+	// already sent the ActivePolicyRemove to any connected endpoints that are affected.
 	delete(p.policyByID, pId)
 }
 
@@ -481,8 +470,7 @@ func (p *Processor) syncRemovedPolicies(ei *EndpointInfo) {
 
 	ei.iteratePolicies(func(pId proto.PolicyID) bool {
 		if !oldSyncedPolicies[pId] {
-			// We've never sent this policy?
-			return false
+			log.WithField("policyID", pId).Panic("syncing removed policies before all policies are added")
 		}
 
 		// Still an active policy, remove it from the old set.
@@ -523,8 +511,7 @@ func (p *Processor) syncRemovedProfiles(ei *EndpointInfo) {
 
 	ei.iterateProfiles(func(pId proto.ProfileID) bool {
 		if !oldSyncedProfiles[pId] {
-			// We've never sent this profile?
-			return false
+			log.WithField("profileID", pId).Panic("syncing removed profiles before all profiles are added")
 		}
 
 		// Still an active profile, remove it from the old set.
