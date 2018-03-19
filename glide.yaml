@@ -31,7 +31,7 @@ import:
   subpackages:
   - lib
 - package: github.com/sirupsen/logrus
-  version: ^1.0.3
+  version: v1.0.4
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
