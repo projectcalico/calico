@@ -155,7 +155,10 @@ func (m ipNetSet) RemoveString(network string) {
 func (m ipNetSet) ContainsAddress(addr *envoyapi.Address) bool {
 	ip := net.ParseIP(addr.GetSocketAddress().GetAddress())
 	if ip == nil {
-		log.WithField("addr", ip).Panic("could not parse IP")
+		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
+		// connections, like Pipes.
+		log.WithField("addr", ip).Warn("could not parse IP")
+		return false
 	}
 	ip4 := ip.To4()
 	if ip4 != nil {

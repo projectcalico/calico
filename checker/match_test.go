@@ -153,6 +153,8 @@ func TestMatchRule(t *testing.T) {
 			{First: 76, Last: 80},
 			{First: 70, Last: 79},
 		},
+		SrcNet: []string{"192.168.4.0/24"},
+		DstNet: []string{"10.54.0.0/16"},
 	}
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
 		Source: &auth.AttributeContext_Peer{
@@ -261,6 +263,20 @@ func TestMatchRule(t *testing.T) {
 	rule.DstPorts = []*proto.PortRange{{First: 25, Last: 25}}
 	Expect(match(rule, reqCache, "")).To(BeFalse())
 	rule.DstPorts = odp
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// SrcNet
+	osn := rule.SrcNet
+	rule.SrcNet = []string{"30.0.0.0/8"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.SrcNet = osn
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// DstNet
+	odn := rule.DstNet
+	rule.DstNet = []string{"30.0.0.0/8"}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.DstNet = odn
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 }
 
@@ -626,4 +642,108 @@ func TestMatchPort(t *testing.T) {
 			Expect(matchPort("test", tc.ranges, tc.ipSetIds, req, &addr)).To(Equal(tc.match))
 		})
 	}
+}
+
+func TestMatchNet(t *testing.T) {
+	testCases := []struct {
+		title string
+		nets  []string
+		ip    string
+		match bool
+	}{
+		{
+			title: "empty",
+			nets:  nil,
+			ip:    "45ab:0023::abcd",
+			match: true,
+		},
+		{
+			title: "single v4 net match",
+			nets:  []string{"192.168.3.0/24"},
+			ip:    "192.168.3.145",
+			match: true,
+		},
+		{
+			title: "single v6 net match",
+			nets:  []string{"45ab:0023::/32"},
+			ip:    "45ab:0023::abcd",
+			match: true,
+		},
+		{
+			title: "v4 ip v6 net no match",
+			nets:  []string{"55ae:4481::/0"},
+			ip:    "192.168.3.145",
+			match: false,
+		},
+		{
+			title: "v6 ip v4 set no match",
+			nets:  []string{"10.0.0.0/0"},
+			ip:    "45ab:0023::abcd",
+			match: false,
+		},
+		{
+			title: "mixed v6 net match",
+			nets:  []string{"45ab:0023::/32", "192.168.0.0/16"},
+			ip:    "45ab:0023::abcd",
+			match: true,
+		},
+		{
+			title: "mixed v4 net match",
+			nets:  []string{"45ab:0023::/32", "192.168.0.0/16"},
+			ip:    "192.168.21.21",
+			match: true,
+		},
+		{
+			title: "single v4 net no matcn",
+			nets:  []string{"192.168.0.0/16"},
+			ip:    "55.39.128.9",
+			match: false,
+		},
+		{
+			title: "single v6 net no match",
+			nets:  []string{"45ab:0023::/32"},
+			ip:    "85ab:0023::abcd",
+			match: false,
+		},
+		{
+			title: "multiple nets no match",
+			nets:  []string{"45.81.99.128/25", "10.0.0.0/8", "13.12.0.0/16"},
+			ip:    "45.81.99.1",
+			match: false,
+		},
+		{
+			title: "multiple nets match",
+			nets:  []string{"45.81.99.0/24", "10.0.0.0/8", "13.12.0.0/16"},
+			ip:    "45.81.99.1",
+			match: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			addr := &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
+				SocketAddress: &envoy_api_v2.SocketAddress{Address: tc.ip}}}
+			Expect(matchNet("test", tc.nets, addr)).To(Equal(tc.match))
+		})
+	}
+}
+
+// "Pipe" style addresses should never match IP nets
+func TestMatchNetPipe(t *testing.T) {
+	RegisterTestingT(t)
+
+	addr := &envoy_api_v2.Address{Address: &envoy_api_v2.Address_Pipe{Pipe: &envoy_api_v2.Pipe{Path: "/tmp/t.sock"}}}
+	nets := []string{"192.168.0.0/16"}
+	Expect(matchNet("test", nets, addr)).To(BeFalse())
+}
+
+func TestMatchNetBadCIDR(t *testing.T) {
+	RegisterTestingT(t)
+
+	addr := &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
+		SocketAddress: &envoy_api_v2.SocketAddress{Address: "192.168.5.6"}}}
+	nets := []string{"192.168.0.0.0/16"}
+	Expect(matchNet("test", nets, addr)).To(BeFalse())
 }
