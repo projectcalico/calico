@@ -186,7 +186,8 @@ func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 
 func CIDRFromIPNet(ipNet *net.IPNet) CIDR {
 	ones, _ := ipNet.Mask.Size()
-	ip := FromNetIP(ipNet.IP)
+	// Mask the IP before creating the CIDR so that we have it in canonical format.
+	ip := FromNetIP(ipNet.IP.Mask(ipNet.Mask))
 	if ip.Version() == 4 {
 		return V4CIDR{
 			addr:   ip.(V4Addr),
