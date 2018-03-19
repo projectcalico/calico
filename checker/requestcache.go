@@ -17,6 +17,7 @@ package checker
 import (
 	"fmt"
 	"regexp"
+	"sync"
 
 	authz "github.com/envoyproxy/data-plane-api/api/auth"
 	"github.com/projectcalico/app-policy/policystore"
@@ -52,6 +53,7 @@ type namespace struct {
 const SPIFFE_ID_PATTERN = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
 
 var spiffeIdRegExp *regexp.Regexp
+var spiffeIdRegExpOnce = sync.Once{}
 
 func NewRequestCache(store *policystore.PolicyStore, req *authz.CheckRequest) (*requestCache, error) {
 	r := &requestCache{Request: req, store: store}
@@ -153,10 +155,9 @@ func (r *requestCache) GetIPSet(ipset string) policystore.IPSet {
 // parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
 func parseSpiffeID(id string) (peer peer, err error) {
 	// Init the regexp the first time this is called, and store it in the package namespace.
-	if spiffeIdRegExp == nil {
-		// We drop the returned error here, since we are compiling
+	spiffeIdRegExpOnce.Do(func() {
 		spiffeIdRegExp, _ = regexp.Compile(SPIFFE_ID_PATTERN)
-	}
+	})
 	match := spiffeIdRegExp.FindStringSubmatch(id)
 	if match == nil {
 		err = fmt.Errorf("expected match %s, got %s", SPIFFE_ID_PATTERN, id)
