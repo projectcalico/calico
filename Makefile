@@ -11,10 +11,6 @@ CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 
 ###############################################################################
-# HtmlProofer
-HP_IGNORE_LOCAL_DIRS?=$(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - "htmlProoferLocalDirIgnore")
-HP_VERSION=v0.2
-
 JEKYLL_VERSION=pages
 DEV?=false
 
@@ -34,10 +30,10 @@ clean:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
 
 htmlproofer: clean _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --file-ignore ${HP_IGNORE_LOCAL_DIRS} --assume-extension --check-html --empty-alt-ignore --url-ignore "/docs.openshift.org/,#,/github.com\/projectcalico\/calico\/releases\/download/"
-	-docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
-	# Rerun htmlproofer across _all_ files, but ignore failure, allowing us to notice legacy docs issues without failing CI
-	
+	# Run htmlproofer, failing if we hit any errors. 
+	./htmlproofer.sh
+
+	# Run kubeval to check master manifests are valid Kubernetes resources.
 	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'find /calico/_site/master -name "*.yaml" |grep -v config.yaml | xargs /kubeval'
 
 strip_redirects:
@@ -61,6 +57,6 @@ endif
 	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
     
 update_canonical_urls:
-    # You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.0 NEW=v3.1
-    # Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
+	# You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.0 NEW=v3.1
+	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
 	find . \( -name '*.md' -o -name '*.html' \) -exec sed -i '/canonical_url:/s/$(OLD)/$(NEW)/g' {} \;
