@@ -580,6 +580,9 @@ node-test-containerized: vendor run-etcd-host run-k8s-apiserver
 	--net=host \
 	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
 
+	# Tear down k8s apiserver afterwards.
+	$(MAKE) stop-k8s-apiserver stop-etcd
+
 .PHONY: node-test-at
 ## Run calico/node docker-image acceptance tests
 node-test-at:
