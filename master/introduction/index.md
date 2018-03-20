@@ -21,7 +21,7 @@ you can achieve fine-grained control over communications
 between containers, virtual machine workloads, and 
 bare metal host endpoints.
 
-Proven in production at scale, {{site.prodname}} v3.0 features 
+Proven in production at scale, {{site.prodname}} {{page.version}} features 
 integrations with Kubernetes, OpenShift, and OpenStack.
 
 > **Note**: For integrations with the  Mesos, DC/OS, and Docker 
