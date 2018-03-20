@@ -1,3 +1,49 @@
+v3.1:
+- title: v3.1.0-rc1
+  note: ""
+  components:
+    felix:
+      version: 3.1.0-rc1
+      url: https://github.com/projectcalico/felix/releases/tag/3.1.0-rc1
+    typha:
+      version: v0.7.0
+      url: https://github.com/projectcalico/typha/releases/tag/v0.7.0
+    calicoctl:
+      version: v2.1.0-rc1
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.1.0-rc1
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.1.0-rc1/calicoctl
+    calico/node:
+      version: v3.1.0-rc1
+      url: https://github.com/projectcalico/calico/releases/tag/v3.1.0-rc1
+    calico/cni:
+      version: v2.1.0-rc1
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.1.0-rc1
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.1.0-rc1/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.1.0-rc1/calico-ipam
+    calico/kube-controllers:
+      version: v2.1.0-rc1
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.1.0-rc1
+    confd:
+      version: v1.1.0-rc1
+      url: https://github.com/projectcalico/confd/releases/tag/v1.1.0-rc1
+    calico-bird:
+      version: v0.3.2
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
+    calico/routereflector:
+      version: v0.6.0
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.6.0
+    flannel:
+      version: v0.9.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    networking-calico:
+      version: 2.0.0
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=2.0.0
+
 v3.0:
 - title: v3.0.3
   note: |
