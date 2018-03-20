@@ -19,7 +19,7 @@ ifeq ($(ARCH),s390x)
 endif
 ###############################################################################
 # vX.Y format: redefine during a release, e.g. "RELEASE_STREAM=v3.1 make release"
-RELEASE_STREAM ?= master
+RELEASE_STREAM ?= v3.1 
 
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
