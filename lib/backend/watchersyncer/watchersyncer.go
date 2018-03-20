@@ -81,6 +81,7 @@ type watcherSyncer struct {
 	numSynced     int
 	callbacks     api.SyncerCallbacks
 	wgwc          *sync.WaitGroup
+	wgws          *sync.WaitGroup
 	cancel        context.CancelFunc
 }
 
@@ -91,9 +92,11 @@ func (ws *watcherSyncer) Start() {
 	// The context is passed to the run() method where it is passed on to all the watcher caches.
 	// The cancel function is stored off and when called it signals to the caches that they need to wrap up their work.
 	// watcher caches wait group (wswc) is used to signal the completion of all of the watcher cache goroutines.
+	// watcher syncer wait group (wswc) is used to signal the completion of the watcher syncer itself.
 	ctx, cancel := context.WithCancel(context.Background())
 	ws.cancel = cancel
 	ws.wgwc = &sync.WaitGroup{}
+	ws.wgws = &sync.WaitGroup{}
 
 	go func() {
 		ws.run(ctx)
@@ -115,6 +118,8 @@ func (ws *watcherSyncer) Stop() {
 	// Closing the results chan signals to the watchersyncer to shut itself down now that nothing else will write to
 	// the results chan
 	close(ws.results)
+	ws.wgws.Wait()
+
 }
 
 // Send a status update and store the status.
@@ -128,6 +133,7 @@ func (ws *watcherSyncer) sendStatusUpdate(status api.SyncStatus) {
 // to syncer updates.
 func (ws *watcherSyncer) run(ctx context.Context) {
 	log.Debug("Sending initial status event and starting watchers")
+	ws.wgws.Add(1)
 	ws.sendStatusUpdate(api.WaitForDatastore)
 	for _, wc := range ws.watcherCaches {
 		ws.wgwc.Add(1)
@@ -161,6 +167,8 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 		// call again.
 		updates = ws.sendUpdates(updates)
 	}
+
+	ws.wgws.Done()
 }
 
 // Process a result from the result channel.  We don't immediately action updates, but
