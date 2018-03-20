@@ -252,6 +252,9 @@ calico/felix-$(ARCH): bin/calico-felix-$(ARCH) register
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
 	docker build --pull -t calico/felix:latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image
+ifeq ($(ARCH),amd64)
+	docker tag calico/felix:latest-$(ARCH) calico/felix:latest
+endif
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
