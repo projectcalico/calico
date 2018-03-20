@@ -15,6 +15,7 @@
 package checker
 
 import (
+	"net"
 	"strings"
 
 	"github.com/projectcalico/app-policy/proto"
@@ -52,11 +53,12 @@ func matchSource(r *proto.Rule, req *requestCache, policyNamespace string) bool 
 		r.GetOriginalSrcSelector(),
 		r.GetOriginalNotSrcSelector(),
 		r.GetSrcServiceAccountMatch())
+	addr := req.Request.GetAttributes().GetSource().GetAddress()
 	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.SourcePeer()) &&
 		matchNamespace(nsMatch, req.SourceNamespace()) &&
 		matchSrcIPSets(r, req) &&
-		matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(),
-			req, req.Request.GetAttributes().GetSource().GetAddress())
+		matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(), req, addr) &&
+		matchNet("src", r.GetSrcNet(), addr)
 }
 
 func computeNamespaceMatch(
@@ -89,11 +91,12 @@ func matchDestination(r *proto.Rule, req *requestCache, policyNamespace string) 
 		r.GetOriginalDstSelector(),
 		r.GetOriginalNotDstSelector(),
 		r.GetDstServiceAccountMatch())
+	addr := req.Request.GetAttributes().GetDestination().GetAddress()
 	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.DestinationPeer()) &&
 		matchNamespace(nsMatch, req.DestinationNamespace()) &&
 		matchDstIPSets(r, req) &&
-		matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(),
-			req, req.Request.GetAttributes().GetDestination().GetAddress())
+		matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(), req, addr) &&
+		matchNet("dst", r.GetDstNet(), addr)
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
@@ -251,6 +254,37 @@ func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, re
 	for _, id := range namedPortSets {
 		s := req.GetIPSet(id)
 		if s.ContainsAddress(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchNet(dir string, nets []string, addr *envoy_api_v2.Address) bool {
+	log.WithFields(log.Fields{
+		"nets": nets,
+		"addr": addr,
+		"dir":  dir,
+	}).Debug("matching net")
+	if len(nets) == 0 {
+		return true
+	}
+	ip := net.ParseIP(addr.GetSocketAddress().GetAddress())
+	if ip == nil {
+		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
+		// connections, like Pipes.
+		log.WithField("ip", addr.GetSocketAddress().GetAddress()).Warn("unable to parse IP")
+		return false
+	}
+	for _, n := range nets {
+		_, ipn, err := net.ParseCIDR(n)
+		if err != nil {
+			// Don't match CIDRs if they are malformed. This case should generally be weeded out by validation earlier
+			// in processing before it gets to Dikastes.
+			log.WithField("cidr", n).Warn("unable to parse CIDR")
+			return false
+		}
+		if ipn.Contains(ip) {
 			return true
 		}
 	}
