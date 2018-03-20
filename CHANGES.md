@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.0
+
+- Adapt for new Calico data model (v3)
+- Transition remaining uses of etcdv2 to etcdv3
+- Disambiguate DHCP agent's subnet lookup for an endpoint
+- Model security groups as NetworkPolicy instead of Profiles
+- Ensure that all Calico driver/plugin code logs consistently
+- Change Calico policy and labels prefix
+- Initialize privsep infrastructure for Calico DHCP agent
+- DHCP agent: Handle endpoint with no ipNetworks
+- Fix watch loops to handle compaction
+
 ## 1.4.3
 
 - Change _log.warn (now somewhat deprecated) to _log.warning

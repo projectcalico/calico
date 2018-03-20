@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.4.3
+Version:        2.0.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,18 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue Mar 20 2018 Neil Jerram <neil@tigera.io> 1:2.0.0-1
+  - networking-calico version 2.0.0 release
+    - Adapt for new Calico data model (v3)
+    - Transition remaining uses of etcdv2 to etcdv3
+    - Disambiguate DHCP agent's subnet lookup for an endpoint
+    - Model security groups as NetworkPolicy instead of Profiles
+    - Ensure that all Calico driver/plugin code logs consistently
+    - Change Calico policy and labels prefix
+    - Initialize privsep infrastructure for Calico DHCP agent
+    - DHCP agent: Handle endpoint with no ipNetworks
+    - Fix watch loops to handle compaction
+
 * Fri Oct 06 2017 Neil Jerram <neil@tigera.io> 1:1.4.3-1
   - networking-calico version 1.4.3 release
     - Change _log.warn (now somewhat deprecated) to _log.warning
