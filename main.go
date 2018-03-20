@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -100,7 +101,7 @@ func main() {
 		case "workloadendpoint":
 			podController := pod.NewPodController(ctx, k8sClientset, calicoClient)
 			go podController.Run(config.WorkloadEndpointWorkers, config.ReconcilerPeriod, stop)
-		case "profile":
+		case "profile", "namespace":
 			namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient)
 			go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
 		case "policy":
@@ -109,6 +110,14 @@ func main() {
 		case "node":
 			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient)
 			go nodeController.Run(config.NodeWorkers, config.ReconcilerPeriod, stop)
+		case "serviceaccount":
+			if apiconfig.IsAlphaFeatureSet(os.Getenv("ALPHA_FEATURES"), apiconfig.AlphaFeatureSA) {
+				log.Info("Running service accounts profile controller")
+				serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient)
+				go serviceAccountController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
+			} else {
+				log.Info("Not running service account profile controller. Not set in ALPHA_FEATURES.")
+			}
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
 		}

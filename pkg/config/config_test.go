@@ -74,7 +74,7 @@ var _ = Describe("Config", func() {
 		It("shoud return default values", func() {
 			Expect(config.LogLevel).To(Equal("info"))
 			Expect(config.ReconcilerPeriod).To(Equal("5m"))
-			Expect(config.EnabledControllers).To(Equal("policy,profile,workloadendpoint"))
+			Expect(config.EnabledControllers).To(Equal("policy,namespace,workloadendpoint"))
 			Expect(config.WorkloadEndpointWorkers).To(Equal(1))
 			Expect(config.ProfileWorkers).To(Equal(1))
 			Expect(config.PolicyWorkers).To(Equal(1))

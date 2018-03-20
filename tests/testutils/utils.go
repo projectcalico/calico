@@ -75,6 +75,7 @@ func GetCalicoClient(etcdIP string) client.Interface {
 	cfg := apiconfig.NewCalicoAPIConfig()
 	cfg.Spec.DatastoreType = apiconfig.EtcdV3
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
+	cfg.Spec.AlphaFeatures = "serviceaccounts"
 	client, err := client.New(*cfg)
 
 	Expect(err).NotTo(HaveOccurred())

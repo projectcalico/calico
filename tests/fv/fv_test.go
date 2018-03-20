@@ -351,7 +351,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 	})
 
-	Context("Profile FV tests", func() {
+	Context("Namespace Profile FV tests", func() {
 		var profName string
 		BeforeEach(func() {
 			nsName := "peanutbutter"
@@ -393,6 +393,61 @@ var _ = Describe("kube-controllers FV tests", func() {
 				profile.Spec.LabelsToApply = map[string]string{}
 				profile, err := calicoClient.Profiles().Update(context.Background(), profile, options.SetOptions{})
 
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(profile.Spec.LabelsToApply).To(BeEmpty())
+			})
+
+			By("waiting for the controller to write back the original labels to apply", func() {
+				Eventually(func() map[string]string {
+					prof, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
+					return prof.Spec.LabelsToApply
+				}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
+			})
+		})
+	})
+
+	Context("ServiceAccount Profile FV tests", func() {
+		var profName string
+		BeforeEach(func() {
+			saName := "peanutbutter"
+			nsName := "default"
+			profName = "ksa." + nsName + "." + saName
+			sa := &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      saName,
+					Namespace: nsName,
+					Labels: map[string]string{
+						"peanut": "butter",
+					},
+				},
+			}
+			_, err := k8sClient.CoreV1().ServiceAccounts(nsName).Create(sa)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() *api.Profile {
+				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
+				return profile
+			}).ShouldNot(BeNil())
+		})
+
+		It("should write new profiles in etcd to match service account in k8s ", func() {
+			// Delete profile and then check if it is re-created.
+			_, err := calicoClient.Profiles().Delete(context.Background(), profName, options.DeleteOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Eventually(func() error {
+				_, err := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
+				return err
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
+		})
+
+		It("should update existing profiles in etcd to match service account in k8s", func() {
+			profile, err := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
+			By("getting the profile", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+
+			By("updating the profile to have no labels to apply", func() {
+				profile.Spec.LabelsToApply = map[string]string{}
+				profile, err := calicoClient.Profiles().Update(context.Background(), profile, options.SetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(profile.Spec.LabelsToApply).To(BeEmpty())
 			})
