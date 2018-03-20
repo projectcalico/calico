@@ -54,7 +54,9 @@ func matchSource(r *proto.Rule, req *requestCache, policyNamespace string) bool 
 		r.GetSrcServiceAccountMatch())
 	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.SourcePeer()) &&
 		matchNamespace(nsMatch, req.SourceNamespace()) &&
-		matchSrcIPSets(r, req)
+		matchSrcIPSets(r, req) &&
+		matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(),
+			req, req.Request.GetAttributes().GetSource().GetAddress())
 }
 
 func computeNamespaceMatch(
@@ -89,7 +91,9 @@ func matchDestination(r *proto.Rule, req *requestCache, policyNamespace string) 
 		r.GetDstServiceAccountMatch())
 	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.DestinationPeer()) &&
 		matchNamespace(nsMatch, req.DestinationNamespace()) &&
-		matchDstIPSets(r, req)
+		matchDstIPSets(r, req) &&
+		matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(),
+			req, req.Request.GetAttributes().GetDestination().GetAddress())
 }
 
 func matchRequest(rule *proto.Rule, req *authz.AttributeContext_Request) bool {
@@ -226,6 +230,31 @@ func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2.Addre
 		}
 	}
 	return true
+}
+
+func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, req *requestCache, addr *envoy_api_v2.Address) bool {
+	log.WithFields(log.Fields{
+		"ranges":        ranges,
+		"namedPortSets": namedPortSets,
+		"addr":          addr,
+		"dir":           dir,
+	}).Debug("matching port")
+	if len(ranges) == 0 && len(namedPortSets) == 0 {
+		return true
+	}
+	p := int32(addr.GetSocketAddress().GetPortValue())
+	for _, r := range ranges {
+		if r.GetFirst() <= p && p <= r.GetLast() {
+			return true
+		}
+	}
+	for _, id := range namedPortSets {
+		s := req.GetIPSet(id)
+		if s.ContainsAddress(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchL4Protocol(rule *proto.Rule, dest *authz.AttributeContext_Peer) bool {
