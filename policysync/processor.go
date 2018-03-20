@@ -470,7 +470,10 @@ func (p *Processor) syncRemovedPolicies(ei *EndpointInfo) {
 
 	ei.iteratePolicies(func(pId proto.PolicyID) bool {
 		if !oldSyncedPolicies[pId] {
-			log.WithField("policyID", pId).Panic("syncing removed policies before all policies are added")
+			log.WithFields(log.Fields{
+				"PolicyID": pId,
+				"endpoint": ei.endpointUpd.GetId(),
+			}).Panic("syncing removed policies before all policies are added")
 		}
 
 		// Still an active policy, remove it from the old set.
@@ -648,18 +651,24 @@ func (p *Processor) sendIPSetRemove(ei *EndpointInfo, id string) {
 // Perform the action on every policy on the Endpoint, breaking if the action returns true.
 func (ei *EndpointInfo) iteratePolicies(action func(id proto.PolicyID) (stop bool)) {
 	var pId proto.PolicyID
+	seen := make(map[proto.PolicyID]bool)
 	for _, tier := range ei.endpointUpd.GetEndpoint().GetTiers() {
 		pId.Tier = tier.Name
 		for _, name := range tier.GetIngressPolicies() {
 			pId.Name = name
+			// No need to check seen since we trust Calc graph to only list a policy once per tier.
+			seen[pId] = true
 			if action(pId) {
 				return
 			}
 		}
 		for _, name := range tier.GetEgressPolicies() {
 			pId.Name = name
-			if action(pId) {
-				return
+			if !seen[pId] {
+				seen[pId] = true
+				if action(pId) {
+					return
+				}
 			}
 		}
 	}
