@@ -60,16 +60,22 @@ import (
 
 var _ = Describe("health tests", func() {
 
-	var k8sAPIServer *infrastructure.Server
+	var k8sInfra *infrastructure.K8sDatastoreInfra
 
 	BeforeEach(func() {
-		k8sAPIServer = infrastructure.SetUp()
+		var err error
+		k8sInfra, err = infrastructure.GetK8sDatastoreInfra()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	JustBeforeEach(func() {
 		// Felix can now flap ready/non-ready while loading its config.  Delay until that
 		// is done.
 		time.Sleep(1 * time.Second)
+	})
+
+	AfterEach(func() {
+		k8sInfra.Stop()
 	})
 
 	var felixContainer *containers.Container
@@ -113,17 +119,17 @@ var _ = Describe("health tests", func() {
 				},
 			}
 			var err error
-			pod, err = k8sAPIServer.Client.CoreV1().Pods("default").Create(pod)
+			pod, err = k8sInfra.K8sClient.CoreV1().Pods("default").Create(pod)
 			Expect(err).NotTo(HaveOccurred())
 			pod.Status.PodIP = "10.0.0.1"
-			_, err = k8sAPIServer.Client.CoreV1().Pods("default").UpdateStatus(pod)
+			_, err = k8sInfra.K8sClient.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 			podsToCleanUp = append(podsToCleanUp, testPodName)
 		}
 
 		AfterEach(func() {
 			for _, name := range podsToCleanUp {
-				err := k8sAPIServer.Client.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+				err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
 			podsToCleanUp = nil
@@ -182,47 +188,39 @@ var _ = Describe("health tests", func() {
 	var typhaContainer *containers.Container
 	var typhaReady, typhaLiveness func() int
 
-	startTypha := func(endpoint string) {
+	startTypha := func(getDockerArgs func() []string) {
 		typhaContainer = containers.Run("typha",
 			containers.RunOpts{AutoRemove: true},
-			"--privileged",
-			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
-			"-e", "TYPHA_HEALTHENABLED=true",
-			"-e", "TYPHA_LOGSEVERITYSCREEN=info",
-			"-e", "TYPHA_DATASTORETYPE=kubernetes",
-			"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
-			"-e", "TYPHA_USAGEREPORTINGENABLED=false",
-			"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
-			"-e", "K8S_API_ENDPOINT="+endpoint,
-			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-			"-v", k8sAPIServer.CertFileName+":/tmp/apiserver.crt",
-			utils.Config.TyphaImage,
-			"calico-typha")
+			append(getDockerArgs(),
+				"--privileged",
+				"-e", "TYPHA_HEALTHENABLED=true",
+				"-e", "TYPHA_LOGSEVERITYSCREEN=info",
+				"-e", "TYPHA_DATASTORETYPE=kubernetes",
+				"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
+				"-e", "TYPHA_USAGEREPORTINGENABLED=false",
+				"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+				utils.Config.TyphaImage,
+				"calico-typha")...)
 		Expect(typhaContainer).NotTo(BeNil())
 		typhaReady = getHealthStatus(typhaContainer.IP, "9098", "readiness")
 		typhaLiveness = getHealthStatus(typhaContainer.IP, "9098", "liveness")
 	}
 
-	startFelix := func(typhaAddr string, calcGraphHangTime string, dataplaneHangTime string) {
+	startFelix := func(typhaAddr string, getDockerArgs func() []string, calcGraphHangTime string, dataplaneHangTime string) {
 		felixContainer = containers.Run("felix",
 			containers.RunOpts{AutoRemove: true},
-			"--privileged",
-			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
-			"-e", "FELIX_IPV6SUPPORT=false",
-			"-e", "FELIX_HEALTHENABLED=true",
-			"-e", "FELIX_LOGSEVERITYSCREEN=info",
-			"-e", "FELIX_DATASTORETYPE=kubernetes",
-			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-			"-e", "FELIX_USAGEREPORTINGENABLED=false",
-			"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
-			"-e", "FELIX_DebugSimulateCalcGraphHangAfter="+calcGraphHangTime,
-			"-e", "FELIX_DebugSimulateDataplaneHangAfter="+dataplaneHangTime,
-			"-e", "K8S_API_ENDPOINT="+k8sAPIServer.Endpoint,
-			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
-			"-e", "FELIX_TYPHAADDR="+typhaAddr,
-			"-v", k8sAPIServer.CertFileName+":/tmp/apiserver.crt",
-			utils.Config.FelixImage,
-		)
+			append(getDockerArgs(),
+				"--privileged",
+				"-e", "FELIX_IPV6SUPPORT=false",
+				"-e", "FELIX_HEALTHENABLED=true",
+				"-e", "FELIX_LOGSEVERITYSCREEN=info",
+				"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
+				"-e", "FELIX_USAGEREPORTINGENABLED=false",
+				"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+				"-e", "FELIX_DebugSimulateCalcGraphHangAfter="+calcGraphHangTime,
+				"-e", "FELIX_DebugSimulateDataplaneHangAfter="+dataplaneHangTime,
+				"-e", "FELIX_TYPHAADDR="+typhaAddr,
+				utils.Config.FelixImage)...)
 		Expect(felixContainer).NotTo(BeNil())
 
 		felixReady = getHealthStatus(felixContainer.IP, "9099", "readiness")
@@ -231,7 +229,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with Felix running (no Typha)", func() {
 		BeforeEach(func() {
-			startFelix("", "", "")
+			startFelix("", k8sInfra.GetDockerArgs, "", "")
 		})
 
 		AfterEach(func() {
@@ -243,7 +241,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with Felix (no Typha) and Felix calc graph set to hang", func() {
 		BeforeEach(func() {
-			startFelix("", "5", "")
+			startFelix("", k8sInfra.GetDockerArgs, "5", "")
 		})
 
 		AfterEach(func() {
@@ -259,7 +257,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with Felix (no Typha) and Felix dataplane set to hang", func() {
 		BeforeEach(func() {
-			startFelix("", "", "5")
+			startFelix("", k8sInfra.GetDockerArgs, "", "5")
 		})
 
 		AfterEach(func() {
@@ -275,8 +273,8 @@ var _ = Describe("health tests", func() {
 
 	Describe("with Felix and Typha running", func() {
 		BeforeEach(func() {
-			startTypha(k8sAPIServer.Endpoint)
-			startFelix(typhaContainer.IP+":5473", "", "")
+			startTypha(k8sInfra.GetDockerArgs)
+			startFelix(typhaContainer.IP+":5473", k8sInfra.GetDockerArgs, "", "")
 		})
 
 		AfterEach(func() {
@@ -299,7 +297,7 @@ var _ = Describe("health tests", func() {
 
 	Describe("with typha connected to bad API endpoint", func() {
 		BeforeEach(func() {
-			startTypha(k8sAPIServer.BadEndpoint)
+			startTypha(k8sInfra.GetBadEndpointDockerArgs)
 		})
 
 		AfterEach(func() {
@@ -322,7 +320,7 @@ var _ = Describe("health tests", func() {
 
 		BeforeEach(func() {
 			var err error
-			info, err = k8sAPIServer.CalicoClient.ClusterInformation().Get(
+			info, err = k8sInfra.GetCalicoClient().ClusterInformation().Get(
 				context.Background(),
 				"default",
 				options.GetOptions{},
@@ -331,13 +329,13 @@ var _ = Describe("health tests", func() {
 			log.Infof("info = %#v", info)
 			notReady := false
 			info.Spec.DatastoreReady = &notReady
-			info, err = k8sAPIServer.CalicoClient.ClusterInformation().Update(
+			info, err = k8sInfra.GetCalicoClient().ClusterInformation().Update(
 				context.Background(),
 				info,
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
-			startFelix("", "", "")
+			startFelix("", k8sInfra.GetDockerArgs, "", "")
 		})
 
 		AfterEach(func() {
@@ -345,7 +343,7 @@ var _ = Describe("health tests", func() {
 				ready := true
 				info.Spec.DatastoreReady = &ready
 				var err error
-				info, err = k8sAPIServer.CalicoClient.ClusterInformation().Update(
+				info, err = k8sInfra.GetCalicoClient().ClusterInformation().Update(
 					context.Background(),
 					info,
 					options.SetOptions{},

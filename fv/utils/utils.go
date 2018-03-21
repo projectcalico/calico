@@ -36,10 +36,11 @@ import (
 )
 
 type EnvConfig struct {
-	FelixImage string `default:"calico/felix:latest"`
-	EtcdImage  string `default:"quay.io/coreos/etcd"`
-	K8sImage   string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
-	TyphaImage string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
+	FelixImage   string `default:"calico/felix:latest"`
+	EtcdImage    string `default:"quay.io/coreos/etcd"`
+	K8sImage     string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
+	TyphaImage   string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
+	BusyboxImage string `default:"busybox:latest"`
 }
 
 var Config EnvConfig
@@ -83,6 +84,10 @@ func run(checkNoError bool, command string, args ...string) error {
 		Expect(err).NotTo(HaveOccurred())
 	}
 	return err
+}
+
+func AddToTestOutput(args ...string) {
+	currentTestOutput = append(currentTestOutput, args...)
 }
 
 var _ = BeforeEach(func() {

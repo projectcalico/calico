@@ -64,6 +64,35 @@ func StartSingleNodeEtcdTopology(options TopologyOptions) (felix *Felix, etcd *c
 // - Configures the Tunnel IP for each host as 10.65.x.1.
 func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd *containers.Container, client client.Interface) {
 	log.Infof("Starting a %d-node etcd topology.", n)
+
+	eds, err := GetEtcdDatastoreInfra()
+	Expect(err).ToNot(HaveOccurred())
+
+	felixes, client = StartNNodeTopology(n, opts, eds)
+
+	client = utils.GetEtcdClient(eds.etcdContainer.IP, opts.AlphaFeaturesToEnable)
+
+	return felixes, eds.etcdContainer, client
+}
+
+// StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
+// the datastore and installs a Node resource for the Felix node.
+func StartSingleNodeTopology(options TopologyOptions, infra DatastoreInfra) (felix *Felix, calicoClient client.Interface) {
+	felixes, calicoClient := StartNNodeTopology(1, options, infra)
+	felix = felixes[0]
+	return
+}
+
+// StartNNodeEtcdTopology starts an etcd container and a set of Felix hosts.  If n > 1, sets
+// up IPIP, otherwise this is skipped.
+//
+// - Configures an IPAM pool for 10.65.0.0/16 (so that Felix programs the all-IPAM blocks IP set)
+//   but (for simplicity) we don't actually use IPAM to assign IPs.
+// - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
+//   index in the returned array.  When creating workloads, use IPs from the relevant block.
+// - Configures the Tunnel IP for each host as 10.65.x.1.
+func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (felixes []*Felix, client client.Interface) {
+	log.Infof("Starting a %d-node topology.", n)
 	success := false
 	var err error
 	defer func() {
@@ -72,15 +101,12 @@ func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd
 			for _, felix := range felixes {
 				felix.Stop()
 			}
-			etcd.Stop()
+			infra.Stop()
 		}
 	}()
 
-	// First start etcd.
-	etcd = RunEtcd()
-
-	// Connect to etcd.
-	client = utils.GetEtcdClient(etcd.IP, opts.AlphaFeaturesToEnable)
+	// Get client.
+	client = infra.GetCalicoClient()
 	mustInitDatastore(client)
 
 	if n > 1 {
@@ -98,23 +124,9 @@ func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd
 
 	for i := 0; i < n; i++ {
 		// Then start Felix and create a node for it.
-		felix := RunFelix(etcd.IP, opts)
+		felix := RunFelix(infra, opts)
 
-		felixNode := api.NewNode()
-		felixNode.Name = felix.Hostname
-		if n > 1 {
-			felixNode.Spec.BGP = &api.NodeBGPSpec{
-				IPv4Address:        felix.IP,
-				IPv4IPIPTunnelAddr: fmt.Sprintf("10.65.%d.1", i),
-			}
-		}
-		Eventually(func() error {
-			_, err = client.Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)
-			if err != nil {
-				log.WithError(err).Warn("Failed to create node")
-			}
-			return err
-		}, "10s", "500ms").ShouldNot(HaveOccurred())
+		infra.AddNode(felix, i, bool(n > 1))
 
 		felixes = append(felixes, felix)
 	}
@@ -147,5 +159,5 @@ func mustInitDatastore(client client.Interface) {
 		)
 		log.WithError(err).Info("EnsureInitialized result")
 		return err
-	}).ShouldNot(HaveOccurred())
+	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
 }
