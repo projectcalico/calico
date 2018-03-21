@@ -46,13 +46,18 @@
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
-ARCHES=$(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
+
+# restore this when all arches work. For now, there are qemu issues related to cross-compile on s390x
+#   see https://github.com/projectcalico/go-build/pull/32
+#ARCHES=$(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
+ARCHES=amd64 arm64 ppc64le
 
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
 # we need to keep track of them separately
 BUILDARCH ?= $(shell uname -m)
+BUILDOS ?= $(shell uname -s | tr A-Z a-z)
 
 # canonicalized names for host architecture
 ifeq ($(BUILDARCH),aarch64)
@@ -73,10 +78,12 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-GO_BUILD_VER ?= v0.14
+CONTAINER_NAME=calico/felix
+GO_BUILD_VER ?= v0.15
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
-GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
+# we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
+GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER ?= v0.1
 PROTOC_CONTAINER ?= calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 FV_ETCDIMAGE ?= quay.io/coreos/etcd:v3.2.5-$(BUILDARCH)
@@ -110,7 +117,11 @@ help:
 	@echo "For any target, set ARCH=<target> to build for a given target."
 	@echo "For example, to build for arm64:"
 	@echo
-	@echo "  make calico/felix ARCH=arm64"
+	@echo "  make build ARCH=arm64"
+	@echo
+	@echo "To generate a docker image for arm64:"
+	@echo
+	@echo "  make image ARCH=arm64"
 	@echo
 	@echo "By default, builds for the architecture on which it is running. Cross-building is supported"
 	@echo "only on amd64, i.e. building for other architectures when running on amd64."
@@ -122,10 +133,15 @@ help:
 	@echo
 	@echo "Builds:"
 	@echo
-	@echo "  make all           Build all the binary packages."
-	@echo "  make deb           Build debs in ./dist."
-	@echo "  make rpm           Build rpms in ./dist."
-	@echo "  make calico/felix  Build calico/felix docker image."
+	@echo "  make all                    Build all the binary packages."
+	@echo "  make deb                    Build debs in ./dist."
+	@echo "  make rpm                    Build rpms in ./dist."
+	@echo "  make build                  Build binary."
+	@echo "  make image                  Build docker image."
+	@echo "  make build-all              Build binary for all supported architectures."
+	@echo "  make image-all              Build docker images for all supported architectures."
+	@echo "  make push IMAGETAG=tag      Deploy docker image with the tag IMAGETAG for the given ARCH, e.g. calico/felix:<IMAGETAG>-<ARCH>."
+	@echo "  make push-all IMAGETAG=tag  Deploy docker images with the tag IMAGETAG all supported architectures"
 	@echo
 	@echo "Tests:"
 	@echo
@@ -157,6 +173,28 @@ TOPDIR:=$(shell pwd)
 
 all: deb rpm calico/felix-$(ARCH)
 test: ut fv
+
+all-multi: $(addprefix sub-all-,$(ARCHES))
+sub-all-%:
+	$(MAKE) all ARCH=$*
+
+.PHONY: version
+
+version:
+ifndef VERSION
+	$(error VERSION is undefined - run using make <target> VERSION=X.Y.Z)
+endif
+
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+space :=
+space +=
+comma := ,
+prefix_linux = $(addprefix linux/,$(strip $1))
+join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 # Targets used when cross building.
 .PHONY: native register
@@ -244,6 +282,12 @@ calico-build/centos6:
 .PHONY: calico/felix calico/felix-$(ARCH) register
 
 # by default, build the image for the target architecture
+.PHONY: image-all
+image-all: $(addprefix sub-image-,$(ARCHES))
+sub-image-%:
+	$(MAKE) image ARCH=$*
+
+image: calico/felix
 calico/felix: calico/felix-$(ARCH)
 calico/felix-$(ARCH): bin/calico-felix-$(ARCH) register
 	rm -rf docker-image/bin
@@ -253,6 +297,40 @@ calico/felix-$(ARCH): bin/calico-felix-$(ARCH) register
 ifeq ($(ARCH),amd64)
 	docker tag calico/felix:latest-$(ARCH) calico/felix:latest
 endif
+
+
+###############################################################################
+# tag and push images of any tag
+###############################################################################
+
+## push all arches
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+## push one arch
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of one arch
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
+
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
@@ -401,6 +479,12 @@ LDFLAGS:=-ldflags "\
         -X github.com/projectcalico/felix/buildinfo.GitRevision=$(GIT_COMMIT) \
         -B 0x$(BUILD_ID)"
 
+.PHONY: build-all
+build-all: $(addprefix sub-build-,$(ARCHES))
+sub-build-%:
+	$(MAKE) build ARCH=$*
+
+build: bin/calico-felix
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
@@ -610,17 +694,14 @@ clean:
 	find . -name "*.pyc" -type f -delete
 
 .PHONY: release release-once-tagged
-release: clean
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=X.Y.Z)
-endif
+release: clean version
 ifeq ($(GIT_COMMIT),<unknown>)
 	$(error git commit ID couldn't be determined, releases must be done from a git working copy)
 endif
 	$(DOCKER_GO_BUILD) utils/tag-release.sh $(VERSION)
 
 .PHONY: continue-release
-continue-release:
+continue-release: version
 	@echo "Edited release notes are:"
 	@echo
 	@cat ./release-notes-$(VERSION)
@@ -636,21 +717,11 @@ continue-release:
 	# new tag.
 	$(MAKE) release-once-tagged
 
-release-once-tagged:
+release-once-tagged: version
 	@echo
 	@echo "Will now build release artifacts..."
 	@echo
-	$(MAKE) bin/calico-felix calico/felix
-	# default image until we use multi-arch manifest
-    ifeq ($(ARCH),amd64)
-	docker tag calico/felix:latest-$(ARCH) calico/felix:latest
-	docker tag calico/felix:latest-$(ARCH) quay.io/calico/felix:latest
-	docker tag calico/felix:latest calico/felix:$(VERSION)
-	docker tag calico/felix:$(VERSION) quay.io/calico/felix:$(VERSION)
-    endif
-	docker tag calico/felix:latest-$(ARCH) quay.io/calico/felix:latest-$(ARCH)
-	docker tag calico/felix:latest-$(ARCH) calico/felix:$(VERSION)-$(ARCH)
-	docker tag calico/felix:$(VERSION)-$(ARCH) quay.io/calico/felix:$(VERSION)-$(ARCH)
+	$(MAKE) build-all image-all
 	@echo
 	@echo "Checking built felix has correct version..."
 	@result=true; \
@@ -667,13 +738,9 @@ release-once-tagged:
 	@echo
 	@echo "Felix release artifacts have been built:"
 	@echo
-	@echo "- Binary:                 bin/calico-felix-$(ARCH)"
-	@echo "- Docker container image: calico/felix:$(VERSION)-$(ARCH)"
-	@echo "- Same, tagged for Quay:  quay.io/calico/felix:$(VERSION)-$(ARCH)"
-    ifeq ($(ARCH),amd64)
-	@echo "- Docker container image default arch: calico/felix:$(VERSION)"
-	@echo "- Same, tagged for Quay:  quay.io/calico/felix:$(VERSION)"
-    endif
+	@echo "- Binaries:                 $(addprefix bin/calico-felix-,$(ARCHES))"
+	@echo "- Docker container images:  $(addprefix calico/felix:$(VERSION)-,$(ARCHES))"
+	@echo "- Same, tagged for Quay:    $(addprefix quay.io/calico/felix:$(VERSION)-,$(ARCHES))"
 	@echo
 	@echo "Now to publish this release to Github:"
 	@echo
@@ -694,27 +761,12 @@ release-once-tagged:
 	@echo
 	@echo "Then, push the versioned docker images to Dockerhub and Quay:"
 	@echo
-	@echo "- docker push calico/felix:$(VERSION)-$(ARCH)"
-    ifeq ($(ARCH),amd64)
-	@echo "- docker push calico/felix:$(VERSION)"
-    endif
-	@echo "- docker push quay.io/calico/felix:$(VERSION)-$(ARCH)"
-    ifeq ($(ARCH),amd64)
-	@echo "- docker push quay.io/calico/felix:$(VERSION)"
-    endif
+	@echo "$(MAKE) push-all IMAGETAG=$(VERSION)"
 	@echo
 	@echo "If this is the latest release from the most recent stable"
 	@echo "release series, also push the 'latest' tag:"
 	@echo
-	@echo "- docker push calico/felix:latest-$(ARCH)"
-    ifeq ($(ARCH),amd64)
-	@echo "- docker push calico/felix:latest"
-    endif
-	@echo "- docker push quay.io/calico/felix:latest-$(ARCH)"
-    ifeq ($(ARCH),amd64)
-	@echo "- docker push quay.io/calico/felix:latest"
-    endif
+	@echo "$(MAKE) push-all IMAGETAG=latest"
 	@echo
 	@echo "If you also want to build Debian/Ubuntu and RPM packages for"
 	@echo "the new release, use 'make deb' and 'make rpm'."
-	@echo
