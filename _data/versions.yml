@@ -1,7 +1,7 @@
 v3.1:
 - title: v3.1.0-rc1
   note: |
-    21 March 2018
+    20 March 2018
 
     #### Support for OpenStack
     Calico v3.1 reintroduces support for OpenStack. Users can now upgrade their Calico 
@@ -32,10 +32,10 @@ v3.1:
     Calico now supports configuration of host endpoints when using the Kubernetes API datastore. This allows you to seamlessly 
     apply network policy directly to Kubernetes host machines and Kubernetes pods alike using Calico global network policies.
 
+
     #### Other changes
     - The install-cni container now maintains the original mode on certificates copied from Kubernetes secrets. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
     - The install-cni container now writes the calico-kubeconfig file with mode 600 by default. It can be configured by setting the KUBECONFIG_MODE option. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
-    - The install-cni container now writes the calico-kubeconfig file only when running as a Kubernetes pod. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
     - The Calico CNI plugin by default expects the /var/lib/calico/nodename file to be created by calico/node. To disable this feature, set `nodename_file_optional: true` in your CNI network configuration. [cni-plugin #480](https://github.com/projectcalico/cni-plugin/pull/480) (@caseydavenport)
     - Fixes a bug where IPs could be assigned from disabled IP pools. [libcalico-go #806](https://github.com/projectcalico/libcalico-go/pull/806) (@ozdanborne)
     - Fixes a bug where profiles were periodically and unnecessarily reprogrammed by kube-controllers. [libcalico-go #805](https://github.com/projectcalico/libcalico-go/pull/805) (@caseydavenport)
@@ -51,17 +51,17 @@ v3.1:
     #### Limitations
 
     - **Offers only Kubernetes, OpenShift, OpenStack, and host endpoint integrations**: the 
-      Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
-      and are not supported. (Calico still supports Docker and rkt containers.) 
-      We plan to resume support for the Mesos, DC/OS, and Docker 
-      orchestrators in a future release.
+    Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
+    and are not supported. (Calico still supports Docker and rkt containers.) 
+    We plan to resume support for the Mesos, DC/OS, and Docker 
+    orchestrators in a future release.
 
     - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
-      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
-      for more information. We plan to resume support for GoBPG in a future release.
-    
+    variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.1/reference/node/configuration) 
+    for more information. We plan to resume support for GoBPG in a future release.
+  
     - **Route reflectors cannot be clustered**: We plan to resume support for
-      this in a future release.
+    this in a future release.
 
   components:
     felix:
