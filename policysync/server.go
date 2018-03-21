@@ -31,6 +31,7 @@ const (
 	OrchestratorId = "k8s"
 	EndpointId     = "eth0"
 )
+const OutputQueueLen = 100
 
 // Server implements the API that each policy-sync agent connects to in order to get policy information.
 // There is a single instance of the Server, it disambiguates connections from different clients by the
@@ -61,7 +62,6 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	if !ok {
 		return errors.New("unable to authenticate client")
 	}
-	// TODO Ensure names are correctly handled/namespaced
 	workloadID := creds.Namespace + "/" + creds.Workload
 
 	// Allocate a new unique join ID, this allows the processor to disambiguate if there are multiple connections
@@ -75,7 +75,7 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	logCxt.Info("New policy sync connection identified")
 
 	// Send a join request to the processor to ask it to start sending us updates.
-	updates := make(chan proto.ToDataplane)
+	updates := make(chan proto.ToDataplane, OutputQueueLen)
 	epID := proto.WorkloadEndpointID{
 		OrchestratorId: OrchestratorId,
 		EndpointId:     EndpointId,
@@ -121,7 +121,6 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 		err := stream.Send(&update)
 		if err != nil {
 			logCxt.WithError(err).Warn("Failed to send update to policy sync client")
-			// TODO: maybe don't just blindly send errors?
 			return err
 		}
 	}

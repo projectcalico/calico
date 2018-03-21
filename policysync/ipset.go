@@ -68,13 +68,28 @@ func (s *ipSetInfo) deltaUpdate(update *proto.IPSetDeltaUpdate) {
 }
 
 func (s *ipSetInfo) getIPSetUpdate() *proto.IPSetUpdate {
-	u := &proto.IPSetUpdate{Id: s.SetID}
+	u := &proto.IPSetUpdate{Id: s.SetID, Type: s.getProtoType()}
 	s.members.Iter(func(item interface{}) error {
 		m := item.(fmt.Stringer)
 		u.Members = append(u.Members, m.String())
 		return nil
 	})
 	return u
+}
+
+func (s *ipSetInfo) getProtoType() proto.IPSetUpdate_IPSetType {
+	switch s.Type {
+	case ipsets.IPSetTypeHashIP:
+		return proto.IPSetUpdate_IP
+	case ipsets.IPSetTypeHashIPPort:
+		return proto.IPSetUpdate_IP_AND_PORT
+	case ipsets.IPSetTypeHashNet:
+		return proto.IPSetUpdate_NET
+	default:
+		log.WithField("IPSetType", s.Type).Panic("unknown IPSetType")
+	}
+	// Unhittable.
+	return 0
 }
 
 type ruleList interface {
