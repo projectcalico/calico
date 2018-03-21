@@ -10,7 +10,7 @@ canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/insta
 - Ensure that you have satisfied these
 [requirements]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/requirements).
 
-- [Install `calicoctl` as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary).
+- [Install `calicoctl` as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary-on-a-single-host).
 
 - [Configure `calicoctl` to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
 
