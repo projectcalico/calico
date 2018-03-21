@@ -111,6 +111,12 @@ EOF
 		    if test -n "$CALICO_ETCD_COMPACTION_PERIOD_MINS"; then
 			iniset $NEUTRON_CONF calico etcd_compaction_period_mins $CALICO_ETCD_COMPACTION_PERIOD_MINS
 		    fi
+		    # If CALICO_ETCD_COMPACTION_MIN_REVISIONS is
+		    # defined, set that as the value of the
+		    # etcd_compaction_min_revisions setting.
+		    if test -n "$CALICO_ETCD_COMPACTION_MIN_REVISIONS"; then
+			iniset $NEUTRON_CONF calico etcd_compaction_min_revisions $CALICO_ETCD_COMPACTION_MIN_REVISIONS
+		    fi
 		    ;;
 
 		extra)

@@ -73,12 +73,13 @@ fi
 # Don't run Tempest tests in parallel.
 export TEMPEST_CONCURRENCY=1
 
+# Request etcd compaction every minute during the Tempest test.
+export DEVSTACK_LOCAL_CONFIG+=$'\n'"CALICO_ETCD_COMPACTION_PERIOD_MINS=2"
+export DEVSTACK_LOCAL_CONFIG+=$'\n'"CALICO_ETCD_COMPACTION_MIN_REVISIONS=50"
+
 # Customize the gate hook so that we can see Felix logs.
 function gate_hook {
     echo "Hi, this is networking-calico's gate hook"
-
-    # Request etcd compaction every minute during the Tempest test.
-    export CALICO_ETCD_COMPACTION_PERIOD_MINS=1
 
     # Run the normal gate hook and record its status.
     $BASE/new/devstack-gate/devstack-vm-gate.sh

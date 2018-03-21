@@ -1088,17 +1088,52 @@ def check_request_etcd_compaction():
                 LOG.warning("Compaction key has lost its lease; rewriting")
                 write_compaction_keys(0)
                 return
-            ttl = lease.ttl()
-            if ttl > cfg.CONF.calico.etcd_compaction_period_mins * 60:
-                # Start from scratch as though neither of the compaction keys
-                # is present.
-                LOG.warning("Unreasonably large lease TTL (%r)", ttl)
-                write_compaction_keys(0)
-                return
 
-            # Lease is there and TTL is reasonable: just wait for more time to
-            # pass then.
-            return
+            # We're now going to sanity check the lease, but that involves
+            # further requests to the etcd server, and it's possible for those
+            # to fail if the lease is expiring _right now_.  We will catch that
+            # and handle it the same as if the key was not there.
+            try:
+                ttl = lease.ttl()
+                if ttl > cfg.CONF.calico.etcd_compaction_period_mins * 60:
+                    # Start from scratch as though neither of the compaction
+                    # keys is present.
+                    LOG.warning("Unreasonably large lease TTL (%r)", ttl)
+                    write_compaction_keys(0)
+                    return
+
+                # Lease is there and TTL is reasonable: just wait for more time
+                # to pass then.
+                LOG.info("Compaction trigger TTL is %r", ttl)
+                return
+            except (etcdv3.Etcd3Exception, KeyError) as e:
+                # Etcd3Exception "Not Found" is expected if the lease has just
+                # expired and been removed.  We can also get KeyError 'TTL'
+                # because of JSON missing the 'TTL' field; for example here's
+                # what we see if we create a lease with TTL 5s and then query
+                # it every 0.5s:
+                #
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'4'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'4'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'3'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'3'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'2'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'2'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'1'}
+                # {..., u'grantedTTL': u'5', u'ID': u'75...', u'TTL': u'1'}
+                # {..., u'ID': u'75...', u'grantedTTL': u'5'}
+                # {..., u'ID': u'75...', u'grantedTTL': u'5'}
+                # {..., u'ID': u'75...', u'grantedTTL': u'5'}
+                # {..., u'ID': u'75...', u'TTL': u'-1'}
+                # {..., u'ID': u'75...', u'TTL': u'-1'}
+                # {..., u'ID': u'75...', u'TTL': u'-1'}
+                #
+                # Strange but true!
+                LOG.info("Lease expired as we were checking it: %r", e)
+
+                # Now fall through to the code below to consider requesting a
+                # compaction.
+
         except etcdv3.KeyNotFound:
             # The key has timed out, so etcd_compaction_period_mins has passed
             # since the last time we considered compaction.  (Or else the key
