@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -75,7 +76,7 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *containers.Felix, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
+func Run(c *infrastructure.Felix, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
 
 	// Build unique workload name and struct.
 	workloadIdx++

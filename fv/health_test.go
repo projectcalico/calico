@@ -52,7 +52,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/k8sapiserver"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -60,10 +60,10 @@ import (
 
 var _ = Describe("health tests", func() {
 
-	var k8sAPIServer *k8sapiserver.Server
+	var k8sAPIServer *infrastructure.Server
 
 	BeforeEach(func() {
-		k8sAPIServer = k8sapiserver.SetUp()
+		k8sAPIServer = infrastructure.SetUp()
 	})
 
 	JustBeforeEach(func() {

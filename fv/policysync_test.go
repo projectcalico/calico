@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/felix/proto"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -54,7 +55,7 @@ var _ = Context("policy sync API tests", func() {
 
 	var (
 		etcd              *containers.Container
-		felix             *containers.Felix
+		felix             *infrastructure.Felix
 		calicoClient      client.Interface
 		w                 [3]*workload.Workload
 		tempDir           string
@@ -69,7 +70,7 @@ var _ = Context("policy sync API tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Configure felix to enable the policy sync API.
-		options := containers.DefaultTopologyOptions()
+		options := infrastructure.DefaultTopologyOptions()
 		options.ExtraEnvVars["FELIX_PolicySyncPathPrefix"] = "/var/run/calico"
 		// To enable debug logs, uncomment these lines; watch out for timeouts caused by the
 		// resulting slow down!
@@ -77,7 +78,7 @@ var _ = Context("policy sync API tests", func() {
 		// options.FelixLogSeverity = "debug"
 		options.ExtraVolumes[tempDir] = "/var/run/calico"
 		options.AlphaFeaturesToEnable = apiconfig.AlphaFeatureSA + "," + apiconfig.AlphaFeatureHTTP
-		felix, etcd, calicoClient = containers.StartSingleNodeEtcdTopology(options)
+		felix, etcd, calicoClient = infrastructure.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.

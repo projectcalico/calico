@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -36,13 +37,13 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Felix
+		felix  *infrastructure.Felix
 		client client.Interface
 		w      [3]*workload.Workload
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
