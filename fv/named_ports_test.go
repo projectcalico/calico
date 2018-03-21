@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -33,6 +34,7 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 var _ = Context("TCP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
@@ -110,7 +112,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			w[ii] = workload.Run(
 				felix,
 				"w"+iiStr,
-				"cali0"+iiStr,
+				"default",
 				"10.65.0.1"+iiStr,
 				ports,
 				protocol,
@@ -153,6 +155,42 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			utils.Run("docker", "exec", felix.Name, "iptables-save", "-c")
 			utils.Run("docker", "exec", felix.Name, "ipset", "list")
 			utils.Run("docker", "exec", felix.Name, "ip", "r")
+
+			profiles, err := client.Profiles().List(context.Background(), options.ListOptions{})
+			if err == nil {
+				utils.AddToTestOutput("Calico Profiles\n")
+				for _, profile := range profiles.Items {
+					utils.AddToTestOutput(fmt.Sprintf("%v\n", profile))
+				}
+			}
+			policies, err := client.NetworkPolicies().List(context.Background(), options.ListOptions{})
+			if err == nil {
+				utils.AddToTestOutput("Calico NetworkPolicies\n")
+				for _, policy := range policies.Items {
+					utils.AddToTestOutput(fmt.Sprintf("%v\n", policy))
+				}
+			}
+			gnps, err := client.GlobalNetworkPolicies().List(context.Background(), options.ListOptions{})
+			if err == nil {
+				utils.AddToTestOutput("Calico GlobalNetworkPolicies\n")
+				for _, gnp := range gnps.Items {
+					utils.AddToTestOutput(fmt.Sprintf("%v\n", gnp))
+				}
+			}
+			workloads, err := client.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
+			if err == nil {
+				utils.AddToTestOutput("Calico WorkloadEndpoints\n")
+				for _, w := range workloads.Items {
+					utils.AddToTestOutput(fmt.Sprintf("%v\n", w))
+				}
+			}
+			nodes, err := client.Nodes().List(context.Background(), options.ListOptions{})
+			if err == nil {
+				utils.AddToTestOutput("Calico Nodes\n")
+				for _, n := range nodes.Items {
+					utils.AddToTestOutput(fmt.Sprintf("%v\n", n))
+				}
+			}
 		}
 
 		for ii := range w {
@@ -693,7 +731,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		nginx = workload.Run(
 			felix,
 			"nginx",
-			"cali123nginx",
+			"kns.test",
 			"10.65.0.1",
 			"80,81",
 			"tcp",
@@ -716,7 +754,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 		nginxClient = workload.Run(
 			felix,
 			"client",
-			"cali123client",
+			"kns.test",
 			"10.65.0.2",
 			"1000",
 			"tcp",
@@ -832,7 +870,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 			w := workload.Run(
 				felix,
 				"target-"+protocol,
-				"cali123"+protocol,
+				"open",
 				ip,
 				"80,81",
 				protocol,
@@ -864,7 +902,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		clientWorkload = workload.Run(
 			felix,
 			"client",
-			"cali123client",
+			"open",
 			"10.65.0.1",
 			"1000",
 			"tcp", // Note: protocol isn't relevant for client.

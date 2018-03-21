@@ -35,21 +35,19 @@ func (f *Felix) GetFelixPIDs() []int {
 	return f.GetPIDs("calico-felix")
 }
 
-func RunFelix(etcdIP string, options TopologyOptions) *Felix {
+func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 
-	args := []string{
+	args := infra.GetDockerArgs()
+	args = append(args,
 		"--privileged",
-		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://" + etcdIP + ":2379",
-		"-e", "FELIX_LOGSEVERITYSCREEN=" + options.FelixLogSeverity,
-		"-e", "FELIX_DATASTORETYPE=etcdv3",
+		"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
 		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT=" + ipv6Enabled,
+		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
 		"-v", "/lib/modules:/lib/modules",
-	}
+	)
 
 	for k, v := range options.ExtraEnvVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))

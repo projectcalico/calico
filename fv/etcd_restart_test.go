@@ -78,9 +78,8 @@ var _ = Context("etcd connection interruption", func() {
 		// Create workloads, using that profile.  One on each "host".
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
-			wIface := fmt.Sprintf("cali1%d", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(felixes[ii], wName, wIface, wIP, "8055", "tcp")
+			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 

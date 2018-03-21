@@ -32,6 +32,7 @@ import (
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -76,13 +77,18 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *infrastructure.Felix, name, interfaceName, ip, ports string, protocol string) (w *Workload) {
-
+func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol string) (w *Workload) {
+	workloadIdx++
+	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
+	interfaceName := conversion.VethNameForWorkload(profile, n)
+	if c.IP == ip {
+		interfaceName = ""
+	}
 	// Build unique workload name and struct.
 	workloadIdx++
 	w = &Workload{
 		C:             c.Container,
-		Name:          fmt.Sprintf("%s-idx%v", name, workloadIdx),
+		Name:          n,
 		InterfaceName: interfaceName,
 		IP:            ip,
 		Ports:         ports,
@@ -166,7 +172,7 @@ func Run(c *infrastructure.Felix, name, interfaceName, ip, ports string, protoco
 	}
 	wep.Spec.IPNetworks = []string{w.IP + "/" + prefixLen}
 	wep.Spec.InterfaceName = w.InterfaceName
-	wep.Spec.Profiles = []string{"default"}
+	wep.Spec.Profiles = []string{profile}
 	w.WorkloadEndpoint = wep
 
 	return
@@ -187,6 +193,14 @@ func (w *Workload) Configure(client client.Interface) {
 func (w *Workload) RemoveFromDatastore(client client.Interface) {
 	_, err := client.WorkloadEndpoints().Delete(utils.Ctx, "fv", w.WorkloadEndpoint.Name, options.DeleteOptions{})
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func (w *Workload) ConfigureInDatastore(infra infrastructure.DatastoreInfra) {
+	wep := w.WorkloadEndpoint
+	wep.Namespace = "default"
+	var err error
+	w.WorkloadEndpoint, err = infra.AddWorkload(wep)
+	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
 }
 
 func (w *Workload) NameSelector() string {

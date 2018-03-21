@@ -124,7 +124,7 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 				w[ii] = workload.Run(
 					felix,
 					"w"+iiStr,
-					"cali0"+iiStr,
+					"fv",
 					c.workloadIP(ii),
 					ports,
 					"tcp",

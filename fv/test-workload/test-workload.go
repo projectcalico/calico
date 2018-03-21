@@ -76,7 +76,7 @@ func main() {
 		// Create a veth pair.
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
-			PeerName:  "w" + interfaceName,
+			PeerName:  string([]byte("w" + interfaceName)[:11]),
 		}
 		err = netlink.LinkAdd(veth)
 		panicIfError(err)
