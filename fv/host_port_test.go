@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/metrics"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
@@ -30,7 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-func MetricsPortReachable(felix *containers.Felix) bool {
+func MetricsPortReachable(felix *infrastructure.Felix) bool {
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
 	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
@@ -65,13 +66,13 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 
 	var (
 		etcd                 *containers.Container
-		felix                *containers.Felix
+		felix                *infrastructure.Felix
 		client               client.Interface
 		metricsPortReachable func() bool
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
 		metricsPortReachable = func() bool {
 			return MetricsPortReachable(felix)

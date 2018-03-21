@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8sapiserver
+package infrastructure
 
 import (
 	"context"
@@ -99,7 +99,7 @@ func Create() (*Server, error) {
 	var err error
 
 	// Start etcd, which will back the k8s API server.
-	server.etcdContainer = containers.RunEtcd()
+	server.etcdContainer = RunEtcd()
 	if server.etcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
 	}

@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -44,16 +45,16 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Felix
+		felix  *infrastructure.Felix
 		client client.Interface
 		w      [2]*workload.Workload
 	)
 
 	BeforeEach(func() {
-		options := containers.DefaultTopologyOptions()
+		options := infrastructure.DefaultTopologyOptions()
 		// For variety, run this test with IPv6 disabled.
 		options.EnableIPv6 = false
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(options)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()

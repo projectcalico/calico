@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -62,7 +63,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 
 	var (
 		etcd   *containers.Container
-		felix  *containers.Felix
+		felix  *infrastructure.Felix
 		client client.Interface
 		w      [4]*workload.Workload
 		cc     *workload.ConnectivityChecker
@@ -80,7 +81,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
 		// Install a default profile that allows workloads with this profile to talk to each
 		// other, in the absence of any Policy.
@@ -667,7 +668,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	var (
 		etcd              *containers.Container
-		felix             *containers.Felix
+		felix             *infrastructure.Felix
 		client            client.Interface
 		nginx             *workload.Workload
 		nginxClient       *workload.Workload
@@ -677,7 +678,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
 		// Create a namespace profile and write to the datastore.
 		defaultProfile := api.NewProfile()
@@ -805,7 +806,7 @@ var _ = Describe("with a simulated kubernetes nginx and client", func() {
 var _ = Describe("tests with mixed TCP/UDP", func() {
 	var (
 		etcd                        *containers.Container
-		felix                       *containers.Felix
+		felix                       *infrastructure.Felix
 		client                      client.Interface
 		targetTCPWorkload           *workload.Workload
 		targetUDPWorkload           *workload.Workload
@@ -816,7 +817,7 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 
 		// Create a profile that opens up traffic by default.
 		defaultProfile := api.NewProfile()

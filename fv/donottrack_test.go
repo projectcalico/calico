@@ -26,6 +26,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -36,7 +37,7 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 
 	var (
 		etcd        *containers.Container
-		felixes     []*containers.Felix
+		felixes     []*infrastructure.Felix
 		hostW       [2]*workload.Workload
 		client      client.Interface
 		cc          *workload.ConnectivityChecker
@@ -45,8 +46,8 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 
 	BeforeEach(func() {
 		dumpedDiags = false
-		options := containers.DefaultTopologyOptions()
-		felixes, etcd, client = containers.StartNNodeEtcdTopology(2, options)
+		options := infrastructure.DefaultTopologyOptions()
+		felixes, etcd, client = infrastructure.StartNNodeEtcdTopology(2, options)
 		cc = &workload.ConnectivityChecker{}
 
 		// Start a host networked workload on each host for connectivity checks.

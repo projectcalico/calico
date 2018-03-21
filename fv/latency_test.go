@@ -27,9 +27,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/fv/utils"
-
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -53,7 +53,7 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 
 	var (
 		etcd     *containers.Container
-		felix    *containers.Felix
+		felix    *infrastructure.Felix
 		felixPID int
 		client   client.Interface
 
@@ -61,10 +61,10 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 	)
 
 	BeforeEach(func() {
-		topologyOptions := containers.DefaultTopologyOptions()
+		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.EnableIPv6 = true
 
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(topologyOptions)
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = felix.GetFelixPID()
 
 		// Install the hping tool, which we use for latency measurments.
