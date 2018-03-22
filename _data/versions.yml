@@ -1,111 +1,3 @@
-v3.1:
-- title: v3.1.0-rc1
-  note: |
-    20 March 2018
-
-    #### Support for OpenStack
-    Calico v3.1 reintroduces support for OpenStack. Users can now upgrade their Calico 
-    OpenStack clusters to v3.1 to take advantage of the new capabilities
-    introduced in the Calico v3 release series. To upgrade an existing cluster, 
-    [follow the documented procedure](https://docs.projectcalico.org/v3.1/getting-started/openstack/upgrade/).
-
-    #### Introducing GlobalNetworkSets
-    Calico now supports a new resource type: GlobalNetworkSet.  A GlobalNetworkSet contains a set of CIDRs 
-    with associated labels, which can be matched by GlobalNetworkPolicies.  
-    This allows for rules to refer to external networks, possibly consisting of thousands of CIDRs. 
-    GlobalNetworkSets allow you to write network policies that are more portable across 
-    clusters by introducing a label-based abstraction on top of network CIDRs. To learn more, 
-    see the [GlobalNetworkSet resource definition](https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/globalnetworkset).
-
-    #### Beta support for IPVS kube-proxy
-    Calico v3.1 moves support for the IPVS kube-proxy from alpha to beta, supporting pod ingress, 
-    pod egress and host endpoint network policy. The IPVS kube-proxy is still beta, but promises greater scale and performance 
-    compared to the existing iptables proxy.
-
-    #### Kubernetes IPv6 support
-    While Calico has always had native IPv6 support, Calico v3.1 includes fixes which better support running an IPv6 based Kubernetes 
-    cluster. In Calico v3.1, you can now use the Kubernetes API datastore in IPv6 mode. 
-    Additionally, Calico now generates a /48 ULA prefix when no IPv6 pool is specified rather than using a fixed CIDR. 
-    This prevents multiple Calico clusters from sharing the same IPv6 address space.
-
-    #### HostEndpoint support for Kubernetes API data store
-    Calico now supports configuration of host endpoints when using the Kubernetes API datastore. This allows you to seamlessly 
-    apply network policy directly to Kubernetes host machines and Kubernetes pods alike using Calico global network policies.
-
-
-    #### Other changes
-    - The install-cni container now maintains the original mode on certificates copied from Kubernetes secrets. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
-    - The install-cni container now writes the calico-kubeconfig file with mode 600 by default. It can be configured by setting the KUBECONFIG_MODE option. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
-    - The Calico CNI plugin by default expects the /var/lib/calico/nodename file to be created by calico/node. To disable this feature, set `nodename_file_optional: true` in your CNI network configuration. [cni-plugin #480](https://github.com/projectcalico/cni-plugin/pull/480) (@caseydavenport)
-    - Fixes a bug where IPs could be assigned from disabled IP pools. [libcalico-go #806](https://github.com/projectcalico/libcalico-go/pull/806) (@ozdanborne)
-    - Fixes a bug where profiles were periodically and unnecessarily reprogrammed by kube-controllers. [libcalico-go #805](https://github.com/projectcalico/libcalico-go/pull/805) (@caseydavenport)
-    - Fixes a bug where nodes were periodically and unnecessarily processed by kube-controllers. [kube-controllers #216](https://github.com/projectcalico/kube-controllers/pull/216) (@caseydavenport)
-    - Closes a number of race conditions and failure scenarios in IPAM block allocation and releasing. [libcalico-go #785](https://github.com/projectcalico/libcalico-go/pull/785) (@caseydavenport)
-    - Improves log output around IPAM block allocation and releasing. [libcalico-go #785](https://github.com/projectcalico/libcalico-go/pull/785) (@caseydavenport)
-    - The self-hosted Kubernetes manifests now set mode 400 for TLS secrets by default [calico #1725](https://github.com/projectcalico/calico/pull/1725) (@caseydavenport)
-    - Fixes a rare bug where a node could in some circumstances advertise /26 blocks that it didn't own [calico #1712](https://github.com/projectcalico/calico/pull/1712) (@caseydavenport)
-    - Use networking.k8s.io api in place of deprecated extensions/v1beta1. [calico #1614](https://github.com/projectcalico/calico/pull/1614) (@bcreane)
-    - Fixes an interaction between failsafe inbound/outbound ports and do-not-track policy that resulted in failsafe ports being blocked if do-not-track policy was added. [felix #1718](https://github.com/projectcalico/felix/pull/1718) (@fasaxc)
-    - Fix bug in icmp validation where ipVersion was required for all icmp rules. [calicoctl #1814](https://github.com/projectcalico/calicoctl/pull/1814) (@ozdanborne)
-
-    #### Limitations
-
-    - **Offers only Kubernetes, OpenShift, OpenStack, and host endpoint integrations**: the 
-    Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
-    and are not supported. (Calico still supports Docker and rkt containers.) 
-    We plan to resume support for the Mesos, DC/OS, and Docker 
-    orchestrators in a future release.
-
-    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
-    variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.1/reference/node/configuration) 
-    for more information. We plan to resume support for GoBPG in a future release.
-  
-    - **Route reflectors cannot be clustered**: We plan to resume support for
-    this in a future release.
-
-  components:
-    felix:
-      version: 3.1.0-rc1
-      url: https://github.com/projectcalico/felix/releases/tag/3.1.0-rc1
-    typha:
-      version: v0.7.0
-      url: https://github.com/projectcalico/typha/releases/tag/v0.7.0
-    calicoctl:
-      version: v2.1.0-rc1
-      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.1.0-rc1
-      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.1.0-rc1/calicoctl
-    calico/node:
-      version: v3.1.0-rc1
-      url: https://github.com/projectcalico/calico/releases/tag/v3.1.0-rc1
-    calico/cni:
-      version: v2.1.0-rc1
-      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.1.0-rc1
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.1.0-rc1/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.1.0-rc1/calico-ipam
-    calico/kube-controllers:
-      version: v2.1.0-rc1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.1.0-rc1
-    confd:
-      version: v1.1.0-rc1
-      url: https://github.com/projectcalico/confd/releases/tag/v1.1.0-rc1
-    calico-bird:
-      version: v0.3.2
-      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
-    calico/routereflector:
-      version: v0.6.0
-      url: https://github.com/projectcalico/routereflector/releases/tag/v0.6.0
-    flannel:
-      version: v0.9.1
-    calico-bgp-daemon:
-      version: v0.2.1
-      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
-    libnetwork-plugin:
-      version: v1.1.0
-      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
-    networking-calico:
-      version: 2.0.0
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=2.0.0
-
 v3.0:
 - title: v3.0.4
   components:
@@ -154,29 +46,29 @@ v3.0:
 - title: v3.0.3
   note: |
     23 February 2018
-    
-    > **Important**: [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade. 
+
+    > **Important**: [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade.
     > You must upgrade to Calico v2.6.5 or later before you can upgrade to Calico v3.0.3.
     {: .alert .alert-danger}
 
-    #### Bug Fixes 
-    
+    #### Bug Fixes
+
     - Improved error messages when failing to initialize a connection to etcd [libcalico-go #794](https://github.com/projectcalico/libcalico-go/pull/794) (@ozdanborne)
 
     - Ignore hidden files when checking for etcd certificates to copy over when installing CNI. [cni-plugin #473](https://github.com/projectcalico/cni-plugin/pull/473) (@tmjd)
 
     #### Limitations
 
-    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the 
-      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
-      and are not supported. (Calico still supports Docker and rkt containers.) 
-      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker 
+    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the
+      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested
+      and are not supported. (Calico still supports Docker and rkt containers.)
+      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker
       orchestrators in a future release.
 
-    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
-      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment
+      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration)
       for more information. We plan to resume support for GoBPG in a future release.
-    
+
     - **Route reflectors cannot be clustered**: We plan to resume support for
       this in a future release.
 
@@ -226,13 +118,13 @@ v3.0:
 - title: v3.0.2
   note: |
     09 February 2018
-    
-    > **Important**: [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade. 
+
+    > **Important**: [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade.
     > You must upgrade to Calico v2.6.5 or later before you can upgrade to Calico v3.0.2.
     {: .alert .alert-danger}
 
-    #### Bug Fixes 
-    
+    #### Bug Fixes
+
     - Fixed a bug where Calico would silently lose its connection to etcd and never recover when the etcd server was terminated. [libcalico-go #780](https://github.com/projectcalico/libcalico-go/pull/780) (@caseydavenport)
 
     - Fixed a bug when multiple nodes are restarted simultaneously and swap IP addresses [calico #1681](https://github.com/projectcalico/calico/pull/1681) (@caseydavenport)
@@ -244,20 +136,20 @@ v3.0:
     - Fixed a panic when BGP is disabled. [calico #1674](https://github.com/projectcalico/calico/pull/1674) (@tmjd)
 
     - Kubernetes self-hosted manifests now enable BGP IP address auto-detection by default. [calico #1588](https://github.com/projectcalico/calico/pull/1588) (@caseydavenport)
-    
+
 
     #### Limitations
 
-    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the 
-      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
-      and are not supported. (Calico still supports Docker and rkt containers.) 
-      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker 
+    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the
+      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested
+      and are not supported. (Calico still supports Docker and rkt containers.)
+      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker
       orchestrators in a future release.
 
-    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
-      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment
+      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration)
       for more information. We plan to resume support for GoBPG in a future release.
-    
+
     - **Route reflectors cannot be clustered**: We plan to resume support for
       this in a future release.
 
@@ -307,141 +199,141 @@ v3.0:
 - title: v3.0.1
   note: |
     22 December 2017
-    
-    > **Important**: This release includes breaking changes to the data and 
-    > resource model. [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade. 
-    > Some highlights include: 
+
+    > **Important**: This release includes breaking changes to the data and
+    > resource model. [Review the documentation](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/) carefully before attempting an upgrade.
+    > Some highlights include:
     > - You must upgrade to Calico v2.6.5 before you can upgrade to v3.0.1.
-    > - Calico deployments that access the etcd datastore directly must complete 
+    > - Calico deployments that access the etcd datastore directly must complete
       a one-time migration.
-    > - You must convert any customized Calico manifests via `calicoctl convert` 
+    > - You must convert any customized Calico manifests via `calicoctl convert`
       before you can use them with v3.0.1.
     {: .alert .alert-danger}
 
     #### What's new
-    
+
     ##### Support for etcdv3
 
     - Calico now stores its data in [etcd version 3](https://coreos.com/blog/etcd3-a-new-etcd.html).
-    
+
     ##### Support for Windows in policy-only mode
-    
+
     - Felix now compiles and runs on Windows in policy-only mode. [felix #1638](https://github.com/projectcalico/felix/pull/1638) (@nwoodmsft)
-    
+
     ##### Migration and upgrade from v2.6.5
-    
-    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/) from Calico v2.6.5. 
-    
+
+    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/) from Calico v2.6.5.
+
     ##### calicoctl enhancements
 
-    - Those using the Kubernetes API datastore can now use `calicoctl` to 
+    - Those using the Kubernetes API datastore can now use `calicoctl` to
       create, read, update, and delete Calico policies.
-      
-    - `calicoctl` features two new resources: [BGP Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgpconfig) 
+
+    - `calicoctl` features two new resources: [BGP Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgpconfig)
       and [Felix Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/felixconfig).
 
-    - The `calicoctl` policy resource has been split into new [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) 
+    - The `calicoctl` policy resource has been split into new [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy)
       and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy) resources.
 
-    - [Network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) 
-      resources can include a `namespace` value, allowing you to create policies that 
-      only apply to [workload endpoint resources](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint) 
+    - [Network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy)
+      resources can include a `namespace` value, allowing you to create policies that
+      only apply to [workload endpoint resources](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint)
       in the same namespace.
 
-    - You can now specify `namespaceSelector` expressions in 
-      [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) 
+    - You can now specify `namespaceSelector` expressions in
+      [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy)
       and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy) rules to select one or more namespaces in their entirety.
 
-    - The `get`, `apply`, `create`, `delete`, and `replace` commands of `calicoctl` 
-      now include an optional `--namespace=<NS>` flag. Refer to the `calicoctl` 
+    - The `get`, `apply`, `create`, `delete`, and `replace` commands of `calicoctl`
+      now include an optional `--namespace=<NS>` flag. Refer to the `calicoctl`
       [Command reference](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/) section for more details.
 
-    - The `get` command of `calicoctl` now includes optional `--all-namespaces` 
-      and `--export` flags. Refer to the [calicoctl get](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/get) 
+    - The `get` command of `calicoctl` now includes optional `--all-namespaces`
+      and `--export` flags. Refer to the [calicoctl get](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/get)
       section for more information.
 
-    - `calicoctl` no longer accepts the following flags in `get` commands: 
-      `--node=<NODE>`, `--orchestrator=<ORCH>`, `--workload=<WORKLOAD>`, and 
+    - `calicoctl` no longer accepts the following flags in `get` commands:
+      `--node=<NODE>`, `--orchestrator=<ORCH>`, `--workload=<WORKLOAD>`, and
       `--scope=<SCOPE>`. These options are now a part of the individual resources.
 
-    - `calicoctl` no longer includes a `config` command. To achieve the equivalent 
+    - `calicoctl` no longer includes a `config` command. To achieve the equivalent
       functionality, refer to [Modifying low-level component configurations](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/#modifying-low-level-component-configurations).
 
     - You can now name [host](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/hostendpoint#endpointport)
-      and [workload](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint#endpointport) 
+      and [workload](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint#endpointport)
       endpoint ports and reference them by name in your [policy rules](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy#ports).
-    
-    - `calicoctl` now allows a `0` value for ICMP entries in policy resources, 
-      enabling `ping` responses. In addition, it now rejects `255` values in the 
-      `type` field due to lack of kernel support. Refer to the reference documentation 
-      of the [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy#icmp) 
-      and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy#icmp) 
+
+    - `calicoctl` now allows a `0` value for ICMP entries in policy resources,
+      enabling `ping` responses. In addition, it now rejects `255` values in the
+      `type` field due to lack of kernel support. Refer to the reference documentation
+      of the [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy#icmp)
+      and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy#icmp)
       resources for more information.
-      
-    - `calicoctl` now offers a new `convert` command, allowing 2.6.x manifests stored under 
+
+    - `calicoctl` now offers a new `convert` command, allowing 2.6.x manifests stored under
       version control to be converted to the v3.x format. [calicoctl #1782](https://github.com/projectcalico/calicoctl/pull/1782) (@gunjan5)
-    
+
     ##### Host endpoint policies can be applied to forwarded traffic
 
-    - The new `ApplyOnForward` flag allows you to specify if a host endpoint policy should 
-      apply to forwarded traffic or not. Forwarded traffic includes traffic forwarded between 
-      host endpoints and traffic forwarded between a host endpoint and a workload endpoint on 
-      the same host. Refer to [Using Calico to secure host interfaces](https://docs.projectcalico.org/v3.0/getting-started/bare-metal/bare-metal) 
+    - The new `ApplyOnForward` flag allows you to specify if a host endpoint policy should
+      apply to forwarded traffic or not. Forwarded traffic includes traffic forwarded between
+      host endpoints and traffic forwarded between a host endpoint and a workload endpoint on
+      the same host. Refer to [Using Calico to secure host interfaces](https://docs.projectcalico.org/v3.0/getting-started/bare-metal/bare-metal)
       for more details.
-    
+
     ##### CNI plugin changes
-    
+
     - Calico now assigns the host side of veth pairs a MAC address of `ee:ee:ee:ee:ee:ee`.
-      If this fails, it uses a kernel-generated MAC address as before. For more information, 
+      If this fails, it uses a kernel-generated MAC address as before. For more information,
       refer to the [Troubleshooting FAQ](https://docs.projectcalico.org/v2.6/usage/troubleshooting/). [cni-plugin #436](https://github.com/projectcalico/cni-plugin/pull/436) (@tmjd)
-    
+
     - The CNI plugin now offers an optional environment variable called `CNI_OLD_CONF_NAME`.
-      If set, the CNI plug-in cleans up old configuration data during an upgrade, making it 
+      If set, the CNI plug-in cleans up old configuration data during an upgrade, making it
       easier to migrate to a new `CNI_CONF_NAME` value. [cni-plugin #392](https://github.com/projectcalico/cni-plugin/pull/392)(@weikinhuang)
-      
-    - The CNI plugin no longer throws a `file exists` message when programming routes. 
+
+    - The CNI plugin no longer throws a `file exists` message when programming routes.
       [cni-plugin #406](https://github.com/projectcalico/cni-plugin/pull/406) (@gunjan5)
 
-    - After a period of deprecation, this release removes support for the `ETCD_AUTHORITY` 
-      and `ETCD_SCHEME` environment variables. Calico no longer reads these values. If you have 
-      not transitioned to `ETCD_ENDPOINTS`, you must do so as of v3.0. Refer to 
+    - After a period of deprecation, this release removes support for the `ETCD_AUTHORITY`
+      and `ETCD_SCHEME` environment variables. Calico no longer reads these values. If you have
+      not transitioned to `ETCD_ENDPOINTS`, you must do so as of v3.0. Refer to
       [Configuring `calicoctl` - etcdv3 datastore](https://docs.projectcalico.org/v3.0/reference/calicoctl/setup/etcdv3) for more information.
 
-    - A new node controller for Kubernetes deployments clears data associated with deleted 
-      nodes from the Calico datastore, preventing conflicts that can lead to crash loops. Refer 
+    - A new node controller for Kubernetes deployments clears data associated with deleted
+      nodes from the Calico datastore, preventing conflicts that can lead to crash loops. Refer
       to [Configuring the Calico Kubernetes controllers](https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration) for more information.
 
     ##### Other changes
-    
-    - Calico now works with Kubernetes network services proxy with IPVS/LVS. Calico enforces 
-      network policies with kube-proxy running in IPVS mode for Kubernetes clusters. Currently 
+
+    - Calico now works with Kubernetes network services proxy with IPVS/LVS. Calico enforces
+      network policies with kube-proxy running in IPVS mode for Kubernetes clusters. Currently
       only workload ingress policy is supported.
 
-    - Rolling update is now enabled by default in the Kubernetes self-hosted manifests. 
+    - Rolling update is now enabled by default in the Kubernetes self-hosted manifests.
       [calico #1506](https://github.com/projectcalico/calico/pull/1506) (@caseydavenport)
-      
+
     - The CoreOS version used for the Kubernetes Vagrant tutorial has been updated, resolving
       an issue causing `kubectl` to hang. [calico #1487](https://github.com/projectcalico/calico/pull/1487) (@2ffs2nns)
-      
-    - Typha no longer sends incorrect `updateTypes` to Felix, increasing the accuracy of 
+
+    - Typha no longer sends incorrect `updateTypes` to Felix, increasing the accuracy of
       Felix statistics. [typha #70](https://github.com/projectcalico/typha/pull/70) (@fasaxc)
-      
+
     - The CNI plugin now offers an optional environment variable called `CNI_OLD_CONF_NAME`.
       If set, the CNI plug-in cleans up old configuration data during an upgrade, making it
       easier to migrate to a new `CNI_CONF_NAME` value. [cni-plugin #392](https://github.com/projectcalico/cni-plugin/pull/392)(@weikinhuang)
 
     #### Limitations
 
-    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the 
-      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
-      and are not supported. (Calico still supports Docker and rkt containers.) 
-      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker 
+    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the
+      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested
+      and are not supported. (Calico still supports Docker and rkt containers.)
+      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker
       orchestrators in a future release.
 
-    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
-      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment
+      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration)
       for more information. We plan to resume support for GoBPG in a future release.
-    
+
     - **Route reflectors cannot be clustered**: We plan to resume support for
       this in a future release.
 
@@ -487,135 +379,135 @@ v3.0:
     #networking-calico:
     #  version: 1.4.3
     #  url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
-      
+
 - title: v3.0.0
   note: |
     21 December 2017
-    
+
     > **Important**: Due to a known issue in this release that can cause potential
-    > brief losses of connectivity after upgrading from v2.6.4, this release is 
-    > deprecated. Use v3.0.1 instead. This issue does not affect those using the 
+    > brief losses of connectivity after upgrading from v2.6.4, this release is
+    > deprecated. Use v3.0.1 instead. This issue does not affect those using the
     > Kubernetes API datastore or running in policy-only mode.
     {: .alert .alert-danger}
 
     #### What's new
-    
+
     ##### Support for etcdv3
 
     - Calico now stores its data in [etcd version 3](https://coreos.com/blog/etcd3-a-new-etcd.html).
-    
+
     ##### Migration and upgrade from v2.6.4
-    
-    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/) from Calico v2.6.4. 
-    
+
+    - This version of Calico supports [migration and upgrade](/v3.0/getting-started/kubernetes/upgrade/) from Calico v2.6.4.
+
     ##### calicoctl enhancements
 
-    - Those using the Kubernetes API datastore can now use `calicoctl` to 
+    - Those using the Kubernetes API datastore can now use `calicoctl` to
       create, read, update, and delete Calico policies.
-      
-    - `calicoctl` features two new resources: [BGP Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgpconfig) 
+
+    - `calicoctl` features two new resources: [BGP Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/bgpconfig)
       and [Felix Configuration](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/felixconfig).
 
-    - The `calicoctl` policy resource has been split into new [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) 
+    - The `calicoctl` policy resource has been split into new [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy)
       and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy) resources.
 
-    - [Network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) 
-      resources can include a `namespace` value, allowing you to create policies that 
-      only apply to [workload endpoint resources](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint) 
+    - [Network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy)
+      resources can include a `namespace` value, allowing you to create policies that
+      only apply to [workload endpoint resources](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint)
       in the same namespace.
 
-    - You can now specify `namespaceSelector` expressions in 
-      [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy) 
+    - You can now specify `namespaceSelector` expressions in
+      [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy)
       and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy) rules to select one or more namespaces in their entirety.
 
-    - The `get`, `apply`, `create`, `delete`, and `replace` commands of `calicoctl` 
-      now include an optional `--namespace=<NS>` flag. Refer to the `calicoctl` 
+    - The `get`, `apply`, `create`, `delete`, and `replace` commands of `calicoctl`
+      now include an optional `--namespace=<NS>` flag. Refer to the `calicoctl`
       [Command reference](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/) section for more details.
 
-    - The `get` command of `calicoctl` now includes optional `--all-namespaces` 
-      and `--export` flags. Refer to the [calicoctl get](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/get) 
+    - The `get` command of `calicoctl` now includes optional `--all-namespaces`
+      and `--export` flags. Refer to the [calicoctl get](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/get)
       section for more information.
 
-    - `calicoctl` no longer accepts the following flags in `get` commands: 
-      `--node=<NODE>`, `--orchestrator=<ORCH>`, `--workload=<WORKLOAD>`, and 
+    - `calicoctl` no longer accepts the following flags in `get` commands:
+      `--node=<NODE>`, `--orchestrator=<ORCH>`, `--workload=<WORKLOAD>`, and
       `--scope=<SCOPE>`. These options are now a part of the individual resources.
 
-    - `calicoctl` no longer includes a `config` command. To achieve the equivalent 
+    - `calicoctl` no longer includes a `config` command. To achieve the equivalent
       functionality, refer to [Modifying low-level component configurations](https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/#modifying-low-level-component-configurations).
 
     - You can now name [host](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/hostendpoint#endpointport)
-      and [workload](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint#endpointport) 
+      and [workload](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/workloadendpoint#endpointport)
       endpoint ports and reference them by name in your [policy rules](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy#ports).
-    
-    - `calicoctl` now allows a `0` value for ICMP entries in policy resources, 
-      enabling `ping` responses. In addition, it now rejects `255` values in the 
-      `type` field due to lack of kernel support. Refer to the reference documentation 
-      of the [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy#icmp) 
-      and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy#icmp) 
+
+    - `calicoctl` now allows a `0` value for ICMP entries in policy resources,
+      enabling `ping` responses. In addition, it now rejects `255` values in the
+      `type` field due to lack of kernel support. Refer to the reference documentation
+      of the [network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/networkpolicy#icmp)
+      and [global network policy](https://docs.projectcalico.org/v3.0/reference/calicoctl/resources/globalnetworkpolicy#icmp)
       resources for more information.
-      
-    - `calicoctl` now offers a new `convert` command, allowing 2.6.x manifests stored under 
+
+    - `calicoctl` now offers a new `convert` command, allowing 2.6.x manifests stored under
       version control to be converted to the v3.x format. [calicoctl #1782](https://github.com/projectcalico/calicoctl/pull/1782) (@gunjan5)
-    
+
     ##### Host endpoint policies can be applied to forwarded traffic
 
-    - The new `ApplyOnForward` flag allows you to specify if a host endpoint policy should 
-      apply to forwarded traffic or not. Forwarded traffic includes traffic forwarded between 
-      host endpoints and traffic forwarded between a host endpoint and a workload endpoint on 
-      the same host. Refer to [Using Calico to secure host interfaces](https://docs.projectcalico.org/v3.0/getting-started/bare-metal/bare-metal) 
+    - The new `ApplyOnForward` flag allows you to specify if a host endpoint policy should
+      apply to forwarded traffic or not. Forwarded traffic includes traffic forwarded between
+      host endpoints and traffic forwarded between a host endpoint and a workload endpoint on
+      the same host. Refer to [Using Calico to secure host interfaces](https://docs.projectcalico.org/v3.0/getting-started/bare-metal/bare-metal)
       for more details.
-    
+
     ##### CNI plugin changes
-    
+
     - Calico now assigns the host side of veth pairs a MAC address of `ee:ee:ee:ee:ee:ee`.
-      If this fails, it uses a kernel-generated MAC address as before. For more information, 
+      If this fails, it uses a kernel-generated MAC address as before. For more information,
       refer to the [Troubleshooting FAQ](https://docs.projectcalico.org/v2.6/usage/troubleshooting/). [cni-plugin #436](https://github.com/projectcalico/cni-plugin/pull/436) (@tmjd)
-    
+
     - The CNI plugin now offers an optional environment variable called `CNI_OLD_CONF_NAME`.
-      If set, the CNI plug-in cleans up old configuration data during an upgrade, making it 
+      If set, the CNI plug-in cleans up old configuration data during an upgrade, making it
       easier to migrate to a new `CNI_CONF_NAME` value. [cni-plugin #392](https://github.com/projectcalico/cni-plugin/pull/392)(@weikinhuang)
-      
-    - The CNI plugin no longer throws a `file exists` message when programming routes. 
+
+    - The CNI plugin no longer throws a `file exists` message when programming routes.
       [cni-plugin #406](https://github.com/projectcalico/cni-plugin/pull/406) (@gunjan5)
 
-    - After a period of deprecation, this release removes support for the `ETCD_AUTHORITY` 
-      and `ETCD_SCHEME` environment variables. Calico no longer reads these values. If you have 
-      not transitioned to `ETCD_ENDPOINTS`, you must do so as of v3.0. Refer to 
+    - After a period of deprecation, this release removes support for the `ETCD_AUTHORITY`
+      and `ETCD_SCHEME` environment variables. Calico no longer reads these values. If you have
+      not transitioned to `ETCD_ENDPOINTS`, you must do so as of v3.0. Refer to
       [Configuring `calicoctl` - etcdv3 datastore](https://docs.projectcalico.org/v3.0/reference/calicoctl/setup/etcdv3) for more information.
 
-    - A new node controller for Kubernetes deployments clears data associated with deleted 
-      nodes from the Calico datastore, preventing conflicts that can lead to crash loops. Refer 
+    - A new node controller for Kubernetes deployments clears data associated with deleted
+      nodes from the Calico datastore, preventing conflicts that can lead to crash loops. Refer
       to [Configuring the Calico Kubernetes controllers](https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration) for more information.
 
     ##### Other changes
-    
+
     - Felix now compiles and runs on Windows in policy-only mode. [felix #1638](https://github.com/projectcalico/felix/pull/1638) (@nwoodmsft)
-    
-    - Calico now works with Kubernetes network services proxy with IPVS/LVS. Calico enforces 
-      network policies with kube-proxy running in IPVS mode for Kubernetes clusters. Currently 
+
+    - Calico now works with Kubernetes network services proxy with IPVS/LVS. Calico enforces
+      network policies with kube-proxy running in IPVS mode for Kubernetes clusters. Currently
       only workload ingress policy is supported.
 
-    - Rolling update is now enabled by default in the Kubernetes self-hosted manifests. 
+    - Rolling update is now enabled by default in the Kubernetes self-hosted manifests.
       [calico #1506](https://github.com/projectcalico/calico/pull/1506) (@caseydavenport)
-      
+
     - The CoreOS version used for the Kubernetes Vagrant tutorial has been updated, resolving
       an issue causing `kubectl` to hang. [calico #1487](https://github.com/projectcalico/calico/pull/1487) (@2ffs2nns)
-      
-    - Typha no longer sends incorrect `updateTypes` to Felix, increasing the accuracy of 
+
+    - Typha no longer sends incorrect `updateTypes` to Felix, increasing the accuracy of
       Felix statistics. [typha #70](https://github.com/projectcalico/typha/pull/70) (@fasaxc)
 
     #### Limitations
 
-    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the 
-      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested 
-      and are not supported. (Calico still supports Docker and rkt containers.) 
-      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker 
+    - **Offers only Kubernetes, OpenShift, and host endpoint integrations**: the
+      OpenStack, Mesos, DC/OS, rkt, and Docker orchestrators have not been tested
+      and are not supported. (Calico still supports Docker and rkt containers.)
+      We plan to resume support for the OpenStack, Mesos, DC/OS, and Docker
       orchestrators in a future release.
 
-    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment 
-      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration) 
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment
+      variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.0/reference/node/configuration)
       for more information. We plan to resume support for GoBPG in a future release.
-    
+
     - **Route reflectors cannot be clustered**: We plan to resume support for
       this in a future release.
 
@@ -2489,3 +2381,111 @@ master:
       url: ""
      flannel:
       version: v0.9.1
+
+v3.1:
+- title: v3.1.0-rc1
+  note: |
+    20 March 2018
+
+    #### Support for OpenStack
+    Calico v3.1 reintroduces support for OpenStack. Users can now upgrade their Calico
+    OpenStack clusters to v3.1 to take advantage of the new capabilities
+    introduced in the Calico v3 release series. To upgrade an existing cluster,
+    [follow the documented procedure](https://docs.projectcalico.org/v3.1/getting-started/openstack/upgrade/).
+
+    #### Introducing GlobalNetworkSets
+    Calico now supports a new resource type: GlobalNetworkSet.  A GlobalNetworkSet contains a set of CIDRs
+    with associated labels, which can be matched by GlobalNetworkPolicies.
+    This allows for rules to refer to external networks, possibly consisting of thousands of CIDRs.
+    GlobalNetworkSets allow you to write network policies that are more portable across
+    clusters by introducing a label-based abstraction on top of network CIDRs. To learn more,
+    see the [GlobalNetworkSet resource definition](https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/globalnetworkset).
+
+    #### Beta support for IPVS kube-proxy
+    Calico v3.1 moves support for the IPVS kube-proxy from alpha to beta, supporting pod ingress,
+    pod egress and host endpoint network policy. The IPVS kube-proxy is still beta, but promises greater scale and performance
+    compared to the existing iptables proxy.
+
+    #### Kubernetes IPv6 support
+    While Calico has always had native IPv6 support, Calico v3.1 includes fixes which better support running an IPv6 based Kubernetes
+    cluster. In Calico v3.1, you can now use the Kubernetes API datastore in IPv6 mode.
+    Additionally, Calico now generates a /48 ULA prefix when no IPv6 pool is specified rather than using a fixed CIDR.
+    This prevents multiple Calico clusters from sharing the same IPv6 address space.
+
+    #### HostEndpoint support for Kubernetes API data store
+    Calico now supports configuration of host endpoints when using the Kubernetes API datastore. This allows you to seamlessly
+    apply network policy directly to Kubernetes host machines and Kubernetes pods alike using Calico global network policies.
+
+
+    #### Other changes
+    - The install-cni container now maintains the original mode on certificates copied from Kubernetes secrets. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
+    - The install-cni container now writes the calico-kubeconfig file with mode 600 by default. It can be configured by setting the KUBECONFIG_MODE option. [cni-plugin #481](https://github.com/projectcalico/cni-plugin/pull/481) (@caseydavenport)
+    - The Calico CNI plugin by default expects the /var/lib/calico/nodename file to be created by calico/node. To disable this feature, set `nodename_file_optional: true` in your CNI network configuration. [cni-plugin #480](https://github.com/projectcalico/cni-plugin/pull/480) (@caseydavenport)
+    - Fixes a bug where IPs could be assigned from disabled IP pools. [libcalico-go #806](https://github.com/projectcalico/libcalico-go/pull/806) (@ozdanborne)
+    - Fixes a bug where profiles were periodically and unnecessarily reprogrammed by kube-controllers. [libcalico-go #805](https://github.com/projectcalico/libcalico-go/pull/805) (@caseydavenport)
+    - Fixes a bug where nodes were periodically and unnecessarily processed by kube-controllers. [kube-controllers #216](https://github.com/projectcalico/kube-controllers/pull/216) (@caseydavenport)
+    - Closes a number of race conditions and failure scenarios in IPAM block allocation and releasing. [libcalico-go #785](https://github.com/projectcalico/libcalico-go/pull/785) (@caseydavenport)
+    - Improves log output around IPAM block allocation and releasing. [libcalico-go #785](https://github.com/projectcalico/libcalico-go/pull/785) (@caseydavenport)
+    - The self-hosted Kubernetes manifests now set mode 400 for TLS secrets by default [calico #1725](https://github.com/projectcalico/calico/pull/1725) (@caseydavenport)
+    - Fixes a rare bug where a node could in some circumstances advertise /26 blocks that it didn't own [calico #1712](https://github.com/projectcalico/calico/pull/1712) (@caseydavenport)
+    - Use networking.k8s.io api in place of deprecated extensions/v1beta1. [calico #1614](https://github.com/projectcalico/calico/pull/1614) (@bcreane)
+    - Fixes an interaction between failsafe inbound/outbound ports and do-not-track policy that resulted in failsafe ports being blocked if do-not-track policy was added. [felix #1718](https://github.com/projectcalico/felix/pull/1718) (@fasaxc)
+    - Fix bug in icmp validation where ipVersion was required for all icmp rules. [calicoctl #1814](https://github.com/projectcalico/calicoctl/pull/1814) (@ozdanborne)
+
+    #### Limitations
+
+    - **Offers only Kubernetes, OpenShift, OpenStack, and host endpoint integrations**: the
+    Mesos, DC/OS, rkt, and Docker orchestrators have not been tested
+    and are not supported. (Calico still supports Docker and rkt containers.)
+    We plan to resume support for the Mesos, DC/OS, and Docker
+    orchestrators in a future release.
+
+    - **GoBGP not supported**: Setting the `CALICO_NETWORKING_BACKEND` environment
+    variable to `gobgp` is not supported. See [Configuring calico/node](https://docs.projectcalico.org/v3.1/reference/node/configuration)
+    for more information. We plan to resume support for GoBPG in a future release.
+
+    - **Route reflectors cannot be clustered**: We plan to resume support for
+    this in a future release.
+
+  components:
+    felix:
+      version: 3.1.0-rc1
+      url: https://github.com/projectcalico/felix/releases/tag/3.1.0-rc1
+    typha:
+      version: v0.7.0
+      url: https://github.com/projectcalico/typha/releases/tag/v0.7.0
+    calicoctl:
+      version: v2.1.0-rc1
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.1.0-rc1
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.1.0-rc1/calicoctl
+    calico/node:
+      version: v3.1.0-rc1
+      url: https://github.com/projectcalico/calico/releases/tag/v3.1.0-rc1
+    calico/cni:
+      version: v2.1.0-rc1
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.1.0-rc1
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.1.0-rc1/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.1.0-rc1/calico-ipam
+    calico/kube-controllers:
+      version: v2.1.0-rc1
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.1.0-rc1
+    confd:
+      version: v1.1.0-rc1
+      url: https://github.com/projectcalico/confd/releases/tag/v1.1.0-rc1
+    calico-bird:
+      version: v0.3.2
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
+    calico/routereflector:
+      version: v0.6.0
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.6.0
+    flannel:
+      version: v0.9.1
+    calico-bgp-daemon:
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
+    libnetwork-plugin:
+      version: v1.1.0
+      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
+    networking-calico:
+      version: 2.0.0
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=2.0.0
