@@ -99,6 +99,16 @@ NetworkManager removes your host's interfaces. See the Debian
 [NetworkConfiguration](https://wiki.debian.org/NetworkConfiguration)
 guide for more information.
 
+The same thing is happening on Fedora Atomic. And instead of totally disable
+NetworkManager, you can add below snippet into /etc/NetworkManager/NetworkManager.conf
+As above mentioned, NetworkManager will periodically delete the interface by Calico
+then Calico has to recreate them, as a result, pods will lose connection periodically.
+
+```
+[keyfile]
+unmanaged-devices=interface-name:cali*;interface-name:tunl*
+```
+
 ## Running sudo calicoctl ... with Environment Variables
 
 If you use `sudo` for commands like `calicoctl node run`, remember that your environment
