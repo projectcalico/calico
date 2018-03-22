@@ -9,7 +9,11 @@ Use the version selector at the top-right of this page to view a different relea
 {% for release in site.data.versions[page.version] %}
 ## {{ release.title }}
 
+{% if release.note %}
 {{ release.note }}
+{% else %}
+{% include {{page.version}}/release-notes/{{release.title}}-release-notes.md %}
+{% endif %}
 
 | Component              | Version |
 |------------------------|---------|{% for component_name in release.components %}
