@@ -77,19 +77,20 @@ spec:
         # a failure.  This annotation works in tandem with the toleration below.
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
-      # Only run this pod on the master.
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
+      # This taint is set by all kubelets running `--cloud-provider=external`
       # so we should tolerate it to schedule the calico pods
       - key: node.cloudprovider.kubernetes.io/uninitialized
         value: "true"
         effect: NoSchedule
+      # Allow this pod to run on the master.
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
       # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
       # This, along with the annotation above marks this pod as a critical add-on.
       - key: CriticalAddonsOnly
         operator: Exists
+      # Only run this pod on the master.
       nodeSelector:
         node-role.kubernetes.io/master: ""
       hostNetwork: true
@@ -171,7 +172,7 @@ spec:
     spec:
       hostNetwork: true
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
+      # This taint is set by all kubelets running `--cloud-provider=external`
       # so we should tolerate it to schedule the calico pods
       - key: node.cloudprovider.kubernetes.io/uninitialized
         value: "true"
@@ -338,7 +339,7 @@ spec:
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
+      # This taint is set by all kubelets running `--cloud-provider=external`
       # so we should tolerate it to schedule the calico pods
       - key: node.cloudprovider.kubernetes.io/uninitialized
         value: "true"

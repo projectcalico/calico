@@ -151,7 +151,7 @@ spec:
     spec:
       hostNetwork: true
       tolerations:
-      # this taint is set by all kubelets running `--cloud-provider=external`
+      # This taint is set by all kubelets running `--cloud-provider=external`
       # so we should tolerate it to schedule the calico pods
       - key: node.cloudprovider.kubernetes.io/uninitialized
         value: "true"
