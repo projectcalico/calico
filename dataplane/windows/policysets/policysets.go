@@ -91,18 +91,23 @@ func (s *PolicySets) RemovePolicySet(setId string) {
 }
 
 // GetPolicySetRules receives a list of Policy set ids and it computes the complete
-// set of resultant hns rules which are needed to enforce all of the Policy sets. As
-// the Policy sets are processed, we increment a priority number and assign it to each rule
-// from the current set. By incremening the rule priority for each set, we ensure that all of
-// the sets will be enforced and considered by the dataplane in the order intended by felix.
-// Once all rules are gathered, we add a final pair of rules to default deny any traffic which
-// has not matched any rules from any Policy sets.
-func (s *PolicySets) GetPolicySetRules(setIds []string) (rules []*hns.ACLPolicy) {
+// set of resultant hns rules which are needed to enforce all of the Policy sets for the
+// specified direction. As the Policy sets are processed, we increment a priority number
+// and assign it to each rule from the current set. By incremening the rule priority for
+// each set, we ensure that all of the sets will be enforced and considered by the dataplane
+// in the order intended by felix. Once all rules are gathered, we add a final pair of rules
+// to default deny any traffic which has not matched any rules from any Policy sets.
+func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules []*hns.ACLPolicy) {
 	// Rules from the first set will receive the default rule priority
 	currentPriority := rulePriority
 
+	direction := hns.Out
+	if isInbound {
+		direction = hns.In
+	}
+
 	for _, setId := range setIds {
-		log.WithField("setId", setId).Debug("Gathering rules for policy set")
+		log.WithFields(log.Fields{"setId": setId, "isInbound": isInbound}).Debug("Gathering per-direction rules for policy set")
 
 		policySet := s.policySetIdToPolicySet[setId]
 		if policySet == nil {
@@ -112,8 +117,10 @@ func (s *PolicySets) GetPolicySetRules(setIds []string) (rules []*hns.ACLPolicy)
 
 		policySet.Members.Iter(func(item interface{}) error {
 			member := item.(*hns.ACLPolicy)
-			member.Priority = currentPriority
-			rules = append(rules, member)
+			if member.Direction == direction {
+				member.Priority = currentPriority
+				rules = append(rules, member)
+			}
 			return nil
 		})
 
@@ -122,12 +129,12 @@ func (s *PolicySets) GetPolicySetRules(setIds []string) (rules []*hns.ACLPolicy)
 		currentPriority += 1
 	}
 
-	// Apply a default block rule for each direction at the end of the policy
-	rules = append(rules, s.NewRule(true, currentPriority), s.NewRule(false, currentPriority))
+	// Apply a default block rule for this direction at the end of the policy
+	rules = append(rules, s.NewRule(isInbound, currentPriority))
 
-	// Finally, for RS3 only, add default allow rules with a host-scope to allow traffic through
+	// Finally, for RS3 only, add default allow rule with a host-scope to allow traffic through
 	// the host windows firewall
-	rules = append(rules, s.NewHostRule(true), s.NewHostRule(false))
+	rules = append(rules, s.NewHostRule(isInbound))
 
 	return
 }
@@ -150,7 +157,6 @@ func (s *PolicySets) ProcessIpSetUpdate(ipSetId string) []string {
 			log.WithFields(log.Fields{"IPSetId": ipSetId, "Policy": policyId}).Error("Unable to find Policy set, this set will be skipped")
 			continue
 		}
-
 		s.AddOrReplacePolicySet(policySet.PolicySetMetadata.SetId, policySet.Policy)
 	}
 
