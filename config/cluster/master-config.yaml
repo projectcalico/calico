@@ -51,10 +51,10 @@ coreos:
         ExecStart=/opt/bin/kube-apiserver \
         --allow-privileged=true \
         --etcd-servers=http://$private_ipv4:2379 \
-        --runtime-config=extensions/v1beta1=true,extensions/v1beta1/networkpolicies=true,admissionregistration.k8s.io/v1alpha1=true \
+        --runtime-config=extensions/v1beta1=true,extensions/v1beta1/networkpolicies=true,admissionregistration.k8s.io/v1beta1=true \
         --insecure-bind-address=0.0.0.0 \
         --bind-address=172.18.18.101 \
-        --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota,Initializers \
+        --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota \
         --advertise-address=$private_ipv4 \
         --service-cluster-ip-range=10.100.0.0/24 \
         --logtostderr=true \
@@ -87,7 +87,9 @@ coreos:
         --logtostderr=true \
         --allocate-node-cidrs=true \
         --cluster-cidr="192.168.128.0/18" \
-        --root-ca-file=/etc/kubernetes/apiserver.crt
+        --root-ca-file=/etc/kubernetes/apiserver.crt \
+        --cluster-signing-cert-file=/etc/kubernetes/apiserver.crt \
+        --cluster-signing-key-file=/etc/kubernetes/apiserver.key
         Restart=always
         RestartSec=10
 
