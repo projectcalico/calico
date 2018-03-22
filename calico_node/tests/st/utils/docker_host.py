@@ -709,6 +709,11 @@ class DockerHost(object):
         self.execute("docker logs calico-node", raise_exception_on_failure=False)
         self.execute("docker exec calico-node ls -l /var/log/calico/felix", raise_exception_on_failure=False)
         self.execute("docker exec calico-node cat /var/log/calico/felix/*", raise_exception_on_failure=False)
+        self.execute("docker exec calico-node ls -l /var/log/calico/confd", raise_exception_on_failure=False)
+        self.execute("docker exec calico-node cat /var/log/calico/confd/*", raise_exception_on_failure=False)
+        self.execute("docker exec calico-node ls -l /var/log/calico/bird", raise_exception_on_failure=False)
+        self.execute("docker exec calico-node cat /var/log/calico/bird/*", raise_exception_on_failure=False)
+
         self.execute("docker ps -a", raise_exception_on_failure=False)
         for wl in self.workloads:
             wl.host.execute("docker logs %s" % wl.name, raise_exception_on_failure=False)
