@@ -253,16 +253,19 @@ class EtcdWatcher(object):
                 # inactivity or because of stop() having been called.
                 while not self._stopped:
                     # If WATCH_TIMEOUT_SECS has now passed since the last watch
-                    # event, break out of this loop.  As we are also writing a
+                    # event, break out of this loop.  If we are also writing a
                     # key within the tree every WATCH_TIMEOUT_SECS / 3 seconds,
                     # this can only happen either if there is some roundtrip
                     # connectivity problem, or if the watch is invalid because
-                    # of a recent compaction; and in either case we need to
+                    # of a recent compaction.  Whatever the reason, we need to
                     # terminate this watch and take a new overall status and
                     # snapshot of the tree.
                     time_now = monotonic_time()
                     if time_now > last_event_time + WATCH_TIMEOUT_SECS:
-                        LOG.warning("Watch is not working")
+                        if self.round_trip_suffix is not None:
+                            LOG.warning("Watch is not working")
+                        else:
+                            LOG.debug("Watch timed out")
                         break
 
                     if self.round_trip_suffix is not None:
