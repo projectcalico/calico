@@ -106,6 +106,16 @@ data:
         - mountPath: /etc/certs/
           name: istio-certs
           readOnly: true
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+      - name: dikastes
+        image: quay.io/calico/dikastes:e8c5ed5
+        args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/policysync.sock", "--debug"]
+        volumeMounts:
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+        - mountPath: /var/run/felix
+          name: felix-sync
       volumes:
       - emptyDir:
           medium: Memory
@@ -113,11 +123,13 @@ data:
       - name: istio-certs
         secret:
           optional: true
-          {{ if eq .Spec.ServiceAccountName "" -}}
-          secretName: istio.default
-          {{ else -}}
-          secretName: {{ printf "istio.%s" .Spec.ServiceAccountName }}
-          {{ end -}}
+          {{ if eq .Spec.ServiceAccountName "" }}secretName: istio.default{{ else }}secretName: {{ printf "istio.%s" .Spec.ServiceAccountName }}{{ end }}
+      - name: dikastes-sock
+        emptyDir:
+          medium: Memory
+      - name: felix-sync
+        flexVolume:
+          driver: nodeagent/uds
 ---
 apiVersion: v1
 kind: Service
@@ -164,7 +176,7 @@ spec:
             - --tlsKeyFile=/etc/istio/certs/key.pem
             - --injectConfig=/etc/istio/inject/config
             - --meshConfig=/etc/istio/config/mesh
-            - --healthCheckInterval=2s
+            - --healthCheckInterval=1s
             - --healthCheckFile=/health
           volumeMounts:
           - name: config-volume
