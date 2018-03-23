@@ -31,6 +31,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -41,14 +42,14 @@ var _ = Context("etcd connection interruption", func() {
 
 	var (
 		etcd    *containers.Container
-		felixes []*containers.Felix
+		felixes []*infrastructure.Felix
 		client  client.Interface
 		w       [2]*workload.Workload
 		cc      *workload.ConnectivityChecker
 	)
 
 	BeforeEach(func() {
-		felixes, etcd, client = containers.StartNNodeEtcdTopology(2, containers.DefaultTopologyOptions())
+		felixes, etcd, client = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		defaultProfile := api.NewProfile()
@@ -77,9 +78,8 @@ var _ = Context("etcd connection interruption", func() {
 		// Create workloads, using that profile.  One on each "host".
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
-			wIface := fmt.Sprintf("cali1%d", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(felixes[ii], wName, wIface, wIP, "8055", "tcp")
+			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
 			w[ii].Configure(client)
 		}
 

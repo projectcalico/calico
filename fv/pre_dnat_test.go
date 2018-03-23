@@ -18,13 +18,16 @@ package fv_test
 
 import (
 	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -40,47 +43,54 @@ import (
 //     | +-----------+ +-----------+ |  | +-----------+ +-----------+ |
 //     +-----------------------------+  +-----------------------------+
 
-var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
+var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 workloads", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		etcd   *containers.Container
-		felix  *containers.Felix
-		client client.Interface
-		w      [2]*workload.Workload
+		infra          infrastructure.DatastoreInfra
+		felix          *infrastructure.Felix
+		client         client.Interface
+		w              [2]*workload.Workload
+		externalClient *containers.Container
 	)
 
 	BeforeEach(func() {
-		options := containers.DefaultTopologyOptions()
+		var err error
+		infra, err = getInfra()
+		Expect(err).NotTo(HaveOccurred())
+
+		options := infrastructure.DefaultTopologyOptions()
 		// For variety, run this test with IPv6 disabled.
 		options.EnableIPv6 = false
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(options)
+		felix, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
-		defaultProfile := api.NewProfile()
-		defaultProfile.Name = "default"
-		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
-		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
-		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
+		err = infra.AddDefaultAllow()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create workloads, using that profile.
 		for ii := range w {
 			iiStr := strconv.Itoa(ii)
-			w[ii] = workload.Run(felix, "w"+iiStr, "cali1"+iiStr, "10.65.0.1"+iiStr, "8055", "tcp")
-			w[ii].Configure(client)
+			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
+			w[ii].ConfigureInDatastore(infra)
 		}
 
-		// We will use the etcd container to model an external client trying to connect into
-		// workloads on a host.  Create a route in the etcd container for the workload CIDR.
-		etcd.Exec("ip", "r", "add", "10.65.0.0/24", "via", felix.IP)
+		// We will use this container to model an external client trying to connect into
+		// workloads on a host.  Create a route in the container for the workload CIDR.
+		externalClient = containers.Run("external-client",
+			containers.RunOpts{AutoRemove: true},
+			"--privileged", // So that we can add routes inside the container.
+			utils.Config.BusyboxImage,
+			"/bin/sh", "-c", "sleep 1000")
+		externalClient.Exec("ip", "r", "add", "10.65.0.0/24", "via", felix.IP)
 	})
 
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
 			felix.Exec("iptables-save", "-c")
 			felix.Exec("ip", "r")
+			felix.Exec("ip", "a")
 		}
 
 		for ii := range w {
@@ -88,10 +98,8 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 		}
 		felix.Stop()
 
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
-		}
-		etcd.Stop()
+		infra.Stop()
+		externalClient.Stop()
 	})
 
 	Context("with node port DNATs", func() {
@@ -117,9 +125,9 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 			cc := &workload.ConnectivityChecker{}
 			cc.ExpectSome(w[0], w[1], 32011)
 			cc.ExpectSome(w[1], w[0], 32010)
-			cc.ExpectSome(etcd, w[1], 32011)
-			cc.ExpectSome(etcd, w[0], 32010)
-			cc.CheckConnectivity()
+			cc.ExpectSome(externalClient, w[1], 32011)
+			cc.ExpectSome(externalClient, w[0], 32010)
+			cc.CheckConnectivityWithTimeout(2, 30*time.Second)
 		})
 
 		Context("with pre-DNAT policy to prevent access from outside", func() {
@@ -145,13 +153,13 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("etcd cannot connect", func() {
+			It("external client cannot connect", func() {
 				cc := &workload.ConnectivityChecker{}
 				cc.ExpectSome(w[0], w[1], 32011)
 				cc.ExpectSome(w[1], w[0], 32010)
-				cc.ExpectNone(etcd, w[1], 32011)
-				cc.ExpectNone(etcd, w[0], 32010)
-				cc.CheckConnectivity()
+				cc.ExpectNone(externalClient, w[1], 32011)
+				cc.ExpectNone(externalClient, w[0], 32010)
+				cc.CheckConnectivityWithTimeout(10, 30*time.Second)
 			})
 
 			Context("with pre-DNAT policy to open pinhole to 32010", func() {
@@ -177,12 +185,12 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("etcd can connect to 32010 but not 32011", func() {
+				It("external client can connect to 32010 but not 32011", func() {
 					cc := &workload.ConnectivityChecker{}
 					cc.ExpectSome(w[0], w[1], 32011)
 					cc.ExpectSome(w[1], w[0], 32010)
-					cc.ExpectNone(etcd, w[1], 32011)
-					cc.ExpectSome(etcd, w[0], 32010)
+					cc.ExpectNone(externalClient, w[1], 32011)
+					cc.ExpectSome(externalClient, w[0], 32010)
 					cc.CheckConnectivity()
 				})
 			})
@@ -210,12 +218,12 @@ var _ = Context("with initialized Felix, etcd datastore, 2 workloads", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("etcd cannot connect", func() {
+				It("external client cannot connect", func() {
 					cc := &workload.ConnectivityChecker{}
 					cc.ExpectSome(w[0], w[1], 32011)
 					cc.ExpectSome(w[1], w[0], 32010)
-					cc.ExpectNone(etcd, w[1], 32011)
-					cc.ExpectNone(etcd, w[0], 32010)
+					cc.ExpectNone(externalClient, w[1], 32011)
+					cc.ExpectNone(externalClient, w[0], 32010)
 					cc.CheckConnectivity()
 				})
 			})

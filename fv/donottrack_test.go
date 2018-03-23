@@ -26,27 +26,35 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = Context("do-not-track policy tests; with 2 nodes", func() {
+var _ = infrastructure.DatastoreDescribe("do-not-track policy tests; with 2 nodes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		etcd        *containers.Container
-		felixes     []*containers.Felix
-		hostW       [2]*workload.Workload
-		client      client.Interface
-		cc          *workload.ConnectivityChecker
-		dumpedDiags bool
+		infra          infrastructure.DatastoreInfra
+		felixes        []*infrastructure.Felix
+		hostW          [2]*workload.Workload
+		client         client.Interface
+		cc             *workload.ConnectivityChecker
+		dumpedDiags    bool
+		externalClient *containers.Container
 	)
 
 	BeforeEach(func() {
+		var err error
+		infra, err = getInfra()
+		Expect(err).NotTo(HaveOccurred())
+
 		dumpedDiags = false
-		options := containers.DefaultTopologyOptions()
-		felixes, etcd, client = containers.StartNNodeEtcdTopology(2, options)
+		options := infrastructure.DefaultTopologyOptions()
+		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
 		cc = &workload.ConnectivityChecker{}
 
 		// Start a host networked workload on each host for connectivity checks.
@@ -61,11 +69,22 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 			hostW[ii] = workload.Run(
 				felixes[ii],
 				fmt.Sprintf("host%d", ii),
-				"", // No interface name means "run in the host's namespace"
-				felixes[ii].IP,
+				"default",
+				felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
 				portsToOpen,
 				"tcp")
 		}
+
+		// We will use this container to model an external client trying to connect into
+		// workloads on a host.  Create a route in the container for the workload CIDR.
+		externalClient = containers.Run("external-client",
+			containers.RunOpts{AutoRemove: true},
+			"--privileged", // So that we can add routes inside the container.
+			utils.Config.BusyboxImage,
+			"/bin/sh", "-c", "sleep 1000")
+
+		err = infra.AddDefaultDeny()
+		Expect(err).To(BeNil())
 	})
 
 	// Utility function to dump diags if the test failed.  Should be called in the inner-most
@@ -85,7 +104,7 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 				log.WithField("felix", ii).Info("ip route:\n" + ipR)
 			}
 		}
-		etcd.Exec("etcdctl", "ls", "--recursive", "/")
+		infra.DumpErrorData()
 
 	}
 
@@ -94,7 +113,8 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 		for _, f := range felixes {
 			f.Stop()
 		}
-		etcd.Stop()
+		infra.Stop()
+		externalClient.Stop()
 	})
 
 	expectFullConnectivity := func() {
@@ -105,8 +125,8 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 		cc.ExpectSome(felixes[1], hostW[0].Port(2379))
 		cc.ExpectSome(felixes[0], hostW[1].Port(22))
 		cc.ExpectSome(felixes[1], hostW[0].Port(22))
-		cc.ExpectSome(etcd, hostW[1].Port(22))
-		cc.ExpectSome(etcd, hostW[0].Port(22))
+		cc.ExpectSome(externalClient, hostW[1].Port(22))
+		cc.ExpectSome(externalClient, hostW[0].Port(22))
 		cc.CheckConnectivityOffset(1)
 	}
 
@@ -154,9 +174,9 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 			// Port 22 is inbound-only so it'll be blocked by the (lack of egress policy).
 			cc.ExpectNone(felixes[0], hostW[1].Port(22))
 			cc.ExpectNone(felixes[1], hostW[0].Port(22))
-			// But etcd should still be able to access it...
-			cc.ExpectSome(etcd, hostW[1].Port(22))
-			cc.ExpectSome(etcd, hostW[0].Port(22))
+			// But external client should still be able to access it...
+			cc.ExpectSome(externalClient, hostW[1].Port(22))
+			cc.ExpectSome(externalClient, hostW[0].Port(22))
 			cc.CheckConnectivity()
 
 			host0Selector := fmt.Sprintf("name == 'eth0-%s'", felixes[0].Name)
@@ -232,10 +252,10 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
 			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
 			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
-			cc.ExpectNone(felixes[0], hostW[1].Port(22)) // Now blocked (lack of egress).
-			cc.ExpectSome(felixes[1], hostW[0].Port(22)) // Still open due to failsafe.
-			cc.ExpectSome(etcd, hostW[1].Port(22))       // Allowed by failsafe
-			cc.ExpectSome(etcd, hostW[0].Port(22))       // Allowed by failsafe
+			cc.ExpectNone(felixes[0], hostW[1].Port(22))     // Now blocked (lack of egress).
+			cc.ExpectSome(felixes[1], hostW[0].Port(22))     // Still open due to failsafe.
+			cc.ExpectSome(externalClient, hostW[1].Port(22)) // Allowed by failsafe
+			cc.ExpectSome(externalClient, hostW[0].Port(22)) // Allowed by failsafe
 			cc.CheckConnectivity()
 
 			By("Having full connectivity after putting them back")
@@ -269,10 +289,10 @@ var _ = Context("do-not-track policy tests; with 2 nodes", func() {
 			cc.ExpectNone(felixes[1], hostW[0].Port(8055))
 			cc.ExpectSome(felixes[0], hostW[1].Port(2379))
 			cc.ExpectSome(felixes[1], hostW[0].Port(2379))
-			cc.ExpectNone(felixes[0], hostW[1].Port(22)) // Response traffic blocked by policy
-			cc.ExpectSome(felixes[1], hostW[0].Port(22)) // Allowed by failsafe
-			cc.ExpectSome(etcd, hostW[1].Port(22))       // Allowed by failsafe
-			cc.ExpectSome(etcd, hostW[0].Port(22))       // Allowed by failsafe
+			cc.ExpectNone(felixes[0], hostW[1].Port(22))     // Response traffic blocked by policy
+			cc.ExpectSome(felixes[1], hostW[0].Port(22))     // Allowed by failsafe
+			cc.ExpectSome(externalClient, hostW[1].Port(22)) // Allowed by failsafe
+			cc.ExpectSome(externalClient, hostW[0].Port(22)) // Allowed by failsafe
 			cc.CheckConnectivity()
 		})
 	})
