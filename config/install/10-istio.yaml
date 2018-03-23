@@ -387,7 +387,7 @@ spec:
         - name: webhook
           mountPath: /var/run/calico
       - name: istio-proxy
-        image: docker.io/istio/proxy:0.6.0
+        image: docker.io/istio/proxy_debug:0.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 15003
@@ -470,7 +470,7 @@ spec:
       serviceAccountName: istio-ingress-service-account
       containers:
       - name: istio-ingress
-        image: docker.io/istio/proxy:0.6.0
+        image: docker.io/istio/proxy_debug:0.6.0
         args:
         - proxy
         - ingress
