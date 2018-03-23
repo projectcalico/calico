@@ -28,10 +28,11 @@ func RunPolicyController(etcdIP, kconfigfile string) *containers.Container {
 	return containers.Run("calico-policy-controller",
 		"--privileged",
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
-		"-e", "ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node",
+		"-e", "ENABLED_CONTROLLERS=workloadendpoint,namespace,policy,node,serviceaccount",
 		"-e", "LOG_LEVEL=info",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",
+		"-e", "ALPHA_FEATURES=serviceaccounts",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		fmt.Sprintf("%s", os.Getenv("CONTAINER_NAME")))
 }

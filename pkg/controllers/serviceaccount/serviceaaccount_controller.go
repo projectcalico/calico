@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package namespace
+package serviceaccount
 
 import (
 	"context"
@@ -38,24 +38,24 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// namespaceController implements the Controller interface for managing Kubernetes namespaces
+// serviceAccountController implements the Controller interface for managing Kubernetes service account
 // and syncing them to the Calico datastore as Profiles.
-type namespaceController struct {
+type serviceAccountController struct {
 	informer      cache.Controller
 	resourceCache rcache.ResourceCache
 	calicoClient  client.Interface
 	ctx           context.Context
 }
 
-// NewNamespaceController returns a controller which manages Namespace objects.
-func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
-	namespaceConverter := converter.NewNamespaceConverter()
+// NewServiceAccountController returns a controller which manages ServiceAccount objects.
+func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.Clientset, c client.Interface) controller.Controller {
+	serviceAccountConverter := converter.NewServiceAccountConverter()
 
 	// Function returns map of profile_name:object stored by policy controller
-	// in the Calico datastore. Indentifies controller written objects by
+	// in the Calico datastore. Identifies controller written objects by
 	// their naming convention.
 	listFunc := func() (map[string]interface{}, error) {
-		log.Debugf("Listing profiles from Calico datastore")
+		log.Debugf("Listing profiles from Calico datastore: to check for ServiceAccount")
 		filteredProfiles := make(map[string]interface{})
 
 		// Get all profile objects from Calico datastore.
@@ -66,16 +66,16 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 
 		// Filter out only objects that are written by policy controller.
 		for _, profile := range profileList.Items {
-			if strings.HasPrefix(profile.Name, kdd.NamespaceProfileNamePrefix) {
+			if strings.HasPrefix(profile.Name, kdd.ServiceAccountProfileNamePrefix) {
 				// Update the profile's ObjectMeta so that it simply contains the name.
 				// There is other metadata that we might receive (like resource version) that we don't want to
 				// compare in the cache.
 				profile.ObjectMeta = metav1.ObjectMeta{Name: profile.Name}
-				key := namespaceConverter.GetKey(profile)
+				key := serviceAccountConverter.GetKey(profile)
 				filteredProfiles[key] = profile
 			}
 		}
-		log.Debugf("Found %d profiles in Calico datastore", len(filteredProfiles))
+		log.Debugf("Found %d ServiceAccount profiles in Calico datastore", len(filteredProfiles))
 		return filteredProfiles, nil
 	}
 
@@ -83,83 +83,77 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 	cacheArgs := rcache.ResourceCacheArgs{
 		ListFunc:    listFunc,
 		ObjectType:  reflect.TypeOf(api.Profile{}),
-		LogTypeDesc: "Namespace",
+		LogTypeDesc: "ServiceAccount",
 	}
 	ccache := rcache.NewResourceCache(cacheArgs)
 
-	// Create a Namespace watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "namespaces", "", fields.Everything())
+	// Create a ServiceAccount watcher.
+	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "serviceaccounts", "", fields.Everything())
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1.Namespace{}, 0, cache.ResourceEventHandlerFuncs{
+	_, informer := cache.NewIndexerInformer(listWatcher, &v1.ServiceAccount{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			log.Debugf("Got ADD event for Namespace: %#v", obj)
-			profile, err := namespaceConverter.Convert(obj)
+			log.Debugf("Got ADD event for ServiceAccount: %#v", obj)
+			profile, err := serviceAccountConverter.Convert(obj)
 			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to calico profile.", obj)
+				log.WithError(err).Errorf("Error while converting %#v to Calico profile.", obj)
 				return
 			}
 
 			// Add to cache.
-			k := namespaceConverter.GetKey(profile)
+			k := serviceAccountConverter.GetKey(profile)
 			ccache.Set(k, profile)
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			log.Debugf("Got UPDATE event for Namespace")
+			log.Debugf("Got UPDATE event for ServiceAccount")
 			log.Debugf("Old object: \n%#v\n", oldObj)
 			log.Debugf("New object: \n%#v\n", newObj)
-			if newObj.(*v1.Namespace).Status.Phase == "Terminating" {
-				// Ignore any updates with "Terminating" status, since
-				// we will soon receive a DELETE event to remove this object.
-				log.Debugf("Ignoring 'Terminating' update for Namespace %s.", newObj.(*v1.Namespace).ObjectMeta.GetName())
-				return
-			}
 
-			// Convert the namespace into a Profile.
-			profile, err := namespaceConverter.Convert(newObj)
+			// Convert the ServiceAccount into a Profile.
+			profile, err := serviceAccountConverter.Convert(newObj)
 			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to calico profile.", newObj)
+				log.WithError(err).Errorf("Error while converting %#v to Calico profile.", newObj)
 				return
 			}
 
 			// Update in the cache.
-			k := namespaceConverter.GetKey(profile)
+			k := serviceAccountConverter.GetKey(profile)
 			ccache.Set(k, profile)
 		},
 		DeleteFunc: func(obj interface{}) {
-			// Convert the namespace into a Profile.
-			log.Debugf("Got DELETE event for namespace: %#v", obj)
-			profile, err := namespaceConverter.Convert(obj)
+			// Convert the ServiceAccount into a Profile.
+			log.Debugf("Got DELETE event for ServiceAccount: %#v", obj)
+			profile, err := serviceAccountConverter.Convert(obj)
 			if err != nil {
 				log.WithError(err).Errorf("Error converting %#v to Calico profile.", obj)
 				return
 			}
 
-			k := namespaceConverter.GetKey(profile)
+			k := serviceAccountConverter.GetKey(profile)
 			ccache.Delete(k)
 		},
 	}, cache.Indexers{})
 
-	return &namespaceController{informer, ccache, c, ctx}
+	return &serviceAccountController{informer, ccache, c, ctx}
 }
 
 // Run starts the controller.
-func (c *namespaceController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
+func (c *serviceAccountController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
 	// Let the workers stop when we are done
 	workqueue := c.resourceCache.GetQueue()
 	defer workqueue.ShutDown()
 
-	log.Info("Starting Namespace/Profile controller")
+	log.Info("Starting ServiceAccount/Profile controller")
 
 	// Wait till k8s cache is synced
-	log.Debug("Waiting to sync with Kubernetes API (Namespaces)")
+	log.Debug("Waiting to sync with Kubernetes API (ServiceAccount)")
 	go c.informer.Run(stopCh)
 	for !c.informer.HasSynced() {
 	}
-	log.Debug("Finished syncing with Kubernetes API (Namespaces)")
+	log.Debug("Finished syncing with Kubernetes API (ServiceAccount)")
 
 	// Start Calico cache.
 	c.resourceCache.Run(reconcilerPeriod)
@@ -168,20 +162,20 @@ func (c *namespaceController) Run(threadiness int, reconcilerPeriod string, stop
 	for i := 0; i < threadiness; i++ {
 		go c.runWorker()
 	}
-	log.Info("Namespace/Profile controller is now running")
+	log.Info("ServiceAccount/Profile controller is now running")
 
 	<-stopCh
-	log.Info("Stopping Namespace/Profile controller")
+	log.Info("Stopping ServiceAccount/Profile controller")
 }
 
-func (c *namespaceController) runWorker() {
+func (c *serviceAccountController) runWorker() {
 	for c.processNextItem() {
 	}
 }
 
 // processNextItem waits for an event on the output queue from the resource cache and syncs
 // any received keys to the datastore.
-func (c *namespaceController) processNextItem() bool {
+func (c *serviceAccountController) processNextItem() bool {
 	// Wait until there is a new item in the work queue.
 	workqueue := c.resourceCache.GetQueue()
 	key, quit := workqueue.Get()
@@ -204,15 +198,15 @@ func (c *namespaceController) processNextItem() bool {
 // find the corresponding resource within the resource cache. If the resource for the provided key
 // exists in the cache, then the value should be written to the datastore. If it does not exist
 // in the cache, then it should be deleted from the datastore.
-func (c *namespaceController) syncToDatastore(key string) error {
+func (c *serviceAccountController) syncToDatastore(key string) error {
 	clog := log.WithField("key", key)
 
 	// Check if it exists in the controller's cache.
 	obj, exists := c.resourceCache.Get(key)
 	if !exists {
 		// The object no longer exists - delete from the datastore.
-		clog.Infof("Deleting Profile from Calico datastore")
-		_, name := converter.NewNamespaceConverter().DeleteArgsFromKey(key)
+		clog.Infof("Deleting ServiceAccount Profile from Calico datastore")
+		_, name := converter.NewServiceAccountConverter().DeleteArgsFromKey(key)
 		_, err := c.calicoClient.Profiles().Delete(c.ctx, name, options.DeleteOptions{})
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			// We hit an error other than "does not exist".
@@ -221,30 +215,30 @@ func (c *namespaceController) syncToDatastore(key string) error {
 		return nil
 	} else {
 		// The object exists - update the datastore to reflect.
-		clog.Info("Create/Update Profile in Calico datastore")
+		clog.Info("Create/Update ServiceAccount Profile in Calico datastore")
 		p := obj.(api.Profile)
 
 		// Lookup to see if this object already exists in the datastore.
 		gp, err := c.calicoClient.Profiles().Get(c.ctx, p.Name, options.GetOptions{})
 		if err != nil {
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-				clog.WithError(err).Warning("Failed to get profile from datastore")
+				clog.WithError(err).Warning("Unexpected error for ServiceAccount profile from datastore")
 				return err
 			}
 
 			// Doesn't exist - create it.
 			_, err := c.calicoClient.Profiles().Create(c.ctx, &p, options.SetOptions{})
 			if err != nil {
-				clog.WithError(err).Warning("Failed to create profile")
+				clog.WithError(err).Warning("Failed to create ServiceAccount profile")
 				return err
 			}
-			clog.Info("Successfully created profile")
+			clog.Info("Successfully created ServiceAccount profile")
 			return nil
 		}
 
 		// The profile already exists, update it and write it back to the datastore.
 		gp.Spec = p.Spec
-		clog.Infof("Update Profile in Calico datastore with resource version %s", gp.ResourceVersion)
+		clog.Infof("Update ServiceAccount Profile in Calico datastore with resource version %s", gp.ResourceVersion)
 		_, err = c.calicoClient.Profiles().Update(c.ctx, gp, options.SetOptions{})
 		if err != nil {
 			clog.WithError(err).Warning("Failed to update profile")
@@ -258,7 +252,7 @@ func (c *namespaceController) syncToDatastore(key string) error {
 // handleErr handles errors which occur while processing a key received from the resource cache.
 // For a given error, we will re-queue the key in order to retry the datastore sync up to 5 times,
 // at which point the update is dropped.
-func (c *namespaceController) handleErr(err error, key string) {
+func (c *serviceAccountController) handleErr(err error, key string) {
 	workqueue := c.resourceCache.GetQueue()
 	if err == nil {
 		// Forget about the #AddRateLimited history of the key on every successful synchronization.
