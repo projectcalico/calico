@@ -407,7 +407,7 @@ spec:
           mountPath: /etc/certs
           readOnly: true
       - name: pilot-webhook
-        image: quay.io/calico/pilot-webhook:bd069d7
+        image: quay.io/calico/pilot-webhook:20180319220721
         imagePullPolicy: Always
         args:
         - /var/run/calico/webhook.sock

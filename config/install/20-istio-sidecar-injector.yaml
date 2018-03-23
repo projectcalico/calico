@@ -109,7 +109,7 @@ data:
         - mountPath: /var/run/dikastes
           name: dikastes-sock
       - name: dikastes
-        image: quay.io/calico/dikastes:e8c5ed5
+        image: quay.io/calico/dikastes:20180320223919
         args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/policysync.sock", "--debug"]
         volumeMounts:
         - mountPath: /var/run/dikastes
