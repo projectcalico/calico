@@ -91,6 +91,10 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 			felix.Exec("ip", "a")
 		}
 		felix.Stop()
+
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
 		infra.Stop()
 	})
 
