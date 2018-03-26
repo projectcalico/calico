@@ -80,49 +80,45 @@ These steps are detailed in this section.
 
 ## etcd install
 
-{{site.prodname}} requires an etcd database to operate—this may be installed on a
-single machine or as a cluster.
+{{site.prodname}} operation requires an etcd v3 key/value store—this may be
+installed on a single machine or as a cluster.  For production you will likely
+want multiple nodes for greater performance and reliability; please refer to
+[the upstream etcd docs](https://coreos.com/etcd/) for detailed advice and
+setup.  Here we present a sample recipe for a single node cluster.
 
-These instructions cover installing a single node etcd database. You may
-wish to co-locate this with your control node. If you want to install a
-cluster, please get in touch with us and we'll be happy to help you
-through the process.
+1.  Install etcd, and ensure that it is initially not running:
 
-1.  Install and configure etcd.
-    -   Install etcd, and ensure that it is initially not running:
+	```
+	yum install -y etcd
+	systemctl stop etcd
+	```
 
-        ```
-        yum install -y etcd
-        systemctl stop etcd
-        ```
+1.  Place the following in `/etc/etcd/etcd.conf`, replacing `<hostname>`,
+	`<public_ip>` and `<uuid>` with their appropriate values for the machine.
 
-    -   Place the following in `/etc/etcd/etcd.conf`, replacing `<hostname>`,
-        `<public_ip>` and `<uuid>` with their appropriate values for the
-        machine.
+	```
+	ETCD_DATA_DIR=/var/lib/etcd
+	ETCD_NAME=<hostname>
+	ETCD_ADVERTISE_CLIENT_URLS="http://<public_ip>:2379,http://<public_ip>:4001"
+	ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
+	ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+	ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
+	ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
+	ETCD_INITIAL_CLUSTER_STATE=new
+	ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
+	```
 
-        ```
-        ETCD_DATA_DIR=/var/lib/etcd
-        ETCD_NAME=<hostname>
-        ETCD_ADVERTISE_CLIENT_URLS="http://<public_ip>:2379,http://<public_ip>:4001"
-        ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
-        ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
-        ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
-        ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
-        ETCD_INITIAL_CLUSTER_STATE=new
-        ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
-        ```
+	You can obtain a `<uuid>` by running the `uuidgen` tool:
 
-        You can obtain a `<uuid>` by running the `uuidgen` tool:
+	```
+	# uuidgen
+	11f92f19-cb5a-476f-879f-5efc34033b8b
+	```
 
-        ```
-        # uuidgen
-        11f92f19-cb5a-476f-879f-5efc34033b8b
-        ```
+	If it is not installed, run `yum install -y util-linux` to
+	install it.
 
-        If it is not installed, run `yum install -y util-linux` to
-        install it.
-
-2.  Launch etcd and set it to restart after a reboot:
+1.  Launch etcd and set it to restart after a reboot:
 
     ```
     systemctl start etcd
