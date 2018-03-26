@@ -199,7 +199,6 @@ On each compute node, perform the following steps:
     >
     {: .alert .alert-info}
 
-
     Then restart libvirt to pick up the changes:
 
     ```
@@ -276,7 +275,7 @@ On each compute node, perform the following steps:
     ```
 
     Add a `[calico]` section with the following content, where `<ip>` is the IP
-    address of the controller.
+    address of the etcd server.
 
     ```
     [calico]
@@ -387,5 +386,5 @@ On each compute node, perform the following steps:
 1.  Restart the Felix service.
 
     ```
-    systemctl restart calico-felix
+    service calico-felix restart
     ```
