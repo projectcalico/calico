@@ -70,10 +70,10 @@ type Rule struct {
 	OriginalDstNamespaceSelector      string   `json:"orig_dst_namespace_selector,omitempty" validate:"omitempty,selector"`
 	OriginalNotSrcSelector            string   `json:"!orig_src_selector,omitempty" validate:"omitempty,selector"`
 	OriginalNotDstSelector            string   `json:"!orig_dst_selector,omitempty" validate:"omitempty,selector"`
-	OriginalSrcServiceAccountNames    []string `json:"orig_src_service_acct_names,omitempty" validate:"omitempty,selector"`
-	OriginalSrcServiceAccountSelector string   `json:"orig_src_service_acct_selector,omitempty" validate:"omitempty"`
+	OriginalSrcServiceAccountNames    []string `json:"orig_src_service_acct_names,omitempty" validate:"omitempty"`
+	OriginalSrcServiceAccountSelector string   `json:"orig_src_service_acct_selector,omitempty" validate:"omitempty,selector"`
 	OriginalDstServiceAccountNames    []string `json:"orig_dst_service_acct_names,omitempty" validate:"omitempty"`
-	OriginalDstServiceAccountSelector string   `json:"orig_dst_service_acct_selector,omitempty" validate:"omitempty"`
+	OriginalDstServiceAccountSelector string   `json:"orig_dst_service_acct_selector,omitempty" validate:"omitempty,selector"`
 
 	// These fields allow us to pass through application layer selectors from the V3 datamodel.
 	HTTPMatch *HTTPMatch `json:"http,omitempty" validate:"omitempty"`

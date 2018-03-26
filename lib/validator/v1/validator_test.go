@@ -159,6 +159,38 @@ func init() {
 			Protocol:    &protoTCP,
 			NotDstPorts: badPorts,
 		}, false),
+		Entry("should accept original source selector (m)", model.Rule{
+			OriginalSrcSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original destination selector (m)", model.Rule{
+			OriginalDstSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original source namespace selector (m)", model.Rule{
+			OriginalSrcNamespaceSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original destination namespace selector (m)", model.Rule{
+			OriginalDstNamespaceSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original not source selector (m)", model.Rule{
+			OriginalNotSrcSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original not destination selector (m)", model.Rule{
+			OriginalNotDstSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original source service account selector (m)", model.Rule{
+			OriginalSrcServiceAccountSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original destination service account selector (m)", model.Rule{
+			OriginalDstServiceAccountSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept named source service accounts (m)", model.Rule{
+			SrcSelector:                    "projectcalico.org/serviceaccount in {\"summary\"}",
+			OriginalSrcServiceAccountNames: []string{"summary"},
+		}, true),
+		Entry("should accept named destination service accounts (m)", model.Rule{
+			DstSelector:                    "projectcalico.org/serviceaccount in {\"summary\"}",
+			OriginalDstServiceAccountNames: []string{"summary"},
+		}, true),
 
 		// (Backend model) EndpointPorts.
 		Entry("should accept EndpointPort with tcp protocol (m)", model.EndpointPort{
