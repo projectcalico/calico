@@ -22,7 +22,7 @@ import (
 
 	syncapi "github.com/projectcalico/app-policy/proto"
 
-	envoyapi "github.com/envoyproxy/data-plane-api/api"
+	envoyapi "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
 	log "github.com/sirupsen/logrus"
 )
 

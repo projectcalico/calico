@@ -17,28 +17,27 @@ package checker
 import (
 	"testing"
 
+	"github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	auth "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/envoyproxy/data-plane-api/api"
-	"github.com/envoyproxy/data-plane-api/api/auth"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 )
 
 var (
-	socketAddressProtocolTCP = &envoy_api_v2.Address{
-		&envoy_api_v2.Address_SocketAddress{
-			&envoy_api_v2.SocketAddress{
-				Protocol: envoy_api_v2.SocketAddress_TCP,
+	socketAddressProtocolTCP = &envoy_api_v2_core.Address{
+		&envoy_api_v2_core.Address_SocketAddress{
+			&envoy_api_v2_core.SocketAddress{
+				Protocol: envoy_api_v2_core.SocketAddress_TCP,
 			},
 		},
 	}
 
-	socketAddressProtocolUDP = &envoy_api_v2.Address{
-		&envoy_api_v2.Address_SocketAddress{
-			&envoy_api_v2.SocketAddress{
-				Protocol: envoy_api_v2.SocketAddress_UDP,
+	socketAddressProtocolUDP = &envoy_api_v2_core.Address{
+		&envoy_api_v2_core.Address_SocketAddress{
+			&envoy_api_v2_core.SocketAddress{
+				Protocol: envoy_api_v2_core.SocketAddress_UDP,
 			},
 		},
 	}
@@ -115,7 +114,7 @@ func TestMatchHTTPMethods(t *testing.T) {
 func TestMatchHTTPNil(t *testing.T) {
 	RegisterTestingT(t)
 
-	req := &auth.AttributeContext_HTTPRequest{}
+	req := &auth.AttributeContext_HttpRequest{}
 	Expect(matchHTTP(nil, req)).To(BeTrue())
 }
 
@@ -149,24 +148,24 @@ func TestMatchRule(t *testing.T) {
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
 		Source: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/sam",
-			Address: &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
-				SocketAddress: &envoy_api_v2.SocketAddress{
+			Address: &envoy_api_v2_core.Address{Address: &envoy_api_v2_core.Address_SocketAddress{
+				SocketAddress: &envoy_api_v2_core.SocketAddress{
 					Address:       srcAddr,
-					Protocol:      envoy_api_v2.SocketAddress_TCP,
-					PortSpecifier: &envoy_api_v2.SocketAddress_PortValue{PortValue: 8458},
+					Protocol:      envoy_api_v2_core.SocketAddress_TCP,
+					PortSpecifier: &envoy_api_v2_core.SocketAddress_PortValue{PortValue: 8458},
 				}}},
 		},
 		Destination: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/ian",
-			Address: &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
-				SocketAddress: &envoy_api_v2.SocketAddress{
+			Address: &envoy_api_v2_core.Address{Address: &envoy_api_v2_core.Address_SocketAddress{
+				SocketAddress: &envoy_api_v2_core.SocketAddress{
 					Address:       dstAddr,
-					Protocol:      envoy_api_v2.SocketAddress_TCP,
-					PortSpecifier: &envoy_api_v2.SocketAddress_PortValue{PortValue: 80},
+					Protocol:      envoy_api_v2_core.SocketAddress_TCP,
+					PortSpecifier: &envoy_api_v2_core.SocketAddress_PortValue{PortValue: 80},
 				}}},
 		},
 		Request: &auth.AttributeContext_Request{
-			Http: &auth.AttributeContext_HTTPRequest{
+			Http: &auth.AttributeContext_HttpRequest{
 				Method: "GET",
 			},
 		},
@@ -202,7 +201,7 @@ func TestMatchRuleNamespaceSelectors(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/dst/sa/ian",
 		},
 		Request: &auth.AttributeContext_Request{
-			Http: &auth.AttributeContext_HTTPRequest{
+			Http: &auth.AttributeContext_HttpRequest{
 				Method: "GET",
 			},
 		},
@@ -230,7 +229,7 @@ func TestMatchRulePolicyNamespace(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/testns/sa/ian",
 		},
 		Request: &auth.AttributeContext_Request{
-			Http: &auth.AttributeContext_HTTPRequest{
+			Http: &auth.AttributeContext_HttpRequest{
 				Method: "GET",
 			},
 		},
@@ -277,7 +276,7 @@ func TestMatchL4Protocol(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/testns/sa/ian",
 		},
 		Request: &auth.AttributeContext_Request{
-			Http: &auth.AttributeContext_HTTPRequest{
+			Http: &auth.AttributeContext_HttpRequest{
 				Method: "GET",
 			},
 		},

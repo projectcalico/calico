@@ -28,7 +28,7 @@ import (
 	"github.com/projectcalico/app-policy/syncher"
 
 	docopt "github.com/docopt/docopt-go"
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -143,7 +143,7 @@ func runClient(arguments map[string]interface{}) {
 	}
 	if useMethod {
 		req.Attributes.Request = &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{
+			Http: &authz.AttributeContext_HttpRequest{
 				Method: method,
 			},
 		}

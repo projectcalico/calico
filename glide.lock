@@ -1,5 +1,5 @@
-hash: b5208dbeaf24d15e19ab7f11cd263536a2239d132b30ee804b214c45fd163922
-updated: 2018-01-18T16:08:17.543215873-08:00
+hash: de6e97ebfeea8f5bbcccd3e873a2c248db000f1665dc525b56b8654c88c2c749
+updated: 2018-03-23T15:43:10.029526948-07:00
 imports:
 - name: github.com/alecthomas/template
   version: a0175ee3bccc567396460bf5acd36800cb10c49c
@@ -10,21 +10,21 @@ imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/envoyproxy/data-plane-api
-  version: 28d28198e583aec75b6242ee02682654197b745e
+  version: 771aeeaeece5ab035724871ff9cbbb337f8c98c8
   subpackages:
-  - api
-  - api/auth
+  - envoy/api/v2/core
+  - envoy/service/auth/v2
 - name: github.com/gogo/protobuf
-  version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
+  version: 49944b4a4b085da44c43d4b233ea40787396371f
 - name: github.com/golang/protobuf
-  version: 1e59b77b52bf8e4b449a57e6f79f21226d571845
+  version: bbd03ef6da3a115852eaf24c8a1c46aeb39aa175
   subpackages:
   - proto
   - ptypes/any
 - name: github.com/google/protobuf
   version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
 - name: github.com/googleapis/googleapis
-  version: c5d0b08ecd3049c378972d833a49df99f779f97f
+  version: f81082ea1e2f85c43649bee26e0d9871d4b41cdb
 - name: github.com/lyft/protoc-gen-validate
   version: 8e6aaf55f4954f1ef9d3ee2e8f5a50e79cc04f8f
 - name: github.com/onsi/gomega
@@ -51,17 +51,17 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
 - name: github.com/prometheus/common
-  version: 2e54d0b93cba2fd133edc32211dcc32c06ef72ca
+  version: e4aa40a9169a88835b849a6efb71e05dc04b88f0
   subpackages:
   - log
 - name: github.com/sirupsen/logrus
-  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
+  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: golang.org/x/crypto
-  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
+  version: 88942b9c40a4c9d203b82b3731787b672d6e809b
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
+  version: 6078986fec03a1dcc236c34816c71b0e05018fda
   subpackages:
   - context
   - html
@@ -74,14 +74,14 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: 91ee8cde435411ca3f1cd365e8f20131aed4d0a1
   subpackages:
   - unix
   - windows
   - windows/registry
   - windows/svc/eventlog
 - name: golang.org/x/text
-  version: b19bf474d317b857955b12035d2c5acb57ce8b01
+  version: ab48842968a66deafa354805a8b031924668e059
   subpackages:
   - encoding
   - encoding/charmap
@@ -93,6 +93,8 @@ imports:
   - encoding/simplifiedchinese
   - encoding/traditionalchinese
   - encoding/unicode
+  - internal/language
+  - internal/language/compact
   - internal/tag
   - internal/utf8internal
   - language
@@ -102,7 +104,7 @@ imports:
   - unicode/bidi
   - unicode/norm
 - name: google.golang.org/genproto
-  version: a8101f21cf983e773d0c1133ebc5424792003214
+  version: ab0870e398d5dd054b868c0db1481ab029b9a9f2
   subpackages:
   - googleapis/
   - googleapis/rpc/code
@@ -125,9 +127,9 @@ imports:
 - name: gopkg.in/alecthomas/kingpin.v2
   version: 947dcec5ba9c011838740e680966fd7087a71d0d
 - name: k8s.io/apimachinery
-  version: bc110fd540ab678abbf2bc71d9ce908eb9325ef6
+  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
   subpackages:
   - pkg/util/validation
 testImports:
 - name: gopkg.in/yaml.v2
-  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
+  version: 7f97868eec74b32b0982dd158a51a446d1da7eb5

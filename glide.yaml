@@ -3,7 +3,7 @@ import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/golang/protobuf
-  version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
+  #version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
   subpackages:
   - proto
 - package: github.com/projectcalico/libcalico-go
@@ -26,9 +26,7 @@ import:
   subpackages:
   - pkg/util/validation
 - package: github.com/envoyproxy/data-plane-api
-  version: 28d28198e583aec75b6242ee02682654197b745e
-  subpackages:
-  - api/auth
+  version: master
 - package: github.com/google/protobuf
   version: v3.5.0.1
 - package: github.com/lyft/protoc-gen-validate
