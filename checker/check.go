@@ -98,7 +98,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				"ordinal":   i,
 				"ProfileID": pID,
 				"result":    action,
-			}).Debug("Profile checked", i, name, action)
+			}).Debug("Profile checked")
 			switch action {
 			case NO_MATCH:
 				continue
