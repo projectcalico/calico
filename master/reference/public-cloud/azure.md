@@ -1,38 +1,49 @@
 ---
 title: Deploying Calico on Azure
-canonical_url: 'https://docs.projectcalico.org/v3.0/reference/public-cloud/azure'
+canonical_url: https://docs.projectcalico.org/v3.0/reference/public-cloud/azure
 ---
 
-{{site.prodname}} in [Microsoft Azure][Azure]{:target="_blank"} is supported in [policy-only][PolicyMode] mode. {{site.prodname}} IPAM needs to be configured in host-local mode and used in conjunction with Kubernetes pod CIDR assignments. Additional option would be to use [Canal][Canal] - {{site.prodname}} with flannel networking.
+## About {{site.prodname}} on Azure
 
-#### Routing Traffic
+While Azure does not support {{site.prodname}} networking, you can use
+{{site.prodname}} policy with one of the following networking options.
 
-##### Azure user-defined routes (Azure UDR)
+- **Azure user-defined routes**: This option provides networking without overlays.
+  Disable {{site.prodname}} networking by setting `CALICO_NETWORKING_BACKEND` to `none` 
+  in `{{site.nodecontainer}}`. (Also called "policy-only mode".) Refer to 
+  [Configuring calico/node](../node/configuration) and [Azure user-defined routes](#azure-user-defined-routes) for more information. If you're on Kubernetes, refer to the [Kubernetes API datastore](../../getting-started/kubernetes/installation/hosted/kubernetes-datastore/#policy-only) installation guide for a sample manifest.
 
-[Azure user-defined routes][AzureUDR] is the only available option for traffic routing without overlay networking. To use Azure routing you must create [Azure route table][AzureUDRCreate]{:target="_blank"} and associatе it with VMs subnet.
+- **flannel** (Kubernetes only): Refer to the [flannel installation guide](../../getting-started/kubernetes/installation/hosted/canal) 
+  for specific instructions and a manifest. This option does use overlays.
 
-##### Flannel networking
+- **Azure CNI IPAM plug-in**: Configure {{site.prodname}} to use the 
+  [Azure CNI plug-in](https://github.com/Azure/azure-container-networking/blob/master/docs/cni.md)
+  instead of the {{site.prodname}} CNI plug-in.
 
-Refer to the following [Kubernetes self-hosted install guide][CanalGuide] in the Canal project for details on installing Calico with flannel.
 
-#### Enabling IP forwarding (only for Azure UDR)
+## Azure user-defined routes
 
-To allow pod traffic make sure VM network interfaces have [IP forwarding enabled][AzureIPForward]{:target="_blank"} in Azure.
+To configure Azure user-defined routes (UDR):
 
-#### Enabling Kubernetes pod CIDR assignment (only for Azure UDR)
+- Create an [Azure route table][AzureUDRCreate]{:target="_blank"} and 
+  associatе it with the VMs subnet.
 
-To enable automatic pod CIDR assignment make sure Kubernetes controller manager has `allocate-node-cidrs` set to `true`
-and a proper subnet in the `cluster-cidr` parameter. Make sure that the selected pod's subnet is a part of your Azure virtual network IP range.
-You also must have Kubernetes Azure cloud provider configured with your routing table name in configuration file.
+- Enable [IP forwarding enabled][AzureIPForward]{:target="_blank"} in your 
+  VM network interfaces.
 
-#### Why doesn't Azure support {{site.prodname}} networking?
+On Kubernetes, also complete the following.
 
-Azure does not allow BGP, IPIP traffic, and traffic with unknown source IPs.
+- Ensure that the selected pod's subnet is a part of your Azure virtual 
+  network IP range.
+  
+- Include the name of your routing table in the configuration file of your 
+  Kubernetes Azure cloud provider.
 
-[Azure]: https://azure.microsoft.com
+## Why doesn't Azure support {{site.prodname}} networking?
+
+Azure does not allow traffic with unknown source IPs.
+
 [AzureIPForward]: https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-network-interface#enable-or-disable-ip-forwarding
 [AzureUDR]: https://docs.microsoft.com/en-us/azure/virtual-network/virtual-networks-udr-overview#user-defined
 [AzureUDRCreate]: https://docs.microsoft.com/en-us/azure/virtual-network/create-user-defined-route-portal
-[Canal]: https://github.com/projectcalico/canal
-[CanalGuide]: https://github.com/projectcalico/canal/blob/master/k8s-install/README.md
 [PolicyMode]: {{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/#policy-only

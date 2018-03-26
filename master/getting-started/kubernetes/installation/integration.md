@@ -14,18 +14,12 @@ installation method.
 * TOC
 {:toc}
 
-## Requirements
+## Before you begin
 
-- An existing Kubernetes cluster running Kubernetes >= v1.7.
-- An `etcd` cluster accessible by all nodes in the Kubernetes cluster. {{site.prodname}} can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up. A number of production users do share the etcd cluster between the two, but separating them gives better performance at high scale.
-
-> **Note**: {{site.prodname}} can also be installed
-> [without a dependency on etcd](hosted/kubernetes-datastore/),
-> but that is not covered in this document.
-{: .alert .alert-info}
+Ensure that your cluster meets the {{site.prodname}} [system requirements](../requirements). 
 
 
-## About the {{site.prodname}} Components
+## About the {{site.prodname}} components
 
 There are three components of a {{site.prodname}} / Kubernetes integration.
 
@@ -213,39 +207,3 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 ```
 
 [Click here to view the above yaml directly.](rbac.yaml)
-
-## Configuring Kubernetes
-
-### Configuring the kubelet
-
-The kubelet needs to be configured to use the {{site.prodname}} network plugin when starting pods.
-
-The kubelet can be configured to use {{site.prodname}} by starting it with the following options
-
-- `--network-plugin=cni`
-- `--cni-conf-dir=/etc/cni/net.d`
-- `--cni-bin-dir=/opt/cni/bin`
-
-For Kubernetes versions prior to v1.4.0, the `cni-conf-dir` and `cni-bin-dir` options are
-not supported.  Use `--network-plugin-dir=/etc/cni/net.d` instead.
-
-See the [kubelet reference documentation](https://kubernetes.io/docs/reference/generated/kubelet/)
-for more details.
-
-### Configuring the kube-proxy
-
-In order to use {{site.prodname}} policy with Kubernetes, the `kube-proxy` component must be
-configured
-
-- in either `iptables` or (beta) `ipvs` proxy mode
-- to disable its "masquerade-all" feature
-- with a "cluster CIDR" that is equal to (or contains) the {{site.prodname}} IP pool.
-
-This ensures that the source address of service-bound packets is preserved.  `iptables` 
-mode is the default as of Kubernetes v1.2.0.  {{site.prodname}}'s `ipvs` mode support requires at 
-least Kubernetes v1.9.3 and it has [some limitations](../installation/#kube-proxy-ipvs-mode).
-
-The Kubernetes team is in the process of migrating kube-proxy from command-line argument
-configuration to a configuration file.  At the time of writing, the required options are
-controlled by command line arguments `--proxy-mode`, `--masquerade-all`, and `--cluster-cidr`,
-as detailed in the [kube-proxy reference documentation](http://kubernetes.io/docs/admin/kube-proxy/).
