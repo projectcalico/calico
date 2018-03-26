@@ -3,28 +3,29 @@ title: Red Hat Enterprise Linux packaged install
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/redhat'
 ---
 
-These instructions will take you through a first-time install of {{site.prodname}}.  If
-you are upgrading an existing system, please see the [{{site.prodname}} on OpenStack
+These instructions will take you through a first-time install of
+{{site.prodname}}.  If you are upgrading an existing system, please see
+[{{site.prodname}} on OpenStack
 upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
-document instead for upgrade instructions.
+instead.
 
-There are three sections to the install: installing etcd, upgrading
-control nodes to use {{site.prodname}}, and upgrading compute nodes to use {{site.prodname}}.
-Follow the [Common Steps](#common-steps) on each node before moving on to the
-specific instructions in the control and compute sections. If you want
-to create a combined control and compute node, work through all three
-sections.
+There are three sections to the install: installing etcd, adding
+{{site.prodname}} to OpenStack control nodes, and adding {{site.prodname}} to
+OpenStack compute nodes.  Follow the [Common steps](#common-steps) on each node
+before moving on to the specific instructions in the control and compute
+sections. If you want to create a combined control and compute node, work
+through all three sections.
 
 ## Before you begin
 
-- Ensure that you meet the [requirements](../requirements). 
+- Ensure that you meet the [requirements](../requirements).
 - Confirm that you have SSH access to and root privileges on one or more Red Hat
   Enterprise Linux (RHEL) hosts.
-- Make sure you have working DNS between the RHEL hosts (use `/etc/hosts` if you 
+- Make sure you have working DNS between the RHEL hosts (use `/etc/hosts` if you
   don't have DNS on your network).
 - [Install OpenStack with Neutron and ML2 networking](http://docs.openstack.org)
   on the RHEL hosts.
-  
+
 > **Note**: On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
 > [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks {{site.prodname}}
 > operation. You can avoid this bug by:
@@ -35,32 +36,47 @@ sections.
 >   install on each compute node.
 {: .alert .alert-info}
 
-## Common Steps
+## Common steps
 
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
-### Configure YUM repositories
-
 {% include ppa_repo_name %}
 
-[Add the EPEL repository](https://fedoraproject.org/wiki/EPEL). You may have already 
-added this to install OpenStack.
+1.  [Add the EPEL repository](https://fedoraproject.org/wiki/EPEL). You may
+    have already added this to install OpenStack.
 
-Configure the {{site.prodname}} repository:
+1.  Configure the {{site.prodname}} repository:
 
-```
-cat > /etc/yum.repos.d/calico.repo <<EOF
-[calico]
-name=Calico Repository
-baseurl=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
-enabled=1
-skip_if_unavailable=0
-gpgcheck=1
-gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
-priority=97
-EOF
-```
+    ```
+    cat > /etc/yum.repos.d/calico.repo <<EOF
+    [calico]
+    name=Calico Repository
+    baseurl=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
+    enabled=1
+    skip_if_unavailable=0
+    gpgcheck=1
+    gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
+    priority=97
+    EOF
+    ```
+
+1.  Install the `etcd3gw` Python package, if it is not already installed on
+    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver
+    and DHCP agent, but is not yet RPM-packaged, so you should install it with
+    `pip`.  First check in case it has already been pulled in by your OpenStack
+    installation.
+
+    ```
+    find /usr/lib/python2.7/ -name etcd3gw
+    ```
+
+    If you see no output there, install `etcd3gw` with pip.
+
+    ```
+    yum install -y python-pip
+    pip install etcd3gw
+    ```
 
 ## etcd install
 
@@ -73,40 +89,16 @@ cluster, please get in touch with us and we'll be happy to help you
 through the process.
 
 1.  Install and configure etcd.
-    -   Download, unpack, and install the binary:
+    -   Install etcd, and ensure that it is initially not running:
 
         ```
-        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
-        tar xvf etcd-v2.0.11-linux-amd64.tar.gz
-        cd etcd-v2.0.11-linux-amd64
-        mv etcd* /usr/local/bin/
+        yum install -y etcd
+        systemctl stop etcd
         ```
 
-        > **Important**: We've seen certificate errors downloading etcd—you may need
-        > to add `--insecure` to the curl command to ignore this.
-        >
-        {: .alert .alert-danger}
-
-    -   Create an etcd user:
-
-        ```
-        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
-        chmod 700 /var/lib/etcd/
-        ```
-
-    -   Add the following line to the bottom of `/etc/fstab`. This will
-        mount a ramdisk for etcd at startup:
-
-        ```
-        tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
-        ```
-
-    -   Run `mount -a` to mount it now.
-    -   Get etcd running by providing an init file.
-
-        Place the following in `/etc/sysconfig/etcd`, replacing
-        `<hostname>` and `<public_ip>` with their appropriate values for
-        the machine.
+    -   Place the following in `/etc/etcd/etcd.conf`, replacing `<hostname>`,
+        `<public_ip>` and `<uuid>` with their appropriate values for the
+        machine.
 
         ```
         ETCD_DATA_DIR=/var/lib/etcd
@@ -117,113 +109,18 @@ through the process.
         ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
         ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
         ETCD_INITIAL_CLUSTER_STATE=new
+        ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
         ```
 
-        Check the `uuidgen` tool is installed (the output should change
-        each time):
+        You can obtain a `<uuid>` by running the `uuidgen` tool:
 
         ```
         # uuidgen
         11f92f19-cb5a-476f-879f-5efc34033b8b
         ```
 
-        If it is not installed, run `yum install util-linux` to
+        If it is not installed, run `yum install -y util-linux` to
         install it.
-
-        Place the following in `/usr/local/bin/start-etcd`:
-
-        ```
-        #!/bin/sh
-        export ETCD_INITIAL_CLUSTER_TOKEN=`uuidgen`
-        exec /usr/local/bin/etcd
-        ```
-
-        Then run `chmod +x /usr/local/bin/start-etcd` to make that
-        file executable.
-
-        You then need to add the following file to
-        `/usr/lib/systemd/system/etcd.service`:
-
-        ```
-        [Unit]
-        Description=Etcd
-        After=syslog.target network.target
-
-        [Service]
-        User=root
-        ExecStart=/usr/local/bin/start-etcd
-        EnvironmentFile=-/etc/sysconfig/etcd
-        KillMode=process
-        Restart=always
-
-        [Install]
-        WantedBy=multi-user.target
-        ```
-
-2.  Launch etcd and set it to restart after a reboot:
-
-    ```
-    systemctl start etcd
-    systemctl enable etcd
-    ```
-
-## etcd proxy install
-
-Install an etcd proxy on every node running OpenStack services that
-isn't running the etcd database itself (both control and compute nodes).
-
-1.  Install and configure etcd as an etcd proxy.
-
-    -   Download, unpack, and install the binary:
-
-        ```
-        curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
-        tar xvf etcd-v2.0.11-linux-amd64.tar.gz
-        cd etcd-v2.0.11-linux-amd64
-        mv etcd* /usr/local/bin/
-        ```
-
-        > **Important**: We've seen certificate errors downloading etcd—you may need
-        > to add `--insecure` to the curl command to ignore this.
-        >
-        {: .alert .alert-danger}
-
-    -   Create an etcd user:
-
-        ```
-        adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
-        chmod 700 /var/lib/etcd/
-        ```
-
-    -   Get etcd running by providing an init file.
-
-        Place the following in `/etc/sysconfig/etcd`, replacing
-        `<etcd_hostname>` and `<etcd_ip>` with the values you used in
-        the [etcd install](#etcd-install) section.
-
-        ```
-        ETCD_PROXY=on
-        ETCD_DATA_DIR=/var/lib/etcd
-        ETCD_INITIAL_CLUSTER="<etcd_hostname>=http://<etcd_ip>:2380"
-        ```
-
-        You then need to add the following file to `/usr/lib/systemd/system/etcd.service`
-
-        ```
-        [Unit]
-        Description=Etcd
-        After=syslog.target network.target
-
-        [Service]
-        User=root
-        ExecStart=/usr/local/bin/etcd
-        EnvironmentFile=-/etc/sysconfig/etcd
-        KillMode=process
-        Restart=always
-
-        [Install]
-        WantedBy=multi-user.target
-        ```
 
 2.  Launch etcd and set it to restart after a reboot:
 
@@ -250,30 +147,14 @@ On each control node, perform the following steps:
     > left around.
     {: .alert .alert-danger}
 
-1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
-    section, find the line beginning with `core_plugin`, and change it to
-    read `core_plugin = calico`.
-
-1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver but not yet
-    RPM-packaged, so you should install it with `pip`.  First check in case it
-    has already been pulled in by your OpenStack installation.
-
-    ```
-    find /usr/lib/python2.7/ -name etcd3gw
-    ```
-
-    If you see no output there, install `etcd3gw` with pip.
-
-    ```
-    yum install -y python-pip
-    pip install etcd3gw
-    ```
+1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section, find
+    the line beginning with `core_plugin`, and change it to read `core_plugin =
+    calico`.  Also remove any existing setting for `service_plugins`.
 
 1.  Install the `calico-control` package:
 
     ```
-    yum install calico-control
+    yum install -y calico-control
     ```
 
 1.  Restart the neutron server process:
@@ -329,7 +210,7 @@ On each compute node, perform the following steps:
     service libvirtd restart
     ```
 
-2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
+1.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
     ```
@@ -353,7 +234,7 @@ On each compute node, perform the following steps:
     service openstack-nova-api restart
     ```
 
-3.  If they're running, stop the Open vSwitch services.
+1.  If they're running, stop the Open vSwitch services.
 
     ```
     service neutron-openvswitch-agent stop
@@ -381,13 +262,13 @@ On each compute node, perform the following steps:
     neutron agent-delete <agent-id>
     ```
 
-5.  Install Neutron infrastructure code on the compute host.
+1.  Install Neutron infrastructure code on the compute host.
 
     ```
-    yum install openstack-neutron
+    yum install -y openstack-neutron
     ```
 
-6.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
+1.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
     ensure that the `lock_path` variable is uncommented and set as follows.
 
     ```
@@ -398,17 +279,25 @@ On each compute node, perform the following steps:
     lock_path = $state_path/lock
     ```
 
-    Then, stop and disable the Neutron DHCP agent, and install the
+    Add a `[calico]` section with the following content, where `<ip>` is the IP
+    address of the controller.
+
+    ```
+    [calico]
+    etcd_host = <ip>
+    ```
+
+1.  Stop and disable the Neutron DHCP agent, and install the
     {{site.prodname}} DHCP agent (which uses etcd, allowing it to scale to higher
     numbers of hosts).
 
     ```
     service neutron-dhcp-agent stop
     chkconfig neutron-dhcp-agent off
-    yum install calico-dhcp-agent
+    yum install -y calico-dhcp-agent
     ```
 
-7.  Stop and disable any other routing/bridging agents such as the L3
+1.  Stop and disable any other routing/bridging agents such as the L3
     routing agent or the Linux bridging agent. These conflict
     with {{site.prodname}}.
 
@@ -418,34 +307,33 @@ On each compute node, perform the following steps:
     ... repeat for bridging agent and any others ...
     ```
 
-8.  If this node is not a controller, install and start the Nova
+1.  If this node is not a controller, install and start the Nova
     Metadata API. This step is not required on combined compute and
     controller nodes.
 
     ```
-    yum install openstack-nova-api
+    yum install -y openstack-nova-api
     service openstack-nova-metadata-api restart
     chkconfig openstack-nova-metadata-api on
     ```
 
-9.  Install the BIRD BGP client.
+1.  Install the BIRD BGP client.
 
     ```
     yum install -y bird bird6
     ```
 
-10. Install the `calico-compute` package.
+1.  Install the `calico-compute` package.
 
     ```
-    yum install calico-compute
+    yum install -y calico-compute
     ```
 
-11. Configure BIRD. By default {{site.prodname}} assumes that you'll be deploying a
-    route reflector to avoid the need for a full BGP mesh. To this end,
-    it includes useful configuration scripts that will prepare a BIRD
-    config file with a single peering to the route reflector. If that's
-    correct for your network, you can run either or both of the
-    following commands.
+1.  Configure BIRD. By default {{site.prodname}} assumes that you will deploy a
+    route reflector to avoid the need for a full BGP mesh. To this end, it
+    includes configuration scripts to prepare a BIRD config file with a single
+    peering to the route reflector. If that's correct for your network, you can
+    run either or both of the following commands.
 
     For IPv4 connectivity between compute hosts:
 
@@ -459,19 +347,19 @@ On each compute node, perform the following steps:
     calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
-    Note that you'll also need to configure your route reflector to
-    allow connections from the compute node as a route reflector client.
-    If you are using BIRD as a route reflector, follow the instructions
-    in [Configuring BIRD as a BGP route reflector]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If you are using another route reflector, refer
-    to the appropriate instructions to configure a client connection.
+    You also need to configure your route reflector to allow connections from
+    the compute node as a route reflector client.  If you are using BIRD as a
+    route reflector, follow the instructions in [Configuring BIRD as a BGP
+    route reflector]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If
+    you are using another route reflector, refer to the appropriate
+    instructions to configure a client connection.
 
-    If you *are* configuring a full BGP mesh you'll need to handle the
-    BGP configuration appropriately on each compute host. The scripts
-    above can be used to generate a sample configuration for BIRD, by
-    replacing the `<route_reflector_ip>` with the IP of one other
-    compute host—this will generate the configuration for a single
-    peer connection, which you can duplicate and update for each compute
-    host in your mesh.
+    If you *are* configuring a full BGP mesh you need to handle the BGP
+    configuration appropriately on each compute host. The scripts above can be
+    used to generate a sample configuration for BIRD, by replacing the
+    `<route_reflector_ip>` with the IP of one other compute host—this will
+    generate the configuration for a single peer connection, which you can
+    duplicate and update for each compute host in your mesh.
 
     To maintain connectivity between VMs if BIRD crashes or is upgraded,
     configure BIRD graceful restart. Edit the systemd unit file
@@ -479,6 +367,7 @@ On each compute node, perform the following steps:
 
     -   Add `-R` to the end of the `ExecStart` line.
     -   Add `KillSignal=SIGKILL` as a new line in the `[Service]` section.
+    -   Run `systemctl daemon-reload` to tell systemd to reread that file.
 
     Ensure that BIRD (and/or BIRD 6 for IPv6) is running and starts on
     reboot.
@@ -490,11 +379,16 @@ On each compute node, perform the following steps:
     chkconfig bird6 on
     ```
 
-12. Create the `/etc/calico/felix.cfg` file by copying
-    `/etc/calico/felix.cfg.example`. Ordinarily the default values
-    should be used, but see [Configuration]({{site.baseurl}}/{{page.version}}/getting-started/openstack/) for more details.
+1.  Create `/etc/calico/felix.cfg` with the following content, where `<ip>` is the IP
+    address of the etcd server.
 
-13. Restart the Felix service.
+    ```
+    [global]
+    DatastoreType = etcdv3
+    EtcdAddr = <ip>:2379
+    ```
+
+1.  Restart the Felix service.
 
     ```
     systemctl restart calico-felix
