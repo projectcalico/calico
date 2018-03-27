@@ -77,7 +77,7 @@ GO_BUILD_VER ?= v0.10
 # for building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
-PROTOC_VER ?= latest
+PROTOC_VER ?= v0.1
 PROTOC_CONTAINER ?= calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 FV_ETCDIMAGE ?= quay.io/coreos/etcd:v3.2.5-$(BUILDARCH)
 FV_K8SIMAGE ?= gcr.io/google_containers/hyperkube-$(BUILDARCH):v1.7.5
