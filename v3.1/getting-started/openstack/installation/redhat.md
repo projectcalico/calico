@@ -3,19 +3,6 @@ title: Red Hat Enterprise Linux packaged install
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/redhat'
 ---
 
-For this version of {{site.prodname}}, with OpenStack on RHEL or CentOS, we recommend
-using OpenStack Liberty or later.
-
-> **Note**: On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
-> [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks {{site.prodname}}
-> operation. You can avoid this bug by:
->
-> - Using Newton or later (recommended), or
->
-> - Manually [patching](https://review.openstack.org/#/c/425637/) your Nova
->   install on each compute node.
-{: .alert .alert-info}
-
 These instructions will take you through a first-time install of {{site.prodname}}.  If
 you are upgrading an existing system, please see the [{{site.prodname}} on OpenStack
 upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
@@ -28,55 +15,51 @@ specific instructions in the control and compute sections. If you want
 to create a combined control and compute node, work through all three
 sections.
 
-> **Important**: Following the upgrade to use etcd as a data store, {{site.prodname}}
-> currently only supports RHEL 7 and above. If support on RHEL 6.x
-> or other versions of Linux is important to you, then please [let
-> us know](https://www.projectcalico.org/contact/).
+## Before you begin
+
+- Ensure that you meet the [requirements](../requirements). 
+- Confirm that you have SSH access to and root privileges on one or more Red Hat
+  Enterprise Linux (RHEL) hosts.
+- Make sure you have working DNS between the RHEL hosts (use `/etc/hosts` if you 
+  don't have DNS on your network).
+- [Install OpenStack with Neutron and ML2 networking](http://docs.openstack.org)
+  on the RHEL hosts.
+  
+> **Note**: On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
+> [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks {{site.prodname}}
+> operation. You can avoid this bug by:
 >
-{: .alert .alert-danger}
-
-
-## Prerequisites
-
-Before starting this you will need the following:
-
--   One or more machines running RHEL, with OpenStack installed.
--   SSH access to these machines.
--   Root access on those machines.  All of the commands shown below should be
-    run as root.
--   Working DNS between these machines (use `/etc/hosts` if you don't
-    have DNS on your network).
+> - Using Newton or later (recommended), or
+>
+> - Manually [patching](https://review.openstack.org/#/c/425637/) your Nova
+>   install on each compute node.
+{: .alert .alert-info}
 
 ## Common Steps
 
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
-### Install OpenStack
-
-If you haven't already done so, install OpenStack with Neutron and ML2
-networking.
-
 ### Configure YUM repositories
 
 {% include ppa_repo_name %}
 
-Add the EPEL repository -- see <https://fedoraproject.org/wiki/EPEL>.
-You may have already added this to install OpenStack.
+[Add the EPEL repository](https://fedoraproject.org/wiki/EPEL). You may have already 
+added this to install OpenStack.
 
 Configure the {{site.prodname}} repository:
 
 ```
-    cat > /etc/yum.repos.d/calico.repo <<EOF
-    [calico]
-    name=Calico Repository
-    baseurl=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
-    enabled=1
-    skip_if_unavailable=0
-    gpgcheck=1
-    gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
-    priority=97
-    EOF
+cat > /etc/yum.repos.d/calico.repo <<EOF
+[calico]
+name=Calico Repository
+baseurl=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
+enabled=1
+skip_if_unavailable=0
+gpgcheck=1
+gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
+priority=97
+EOF
 ```
 
 ## etcd install
@@ -353,7 +336,7 @@ On each compute node, perform the following steps:
     linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
-    Remove the lines from the \[neutron\] section setting
+    Remove the lines from the `[neutron]` section setting
     `service_neutron_metadata_proxy` or `service_metadata_proxy` to
     `True`, if there are any. Additionally, if there is a line setting
     `metadata_proxy_shared_secret`, comment that line out as well.
@@ -494,10 +477,10 @@ On each compute node, perform the following steps:
     configure BIRD graceful restart. Edit the systemd unit file
     /usr/lib/systemd/system/bird.service (and bird6.service for IPv6):
 
-    -   Add -R to the end of the ExecStart line.
-    -   Add KillSignal=SIGKILL as a new line in the \[Service\] section.
+    -   Add `-R` to the end of the `ExecStart` line.
+    -   Add `KillSignal=SIGKILL` as a new line in the `[Service]` section.
 
-    Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on
+    Ensure that BIRD (and/or BIRD 6 for IPv6) is running and starts on
     reboot.
 
     ```

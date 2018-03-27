@@ -8,7 +8,7 @@ In this mode, {{site.prodname}} uses the Kubernetes API directly as the datastor
 
 Note that this mode currently comes with a number of limitations, namely:
 
-- It does not yet support Calico IPAM. We recommend using `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
+- It does not yet support {{site.prodname}} IPAM. We recommend using `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - {{site.prodname}} networking support is in beta. Control of the node-to-node mesh, default AS Number and all BGP peering configuration should be configured using `calicoctl`.
 
 The provided manifest configures {{site.prodname}} to use host-local IPAM in conjunction with the Kubernetes assigned
@@ -37,9 +37,9 @@ This document describes two installation options for {{site.prodname}} using Kub
 
 > **Note**: There is currently no upgrade path to switch between
 > different installation options. Therefore, if you are upgrading
-> from Calico v2.1, use the
-> [Calico policy-only with user-supplied networking](#policy-only)
-> installation instructions to upgrade Calico policy-only which
+> from {{site.prodname}} v2.1, use the
+> [{{site.prodname}} policy-only with user-supplied networking](#policy-only)
+> installation instructions to upgrade {{site.prodname}} policy-only which
 > leaves the networking solution unchanged.
 {: .alert .alert-info}
 
@@ -47,7 +47,7 @@ This document describes two installation options for {{site.prodname}} using Kub
 
 When using the Kubernetes API datastore, {{site.prodname}} has beta support for 
 {{site.prodname}} networking.  This provides BGP-based networking with a full node-to-node 
-mesh and/or explicit configuration of peers.  (The "beta" label is because Calico IPAM is 
+mesh and/or explicit configuration of peers.  (The "beta" label is because {{site.prodname}} IPAM is 
 not yet supported.)
 
 To install {{site.prodname}} with BGP networking:
@@ -75,7 +75,7 @@ To install {{site.prodname}} with BGP networking:
    uses significant CPU (in the `confd` process on each host and the API server) 
    as the number of nodes increases.
 
-   Alternatively, if you're running on-premise, you may want to configure Calico
+   Alternatively, if you're running on-premise, you may want to configure {{site.prodname}}
    to peer with your BGP infrastructure.
     
    In either case, see the [Configuring BGP Peers guide]({{site.baseurl}}/{{page.version}}/usage/configuration/bgp) 
