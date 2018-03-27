@@ -86,8 +86,6 @@ FV_FELIXIMAGE ?= calico/felix:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
-        PROTOC_VER?=v0.1
-        PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)
         FV_ETCDIMAGE=quay.io/coreos/etcd:v3.2.5
         FV_K8SIMAGE=gcr.io/google_containers/hyperkube:v1.7.5
         FV_TYPHAIMAGE=calico/typha:v0.6.0-beta1-16-g512a0f2
