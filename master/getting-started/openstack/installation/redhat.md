@@ -88,35 +88,35 @@ setup.  Here we present a sample recipe for a single node cluster.
 
 1.  Install etcd, and ensure that it is initially not running:
 
-	```
-	yum install -y etcd
-	systemctl stop etcd
-	```
+    ```
+    yum install -y etcd
+    systemctl stop etcd
+    ```
 
 1.  Place the following in `/etc/etcd/etcd.conf`, replacing `<hostname>`,
-	`<public_ip>` and `<uuid>` with their appropriate values for the machine.
+    `<public_ip>` and `<uuid>` with their appropriate values for the machine.
 
-	```
-	ETCD_DATA_DIR=/var/lib/etcd
-	ETCD_NAME=<hostname>
-	ETCD_ADVERTISE_CLIENT_URLS="http://<public_ip>:2379,http://<public_ip>:4001"
-	ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
-	ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
-	ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
-	ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
-	ETCD_INITIAL_CLUSTER_STATE=new
-	ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
-	```
+    ```
+    ETCD_DATA_DIR=/var/lib/etcd
+    ETCD_NAME=<hostname>
+    ETCD_ADVERTISE_CLIENT_URLS="http://<public_ip>:2379,http://<public_ip>:4001"
+    ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
+    ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+    ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
+    ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
+    ETCD_INITIAL_CLUSTER_STATE=new
+    ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
+    ```
 
-	You can obtain a `<uuid>` by running the `uuidgen` tool:
+    You can obtain a `<uuid>` by running the `uuidgen` tool:
 
-	```
-	# uuidgen
-	11f92f19-cb5a-476f-879f-5efc34033b8b
-	```
+    ```
+    # uuidgen
+    11f92f19-cb5a-476f-879f-5efc34033b8b
+    ```
 
-	If it is not installed, run `yum install -y util-linux` to
-	install it.
+    If it is not installed, run `yum install -y util-linux` to
+    install it.
 
 1.  Launch etcd and set it to restart after a reboot:
 
