@@ -20,7 +20,7 @@ import (
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
@@ -98,7 +98,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				"ordinal":   i,
 				"ProfileID": pID,
 				"result":    action,
-			}).Debug("Profile checked", i, name, action)
+			}).Debug("Profile checked")
 			switch action {
 			case NO_MATCH:
 				continue

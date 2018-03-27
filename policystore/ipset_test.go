@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/app-policy/proto"
 
-	envoyapi "github.com/envoyproxy/data-plane-api/api"
+	envoyapi "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
 )
 
 func makeAddr(ip string, protocol envoyapi.SocketAddress_Protocol, port uint32) envoyapi.Address {

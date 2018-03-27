@@ -19,7 +19,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 )
@@ -92,7 +92,7 @@ func TestCheckPolicyRules(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/default/sa/sue",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "HEAD"},
 		},
 	}}
 	reqCache, err := NewRequestCache(policystore.NewPolicyStore(), req)
@@ -120,7 +120,7 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "HEAD"},
 		},
 	}}
 	status := checkStore(store, req)
@@ -143,7 +143,7 @@ func TestCheckStoreNoTiers(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/default/sa/steve",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "HEAD"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "HEAD"},
 		},
 	}}
 	status := checkStore(store, req)
@@ -188,7 +188,7 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/default/sa/sally",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET"},
 		},
 	}}
 
@@ -236,7 +236,7 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/default/sa/quinn",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET"},
 		},
 	}}
 
@@ -299,7 +299,7 @@ func TestCheckStorePass(t *testing.T) {
 			Principal: "spiffe://cluster.local/ns/default/sa/molly",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET"},
 		},
 	}}
 
@@ -324,7 +324,7 @@ func TestCheckStoreInitFails(t *testing.T) {
 			Principal: "spiffe://malformed",
 		},
 		Request: &authz.AttributeContext_Request{
-			Http: &authz.AttributeContext_HTTPRequest{Method: "GET"},
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET"},
 		},
 	}}
 

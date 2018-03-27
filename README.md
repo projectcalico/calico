@@ -95,9 +95,6 @@ namespace similar to the following.
     kubectl get pods --namespace=istio-system 
  
     NAME                                 READY     STATUS    RESTARTS   AGE
-    dikastes-node-ffcbl                  1/1       Running   0          20h
-    dikastes-node-p2d3r                  1/1       Running   0          20h
-    dikastes-node-w0b0x                  1/1       Running   0          20h
     istio-ca-3883180085-wdrqr            1/1       Running   0          20h
     istio-egress-1389168910-tfnh0        1/1       Running   0          20h
     istio-ingress-174722661-3fv5x        1/1       Running   0          20h
@@ -110,10 +107,10 @@ plan is to integrate it into the `calico-node` pod in future versions.
 Note that Istio Mixer is not included in this demo because it is not required.  You can add a
 Mixer deployment and [use it for telemetry or additional authorization checks](#can-i-use-dikastes-with-istio-mixer?).
 
-Finally, add the initializer, which automatically adds the Istio Proxy sidecar to each deployment you add to your
+Finally, add the Sidecar Injector, which automatically adds the Istio Proxy sidecar to each deployment you add to your
 cluster.
 
-    kubectl apply -f config/install/20-istio-initializer.yaml
+    kubectl apply -f config/install/20-istio-sidecar-injector.yaml
     
 ### Install the demo application
 
@@ -128,9 +125,9 @@ When the demo application has come up, you will see 3 pods.
     kubectl get pods
     
     NAME                        READY     STATUS    RESTARTS   AGE
-    customer-2809159614-qqfnx   2/2       Running   0          21h
-    database-1601951801-m4w70   2/2       Running   0          21h
-    summary-2817688950-g1b3n    2/2       Running   0          21h
+    customer-2809159614-qqfnx   3/3       Running   0          21h
+    database-1601951801-m4w70   3/3       Running   0          21h
+    summary-2817688950-g1b3n    3/3       Running   0          21h
     
 There is a Kubernetes ServiceAccount for each microservice in the application (in addition to the `default` account).
 

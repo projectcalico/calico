@@ -21,7 +21,7 @@ import (
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 
-	envoyapi "github.com/envoyproxy/data-plane-api/api"
+	envoyapi "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
 )
 
 const addr1Ip = "3.4.6.8"

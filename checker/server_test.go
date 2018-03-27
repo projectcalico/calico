@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	"github.com/projectcalico/app-policy/policystore"
 )
 

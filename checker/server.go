@@ -17,7 +17,7 @@ package checker
 import (
 	"github.com/projectcalico/app-policy/policystore"
 
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"

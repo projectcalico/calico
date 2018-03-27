@@ -21,8 +21,8 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
-	"github.com/envoyproxy/data-plane-api/api"
-	authz "github.com/envoyproxy/data-plane-api/api/auth"
+	"github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -159,7 +159,7 @@ func matchNamespace(nsMatch *namespaceMatch, ns namespace) bool {
 	return matchName(nsMatch.Names, ns.Name) && matchLabels(nsMatch.Selector, ns.Labels)
 }
 
-func matchHTTP(rule *proto.HTTPMatch, req *authz.AttributeContext_HTTPRequest) bool {
+func matchHTTP(rule *proto.HTTPMatch, req *authz.AttributeContext_HttpRequest) bool {
 	log.WithFields(log.Fields{
 		"rule": rule,
 	}).Debug("Matching HTTP.")
@@ -214,7 +214,7 @@ func matchDstIPSets(r *proto.Rule, req *requestCache) bool {
 }
 
 // matchIPSetsAll returns true if the address matches all of the IP set ids, false otherwise.
-func matchIPSetsAll(ids []string, req *requestCache, addr *envoy_api_v2.Address) bool {
+func matchIPSetsAll(ids []string, req *requestCache, addr *envoy_api_v2_core.Address) bool {
 	for _, id := range ids {
 		s := req.GetIPSet(id)
 		if !s.ContainsAddress(addr) {
@@ -225,7 +225,7 @@ func matchIPSetsAll(ids []string, req *requestCache, addr *envoy_api_v2.Address)
 }
 
 // matchIPSetsNotAny returns true if the address does not match any of the ipset ids, false otherwise.
-func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2.Address) bool {
+func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2_core.Address) bool {
 	for _, id := range ids {
 		s := req.GetIPSet(id)
 		if s.ContainsAddress(addr) {
