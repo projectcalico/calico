@@ -1,5 +1,5 @@
-hash: de6e97ebfeea8f5bbcccd3e873a2c248db000f1665dc525b56b8654c88c2c749
-updated: 2018-03-23T15:43:10.029526948-07:00
+hash: 7fdd5a5728141fc959e06c8687c5187cac6af4b7a66d61f688fe2baf50eee506
+updated: 2018-03-27T10:31:59.684910412-07:00
 imports:
 - name: github.com/alecthomas/template
   version: a0175ee3bccc567396460bf5acd36800cb10c49c
@@ -24,7 +24,7 @@ imports:
 - name: github.com/google/protobuf
   version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
 - name: github.com/googleapis/googleapis
-  version: f81082ea1e2f85c43649bee26e0d9871d4b41cdb
+  version: a15a7499667fb459c4b6594059b8a61f92e945db
 - name: github.com/lyft/protoc-gen-validate
   version: 8e6aaf55f4954f1ef9d3ee2e8f5a50e79cc04f8f
 - name: github.com/onsi/gomega
@@ -51,7 +51,7 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
 - name: github.com/prometheus/common
-  version: e4aa40a9169a88835b849a6efb71e05dc04b88f0
+  version: 38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a
   subpackages:
   - log
 - name: github.com/sirupsen/logrus
@@ -74,14 +74,14 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 91ee8cde435411ca3f1cd365e8f20131aed4d0a1
+  version: 13d03a9a82fba647c21a0ef8fba44a795d0f0835
   subpackages:
   - unix
   - windows
   - windows/registry
   - windows/svc/eventlog
 - name: golang.org/x/text
-  version: ab48842968a66deafa354805a8b031924668e059
+  version: ece95c760240037f89ebcbdd7155ac8cb52e38fa
   subpackages:
   - encoding
   - encoding/charmap
@@ -132,4 +132,4 @@ imports:
   - pkg/util/validation
 testImports:
 - name: gopkg.in/yaml.v2
-  version: 7f97868eec74b32b0982dd158a51a446d1da7eb5
+  version: 86f5ed62f8a0ee96bd888d2efdfd6d4fb100a4eb
