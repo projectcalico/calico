@@ -1,6 +1,6 @@
 ---
 title: Conntrack
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/conntrack'
+canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/policy/conntrack'
 ---
 
 
