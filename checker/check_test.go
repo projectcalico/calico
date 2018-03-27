@@ -202,13 +202,13 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
-// And endpoint with no Policies should evaluate Profiles.
+// And endpoint with no Tiers should evaluate Profiles.
 func TestCheckStoreProfileOnly(t *testing.T) {
 	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = &proto.WorkloadEndpoint{
-		Tiers:      []*proto.TierInfo{{}},
+		Tiers:      []*proto.TierInfo{},
 		ProfileIds: []string{"profile1", "profile2"},
 	}
 	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
@@ -247,6 +247,53 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	http.Method = "HEAD"
 
 	status = checkStore(store, req)
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
+}
+
+// And endpoint with a Tier should not evaluate profiles; there is a default deny on the tier.
+func TestCheckStorePolicyDefaultDeny(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{
+			{
+				Name:            "tier1",
+				IngressPolicies: []string{"policy1"},
+			},
+		},
+		ProfileIds: []string{"profile1"},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action:    "deny",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"HEAD"}},
+			},
+		},
+	}
+	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
+		InboundRules: []*proto.Rule{
+			{
+				Action:    "allow",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
+			},
+		},
+	}
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/quinn",
+		},
+		Request: &authz.AttributeContext_Request{
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET"},
+		},
+	}}
+
+	status := checkStore(store, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
