@@ -17,7 +17,7 @@ package checker
 import (
 	"testing"
 
-	"github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
 	auth "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	. "github.com/onsi/gomega"
 
@@ -26,18 +26,18 @@ import (
 )
 
 var (
-	socketAddressProtocolTCP = &envoy_api_v2_core.Address{
-		&envoy_api_v2_core.Address_SocketAddress{
-			&envoy_api_v2_core.SocketAddress{
-				Protocol: envoy_api_v2_core.SocketAddress_TCP,
+	socketAddressProtocolTCP = &core.Address{
+		&core.Address_SocketAddress{
+			&core.SocketAddress{
+				Protocol: core.SocketAddress_TCP,
 			},
 		},
 	}
 
-	socketAddressProtocolUDP = &envoy_api_v2_core.Address{
-		&envoy_api_v2_core.Address_SocketAddress{
-			&envoy_api_v2_core.SocketAddress{
-				Protocol: envoy_api_v2_core.SocketAddress_UDP,
+	socketAddressProtocolUDP = &core.Address{
+		&core.Address_SocketAddress{
+			&core.SocketAddress{
+				Protocol: core.SocketAddress_UDP,
 			},
 		},
 	}
@@ -158,20 +158,20 @@ func TestMatchRule(t *testing.T) {
 	req := &auth.CheckRequest{Attributes: &auth.AttributeContext{
 		Source: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/sam",
-			Address: &envoy_api_v2_core.Address{Address: &envoy_api_v2_core.Address_SocketAddress{
-				SocketAddress: &envoy_api_v2_core.SocketAddress{
+			Address: &core.Address{Address: &core.Address_SocketAddress{
+				SocketAddress: &core.SocketAddress{
 					Address:       srcAddr,
-					Protocol:      envoy_api_v2_core.SocketAddress_TCP,
-					PortSpecifier: &envoy_api_v2_core.SocketAddress_PortValue{PortValue: 8458},
+					Protocol:      core.SocketAddress_TCP,
+					PortSpecifier: &core.SocketAddress_PortValue{PortValue: 8458},
 				}}},
 		},
 		Destination: &auth.AttributeContext_Peer{
 			Principal: "spiffe://cluster.local/ns/default/sa/ian",
-			Address: &envoy_api_v2_core.Address{Address: &envoy_api_v2_core.Address_SocketAddress{
-				SocketAddress: &envoy_api_v2_core.SocketAddress{
+			Address: &core.Address{Address: &core.Address_SocketAddress{
+				SocketAddress: &core.SocketAddress{
 					Address:       dstAddr,
-					Protocol:      envoy_api_v2_core.SocketAddress_TCP,
-					PortSpecifier: &envoy_api_v2_core.SocketAddress_PortValue{PortValue: 80},
+					Protocol:      core.SocketAddress_TCP,
+					PortSpecifier: &core.SocketAddress_PortValue{PortValue: 80},
 				}}},
 		},
 		Request: &auth.AttributeContext_Request{
@@ -630,11 +630,11 @@ func TestMatchPort(t *testing.T) {
 		t.Run(tc.title, func(t *testing.T) {
 			RegisterTestingT(t)
 
-			addr := envoy_api_v2.Address{
-				Address: &envoy_api_v2.Address_SocketAddress{
-					SocketAddress: &envoy_api_v2.SocketAddress{
+			addr := core.Address{
+				Address: &core.Address_SocketAddress{
+					SocketAddress: &core.SocketAddress{
 						Address:       tc.ip,
-						PortSpecifier: &envoy_api_v2.SocketAddress_PortValue{tc.port},
+						PortSpecifier: &core.SocketAddress_PortValue{tc.port},
 					},
 				},
 			}
@@ -722,8 +722,8 @@ func TestMatchNet(t *testing.T) {
 		t.Run(tc.title, func(t *testing.T) {
 			RegisterTestingT(t)
 
-			addr := &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
-				SocketAddress: &envoy_api_v2.SocketAddress{Address: tc.ip}}}
+			addr := &core.Address{Address: &core.Address_SocketAddress{
+				SocketAddress: &core.SocketAddress{Address: tc.ip}}}
 			Expect(matchNet("test", tc.nets, addr)).To(Equal(tc.match))
 		})
 	}
@@ -733,7 +733,7 @@ func TestMatchNet(t *testing.T) {
 func TestMatchNetPipe(t *testing.T) {
 	RegisterTestingT(t)
 
-	addr := &envoy_api_v2.Address{Address: &envoy_api_v2.Address_Pipe{Pipe: &envoy_api_v2.Pipe{Path: "/tmp/t.sock"}}}
+	addr := &core.Address{Address: &core.Address_Pipe{Pipe: &core.Pipe{Path: "/tmp/t.sock"}}}
 	nets := []string{"192.168.0.0/16"}
 	Expect(matchNet("test", nets, addr)).To(BeFalse())
 }
@@ -741,8 +741,8 @@ func TestMatchNetPipe(t *testing.T) {
 func TestMatchNetBadCIDR(t *testing.T) {
 	RegisterTestingT(t)
 
-	addr := &envoy_api_v2.Address{Address: &envoy_api_v2.Address_SocketAddress{
-		SocketAddress: &envoy_api_v2.SocketAddress{Address: "192.168.5.6"}}}
+	addr := &core.Address{Address: &core.Address_SocketAddress{
+		SocketAddress: &core.SocketAddress{Address: "192.168.5.6"}}}
 	nets := []string{"192.168.0.0.0/16"}
 	Expect(matchNet("test", nets, addr)).To(BeFalse())
 }

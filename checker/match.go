@@ -21,7 +21,7 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
-	"github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -214,7 +214,7 @@ func matchDstIPSets(r *proto.Rule, req *requestCache) bool {
 }
 
 // matchIPSetsAll returns true if the address matches all of the IP set ids, false otherwise.
-func matchIPSetsAll(ids []string, req *requestCache, addr *envoy_api_v2_core.Address) bool {
+func matchIPSetsAll(ids []string, req *requestCache, addr *core.Address) bool {
 	for _, id := range ids {
 		s := req.GetIPSet(id)
 		if !s.ContainsAddress(addr) {
@@ -225,7 +225,7 @@ func matchIPSetsAll(ids []string, req *requestCache, addr *envoy_api_v2_core.Add
 }
 
 // matchIPSetsNotAny returns true if the address does not match any of the ipset ids, false otherwise.
-func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2_core.Address) bool {
+func matchIPSetsNotAny(ids []string, req *requestCache, addr *core.Address) bool {
 	for _, id := range ids {
 		s := req.GetIPSet(id)
 		if s.ContainsAddress(addr) {
@@ -235,7 +235,7 @@ func matchIPSetsNotAny(ids []string, req *requestCache, addr *envoy_api_v2_core.
 	return true
 }
 
-func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, req *requestCache, addr *envoy_api_v2.Address) bool {
+func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, req *requestCache, addr *core.Address) bool {
 	log.WithFields(log.Fields{
 		"ranges":        ranges,
 		"namedPortSets": namedPortSets,
@@ -260,7 +260,7 @@ func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, re
 	return false
 }
 
-func matchNet(dir string, nets []string, addr *envoy_api_v2.Address) bool {
+func matchNet(dir string, nets []string, addr *core.Address) bool {
 	log.WithFields(log.Fields{
 		"nets": nets,
 		"addr": addr,
