@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/i
 
 ## Prerequisites
 
-- [Install calicoctl as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary).
+- [Install calicoctl as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary-on-a-single-host).
 
 - [Configure calicoctl to connect to etcd](/{{page.version}}/usage/calicoctl/configure/).
 

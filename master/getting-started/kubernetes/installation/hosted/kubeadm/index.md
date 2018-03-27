@@ -42,4 +42,4 @@ To install {{site.prodname}}, configured to use the Kubernetes API as its sole d
 ## Using calicoctl in a kubeadm cluster
 
 The simplest way to use calicoctl in kubeadm is by running it as a pod.
-See [Installing calicoctl as a container](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-container) for more information.
+See [Installing calicoctl](/{{page.version}}/usage/calicoctl/install) for more information.
