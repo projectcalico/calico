@@ -164,21 +164,25 @@ const (
 	StatusBad = 503
 )
 
-// ServeHTTP publishes the current overall liveness and readiness at http://*:PORT/liveness and
-// http://*:PORT/readiness respectively.  A GET request on those URLs returns StatusGood or
+// ServeHTTP publishes the current overall liveness and readiness at http://HOST:PORT/liveness and
+// http://HOST:PORT/readiness respectively.  A GET request on those URLs returns StatusGood or
 // StatusBad, according to the current overall liveness or readiness.  These endpoints are designed
 // for use by Kubernetes liveness and readiness probes.
-func (aggregator *HealthAggregator) ServeHTTP(enabled bool, port int) {
+func (aggregator *HealthAggregator) ServeHTTP(enabled bool, host string, port int) {
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 	if enabled {
+		logCxt := log.WithFields(log.Fields{
+			"host": host,
+			"port": port,
+		})
 		if aggregator.httpServer != nil {
-			log.WithField("port", port).Info("Health enabled.  Server is already running.")
+			logCxt.Info("Health enabled.  Server is already running.")
 			return
 		}
-		log.WithField("port", port).Info("Health enabled.  Starting server.")
+		logCxt.Info("Health enabled.  Starting server.")
 		aggregator.httpServer = &http.Server{
-			Addr:    fmt.Sprintf(":%v", port),
+			Addr:    fmt.Sprintf("%s:%v", host, port),
 			Handler: aggregator.httpServeMux,
 		}
 		go func() {
