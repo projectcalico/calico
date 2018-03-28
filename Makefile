@@ -337,7 +337,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
 
 # Build all the debs.
 .PHONY: deb
-deb: dist/calico-felix/calico-felix
+deb: bin/calico-felix
 ifeq ($(GIT_COMMIT),<unknown>)
 	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
 endif
@@ -347,7 +347,7 @@ endif
 
 # Build RPMs.
 .PHONY: rpm
-rpm: dist/calico-felix/calico-felix
+rpm: bin/calico-felix
 ifeq ($(GIT_COMMIT),<unknown>)
 	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
 endif
@@ -404,6 +404,7 @@ LDFLAGS:=-ldflags "\
         -B 0x$(BUILD_ID)"
 
 bin/calico-felix: bin/calico-felix-$(ARCH)
+	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
 bin/calico-felix-$(ARCH): $(FELIX_GO_FILES) vendor/.up-to-date
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
