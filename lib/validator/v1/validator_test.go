@@ -159,6 +159,62 @@ func init() {
 			Protocol:    &protoTCP,
 			NotDstPorts: badPorts,
 		}, false),
+		Entry("should accept original source selector (m)", model.Rule{
+			OriginalSrcSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original destination selector (m)", model.Rule{
+			OriginalDstSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original source namespace selector (m)", model.Rule{
+			OriginalSrcNamespaceSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original destination namespace selector (m)", model.Rule{
+			OriginalDstNamespaceSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original not source selector (m)", model.Rule{
+			OriginalNotSrcSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original not destination selector (m)", model.Rule{
+			OriginalNotDstSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original source service account selector (m)", model.Rule{
+			OriginalSrcServiceAccountSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept original destination service account selector (m)", model.Rule{
+			OriginalDstServiceAccountSelector: "app == 'sandwich'",
+		}, true),
+		Entry("should accept named source service accounts (m)", model.Rule{
+			SrcSelector:                    "projectcalico.org/serviceaccount in {\"summary\"}",
+			OriginalSrcServiceAccountNames: []string{"summary"},
+		}, true),
+		Entry("should accept named destination service accounts (m)", model.Rule{
+			DstSelector:                    "projectcalico.org/serviceaccount in {\"summary\"}",
+			OriginalDstServiceAccountNames: []string{"summary"},
+		}, true),
+		Entry("should reject original source selector with error (m)", model.Rule{
+			OriginalSrcSelector: "not a selector",
+		}, false),
+		Entry("should reject original destination selector with error (m)", model.Rule{
+			OriginalDstSelector: "not a selector",
+		}, false),
+		Entry("should reject original source namespace selector with error (m)", model.Rule{
+			OriginalSrcNamespaceSelector: "not a selector",
+		}, false),
+		Entry("should reject original destination namespace selector with error (m)", model.Rule{
+			OriginalDstNamespaceSelector: "not a selector",
+		}, false),
+		Entry("should reject original not source selector with error (m)", model.Rule{
+			OriginalNotSrcSelector: "not a selector",
+		}, false),
+		Entry("should reject original not destination selector with error (m)", model.Rule{
+			OriginalNotDstSelector: "not a selector",
+		}, false),
+		Entry("should reject original source service account selector with error (m)", model.Rule{
+			OriginalSrcServiceAccountSelector: "not a selector",
+		}, false),
+		Entry("should reject original destination service account selector with error (m)", model.Rule{
+			OriginalDstServiceAccountSelector: "not a selector",
+		}, false),
 
 		// (Backend model) EndpointPorts.
 		Entry("should accept EndpointPort with tcp protocol (m)", model.EndpointPort{
