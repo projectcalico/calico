@@ -191,6 +191,30 @@ func init() {
 			DstSelector:                    "projectcalico.org/serviceaccount in {\"summary\"}",
 			OriginalDstServiceAccountNames: []string{"summary"},
 		}, true),
+		Entry("should reject original source selector with error (m)", model.Rule{
+			OriginalSrcSelector: "not a selector",
+		}, false),
+		Entry("should reject original destination selector with error (m)", model.Rule{
+			OriginalDstSelector: "not a selector",
+		}, false),
+		Entry("should reject original source namespace selector with error (m)", model.Rule{
+			OriginalSrcNamespaceSelector: "not a selector",
+		}, false),
+		Entry("should reject original destination namespace selector with error (m)", model.Rule{
+			OriginalDstNamespaceSelector: "not a selector",
+		}, false),
+		Entry("should reject original not source selector with error (m)", model.Rule{
+			OriginalNotSrcSelector: "not a selector",
+		}, false),
+		Entry("should reject original not destination selector with error (m)", model.Rule{
+			OriginalNotDstSelector: "not a selector",
+		}, false),
+		Entry("should reject original source service account selector with error (m)", model.Rule{
+			OriginalSrcServiceAccountSelector: "not a selector",
+		}, false),
+		Entry("should reject original destination service account selector with error (m)", model.Rule{
+			OriginalDstServiceAccountSelector: "not a selector",
+		}, false),
 
 		// (Backend model) EndpointPorts.
 		Entry("should accept EndpointPort with tcp protocol (m)", model.EndpointPort{
