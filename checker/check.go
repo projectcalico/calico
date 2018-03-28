@@ -117,7 +117,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				s.Code = PERMISSION_DENIED
 				return
 			case LOG:
-				panic("profile should never return LOG action")
+				log.Panic("profile should never return LOG action")
 			}
 		}
 	} else {
@@ -163,7 +163,7 @@ func actionFromString(s string) Action {
 	a, found := m[strings.ToLower(s)]
 	if !found {
 		log.Errorf("Got bad action %v", s)
-		panic("got bad action")
+		log.Panic("got bad action")
 	}
 	return a
 }
