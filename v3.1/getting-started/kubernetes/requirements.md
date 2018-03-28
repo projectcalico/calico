@@ -10,9 +10,9 @@ canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/r
 #### Supported versions
 
 We test {{site.prodname}} {{page.version}} against the following Kubernetes versions.
-- 1.7
 - 1.8
 - 1.9
+- 1.10
 
 Other versions are likely to work, but we do not actively test {{site.prodname}} 
 {{page.version}} against them.
