@@ -3,7 +3,7 @@ title: Configuring BGP Peers
 canonical_url: 'https://docs.projectcalico.org/v3.0/usage/configuration/bgp'
 ---
 
-This document describes the commands available in `calicoctl` for managing BGP.  It
+This document describes the commands available in `calicoctl` for managing BGP. It
 is intended primarily for users who are running on private cloud
 and would like to peer Calico with their underlying infrastructure.
 
@@ -93,6 +93,30 @@ number, the command will output the current value.
 	$ calicoctl config get asNumber
 	64513
 
+To get the node configuration:
+
+	$ calicoctl get node kube-node1 -o yaml
+	- apiVersion: v1
+	  kind: node
+	  metadata:
+	    name: kube-node1
+	  spec:
+	    bgp:
+	      ipv4Address: 172.31.3.11/32
+
+To set the local AS number to use for the node (just copy the retrieved 
+configuration and add `asNumber` key under `spec/bgp`:
+
+	$ calicoctl apply -f - <<EOF
+	- apiVersion: v1
+	  kind: node
+	  metadata:
+	    name: kube-node1
+	  spec:
+	    bgp:
+	      asNumber: 65011
+	      ipv4Address: 172.31.3.11/32
+	EOF
 
 ### Disabling the full node-to-node BGP mesh
 
