@@ -163,48 +163,6 @@ On each control node, perform the following steps:
 
 On each compute node, perform the following steps:
 
-1.  Make changes to SELinux and QEMU config to allow VM interfaces with
-    `type='ethernet'` ([this libvirt Wiki
-    page](https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface))
-    explains why these changes are required):
-
-    ```
-    setenforce permissive
-    ```
-
-    Edit `/etc/selinux/config` and change the `SELINUX=` line to the
-    following:
-
-    ```
-    SELINUX=permissive
-    ```
-
-    In `/etc/libvirt/qemu.conf`, add or edit the following four options:
-
-    ```
-    clear_emulator_capabilities = 0
-    user = "root"
-    group = "root"
-    cgroup_device_acl = [
-        "/dev/null", "/dev/full", "/dev/zero",
-        "/dev/random", "/dev/urandom",
-        "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
-        "/dev/rtc", "/dev/hpet", "/dev/net/tun",
-    ]
-    ```
-
-
-    > **Note**: The `cgroup_device_acl` entry is subtly different than the
-    > default. It now contains `/dev/net/tun`.
-    >
-    {: .alert .alert-info}
-
-    Then restart libvirt to pick up the changes:
-
-    ```
-    service libvirtd restart
-    ```
-
 1.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
