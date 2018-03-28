@@ -60,11 +60,12 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 
 		tier := ep.Tiers[0]
 		policies := tier.IngressPolicies
+		action := NO_MATCH
 	Policy:
 		for i, name := range policies {
 			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
-			action := checkPolicy(policy, reqCache)
+			action = checkPolicy(policy, reqCache)
 			log.WithFields(log.Fields{
 				"ordinal":  i,
 				"PolicyID": pID,
@@ -87,8 +88,15 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				panic("policy should never return LOG action")
 			}
 		}
+		// Done evaluating policies in the tier. If no policy rules have matched, there is an implicit default deny
+		// at the end of the tier.
+		if action == NO_MATCH {
+			log.Debug("No policy matched. Tier default DENY applies.")
+			s.Code = PERMISSION_DENIED
+			return
+		}
 	}
-	// If we reach here, there were either no policies, or none that matched.
+	// If we reach here, there were either no tiers, or a policy PASSed the request.
 	if len(ep.ProfileIds) > 0 {
 		for i, name := range ep.ProfileIds {
 			pID := proto.ProfileID{Name: name}
@@ -109,7 +117,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				s.Code = PERMISSION_DENIED
 				return
 			case LOG:
-				panic("profile should never return LOG action")
+				log.Panic("profile should never return LOG action")
 			}
 		}
 	} else {
@@ -155,7 +163,7 @@ func actionFromString(s string) Action {
 	a, found := m[strings.ToLower(s)]
 	if !found {
 		log.Errorf("Got bad action %v", s)
-		panic("got bad action")
+		log.Panic("got bad action")
 	}
 	return a
 }
