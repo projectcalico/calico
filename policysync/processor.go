@@ -210,8 +210,7 @@ func (p *Processor) handleDataplane(update interface{}) {
 		p.handleIPSetRemove(update)
 	default:
 		log.WithFields(log.Fields{
-			"update": update,
-			"type":   reflect.TypeOf(update),
+			"type": reflect.TypeOf(update),
 		}).Warn("Unhandled update")
 	}
 }
