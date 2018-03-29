@@ -1,6 +1,6 @@
 ---
 title: AWS
-canonical_url: 'https://docs.projectcalico.org/v3.0/reference/public-cloud/aws'
+canonical_url: https://docs.projectcalico.org/v3.0/reference/public-cloud/aws
 ---
 
 {{site.prodname}} provides the following advantages when running in AWS:
@@ -9,38 +9,19 @@ canonical_url: 'https://docs.projectcalico.org/v3.0/reference/public-cloud/aws'
 - **No Overlays**: Within each VPC subnet {{site.prodname}} doesn't need an overlay, which means high performance networking for your containers.
 - **No 50 Node Limit**: {{site.prodname}} allows you to surpass the 50 node limit, which exists as a consequence of the [AWS 50 route limit](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Appendix_Limits.html#vpc-limits-route-tables) when using the VPC routing table.
 
-## Requirements
-
-To deploy {{site.prodname}} in AWS, you must ensure that the proper security group rules
-have been made and that traffic between containers on different hosts is not
-dropped by the VPC. There are a few different options for doing this depending
-on your deployment.
-
-#### Configure Security Groups
-
-{{site.prodname}} requires the following security group exceptions to function properly
-in AWS.
-
-| Description   | Type            | Protocol | Port Range |
-|:--------------|:----------------|:---------|:-----------|
-| BGP           | Custom TCP Rule | TCP      | 179        |
-| IPIP*         | Custom Protocol | IPIP     | all        |
-
-\* The IPIP exception is required only when using {{site.prodname}} with IPIP encapsulation. Keep reading 
-for information on when IPIP is required in AWS.
-
-#### Routing Traffic Within a Single VPC Subnet
+## Routing traffic within a single VPC subnet
 
 Since {{site.prodname}} assigns IP addresses outside the range used by AWS for EC2 instances, you must disable AWS src/dst
 checks on each EC2 instance in your cluster
 [as described in the AWS documentation](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck).  This
 allows {{site.prodname}} to route traffic natively within a single VPC subnet without using an overlay or any of the limited VPC routing table entries.
 
-#### Routing Traffic Across Different VPC Subnets / VPCs
+## Routing traffic across different VPC subnets / VPCs
 
 If you need to split your deployment across multiple AZs for high availability then each AZ will have its own VPC subnet.  To
 use {{site.prodname}} across multiple different VPC subnets or [peered VPCs](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/vpc-peering.html),
-in addition to disabling src/dst checks as described above you must also enable IPIP encapsulation and outgoing NAT on your {{site.prodname}} IP pools.
+in addition to disabling src/dst checks as described above you must also enable IPIP encapsulation and outgoing NAT
+on your {{site.prodname}} IP pools.
 
 See the [IP pool configuration reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
 for information on how to configure {{site.prodname}} IP pools.
@@ -52,8 +33,8 @@ performance, you can configure {{site.prodname}} to perform IPIP encapsulation o
 To enable the "CrossSubnet" IPIP feature, configure your {{site.prodname}} IP pool resources
 to enable IPIP and set the mode to "CrossSubnet".
 
-> **Note**: This feature was introduced in Calico v2.1, if your deployment was created with
-> an older version of Calico, or if you if you are unsure whether your deployment
+> **Note**: This feature was introduced in {{site.prodname}} v2.1, if your deployment was created with
+> an older version of {{site.prodname}}, or if you if you are unsure whether your deployment
 > is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip)
 > which discusses this in more detail.
 >
@@ -66,15 +47,15 @@ CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet`. Adjust the pool CIDR for your
 $ calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
-  metadata:
-    name: ippool-cs-1
-  spec:
+metadata:
+  name: ippool-cs-1
+spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
 EOF
 ```
 
-#### Enabling Workload-to-WAN Traffic
+## Enabling workload-to-WAN traffic
 
 To allow {{site.prodname}} networked containers to reach resources outside of AWS,
 you must configure outgoing NAT on your [{{site.prodname}} IP pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
@@ -91,9 +72,9 @@ Adjust the pool CIDR for your deployment.
 $ calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
-  metadata:
-    name: ippool-1
-  spec:
+metadata:
+  name: ippool-1
+spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
   natOutgoing: true

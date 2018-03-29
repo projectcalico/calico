@@ -1,427 +1,322 @@
 ---
-title: Ubuntu Packaged Install Instructions
+title: Ubuntu packaged install instructions
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/ubuntu'
 ---
 
-For this version of {{site.prodname}}, with OpenStack on Ubuntu Trusty or Xenial, we
-recommend using OpenStack Liberty or later; Kilo is also known to work on
-Ubuntu Trusty.
+These instructions will take you through a first-time install of
+{{site.prodname}}.  If you are upgrading an existing system, please see
+[{{site.prodname}} on OpenStack
+upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
+instead.
 
-These instructions will take you through a first-time install of {{site.prodname}} using
-the latest packages on a system running Ubuntu 14.04 (Trusty) or 16.04
-(Xenial). If you are upgrading an existing system, please see [this
-document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
-instead for upgrade instructions.
+There are three sections to the install: installing etcd, adding
+{{site.prodname}} to OpenStack control nodes, and adding {{site.prodname}} to
+OpenStack compute nodes.  Follow the [Common steps](#common-steps) on each node
+before moving on to the specific instructions in the control and compute
+sections. If you want to create a combined control and compute node, work
+through all three sections.
 
-There are three sections to the install: installing etcd, upgrading
-control nodes to use {{site.prodname}}, and upgrading compute nodes to use {{site.prodname}}.
-The [Common Steps](#common-steps) must be followed on each node before moving onto
-the specific instructions in those sections.
+## Before you begin
 
-## Prerequisites
+- Ensure that you meet the [requirements](../requirements).
+- Confirm that you have SSH access to and root privileges on one or more Ubuntu hosts
+  (your OpenStack compute or control nodes).
+- [Install OpenStack with Neutron and ML2 networking](http://docs.openstack.org)
+  on the Ubuntu hosts.
 
-Before starting this you will need the following:
-
--   One or more machines running Ubuntu (these will be installed
-    as your OpenStack compute or control nodes).
--   SSH access to these machines.
--   Root access on those machines.  All of the commands shown below should be
-    run as root.
-
-## Common Steps
+## Common steps
 
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
 These steps are detailed in this section.
 
-### Install OpenStack
-
-If you haven't already done so, you should install OpenStack with
-Neutron and ML2 networking. Instructions for installing OpenStack can be
-found at <http://docs.openstack.org>.
-
-### Configuring APT software sources
-
 {% include ppa_repo_name %}
 
-Configure APT to use the {{site.prodname}} PPA:
+1.  Configure APT to use the {{site.prodname}} PPA:
 
-```
+    ```
     add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
-```
+    ```
 
-With Kilo, {{site.prodname}} also needs patched versions of Nova and Neutron that are
-provided by our 'kilo' PPA.  So if you are using Kilo:
+1.  Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
+    fixes to BIRD that are not yet available in Ubuntu. To add the PPA, run:
 
-```
-    add-apt-repository ppa:project-calico/kilo
-```
-
-and also edit `/etc/apt/preferences` to add the following lines, whose effect
-is to prefer the {{site.prodname}}-provided packages for Nova and Neutron even if later
-versions of those packages are released by Ubuntu.
-
-```
-    Package: *
-    Pin: release o=LP-PPA-project-calico-*
-    Pin-Priority: 1001
-```
-
-### Common
-
-You will also need to add the official [BIRD](http://bird.network.cz/)
-PPA. This PPA contains fixes to BIRD that are not yet available in Ubuntu. To
-add the PPA, run:
-
-```
+    ```
     add-apt-repository ppa:cz.nic-labs/bird
-```
+    ```
 
-Once that's done, update your package manager on each machine:
+1. Update your package manager on each machine:
 
-```
+    ```
     apt-get update
-```
-
-## Etcd Install
-
-{{site.prodname}} requires an etcd database to operate -- this may be installed on
-a single machine or as a cluster.
-
-These instructions cover installing a single node etcd database. You may
-wish to co-locate this with your control node. If you want to install a
-cluster, please get in touch with us and we'll be happy to help you
-through the process.
-
-1.  Install the `etcd` packages:
-
     ```
-        apt-get install etcd python-etcd
-    ```
-
-2.  Stop the etcd service: :
-
-    ```
-        service etcd stop
-    ```
-
-3.  Delete any existing etcd database: :
-
-    ```
-        rm -rf /var/lib/etcd/*
-    ```
-
-4.  Mount a RAM disk at /var/lib/etcd: :
-
-    ```
-        mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
-    ```
-
-5.  Add the following to the bottom of `/etc/fstab` so that the RAM disk
-    gets reinstated at boot time:
-
-    ```
-        tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
-    ```
-
-6.  Edit `/etc/init/etcd.conf`:
-    -   Find the line which begins `exec /usr/bin/etcd` and edit it,
-        substituting for `<controller_fqdn>` and
-        `<controller_ip>` appropriately.
-
-        ```
-            exec /usr/bin/etcd --name="<controller_fqdn>"  \
-                               --advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
-                               --listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"  \
-                               --listen-peer-urls "http://0.0.0.0:2380"  \
-                               --initial-advertise-peer-urls "http://<controller_ip>:2380"  \
-                               --initial-cluster-token $(uuidgen)  \
-                               --initial-cluster "<controller_fqdn>=http://<controller_ip>:2380"  \
-                               --initial-cluster-state "new"
-        ```
-
-7.  Start the etcd service: :
-
-    ```
-        service etcd start
-    ```
-
-## Etcd Proxy Install
-
-Install an etcd proxy on every node running OpenStack services that
-isn't running the etcd database itself (both control and compute nodes).
-
-1.  Install the `etcd` and `python-etcd` packages:
-
-    ```
-        apt-get install etcd python-etcd
-    ```
-
-2.  Stop the etcd service: :
-
-    ```
-        service etcd stop
-    ```
-
-3.  Delete any existing etcd database: :
-
-    ```
-        rm -rf /var/lib/etcd/*
-    ```
-
-4.  Edit `/etc/init/etcd.conf`:
-    -   Find the line which begins `exec /usr/bin/etcd` and edit it,
-        substituting for `<etcd_fqdn>` and `<etcd_ip>` appropriately:
-
-        ```
-            exec /usr/bin/etcd --proxy on                                             \
-                               --initial-cluster "<etcd_fqdn>=http://<etcd_ip>:2380"  \
-        ```
-
-5.  Start the etcd service:
-
-    ```
-        service etcd start
-    ```
-
-## Control Node Install
-
-On each control node ensure etcd or an etcd proxy is installed, and then
-perform the following steps:
-
-1.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
-    will bring in {{site.prodname}}-specific updates to the OpenStack packages and
-    to `dnsmasq`. (OpenStack updates are not needed for Liberty.)
 
 1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver but not yet
-    packaged for Ubuntu, so you should install it with `pip`.  First check in
-    case it has already been pulled in by your OpenStack installation.
+    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver
+    and DHCP agent, but is not yet packaged for Ubuntu, so you should install
+    it with `pip`.  First check in case it has already been pulled in by your
+    OpenStack installation.
 
     ```
-        find /usr/lib/python2.7/ -name etcd3gw
+    find /usr/lib/python2.7/ -name etcd3gw
     ```
 
     If you see no output there, install `etcd3gw` with pip.
 
     ```
-        apt-get install -y python-pip
-        pip install etcd3gw
+    apt-get install -y python-pip
+    pip install etcd3gw
     ```
+
+## etcd install
+
+{{site.prodname}} operation requires an etcd v3 key/value store—this may be
+installed on a single machine or as a cluster.  For production you will likely
+want multiple nodes for greater performance and reliability; please refer to
+[the upstream etcd docs](https://coreos.com/etcd/) for detailed advice and
+setup.
+
+etcd v3 is not packaged for Ubuntu Trusty or Xenial, so to install an etcd
+server we suggest one of the following:
+
+- Download the etcd binary from the [official etcd release
+  page](https://github.com/coreos/etcd/releases/), and run it as shown by the
+  instructions there.
+
+- [Running etcd as a container under
+  Docker](https://coreos.com/etcd/docs/latest/op-guide/container.html#docker).
+
+## Control node install
+
+On each control node ensure etcd or an etcd proxy is installed, and then
+perform the following steps.
+
+1.  Delete all configured OpenStack state, in particular any instances,
+    routers, subnets and networks (in that order) created by the install
+    process referenced above. You can do this using the web dashboard or
+    at the command line.
+
+    > **Tip**: The Admin and Project sections of the web dashboard both
+    > have subsections for networks and routers. Some networks may
+    > need to be deleted from the Admin section.
+    {: .alert .alert-success}
+
+    > **Important**: The {{site.prodname}} install will fail if incompatible state is
+    > left around.
+    {: .alert .alert-danger}
+
+1.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
+    bring in {{site.prodname}}-specific updates to the OpenStack packages and
+    to `dnsmasq`.
+
+1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section, find
+    the line beginning with `core_plugin`, and change it to read `core_plugin =
+    calico`.  Also remove any existing setting for `service_plugins`.
 
 1.  Install the `calico-control` package:
 
     ```
-        apt-get install calico-control
+    apt-get install -y calico-control
     ```
-
-1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
-    section:
-    -   Find the line beginning with `core_plugin`, and change it to
-        read `core_plugin = calico`.
-
-1.  With OpenStack releases earlier than Liberty, edit the
-    `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section:
-    -   Find the line for the `dhcp_agents_per_network` setting,
-        uncomment it, and set its value to the number of compute nodes
-        that you will have (or any number larger than that). This allows
-        a DHCP agent to run on every compute node, which {{site.prodname}} requires
-        because the networks on different compute nodes are not
-        bridged together.
 
 1.  Restart the Neutron server process:
 
     ```
-        service neutron-server restart
+    service neutron-server restart
     ```
 
-## Compute Node Install
+## Compute node install
 
-On each compute node ensure etcd or an etcd proxy is installed, and then
-perform the following steps:
+On each compute node, perform the following steps:
 
-1.  Make the changes to SELinux and QEMU config that are described in
-    [this libvirt Wiki page](https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface)),
-    to allow VM interfaces with `type='ethernet'`.
+1.  Make changes to SELinux and QEMU config to allow VM interfaces with
+    `type='ethernet'` ([this libvirt Wiki
+    page](https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface))
+    explains why these changes are required):
 
     Disable SELinux if it's running. SELinux isn't installed by default
-    on Ubuntu -- you can check its status by running `sestatus`. If this
+    on Ubuntu. You can check its status by running `sestatus`. If this
     is installed and the current mode is `enforcing`, then disable it by
     running `setenforce permissive` and setting `SELINUX=permissive` in
     `/etc/selinux/config`.
 
-    In `/etc/libvirt/qemu.conf`, add or edit the following four options
-    (in particular note the `/dev/net/tun` in `cgroup_device_acl`):
+    In `/etc/libvirt/qemu.conf`, add or edit the following four options:
 
     ```
-        clear_emulator_capabilities = 0
-        user = "root"
-        group = "root"
-        cgroup_device_acl = [
-             "/dev/null", "/dev/full", "/dev/zero",
-             "/dev/random", "/dev/urandom",
-             "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
-             "/dev/rtc", "/dev/hpet", "/dev/net/tun",
-        ]
+    clear_emulator_capabilities = 0
+    user = "root"
+    group = "root"
+    cgroup_device_acl = [
+        "/dev/null", "/dev/full", "/dev/zero",
+        "/dev/random", "/dev/urandom",
+        "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
+        "/dev/rtc", "/dev/hpet", "/dev/net/tun",
+    ]
     ```
+
+
+    > **Note**: The `cgroup_device_acl` entry is subtly different than the
+    > default. It now contains `/dev/net/tun`.
+    >
+    {: .alert .alert-info}
 
     Then restart libvirt to pick up the changes:
 
     ```
-        service libvirt-bin restart
+    service libvirt-bin restart
     ```
 
-2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
+1.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
     ```
-        linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
+    linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
-    Remove the lines from the \[neutron\] section setting
+    Remove the lines from the `[neutron]` section setting
     `service_neutron_metadata_proxy` or `service_metadata_proxy` to
     `True`, if there are any.
 
     Restart nova compute.
 
     ```
-        service nova-compute restart
+    service nova-compute restart
     ```
 
-3.  If they're running, stop the Open vSwitch services:
+1.  If they're running, stop the Open vSwitch services:
 
     ```
-        service openvswitch-switch stop
-        service neutron-plugin-openvswitch-agent stop
+    service openvswitch-switch stop
+    service neutron-plugin-openvswitch-agent stop
     ```
 
     Then, prevent the services running if you reboot:
 
     ```
-        sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
-        sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
-        sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
+    sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
+    sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
+    sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
     ```
 
     Then, on your control node, run the following command to find the
     agents that you just stopped:
 
     ```
-        neutron agent-list
+    neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
     control node, replacing `<agent-id>` with the ID of the agent:
 
     ```
-        neutron agent-delete <agent-id>
+    neutron agent-delete <agent-id>
     ```
 
-4.  Install some extra packages:
+1.  Install some extra packages:
 
     ```
-        apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
+    apt-get install -y neutron-common neutron-dhcp-agent nova-api-metadata
     ```
 
-5.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
-    will bring in {{site.prodname}}-specific updates to the OpenStack packages and
-    to `dnsmasq`. For OpenStack Liberty, this step only upgrades
-    `dnsmasq`.
+1.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
+    bring in {{site.prodname}}-specific updates to the OpenStack packages and
+    to `dnsmasq`.
 
-    > **Important**: Check the version of libvirt-bin that is installed using
-    > `dpkg -s libvirt-bin`. For Kilo, the version of libvirt-bin
-    > should be at least `1.2.12-0ubuntu13`. This will become part
-    > of the standard Ubuntu Kilo repository, but at the time of
-    > writing needs to be installed as follows:
-    >
-    > `$ sudo add-apt-repository cloud-archive:kilo-proposed`
-    >
-    > `$ sudo apt-get update`
-    >
-    > `$ sudo apt-get upgrade`
-    >
-    {: .alert .alert-danger}
-
-
-6.  If you're using OpenStack Kilo, open `/etc/neutron/dhcp_agent.ini` in your
-    preferred text editor, and set the following in the `[DEFAULT]` section:
+1.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
+    ensure that the `lock_path` variable is uncommented and set as follows.
 
     ```
-        interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
+    # Directory to use for lock files. For security, the specified directory should
+    # only be writable by the user running the processes that need locking.
+    # Defaults to environment variable OSLO_LOCK_PATH. If external locks are used,
+    # a lock path must be set.
+    lock_path = $state_path/lock
     ```
 
-    and then restart the DHCP agent:
+    Add a `[calico]` section with the following content, where `<ip>` is the IP
+    address of the etcd server.
 
     ```
-        service neutron-dhcp-agent restart
+    [calico]
+    etcd_host = <ip>
     ```
 
-    For OpenStack Liberty and later, install the {{site.prodname}} DHCP agent
-    (which uses etcd, allowing it to scale to higher numbers of hosts)
-    and disable the Neutron-provided one:
+1.  Install the {{site.prodname}} DHCP agent (which uses etcd, allowing
+    it to scale to higher numbers of hosts) and disable the Neutron-provided
+    one:
 
     ```
-        service neutron-dhcp-agent stop
-        echo manual | tee /etc/init/neutron-dhcp-agent.override
-        apt-get install calico-dhcp-agent
+    service neutron-dhcp-agent stop
+    echo manual | tee /etc/init/neutron-dhcp-agent.override
+    apt-get install -y calico-dhcp-agent
     ```
 
-7.  Install the `calico-compute` package:
+1.  Install the `calico-compute` package:
 
     ```
-        apt-get install calico-compute
+    apt-get install -y calico-compute
     ```
 
-    This step may prompt you to save your IPTables rules to make them
+    This step may prompt you to save your iptables rules to make them
     persistent on restart -- hit yes.
 
-8.  Configure BIRD. By default {{site.prodname}} assumes that you'll be deploying a
-    route reflector to avoid the need for a full BGP mesh. To this end,
-    it includes useful configuration scripts that will prepare a BIRD
-    config file with a single peering to the route reflector. If that's
-    correct for your network, you can run either or both of the
-    following commands.
+1.  Configure BIRD. By default {{site.prodname}} assumes that you will deploy a
+    route reflector to avoid the need for a full BGP mesh. To this end, it
+    includes configuration scripts to prepare a BIRD config file with a single
+    peering to the route reflector. If that's correct for your network, you can
+    run either or both of the following commands.
 
     For IPv4 connectivity between compute hosts:
 
     ```
-        calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
+    calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
     ```
 
     And/or for IPv6 connectivity between compute hosts:
 
     ```
-        calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
+    calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
-    Note that you'll also need to configure your route reflector to
-    allow connections from the compute node as a route reflector client.
-    If you are using BIRD as a route reflector, follow the instructions
-    [here]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If you are using another route reflector, refer
-    to the appropriate instructions to configure a client connection.
+    You also need to configure your route reflector to allow connections from
+    the compute node as a route reflector client.  If you are using BIRD as a
+    route reflector, follow the instructions
+    [here]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If
+    you are using another route reflector, refer to the appropriate
+    instructions to configure a client connection.
 
-    If you *are* configuring a full BGP mesh you'll need to handle the
-    BGP configuration appropriately on each compute host. The scripts
-    above can be used to generate a sample configuration for BIRD, by
-    replacing the `<route_reflector_ip>` with the IP of one other
-    compute host -- this will generate the configuration for a single
-    peer connection, which you can duplicate and update for each compute
-    host in your mesh.
+    If you *are* configuring a full BGP mesh you need to handle the BGP
+    configuration appropriately on each compute host. The scripts above can be
+    used to generate a sample configuration for BIRD, by replacing the
+    `<route_reflector_ip>` with the IP of one other compute host -- this will
+    generate the configuration for a single peer connection, which you can
+    duplicate and update for each compute host in your mesh.
 
     To maintain connectivity between VMs if BIRD crashes or is upgraded,
     configure BIRD graceful restart:
 
-    -   Add -R to BIRD\_ARGS in /etc/bird/envvars (you may need to
+    -   Add `-R` to `BIRD_ARGS` in /etc/bird/envvars (you may need to
         uncomment this option).
-    -   Edit the upstart jobs /etc/init/bird.conf and bird6.conf ()if
+    -   Edit the upstart jobs /etc/init/bird.conf and bird6.conf (if
         you're using IPv6), and add the following script to it.
 
         ```
-            pre-stop script
-            PID=`status bird | egrep -oi '([0-9]+)$' | head -n1`
-            kill -9 $PID
-            end script
+        pre-stop script
+        PID=`status bird | egrep -oi '([0-9]+)$' | head -n1`
+        kill -9 $PID
+        end script
         ```
 
-9.  Create the `/etc/calico/felix.cfg` file by taking a copy of the
-    supplied sample config at `/etc/calico/felix.cfg.example`.
-10. Restart the Felix service with `service calico-felix restart`.
+1.  Create `/etc/calico/felix.cfg` with the following content, where `<ip>` is the IP
+    address of the etcd server.
+
+    ```
+    [global]
+    DatastoreType = etcdv3
+    EtcdAddr = <ip>:2379
+    ```
+
+1.  Restart the Felix service.
+
+    ```
+    service calico-felix restart
+    ```

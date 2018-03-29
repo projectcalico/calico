@@ -16,5 +16,5 @@ as a pod.
 In other environments, use the following command.
 
 ```
-docker pull {{site.imageNames["calicoctl"]}}:{{site.data.versions[page.version].first.title}}
+docker pull {{site.imageNames["calicoctl"]}}:{{site.data.versions[page.version].first.components["calicoctl"].version}}
 ```

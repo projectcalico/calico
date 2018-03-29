@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/i
 There are a number of solutions for deploying {{site.prodname}} and Kubernetes on GCE.  We recommend taking
 a look at the following solutions and guides which install {{site.prodname}} for networking and network policy on GCE.
 
-Make sure you've read the [{{site.prodname}} GCE reference guide][gce-reference] for details on how to configure {{site.prodname}} and GCE.
+Make sure you've read the [GCE configuration guide](../../../reference/public-cloud/gce) for details on how to configure {{site.prodname}} and GCE.
 
 #### Popular guides and tools
 
@@ -32,4 +32,3 @@ on GCE using one of our [self-hosted manifests][self-hosted], or by [integrating
 [typhoon]: https://typhoon.psdn.io/
 [self-hosted]: hosted
 [integration-guide]: integration
-[gce-reference]: {{site.baseurl}}/{{page.version}}/reference/public-cloud/gce

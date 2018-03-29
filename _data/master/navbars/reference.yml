@@ -89,15 +89,15 @@ toc:
   path: /reference/cni-plugin/configuration
 - title: Calico Kubernetes Controllers
   path: /reference/kube-controllers/configuration
-- title: Deploying on Public Cloud
+- title: Configuration on public clouds
   section:
-    - title: AWS
+    - title: Amazon Web Services
       path: /reference/public-cloud/aws
     - title: Azure
       path: /reference/public-cloud/azure
-    - title: GCE
+    - title: Google Compute Engine
       path: /reference/public-cloud/gce
-- title: Deploying on Private Cloud
+- title: Network design
   section:
     - title: Calico Over Ethernet Fabrics
       path: /reference/private-cloud/l2-interconnect-fabric
@@ -128,8 +128,6 @@ toc:
         path: /reference/advanced/etcd-rbac/kubernetes-advanced
       - title: Etcd paths for Calico components
         path: /reference/advanced/etcd-rbac/calico-etcdv3-paths
-- title: System Requirements
-  path: /reference/requirements
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Get Involved

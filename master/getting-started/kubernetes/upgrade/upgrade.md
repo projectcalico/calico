@@ -14,8 +14,6 @@ and your datastore type.
 
 - [Upgrading a self-hosted installation that connects directly to an etcd datastore](#upgrading-a-self-hosted-installation-that-uses-the-etcd-datastore)
 
-- [Upgrading a custom installation](#upgrading-a-custom-installation)
-
 > **Important**: Do not use older versions of `calicoctl` after the upgrade.
 > This may result in unexpected behavior and data.
 {: .alert .alert-danger}
@@ -128,10 +126,4 @@ and your datastore type.
 1. Remove any existing `calicoctl` instances and install the new `calicoctl`.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
-
-## Upgrading a custom installation
-
-_Docs for this coming soon!_
-
-
 

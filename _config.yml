@@ -107,3 +107,8 @@ defaults:
       path: v3.0
     values:
       version: v3.0
+  -
+    scope:
+      path: v3.1
+    values:
+      version: v3.1

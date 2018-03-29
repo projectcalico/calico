@@ -31,6 +31,8 @@ toc:
     path: /usage/routereflector/calico-routereflector
 - title: Enabling IPv6 Support
   path: /usage/ipv6
+- title: Enabling IPVS in Kubernetes
+  path: /usage/enabling-ipvs
 - title: External Connectivity
   path: /usage/external-connectivity
 - title: Configuring IP-in-IP
