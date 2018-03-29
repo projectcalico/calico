@@ -145,7 +145,11 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
     def __init__(self, agent, hostname):
         workload_endpoint_prefix = datamodel_v3._build_key("WorkloadEndpoint",
                                                            "")
-        super(CalicoEtcdWatcher, self).__init__(workload_endpoint_prefix)
+        this_host_prefix = (workload_endpoint_prefix +
+                            hostname.replace('-', '--') +
+                            "-openstack-")
+
+        super(CalicoEtcdWatcher, self).__init__(this_host_prefix)
         self.agent = agent
         self.hostname = hostname
         self.suppress_dnsmasq_updates = False

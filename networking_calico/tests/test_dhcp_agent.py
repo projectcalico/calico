@@ -31,7 +31,6 @@ from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
-from networking_calico import datamodel_v3
 from networking_calico.etcdutils import EtcdWatcher
 
 LOG = logging.getLogger(__name__)
@@ -311,7 +310,10 @@ class TestDhcpAgent(base.BaseTestCase):
     def test_etcd_watchers_init_with_conf_values(self):
         agent = CalicoDhcpAgent()
         self.assertEqual(agent.etcd.prefix,
-                         datamodel_v3._build_key("WorkloadEndpoint", ""))
+                         "/calico/resources/v3/projectcalico.org/" +
+                         "workloadendpoints/openstack/" +
+                         self.hostname.replace('-', '--') +
+                         "-openstack-")
         self.assertEqual(agent.etcd.subnet_watcher.prefix,
                          datamodel_v1.SUBNET_DIR)
 
