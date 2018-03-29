@@ -1,5 +1,5 @@
-hash: 1d1b9864679c8405fbea6aa4685355456172d00a23ee21be05a2000509d94b3a
-updated: 2018-03-23T18:42:55.074422995Z
+hash: 1c56a150fe70632c3f836f4fcebaabc0a9ab54dd2ed16a47fd1c35ab0276776f
+updated: 2018-03-29T19:02:29.041099798Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -113,7 +113,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 59b4549305c9c7a81367b9ff34597ba8babea832
+  version: 4b54e7d2460df21c1c2d345af2337f91bfc938ca
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -205,7 +205,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: f94d044d5357e7d8939fec43efc14124408cd2b9
+  version: 88291609bbefd0fe22982a7a78ec51d63583a651
   subpackages:
   - lib
   - lib/apiconfig
@@ -244,7 +244,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: a496a8f1eeca7b15728bfd12b650333cf1dcb336
+  version: dc03572695e542d4e94a0ad2fb67570d9eec2e39
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -259,7 +259,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e4aa40a9169a88835b849a6efb71e05dc04b88f0
+  version: 38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -279,15 +279,15 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 41009d533ba0788a139b0b6ef38923a23b3766d3
+  version: 85aa3b74a43a9fa174a588ce9a042c9b71b0842c
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 88942b9c40a4c9d203b82b3731787b672d6e809b
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -342,7 +342,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
   subpackages:
   - internal
   - internal/app_identity
