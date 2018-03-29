@@ -1,18 +1,23 @@
 # Release process
 
 ## Resulting artifacts
+
 Creating a new release creates the following artifact
 * `calico/kube-controllers:$VERSION` container images (and the quay.io variant)
 
 ## Preparing for a release
-Ensure that the branch you want to release from (typically master) is in a good state.
+
+Ensure that the branch you want to release from is in a good state.
 e.g. Update any pins in glide.yaml, create PR, ensure tests pass and merge.
 
 You should have no local changes and tests should be passing.
 
 ## Creating the release
+
 1. Choose a version e.g. `v1.0.0`
-2. Create the release artifacts repositories `make release VERSION=v1.0.0`.
-3. Follow the instructions from `make release` to push the artifacts and git tag.
-4. Create a release on Github, using the tag which was just pushed.
+1. Create a tag: `make release-tag VERSION=v1.0.0`
+1. Create the artifacts: `make release-build VERSION=v1.0.0`
+1. Verify it: `make release-verify VERSION=v1.0.0`
+1. Publish images and create a GitHub release draft: `make release-publish VERSION=v1.0.0`
+1. Publish the GitHub release draft by following the link printed to screen.
 
