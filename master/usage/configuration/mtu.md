@@ -28,7 +28,7 @@ packet.
 #### Default MTU sizes
 
 The default MTU for workload interfaces is 1500, this is to match the most
-common network MTU size.  The default MTU for the IP-in-IP tunnel device
+common network MTU size. The default MTU for the IP-in-IP tunnel device
 is 1440 to match the value needed in GCE.
 
 #### Using flannel for Networking
@@ -83,6 +83,9 @@ Example CNI configuration
 }
 ```
 
+By default, CNI MTU and `FELIX_IPINIPMTU` derive their value from `veth_mtu` ConfigMap
+variable. `veth_mtu` is set to `1440` in default configuration in `calico.yaml`. In case
+different values are required, `calico.yaml` needs to be updated accordingly.
 
 ### Setting MTU for tunnel network interfaces
 

@@ -8,23 +8,25 @@ In this mode, {{site.prodname}} uses the Kubernetes API directly as the datastor
 
 Note that this mode currently comes with a number of limitations, namely:
 
-- It does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
+- It does not yet support {{site.prodname}} IPAM. We recommend using `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - {{site.prodname}} networking support is in beta. Control of the node-to-node mesh, default AS Number and all BGP peering configuration should be configured using `calicoctl`.
-
-## Requirements
 
 The provided manifest configures {{site.prodname}} to use host-local IPAM in conjunction with the Kubernetes assigned
 pod CIDRs for each node.
 
-You must have a Kubernetes cluster, which meets the following requirements:
+## Before you begin
 
-- Running Kubernetes `v1.7.0` or higher.
-- Configured to use CNI network plugins (i.e., by passing `--network-plugin=cni` to the kubelet).
-- Kubernetes controller manager is configured to allocate pod CIDRs (i.e., by passing `--allocate-node-cidrs=true` to the controller manager).
-- Kubernetes controller manager has been provided a cluster-cidr, for example:
-  - If using kubeadm, by passing `--pod-network-cidr=192.168.0.0/16` to `kubeadm`.
-  - Otherwise, by passing `--cluster-cidr=192.168.0.0/16` directly to the controller manager.
+- Ensure that your cluster meets the {{site.prodname}} [System requirements](../../../requirements). 
 
+- If your cluster has RBAC enabled, install {{site.prodname}}'s RBAC manifest, 
+  which creates roles and role bindings for {{site.prodname}}'s components:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+   ```
+   > **Note**: You can also 
+   > [view the YAML in your browser](../rbac-kdd.yaml){:target="_blank"}.
+   {: .alert .alert-info}
 
 ## Installation
 
@@ -33,32 +35,19 @@ This document describes two installation options for {{site.prodname}} using Kub
 1. {{site.prodname}} policy with {{site.prodname}} networking (beta)
 2. {{site.prodname}} policy-only with user-supplied networking
 
-Ensure you have a cluster which meets the above requirements.  There may be additional requirements based on the installation option you choose.
-
 > **Note**: There is currently no upgrade path to switch between
 > different installation options. Therefore, if you are upgrading
-> from Calico v2.1, use the
-> [Calico policy-only with user-supplied networking](#policy-only)
-> installation instructions to upgrade Calico policy-only which
+> from {{site.prodname}} v2.1, use the
+> [{{site.prodname}} policy-only with user-supplied networking](#policy-only)
+> installation instructions to upgrade {{site.prodname}} policy-only which
 > leaves the networking solution unchanged.
 {: .alert .alert-info}
-
-### Before you start: if your cluster has RBAC enabled
-
-Install {{site.prodname}}'s RBAC manifest, which creates roles and role bindings for {{site.prodname}}'s components:
-
-```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-```
-   > **Note**: You can also 
-   > [view the YAML in your browser](../rbac-kdd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
 
 ### Option 1: {{site.prodname}} policy with {{site.prodname}} networking (beta)
 
 When using the Kubernetes API datastore, {{site.prodname}} has beta support for 
 {{site.prodname}} networking.  This provides BGP-based networking with a full node-to-node 
-mesh and/or explicit configuration of peers.  (The "beta" label is because Calico IPAM is 
+mesh and/or explicit configuration of peers.  (The "beta" label is because {{site.prodname}} IPAM is 
 not yet supported.)
 
 To install {{site.prodname}} with BGP networking:
@@ -86,7 +75,7 @@ To install {{site.prodname}} with BGP networking:
    uses significant CPU (in the `confd` process on each host and the API server) 
    as the number of nodes increases.
 
-   Alternatively, if you're running on-premise, you may want to configure Calico
+   Alternatively, if you're running on-premise, you may want to configure {{site.prodname}}
    to peer with your BGP infrastructure.
     
    In either case, see the [Configuring BGP Peers guide]({{site.baseurl}}/{{page.version}}/usage/configuration/bgp) 

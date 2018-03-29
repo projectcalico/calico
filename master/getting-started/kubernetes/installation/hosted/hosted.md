@@ -3,15 +3,19 @@ title: Standard Hosted Install
 canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/hosted'
 ---
 
-The following steps install {{site.prodname}} as a Kubernetes add-on using your own etcd cluster.
+The following steps install {{site.prodname}} as a Kubernetes add-on using 
+your own etcd cluster.
 
-## RBAC
+## Before you begin
 
-If deploying {{site.prodname}} on an RBAC-enabled cluster, you should first apply the `ClusterRole` and `ClusterRoleBinding` specs:
+- Ensure that your cluster meets the {{site.prodname}} [system requirements](../../requirements). 
 
-```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
-```
+- If deploying {{site.prodname}} on an RBAC-enabled cluster, you should 
+  first apply the `ClusterRole` and `ClusterRoleBinding` specs:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
+   ```
 
 ## Install {{site.prodname}}
 

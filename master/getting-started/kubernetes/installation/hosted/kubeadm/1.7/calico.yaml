@@ -21,6 +21,9 @@ data:
   # Configure the Calico backend to use.
   calico_backend: "bird"
 
+  # Configure the MTU to use
+  veth_mtu: "1440"
+
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
@@ -31,7 +34,7 @@ data:
           "type": "calico",
           "etcd_endpoints": "__ETCD_ENDPOINTS__",
           "log_level": "info",
-          "mtu": 1500,
+          "mtu": __CNI_MTU__,
           "ipam": {
               "type": "calico-ipam"
           },
@@ -73,19 +76,20 @@ spec:
         # a failure.  This annotation works in tandem with the toleration below.
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
-      # Only run this pod on the master.
       tolerations:
-        # this taint is set by all kubelets running `--cloud-provider=external`
+        # This taint is set by all kubelets running `--cloud-provider=external`
         # so we should tolerate it to schedule the calico pods
         - key: node.cloudprovider.kubernetes.io/uninitialized
           value: "true"
           effect: NoSchedule
+        # Allow this pod to run on the master.
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
         # Allow this pod to be rescheduled while the node is in "critical add-ons only" mode.
         # This, along with the annotation above marks this pod as a critical add-on.
         - key: CriticalAddonsOnly
           operator: Exists
+      # Only run this pod on the master.
       nodeSelector:
         node-role.kubernetes.io/master: ""
       hostNetwork: true
@@ -224,7 +228,10 @@ spec:
               value: "false"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
-              value: "1440"
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Set Felix logging to "info"
             - name: FELIX_LOGSEVERITYSCREEN
               value: "info"
@@ -281,6 +288,12 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir

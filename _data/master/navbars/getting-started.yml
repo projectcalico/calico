@@ -9,6 +9,8 @@ toc:
   section:
   - title: Quickstart
     path: /getting-started/kubernetes/
+  - title: Requirements
+    path: /getting-started/kubernetes/requirements
   - title: Installation
     section:
     - title: Introduction
@@ -68,10 +70,12 @@ toc:
 
 - title: OpenShift
   section:
-    - title: Installation
-      path: /getting-started/openshift/installation
-    - title: Connecting to a dedicated etcd cluster (optional)
-      path: /getting-started/openshift/dedicated-etcd
+  - title: Requirements
+    path: /getting-started/openshift/requirements
+  - title: Installation
+    path: /getting-started/openshift/installation
+  - title: Connecting to a dedicated etcd cluster (optional)
+    path: /getting-started/openshift/dedicated-etcd
 
 - title: Mesos
   section:
@@ -80,7 +84,7 @@ toc:
   - title: Installation
     section:
     - title: Requirements
-      path: /getting-started/mesos/installation/prerequisites
+      path: /getting-started/mesos/installation/requirements
     - title: Integration Guide
       path: /getting-started/mesos/installation/integration
     - title: DC/OS
@@ -135,6 +139,8 @@ toc:
   section:
   - title: Overview
     path: /getting-started/openstack/
+  - title: Requirements
+    path: /getting-started/openstack/requirements
   - title: Installation
     section:
     - title: Overview
@@ -176,7 +182,37 @@ toc:
   section:
   - title: Overview
     path: /getting-started/bare-metal/bare-metal
+  - title: Requirements
+    path: /getting-started/bare-metal/requirements
   - title: Installation
     section:
-    - title: Installing Felix as a static binary
-      path: /getting-started/bare-metal/bare-metal-install
+    - title: Overview
+      path: /getting-started/bare-metal/installation/
+    - title: Binary install with package manager
+      path: /getting-started/bare-metal/installation/binary-mgr
+    - title: Binary install without package manager
+      path: /getting-started/bare-metal/installation/binary
+    - title: Container install
+      path: /getting-started/bare-metal/installation/container
+  - title: Setting policy
+    section:
+    - title: Basic connectivity
+      path: /getting-started/bare-metal/policy/
+    - title: Creating policy objects
+      path: /getting-started/bare-metal/policy/objects
+    - title: Selector-based policies
+      path: /getting-started/bare-metal/policy/selector
+    - title: Failsafe rules
+      path: /getting-started/bare-metal/policy/failsafe
+    - title: Untracked policy
+      path: /getting-started/bare-metal/policy/donottrack
+    - title: Pre-DNAT policy
+      path: /getting-started/bare-metal/policy/pre-dnat
+    - title: Apply on forwarded traffic
+      path: /getting-started/bare-metal/policy/forwarded
+    - title: Summary
+      path: /getting-started/bare-metal/policy/summary
+    - title: Tutorial
+      path: /getting-started/bare-metal/policy/tutorial
+    - title: conntrack
+      path: /getting-started/bare-metal/policy/conntrack

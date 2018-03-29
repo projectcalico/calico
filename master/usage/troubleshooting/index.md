@@ -85,19 +85,22 @@ If you do not see this, please check the following.
 
 - Make sure your network allows the requisite BGP traffic on TCP port 179.
 
-### Disable Ubuntu (or GNOME) NetworkManager
+### Configure NetworkManager
 
-Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
+Configure [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
 attempting to use {{site.prodname}} networking.
 
 NetworkManager manipulates the routing table for interfaces in the default network
 namespace where {{site.prodname}} veth pairs are anchored for connections to containers.
 This can interfere with the {{site.prodname}} agent's ability to route correctly.
 
-You can configure interfaces in the `/etc/network/interfaces` file if the
-NetworkManager removes your host's interfaces. See the Debian
-[NetworkConfiguration](https://wiki.debian.org/NetworkConfiguration)
-guide for more information.
+Create the following configuration file at `/etc/NetworkManager/conf.d/calico.conf` to prevent
+NetworkManager from interfering with the interfaces:
+
+```
+[keyfile]
+unmanaged-devices=interface-name:cali*;interface-name:tunl*
+```
 
 ## Running sudo calicoctl ... with Environment Variables
 
