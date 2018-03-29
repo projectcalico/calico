@@ -56,10 +56,12 @@ rpmbuild --target=$(uname -m) --define '_topdir '`pwd` --define "dist .${EL_VERS
 case "$EL_VERSION" in
   "el7")
     rm -rf /code/dist/rpms
+    mkdir -p /code/dist
     cp -r /tmp/rpmbuild /code/dist/rpms
     ;;
   "el6")
     rm -rf /code/dist/rpms/el6-rpms
+    mkdir -p /code/dist
     cp -r /tmp/rpmbuild /code/dist/el6-rpms
     ;;
 esac
