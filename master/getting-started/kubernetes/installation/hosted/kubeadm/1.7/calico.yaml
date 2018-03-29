@@ -21,6 +21,9 @@ data:
   # Configure the Calico backend to use.
   calico_backend: "bird"
 
+  # Configure the MTU to use
+  veth_mtu: "1440"
+
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
@@ -31,7 +34,7 @@ data:
           "type": "calico",
           "etcd_endpoints": "__ETCD_ENDPOINTS__",
           "log_level": "info",
-          "mtu": 1500,
+          "mtu": __CNI_MTU__,
           "ipam": {
               "type": "calico-ipam"
           },
@@ -224,7 +227,10 @@ spec:
               value: "false"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
-              value: "1440"
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Set Felix logging to "info"
             - name: FELIX_LOGSEVERITYSCREEN
               value: "info"
@@ -281,6 +287,12 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir

@@ -19,6 +19,9 @@ data:
   # essential.
   typha_service_name: "none"
 
+  # Configure the MTU to use
+  veth_mtu: "1440"
+
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
@@ -30,7 +33,7 @@ data:
           "log_level": "info",
           "datastore_type": "kubernetes",
           "nodename": "__KUBERNETES_NODE_NAME__",
-          "mtu": 1500,
+          "mtu": __CNI_MTU__,
           "ipam": {
             "type": "host-local",
             "subnet": "usePodCidr"
@@ -223,7 +226,10 @@ spec:
               value: "false"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
-              value: "1440"
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Wait for the datastore.
             - name: WAIT_FOR_DATASTORE
               value: "true"
@@ -296,6 +302,12 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
+             # CNI MTU Config variable
+             - name: CNI_MTU
+               valueFrom:
+                 configMapKeyRef:
+                   name: calico-config
+                   key: veth_mtu
             # Set the hostname based on the k8s node name.
             - name: KUBERNETES_NODE_NAME
               valueFrom:
