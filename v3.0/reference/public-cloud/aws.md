@@ -25,7 +25,7 @@ in AWS.
 | Description   | Type            | Protocol | Port Range |
 |:--------------|:----------------|:---------|:-----------|
 | BGP           | Custom TCP Rule | TCP      | 179        |
-| IPIP*         | Custom Protocol | IPIP     | all        |
+| IPIP*         | Custom Protocol | 4        | all        |
 
 \* The IPIP exception is required only when using Calico with IPIP encapsulation. Keep reading
 for information on when IPIP is required in AWS.
