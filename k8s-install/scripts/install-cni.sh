@@ -149,6 +149,7 @@ grep "__KUBERNETES_SERVICE_HOST__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_HO
 grep "__KUBERNETES_SERVICE_PORT__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_PORT__/${KUBERNETES_SERVICE_PORT}/g $TMP_CONF
 sed -i s/__KUBERNETES_NODE_NAME__/${KUBERNETES_NODE_NAME:-$(hostname)}/g $TMP_CONF
 sed -i s/__KUBECONFIG_FILENAME__/calico-kubeconfig/g $TMP_CONF
+sed -i s/__CNI_MTU__/${CNI_MTU:-1500}/g $TMP_CONF
 
 # Use alternative command character "~", since these include a "/".
 sed -i s~__KUBECONFIG_FILEPATH__~${HOST_CNI_NET_DIR}/calico-kubeconfig~g $TMP_CONF
