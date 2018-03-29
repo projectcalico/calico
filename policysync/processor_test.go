@@ -770,76 +770,90 @@ var _ = Describe("Processor", func() {
 						Expect(g).To(HavePayload(wepUpd))
 
 						close(done)
-					})
+					}, 2)
 
 					It("should split large IPSetUpdate", func(done Done) {
 						msg := updateIpSet(IPSetName, 82250)
+						By("sending a large IPSetUpdate")
 						updates <- msg
 
+						By("receiving the first part")
 						out, err := syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetUpdate().GetMembers()).To(HaveLen(82200))
 
+						By("receiving the second part")
 						out, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
 						close(done)
-					})
+					}, 5)
 
 					It("should split IpSetDeltaUpdates with both large adds and removes", func(done Done) {
 						msg2 := deltaUpdateIpSet(IPSetName, 82250, 82250)
+						By("sending a large IPSetDeltaUpdate")
 						updates <- msg2
+
+						By("receiving the first part with added members")
 						out, err := syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(82200))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
 
+						By("receiving the second part with added and removed members")
 						out, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(50))
 
+						By("receiving the third part with removed members")
 						out, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
 
 						close(done)
-					})
+					}, 5)
 
 					It("should split IpSetDeltaUpdates with large adds", func(done Done) {
 						msg2 := deltaUpdateIpSet(IPSetName, 82250, 0)
+						By("sending a large IPSetDeltaUpdate")
 						updates <- msg2
 
+						By("receiving the first part")
 						out, err := syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(82200))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
 
+						By("receiving the second part")
 						out, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(50))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(0))
 
 						close(done)
-					})
+					}, 5)
 
 					It("should split IpSetDeltaUpdates with large removes", func(done Done) {
 						msg2 := deltaUpdateIpSet(IPSetName, 0, 82250)
+						By("sending a large IPSetDeltaUpdate")
 						updates <- msg2
 
+						By("receiving the first part")
 						out, err := syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(50))
 
+						By("receiving the second part")
 						out, err = syncStream.Recv()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(out.GetIpsetDeltaUpdate().GetAddedMembers()).To(HaveLen(0))
 						Expect(out.GetIpsetDeltaUpdate().GetRemovedMembers()).To(HaveLen(82200))
 
 						close(done)
-					})
+					}, 5)
 
 					AfterEach(func() {
 						clientCancel()
