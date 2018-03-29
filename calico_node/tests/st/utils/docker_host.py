@@ -610,6 +610,9 @@ class DockerHost(object):
         """
         return command.replace('\'', '\'"\'"\'')
 
+    def check_readiness(self):
+        self.execute("docker exec calico-node /sbin/check_readiness")
+
     def get_hostname(self):
         """
         Get the hostname from Docker

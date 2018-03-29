@@ -1,0 +1,46 @@
+#!/bin/sh
+
+# Check felix readiness
+if [ ! -z "$FELIX_CHECKREADINESS" ]; then
+    if [ ! /usr/bin/wget localhost:9099/readiness -O - ]; then
+        echo "Felix is not ready."
+        exit 1
+    fi
+fi
+
+# begin bird readiness checks.
+# Check that bird is enabled.
+if [ ! -d /etc/service/enabled/bird ]; then
+    echo "Felix is ready."
+    exit 0
+fi
+
+# Check bird peer status
+unestablished_peers()
+{
+    /bin/birdcl -s /var/run/calico/bird.ctl show protocols | tail -n +3 | while read -r line; do
+        protocol=`echo "$line" | awk '{print $2}'`
+        if [ "$protocol" != "BGP" ]; then
+            continue
+        fi
+
+        status=`echo $line | awk '{print $6}'`
+        if [ "$status" != "Established" ]; then
+            peer=`echo $line | awk '{print $1}'`
+            printf "$peer, "
+        fi
+    done
+}
+ueps=$(unestablished_peers)
+if [ ! -z "$ueps" ]; then
+    echo "Bird is not ready: Unestablished peers: $ueps"
+    exit 1
+fi
+
+# Check bird GR status
+if [ $(/bin/birdcl -s /var/run/calico/bird.ctl show status | grep "Graceful restart recovery in progress") ]; then
+    echo "Bird is not ready: Graceful restart in progress."
+    exit 1
+fi
+
+echo "Bird and Felix are ready."
