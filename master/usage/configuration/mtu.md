@@ -83,9 +83,8 @@ Example CNI configuration
 }
 ```
 
-By default, CNI MTU and `FELIX_IPINIPMTU` derive their value from `veth_mtu` ConfigMap
-variable. `veth_mtu` is set to `1440` in default configuration in `calico.yaml`. In case
-different values are required, `calico.yaml` needs to be updated accordingly.
+When using the Kubernetes self-hosted manifests, the CNI plugin derives this value from the `veth_mtu`
+field of the calico-config ConfigMap and is set to `1440` by default.
 
 ### Setting MTU for tunnel network interfaces
 
@@ -98,6 +97,9 @@ the specified MTU.
 
 Passing in the environment variable `FELIX_IPINIPMTU` when running the
 `{{site.nodecontainer}}` container will set the MTU for Felix to use.
+
+When using the Kubernetes self-hosted manifests, the Felix derives this value from the `veth_mtu`
+field of the calico-config ConfigMap and is set to `1440` by default.
 
 ### Setting the tunnel MTU with calicoctl
 
