@@ -124,6 +124,7 @@ the following steps.
       logSeverityScreen: Info
       nodeToNodeMeshEnabled: false
       asNumber: 63400
+    EOF
     ```
     
     You're done!
