@@ -302,12 +302,12 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
-             # CNI MTU Config variable
-             - name: CNI_MTU
-               valueFrom:
-                 configMapKeyRef:
-                   name: calico-config
-                   key: veth_mtu
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Set the hostname based on the k8s node name.
             - name: KUBERNETES_NODE_NAME
               valueFrom:
