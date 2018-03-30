@@ -192,7 +192,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindProfile,
-		resources.NewProfileClient(cs, ca.AlphaFeatures),
+		resources.NewProfileClient(cs),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -204,7 +204,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindWorkloadEndpoint,
-		resources.NewWorkloadEndpointClient(cs, ca.AlphaFeatures),
+		resources.NewWorkloadEndpointClient(cs),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.BlockAffinityKey{}),

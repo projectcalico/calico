@@ -16,12 +16,10 @@ package updateprocessors
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -208,14 +206,7 @@ func parseSelectorAttachPrefix(s, prefix string) string {
 // by converting the list of service account names into a set of service account with
 // key: "projectcalico.org/serviceaccount" in { 'sa-1', 'sa-2' } AND
 // by prefixing the keys with the `pcsa.` prefix. For example, `k == 'v'` becomes `pcsa.k == 'v'`.
-// NOTE: Check if the env variable ALPHA_FEATURES is set or not before converting the ServiceAccountMatch to selector
 func parseServiceAccounts(sam *apiv3.ServiceAccountMatch) string {
-
-	if apiconfig.IsAlphaFeatureSet(os.Getenv("ALPHA_FEATURES"), apiconfig.AlphaFeatureSA) == false {
-		log.Warnf("ServiceAccount match when ALPHA_FEATURES flag does not have %s set", apiconfig.AlphaFeatureSA)
-		return ""
-	}
-
 	var updated string
 	if sam.Selector != "" {
 		updated = parseSelectorAttachPrefix(sam.Selector, conversion.ServiceAccountLabelPrefix)

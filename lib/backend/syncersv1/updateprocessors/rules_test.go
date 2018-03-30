@@ -16,7 +16,6 @@ package updateprocessors_test
 
 import (
 	"fmt"
-	"os"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -60,10 +59,6 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:     []string{"192.168.40.1/32"},
 				NotSelector: "has(label1)",
 				NotPorts:    []numorstring.Port{port443},
-				ServiceAccounts: &apiv3.ServiceAccountMatch{
-					Names:    []string{"a", "b"},
-					Selector: "servacctsel",
-				},
 			},
 			Destination: apiv3.EntityRule{
 				Nets:        []string{"10.100.1.1/32"},
@@ -72,10 +67,6 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 				NotNets:     []string{"192.168.80.1/32"},
 				NotSelector: "has(label2)",
 				NotPorts:    []numorstring.Port{port80},
-				ServiceAccounts: &apiv3.ServiceAccountMatch{
-					Names:    []string{"c", "d"},
-					Selector: "servacctsel2",
-				},
 			},
 			HTTP: &apiv3.HTTPMatch{
 				Methods: []string{"GET", "PUT"},
@@ -113,10 +104,10 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		Expect(rulev1.OriginalNotSrcSelector).To(Equal("has(label1)"))
 		Expect(rulev1.OriginalNotDstSelector).To(Equal("has(label2)"))
 
-		Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal("servacctsel"))
-		Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal("servacctsel2"))
-		Expect(rulev1.OriginalSrcServiceAccountNames).To(Equal([]string{"a", "b"}))
-		Expect(rulev1.OriginalDstServiceAccountNames).To(Equal([]string{"c", "d"}))
+		Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal(""))
+		Expect(rulev1.OriginalSrcServiceAccountNames).To(BeNil())
+		Expect(rulev1.OriginalDstServiceAccountNames).To(BeNil())
 
 		Expect(rulev1.HTTPMatch.Methods).To(Equal([]string{"GET", "PUT"}))
 
@@ -378,30 +369,7 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 		})
 	})
 
-	It("should ignore the serviceaccount match", func() {
-
-		srce := fmt.Sprintf("(%s == 'namespace') && (has(label1))", apiv3.LabelNamespace)
-		r := apiv3.Rule{
-			Action: apiv3.Allow,
-			Source: apiv3.EntityRule{
-				ServiceAccounts: &apiv3.ServiceAccountMatch{
-					Names:    []string{"sa1", "sa2"},
-					Selector: "key == 'value1'",
-				},
-				Selector: "has(label1)",
-			},
-		}
-
-		// Process the rule and get the corresponding v1 representation.
-		rulev1 := updateprocessors.RuleAPIV2ToBackend(r, "namespace")
-
-		By("generating the correct source selector", func() {
-			Expect(rulev1.SrcSelector).To(Equal(srce))
-		})
-	})
-
 	It("should parse a serviceaccount match", func() {
-		os.Setenv("ALPHA_FEATURES", "serviceaccounts")
 		srce := fmt.Sprintf("(%s == 'namespace') && ((%skey == \"value1\") && (%s in {\"%s\", \"%s\"}))", apiv3.LabelNamespace, conversion.ServiceAccountLabelPrefix, apiv3.LabelServiceAccount, "sa1", "sa2")
 		dste := fmt.Sprintf("(pcns.nskey == \"nsvalue\") && ((%skey == \"value2\") && (%s in {\"%s\"}))", conversion.ServiceAccountLabelPrefix, apiv3.LabelServiceAccount, "sa3")
 
@@ -427,10 +395,12 @@ var _ = Describe("Test the Rules Conversion Functions", func() {
 
 		By("generating the correct source selector", func() {
 			Expect(rulev1.SrcSelector).To(Equal(srce))
+			Expect(rulev1.OriginalSrcServiceAccountSelector).To(Equal("key == 'value1'"))
 		})
 
 		By("generating the correct destination selector", func() {
 			Expect(rulev1.DstSelector).To(Equal(dste))
+			Expect(rulev1.OriginalDstServiceAccountSelector).To(Equal("key == 'value2'"))
 		})
 	})
 
