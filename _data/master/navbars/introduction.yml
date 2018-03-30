@@ -5,3 +5,6 @@ order: 0
 toc:
 - title: About Calico
   path: /introduction/
+- title: Sample deployments
+  path: /introduction/deployments
+
