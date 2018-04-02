@@ -1,5 +1,5 @@
-hash: 7da122c90265659121621d38b0bed0d04beeaae7cdcb0b41c2cb105ccce11304
-updated: 2018-03-19T15:02:56.058140843Z
+hash: 8df6f0aef03be67929164a5837f46f30a23f5c7c86c973bf29f9421a48e2e146
+updated: 2018-04-02T18:16:01.314470529Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -170,7 +170,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 16a16d0960511310db4772874de7650ab2967827
+  version: 88291609bbefd0fe22982a7a78ec51d63583a651
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -184,9 +184,6 @@ imports:
   - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
-  - lib/backend/syncersv1/felixsyncer
-  - lib/backend/syncersv1/updateprocessors
-  - lib/backend/watchersyncer
   - lib/client
   - lib/clientv3
   - lib/errors
@@ -273,7 +270,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
+  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
   subpackages:
   - unix
   - windows
@@ -303,7 +300,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
   subpackages:
   - internal
   - internal/app_identity
