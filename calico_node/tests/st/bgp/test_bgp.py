@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,25 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-
-import time
 from subprocess import CalledProcessError
 
-from nose.plugins.attrib import attr
-from nose_parameterized import parameterized
-
 from tests.st.test_base import TestBase
-from tests.st.utils.constants import (LARGE_AS_NUM)
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
-from tests.st.utils.utils import check_bird_status, \
-        retry_until_success, update_bgp_config
-from unittest import skip
+from tests.st.utils.utils import check_bird_status, retry_until_success
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
-class TestGracefulRestart(TestBase):
-    def test_graceful_restart_readiness(self):
+
+class TestReadiness(TestBase):
+    def test_felix_readiness(self):
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS, start_calico=False) as host1:
+            # Start node without felix healthcheck endpoint.
+            host1.start_calico_node(env_options="-e FELIX_HEALTHENABLED=false")
+            retry_until_success(host1.check_readiness, retries=10)
+
+            # Trick the readiness script into thinking felix is reporting health when it isn't, so that we can
+            # trigger the readiness script to try and hit felix, when felix isn't running on that endpoint yet.
+            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
+                               "docker exec -e FELIX_HEALTHENABLED=true calico-node /sbin/check_readiness")
+
+    def test_bgp_established(self):
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
                 DockerHost('host2',
@@ -66,8 +71,10 @@ class TestGracefulRestart(TestBase):
             host2.execute("docker exec -it calico-node pkill -9 bird")
 
             # Check that the readiness script is reporting 'not ready'
-            self.assertRaises(CalledProcessError, host1.check_readiness)
-            self.assertRaises(CalledProcessError, host2.check_readiness)
+            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: BGP not established with",
+                                    host1.check_readiness)
+            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: BGP not established with",
+                                    host2.check_readiness)
 
             # Restore connectivity
             host1.execute("iptables -t raw -D PREROUTING -p tcp -m multiport --dports 179 -j DROP")

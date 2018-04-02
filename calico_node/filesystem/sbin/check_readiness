@@ -1,18 +1,13 @@
 #!/bin/sh
+not_ready_msg="calico/node is not ready"
 
 # Check felix readiness
-if [ ! -z "$FELIX_CHECKREADINESS" ]; then
-    if [ ! /usr/bin/wget localhost:9099/readiness -O - ]; then
-        echo "Felix is not ready."
+if [ "$FELIX_HEALTHENABLED" = "true" ]; then
+    /usr/bin/wget -T 5 localhost:9099/readiness -O - &> /dev/null
+    if [ $? -ge 400 ] || [ $? -lt 200 ]; then
+        echo "$not_ready_msg: felix is not ready"
         exit 1
     fi
-fi
-
-# begin bird readiness checks.
-# Check that bird is enabled.
-if [ ! -d /etc/service/enabled/bird ]; then
-    echo "Felix is ready."
-    exit 0
 fi
 
 # Check bird peer status
@@ -27,20 +22,30 @@ unestablished_peers()
         status=`echo $line | awk '{print $6}'`
         if [ "$status" != "Established" ]; then
             peer=`echo $line | awk '{print $1}'`
-            printf "$peer, "
+            printf "$peer "
         fi
     done
 }
-ueps=$(unestablished_peers)
-if [ ! -z "$ueps" ]; then
-    echo "Bird is not ready: Unestablished peers: $ueps"
+# Check that bird is enabled.
+if [ -d /etc/service/enabled/bird ]; then
+    ueps=$(unestablished_peers)
+    if [ ! -z "$ueps" ]; then
+        echo "$not_ready_msg: BGP not established with $ueps"
+        exit 1
+    fi
+fi
+
+# Check bird is running
+bird_status=$(/bin/birdcl -s /var/run/calico/bird.ctl show status)
+if [ $? -gt 0 ]; then
+    echo "$not_ready_msg: BGP daemon is not running yet."
     exit 1
 fi
 
 # Check bird GR status
-if [ $(/bin/birdcl -s /var/run/calico/bird.ctl show status | grep "Graceful restart recovery in progress") ]; then
-    echo "Bird is not ready: Graceful restart in progress."
+if [ $(echo $bird_status | grep "Graceful restart recovery in progress") ]; then
+    echo "$not_ready_msg: BGP Graceful restart in progress."
     exit 1
 fi
 
-echo "Bird and Felix are ready."
+echo "calico/node is ready."
