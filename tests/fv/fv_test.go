@@ -649,7 +649,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 	})
 
 	Describe("Pod FV tests", func() {
-		It("should not overwrite a workload endpoints container ID", func() {
+		It("should not overwrite a workload endpoint's container ID", func() {
 			// Create a Pod
 			podName := "testpod"
 			podNamespace := "default"
