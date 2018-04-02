@@ -1,14 +1,14 @@
 ---
 layout: null
 ---
-# Calico Version {{site.data.versions[page.version].first.title}}
+# {{site.prodname}} Version {{site.data.versions[page.version].first.title}}
 # {{site.url}}/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
 # This manifest includes the following component versions:
-#   calico/node:{{site.data.versions[page.version].first.title}}
+#   {{site.nodecontainer}}:{{site.data.versions[page.version].first.title}}
 #   calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
 #   calico/kube-controllers:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
 
-# This ConfigMap is used to configure a self-hosted Calico installation.
+# This ConfigMap is used to configure a self-hosted {{site.prodname}} installation.
 kind: ConfigMap
 apiVersion: v1
 metadata:
@@ -18,7 +18,7 @@ data:
   # The location of your etcd cluster.  This uses the Service clusterIP defined below.
   etcd_endpoints: "http://10.96.232.136:6666"
 
-  # Configure the Calico backend to use.
+  # Configure the {{site.prodname}} backend to use.
   calico_backend: "bird"
 
   # Configure the MTU to use
@@ -55,7 +55,7 @@ data:
 
 ---
 
-# This manifest installs the Calico etcd on the kubeadm master.  This uses a DaemonSet
+# This manifest installs the {{site.prodname}} etcd on the kubeadm master.  This uses a DaemonSet
 # to force it to run on the master even when the master isn't schedulable, and uses
 # nodeSelector to ensure it only runs on the master.
 apiVersion: extensions/v1beta1
@@ -78,7 +78,7 @@ spec:
     spec:
       tolerations:
         # This taint is set by all kubelets running `--cloud-provider=external`
-        # so we should tolerate it to schedule the calico pods
+        # so we should tolerate it to schedule the {{site.prodname}} pods
         - key: node.cloudprovider.kubernetes.io/uninitialized
           value: "true"
           effect: NoSchedule
@@ -120,7 +120,7 @@ spec:
 
 ---
 
-# This manifest installs the Service which gets traffic to the Calico
+# This manifest installs the Service which gets traffic to the {{site.prodname}}
 # etcd.
 apiVersion: v1
 kind: Service
@@ -141,8 +141,8 @@ spec:
 
 ---
 
-# This manifest installs the calico/node container, as well
-# as the Calico CNI plugins and network config on
+# This manifest installs the {{site.nodecontainer}} container, as well
+# as the {{site.prodname}} CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
 apiVersion: extensions/v1beta1
@@ -190,7 +190,7 @@ spec:
         - name: calico-node
           image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
-            # The location of the Calico etcd cluster.
+            # The location of the {{site.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
@@ -267,7 +267,7 @@ spec:
             - mountPath: /var/lib/calico
               name: var-lib-calico
               readOnly: false
-        # This container installs the Calico CNI binaries
+        # This container installs the {{site.prodname}} CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
           image: {{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
@@ -276,7 +276,7 @@ spec:
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
               value: "10-calico.conflist"
-            # The location of the Calico etcd cluster.
+            # The location of the {{site.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
@@ -320,7 +320,7 @@ spec:
 
 ---
 
-# This manifest deploys the Calico Kubernetes controllers.
+# This manifest deploys the {{site.prodname}} Kubernetes controllers.
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -361,7 +361,7 @@ spec:
         - name: calico-kube-controllers
           image: {{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
           env:
-            # The location of the Calico etcd cluster.
+            # The location of the {{site.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
