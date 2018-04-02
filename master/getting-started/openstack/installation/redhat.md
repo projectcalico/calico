@@ -26,16 +26,6 @@ through all three sections.
 - [Install OpenStack with Neutron and ML2 networking](http://docs.openstack.org)
   on the RHEL hosts.
 
-> **Note**: On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
-> [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks {{site.prodname}}
-> operation. You can avoid this bug by:
->
-> - Using Newton or later (recommended), or
->
-> - Manually [patching](https://review.openstack.org/#/c/425637/) your Nova
->   install on each compute node.
-{: .alert .alert-info}
-
 ## Common steps
 
 Some steps need to be taken on all machines being installed with {{site.prodname}}.
