@@ -1,9 +1,9 @@
 ---
-title: Configuring the Calico Kubernetes controllers
+title: Configuring the {{site.prodname}} Kubernetes controllers
 canonical_url: 'https://docs.projectcalico.org/v3.0/reference/kube-controllers/configuration'
 ---
 
-The Calico Kubernetes controllers are primarily configured through environment variables. When running
+The {{site.prodname}} Kubernetes controllers are primarily configured through environment variables. When running
 the controllers as a Kubernetes pod, this is accomplished through the pod manifest `env`
 section.
 
@@ -16,11 +16,11 @@ The `calico/kube-controllers` container includes the following controllers:
 1. workloadendpoint controller: watches for changes to pod labels and updates {{site.prodname}} workload endpoints.
 1. node controller: watches for the removal of Kubernetes nodes and removes corresponding data from {{site.prodname}}.
 
-By default, all four controllers are enabled.
+By default, the following controllers are enabled: profile, policy, workloadendpoint
 
 ### Configuring etcd access
 
-The Calico Kubernetes controllers support the following environment variables to configure etcd access:
+The {{site.prodname}} Kubernetes controllers support the following environment variables to configure etcd access:
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
@@ -55,3 +55,42 @@ The following environment variables can be used to configure the {{site.prodname
 
 [in-cluster-config]: https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
 [kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
+
+## About each controller
+
+### Node controller
+
+The node controller automatically cleans up configuration for nodes that no longer exist.
+
+The node controller is not enabled by default. However, the {{site.prodname}} Kubernetes manifests do enable this controller.
+
+To enable the node controller, perform the following two steps.
+
+1. Add "node" to the list of enabled controllers in the environment for kube-controllers. For example: `ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node`
+1. Configure {{site.nodecontainer}} with a Kubernetes node reference by adding the following snippet to the environment section of the {{site.noderunning}} daemon set.
+```
+- name: CALICO_K8S_NODE_REF
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+```
+
+### Policy controller
+
+The policy controller syncs Kubernetes network policies to the {{site.prodname}} data store.
+
+The policy controller is enabled by default.
+
+
+### Workload endpoint controller
+
+The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} data store by updating
+the corresponding workload endpoints appropriately.
+
+The workload endpoint controller is enabled by default.
+
+### Profile controller
+
+The profile controller syncs Kubernetes namespace label changes to the {{site.prodname}} data store.
+
+The profile controller is enabled by default.
