@@ -127,7 +127,7 @@ mkdir -p /etc/cni/net.d
 cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
-    "cniVersion": "0.1.0",
+    "cniVersion": "0.6.0",
     "type": "calico",
     "etcd_endpoints": "http://<ETCD_IP>:<ETCD_PORT>",
     "log_level": "info",
@@ -156,8 +156,8 @@ In addition to the CNI plugin specified by the CNI config file, Kubernetes requi
 Download the file `loopback` and copy it to the CNI binary directory.
 
 ```bash
-wget https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
-tar -zxvf cni-v0.3.0.tgz
+wget https://github.com/containernetworking/cni/releases/download/v0.6.0/cni-v0.6.0.tgz
+tar -zxvf cni-v0.6.0.tgz
 sudo cp loopback /opt/cni/bin/
 ```
 
