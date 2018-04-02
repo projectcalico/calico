@@ -23,19 +23,47 @@ _log.setLevel(logging.DEBUG)
 
 
 class TestReadiness(TestBase):
-    def test_felix_readiness(self):
+    def test_readiness(self):
+        """
+        A simple base case to check if calico/node becomes ready.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
+            # Start node without felix healthcheck endpoint.
+            retry_until_success(host1.check_readiness, retries=10)
+
+    def test_not_ready_with_broken_felix(self):
+        """
+        Simulate a broken felix by turning off Felix's health endpoint.
+        """
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS, start_calico=False) as host1:
             # Start node without felix healthcheck endpoint.
             host1.start_calico_node(env_options="-e FELIX_HEALTHENABLED=false")
-            retry_until_success(host1.check_readiness, retries=10)
 
             # Trick the readiness script into thinking felix is reporting health when it isn't, so that we can
             # trigger the readiness script to try and hit felix, when felix isn't running on that endpoint yet.
             self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
                                "docker exec -e FELIX_HEALTHENABLED=true calico-node /sbin/check_readiness")
 
-    def test_bgp_established(self):
+    def test_not_ready_with_no_networking_and_broken_felix(self):
+        """
+        Check that we're still reporting broken felix even when calico networking (bird) is off.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS, start_calico=False) as host1:
+            # Start node without felix healthcheck endpoint.
+            host1.start_calico_node(env_options="-e FELIX_HEALTHENABLED=false -e CALICO_NETWORKING_BACKEND=none")
+
+            # Trick the readiness script into thinking felix is reporting health when it isn't, so that we can
+            # trigger the readiness script to try and hit felix, when felix isn't running on that endpoint yet.
+            self.assertRaisesRegexp(CalledProcessError, "calico/node is not ready: felix is not ready", host1.execute,
+                               "docker exec -e FELIX_HEALTHENABLED=true calico-node /sbin/check_readiness")
+
+    def test_bird_readiness(self):
+        """
+        Test readiness when BGP connections are severed.
+        """
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
                 DockerHost('host2',
@@ -57,13 +85,6 @@ class TestReadiness(TestBase):
                                         ip_pass_list=[workload_host1.ip,
                                                       workload_host2.ip])
 
-            # Check the BGP status on the BIRD/GoBGP host.
-            def check_connected():
-                for target in [host1, host2]:
-                    expected = [("node-to-node mesh", h.ip, "Established") for h in [host1, host2] if h is not target]
-                    _log.debug("expected : %s", expected)
-                    check_bird_status(target, expected)
-
             # Block bgp connectivity between hosts
             host1.execute("iptables -t raw -I PREROUTING  -p tcp -m multiport --dport 179 -j DROP")
             host2.execute("iptables -t raw -I PREROUTING -p tcp -m multiport --dport 179 -j DROP")
@@ -83,4 +104,5 @@ class TestReadiness(TestBase):
             _log.debug('check connected and retry until "Established"')
             retry_until_success(host1.check_readiness, retries=10)
             retry_until_success(host2.check_readiness, retries=10)
-            retry_until_success(check_connected, retries=20, ex_class=Exception)
+            check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
+            check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])

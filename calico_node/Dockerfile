@@ -30,6 +30,9 @@ RUN apk --no-cache add wget ca-certificates libgcc && \
     apk del wget && \
     rm -f glibc-$GLIBC_VERSION.apk glibc-bin-$GLIBC_VERSION.apk
 
+# Install curl, used for readiness checks
+RUN apk add --no-cache curl
+
 # Install runit from the community repository, as its not yet available in global
 RUN apk add --no-cache --repository "http://alpine.gliderlabs.com/alpine/edge/community" runit
 

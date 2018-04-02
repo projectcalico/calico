@@ -57,7 +57,7 @@ See the [Requesting a Specific IP address]({{site.baseurl}}/{{page.version}}/ref
 
 ## calico/node Readiness probe failed: Bird is not ready: Unestablished peers
 
-The calico/node container may report an "unready" status in Kubernetes with this message starting in Calico v3.1+. In most cases, this means a particular peer is unreachable in the cluster. Users should ensure BGP connectivity between the two hosts is allowed in their environment.
+The calico/node container may report an "unready" status in Kubernetes with this message. In most cases, this means a particular peer is unreachable in the cluster. Users should ensure BGP connectivity between the two hosts is allowed in their environment.
 
-In other cases, this message can be a result of stale node resources in the datastore. This will be apparent if the peer name in the message is not currently running node.
+In other cases, this message can occur when there are stale node resources in the datastore. This will be apparent if the peer name in the message is not currently running node.
 Resolve cases like this by [decomissioning the stale nodes]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).
