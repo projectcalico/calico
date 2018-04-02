@@ -1,5 +1,5 @@
-hash: bbdfb3d201603965daf71d46aa10b3796f2dad0204d2adc380e31385f63ed39b
-updated: 2018-03-19T15:35:32.66903538Z
+hash: d82f9428a3e985deb50f6ba8900c88cc94210f16d6d14df4664eb190d2ce015e
+updated: 2018-04-02T18:13:31.90671579Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/containernetworking/cni
@@ -131,7 +131,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/mcuadros/go-version
@@ -191,7 +191,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5f90a75a16b8c4b94fd045afbfbb545194b451ac
+  version: 88291609bbefd0fe22982a7a78ec51d63583a651
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -205,9 +205,6 @@ imports:
   - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
-  - lib/backend/syncersv1/felixsyncer
-  - lib/backend/syncersv1/updateprocessors
-  - lib/backend/watchersyncer
   - lib/clientv2
   - lib/clientv3
   - lib/errors
@@ -232,11 +229,11 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -256,11 +253,11 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -316,7 +313,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
   subpackages:
   - internal
   - internal/app_identity
