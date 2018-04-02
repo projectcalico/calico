@@ -1,5 +1,5 @@
-hash: d4afca3941d016f3a87002d04880efcc7f46b7c7bd9958767ae44ee61caaf584
-updated: 2018-03-19T15:37:04.363700904Z
+hash: b2b0074cae9994f925494bf7aac6576037982b6c40c51fa554e771c6b9ba2c64
+updated: 2018-04-02T18:14:09.991627046Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -179,7 +179,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 16a16d0960511310db4772874de7650ab2967827
+  version: 88291609bbefd0fe22982a7a78ec51d63583a651
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -192,9 +192,6 @@ imports:
   - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
-  - lib/backend/syncersv1/felixsyncer
-  - lib/backend/syncersv1/updateprocessors
-  - lib/backend/watchersyncer
   - lib/clientv3
   - lib/errors
   - lib/hash
@@ -305,7 +302,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
   subpackages:
   - internal
   - internal/app_identity
