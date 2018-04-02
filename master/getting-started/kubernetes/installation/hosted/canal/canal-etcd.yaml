@@ -229,7 +229,7 @@ spec:
                 configMapKeyRef:
                   name: canal-config
                   key: etcd_cert
-            # Disable Calico BGP.  Calico is simply enforcing policy.
+            # Disable {{site.prodname}} BGP. {{site.prodname}} is simply enforcing policy.
             - name: CALICO_NETWORKING_BACKEND
               value: "none"
             # Cluster type to identify the deployment type
@@ -271,7 +271,7 @@ spec:
               readOnly: false
             - mountPath: /calico-secrets
               name: etcd-certs
-        # This container installs the Calico CNI binaries
+        # This container installs the {{site.prodname}} CNI binaries
         # and CNI network config file on each node.
         - name: install-calico-cni
           image: {{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
@@ -383,7 +383,7 @@ spec:
                 configMapKeyRef:
                   name: canal-config
                   key: etcd_endpoints
-            # The location of the Calico etcd cluster.
+            # The location of the {{site.prodname}} etcd cluster.
             - name: ETCDCTL_CACERT
               valueFrom:
                 configMapKeyRef:
@@ -401,7 +401,7 @@ spec:
 
 ---
 
-# This manifest deploys the Calico policy controller on Kubernetes.
+# This manifest deploys the {{site.prodname}} policy controller on Kubernetes.
 # See https://github.com/projectcalico/k8s-policy
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -440,7 +440,7 @@ spec:
         - name: calico-kube-controllers
           image: {{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
           env:
-            # The location of the Calico etcd cluster.
+            # The location of the {{site.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:

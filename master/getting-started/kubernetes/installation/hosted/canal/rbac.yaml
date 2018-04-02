@@ -1,4 +1,4 @@
-# Calico Roles
+# {{site.prodname}} Roles
 # Reference {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -114,7 +114,7 @@ subjects:
 
 ---
 
-# Bind the calico ClusterRole to the canal ServiceAccount.
+# Bind the {{site.prodname}} ClusterRole to the canal ServiceAccount.
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
