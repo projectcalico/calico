@@ -166,15 +166,15 @@ done
 if ${USE_TYPHA}; then
     # Run Typha.
     docker run --detach --privileged --name ${prefix}-typha \
-	   -e CALICO_DATASTORE_TYPE=kubernetes \
-	   -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
-	   -e TYPHA_DATASTORETYPE=kubernetes \
-	   -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
-	   -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
-	   -v ${PWD}:/testcode \
-	   -w /testcode/k8sfv/output \
-	   $FV_TYPHAIMAGE \
-	   /bin/sh -c "for n in 1 2; do calico-typha; done"
+       -e CALICO_DATASTORE_TYPE=kubernetes \
+       -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
+       -e TYPHA_DATASTORETYPE=kubernetes \
+       -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+       -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
+       -v ${PWD}:/testcode \
+       -w /testcode/k8sfv/output \
+       $FV_TYPHAIMAGE \
+       /bin/sh -c "for n in 1 2; do calico-typha; done"
     typha_ip=$(get_container_ip ${prefix}-typha)
     typha_hostname=$(get_container_hostname ${prefix}-typha)
     typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"
@@ -209,18 +209,37 @@ felix_hostname=$(get_container_hostname ${prefix}-felix)
 run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v -k8s-api-endpoint ${k8s_api_endpoint} -felix-ip ${felix_ip} -felix-hostname ${felix_hostname} -prometheus-push-url \"${PROMPG_URL}\" -code-level \"${CODE_LEVEL}\""
 if test -n "${GINKGO_FOCUS}"; then
     docker exec ${prefix}-felix /bin/sh -c \
-	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\""
+        "${run} -ginkgo.focus \"${GINKGO_FOCUS}\""
 elif ${JUST_A_MINUTE}; then
+    tmp=$(mktemp)
     # Run all the tests that are _not_ marked as "[slow]", and fail
     # the test if any of those takes longer than 2 minutes.  A k8sfv
     # test should be marked as "[slow]" if it normally takes longer
     # than 1 minute - so this allows a buffer of 1 extra minute to
     # allow for executor slowness.
     docker exec ${prefix}-felix /bin/sh -c \
-	   "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120" | perl -pe 'END { exit $status } $status=1 if /SLOW TEST|FAIL!/;'
+       "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120" | tee $tmp
+    # Fail if the docker command returned failure
+    cmdStatus=${PIPESTATUS[0]}
+    if [ $cmdStatus -ne 0 ]; then
+        echo "docker or k7sfv.test command failed with RC $cmdStatus"
+        rm -f $tmp
+        exit 1
+    fi
+    # Grab the lines that have SLOW TEST until a line with ---------
+    slow="$(awk '/SLOW TEST/,/--------/' $tmp)"
+    rm -f $tmp
+    # If there were any slow tests then fail the test but print out
+    # the slow test lines.
+    if [ -n "$slow" ]; then
+        echo "====Slow tests detected===="
+        echo $slow
+        echo "====End of slow test summary===="
+        exit 1
+    fi
 else
     docker exec ${prefix}-felix /bin/sh -c \
-	   "${run}"
+        "${run}"
 fi
 
 # Save the status of the test run.
