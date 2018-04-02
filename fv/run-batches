@@ -18,6 +18,7 @@
 : ${FV_BATCHES_TO_RUN:=1 2 3 4}
 : ${FV_SLOW_SPEC_THRESH:=90}
 : ${GINKGO_ARGS:=}
+: ${GINKGO_FOCUS:=.*}
 
 for batch in ${FV_BATCHES_TO_RUN}; do
   (
@@ -27,6 +28,7 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.seed 1 \
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
+               -ginkgo.focus="${GINKGO_FOCUS}" \
                ${GINKGO_ARGS}; \
   ) &
   pids[${batch}]=$!
