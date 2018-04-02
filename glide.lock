@@ -1,5 +1,5 @@
-hash: c8ebb4e64c9fadf9c326dd51b98c27617d35f87f7b5a64fc6d44977ac7dad95c
-updated: 2018-03-23T21:46:18.12921568Z
+hash: 680e068468b3bbbe66db00b9b309260ae05ddd8937c91c0f37e026f65f558b97
+updated: 2018-04-02T18:14:53.113420637Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -16,7 +16,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
@@ -37,7 +37,7 @@ imports:
 - name: github.com/dgrijalva/jwt-go
   version: d2709f9f1f31ebcda9651b03077758c1f3a0018c
 - name: github.com/docopt/docopt-go
-  version: ee0de3bc6815ee19d4a46c7eb90f829db0e014b1
+  version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/eapache/channels
   version: 47238d5aae8c0fefd518ef2bee46290909cf8263
 - name: github.com/eapache/queue
@@ -121,7 +121,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: ef2ba80ce2a1ad95a99aac3cc76f5b75a0a0e758
+  version: dc71a8d82bf94ce4ed62818760d6a28b1abf8996
   subpackages:
   - client/v2
   - models
@@ -143,7 +143,7 @@ imports:
 - name: github.com/mattn/go-runewidth
   version: a9d6d1e4dc51df2130326793d49971f238839169
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
   subpackages:
   - pbutil
 - name: github.com/mcuadros/go-version
@@ -176,7 +176,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 649b44d988ce182cabcda7dba01fcf3b6179ad19
+  version: 003f63b7f4cff3fc95357005358af2de0f5fe152
   subpackages:
   - format
   - internal/assertion
@@ -217,7 +217,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: f94d044d5357e7d8939fec43efc14124408cd2b9
+  version: 88291609bbefd0fe22982a7a78ec51d63583a651
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -281,7 +281,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/spf13/afero
-  version: a880a37ed1804d98f64b3b7d58b5e3f8fbf421c4
+  version: 63644898a8da0bc22138abf860edaf5277b6102e
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -295,11 +295,11 @@ imports:
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/vishvananda/netlink
-  version: 41009d533ba0788a139b0b6ef38923a23b3766d3
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
@@ -356,7 +356,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
   subpackages:
   - internal
   - internal/app_identity
@@ -368,7 +368,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: ab0870e398d5dd054b868c0db1481ab029b9a9f2
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
