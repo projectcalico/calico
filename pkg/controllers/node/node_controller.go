@@ -234,6 +234,7 @@ func (c *NodeController) syncToCalico(key string) error {
 			c.nodeLookupCache.RLock()
 			calicoNodeName, ok = c.nodeLookupCache.nodes[key]
 			c.nodeLookupCache.RUnlock()
+			clog = log.WithField("node", calicoNodeName)
 		}
 
 		if ok {
