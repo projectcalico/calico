@@ -729,7 +729,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 						return fmt.Errorf("%v should equal 'label2'", w.Labels["foo"])
 					}
 					return nil
-				}, 10*time.Second).ShouldNot(HaveOccurred())
+				}, 15*time.Second).ShouldNot(HaveOccurred())
 			})
 
 			By("updating the workload endpoint's container ID", func() {
