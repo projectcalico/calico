@@ -432,6 +432,7 @@ fv fv/latency.log: calico/felix bin/iptables-locker bin/test-workload bin/test-c
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
+	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
 	   echo; \
