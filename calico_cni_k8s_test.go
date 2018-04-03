@@ -1625,6 +1625,127 @@ var _ = Describe("CalicoCni", func() {
 					Expect(ep.Spec.ContainerID).Should(Equal(containerID2))
 				})
 			})
+
+			Context("when pod has a service account", func() {
+				It("should add a service account profile to the workload endpoint", func() {
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					if err != nil {
+						panic(err)
+					}
+					clientset, err := kubernetes.NewForConfig(config)
+					if err != nil {
+						panic(err)
+					}
+
+					name := fmt.Sprintf("run%d", rand.Uint32())
+
+					// Create a K8s service account
+					saName := "testserviceaccount"
+					_, err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Create(&v1.ServiceAccount{
+						ObjectMeta: metav1.ObjectMeta{Name: saName},
+					})
+					if err != nil {
+						panic(err)
+					}
+
+					// Create a K8s pod with the service account
+					_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Name: name},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name),
+								Image: "ignore",
+								Ports: []v1.ContainerPort{{
+									Name:          "anamedport",
+									ContainerPort: 555,
+								}},
+							}},
+							ServiceAccountName: saName,
+							NodeName:           hostname,
+						},
+					})
+					if err != nil {
+						panic(err)
+					}
+					containerID, session, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					result, err := testutils.GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+
+					mac := contVeth.Attrs().HardwareAddr
+
+					Expect(len(result.IPs)).Should(Equal(1))
+
+					ids := names.WorkloadEndpointIdentifiers{
+						Node:         hostname,
+						Orchestrator: api.OrchestratorKubernetes,
+						Endpoint:     "eth0",
+						Pod:          name,
+						ContainerID:  containerID,
+					}
+
+					wrkload, err := ids.CalculateWorkloadEndpointName(false)
+					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+					Expect(err).NotTo(HaveOccurred())
+
+					// The endpoint is created
+					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
+					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
+					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/serviceaccount": saName,
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+					}))
+					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+						Pod:           name,
+						InterfaceName: interfaceName,
+						IPNetworks:    []string{result.IPs[0].Address.String()},
+						MAC:           mac.String(),
+						Profiles:      []string{"kns.test", "ksa.test." + saName},
+						Node:          hostname,
+						Endpoint:      "eth0",
+						Workload:      "",
+						ContainerID:   containerID,
+						Orchestrator:  api.OrchestratorKubernetes,
+						Ports: []api.EndpointPort{{
+							Name:     "anamedport",
+							Protocol: numorstring.ProtocolFromString("TCP"),
+							Port:     555,
+						}},
+					}))
+
+					_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+
+					// Make sure there are no endpoints anymore
+					endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(0))
+
+					// Make sure the interface has been removed from the namespace
+					targetNs, _ := ns.GetNS(contNs.Path())
+					err = targetNs.Do(func(_ ns.NetNS) error {
+						_, err = netlink.LinkByName("eth0")
+						return err
+					})
+					Expect(err).Should(HaveOccurred())
+					Expect(err.Error()).Should(Equal("Link not found"))
+
+					// Make sure the interface has been removed from the host
+					_, err = netlink.LinkByName("cali" + containerID)
+					Expect(err).Should(HaveOccurred())
+					Expect(err.Error()).Should(Equal("Link not found"))
+				})
+			})
 		})
 	})
 })
