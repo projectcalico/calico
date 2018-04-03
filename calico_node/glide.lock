@@ -1,5 +1,5 @@
-hash: 8df6f0aef03be67929164a5837f46f30a23f5c7c86c973bf29f9421a48e2e146
-updated: 2018-04-02T18:16:01.314470529Z
+hash: b098f4743a46112283d260d4310a8d634acb8ab80ac65a800b75de7ee4a78fa2
+updated: 2018-04-03T17:47:51.034281848Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -170,7 +170,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 88291609bbefd0fe22982a7a78ec51d63583a651
+  version: 9070d94a5bf7214a417372890fa0ad28eb13e813
   subpackages:
   - lib/api
   - lib/apiconfig
