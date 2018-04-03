@@ -32,7 +32,6 @@ func RunPolicyController(etcdIP, kconfigfile string) *containers.Container {
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",
-		"-e", "ALPHA_FEATURES=serviceaccounts",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		fmt.Sprintf("%s", os.Getenv("CONTAINER_NAME")))
 }

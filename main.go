@@ -111,13 +111,8 @@ func main() {
 			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient)
 			go nodeController.Run(config.NodeWorkers, config.ReconcilerPeriod, stop)
 		case "serviceaccount":
-			if apiconfig.IsAlphaFeatureSet(os.Getenv("ALPHA_FEATURES"), apiconfig.AlphaFeatureSA) {
-				log.Info("Running service accounts profile controller")
-				serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient)
-				go serviceAccountController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
-			} else {
-				log.Info("Not running service account profile controller. Not set in ALPHA_FEATURES.")
-			}
+			serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient)
+			go serviceAccountController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
 		}
