@@ -1769,3 +1769,65 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	})
 })
+
+var _ = Describe("Test Watch support", func() {
+	var (
+		c   *KubeClient
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		// Create a client
+		cfg := apiconfig.CalicoAPIConfigSpec{KubeConfig: apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}}
+		client, err := NewKubeClient(&cfg)
+		Expect(err).NotTo(HaveOccurred())
+		c = client.(*KubeClient)
+
+		ctx = context.Background()
+	})
+
+	It("Should support watching Nodes", func() {
+		By("Watching a single node", func() {
+			name := "127.0.0.1" // Node created by test/mock-node.yaml
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: apiv3.KindNode}, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should get at least one event from the watch.
+			var receivedEvent bool
+			for i := 0; i < 10; i++ {
+				select {
+				case e := <-watch.ResultChan():
+					// Got an event. Check it's OK.
+					Expect(e.Error).NotTo(HaveOccurred())
+					Expect(e.Type).To(Equal(api.WatchAdded))
+					receivedEvent = true
+					break
+				default:
+					time.Sleep(50 * time.Millisecond)
+				}
+			}
+			Expect(receivedEvent).To(BeTrue(), "Did not receive watch event")
+		})
+
+		By("Watching all nodes", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should get at least one event from the watch.
+			var receivedEvent bool
+			for i := 0; i < 10; i++ {
+				select {
+				case e := <-watch.ResultChan():
+					// Got an event. Check it's OK.
+					Expect(e.Error).NotTo(HaveOccurred())
+					Expect(e.Type).To(Equal(api.WatchAdded))
+					receivedEvent = true
+					break
+				default:
+					time.Sleep(50 * time.Millisecond)
+				}
+			}
+			Expect(receivedEvent).To(BeTrue(), "Did not receive watch event")
+		})
+	})
+})

@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -160,11 +161,19 @@ func (c *nodeClient) EnsureInitialized() error {
 }
 
 func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	if len(list.(model.ResourceListOptions).Name) != 0 {
-		return nil, fmt.Errorf("cannot watch specific resource instance: %s", list.(model.ResourceListOptions).Name)
+	// Build watch options to pass to k8s.
+	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true}
+	rlo, ok := list.(model.ResourceListOptions)
+	if !ok {
+		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
+	}
+	if len(rlo.Name) != 0 {
+		// We've been asked to watch a specific node resource.
+		log.WithField("name", rlo.Name).Debug("Watching a single node")
+		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name).String()
 	}
 
-	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(metav1.ListOptions{ResourceVersion: revision})
+	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
