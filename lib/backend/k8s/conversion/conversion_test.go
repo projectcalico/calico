@@ -415,6 +415,77 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should parse a Pod with serviceaccount", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary": "annotation",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:           "nodeA",
+				ServiceAccountName: "sa-test",
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								ContainerPort: 5678,
+							},
+							{
+								Name:          "no-proto",
+								ContainerPort: 1234,
+							},
+						},
+					},
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure the type information is correct.
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).APIVersion).To(Equal(apiv3.GroupVersionCurrent))
+
+		// Assert key fields.
+		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
+		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
+		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
+
+		// Check for only values that are ServiceAccount related.
+		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Profiles)).To(Equal(2))
+		expectedLabels := map[string]string{
+			"labelA":                         "valueA",
+			"labelB":                         "valueB",
+			"projectcalico.org/namespace":    "default",
+			"projectcalico.org/orchestrator": "k8s",
+			apiv3.LabelServiceAccount:        "sa-test",
+		}
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
+
+		// Assert ResourceVersion is present.
+		Expect(wep.Revision).To(Equal("1234"))
+	})
 })
 
 var _ = Describe("Test NetworkPolicy conversion", func() {
@@ -2026,7 +2097,7 @@ var _ = Describe("Test Namespace conversion", func() {
 var _ = Describe("Test ServiceAccount conversion", func() {
 
 	// Use a single instance of the Converter for these tests.
-	c := Converter{AlphaSA: true}
+	c := Converter{}
 
 	It("should parse a ServiceAccount in default namespace to a Profile", func() {
 		sa := kapiv1.ServiceAccount{
@@ -2095,7 +2166,7 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 		Expect(len(labels)).To(Equal(0))
 	})
 
-	It("should handle ServiceAccount resource versions, with feature flag set", func() {
+	It("should handle ServiceAccount resource versions", func() {
 		By("converting ns and sa versions to the correct combined version")
 		rev := c.JoinProfileRevisions("1234", "5678")
 		Expect(rev).To(Equal("1234/5678"))
@@ -2139,114 +2210,4 @@ var _ = Describe("Test ServiceAccount conversion", func() {
 		_, _, err = c.SplitProfileRevision("1234/5678/1313")
 		Expect(err).To(HaveOccurred())
 	})
-
-	It("should handle ServiceAccount resource versions, with feature flag unset", func() {
-		// When AlphaSA == false profile ignore the saRev completely.
-		c.AlphaSA = false
-		By("returning only the ns version")
-		rev := c.JoinProfileRevisions("1234", "5678")
-		Expect(rev).To(Equal("1234"))
-
-		rev = c.JoinProfileRevisions("", "5678")
-		Expect(rev).To(Equal(""))
-
-		rev = c.JoinProfileRevisions("1234", "")
-		Expect(rev).To(Equal("1234"))
-
-		By("extracting only the input version without spliting")
-		nsRev, saRev, err := c.SplitProfileRevision("")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(nsRev).To(Equal(""))
-		Expect(saRev).To(Equal(""))
-
-		nsRev, saRev, err = c.SplitProfileRevision("1234/5678")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(nsRev).To(Equal("1234/5678"))
-		Expect(saRev).To(Equal(""))
-
-		nsRev, saRev, err = c.SplitProfileRevision("1234")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(nsRev).To(Equal("1234"))
-		Expect(saRev).To(Equal(""))
-
-	})
-})
-
-var _ = Describe("Test Pod conversion with alpha feature flag", func() {
-
-	// Use a single instance of the Converter for these tests.
-	c := Converter{AlphaSA: true}
-
-	It("should parse a Pod with serviceaccount", func() {
-		pod := kapiv1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "podA",
-				Namespace: "default",
-				Annotations: map[string]string{
-					"arbitrary": "annotation",
-				},
-				Labels: map[string]string{
-					"labelA": "valueA",
-					"labelB": "valueB",
-				},
-				ResourceVersion: "1234",
-			},
-			Spec: kapiv1.PodSpec{
-				NodeName:           "nodeA",
-				ServiceAccountName: "sa-test",
-				Containers: []kapiv1.Container{
-					{
-						Ports: []kapiv1.ContainerPort{
-							{
-								ContainerPort: 5678,
-							},
-							{
-								Name:          "no-proto",
-								ContainerPort: 1234,
-							},
-						},
-					},
-					{
-						Ports: []kapiv1.ContainerPort{
-							{
-								Name:          "tcp-proto",
-								Protocol:      kapiv1.ProtocolTCP,
-								ContainerPort: 1024,
-							},
-						},
-					},
-				},
-			},
-			Status: kapiv1.PodStatus{
-				PodIP: "192.168.0.1",
-			},
-		}
-
-		wep, err := c.PodToWorkloadEndpoint(&pod)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Make sure the type information is correct.
-		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
-		Expect(wep.Value.(*apiv3.WorkloadEndpoint).APIVersion).To(Equal(apiv3.GroupVersionCurrent))
-
-		// Assert key fields.
-		Expect(wep.Key.(model.ResourceKey).Name).To(Equal("nodeA-k8s-podA-eth0"))
-		Expect(wep.Key.(model.ResourceKey).Namespace).To(Equal("default"))
-		Expect(wep.Key.(model.ResourceKey).Kind).To(Equal(apiv3.KindWorkloadEndpoint))
-
-		// Check for only values that are controlled by the alphaSA flag
-		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.Profiles)).To(Equal(2))
-		expectedLabels := map[string]string{
-			"labelA":                         "valueA",
-			"labelB":                         "valueB",
-			"projectcalico.org/namespace":    "default",
-			"projectcalico.org/orchestrator": "k8s",
-			apiv3.LabelServiceAccount:        "sa-test",
-		}
-		Expect(wep.Value.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(expectedLabels))
-
-		// Assert ResourceVersion is present.
-		Expect(wep.Revision).To(Equal("1234"))
-	})
-
 })

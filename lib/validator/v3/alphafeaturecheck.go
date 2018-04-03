@@ -20,26 +20,6 @@ import (
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 )
 
-// ValidateNoServiceAccountRules checks if the set of rules have the
-// serviceAccount match set and if yes then it returns an error.
-func ValidateNoServiceAccountRules(ingress, egress []apiv3.Rule) error {
-	for _, rule := range ingress {
-		if rule.Source.ServiceAccounts != nil ||
-			rule.Destination.ServiceAccounts != nil {
-			return errors.New("alpha feature Service Account Match used")
-		}
-	}
-
-	for _, rule := range egress {
-		if rule.Source.ServiceAccounts != nil ||
-			rule.Destination.ServiceAccounts != nil {
-			return errors.New("alpha feature Service Account Match used")
-		}
-	}
-
-	return nil
-}
-
 // ValidateNoHTTPRules checks if the set of rules have the
 // HTTP match set and if yes then it returns an error.
 func ValidateNoHTTPRules(ingress, egress []apiv3.Rule) error {

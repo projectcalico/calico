@@ -28,7 +28,6 @@ const (
 	EtcdV3              DatastoreType = "etcdv3"
 	Kubernetes          DatastoreType = "kubernetes"
 	KindCalicoAPIConfig               = "CalicoAPIConfig"
-	AlphaFeatureSA                    = "serviceaccounts"
 	AlphaFeatureHTTP                  = "httprules"
 )
 

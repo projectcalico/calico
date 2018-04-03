@@ -46,10 +46,7 @@ const (
 )
 
 //TODO: make this private and expose a public conversion interface instead
-type Converter struct {
-	// AlphaSA set to true if the alpha feature for serviceaccounts is enabled.
-	AlphaSA bool
-}
+type Converter struct{}
 
 // VethNameForWorkload returns a deterministic veth name
 // for the given Kubernetes workload (WEP) name and namespace.
@@ -183,7 +180,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	profiles = append(profiles, NamespaceProfileNamePrefix+pod.Namespace)
 
 	// Pull out the Serviceaccount based profile off the pod SA and namespace
-	if c.AlphaSA && pod.Spec.ServiceAccountName != "" {
+	if pod.Spec.ServiceAccountName != "" {
 		profiles = append(profiles, serviceAccountNameToProfileName(pod.Spec.ServiceAccountName, pod.Namespace))
 	}
 
@@ -218,7 +215,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	labels[apiv3.LabelNamespace] = pod.Namespace
 	labels[apiv3.LabelOrchestrator] = apiv3.OrchestratorKubernetes
 
-	if c.AlphaSA && pod.Spec.ServiceAccountName != "" {
+	if pod.Spec.ServiceAccountName != "" {
 		labels[apiv3.LabelServiceAccount] = pod.Spec.ServiceAccountName
 	}
 
@@ -685,10 +682,6 @@ func (c Converter) ProfileNameToServiceAccount(profileName string) (ns, sa strin
 // revisions.
 // This is conditional on the feature flag for serviceaccount set or not.
 func (c Converter) JoinProfileRevisions(nsRev, saRev string) string {
-	if c.AlphaSA == false {
-		return nsRev
-	}
-
 	return nsRev + "/" + saRev
 }
 
@@ -697,11 +690,6 @@ func (c Converter) JoinProfileRevisions(nsRev, saRev string) string {
 // This is conditional on the feature flag for serviceaccount set or not.
 func (c Converter) SplitProfileRevision(rev string) (nsRev string, saRev string, err error) {
 	if rev == "" {
-		return
-	}
-
-	if c.AlphaSA == false {
-		nsRev = rev
 		return
 	}
 
