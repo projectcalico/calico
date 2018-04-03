@@ -99,7 +99,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		Expect(*info.Spec.DatastoreReady).To(BeTrue())
 	})
 
-	Context("nodes", func() {
+	Context("Node FV tests", func() {
 		It("should be removed in response to a k8s node delete", func() {
 			kn := &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
@@ -461,7 +461,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 	})
 
-	Describe("NetworkPolicy FV tests", func() {
+	Context("NetworkPolicy FV tests", func() {
 		var (
 			policyName        string
 			genPolicyName     string
@@ -565,7 +565,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 	})
 
-	Describe("NetworkPolicy egress FV tests", func() {
+	Context("NetworkPolicy egress FV tests", func() {
 		var (
 			policyName      string
 			genPolicyName   string
@@ -648,7 +648,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 	})
 
-	Describe("Pod FV tests", func() {
+	Context("Pod FV tests", func() {
 		It("should not overwrite a workload endpoint's container ID", func() {
 			// Create a Pod
 			podName := "testpod"
@@ -729,7 +729,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 						return fmt.Errorf("%v should equal 'label2'", w.Labels["foo"])
 					}
 					return nil
-				}, 3*time.Second).ShouldNot(HaveOccurred())
+				}, 10*time.Second).ShouldNot(HaveOccurred())
 			})
 
 			By("updating the workload endpoint's container ID", func() {
