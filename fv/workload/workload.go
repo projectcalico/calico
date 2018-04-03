@@ -104,7 +104,9 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 	stdoutReader := bufio.NewReader(w.outPipe)
 	stderrReader := bufio.NewReader(w.errPipe)
 
+	stderrDone := make(chan struct{})
 	go func() {
+		defer close(stderrDone)
 		for {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
@@ -116,6 +118,10 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 	}()
 
 	namespacePath, err := stdoutReader.ReadString('\n')
+	if err != nil {
+		// About to fail, make sure we output all the error output.
+		defer Eventually(stderrDone).Should(BeClosed())
+	}
 	Expect(err).NotTo(HaveOccurred())
 	w.namespacePath = strings.TrimSpace(namespacePath)
 

@@ -74,9 +74,13 @@ func main() {
 		log.WithField("namespace", namespace).Debug("Created namespace")
 
 		// Create a veth pair.
+		peerName := "w" + interfaceName
+		if len(peerName) > 11 {
+			peerName = peerName[:11]
+		}
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
-			PeerName:  string([]byte("w" + interfaceName)[:11]),
+			PeerName:  peerName,
 		}
 		err = netlink.LinkAdd(veth)
 		panicIfError(err)
