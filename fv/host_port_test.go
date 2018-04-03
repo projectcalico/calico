@@ -85,13 +85,12 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
 			felix.Exec("iptables-save", "-c")
+			felix.Exec("ip", "r")
+			felix.Exec("ip", "a")
 		}
 		felix.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
 		infra.Stop()
 	})
 

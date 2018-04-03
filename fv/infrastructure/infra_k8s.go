@@ -287,6 +287,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	cleanupAllPools(kds.calicoClient)
 	cleanupAllGlobalNetworkPolicies(kds.calicoClient)
 	cleanupAllNetworkPolicies(kds.calicoClient)
+	cleanupAllHostEndpoints(kds.calicoClient)
 }
 
 func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
@@ -440,6 +441,13 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 			utils.AddToTestOutput(fmt.Sprintf("%v\n", n))
 		}
 	}
+	heps, err := kds.calicoClient.HostEndpoints().List(context.Background(), options.ListOptions{})
+	if err == nil {
+		utils.AddToTestOutput("Calico Host Endpoints\n")
+		for _, hep := range heps.Items {
+			utils.AddToTestOutput(fmt.Sprintf("%v\n", hep))
+		}
+	}
 }
 
 var zeroGracePeriod int64 = 0
@@ -548,9 +556,6 @@ func cleanupAllGlobalNetworkPolicies(client client.Interface) {
 
 func cleanupAllNetworkPolicies(client client.Interface) {
 	ctx := context.Background()
-	//Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*apiv3.NetworkPolicy, error)
-	//Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*apiv3.NetworkPolicy, error)
-	//List(ctx context.Context, opts options.ListOptions) (*apiv3.NetworkPolicyList, error)
 	nps, err := client.NetworkPolicies().List(ctx, options.ListOptions{})
 	if err != nil {
 		panic(err)
@@ -558,6 +563,21 @@ func cleanupAllNetworkPolicies(client client.Interface) {
 	log.WithField("count", len(nps.Items)).Info("Global Network Policies present")
 	for _, np := range nps.Items {
 		_, err = client.NetworkPolicies().Delete(ctx, np.Namespace, np.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func cleanupAllHostEndpoints(client client.Interface) {
+	ctx := context.Background()
+	heps, err := client.HostEndpoints().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(heps.Items)).Info("HostEndpoints present")
+	for _, hep := range heps.Items {
+		_, err = client.HostEndpoints().Delete(ctx, hep.Name, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}
