@@ -36,7 +36,8 @@ func PortString() string {
 
 func GetFelixMetric(felixIP, name string) (metric string, err error) {
 	var resp *http.Response
-	resp, err = http.Get("http://" + felixIP + ":" + PortString() + "/metrics")
+	httpClient := http.Client{Timeout: time.Second}
+	resp, err = httpClient.Get("http://" + felixIP + ":" + PortString() + "/metrics")
 	if err != nil {
 		return
 	}
