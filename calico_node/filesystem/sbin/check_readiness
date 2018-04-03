@@ -1,8 +1,32 @@
 #!/bin/sh
+# check_readiness [-f] [-b]
+# -f  check felix health
+# -b  check bird help
 not_ready_msg="calico/node is not ready"
+check_felix=false
+check_bird=false
+
+for arg in "$@"; do
+    case ${arg} in
+        felix )
+            check_felix=true
+        ;;
+        bird )
+            check_bird=true
+        ;;
+        * )
+            echo "calico readiness checks are not properly configured"
+            exit 1
+    esac
+done
+
+if [ "$check_bird" = false ] && [ "$check_felix" = false ]; then
+    echo "calico readiness checks are not properly configured"
+    exit 1
+fi
 
 # Check felix readiness
-if [ "$FELIX_HEALTHENABLED" = "true" ]; then
+if [ "check_felix" = "true" ]; then
     ret_code=$(/usr/bin/curl --connect-timeout 5 -s -o /dev/null -w "${http_code}" localhost:9099/readiness)
     if [ -z "$ret_code" ] || [ $ret_code -ge 400 ] || [ $ret_code -lt 200 ]; then
         echo "$not_ready_msg: felix is not ready"
@@ -26,8 +50,9 @@ unestablished_peers()
         fi
     done
 }
+
 # Check that bird is enabled.
-if [ -d /etc/service/enabled/bird ]; then
+if [ "$check_bird" = true ]; then
     # Check bird is running
     bird_status=$(/bin/birdcl -s /var/run/calico/bird.ctl show status)
     if [ $? != 0 ]; then
