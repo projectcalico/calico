@@ -262,7 +262,9 @@ spec:
             failureThreshold: 6
           readinessProbe:
             exec:
-              command: [/sbin/check_readiness]
+              command:
+              - /sbin/check_readiness
+              - felix
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules

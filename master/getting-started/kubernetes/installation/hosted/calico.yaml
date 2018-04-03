@@ -207,8 +207,8 @@ spec:
             exec:
               command:
               - /sbin/check_readiness
-                bird
-                felix
+              - bird
+              - felix
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules

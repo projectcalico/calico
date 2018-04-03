@@ -264,8 +264,7 @@ spec:
             exec:
               command:
               - /sbin/check_readiness
-                felix
-
+              - felix
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules
