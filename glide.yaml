@@ -51,5 +51,15 @@ import:
   version: v1.2
 - package: github.com/containernetworking/cni
   version: v0.5.2
+- package: github.com/jbenet/go-reuseport
+  repo: https://github.com/fasaxc/go-reuseport.git
+  version: disable-dial-check
+- package: github.com/jbenet/go-sockaddr
+  version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
+  subpackages:
+  - net
 - package: github.com/onsi/gomega
   version: ^1.1.0
+- name: gopkg.in/yaml.v2
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
+

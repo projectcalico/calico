@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,12 @@ import (
 	"io"
 	"io/ioutil"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
+	"time"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
@@ -84,7 +87,7 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 	log.WithField("workload", w).Info("About to run workload")
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
-		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v %v %v",
+		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload '%v' '%v' '%v'",
 			w.Name,
 			w.InterfaceName,
 			w.IP,
@@ -100,11 +103,10 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)
 	stderrReader := bufio.NewReader(w.errPipe)
-	namespacePath, err := stdoutReader.ReadString('\n')
-	Expect(err).NotTo(HaveOccurred())
-	w.namespacePath = strings.TrimSpace(namespacePath)
 
+	stderrDone := make(chan struct{})
 	go func() {
+		defer close(stderrDone)
 		for {
 			line, err := stderrReader.ReadString('\n')
 			if err != nil {
@@ -114,6 +116,15 @@ func Run(c *containers.Container, name, interfaceName, ip, ports string) (w *Wor
 			log.Infof("Workload %s stderr: %s", name, strings.TrimSpace(string(line)))
 		}
 	}()
+
+	namespacePath, err := stdoutReader.ReadString('\n')
+	if err != nil {
+		// About to fail, make sure we output all the error output.
+		defer Eventually(stderrDone).Should(BeClosed())
+	}
+	Expect(err).NotTo(HaveOccurred())
+	w.namespacePath = strings.TrimSpace(namespacePath)
+
 	go func() {
 		for {
 			line, err := stdoutReader.ReadString('\n')
@@ -180,6 +191,79 @@ func (w *Workload) CanConnectTo(ip, port string) bool {
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
 	return err == nil
+}
+
+func (w *Workload) Port(port uint16) *Port {
+	return &Port{
+		Workload: w,
+		Port:     port,
+	}
+}
+
+type Port struct {
+	*Workload
+	Port uint16
+}
+
+func (w *Port) SourceName() string {
+	if w.Port == 0 {
+		return w.Name
+	}
+	return fmt.Sprintf("%s:%d", w.Name, w.Port)
+}
+
+func (p *Port) CanConnectTo(ip, port, protocol string) bool {
+
+	// Ensure that the host has the 'test-connection' binary.
+	p.C.EnsureBinary("test-connection")
+
+	if protocol == "udp" {
+		// If this is a retry then we may have stale conntrack entries and we don't want those
+		// to influence the connectivity check.  Only an issue for UDP due to the lack of a
+		// sequence number.
+		p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+	}
+
+	// Run 'test-connection' to the target.
+	args := []string{
+		"exec", p.C.Name, "/test-connection", p.namespacePath, ip, port, "--protocol=" + protocol,
+	}
+	if p.Port != 0 {
+		// If we are using a particular source port, fill it in.
+		args = append(args, fmt.Sprintf("--source-port=%d", p.Port))
+	}
+	connectionCmd := utils.Command("docker", args...)
+	outPipe, err := connectionCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	errPipe, err := connectionCmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	wOut, err := ioutil.ReadAll(outPipe)
+	Expect(err).NotTo(HaveOccurred())
+	wErr, err := ioutil.ReadAll(errPipe)
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Wait()
+
+	log.WithFields(log.Fields{
+		"stdout": string(wOut),
+		"stderr": string(wErr)}).WithError(err).Info("Connection test")
+
+	return err == nil
+}
+
+// ToMatcher implements the connectionTarget interface, allowing this port to be used as
+// target.
+func (p *Port) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
+	if p.Port == 0 {
+		return p.Workload.ToMatcher(explicitPort...)
+	}
+	return &connectivityMatcher{
+		ip:         p.Workload.IP,
+		port:       fmt.Sprint(p.Port),
+		targetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
+	}
 }
 
 type connectionTarget interface {
@@ -258,6 +342,10 @@ type ConnectivityChecker struct {
 	expectations []expectation
 }
 
+func (c *ConnectivityChecker) ResetExpectations() {
+	c.expectations = nil
+}
+
 func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
 	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true})
 }
@@ -293,4 +381,49 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
 	}
 	return result
+}
+
+func (c *ConnectivityChecker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(offset+2, 10*time.Second, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(2, 10*time.Second, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
+	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
+}
+
+func (c *ConnectivityChecker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, optionalDescription ...interface{}) {
+	expConnectivity := c.ExpectedConnectivity()
+	start := time.Now()
+
+	// Track the number of attempts. If the first connectivity check fails, we want to
+	// do at least one retry before we time out.  That covers the case where the first
+	// connectivity check takes longer than the timeout.
+	completedAttempts := 0
+	var actualConn []string
+	for time.Since(start) < timeout || completedAttempts < 2 {
+		actualConn = c.ActualConnectivity()
+		if reflect.DeepEqual(actualConn, expConnectivity) {
+			return
+		}
+		completedAttempts++
+	}
+
+	// Build a concise description of the incorrect connectivity.
+	for i := range actualConn {
+		if actualConn[i] != expConnectivity[i] {
+			actualConn[i] += " <---- WRONG"
+			expConnectivity[i] += " <----"
+		}
+	}
+
+	message := fmt.Sprintf(
+		"Connectivity was incorrect:\n\nExpected\n    %s\nto match\n    %s",
+		strings.Join(actualConn, "\n    "),
+		strings.Join(expConnectivity, "\n    "),
+	)
+	Fail(message, callerSkip)
 }
