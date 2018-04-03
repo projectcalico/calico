@@ -446,7 +446,7 @@ st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-n
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
 	           $(SYSTEMTEST_CONTAINER) \
-	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture --pdb-failure --pdb --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
 ## Run the STs in a container using etcd with SSL certificate/key/CA verification.
@@ -480,7 +480,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -v $(SOURCE_DIR):/code \
 	           -v $(SOURCE_DIR)/certs:$(SOURCE_DIR)/certs \
 	           $(SYSTEMTEST_CONTAINER) \
-	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+	           sh -c 'nosetests $(ST_TO_RUN) -sv --pdb-failure --pdb --nologcapture --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
 .PHONY: add-ssl-hostname
