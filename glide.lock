@@ -1,5 +1,5 @@
 hash: 7d603735922f8b63940ee09226865770abc48ae902648375d1eb2d3400610b7c
-updated: 2018-04-03T10:39:23.277073227Z
+updated: 2018-04-03T13:37:47.785445273Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -212,7 +212,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: f05b0beb3a2bb80a331ac91d3927d0b71ca1126b
+  version: 2d2086ef926660cd6b96e8def7d5b29ecc1c2dff
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -333,7 +333,7 @@ imports:
   subpackages:
   - patricia
 - name: gopkg.in/yaml.v2
-  version: 670d4cfef0544295bc27a114dbac37980d83185a
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/apimachinery
   version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
   subpackages:

@@ -60,3 +60,6 @@ import:
   - net
 - package: github.com/onsi/gomega
   version: ^1.1.0
+- name: gopkg.in/yaml.v2
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
+
