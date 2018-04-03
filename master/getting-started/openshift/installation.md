@@ -7,6 +7,10 @@ Installation of {{site.prodname}} in OpenShift is integrated in openshift-ansibl
 The information below explains the variables which must be set during
 during the standard [Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables).
 
+## Before you begin
+
+Ensure that your cluster meets the {{site.prodname}} [system requirements](requirements). 
+
 ## Installation
 
 To install {{site.prodname}} in OpenShift, set the following `OSEv3:vars` in your
