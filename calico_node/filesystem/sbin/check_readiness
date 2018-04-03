@@ -1,7 +1,9 @@
 #!/bin/sh
-# check_readiness [-f] [-b]
-# -f  check felix health
-# -b  check bird help
+# check_readiness [felix] [bird]
+#
+#   felix   check felix health
+#   bird    check bird help
+
 not_ready_msg="calico/node is not ready"
 check_felix=false
 check_bird=false
