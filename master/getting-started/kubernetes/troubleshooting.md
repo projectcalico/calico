@@ -54,3 +54,13 @@ However, if you do need to assign a particular address to a Pod, {{site.prodname
 - You can request an IP using the `cni.projectcalico.org/ipAddrsNoIpam` annotation. Note that this annotation bypasses the configured IPAM plugin, and thus in most cases it is recommended to use the above annotation. 
 
 See the [Requesting a Specific IP address]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#requesting-a-specific-ip-address) section in the CNI plugin reference documentation for more details.
+
+## calico/node is not ready: BIRD is not ready: BGP not established with 10.0.0.1
+
+The calico/node container may report an "unready" status in Kubernetes with this message. In most cases, this means a particular peer is unreachable in the cluster. Users should ensure BGP connectivity between the two peers is allowed in their environment.
+
+This can also occur when inactive Node resources are configured when using node-to-node mesh. Resolve cases like this by [decomissioning the stale nodes]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).
+
+Lastly this can occur when BGP connections to non-mesh peers go down. If this
+is a common occurance in your BGP topology, you can disable BIRD readiness checks. See [node readiness]({{site.baseurl}}/{{page.version}}/reference/node/configuration#node-readiness)
+for more information.

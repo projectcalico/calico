@@ -15,6 +15,8 @@ of the following reasons.
   cluster.
 - You are renaming a node.
 - You are receiving an error about an IP address already in use.
+- Readiness checks are failing due to unreachable peers that are no longer in the
+  cluster.
 - Hosts are regularly added and removed from your cluster.
 
 
