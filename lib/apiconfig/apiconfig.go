@@ -28,7 +28,6 @@ const (
 	EtcdV3              DatastoreType = "etcdv3"
 	Kubernetes          DatastoreType = "kubernetes"
 	KindCalicoAPIConfig               = "CalicoAPIConfig"
-	AlphaFeatureHTTP                  = "httprules"
 )
 
 // CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource
