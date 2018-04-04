@@ -599,9 +599,10 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("replace", data=clusterinfo_name1_rev2)
         rc.assert_error(NOT_FOUND)
 
-        # Apply an update to the cluster information and assert not supported.
+        # Apply an update to the cluster information and assert not found (we need the node to
+        # create it).
         rc = calicoctl("apply", data=clusterinfo_name1_rev2)
-        rc.assert_error(NOT_SUPPORTED)
+        rc.assert_error(NOT_FOUND)
 
         # Delete the resource by name (i.e. without using a resource version) - assert not
         # supported.
@@ -758,7 +759,7 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error(text=KUBERNETES_NP)
 
         rc = calicoctl("apply", data=k8s_np)
-        rc.assert_error(text=NOT_SUPPORTED)
+        rc.assert_error(text=NOT_FOUND)
 
         rc = calicoctl("replace", data=k8s_np)
         rc.assert_error(text=NOT_FOUND)
