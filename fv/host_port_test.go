@@ -125,6 +125,8 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		Context("with pre-DNAT policy defined", func() {
 
 			BeforeEach(func() {
+				// Ensure the HostEndpoint has taken effect and is blocking traffic
+				Eventually(metricsPortReachable, "10s", "1s").Should(BeFalse())
 				policy := api.NewGlobalNetworkPolicy()
 				policy.Name = "pre-dnat-policy-1"
 				policy.Spec.PreDNAT = true
