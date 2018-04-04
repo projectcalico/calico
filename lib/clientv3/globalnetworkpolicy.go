@@ -54,11 +54,6 @@ func (r globalNetworkPolicies) Create(ctx context.Context, res *apiv3.GlobalNetw
 		return nil, err
 	}
 
-	// Check if it is permitted to create the network policy with the specific alpha feature support.
-	if err := r.validateAlphaFeatures(res); err != nil {
-		return nil, err
-	}
-
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindGlobalNetworkPolicy, res)
@@ -85,11 +80,6 @@ func (r globalNetworkPolicies) Update(ctx context.Context, res *apiv3.GlobalNetw
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
 	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
-
-	// Check if it is permitted to create the network policy with the specific alpha feature support.
-	if err := r.validateAlphaFeatures(res); err != nil {
 		return nil, err
 	}
 
@@ -160,10 +150,6 @@ func (r globalNetworkPolicies) Watch(ctx context.Context, opts options.ListOptio
 	}
 
 	return r.client.resources.Watch(ctx, opts, apiv3.KindGlobalNetworkPolicy, &policyConverter{})
-}
-
-func (r globalNetworkPolicies) validateAlphaFeatures(res *apiv3.GlobalNetworkPolicy) error {
-	return nil
 }
 
 func defaultPolicyTypesField(ingressRules, egressRules []apiv3.Rule, types *[]apiv3.PolicyType) {

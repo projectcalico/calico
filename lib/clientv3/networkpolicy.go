@@ -53,11 +53,6 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 		return nil, err
 	}
 
-	// Check if it is permitted to create the network policy with the specific alpha feature support.
-	if err := r.validateAlphaFeatures(res); err != nil {
-		return nil, err
-	}
-
 	// Properly prefix the name
 	res.GetObjectMeta().SetName(convertPolicyNameForStorage(res.GetObjectMeta().GetName()))
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindNetworkPolicy, res)
@@ -84,11 +79,6 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
 	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
-
-	// Check if it is permitted to create the network policy with the specific alpha feature support.
-	if err := r.validateAlphaFeatures(res); err != nil {
 		return nil, err
 	}
 
@@ -159,8 +149,4 @@ func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (w
 	}
 
 	return r.client.resources.Watch(ctx, opts, apiv3.KindNetworkPolicy, &policyConverter{})
-}
-
-func (r networkPolicies) validateAlphaFeatures(res *apiv3.NetworkPolicy) error {
-	return nil
 }
