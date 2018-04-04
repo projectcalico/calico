@@ -28,7 +28,6 @@ const (
 	EtcdV3              DatastoreType = "etcdv3"
 	Kubernetes          DatastoreType = "kubernetes"
 	KindCalicoAPIConfig               = "CalicoAPIConfig"
-	AlphaFeatureHTTP                  = "httprules"
 )
 
 // CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource
@@ -47,8 +46,6 @@ type CalicoAPIConfigSpec struct {
 	EtcdConfig
 	// Inline the k8s config fields.
 	KubeConfig
-	// Alpha Feature set: comma separated list of alpha features that are enabled.
-	AlphaFeatures string `json:"alphafeatures" envconfig:"ALPHA_FEATURES" default:""`
 }
 
 type EtcdConfig struct {
