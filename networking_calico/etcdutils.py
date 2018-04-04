@@ -163,7 +163,8 @@ class EtcdWatcher(object):
             snapshot_data = self._pre_snapshot_hook()
 
             # Get all existing values and process them through the dispatcher.
-            for result in etcdv3.get_prefix(self.prefix):
+            for result in etcdv3.get_prefix(self.prefix,
+                                            revision=last_revision):
                 key, value, mod_revision = result
                 # Convert to what the dispatcher expects - see below.
                 response = Response(

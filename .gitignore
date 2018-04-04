@@ -52,3 +52,5 @@ ChangeLog
 *~
 .*.swp
 .*sw?
+venv
+.idea

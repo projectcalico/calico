@@ -215,7 +215,7 @@ class TestEtcdWatcher(unittest.TestCase):
                         key='foo',
                         value='bar',
                         mod_revision='12')
-        self.m_client.get_prefix.side_effect = iter([
+        self.m_client.get.side_effect = iter([
             [],
             [_rsp_to_tuple(rsp1)],
             ExpectedException()

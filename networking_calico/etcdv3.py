@@ -21,6 +21,7 @@ from etcd3gw.exceptions import Etcd3Exception
 from etcd3gw.lease import Lease
 
 from etcd3gw.utils import _encode
+from etcd3gw.utils import _increment_last_byte
 import etcd3gw.watch as watch
 
 from networking_calico.compat import cfg
@@ -28,6 +29,11 @@ from networking_calico.compat import log
 
 
 LOG = log.getLogger(__name__)
+
+# Limit on number of keys we get from etcd.  We found that the etcd gateway
+# has limits on the size of responses that kick in at 3000+ keys so make sure
+# we leave plenty of headroom.
+CHUNK_SIZE_LIMIT = 200
 
 
 class ForceClosingWatcher(watch.Watcher):
@@ -220,10 +226,13 @@ def delete(key, existing_value=None, mod_revision=None):
     return deleted
 
 
-def get_prefix(prefix):
+def get_prefix(prefix, revision=None):
     """Read all etcdv3 data whose key begins with a given prefix.
 
     - prefix (string): The prefix.
+
+    - revision: The revision to do the get at.  If not specified then the
+      current revision is used.
 
     Returns a list of tuples (key, value, mod_revision), one for each key-value
     pair, in which:
@@ -241,7 +250,37 @@ def get_prefix(prefix):
     reimplemented within the Calico v3 data model.
     """
     client = _get_client()
-    results = client.get_prefix(prefix)
+
+    if revision is None:
+        _, revision = get_status()
+        LOG.debug("Doing get at current revision: %r", revision)
+
+    # The JSON gateway can only return a certain number of bytes in a single
+    # response so we chunk up the read into blocks.
+    #
+    # Since etcd's get protocol has an inclusive range_start and an exclusive
+    # range_end, we load the keys in reverse order.  That way, we can use the
+    # final key in each chunk as the next range_end.
+    range_end = _encode(_increment_last_byte(prefix))
+    results = []
+    while True:
+        # Note: originally, we included the sort_target parameter here but
+        # etcdgw has a bug (https://github.com/dims/etcd3-gateway/issues/18),
+        # which prevents that from working.  In any case, sort-by-key is the
+        # default, which is what we want.
+        chunk = client.get(prefix,
+                           metadata=True,
+                           range_end=range_end,
+                           sort_order='descend',
+                           limit=CHUNK_SIZE_LIMIT,
+                           revision=str(revision))
+        results.extend(chunk)
+        if len(chunk) < CHUNK_SIZE_LIMIT:
+            # Partial (or empty) chunk signals that we're done.
+            break
+        _, data = chunk[-1]
+        range_end = _encode(data["key"])
+
     LOG.debug("etcdv3 get_prefix %s results=%s", prefix, len(results))
     tuples = []
     for result in results:
