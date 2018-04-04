@@ -1,0 +1,78 @@
+#!/bin/sh
+# check_readiness [felix] [bird]
+#
+#   felix   check felix health
+#   bird    check bird help
+
+not_ready_msg="calico/node is not ready"
+check_felix=false
+check_bird=false
+
+for arg in "$@"; do
+    case ${arg} in
+        felix )
+            check_felix=true
+        ;;
+        bird )
+            check_bird=true
+        ;;
+        * )
+            echo "calico readiness checks are not properly configured"
+            exit 1
+    esac
+done
+
+if [ "$check_bird" = false ] && [ "$check_felix" = false ]; then
+    echo "calico readiness checks are not properly configured"
+    exit 1
+fi
+
+# Check felix readiness
+if [ "check_felix" = "true" ]; then
+    ret_code=$(/usr/bin/curl --connect-timeout 5 -s -o /dev/null -w "${http_code}" localhost:9099/readiness)
+    if [ -z "$ret_code" ] || [ $ret_code -ge 400 ] || [ $ret_code -lt 200 ]; then
+        echo "$not_ready_msg: felix is not ready"
+        exit 1
+    fi
+fi
+
+# Check bird peer status
+unestablished_peers()
+{
+    /bin/birdcl -s /var/run/calico/bird.ctl show protocols | tail -n +3 | while read -r line; do
+        protocol=`echo "$line" | awk '{print $2}'`
+        if [ "$protocol" != "BGP" ]; then
+            continue
+        fi
+
+        status=`echo $line | awk '{print $6}'`
+        if [ "$status" != "Established" ]; then
+            peer=`echo $line | awk '{print $1}'`
+            printf "$peer "
+        fi
+    done
+}
+
+# Check that bird is enabled.
+if [ "$check_bird" = true ]; then
+    # Check bird is running
+    bird_status=$(/bin/birdcl -s /var/run/calico/bird.ctl show status)
+    if [ $? != 0 ]; then
+        echo "$not_ready_msg: BGP daemon is not running."
+        exit 1
+    fi
+
+    ueps=$(unestablished_peers)
+    if [ ! -z "$ueps" ]; then
+        echo "$not_ready_msg: BGP not established with $ueps"
+        exit 1
+    fi
+
+    # Check bird GR status
+    if [ $(echo $bird_status | grep "Graceful restart recovery in progress") ]; then
+        echo "$not_ready_msg: BGP graceful restart in progress."
+        exit 1
+    fi
+fi
+
+echo "calico/node is ready."

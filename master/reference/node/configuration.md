@@ -144,3 +144,33 @@ e.g.
 IP_AUTODETECTION_METHOD=interface=eth.*
 IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
+
+### Node readiness
+
+**Felix**
+
+Felix readiness is exposed through an http endpoint in the container. A ready
+felix will respond to requests with a http status >= 200 and < 400.
+
+Sample Kubernetes readiness check yaml:
+
+```yaml
+readinessProbe:
+  periodSeconds: 10
+  httpGet:
+    path: /readiness
+    port: 9099
+```
+
+**Bird (and Felix)**
+
+The bird readiness endpoint additionally checks for Felix readiness and summarizes the two statuses together. It is determined by executing a shell script in the calico/node container.
+
+Sample Kubernetes readiness check yaml:
+
+```yaml
+readinessProbe:
+  exec:
+    command: [/sbin/check_readiness]
+    periodSeconds: 10
+```

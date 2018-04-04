@@ -54,3 +54,10 @@ However, if you do need to assign a particular address to a Pod, {{site.prodname
 - You can request an IP using the `cni.projectcalico.org/ipAddrsNoIpam` annotation. Note that this annotation bypasses the configured IPAM plugin, and thus in most cases it is recommended to use the above annotation. 
 
 See the [Requesting a Specific IP address]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#requesting-a-specific-ip-address) section in the CNI plugin reference documentation for more details.
+
+## calico/node Readiness probe failed: Bird is not ready: Unestablished peers
+
+The calico/node container may report an "unready" status in Kubernetes with this message. In most cases, this means a particular peer is unreachable in the cluster. Users should ensure BGP connectivity between the two hosts is allowed in their environment.
+
+In other cases, this message can occur when there are stale node resources in the datastore. This will be apparent if the peer name in the message is not currently running node.
+Resolve cases like this by [decomissioning the stale nodes]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).
