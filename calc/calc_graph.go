@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,8 +86,15 @@ type PipelineCallbacks interface {
 	passthruCallbacks
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDispatcher *dispatcher.Dispatcher) {
+type CalcGraph struct {
+	// AllUpdDispatcher is the input node to the calculation graph.
+	AllUpdDispatcher      *dispatcher.Dispatcher
+	activeRulesCalculator *ActiveRulesCalculator
+}
+
+func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) *CalcGraph {
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
+
 	// The source of the processing graph, this dispatcher will be fed all the updates from the
 	// datastore, fanning them out to the registered receivers.
 	//
@@ -101,7 +108,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	//              /   |   \
 	//     receiver_1  ...  receiver_n
 	//
-	allUpdDispatcher = dispatcher.NewDispatcher()
+	allUpdDispatcher := dispatcher.NewDispatcher()
 
 	// Some of the receivers only need to know about local endpoints. Create a second dispatcher
 	// that will filter out non-local endpoints.
@@ -309,7 +316,10 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	profileDecoder := NewProfileDecoder(callbacks)
 	profileDecoder.RegisterWith(allUpdDispatcher)
 
-	return allUpdDispatcher
+	return &CalcGraph{
+		AllUpdDispatcher:      allUpdDispatcher,
+		activeRulesCalculator: activeRulesCalc,
+	}
 }
 
 type localEndpointDispatcherReg dispatcher.Dispatcher

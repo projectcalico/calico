@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,8 +78,9 @@ type ActiveRulesCalculator struct {
 	missingProfiles set.Set
 
 	// Callback objects.
-	RuleScanner         ruleScanner
-	PolicyMatchListener PolicyMatchListener
+	RuleScanner           ruleScanner
+	PolicyMatchListener   PolicyMatchListener
+	OnPolicyCountsChanged func(numPolicies, numProfiles int)
 }
 
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
@@ -160,6 +161,8 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 				log.Debugf("Profile rules deleted while inactive: %v", key.Name)
 			}
 		}
+		// Update the policy/profile counts.
+		arc.updateStats()
 	case model.PolicyKey:
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
@@ -186,11 +189,21 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			// No need to call updatePolicy() because we'll have got a matchStopped
 			// callback.
 		}
+		// Update the policy/profile counts.
+		arc.updateStats()
 	default:
 		log.Infof("Ignoring unexpected update: %v %#v",
 			reflect.TypeOf(update.Key), update)
 	}
+
 	return
+}
+
+func (arc *ActiveRulesCalculator) updateStats() {
+	if arc.OnPolicyCountsChanged == nil {
+		return
+	}
+	arc.OnPolicyCountsChanged(len(arc.allPolicies), len(arc.allProfileRules))
 }
 
 func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
