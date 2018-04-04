@@ -3,29 +3,28 @@ title: Installing Calico on Kubernetes
 canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/'
 ---
 
-{{site.prodname}} can be installed on a Kubernetes cluster in a number of configurations.  This document
-gives an overview of the most popular approaches, and provides links to each for more detailed
-information.
+We provide a number of manifests to get you up and running with {{site.prodname}} in
+just a few steps. Refer to the section that corresponds to your desired networking
+for instructions.
 
-## [{{site.prodname}} Hosted Install](hosted)
+- [Installing {{site.prodname}} for policy and networking (recommended)](calico)
 
-Installs the {{site.prodname}} components as a DaemonSet entirely using Kubernetes manifests through a single
-kubectl command. 
+- [Installing {{site.prodname}} for policy and flannel for networking](flannel)
 
-## [Custom Installation](integration)
+- [Installing {{site.prodname}} for policy (advanced)](other)
 
-In addition to the hosted approach above, the {{site.prodname}} components can also be installed using your
-own orchestration mechanisms (e.g ansible, chef, bash, etc)
+Should you wish to modify the manifests before applying them, refer to 
+[Customizing the manifests](config-options). 
 
-Follow the [integration guide](integration) if you would like
-to integrate {{site.prodname}} into your own installation or deployment scripts.
+If you prefer not to use Kubernetes to start the {{site.prodname}} services, refer to the 
+[Integration guide](integration).
 
-## Third Party Integrations
+Several third-party vendors also provide a variety of {{site.prodname}} installation
+methods for different public clouds. Refer to the section that corresponds to your provider 
+for more details.
 
-A number of popular Kubernetes installers use {{site.prodname}} to provide networking and/or network policy.
+- [Amazon Web Services (AWS)](aws)
 
-You can find some of them here, organized by cloud provider.
+- [Google Compute Engine (GCE)](gce)
 
-- [Amazon Web Services](aws)
-- [Google Compute Engine](gce)
-- [Microsoft Azure](azure)
+- [Azure](azure)

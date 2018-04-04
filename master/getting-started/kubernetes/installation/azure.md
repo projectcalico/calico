@@ -12,11 +12,5 @@ Make sure you've read the [Azure configuration guide](../../../reference/public-
 
 **[ACS Engine][acs-engine]** configures and deploys Kubernetes clusters on Azure with an option to enable {{site.prodname}} policy.
 
-#### More installation options
-
-If the out-of-the-box solutions listed above don't meet your requirements, you can install {{site.prodname}} for Kubernetes
-on Azure using one of our [self-hosted manifests][self-hosted], or by [integrating {{site.prodname}} with your own configuration management][integration-guide].
 
 [acs-engine]: https://github.com/Azure/acs-engine/blob/master/docs/kubernetes.md
-[self-hosted]: hosted
-[integration-guide]: integration
