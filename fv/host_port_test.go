@@ -21,16 +21,17 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/metrics"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-func MetricsPortReachable(felix *containers.Felix) bool {
+func MetricsPortReachable(felix *infrastructure.Felix) bool {
 	// Delete existing conntrack state for the metrics port.
 	felix.Exec("conntrack", "-L")
 	felix.Exec("conntrack", "-L", "-p", "tcp", "--dport", metrics.PortString())
@@ -61,17 +62,20 @@ func MetricsPortReachable(felix *containers.Felix) bool {
 //   - When pre-DNAT policy is then configured, to allow ingress to that port, it should be
 //     reachable again.
 
-var _ = Context("with initialized Felix and etcd datastore", func() {
-
+var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		etcd                 *containers.Container
-		felix                *containers.Felix
+		infra                infrastructure.DatastoreInfra
+		felix                *infrastructure.Felix
 		client               client.Interface
 		metricsPortReachable func() bool
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		var err error
+		infra, err = getInfra()
+		Expect(err).NotTo(HaveOccurred())
+
+		felix, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 
 		metricsPortReachable = func() bool {
 			return MetricsPortReachable(felix)
@@ -81,14 +85,13 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	AfterEach(func() {
 
 		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
 			felix.Exec("iptables-save", "-c")
+			felix.Exec("ip", "r")
+			felix.Exec("ip", "a")
 		}
 		felix.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
-		}
-		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("with no endpoints or policy, port should be reachable", func() {
@@ -96,11 +99,11 @@ var _ = Context("with initialized Felix and etcd datastore", func() {
 	})
 
 	It("with a local workload, port should be reachable", func() {
-		w := workload.Run(felix, "w", "cali12345", "10.65.0.2", "8055", "tcp")
-		w.Configure(client)
-		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
+		w := workload.Run(felix, "w", "default", "10.65.0.2", "8055", "tcp")
+		w.ConfigureInDatastore(infra)
+		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue(), "Not reachable with workload running")
 		w.Stop()
-		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
+		Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue(), "With workload stopped, not reachable")
 	})
 
 	Context("with host endpoint defined", func() {

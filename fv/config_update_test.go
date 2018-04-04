@@ -27,6 +27,7 @@ import (
 	"errors"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/metrics"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -44,14 +45,14 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 	var (
 		etcd     *containers.Container
-		felix    *containers.Felix
+		felix    *infrastructure.Felix
 		felixPID int
 		client   client.Interface
 		w        [3]*workload.Workload
 	)
 
 	BeforeEach(func() {
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(containers.DefaultTopologyOptions())
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
 		felixPID = felix.GetSinglePID("calico-felix")
 	})
 
@@ -207,7 +208,7 @@ var _ = Context("Config update tests, after starting felix", func() {
 	})
 })
 
-func waitForFelixInSync(felix *containers.Felix) {
+func waitForFelixInSync(felix *infrastructure.Felix) {
 	// The datastore should transition to in-sync.
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_resync_state")
@@ -221,10 +222,10 @@ func waitForFelixInSync(felix *containers.Felix) {
 // kubeProxy object for felix container
 type kubeProxy struct {
 	mode  string
-	felix *containers.Felix
+	felix *infrastructure.Felix
 }
 
-func newKubeProxy(felix *containers.Felix) *kubeProxy {
+func newKubeProxy(felix *infrastructure.Felix) *kubeProxy {
 	// Default mode for kube-proxy is iptables.
 	return &kubeProxy{mode: "iptables", felix: felix}
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/workload"
 
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -46,4 +47,11 @@ var _ = AfterEach(func() {
 	}
 	Expect(workload.UnactivatedConnectivityCheckers.Len()).To(BeZero(),
 		"Test bug: ConnectivityChecker was created but not activated.")
+})
+
+var _ = AfterSuite(func() {
+	if infrastructure.K8sInfra != nil {
+		infrastructure.TearDownK8sInfra(infrastructure.K8sInfra)
+		infrastructure.K8sInfra = nil
+	}
 })

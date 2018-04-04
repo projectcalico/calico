@@ -30,18 +30,19 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", func() {
+var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 	var (
-		etcd    *containers.Container
-		felixes []*containers.Felix
+		infra   infrastructure.DatastoreInfra
+		felixes []*infrastructure.Felix
 		client  client.Interface
 		w       [2]*workload.Workload
 		hostW   [2]*workload.Workload
@@ -49,15 +50,13 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 	)
 
 	BeforeEach(func() {
-		felixes, etcd, client = containers.StartNNodeEtcdTopology(2, containers.DefaultTopologyOptions())
+		var err error
+		infra, err = getInfra()
+		Expect(err).NotTo(HaveOccurred())
+		felixes, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
-		defaultProfile := api.NewProfile()
-		defaultProfile.Name = "default"
-		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
-		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
-		defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
-		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
+		err = infra.AddDefaultAllow()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
@@ -78,10 +77,9 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 		// Create workloads, using that profile.  One on each "host".
 		for ii := range w {
 			wIP := fmt.Sprintf("10.65.%d.2", ii)
-			wIface := fmt.Sprintf("cali1%d", ii)
 			wName := fmt.Sprintf("w%d", ii)
-			w[ii] = workload.Run(felixes[ii], wName, wIface, wIP, "8055", "tcp")
-			w[ii].Configure(client)
+			w[ii] = workload.Run(felixes[ii], wName, "default", wIP, "8055", "tcp")
+			w[ii].ConfigureInDatastore(infra)
 
 			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
 		}
@@ -95,6 +93,7 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ipset", "list")
 				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
 			}
 		}
 
@@ -109,9 +108,9 @@ var _ = Context("with etcd IPIP topology before adding host IPs to IP sets", fun
 		}
 
 		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+			infra.DumpErrorData()
 		}
-		etcd.Stop()
+		infra.Stop()
 	})
 
 	It("should have workload to workload connectivity", func() {

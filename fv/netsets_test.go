@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
@@ -83,14 +84,14 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 
 	var (
 		etcd     *containers.Container
-		felix    *containers.Felix
+		felix    *infrastructure.Felix
 		felixPID int
 		client   client.Interface
 	)
 
 	BeforeEach(func() {
-		topologyOptions := containers.DefaultTopologyOptions()
-		felix, etcd, client = containers.StartSingleNodeEtcdTopology(topologyOptions)
+		topologyOptions := infrastructure.DefaultTopologyOptions()
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		felixPID = felix.GetFelixPID()
 	})
 
@@ -136,7 +137,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				w[ii] = workload.Run(
 					felix,
 					"w"+iiStr,
-					"cali0"+iiStr,
+					"fv",
 					c.workloadIP(ii),
 					ports,
 					"tcp",
@@ -638,7 +639,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 			w := workload.Run(
 				felix,
 				"w",
-				"cali12345",
+				"default",
 				"10.65.0.2",
 				"8055",
 				"tcp",
