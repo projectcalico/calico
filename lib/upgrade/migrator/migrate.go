@@ -80,10 +80,9 @@ func New(clientv3 clientv3.Interface, clientv1 clients.V1ClientInterface, status
 
 // migrationHelper implements the migrate.Interface.
 type migrationHelper struct {
-	clientv3                clientv3.Interface
-	clientv1                clients.V1ClientInterface
-	enforceEmptyDestination bool
-	statusWriter            StatusWriterInterface
+	clientv3     clientv3.Interface
+	clientv1     clients.V1ClientInterface
+	statusWriter StatusWriterInterface
 }
 
 // Error types encountered during validation and migration.
@@ -368,7 +367,7 @@ type ic interface {
 }
 
 func (m *migrationHelper) v3DatastoreIsClean() (bool, error) {
-	bc := m.clientv3.(backend).Backend()
+	bc := m.clientv3.(backendClientAccessor).Backend()
 	if i, ok := bc.(ic); ok {
 		return i.IsClean()
 	}
@@ -676,10 +675,17 @@ func (m *migrationHelper) queryAndConvertV1ToV3Nodes(data *MigrationData) error 
 // If neither the v1 nor v3 versions are present, then no migration is required.
 func (m *migrationHelper) ShouldMigrate() (bool, error) {
 	ci, err := m.clientv3.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
-	if err == nil {
+	if err == nil && ci.Spec.CalicoVersion == "" {
+		// The ClusterInformation exists but the CalicoVersion field is empty. This may happen if a
+		// non-calico/node or typha component initializes the datastore prior to the node writing in
+		// the current version, or the node or typha completing the data migration.
+		log.Debugf("ClusterInformation contained empty CalicoVersion - treating as is ClusterInformation is not present", ci.Spec.CalicoVersion)
+	} else if err == nil {
+		// The ClusterInformation exists and the CalicoVersion field is not empty, check if migration is
+		// required.
 		if yes, err := versionRequiresMigration(ci.Spec.CalicoVersion); err != nil {
 			log.Errorf("Unexpected CalicoVersion '%s' in ClusterInformation: %v", ci.Spec.CalicoVersion, err)
-			return true, fmt.Errorf("unexpected CalicoVersion '%s' in ClusterInformation: %v", ci.Spec.CalicoVersion, err)
+			return false, fmt.Errorf("unexpected CalicoVersion '%s' in ClusterInformation: %v", ci.Spec.CalicoVersion, err)
 		} else if yes {
 			log.Debugf("ClusterInformation contained CalicoVersion '%s' and indicates migration is needed", ci.Spec.CalicoVersion)
 			return true, nil
@@ -687,7 +693,7 @@ func (m *migrationHelper) ShouldMigrate() (bool, error) {
 		log.Debugf("ClusterInformation contained CalicoVersion '%s' and indicates migration is not needed", ci.Spec.CalicoVersion)
 		return false, nil
 	} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-		// The error indicates a problem with accessing the resource
+		// The error indicates a problem with accessing the resource.
 		return false, fmt.Errorf("unable to query ClusterInformation to determine Calico version: %v", err)
 	}
 
@@ -718,8 +724,8 @@ func (m *migrationHelper) ShouldMigrate() (bool, error) {
 		// v3.0+ version in the v1 API data which suggests a modified/hacked set up which we
 		// cannot migrate from.
 		log.Errorf("Unexpected version in the global Felix configuration, currently at %s", v)
-		return false, errors.New(fmt.Sprintf("unexpected Calico version '%s': migration to v3 should be from a tagged "+
-			"release of Calico v%s+", v, minUpgradeVersion))
+		return false, fmt.Errorf("unexpected Calico version '%s': migration to v3 should be from a tagged "+
+			"release of Calico v%s+", v, minUpgradeVersion)
 	}
 	log.Debugf("GlobalConfig contained CalicoVersion '%s' and indicates migration is needed", v)
 	return true, nil
@@ -951,7 +957,7 @@ func (m *migrationHelper) storeV3Resources(data *MigrationData) error {
 	for n, r := range data.Resources {
 		// Convert the resource to a KVPair and access the backend datastore directly.
 		// This is slightly more efficient, and cuts out some of the unneccessary additional
-		// processing. Since we applying directly to the backend we need to set the UUID
+		// processing. Since we are applying directly to the backend we need to set the UUID
 		// and creation timestamp which is normally handled by clientv3.
 		r = toStorage(r)
 		if err := m.applyToBackend(&model.KVPair{
@@ -1066,15 +1072,15 @@ func (m *migrationHelper) migrateIPAMData() error {
 	return nil
 }
 
-// backend is an interface used to access the backend client from the main clientv3.
-type backend interface {
+// backendClientAccessor is an interface used to access the backend client from the main clientv3.
+type backendClientAccessor interface {
 	Backend() bapi.Client
 }
 
 // applyToBackend applies the supplied KVPair directly to the backend datastore.
 func (m *migrationHelper) applyToBackend(kvp *model.KVPair) error {
-	// Extract the backend API from the v3 client.
-	bc := m.clientv3.(backend).Backend()
+	// Extract the backend client API from the v3 client.
+	bc := m.clientv3.(backendClientAccessor).Backend()
 
 	// First try creating the resource. If the resource already exists, try an update.
 	logCxt := log.WithField("Key", kvp.Key)

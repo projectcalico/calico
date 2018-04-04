@@ -15,16 +15,25 @@
 package migrator
 
 import (
+	"context"
+	"errors"
 	gnet "net"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/converters"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("UT for checking the version for migration.", func() {
@@ -97,7 +106,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	It("should not filter WorkloadEndpoints without openstack as OrchestratorID", func() {
 		clientv1 := fakeClientV1{
 			kvps: []*model.KVPair{
-				&model.KVPair{
+				{
 					Key:   wk,
 					Value: &wv,
 				},
@@ -112,7 +121,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 		wepOSKey.OrchestratorID = v3.OrchestratorOpenStack
 		clientv1 := fakeClientV1{
 			kvps: []*model.KVPair{
-				&model.KVPair{
+				{
 					Key:   wepOSKey,
 					Value: &wv,
 				},
@@ -125,7 +134,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	It("should not filter Profiles without openstack-sg prefix", func() {
 		clientv1 := fakeClientV1{
 			kvps: []*model.KVPair{
-				&model.KVPair{
+				{
 					Key: model.ProfileKey{
 						Name: "profilename",
 					},
@@ -145,7 +154,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 	It("should filter Profiles with openstack-sg- prefix", func() {
 		clientv1 := fakeClientV1{
 			kvps: []*model.KVPair{
-				&model.KVPair{
+				{
 					Key: model.ProfileKey{
 						Name: "openstack-sg-profilename",
 					},
@@ -162,4 +171,88 @@ var _ = Describe("Test OpenStack migration filters", func() {
 
 		convertAndCheckResourcesConverted(clientv1, 0)
 	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Migration tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+
+	ctx := context.Background()
+	blank := ""
+	v2_6_4 := "v2.6.4"
+	v2_6_5 := "v2.6.5"
+	v3_0_0 := "v3.0.0"
+	v3_1_0 := "v3.1.0"
+	master := "master"
+
+	DescribeTable("ShouldMigrate() tests",
+		func(v1Version, v3Version *string, expected interface{}) {
+			// For the v1 version, we use the emulated client since this is an easy implementation.
+			// For the v3 version, we hook into etcdv3 using the real v3 client.
+			v3Client, err := clientv3.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Clean the v3 data.
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+
+			// If the v3 version is specified, configure it in the ClusterInformation.
+			By("Configuring a cluster version in the v3 datastore")
+			if v3Version != nil {
+				_, err := v3Client.ClusterInformation().Create(ctx, &v3.ClusterInformation{
+					ObjectMeta: v1.ObjectMeta{
+						Name: "default",
+					},
+					Spec: v3.ClusterInformationSpec{
+						CalicoVersion: *v3Version,
+					},
+				}, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Create the dummy v1 client, if necesary including the v1 cluster version.
+			By("Configuring a cluster version in the v1 datastore")
+			v1Client := fakeClientV1{}
+			if v1Version != nil {
+				v1Client.kvps = append(v1Client.kvps, &model.KVPair{
+					Key:   model.GlobalConfigKey{Name: "CalicoVersion"},
+					Value: *v1Version,
+				})
+			}
+
+			// Create the migration helper.
+			By("Creating a migration helper and invoking ShouldMigrate()")
+			mh := &migrationHelper{clientv1: v1Client, clientv3: v3Client}
+			s, err := mh.ShouldMigrate()
+			if b, ok := expected.(bool); ok {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(s).To(Equal(b))
+			} else {
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(Equal(expected.(error).Error()))
+				Expect(s).To(BeFalse())
+			}
+		},
+
+		// Test 1: Pass two fully populated BGPConfigurationSpecs and expect the series of operations to succeed.
+		Entry("No calico version data", nil, nil, false),
+		Entry("v1 only calico version (v2.6.4)", &v2_6_4, nil,
+			errors.New("unable to migrate data from version 'v2.6.4': migration to "+
+				"v3 requires a tagged release of Calico v2.6.5+")),
+		Entry("v1 only calico version (v2.6.5)", &v2_6_5, nil, true),
+		Entry("v1 only calico version (v3.0.0)", &v3_0_0, nil,
+			errors.New("unexpected Calico version 'v3.0.0': migration to v3 should be from a tagged "+
+				"release of Calico v2.6.5+")),
+		Entry("v1 only calico version (master)", &master, nil,
+			errors.New("unable to migrate data from version 'master': unable to parse the version")),
+		Entry("v3 only calico version (v2.6.4)", nil, &v2_6_4,
+			errors.New("unexpected CalicoVersion 'v2.6.4' in ClusterInformation: migration to v3 requires a tagged "+
+				"release of Calico v2.6.5+")),
+		Entry("v1 and v3 calico version (v2.6.5)", &v2_6_5, &v2_6_5, true),
+		Entry("v1 and v3 calico version (v2.6.5 and v3.0.0 resp)", &v2_6_5, &v3_0_0, false),
+		Entry("v1 and v3 calico version (v2.6.5 and v3.1.0 resp)", &v2_6_5, &v3_1_0, false),
+		Entry("v1 and v3 calico version (v2.6.5 and blank resp)", &v2_6_5, &blank, true),
+		Entry("v1 and v3 calico version (blank)", &blank, &blank,
+			errors.New("unable to migrate data from version '': unable to parse the version")),
+		Entry("v3 only calico version (blank)", nil, &blank, false),
+	)
 })
