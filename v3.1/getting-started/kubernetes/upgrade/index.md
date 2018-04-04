@@ -3,42 +3,35 @@ title: Upgrading Calico for Kubernetes
 canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/'
 ---
 
-Upgrading to this release of {{site.prodname}} from a pre-v3.0 release may require some manual steps, depending on
-your choice of datastore.
-
 ## Before you begin
 
-- You must first [upgrade](/v2.6/getting-started/kubernetes/upgrade) 
-  to {{site.prodname}} [v2.6.5](https://github.com/projectcalico/calico/releases) 
-  (or a later v2.6.x release) before you can upgrade to {{site.prodname}} 
-  {{site.data.versions[page.version].first.title}}. 
+- You must first upgrade to at least {{site.prodname}} [v2.6.5](https://github.com/projectcalico/calico/releases) 
+  before you can upgrade to {{site.prodname}} {{site.data.versions[page.version].first.title}}. 
   
-  > **Important**: {{site.prodname}} v2.6.5 was a special transitional release that included changes to enable 
-  > upgrade to v3.0.1+; do not skip this step!
+  > **Important**: {{site.prodname}} v2.6.5 was a special transitional release that 
+  > included changes to enable upgrade to {{site.prodname}} v3.x. Do not skip this step!
   {: .alert .alert-danger}
 
-- If you are using the etcd datastore, you should upgrade etcd to the latest stable 
+- If you are using the etcd datastore, upgrade etcd to the latest stable 
   [v3 release](https://coreos.com/etcd/docs/latest/).  
+
+## About upgrading to {{site.prodname}} {{site.data.versions[page.version].first.title}}
+
+The steps to upgrade differ according to your current version and datastore type.
+
+- **Kubernetes API datastore, {{site.prodname}} v2.6.5 or later**: Complete the steps in 
+  [Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-a-self-hosted-installation-that-uses-the-kubernetes-api-datastore).
   
-  > **Tip**: etcd v3.x still supports the etcd v2 API, as used by {{site.prodname}} v2.6.x.
-  > However, {{site.prodname}} v3.0.0+ does not support the etcd v2 API.  The upgrade steps below
-  > move the data from the etcd v2 API to the etcd v3 API.  This requires an etcd v3.x server.
-  {: .alert .alert-success}
+- **etcd datastore, {{site.prodname}} v3.x**: Complete the steps in 
+  [Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-a-self-hosted-installation-that-uses-the-etcd-datastore).
+  
+- **etcd datastore, {{site.prodname}} v2.6.x**: You must migrate your data before
+  you can upgrade. Complete the steps in each of the following sections.
+  
+  1. **[Install and configure calico-upgrade](/{{page.version}}/getting-started/kubernetes/upgrade/setup)** 
 
-## Kubernetes API datastore upgrade steps
+  1. **[Test the data migration and check for errors](/{{page.version}}/getting-started/kubernetes/upgrade/test)**
 
-If you are using the Kubernetes API datastore, complete the steps in 
-[Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade).
+  1. **[Migrate {{site.prodname}} data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate)** 
 
-## etcd datastore upgrade steps
-
-If you are using the etcd datastore then a manual migration step is required, using the 
-`calico-upgrade` tool.  To complete the upgrade follow these steps in sequence:
-
-1. **[Install and configure calico-upgrade](/{{page.version}}/getting-started/kubernetes/upgrade/setup)** 
-
-1. **[Test the data migration and check for errors](/{{page.version}}/getting-started/kubernetes/upgrade/test)**
-
-1. **[Migrate {{site.prodname}} data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate)** 
-
-1. **[Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade)** 
+  1. **[Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-a-self-hosted-installation-that-uses-the-etcd-datastore)** 

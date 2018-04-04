@@ -23,7 +23,7 @@ following:
 
 - [The existing etcdv2 datastore used by Calico v2.6.5](#configuring-calico-upgrade-to-connect-to-the-etcdv2-datastore)
 
-- [The etcdv3 cluster you plan to use for Calico v3.0](#configuring-calico-upgrade-to-connect-to-the-etcdv3-cluster)
+- [The etcdv3 cluster you plan to use for Calico v3.x](#configuring-calico-upgrade-to-connect-to-the-etcdv3-cluster)
 
 {% include {{page.version}}/config-calico-upgrade-etcd.md %}
 
