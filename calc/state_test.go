@@ -243,3 +243,28 @@ func (s State) KVDeltas(prev State) []api.Update {
 	}
 	return deltas
 }
+
+func (s State) NumPolicies() int {
+	return s.ActiveKeys(model.PolicyKey{}).Len()
+}
+
+func (s State) NumProfileRules() int {
+	return s.ActiveKeys(model.ProfileRulesKey{}).Len()
+}
+
+func (s State) ActiveKeys(keyTypeExample interface{}) set.Set {
+	// Need to be a little careful here, the DatastoreState can contain an ordered sequence of updates and deletions
+	// We need to track which keys are actually still live at the end of it.
+	keys := set.New()
+	for _, u := range s.DatastoreState {
+		if reflect.TypeOf(u.Key) != reflect.TypeOf(keyTypeExample) {
+			continue
+		}
+		if u.Value == nil {
+			keys.Discard(u.Key)
+		} else {
+			keys.Add(u.Key)
+		}
+	}
+	return keys
+}

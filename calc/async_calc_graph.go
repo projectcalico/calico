@@ -22,7 +22,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -70,7 +69,7 @@ func init() {
 }
 
 type AsyncCalcGraph struct {
-	Dispatcher       *dispatcher.Dispatcher
+	*CalcGraph
 	inputEvents      chan interface{}
 	outputChannels   []chan<- interface{}
 	eventBuffer      *EventSequencer
@@ -97,11 +96,11 @@ func NewAsyncCalcGraph(
 	healthAggregator *health.HealthAggregator,
 ) *AsyncCalcGraph {
 	eventBuffer := NewEventSequencer(conf)
-	disp := NewCalculationGraph(eventBuffer, conf.FelixHostname)
+	calcGraph := NewCalculationGraph(eventBuffer, conf.FelixHostname)
 	g := &AsyncCalcGraph{
+		CalcGraph:        calcGraph,
 		inputEvents:      make(chan interface{}, 10),
 		outputChannels:   outputChannels,
-		Dispatcher:       disp,
 		eventBuffer:      eventBuffer,
 		healthAggregator: healthAggregator,
 	}
@@ -143,7 +142,7 @@ func (acg *AsyncCalcGraph) loop() {
 				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
 				updStartTime := time.Now()
-				acg.Dispatcher.OnUpdates(update)
+				acg.AllUpdDispatcher.OnUpdates(update)
 				summaryUpdateTime.Observe(time.Since(updStartTime).Seconds())
 				// Record stats for the number of messages processed.
 				for _, upd := range update {
@@ -156,7 +155,7 @@ func (acg *AsyncCalcGraph) loop() {
 				log.WithField("status", update).Debug(
 					"Pulled status update off channel")
 				acg.syncStatusNow = update
-				acg.Dispatcher.OnStatusUpdated(update)
+				acg.AllUpdDispatcher.OnStatusUpdated(update)
 				if update == api.InSync && !acg.beenInSync {
 					log.Info("First time we've been in sync")
 					acg.beenInSync = true

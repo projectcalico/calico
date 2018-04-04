@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,10 @@ var _ = Describe("Stats collector", func() {
 			})
 			Expect(lastStatsUpdate).To(BeNil())
 		})
+		It("should do nothing on policy count update", func() {
+			sc.UpdatePolicyCounts(10, 10)
+			Expect(lastStatsUpdate).To(BeNil())
+		})
 	})
 
 	Describe("after in-sync", func() {
@@ -87,6 +91,18 @@ var _ = Describe("Stats collector", func() {
 			sc.OnUpdate(api.Update{KVPair{Key: HostConfigKey{localHostname, "foo"}}, api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumHosts: 1,
+			}))
+		})
+		It("should count a policy", func() {
+			sc.UpdatePolicyCounts(1, 0)
+			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
+				NumPolicies: 1,
+			}))
+		})
+		It("should count a profile", func() {
+			sc.UpdatePolicyCounts(0, 1)
+			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
+				NumProfiles: 1,
 			}))
 		})
 

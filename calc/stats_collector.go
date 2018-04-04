@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
@@ -38,18 +37,30 @@ var (
 		Name: "felix_cluster_num_workload_endpoints",
 		Help: "Total number of workload endpoints cluster-wide.",
 	})
+	gaugeClusNumPolicies = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_cluster_num_policies",
+		Help: "Total number of policies cluster-wide.",
+	})
+	gaugeClusNumProfiles = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_cluster_num_profiles",
+		Help: "Total number of profiles cluster-wide.",
+	})
 )
 
 func init() {
 	prometheus.MustRegister(gaugeClusNumHosts)
 	prometheus.MustRegister(gaugeClusNumHostEndpoints)
 	prometheus.MustRegister(gaugeClusNumWorkloadEndpoints)
+	prometheus.MustRegister(gaugeClusNumPolicies)
+	prometheus.MustRegister(gaugeClusNumProfiles)
 }
 
 type StatsCollector struct {
 	keyCountByHost       map[string]int
 	numWorkloadEndpoints int
 	numHostEndpoints     int
+	numPolicies          int
+	numProfiles          int
 
 	lastUpdate StatsUpdate
 	inSync     bool
@@ -61,6 +72,8 @@ type StatsUpdate struct {
 	NumHosts             int
 	NumWorkloadEndpoints int
 	NumHostEndpoints     int
+	NumPolicies          int
+	NumProfiles          int
 }
 
 func (s StatsUpdate) String() string {
@@ -75,12 +88,13 @@ func NewStatsCollector(callback func(StatsUpdate) error) *StatsCollector {
 	}
 }
 
-func (s *StatsCollector) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	allUpdDispatcher.Register(model.HostIPKey{}, s.OnUpdate)
-	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, s.OnUpdate)
-	allUpdDispatcher.Register(model.HostEndpointKey{}, s.OnUpdate)
-	allUpdDispatcher.Register(model.HostConfigKey{}, s.OnUpdate)
-	allUpdDispatcher.RegisterStatusHandler(s.OnStatusUpdate)
+func (s *StatsCollector) RegisterWith(calcGraph *CalcGraph) {
+	calcGraph.AllUpdDispatcher.Register(model.HostIPKey{}, s.OnUpdate)
+	calcGraph.AllUpdDispatcher.Register(model.WorkloadEndpointKey{}, s.OnUpdate)
+	calcGraph.AllUpdDispatcher.Register(model.HostEndpointKey{}, s.OnUpdate)
+	calcGraph.AllUpdDispatcher.Register(model.HostConfigKey{}, s.OnUpdate)
+	calcGraph.AllUpdDispatcher.RegisterStatusHandler(s.OnStatusUpdate)
+	calcGraph.activeRulesCalculator.OnPolicyCountsChanged = s.UpdatePolicyCounts
 }
 
 func (s *StatsCollector) OnStatusUpdate(status api.SyncStatus) {
@@ -139,16 +153,34 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 	return
 }
 
+func (s *StatsCollector) UpdatePolicyCounts(numPolicies, numProfiles int) {
+	if numPolicies == s.numPolicies && numProfiles == s.numProfiles {
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"numPolicies": numPolicies,
+		"numProfiles": numProfiles,
+	}).Debug("Number of policies/profiles changed")
+	s.numPolicies = numPolicies
+	s.numProfiles = numProfiles
+	s.sendUpdate()
+}
+
 func (s *StatsCollector) sendUpdate() {
 	log.Debug("Checking whether we should send an update")
 	update := StatsUpdate{
 		NumHosts:             len(s.keyCountByHost),
 		NumHostEndpoints:     s.numHostEndpoints,
 		NumWorkloadEndpoints: s.numWorkloadEndpoints,
+		NumPolicies:          s.numPolicies,
+		NumProfiles:          s.numProfiles,
 	}
 	gaugeClusNumHosts.Set(float64(len(s.keyCountByHost)))
 	gaugeClusNumWorkloadEndpoints.Set(float64(s.numWorkloadEndpoints))
 	gaugeClusNumHostEndpoints.Set(float64(s.numHostEndpoints))
+	gaugeClusNumPolicies.Set(float64(s.numPolicies))
+	gaugeClusNumProfiles.Set(float64(s.numProfiles))
 	if s.inSync && s.lastUpdate != update {
 		if err := s.Callback(update); err != nil {
 			log.WithError(err).Warn("Failed to report stats")
