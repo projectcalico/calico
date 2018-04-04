@@ -184,7 +184,7 @@ class DockerHost(object):
             self.ip6 = get_ip(v6=True)
 
         if start_calico:
-            self.start_calico_node()
+            self.start_calico_node(env_options=' -e FELIX_HEALTHENABLED=true ')
 
     def execute(self, command, raise_exception_on_failure=True, daemon_mode=False):
         """
