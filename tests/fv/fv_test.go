@@ -146,7 +146,6 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err := calicoClient.Nodes().Create(context.Background(), cn, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
 			Eventually(func() *api.Node {
 				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 				return node
@@ -206,7 +205,16 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 
 		It("should clean up weps, IPAM allocations, etc. when deleting a node", func() {
-			// Create a node.
+			// Create the node in the Kubernetes API.
+			kn := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kNodeName,
+				},
+			}
+			_, err := k8sClient.CoreV1().Nodes().Create(kn)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create the node object in Calico's datastore.
 			cn := &api.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: cNodeName,
@@ -220,7 +228,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 					},
 				},
 			}
-			_, err := calicoClient.Nodes().Create(context.Background(), cn, options.SetOptions{})
+			_, err = calicoClient.Nodes().Create(context.Background(), cn, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create objects associated with this node.
@@ -233,14 +241,6 @@ var _ = Describe("kube-controllers FV tests", func() {
 				},
 			}
 			_, err = calicoClient.IPPools().Create(context.Background(), &pool, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			kn := &v1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: kNodeName,
-				},
-			}
-			_, err = k8sClient.CoreV1().Nodes().Create(kn)
 			Expect(err).NotTo(HaveOccurred())
 
 			affBlock := cnet.IPNet{
@@ -317,7 +317,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.BGPConfigurations().Create(context.Background(), &bgpConf, options.SetOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Delete thd node.
+			// Delete the node.
 			err = k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -336,7 +336,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			ips, _ := calicoClient.IPAM().IPsByHandle(context.Background(), handle)
 			Expect(ips).Should(BeNil())
 
-			// Check that the host affinity pool was released.
+			// Check that the host affinity was released.
 			be := testutils.GetBackendClient(etcd.IP)
 			list, err := be.List(
 				context.Background(),
@@ -729,7 +729,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 						return fmt.Errorf("%v should equal 'label2'", w.Labels["foo"])
 					}
 					return nil
-				}, 10*time.Second).ShouldNot(HaveOccurred())
+				}, 15*time.Second).ShouldNot(HaveOccurred())
 			})
 
 			By("updating the workload endpoint's container ID", func() {
