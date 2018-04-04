@@ -1,9 +1,0 @@
----
-  dataSource: "prs"
-  prefix: ""
-  onlyMilestones: false
-  changelogFilename: "CHANGELOG.md"
-  groupBy: 
-    Notable changes: ["release-note-required"]
-  template: 
-    label: ""

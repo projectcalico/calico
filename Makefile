@@ -211,22 +211,8 @@ release-publish: release-prereqs
 	docker push calico/kube-controllers:$(VERSION)
 	docker push quay.io/calico/kube-controllers:$(VERSION)
 
-	# Make a draft of the release notes.
-	$(MAKE) release-notes
-
 	@echo "Complete the release process on GitHub"
-
-# Run gren in a container in order to generate a GitHub release with the correct
-# release notes. See here for more info: https://github.com/github-tools/github-release-notes
-release-notes: release-prereqs
-ifndef GITHUB_TOKEN
-	$(error GITHUB_TOKEN is undefined - run using make release-notes GITHUB_TOKEN=X)
-endif
-	docker run -ti --rm \
-		-v $(PWD):/code \
-		-e GREN_GITHUB_TOKEN=$(GITHUB_TOKEN) \
-		-e VERSION=$(VERSION) \
-		node bash -c "npm install github-release-notes -g && cd /code && gren release -d -t $(VERSION)"
+	@echo " - https://github.com/projectcalico/kube-controllers/releases"
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
