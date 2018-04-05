@@ -1,10 +1,11 @@
 
  Use `calicoctl convert` to convert your Calico resource manifests from v1 API to v3 API.
  
-   > **Note**: Make sure to use the latest version of `calicoctl`
+ > **Important**: Make sure to use the latest version of `calicoctl`.
+ {: .alert .alert-danger}
    
  `calicoctl convert` command allows you to convert multiple resources from v1 API to v3 at the same time.
- You can convert your v1 yaml or json manifests v3 yaml or json manifests.
+ You can convert your v1 YAML or JSON manifests to v3 YAML or JSON manifests.
  
  **Example**
  ```

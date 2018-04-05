@@ -8,7 +8,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/u
 You may need or wish to manually delete Calico data from your etcd datastore under the
 following conditions.
   
-- [**etcd**: You succeeded in migrating your data and upgrading to Calico v3.0. After
+- [**etcd**: You succeeded in migrating your data and upgrading to Calico v3.x. After
   running Calico for some time and experiencing no errors, you want to delete
   the old Calico data from the etcdv2 datastore](#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade).
   
@@ -16,9 +16,9 @@ following conditions.
   with some, but not all of your etcvd2 data](#deleting-calico-data-from-etcdv3-after-a-partial-migration).
 
 - [**Kubernetes API datastore**: You are using the Kubernetes API datastore and upgraded 
-  to Calico v3.0 but then downgraded to v2.6.5. You want to clean the Calico v3.0 data out of
+  to Calico v3.x but then downgraded to v2.6.x. You want to clean the Calico v3.x data out of
   the Kubernetes API datastore. If you plan to attempt another upgrade to
-  Calico v3.0, this is required.](#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade).
+  Calico v3.x, this is required.](#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade).
 
 {% include {{page.version}}/deleting-etcd-v2-v3-data.md %}
 
@@ -27,7 +27,7 @@ following conditions.
 ### Prerequisites
 
 - This procedure requires kubectl.
-- This procedure should only be done if you have upgraded to v3.0+ and then
+- This procedure should only be done if you have upgraded to v3.x and then
   downgraded to your previous version.
 
 ### Deleting Calico data from the Kubernetes API datastore

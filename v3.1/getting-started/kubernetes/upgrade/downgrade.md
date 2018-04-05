@@ -9,7 +9,7 @@ Under some circumstances, you may need to perform a downgrade and return your
 cluster to the previous version of {{site.prodname}}. If you need to downgrade
 you should do so as soon as possible to avoid an outage.
 
-> **Important**: After downgrading or aborting the migration it is necessary
+> **Note**: After downgrading or aborting the migration it is necessary
 > to delete the previously migrated
 > [etcd](delete#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade)
 > or [Kubernetes API](delete#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade)
@@ -31,9 +31,6 @@ The downgrade procedure varies according to how you originally installed
   Kubernetes API datastore](#downgrading-a-self-hosted-installation-that-uses-the-kubernetes-api-datastore)
   follow these steps.
 
-
-- [Downgrading a custom installation](#downgrading-a-custom-installation)
-
 ## Downgrading a self-hosted installation that uses the etcd datastore
 
 If you have upgraded {{site.prodname}} by deploying the latest manifest,
@@ -47,7 +44,7 @@ follow the steps here to downgrade.
    calico-upgrade abort
    ```
    
-   > **Important**: Do not use versions of `calicoctl` v3.0+ after aborting the upgrade.
+   > **Important**: Do not use versions of `calicoctl` v3.x after aborting the upgrade.
    > Doing so may result in unexpected behavior and data.
    {: .alert .alert-danger}
 
@@ -80,8 +77,3 @@ follow the steps here to downgrade.
    ```
    kubectl rollout status ds/calico-node -n kube-system
    ```
-
-## Downgrading a custom installation
-
-_Docs for this coming soon!_
-
