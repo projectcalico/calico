@@ -17,7 +17,7 @@ SHARED_ETCD_OPTS = [
     # etcd connection information.
     cfg.StrOpt('etcd_host', default='127.0.0.1',
                help="The hostname or IP of the etcd node/proxy"),
-    cfg.IntOpt('etcd_port', default=4001,
+    cfg.IntOpt('etcd_port', default=2379,
                help="The port to use for the etcd node/proxy"),
     cfg.StrOpt('etcd_scheme', default='http',
                help='The protocol scheme to be used for connections to etcd'),

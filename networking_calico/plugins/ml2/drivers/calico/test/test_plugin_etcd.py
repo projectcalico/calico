@@ -311,7 +311,7 @@ class TestPluginEtcd(_TestEtcdBase):
 
         # Mock out config.
         lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
+        lib.m_compat.cfg.CONF.calico.etcd_port = 2379
         lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
         lib.m_compat.cfg.CONF.calico.etcd_key_file = None
