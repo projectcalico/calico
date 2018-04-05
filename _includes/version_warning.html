@@ -8,11 +8,11 @@
 
 {% if page.version != site.data.versions.first[0] %}
   <div class="alert alert-warning" role="alert">
-    <strong>Warning:</strong> You are viewing the {{ page.version }} docs.
+    <strong>Warning:</strong>
     {% if canonical_version == site.data.versions.first[0] %}
-      <a href="{{site.baseurl}}/{{canonical_path}}">Click here to view this doc on the latest release.</a>
+      You're not viewing the <a href="{{site.baseurl}}/{{canonical_path}}">latest copy of this page</a>.
     {% else %}
-      <a href="{{site.baseurl}}/latest">Click here to view the docs for the latest release.</a>
+      You're not viewing the <a href="{{site.baseurl}}/latest">latest {{site.prodname}} documentation</a>.
     {% endif %}
   </div>
 {% endif %}
