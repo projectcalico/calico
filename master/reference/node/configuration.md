@@ -144,3 +144,24 @@ e.g.
 IP_AUTODETECTION_METHOD=interface=eth.*
 IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
+
+### Node readiness
+
+The `calico/node` container supports an exec readiness endpoint.
+
+Here is the help text:
+
+```
+$ docker exec calico-node /bin/readiness -h
+Usage of dist/readiness:
+  -bird
+    	Specify to enable BIRD readiness checks
+  -bird6
+    	Specify to enable BIRD6 readiness checks
+  -felix
+    	Specify to enable felix readiness checks
+```
+
+The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifiying that all BGP peers are established and
+no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
+in the cluster, see [decomissioning a node]]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).

@@ -101,7 +101,7 @@ NODE_CONTAINER_NAME?=calico/node$(ARCHTAG)
 NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
-NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
+NODE_CONTAINER_BINARIES=startup readiness allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 
 FELIX_REPO?=calico/felix
 FELIX_CONTAINER_NAME?=$(FELIX_REPO)$(ARCHTAG):$(FELIX_VER)
@@ -117,6 +117,8 @@ STARTUP_DIR=$(NODE_CONTAINER_DIR)/startup
 STARTUP_FILES=$(shell find $(STARTUP_DIR) -name '*.go')
 ALLOCATE_IPIP_DIR=$(NODE_CONTAINER_DIR)/allocateipip
 ALLOCATE_IPIP_FILES=$(shell find $(ALLOCATE_IPIP_DIR) -name '*.go')
+READINESS_DIR=$(NODE_CONTAINER_DIR)/readiness
+READINESS_FILES=$(shell find $(READINESS_DIR) -name '*.go')
 
 TEST_CONTAINER_NAME?=calico/test$(ARCHTAG):latest
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
@@ -283,6 +285,10 @@ $(NODE_CONTAINER_BIN_DIR)/startup: dist/startup
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
 	cp dist/startup $(NODE_CONTAINER_BIN_DIR)/startup
 
+$(NODE_CONTAINER_BIN_DIR)/readiness: dist/readiness
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+	cp dist/readiness $(NODE_CONTAINER_BIN_DIR)/readiness
+
 $(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr: dist/allocate-ipip-addr
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
 	cp dist/allocate-ipip-addr $(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr
@@ -306,6 +312,26 @@ dist/startup: $(STARTUP_FILES) vendor
 	  	$(CALICO_BUILD) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
 			make CALICO_GIT_VER=$(CALICO_GIT_VER) startup'
+
+## Build readiness.go
+.PHONY: readiness
+readiness:
+	GOOS=linux GOARCH=$(ARCH) CGO_ENABLED=0 go build -v -i -o dist/readiness $(LDFLAGS) readiness/readiness.go
+
+dist/readiness: $(HEALTHCHECK_FILES) vendor
+	mkdir -p dist
+	mkdir -p .go-pkg-cache
+	docker run --rm \
+		-e ARCH=$(ARCH) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
+		-v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
+		-v $(VERSIONS_FILE):/versions.yaml:ro \
+        -e VERSIONS_FILE=/versions.yaml \
+	  	$(CALICO_BUILD) sh -c '\
+			cd /go/src/$(PACKAGE_NAME) && \
+			make CALICO_GIT_VER=$(CALICO_GIT_VER) readiness'
 
 ## Build allocate_ipip_addr.go
 .PHONY: allocate-ipip-addr
@@ -596,7 +622,7 @@ node-test-at:
 	chmod +rx /tmp/goss && \
 	/tmp/goss --gossfile /tmp/goss.yaml validate'
 
-.PHONY: ci 
+.PHONY: ci
 ci:
 	# Run the containerized UTs first.
 	$(MAKE) node-test-containerized
