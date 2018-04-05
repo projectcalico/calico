@@ -28,8 +28,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -409,19 +409,26 @@ const (
 
 func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var validationFilter *ValidationFilter
-	var calcGraph *dispatcher.Dispatcher
+	var calcGraph *CalcGraph
 	var mockDataplane *mock.MockDataplane
 	var eventBuf *EventSequencer
 	var lastState State
 	var state State
 	var sentInSync bool
+	var lastStats StatsUpdate
 
 	BeforeEach(func() {
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
 		calcGraph = NewCalculationGraph(eventBuf, localHostname)
-		validationFilter = NewValidationFilter(calcGraph)
+		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
+			log.WithField("stats", stats).Info("Stats update")
+			lastStats = stats
+			return nil
+		})
+		statsCollector.RegisterWith(calcGraph)
+		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher)
 		sentInSync = false
 		lastState = empty
 		state = empty
@@ -497,6 +504,12 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
 			"PreDNAT policies incorrect after moving to state: %v",
 			state.Name)
+		Expect(lastStats.NumPolicies).To(Equal(state.NumPolicies()),
+			"number of policies stat incorrect after moving to state: %v\n%+v",
+			state.Name, spew.Sdump(state.DatastoreState))
+		Expect(lastStats.NumProfiles).To(Equal(state.NumProfileRules()),
+			"number of profiles stat incorrect after moving to state: %v\n%+v",
+			state.Name, spew.Sdump(state.DatastoreState))
 	}))
 }
 

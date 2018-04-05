@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -182,14 +182,16 @@ func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion str
 		"gitRevision":   buildinfo.GitRevision,
 	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
-		"guid":    {clusterGUID},
-		"type":    {clusterType},
-		"cal_ver": {calicoVersion},
-		"size":    {fmt.Sprintf("%v", stats.NumHosts)},
-		"weps":    {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
-		"heps":    {fmt.Sprintf("%v", stats.NumHostEndpoints)},
-		"version": {buildinfo.GitVersion},
-		"rev":     {buildinfo.GitRevision},
+		"guid":     {clusterGUID},
+		"type":     {clusterType},
+		"cal_ver":  {calicoVersion},
+		"size":     {fmt.Sprint(stats.NumHosts)},
+		"weps":     {fmt.Sprint(stats.NumWorkloadEndpoints)},
+		"heps":     {fmt.Sprint(stats.NumHostEndpoints)},
+		"version":  {buildinfo.GitVersion},
+		"rev":      {buildinfo.GitRevision},
+		"policies": {fmt.Sprint(stats.NumPolicies)},
+		"profiles": {fmt.Sprint(stats.NumProfiles)},
 	}
 	fullURL := u.BaseURL + queryParams.Encode()
 	log.WithField("url", fullURL).Debug("Calculated URL.")

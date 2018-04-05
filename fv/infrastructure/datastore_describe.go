@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 )
 

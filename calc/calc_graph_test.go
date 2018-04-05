@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			logrus.WithField("message", message).Info("Received message")
 			messageReceived = message
 		}
-		cg := NewCalculationGraph(eb, "hostname")
+		cg := NewCalculationGraph(eb, "hostname").AllUpdDispatcher
 
 		// Send in the update and flush the buffer.  It should deposit the message
 		// via our callback.
@@ -129,7 +129,7 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			logrus.WithField("message", message).Info("Received message")
 			messagesReceived = append(messagesReceived, message)
 		}
-		cg = NewCalculationGraph(eb, "hostname")
+		cg = NewCalculationGraph(eb, "hostname").AllUpdDispatcher
 	})
 
 	It("should coalesce duplicate updates", func() {
