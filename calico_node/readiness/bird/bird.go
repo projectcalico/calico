@@ -126,7 +126,7 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 	}
 
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
-	c, err := net.Dial("unix", "/var/run/calico/bird.ctl")
+	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
 	if err != nil {
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
