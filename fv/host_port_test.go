@@ -17,6 +17,8 @@
 package fv_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -146,7 +148,23 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 			})
 
 			It("port should be reachable", func() {
-				Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
+				//Eventually(metricsPortReachable, "10s", "1s").Should(BeTrue())
+				// Switching to the loop below, *seems* to have fixed a flake
+				// that was happening here with the Eventually check above.
+				// The loop is purposefully high vs what is being checked so
+				// if another failure occurs we can see if the timeout is just
+				// a little too low or it is something more.
+				start := time.Now()
+				for time.Since(start).Seconds() < 50 {
+					metricsStartTime := time.Now()
+					reachable := metricsPortReachable()
+					log.WithField("time", time.Since(metricsStartTime)).Info("Checked metrics port")
+					if reachable {
+						break
+					}
+					time.Sleep(time.Second)
+				}
+				Expect(time.Since(start).Seconds()).To(BeNumerically("<", 10))
 			})
 		})
 	})
