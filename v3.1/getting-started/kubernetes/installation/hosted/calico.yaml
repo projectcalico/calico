@@ -204,11 +204,9 @@ spec:
             initialDelaySeconds: 10
             failureThreshold: 6
           readinessProbe:
-            exec:
-              command:
-              - /bin/readiness
-              - -bird
-              - -felix
+            httpGet:
+              path: /readiness
+              port: 9099
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules
