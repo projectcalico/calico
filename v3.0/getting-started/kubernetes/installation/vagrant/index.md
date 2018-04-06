@@ -26,10 +26,10 @@ Run
     vagrant up
 
 
-> **Note**: This will deploy a Kubernetes master and two Kubernetes nodes. 
-> To run more nodes, modify the value `num_instances` in the Vagrantfile 
+> **Note**: This will deploy a Kubernetes master and two Kubernetes nodes.
+> To run more nodes, modify the value `num_instances` in the Vagrantfile
 > before running `vagrant up`.
-{: .alert .alert-info} 
+{: .alert .alert-info}
 
 To connect to your servers
 
@@ -82,7 +82,7 @@ And finally check that Docker is running on both hosts by running
 
 Prequisite: [`kubectl` installed](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
-Let's configure `kubectl` so you can access the cluster from your local machine. 
+Let's configure `kubectl` so you can access the cluster from your local machine.
 
 ```shell
 kubectl config set-cluster vagrant-cluster --server=http://172.18.18.101:8080

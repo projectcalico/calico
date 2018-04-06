@@ -1,6 +1,6 @@
 ---
 title: Kubernetes API datastore
-canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/kubernetes-datastore/
+canonical_url: https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/
 ---
 
 This document describes how to install {{site.prodname}} on Kubernetes without a separate etcd cluster.
@@ -50,46 +50,46 @@ Install {{site.prodname}}'s RBAC manifest, which creates roles and role bindings
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
 ```
-   > **Note**: You can also 
+   > **Note**: You can also
    > [view the YAML in your browser](../rbac-kdd.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
 ### Option 1: {{site.prodname}} policy with {{site.prodname}} networking (beta)
 
-When using the Kubernetes API datastore, {{site.prodname}} has beta support for 
-{{site.prodname}} networking.  This provides BGP-based networking with a full node-to-node 
-mesh and/or explicit configuration of peers.  (The "beta" label is because Calico IPAM is 
+When using the Kubernetes API datastore, {{site.prodname}} has beta support for
+{{site.prodname}} networking.  This provides BGP-based networking with a full node-to-node
+mesh and/or explicit configuration of peers.  (The "beta" label is because Calico IPAM is
 not yet supported.)
 
 To install {{site.prodname}} with BGP networking:
 
 1. Download [the {{site.prodname}} networking manifest](calico-networking/1.7/calico.yaml)
 
-2. If your Kubernetes cluster contains more than 50 nodes, or it is likely to grow to 
+2. If your Kubernetes cluster contains more than 50 nodes, or it is likely to grow to
    more than 50 nodes, edit the manifest to [enable Typha](#enabling-typha).
 
 3. Make sure your cluster CIDR matches the `CALICO_IPV4POOL_CIDR` environment variable in the manifest.
-   The cluster CIDR is configured by the  `--cluster-cidr` option passed to the Kubernetes 
+   The cluster CIDR is configured by the  `--cluster-cidr` option passed to the Kubernetes
    controller manager.  If you are using `kubeadm` that option is controlled by `kubeadm`'s
    `--pod-network-cidr` option.
-   
+
    > **Note**: {{site.prodname}} only uses the `CALICO_IPV4POOL_CIDR` variable if there is no
-   > IP pool already created.  Changing the variable after the first node has started has no 
+   > IP pool already created.  Changing the variable after the first node has started has no
    > effect.
    {: .alert .alert-info}
 
 4. Apply the manifest: `kubectl apply -f calico.yaml`
 
-5. If your Kubernetes cluster has more than 100 nodes, we recommend disabling the 
+5. If your Kubernetes cluster has more than 100 nodes, we recommend disabling the
    node-to-node BGP mesh and configuring a pair of redundant route reflectors.
-   Due to limitations in the Kubernetes API, maintaining the node-to-node mesh 
-   uses significant CPU (in the `confd` process on each host and the API server) 
+   Due to limitations in the Kubernetes API, maintaining the node-to-node mesh
+   uses significant CPU (in the `confd` process on each host and the API server)
    as the number of nodes increases.
 
    Alternatively, if you're running on-premise, you may want to configure Calico
    to peer with your BGP infrastructure.
-    
-   In either case, see the [Configuring BGP Peers guide]({{site.baseurl}}/{{page.version}}/usage/configuration/bgp) 
+
+   In either case, see the [Configuring BGP Peers guide]({{site.baseurl}}/{{page.version}}/usage/configuration/bgp)
    for details on using `calicoctl` to configure your topology.
 
 ### <a name="policy-only"></a> Option 2: {{site.prodname}} policy-only with user-supplied networking
@@ -101,16 +101,16 @@ To install {{site.prodname}} in policy-only mode:
 
 1. Download [the policy-only manifest](policy-only/1.7/calico.yaml)
 
-2. If your Kubernetes cluster contains more than 50 nodes, or it is likely to grow to 
+2. If your Kubernetes cluster contains more than 50 nodes, or it is likely to grow to
    more than 50 nodes, edit the manifest to [enable Typha](#enabling-typha).
 
 3. Make sure your cluster CIDR matches the `CALICO_IPV4POOL_CIDR` environment variable in the manifest.
-   The cluster CIDR is configured by the  `--cluster-cidr` option passed to the Kubernetes 
+   The cluster CIDR is configured by the  `--cluster-cidr` option passed to the Kubernetes
    controller manager.  If you are using `kubeadm` that option is controlled by `kubeadm`'s
    `--pod-network-cidr` option.
-   
+
    > **Note**: {{site.prodname}} only uses the `CALICO_IPV4POOL_CIDR` variable if there is no
-   > IP pool already created.  Changing the variable after the first node has started has no 
+   > IP pool already created.  Changing the variable after the first node has started has no
    > effect.
    {: .alert .alert-info}
 
@@ -119,17 +119,17 @@ To install {{site.prodname}} in policy-only mode:
 ### Enabling Typha
 
 {{site.prodname}}'s Typha component helps {{site.prodname}} scale to high numbers of
-nodes without over-taxing the Kubernetes API server.  It sits between Felix ({{site.prodname}}'s 
+nodes without over-taxing the Kubernetes API server.  It sits between Felix ({{site.prodname}}'s
 per-host agent) and the API server, as fan-out proxy.
 
-> **Important**: Typha runs as a host-networked pod and it opens a port on the host for Felix 
+> **Important**: Typha runs as a host-networked pod and it opens a port on the host for Felix
 > to connect to.  If your cluster runs in an untrusted environment, you **must** take steps to secure that
-> port so that only your Kubernetes nodes can access it.  You may wish to add a `nodeSelector` to the 
+> port so that only your Kubernetes nodes can access it.  You may wish to add a `nodeSelector` to the
 > manifest to control where Typha runs (for example on the master) and then use {{site.prodname}} host protection
 > to secure those hosts.
 {: .alert .alert-danger}
 
-We recommend enabling Typha if you have more than 50 Kubernetes nodes in your cluster.  Without Typha, the 
+We recommend enabling Typha if you have more than 50 Kubernetes nodes in your cluster.  Without Typha, the
 load on the API server and Felix's CPU usage increases substantially as the number of nodes is increased.
 In our testing, beyond 100 nodes, both Felix and the API server use an unacceptable amount of CPU.
 
@@ -138,7 +138,7 @@ To enable Typha in either the {{site.prodname}} networking manifest or the polic
 1. Change the `typha_service_name` variable in the ConfigMap from `"none"` to `"calico-typha"`.
 
 2. Modify the replica count in the `calico-typha` Deployment section to the desired number of replicas:
-    
+
    ```
    apiVersion: apps/v1beta1
    kind: Deployment
@@ -149,15 +149,15 @@ To enable Typha in either the {{site.prodname}} networking manifest or the polic
      ...
      replicas: <number of replicas>
    ```
-   
-   We recommend starting at least one replica for every 200 nodes and, at most, 20 replicas (since each 
+
+   We recommend starting at least one replica for every 200 nodes and, at most, 20 replicas (since each
    replica places some load on the API server).
-   
+
    In production, we recommend starting at least 3 replicas to reduce the impact of rolling upgrades
    and failures.
 
-> **Note**: If you set `typha_service_name` without increasing the replica count from its default 
-> of `0` Felix will fail to start because it will try to connect to Typha but there 
+> **Note**: If you set `typha_service_name` without increasing the replica count from its default
+> of `0` Felix will fail to start because it will try to connect to Typha but there
 > will be no Typha instances to connect to.
 {: .alert .alert-info}
 

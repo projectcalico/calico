@@ -1,6 +1,6 @@
 ---
 title: Deploying Calico and Kubernetes on Container Linux by CoreOS using Vagrant and VirtualBox
-canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/vagrant/'
+canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/vagrant/
 ---
 
 These instructions allow you to set up a Kubernetes cluster with Calico networking using Vagrant and the [Calico CNI plugin][cni-plugin]. This guide does not set up TLS between Kubernetes components.
@@ -26,10 +26,10 @@ Run
     vagrant up
 
 
-> **Note**: This will deploy a Kubernetes master and two Kubernetes nodes. 
-> To run more nodes, modify the value `num_instances` in the Vagrantfile 
+> **Note**: This will deploy a Kubernetes master and two Kubernetes nodes.
+> To run more nodes, modify the value `num_instances` in the Vagrantfile
 > before running `vagrant up`.
-{: .alert .alert-info} 
+{: .alert .alert-info}
 
 To connect to your servers
 
@@ -82,7 +82,7 @@ And finally check that Docker is running on both hosts by running
 
 Prequisite: [`kubectl` installed](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
-Let's configure `kubectl` so you can access the cluster from your local machine. 
+Let's configure `kubectl` so you can access the cluster from your local machine.
 
 ```shell
 kubectl config set-cluster vagrant-cluster --server=http://172.18.18.101:8080
