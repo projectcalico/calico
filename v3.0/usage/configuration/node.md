@@ -1,7 +1,6 @@
 ---
 title: Configuring a Node IP Address and Subnet
 canonical_url: https://docs.projectcalico.org/v3.0/usage/configuration/node
-redirect_from: latest/usage/configuration/node
 ---
 
 By default, Calico automatically detects each Node's IP address and subnet.  In most cases,

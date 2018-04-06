@@ -1,7 +1,6 @@
 ---
 title: IPv6 Support
 canonical_url: https://docs.projectcalico.org/v3.0/usage/ipv6
-redirect_from: latest/usage/ipv6
 ---
 
 Calico supports connectivity over IPv6, between compute hosts, and

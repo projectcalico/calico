@@ -1,7 +1,6 @@
 ---
 title: calicoctl ipam
 canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/ipam/
-redirect_from: latest/reference/calicoctl/commands/ipam/index
 ---
 
 This section describes the `calicoctl ipam` commands.

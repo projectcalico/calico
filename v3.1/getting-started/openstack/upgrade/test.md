@@ -1,5 +1,6 @@
 ---
 title: Testing the data migration
+redirect_from: latest/getting-started/openstack/upgrade/test
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/openstack/upgrade/test'
 ---
 
