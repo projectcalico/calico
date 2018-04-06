@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        2.0.0
+Version:        3.1.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,16 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Apr 06 2018 Neil Jerram <neil@tigera.io> 1:3.1.0-1
+  - networking-calico version 3.1.0 release
+    - Try to trigger compaction during OpenStack CI run
+    - Don't log warnings when it is expected for watch to timeout
+    - DHCP agent: watch endpoints for this host only
+    - Monkey-patch etcd3gw's Watcher to avoid socket leak
+    - Chunk up etcd prefix reads into batches.
+    - Set default etcd port to 2379
+    - DHCP agent: take hostname from Neutron 'host' config
+
 * Tue Mar 20 2018 Neil Jerram <neil@tigera.io> 1:2.0.0-1
   - networking-calico version 2.0.0 release
     - Adapt for new Calico data model (v3)

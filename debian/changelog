@@ -1,3 +1,29 @@
+networking-calico (1:3.1.0~xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit 7ba006f).
+    - Try to trigger compaction during OpenStack CI run
+    - Don't log warnings when it is expected for watch to timeout
+    - DHCP agent: watch endpoints for this host only
+    - Monkey-patch etcd3gw's Watcher to avoid socket leak
+    - Chunk up etcd prefix reads into batches.
+    - Set default etcd port to 2379
+    - DHCP agent: take hostname from Neutron 'host' config
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 06 Apr 2018 17:36:55 +0100
+
+networking-calico (1:3.1.0~trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit 7ba006f).
+    - Try to trigger compaction during OpenStack CI run
+    - Don't log warnings when it is expected for watch to timeout
+    - DHCP agent: watch endpoints for this host only
+    - Monkey-patch etcd3gw's Watcher to avoid socket leak
+    - Chunk up etcd prefix reads into batches.
+    - Set default etcd port to 2379
+    - DHCP agent: take hostname from Neutron 'host' config
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 06 Apr 2018 17:36:55 +0100
+
 networking-calico (1:2.0.0~xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit b55e917).

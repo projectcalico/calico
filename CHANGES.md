@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.1.0
+
+- Try to trigger compaction during OpenStack CI run
+- Don't log warnings when it is expected for watch to timeout
+- DHCP agent: watch endpoints for this host only
+- Monkey-patch etcd3gw's Watcher to avoid socket leak
+- Chunk up etcd prefix reads into batches.
+- Set default etcd port to 2379
+- DHCP agent: take hostname from Neutron 'host' config
+
 ## 2.0.0
 
 - Adapt for new Calico data model (v3)
