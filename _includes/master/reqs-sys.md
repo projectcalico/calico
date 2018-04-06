@@ -26,7 +26,8 @@ use the Kubernetes API datastore.{% endif %}{% if include.orch == "OpenShift" %}
 OpenShift, {{site.prodname}} can share an etcdv3 cluster with OpenShift, or
 you can set up an etcdv3 cluster dedicated to {{site.prodname}}.{% endif %}
 {% if include.orch == "OpenStack" %}If you don't already have an etcdv3 cluster
-to connect to, we provide instructions in the [installation documentation](./installation/).{% endif %}
+to connect to, we provide instructions in the [installation documentation](./installation/).{% endif %}{% if include.orch == "host protection" %}The key/value store must be etcdv3.{% endif %}
+
 
 ## Network requirements
 
