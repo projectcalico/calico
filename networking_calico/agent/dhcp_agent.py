@@ -576,7 +576,12 @@ class CalicoDhcpAgent(DhcpAgent):
     there are more than a few hundred agents running.
     """
     def __init__(self):
-        hostname = socket.gethostname()
+        try:
+            hostname = cfg.CONF.host
+        except AttributeError:
+            # We get AttributeError (or an exception derived from that) if that
+            # config option does not exist, in an old enough Neutron release.
+            hostname = socket.gethostname()
         super(CalicoDhcpAgent, self).__init__(host=hostname)
 
         # Override settings that Calico's DHCP agent use requires.

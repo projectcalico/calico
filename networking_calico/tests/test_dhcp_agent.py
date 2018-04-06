@@ -76,6 +76,7 @@ class TestDhcpAgent(base.BaseTestCase):
         self.mock_makedirs_p = mock.patch("os.makedirs")
         self.mock_makedirs = self.mock_makedirs_p.start()
         self.hostname = socket.gethostname()
+        cfg.CONF.host = self.hostname
 
     def test_mainline(self):
         # Create the DHCP agent.
@@ -313,6 +314,17 @@ class TestDhcpAgent(base.BaseTestCase):
                          "/calico/resources/v3/projectcalico.org/" +
                          "workloadendpoints/openstack/" +
                          self.hostname.replace('-', '--') +
+                         "-openstack-")
+        self.assertEqual(agent.etcd.subnet_watcher.prefix,
+                         datamodel_v1.SUBNET_DIR)
+
+    def test_host_config(self):
+        cfg.CONF.host = "my-special-hostname"
+        agent = CalicoDhcpAgent()
+        self.assertEqual(agent.etcd.prefix,
+                         "/calico/resources/v3/projectcalico.org/" +
+                         "workloadendpoints/openstack/" +
+                         "my--special--hostname" +
                          "-openstack-")
         self.assertEqual(agent.etcd.subnet_watcher.prefix,
                          datamodel_v1.SUBNET_DIR)
