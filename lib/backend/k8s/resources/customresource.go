@@ -68,7 +68,7 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 	// Convert the KVPair to the K8s resource.
 	resIn, err := c.convertKVPairToResource(kvp)
 	if err != nil {
-		logContext.WithError(err).Info("Error creating resource")
+		logContext.WithError(err).Debug("Error creating resource")
 		return nil, err
 	}
 
@@ -82,7 +82,7 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 		Body(resIn).
 		Do().Into(resOut)
 	if err != nil {
-		logContext.WithError(err).Info("Error creating resource")
+		logContext.WithError(err).Debug("Error creating resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
