@@ -33,9 +33,6 @@ toc:
         path: /getting-started/kubernetes/installation/gce
       - title: Azure 
         path: /getting-started/kubernetes/installation/azure
-      - title: 'Vagrant/VirtualBox: CoreOS'
-        path: /getting-started/kubernetes/installation/vagrant/
-
   - title: Tutorials
     section:
     - title: Using calicoctl
