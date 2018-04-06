@@ -186,6 +186,15 @@ class DockerHost(object):
         if start_calico:
             self.start_calico_node(env_options=' -e FELIX_HEALTHENABLED=true ')
 
+    def assert_is_ready(self, bird=True, felix=True):
+        cmd = "docker exec calico-node /bin/readiness"
+        if bird:
+            cmd += " -bird"
+        if felix:
+            cmd += " -felix"
+
+        self.execute(cmd)
+
     def execute(self, command, raise_exception_on_failure=True, daemon_mode=False):
         """
         Pass a command into a host container.
