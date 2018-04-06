@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        3.1.0
-Release:        0.1.rc1%{?dist}
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -151,6 +151,18 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Apr 06 2018 Neil Jerram <neil@tigera.io> 3.1.0-1
+  - Felix 3.1.0 (from Git commit dba3279).
+    [Changes recorded in 3.1.0 tag]
+    - Merge pull request #1726 from nwoodmsft/master
+    - Rearrange the etcd/felix support code
+    - Switch HostEndpoint tests to run with KDD
+    - FVs: Cleanup HostEndpoints for KDD
+    - FV: fix interfaceName trimming in test-workload
+    - Add stats for policy and profile counts.
+    - Make slow test failures obvious
+    - Update libcalico-go to latest release-v3.1
+
 * Wed Mar 21 2018 Neil Jerram <neil@tigera.io> 3.1.0-0.1.rc1
   - Felix 3.1.0-rc1 (from Git commit e2f6473).
     [Changes recorded in 3.1.0-rc1 tag]
