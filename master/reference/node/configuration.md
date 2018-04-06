@@ -164,4 +164,4 @@ Usage of dist/readiness:
 
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifiying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
-in the cluster, see [decomissioning a node]]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).
+in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).
