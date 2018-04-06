@@ -15,28 +15,26 @@ toc:
     section:
     - title: Introduction
       path: /getting-started/kubernetes/installation/
-    - title: Hosted (via kubectl)
-      section:
-      - title: Introduction
-        path: /getting-started/kubernetes/installation/hosted/
-      - title: Standard Hosted Install
-        path: /getting-started/kubernetes/installation/hosted/hosted
-      - title: Kubeadm Hosted Install
-        path: /getting-started/kubernetes/installation/hosted/kubeadm/
-      - title: Kubernetes Datastore Hosted Install
-        path: /getting-started/kubernetes/installation/hosted/kubernetes-datastore/
-      - title: Canal/flannel Hosted Install
-        path: /getting-started/kubernetes/installation/hosted/canal/
-    - title: Integration Guide
+    - title: Installing Calico for policy and networking (recommended)
+      path: /getting-started/kubernetes/installation/calico
+    - title: Installing Calico for policy and flannel for networking
+      path: /getting-started/kubernetes/installation/flannel
+    - title: Installing Calico for policy (advanced)
+      path: /getting-started/kubernetes/installation/other
+    - title: Customizing the manifests (advanced)
+      path: /getting-started/kubernetes/installation/config-options
+    - title: Integration guide (advanced) 
       path: /getting-started/kubernetes/installation/integration
-    - title: AWS
-      path: /getting-started/kubernetes/installation/aws
-    - title: GCE
-      path: /getting-started/kubernetes/installation/gce
-    - title: Azure 
-      path: /getting-started/kubernetes/installation/azure
-    - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /getting-started/kubernetes/installation/vagrant/
+    - title: Additional install methods
+      section:
+      - title: Amazon Web Services
+        path: /getting-started/kubernetes/installation/aws
+      - title: Google Compute Engine
+        path: /getting-started/kubernetes/installation/gce
+      - title: Azure 
+        path: /getting-started/kubernetes/installation/azure
+      - title: 'Vagrant/VirtualBox: CoreOS'
+        path: /getting-started/kubernetes/installation/vagrant/
   - title: Tutorials
     section:
     - title: Using calicoctl

@@ -23,10 +23,6 @@ as well as other public and private cloud environments.
 
 **[Typhoon][typhoon]** deploys free and minimal Kubernetes clusters with Terraform, for AWS and other platforms.
 
-#### More installation options
-
-If the out-of-the-box solutions listed above don't meet your requirements, you can install {{site.prodname}} for Kubernetes
-on AWS using one of our [self-hosted manifests][self-hosted], or by [integrating {{site.prodname}} with your own configuration management][integration-guide].
 
 [heptio]: https://s3.amazonaws.com/quickstart-reference/heptio/latest/doc/heptio-kubernetes-on-the-aws-cloud.pdf
 [kops]: https://github.com/kubernetes/kops/blob/master/docs/networking.md#calico-example-for-cni-and-network-policy
@@ -34,6 +30,3 @@ on AWS using one of our [self-hosted manifests][self-hosted], or by [integrating
 [stackpoint]: https://stackpoint.io/#/
 [coreos]: https://coreos.com/kubernetes/docs/latest/
 [typhoon]: https://typhoon.psdn.io/
-
-[self-hosted]: hosted
-[integration-guide]: integration

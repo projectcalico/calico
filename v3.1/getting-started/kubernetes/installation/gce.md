@@ -20,11 +20,6 @@ Make sure you've read the [GCE configuration guide](../../../reference/public-cl
 
 **[Typhoon][typhoon]** deploys free and minimal Kubernetes clusters with Terraform, for GCE and other platforms.
 
-#### More installation options
-
-If the out-of-the-box solutions listed above don't meet your requirements, you can install {{site.prodname}} for Kubernetes
-on GCE using one of our [self-hosted manifests][self-hosted], or by [integrating {{site.prodname}} with your own configuration management][integration-guide].
-
 [ket]: https://apprenda.com/kismatic/
 [kube-up]: http://kubernetes.io/docs/getting-started-guides/network-policy/calico/
 [kubespray]: https://github.com/kubernetes-incubator/kubespray
