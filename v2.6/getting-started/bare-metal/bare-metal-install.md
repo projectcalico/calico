@@ -1,13 +1,13 @@
 ---
 title: Installing Felix as a static binary
-canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/bare-metal/bare-metal-install'
+canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/installation'
 ---
 
 These instructions will take you through a first-time install of
 Calico's per-host daemon, Felix, starting with the calico-felix binary.
 These instructions apply to Calico v2.1.0 and above.  Older versions
  were packaged differently.
- 
+
 > **Note**: This install process is most suited to bare-metal-only
 > installations where Felix is to be used to control policy for the
 > host's interfaces. For OpenStack and containers there are
@@ -40,7 +40,7 @@ Felix has the following pre-requisites:
     supports the etcdv2 protocol.  We recommend running the latest
     stable release of etcd v3.x. To check the version, run
     `etcd --version`
-    
+
 > **Note**: If any of the commands above fail when run with the `--version`
 > flag then you have an old version that doesn't support reporting
 > its version.

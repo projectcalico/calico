@@ -1,6 +1,6 @@
 ---
 title: Standard Hosted Install
-canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/hosted'
+canonical_url: https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/
 ---
 
 The following steps install Calico as a Kubernetes add-on using your own etcd cluster.
@@ -26,7 +26,7 @@ Then simply apply the manifest:
 kubectl apply -f calico.yaml
 ```
 
-> **Note**: Make sure you configure the provided ConfigMap with the 
+> **Note**: Make sure you configure the provided ConfigMap with the
 > location of your etcd cluster before running the above command.
 {: .alert .alert-info}
 

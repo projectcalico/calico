@@ -1,7 +1,7 @@
 ---
 title: Deploying Calico and Kubernetes on AWS
 redirect_from: latest/getting-started/kubernetes/installation/aws
-canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/aws'
+canonical_url: https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/aws
 ---
 
 There are a number of solutions for deploying {{site.prodname}} and Kubernetes on AWS.  We recommend taking

@@ -1,7 +1,7 @@
 ---
 title: About Calico
 redirect_from: latest/introduction/index
-canonical_url: 'https://docs.projectcalico.org/v3.0/introduction/'
+canonical_url: 'https://docs.projectcalico.org/v3.1/introduction/'
 ---
 
 {{site.prodname}} provides secure network connectivity for 
