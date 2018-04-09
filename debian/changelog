@@ -1,3 +1,201 @@
+felix (3.1.0~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.1.0 (from Git commit dba3279).
+    [Changes recorded in 3.1.0 tag]
+    - Merge pull request #1726 from nwoodmsft/master
+    - Rearrange the etcd/felix support code
+    - Switch HostEndpoint tests to run with KDD
+    - FVs: Cleanup HostEndpoints for KDD
+    - FV: fix interfaceName trimming in test-workload
+    - Add stats for policy and profile counts.
+    - Make slow test failures obvious
+    - Update libcalico-go to latest release-v3.1
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 06 Apr 2018 21:24:32 +0100
+
+felix (3.1.0~rc1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.1.0-rc1 (from Git commit e2f6473).
+    [Changes recorded in 3.1.0-rc1 tag]
+    - Switch to using hash:net IP sets.
+    - Implement network sets.
+    - FV tests for network sets.
+    - Fix that ipsets layer couldn't parse IPs as /32 or /128 CIDRs.
+    - Rev typha to disable static check warning.
+    - Record the 2.7.0-pre1 release.
+    - Rev libcalico-go to pick up network sets fixes.
+    - Record 2.7.0-pre2 release
+    - Start of a churn test for network sets.  Doesn't terminate!
+    - Switch back to hash:ip,port for named ports.
+    - Self review markups
+    - WiP on netsets FV tests.
+    - Have workloads retry namespace creation.
+    - Allow time for newly created veth to reflect back to user space
+    - deb + rpm packages for v3.0.1
+    - Deduplicate doc on package publication
+    - Review markups
+    - Change to log to stdout by default.
+    - Remove Tigera-specific Confluence note
+    - Add basic FV churn test for network sets.
+    - Add a basic connectivity test for network sets.
+    - Rev libcalico-go after merging GlobalNetworkSet.
+    - Update Windows driver to document that IP sets now contain CIDRs.
+    - Update Typha pin.
+    - Add service to the protobuf spec. Rev libs for compatibility.
+    - WiP
+    - Code review markups.
+    - Beef up tear down processing
+    - Fix that the scanner buffer was too small to read some felix debug log lines.
+    - Tweak churn test:
+    - Add timeouts to container stop operations.
+    - calico-diags: Dump etcdv3 data as well as etcdv2
+    - Actually think ${ETCDCTL_V3} should include "ETCDCTL_API=3"
+    - Reduce default log level.
+    - Make sure docker run is dead before waiting on its logs.
+    - Added EPM and rules for ipvs workload egress.
+    - Avoid debug logs, they clog the pipe.
+    - Glide up and UTs running.
+    - WIP Policy Sync API Processor
+    - Increase connectivity check timeout.
+    - Use CheckConnectivity everywhere.  Make sure connectivity check is retried at least once.
+    - Make k8s API server startup retry on failure.
+    - WiP on Processor.
+    - Added host ipsets.
+    - WIP processor handles wep, policy, profiles.
+    - WIP Policy Sync server
+    - Refactor epMark.
+    - Pass UT for dataplane.
+    - Fix UT for rules.
+    - eval needed if ETCDCTL_V3 includes ETCDCTL_API=3
+    - Update to use flex-volume prototype.
+    - Added KubeNodePortRange and fix UT for it.
+    - Kick the tyres, first message through the policy sync API.
+    - UT for Markbits bits allocation.
+    - Added UT for mark_bits.
+    - Added more UT.
+    - Fix UT for markbits.
+    - Check for leaked connectivity checkers.
+    - Add more netowrk sets FV tests.
+    - Add more FV tests for network sets.
+    - Tweak conenctivity check failure test.
+    - Add tests with network sets that have overlapping CIDRs.
+    - Markup for review.
+    - More Markup and fix UT.
+    - Added UT for host ip manager and multi mark match.
+    - Fix flex volume server issues.
+    - Update libcalico-go to 8439a792041f7cb676bc339dffccf30e165a9ec3
+    - Add special case for 0.0.0.0/0 and ::/0 CIDRs in network sets.
+    - Added UT for epmark.
+    - Added KubeIPVSSupportEnabled and fix some UT.
+    - Fix more UT for ipvs enable flag.
+    - Add IPv6 ingfrastructure and networks sets tests.
+    - More UT fix for ipvs enabled.
+    - Fix UT for rules.
+    - Map in /lib/modules so that ip6tables can insert its modules.
+    - Added UT for ipvs felix config.
+    - Removed code which is redundent.
+    - Add timeouts to IPv6 wait loops.
+    - Markup for review.
+    - Fix glide.yaml.
+    - Make sure logs are hooked before each test.
+    - Fix UT and add validation to mark match builders.
+    - Make number of ginkgo  nodes configurable.
+    - Rev typha pin.
+    - Code review markups.
+    - Add latency measurement tests
+    - Update libcalico-go to 26b83dc3ccceeff9312eaf339386e6599c89c63b
+    - Change the main IP set prefix.
+    - Update libcalico-go to 13d015d6433fd53fb260dc2b3ab50340c34f5749
+    - Add Context parameter to backend Apply() calls
+    - Update syscall.NlMsghdr -> unix.NlMsghdr
+    - Limit status report Apply() calls to 2s (each)
+    - Add FV test that silently cuts the etcd connection.
+    - Fix flake: make sure ready flag is reset after that health test.
+    - Review markups.
+    - Un-focus the policy API tests.
+    - Pin the protoc container to v0.1 (copy of current latest).
+    - Make the policy sync API socker configurable.
+    - Markups.
+    - Remove hard-coded PathPrefix, plumb through as config param.
+    - Sync up usage of GINKGO_ARGS in Makefile.
+    - Temporarily ignore the policy sync config params, which are not yet in libcalico-go.
+    - Fix up ifacemanager test after updating glide.
+    - Tidy up existing policy sync test.
+    - Added support for s390x
+    - Rework policy sync test to use contexts.
+    - Move mock dataplane into its own package so it can be reused.
+    - Update policy sync FV to check the correct state is reached.
+    - Fix that new connections for existing endpoint didn't receive updates.
+    - Add InSync message to policy sync API.
+    - Improve mock dataplane: catch out-of-order updates.
+    - Wait for connection to close.
+    - Split out a mockWorkloadClient.
+    - Pull out function create per-workload dir.
+    - Add policy sync FVs
+    - Split join and leave messsages for clarity.
+    - Fix that deletes weren't sent on policy API when policies were no longer used.
+    - Add FV test to verify that a change of profiles is handled correctly.
+    - Fix server/processor leave processing deadlock; add FV for it.
+    - Replace FlexVol Management API with binder
+    - Poll waits until credential dir exists
+    - Propagate FV_FELIXIMAGE into fv and k8sfv tests.
+    - Fix fv for policy sync with binder.
+    - Added support for ipvs hep.
+    - Add drop rule for unknow cali/tap interface.
+    - Fix UT for ipvs host egress.
+    - Rename generic epmark to non-cali epmark.
+    - Test code typo: smNonCaiSetMarkRule -> smNonCaliSetMarkRule
+    - Fix accidental nanosecond sleep
+    - Placate goimports
+    - Address review feedback.
+    - Fix accidental copyright year updates.
+    - Markups.
+    - Handle async client cancel
+    - Break binder event loop on stop
+    - Add stop channel to watcher
+    - Update libcalico-go to 2fa2887d917b41342f9beaae745dff2355e4f47c
+    - Pass through original selectors and namespaces to policy sync API.
+    - Pass through service account match criteria for policy sync API.
+    - Add FV test that service account matches are passed through to the policy API.
+    - Markups: Switch to a nested mesage for the service account match criteria.
+    - Markups: update libcalico-go and add UT for conversion to proto.Policy.
+    - Whitelist failsafe response traffic in the raw chain.
+    - Add FV test for failsafe port/do-not-track policy overlap.
+    - Update libcalico-go to 16a16d0960511310db4772874de7650ab2967827
+    - Code review markups.
+    - Add ServiceAccount to dataplane proto
+    - Calc graph passes Service Accounts thru to dataplane
+    - Policy sync & dataplanes update service accounts
+    - UT for Calc Graph supporting service accounts
+    - UT for ServiceAccounts in processor
+    - FV for Service Account pass thru
+    - Service Account Labels FV and bug fix
+    - Update calico/felix alpine base image to 3.7
+    - Code review markups
+    - Pass K8s namespaces thru calc graph
+    - Policy Sync & External dataplane handle Namespaces
+    - FV for namespace passthru to policy sync
+    - Fix comment - namespaces synced over API
+    - Fix that workload ingress policy wasn't applied to IPVS-forwarded traffic.
+    - Refactor profile_decoder.go to use type switch
+    - pass HTTPMatch thru the calc graph
+    - Update libcalico & typha pins
+    - Remove unused vars from static analysis
+    - calico-diags: include iptables packet counts
+    - Fix up some linter errors.
+    - Exclude Windows tests from linter.
+    - Auto detect ipvs support mode.
+    - Markup and new libcalico-go pin.
+    - Added fv for auto detecting kube-proxy mode.
+    - Add batching support to fv make target.
+    - Update felix to latest libcalico-go
+    - Update libcalico-go to 49c0d0164441316a4bc430da232a8a6d7703275d
+    - Update libcalico-go to release-v3.1
+    - NetworkSet CIDRs in canonical format
+    - Refactor to use net.IP.Mask()
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 21 Mar 2018 17:18:27 +0000
+
 felix (3.0.1~__STREAM__) __STREAM__; urgency=low
 
   * Felix 3.0.1 (from Git commit 757dc44).
