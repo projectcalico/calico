@@ -1,23 +1,34 @@
-###############################################################################
-# The build architecture is select by setting the ARCH variable.
-# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
-# When ARCH is undefined it defaults to amd64.
-ARCH?=amd64
+# Both native and cross architecture builds are supported.
+# The target architecture is select by setting the ARCH variable.
+# When ARCH is undefined it is set to the detected host architecture.
+# When ARCH differs from the host architecture a crossbuild will be performed.
+ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
 
-ifeq ($(ARCH),amd64)
-	ARCHTAG?=
-	GO_BUILD_VER?=v0.12
+# BUILDARCH is the host architecture
+# ARCH is the target architecture
+# we need to keep track of them separately
+BUILDARCH ?= $(shell uname -m)
+BUILDOS ?= $(shell uname -s | tr A-Z a-z)
+
+# canonicalized names for host architecture
+ifeq ($(BUILDARCH),aarch64)
+        BUILDARCH=arm64
+endif
+ifeq ($(BUILDARCH),x86_64)
+        BUILDARCH=amd64
 endif
 
-ifeq ($(ARCH),ppc64le)
-	ARCHTAG:=-ppc64le
-	GO_BUILD_VER?=latest
+# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
+ARCH ?= $(BUILDARCH)
+
+# canonicalized names for target architecture
+ifeq ($(ARCH),aarch64)
+        override ARCH=arm64
+endif
+ifeq ($(ARCH),x86_64)
+    override ARCH=amd64
 endif
 
-ifeq ($(ARCH),s390x)
-	ARCHTAG:=-s390x
-	GO_BUILD_VER?=latest
-endif
 
 # Select which release branch to test.
 RELEASE_BRANCH?=release-v3.1
@@ -28,10 +39,11 @@ RELEASE_BRANCH?=release-v3.1
 
 all: clean test
 
-GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+GO_BUILD_VER?=latest
+GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 
 CALICOCTL_VER=master
-CALICOCTL_CONTAINER_NAME=calico/ctl$(ARCHTAG):$(CALICOCTL_VER)
+CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 K8S_VERSION=v1.8.1
 ETCD_VER=v3.2.5
 BIRD_VER=v0.3.1
@@ -56,10 +68,51 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(MY_UID) \
+                              -e GOARCH=$(ARCH) \
                               -v ${CURDIR}:/go/src/github.com/kelseyhightower/confd:rw \
                               -v ${CURDIR}/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/github.com/kelseyhightower/confd \
                               $(GO_BUILD_CONTAINER)
+
+
+help:
+	@echo "confd Makefile"
+	@echo
+	@echo "Dependencies: docker 1.12+; go 1.8+"
+	@echo
+	@echo "For any target, set ARCH=<target> to build for a given target."
+	@echo "For example, to build for arm64:"
+	@echo
+	@echo "  make build ARCH=arm64"
+	@echo
+	@echo "Initial set-up:"
+	@echo
+	@echo "  make vendor  Update/install the go build dependencies."
+	@echo
+	@echo "Builds:"
+	@echo
+	@echo "  make build           Build the binary."
+	@echo "  make image           Build calico/confd docker image."
+	@echo
+	@echo "Tests:"
+	@echo
+	@echo "  make test                Run all tests."
+	@echo "  make test-kdd            Run kdd tests."
+	@echo "  make test-etcd           Run etcd tests."
+	@echo
+	@echo "Maintenance:"
+	@echo
+	@echo "  make update-vendor  Update the vendor directory with new "
+	@echo "                      versions of upstream packages.  Record results"
+	@echo "                      in glide.lock."
+	@echo "  make clean         Remove binary files and docker images."
+	@echo "-----------------------------------------"
+	@echo "ARCH (target):          $(ARCH)"
+	@echo "BUILDARCH (host):       $(BUILDARCH)"
+	@echo "GO_BUILD_CONTAINER:     $(GO_BUILD_CONTAINER)"
+	@echo "-----------------------------------------"
+
+
 
 # Update the vendored dependencies with the latest upstream versions matching
 # our glide.yaml.  If there are any changes, this updates glide.lock
@@ -78,16 +131,31 @@ vendor vendor/.up-to-date: glide.lock
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
-container: bin/confd
-	docker build -t calico/confd$(ARCHTAG) -f Dockerfile$(ARCHTAG) .
 
-bin/confd: $(GO_FILES) vendor/.up-to-date
+image: bin/confd
+	docker build -t calico/confd:latest-$(ARCH) -f Dockerfile.$(ARCH) .
+ifeq ($(ARCH),amd64)
+	docker tag calico/confd:latest-$(ARCH) calico/confd:latest
+endif
+
+# the standard for calico is the make target "image", but there used to be a "container" target in confd, so we leave it
+container: image
+
+
+build: bin/confd
+bin/confd: bin/confd-$(ARCH)
+ifeq ($(ARCH),amd64)
+	ln -f bin/confd-$(ARCH) bin/confd
+endif
+
+bin/confd-$(ARCH): $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ $(LDFLAGS) "github.com/kelseyhightower/confd" && \
-		( ldd bin/confd 2>&1 | grep -q -e "Not a valid dynamic program" \
+		( ldd bin/confd-$(ARCH) 2>&1 | grep -q -e "Not a valid dynamic program" \
 			-e "not a dynamic executable" || \
 	             ( echo "Error: bin/confd was not statically linked"; false ) )'
+
 
 .PHONY: test
 ## Run all tests
@@ -125,10 +193,19 @@ run-build: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calicoctl run-etcd
 		$(GO_BUILD_CONTAINER) sh
 
 ## Etcd is used by the kubernetes
+# NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
+# amd64: 3.2.5
+# arm64: 3.2.5-arm64
+# ppc64le: 3.2.5-ppc64le
+# s390x is not available
+COREOS_ETCD ?= quay.io/coreos/etcd:$(ETCD_VER)-$(ARCH)
+ifeq ($(ARCH),amd64)
+COREOS_ETCD = quay.io/coreos/etcd:$(ETCD_VER)
+endif
 run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd:$(ETCD_VER)$(ARCHTAG) \
+	--name calico-etcd $(COREOS_ETCD) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -143,7 +220,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	  --name calico-k8s-apiserver \
 	gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		  --service-cluster-ip-range=10.101.0.0/16 
+		  --service-cluster-ip-range=10.101.0.0/16
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -166,7 +243,7 @@ bin/allocate-ipip-addr:
 	chmod +x $@
 
 bin/etcdctl:
-	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VER)/etcd-$(ETCD_VER)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VER)-linux-$(ARCH)/etcdctl 
+	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VER)/etcd-$(ETCD_VER)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VER)-linux-$(ARCH)/etcdctl
 
 bin/calicoctl:
 	-docker rm -f calico-ctl
@@ -192,27 +269,34 @@ endif
 	if git describe --tags --dirty | grep dirty; \
 	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
 
-	# Build binary and docker image. 
-	$(MAKE) container 
+	# Build binary and docker image.
+	$(MAKE) image
 
 	# Check that the version output includes the version specified.
 	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
 	# Release is currently supported on darwin / linux only.
-	if ! docker run calico/confd /bin/confd --version | grep '$(VERSION)$$'; then \
+	if ! docker run calico/confd:latest-$(ARCH) /bin/confd --version | grep '$(VERSION)$$'; then \
 	  echo "Reported version:" `docker run calico/confd /bin/confd --version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
 	fi
 
+	# create defaults for amd64
+ifeq ($(ARCH),amd64)
+	docker tag calico/confd:latest-$(ARCH) calico/confd:latest
+	docker tag calico/confd:latest-$(ARCH) quay.io/calico/confd:latest
+	docker tag calico/confd:latest calico/confd:$(VERSION)
+	docker tag calico/confd:$(VERSION) quay.io/calico/confd:$(VERSION)
+endif
 	# Retag images with corect version and quay
-	docker tag calico/confd calico/confd:$(VERSION)
-	docker tag calico/confd quay.io/calico/confd:$(VERSION)
-	docker tag calico/confd quay.io/calico/confd:latest
+	docker tag calico/confd:latest-$(ARCH) calico/confd:$(VERSION)-$(ARCH)
+	docker tag calico/confd:latest-$(ARCH) quay.io/calico/confd:$(VERSION)-$(ARCH)
+	docker tag calico/confd:latest-$(ARCH) quay.io/calico/confd:latest-$(ARCH)
 
 	# Check that images were created recently and that the IDs of the versioned and latest images match
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd 
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd:$(VERSION)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd:latest-$(ARCH)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd:$(VERSION)-$(ARCH)
 
 	@echo ""
 	@echo "# Push the created tag to GitHub"
@@ -226,14 +310,22 @@ endif
 	@echo ""
 	@echo "# Now push the newly created release images."
 	@echo ""
+	@echo "  docker push calico/confd:$(VERSION)-$(ARCH)"
+	@echo "  docker push quay.io/calico/confd:$(VERSION)-$(ARCH)"
+ifeq ($(ARCH),amd64)
 	@echo "  docker push calico/confd:$(VERSION)"
 	@echo "  docker push quay.io/calico/confd:$(VERSION)"
+endif
 	@echo ""
 	@echo "# For the final release only, push the latest tag"
-	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES" 
+	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES"
 	@echo ""
+	@echo "  docker push calico/confd:latest-$(ARCH)"
+	@echo "  docker push quay.io/calico/confd:latest-$(ARCH)"
+ifeq ($(ARCH),amd64)
 	@echo "  docker push calico/confd:latest"
 	@echo "  docker push quay.io/calico/confd:latest"
+endif
 	@echo ""
 	@echo "See RELEASING.md for detailed instructions."
 
@@ -241,5 +333,13 @@ endif
 clean:
 	rm -rf bin/*
 	rm -rf tests/logs
-	-docker rmi -f calico/confd
-	-docker rmi -f quay.io/calico/confd
+	-docker rmi -f calico/confd:latest-$(ARCH)
+	-docker rmi -f calico/confd:$(VERSION)-$(ARCH)
+	-docker rmi -f quay.io/calico/confd:latest-$(ARCH)
+	-docker rmi -f quay.io/calico/confd:$(VERSION)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	-docker rmi -f calico/confd:latest
+	-docker rmi -f calico/confd:$(VERSION)
+	-docker rmi -f quay.io/calico/confd:latest
+	-docker rmi -f quay.io/calico/confd:$(VERSION)
+endif
