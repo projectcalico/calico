@@ -19,6 +19,7 @@ rules:
       - namespaces
       - networkpolicies
       - nodes
+      - serviceaccounts
     verbs:
       - watch
       - list
