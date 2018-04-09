@@ -69,21 +69,30 @@ type NetConf struct {
 		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
 		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
 	} `json:"ipam,omitempty"`
-	MTU                  int        `json:"mtu"`
-	Hostname             string     `json:"hostname"`
-	Nodename             string     `json:"nodename"`
-	NodenameFileOptional bool       `json:"nodename_file_optional"`
-	DatastoreType        string     `json:"datastore_type"`
-	EtcdAuthority        string     `json:"etcd_authority"`
-	EtcdEndpoints        string     `json:"etcd_endpoints"`
-	LogLevel             string     `json:"log_level"`
-	Policy               Policy     `json:"policy"`
-	Kubernetes           Kubernetes `json:"kubernetes"`
-	Args                 Args       `json:"args"`
-	EtcdScheme           string     `json:"etcd_scheme"`
-	EtcdKeyFile          string     `json:"etcd_key_file"`
-	EtcdCertFile         string     `json:"etcd_cert_file"`
-	EtcdCaCertFile       string     `json:"etcd_ca_cert_file"`
+	Args                 Args              `json:"args"`
+	MTU                  int               `json:"mtu"`
+	Nodename             string            `json:"nodename"`
+	NodenameFileOptional bool              `json:"nodename_file_optional"`
+	DatastoreType        string            `json:"datastore_type"`
+	EtcdEndpoints        string            `json:"etcd_endpoints"`
+	LogLevel             string            `json:"log_level"`
+	Policy               Policy            `json:"policy"`
+	Kubernetes           Kubernetes        `json:"kubernetes"`
+	EtcdScheme           string            `json:"etcd_scheme"`
+	EtcdKeyFile          string            `json:"etcd_key_file"`
+	EtcdCertFile         string            `json:"etcd_cert_file"`
+	EtcdCaCertFile       string            `json:"etcd_ca_cert_file"`
+	ContainerSettings    ContainerSettings `json:"container_settings,omitempty"`
+
+	// Options below here are deprecated.
+	EtcdAuthority string `json:"etcd_authority"`
+	Hostname      string `json:"hostname"`
+}
+
+// ContainerSettings gcontains configuration options
+// to be configured inside the container namespace.
+type ContainerSettings struct {
+	AllowIPForwarding bool `json:"allow_ip_forwarding"`
 }
 
 // CNITestArgs is the CNI_ARGS used for test purposes.
