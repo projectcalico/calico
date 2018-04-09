@@ -110,8 +110,11 @@ deployment you add to your cluster.
 
 Dikastes is a Calico component that computes authorization policy for the Istio proxies on each host. Calico
 utilizes [Istio's automatic sidecar injection](https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection)
-to inject Dikastes container into a pod at pod creation time. Run the following command if you want to enable automatic
-sidecar injection for the namespace of your deployment.
+to inject Dikastes container into a pod at pod creation time.
+
+### Optional: Enable sidecar injection for additional namespaces.
+
+The `20-istio-sidecar-injector.yaml` manifest enables sidecar injection for the `default` namespace where the rest of this demo is run.  If you want to experiment with applications in other namespaces, run the following command to enable sidecar injection in your namespace.
 
 ```
 kubectl label namespace <your namespace name> istio-injection=enabled
