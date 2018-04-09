@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,8 +46,9 @@ var (
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
-		IPSetMembers:  make(map[string]set.Set),
-		IPSetMetadata: make(map[string]setMetadata),
+		IPSetMembers:     make(map[string]set.Set),
+		IPSetMetadata:    make(map[string]setMetadata),
+		FailDestroyNames: set.New(),
 	}
 }
 
@@ -61,10 +62,13 @@ type mockDataplane struct {
 	ListOpFailures    []string
 	RestoreOpFailures []string
 	FailNextDestroy   bool
+	FailDestroyNames  set.Set
 
 	// Record when various (expected) error cases are hit.
 	TriedToDeleteNonExistent bool
 	TriedToAddExistent       bool
+
+	AttemptedDestroys []string
 
 	CumulativeSleep time.Duration
 }
@@ -305,8 +309,14 @@ func (c *restoreCmd) main() {
 		case "destroy":
 			Expect(len(parts)).To(Equal(2))
 			name := parts[1]
+			c.Dataplane.AttemptedDestroys = append(c.Dataplane.AttemptedDestroys, name)
 			if _, ok := c.Dataplane.IPSetMembers[name]; !ok {
 				c.Stderr.Write([]byte("set doesn't exist"))
+				result = &exec.ExitError{}
+				return
+			}
+			if c.Dataplane.FailDestroyNames.Contains(name) {
+				c.Stderr.Write([]byte("set is in use"))
 				result = &exec.ExitError{}
 				return
 			}
@@ -454,6 +464,13 @@ func (d *destroyCmd) Output() ([]byte, error) {
 }
 
 func (d *destroyCmd) CombinedOutput() ([]byte, error) {
+	d.Dataplane.AttemptedDestroys = append(d.Dataplane.AttemptedDestroys, d.SetName)
+
+	if d.Dataplane.FailDestroyNames.Contains(d.SetName) {
+		log.WithField("setName", d.SetName).Info(
+			"Mock dataplane simulating persistent failure to delete IP set")
+		return nil, &exec.ExitError{}
+	}
 	if d.Dataplane.FailNextDestroy {
 		d.Dataplane.FailNextDestroy = false
 		return nil, &exec.ExitError{}

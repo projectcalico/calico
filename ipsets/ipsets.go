@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,12 +36,16 @@ type IPSets struct {
 	mainIPSetNameToIPSet map[string]*ipSet
 
 	existingIPSetNames set.Set
+	nextTempIPSetIdx   uint
 
 	// dirtyIPSetIDs contains IDs of IP sets that need updating.
 	dirtyIPSetIDs  set.Set
 	resyncRequired bool
 
-	// pendingIPSetDeletions contains names of IP sets that need to be deleted.
+	// pendingTempIPSetDeletions contains names of temporary IP sets that need to be deleted.  We use it to
+	// attempt an early deletion of temporary IP sets, if possible.
+	pendingTempIPSetDeletions set.Set
+	// pendingIPSetDeletions contains names of IP sets that need to be deleted (including temporary ones).
 	pendingIPSetDeletions set.Set
 
 	// Factory for command objects; shimmed for UT mocking.
@@ -86,12 +90,13 @@ func NewIPSetsWithShims(
 		ipSetIDToIPSet:       map[string]*ipSet{},
 		mainIPSetNameToIPSet: map[string]*ipSet{},
 
-		dirtyIPSetIDs:         set.New(),
-		pendingIPSetDeletions: set.New(),
-		newCmd:                cmdFactory,
-		sleep:                 sleep,
-		existingIPSetNames:    set.New(),
-		resyncRequired:        true,
+		dirtyIPSetIDs:             set.New(),
+		pendingTempIPSetDeletions: set.New(),
+		pendingIPSetDeletions:     set.New(),
+		newCmd:                    cmdFactory,
+		sleep:                     sleep,
+		existingIPSetNames:        set.New(),
+		resyncRequired:            true,
 
 		gaugeNumIpsets: gaugeVecNumCalicoIpsets.WithLabelValues(familyStr),
 
@@ -119,7 +124,6 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	ipSet := &ipSet{
 		IPSetMetadata:    setMetadata,
 		MainIPSetName:    s.IPVersionConfig.NameForMainIPSet(setID),
-		TempIPSetName:    s.IPVersionConfig.NameForTempIPSet(setID),
 		pendingReplace:   canonMembers,
 		pendingAdds:      set.New(),
 		pendingDeletions: set.New(),
@@ -132,7 +136,6 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 
 	// The IP set may have been previously queued for deletion, undo that.
 	s.pendingIPSetDeletions.Discard(ipSet.MainIPSetName)
-	s.pendingIPSetDeletions.Discard(ipSet.TempIPSetName)
 }
 
 // RemoveIPSet queues up the removal of an IP set, it need not be empty.  The IP sets will be
@@ -141,11 +144,9 @@ func (s *IPSets) RemoveIPSet(setID string) {
 	s.logCxt.WithField("setID", setID).Info("Queueing IP set for removal")
 	delete(s.ipSetIDToIPSet, setID)
 	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
-	tempIPSetName := s.IPVersionConfig.NameForTempIPSet(setID)
 	delete(s.mainIPSetNameToIPSet, mainIPSetName)
 	s.dirtyIPSetIDs.Discard(setID)
 	s.pendingIPSetDeletions.Add(mainIPSetName)
-	s.pendingIPSetDeletions.Add(tempIPSetName)
 }
 
 // AddMembers adds the given members to the IP set.  Filters out members that are of the incorrect
@@ -264,9 +265,17 @@ func (s *IPSets) ApplyUpdates() {
 			s.resyncRequired = false
 		}
 
+		numTempSets := s.pendingTempIPSetDeletions.Len()
+		if numTempSets > 0 {
+			log.WithField("numTempSets", numTempSets).Info(
+				"There are left-over temporary IP sets, attempting cleanup")
+			s.tryTempIPSetDeletions()
+		}
+
 		if err := s.tryUpdates(); err != nil {
-			s.logCxt.WithError(err).Warning(
-				"Failed to update IP sets. Marking dataplane for resync.")
+			// While failed deletions don't cause immediate problems, update failures may mean that our iptables
+			// updates fail.  We need to do an immediate resync.
+			s.logCxt.WithError(err).Warning("Failed to update IP sets. Marking dataplane for resync.")
 			s.resyncRequired = true
 			countNumIPSetErrors.Inc()
 			backOff()
@@ -278,7 +287,7 @@ func (s *IPSets) ApplyUpdates() {
 	}
 	if !success {
 		s.dumpIPSetsToLog()
-		s.logCxt.Panic("Failed to update IP sets after mutliple retries.")
+		s.logCxt.Panic("Failed to update IP sets after multiple retries.")
 	}
 	gaugeNumTotalIpsets.Set(float64(s.existingIPSetNames.Len()))
 }
@@ -514,7 +523,6 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		s.logCxt.WithFields(log.Fields{
 			"ID":       ipSet.SetID,
 			"mainName": ipSet.MainIPSetName,
-			"tempName": ipSet.TempIPSetName,
 		}).Debug("Whitelisting IP sets.")
 	}
 
@@ -536,6 +544,13 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		if expectedIPSets.Contains(setName) {
 			s.logCxt.WithField("setName", setName).Debug("Skipping expected Calico IP set.")
 			return nil
+		}
+		if s.IPVersionConfig.IsTempIPSetName(setName) {
+			// Temporary IP sets get leaked after a failure but they should never be in use by iptables so
+			// we try to delete them early in the processing to free up IP set space.
+			s.logCxt.WithField("setName", setName).Info(
+				"Resync found left-over temporary IP set. Queueing early deletion.")
+			s.pendingTempIPSetDeletions.Add(setName)
 		}
 		s.logCxt.WithField("setName", setName).Info(
 			"Resync found left-over Calico IP set. Queueing deletion.")
@@ -629,9 +644,8 @@ func (s *IPSets) tryUpdates() error {
 			ipSet.members = ipSet.pendingReplace
 			ipSet.pendingReplace = nil
 
-			// Doing a rewrite creates the main IP set and deletes the temp IP set.
+			// Doing a rewrite creates the main IP set.
 			s.existingIPSetNames.Add(ipSet.MainIPSetName)
-			s.existingIPSetNames.Discard(ipSet.TempIPSetName)
 		} else {
 			ipSet.pendingAdds.Iter(func(m interface{}) error {
 				ipSet.members.Add(m)
@@ -718,13 +732,7 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 		writeLine("create %s %s family %s maxelem %d",
 			mainSetName, ipSet.Type, s.IPVersionConfig.Family, ipSet.MaxSize)
 	}
-	tempSetName := ipSet.TempIPSetName
-	if s.existingIPSetNames.Contains(tempSetName) {
-		// Explicitly delete the temporary IP set so that we can recreate it with new
-		// parameters.
-		logCxt.WithField("setID", ipSet.SetID).Debug("Temp IP set exists, deleting it before rewrite")
-		writeLine("destroy %s", tempSetName)
-	}
+	tempSetName := s.nextFreeTempIPSetName()
 	// Create the temporary IP set with the current parameters.
 	writeLine("create %s %s family %s maxelem %d",
 		tempSetName, ipSet.Type, s.IPVersionConfig.Family, ipSet.MaxSize)
@@ -740,6 +748,22 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 	writeLine("destroy %s", tempSetName)
 
 	return
+}
+
+// nextFreeTempIPSetName picks a name for a temporary IP set avoiding any that appear to be in use already.
+// Giving each temporary IP set a new name works around the fact that we sometimes see transient failures to
+// remove temporary IP sets.
+func (s *IPSets) nextFreeTempIPSetName() string {
+	for {
+		candidateName := s.IPVersionConfig.NameForTempIPSet(s.nextTempIPSetIdx)
+		s.nextTempIPSetIdx++
+		if s.existingIPSetNames.Contains(candidateName) {
+			log.WithField("candidate", candidateName).Warning(
+				"Skipping in-use temporary IP set name (previous cleanup failure?)")
+			continue
+		}
+		return candidateName
+	}
 }
 
 // writeDeltas calculates the ipset restore input required to apply the pending adds/deletes to the
@@ -781,15 +805,40 @@ func (s *IPSets) ApplyDeletions() {
 		if s.existingIPSetNames.Contains(setName) {
 			logCxt.Info("Deleting IP set.")
 			if err := s.deleteIPSet(setName); err != nil {
-				logCxt.WithError(err).Warning("Failed to delete IP set.")
+				// Note: we used to set the resyncRequired flag on this path but that can lead to excessive retries if
+				// the problem isn't something that we can fix (for example an external app has made a reference to
+				// our IP set).  Instead, wait for the next timed resync.
+				logCxt.WithError(err).Warning("Failed to delete IP set. Will retry on next resync.")
 			}
 		}
+		// Always remove the item so we don't retry until the next timed resync.
 		return set.RemoveItem
 	})
 
 	// ApplyDeletions() marks the end of the two-phase "apply".  Piggy back on that to
 	// update the gauge that records how many IP sets we own.
 	s.gaugeNumIpsets.Set(float64(len(s.ipSetIDToIPSet)))
+}
+
+// tryTempIPSetDeletions tries to delete any temporary IP sets found by the last resync.
+func (s *IPSets) tryTempIPSetDeletions() {
+	s.pendingTempIPSetDeletions.Iter(func(item interface{}) error {
+		setName := item.(string)
+		logCxt := s.logCxt.WithField("setName", setName)
+		if s.existingIPSetNames.Contains(setName) {
+			logCxt.Info("Deleting IP set.")
+			if err := s.deleteIPSet(setName); err != nil {
+				// Log and carry on; we'll try again in ApplyDeletions().
+				logCxt.WithError(err).Warning("Failed to delete temporary IP set. Will retry...")
+			} else {
+				// Success! Remove from the main pending deletions set too.
+				logCxt.WithField("setName", setName).Info("Successfully removed left-over temporary IP set.")
+				s.pendingIPSetDeletions.Discard(item)
+			}
+		}
+		// Always remove the item so we don't retry until the next timed resync.
+		return set.RemoveItem
+	})
 }
 
 func (s *IPSets) deleteIPSet(setName string) error {
@@ -800,7 +849,6 @@ func (s *IPSets) deleteIPSet(setName string) error {
 			"setName": setName,
 			"output":  string(output),
 		}).Warn("Failed to delete IP set, may be out-of-sync.")
-		s.resyncRequired = true
 		return err
 	}
 	// Success, update the cache.

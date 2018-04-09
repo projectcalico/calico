@@ -32,12 +32,10 @@ const (
 	ipSetID2 = "t:qMt7iLlGDhvLnCjM0l9nzxbabcd"
 
 	v4MainIPSetName  = "cali40s:qMt7iLlGDhvLnCjM0l9nzxb"
-	v4TempIPSetName  = "cali4ts:qMt7iLlGDhvLnCjM0l9nzxb"
+	v4TempIPSetName0 = "cali4t0"
+	v4TempIPSetName1 = "cali4t1"
+	v4TempIPSetName2 = "cali4t2"
 	v4MainIPSetName2 = "cali40t:qMt7iLlGDhvLnCjM0l9nzxb"
-	v4TempIPSetName2 = "cali4tt:qMt7iLlGDhvLnCjM0l9nzxb"
-
-	v6MainIPSetName = "cali60s:qMt7iLlGDhvLnCjM0l9nzxb"
-	v6TempIPSetName = "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb"
 )
 
 var (
@@ -275,7 +273,7 @@ var _ = Describe("IP sets dataplane", func() {
 		BeforeEach(func() {
 			dataplane.IPSetMembers = map[string]set.Set{
 				v4MainIPSetName:  set.From("10.0.0.1"),
-				v4TempIPSetName:  set.From("10.0.0.2"),
+				v4TempIPSetName1: set.From("10.0.0.2"),
 				v4MainIPSetName2: set.From("10.0.0.3"),
 			}
 		})
@@ -293,6 +291,133 @@ var _ = Describe("IP sets dataplane", func() {
 			}))
 			// It shouldn't try to double-delete the temp IP set.
 			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+		})
+	})
+
+	Describe("with a persistent failure to delete a new temporary IP set", func() {
+		BeforeEach(func() {
+			// Lay the trap: this should be the first temp IP set to get used.
+			dataplane.FailDestroyNames.Add(v4TempIPSetName0)
+		})
+
+		AfterEach(func() {
+			// It shouldn't try to double-add/delete anything.
+			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+			Expect(dataplane.TriedToAddExistent).To(BeFalse())
+		})
+
+		It("should rewrite IP set correctly on first apply()", func() {
+			ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+			apply()
+
+			By("Creating the main IP set and leaving the temp IP set left over.")
+			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+				v4TempIPSetName0: set.From(),
+				v4MainIPSetName:  set.From("10.0.0.1", "10.0.0.2"),
+			}))
+
+			By("Using the correct sequence of destroys")
+			Expect(dataplane.AttemptedDestroys).To(Equal([]string{
+				v4TempIPSetName0, // Failed "ipset restore" deletion after successful write/swap.
+				// Resync happens here.
+				v4TempIPSetName0, // Attempted pre-update deletion.
+				// Since initial write of ip set failed, we try a full rewrite, using a new temp IP set name...
+				v4TempIPSetName1, // Deletion of new temp IP set.
+				v4TempIPSetName0, // Attempted deletion in ApplyDeletions().
+			}))
+
+			By("Leaving the resync flag unset")
+			dataplane.AttemptedDestroys = nil
+			apply()
+			Expect(dataplane.AttemptedDestroys).To(BeEmpty())
+		})
+	})
+
+	Describe("with a persistent failure to delete a pre-existing temporary IP set", func() {
+		BeforeEach(func() {
+			dataplane.IPSetMembers = map[string]set.Set{
+				v4MainIPSetName:  set.From("10.0.0.1"),
+				v4TempIPSetName1: set.From("10.0.0.2"),
+				v4TempIPSetName2: set.From("10.0.0.2"),
+				v4MainIPSetName2: set.From("10.0.0.3"),
+			}
+			dataplane.FailDestroyNames.Add(v4TempIPSetName1)
+		})
+
+		AfterEach(func() {
+			// It shouldn't try to double-add/delete anything.
+			Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+			Expect(dataplane.TriedToAddExistent).To(BeFalse())
+		})
+
+		Describe("after first apply()", func() {
+			BeforeEach(apply)
+
+			It("should clean up what it can on the first apply()", func() {
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+					v4TempIPSetName1: set.From("10.0.0.2"),
+				}))
+				Expect(dataplane.AttemptedDestroys).To(ConsistOf(
+					v4TempIPSetName2,
+					v4TempIPSetName1,
+					v4MainIPSetName,
+					v4MainIPSetName2,
+					v4TempIPSetName1, // Temp IP set will get a second try at deletion
+				))
+			})
+
+			It("second apply shouldn't retry deletions", func() {
+				dataplane.AttemptedDestroys = nil
+				apply()
+
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+					v4TempIPSetName1: set.From("10.0.0.2"),
+				}))
+				Expect(dataplane.AttemptedDestroys).To(BeEmpty())
+			})
+
+			It("second apply after resync should retry deletions", func() {
+				dataplane.AttemptedDestroys = nil
+				ipsets.QueueResync()
+				apply()
+
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+					v4TempIPSetName1: set.From("10.0.0.2"),
+				}))
+				Expect(dataplane.AttemptedDestroys).To(ConsistOf(
+					v4TempIPSetName1,
+					v4TempIPSetName1,
+				))
+
+				By("And should be idempotent")
+				dataplane.AttemptedDestroys = nil
+				apply()
+				Expect(dataplane.AttemptedDestroys).To(BeEmpty())
+			})
+
+			It("successful temp set deletion retry should clean up", func() {
+				dataplane.FailDestroyNames.Clear()
+				dataplane.AttemptedDestroys = nil
+				ipsets.QueueResync()
+				apply()
+
+				Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{}))
+				Expect(dataplane.AttemptedDestroys).To(Equal([]string{v4TempIPSetName1}))
+
+				By("And should be idempotent")
+				dataplane.AttemptedDestroys = nil
+				apply()
+				Expect(dataplane.AttemptedDestroys).To(BeEmpty())
+			})
+		})
+
+		It("should rewrite IP set correctly on first apply()", func() {
+			ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+			apply()
+			Expect(dataplane.IPSetMembers).To(Equal(map[string]set.Set{
+				v4TempIPSetName1: set.From("10.0.0.2"),
+				v4MainIPSetName:  set.From("10.0.0.1", "10.0.0.2"),
+			}))
 		})
 	})
 
@@ -639,7 +764,7 @@ var _ = Describe("IP sets dataplane", func() {
 		apply()
 
 		// Recreate its temporary set, then resync.
-		dataplane.IPSetMembers[v4TempIPSetName] = set.From("10.0.0.1")
+		dataplane.IPSetMembers[v4TempIPSetName1] = set.From("10.0.0.1")
 		resyncAndApply()
 
 		// Should be cleaned up.

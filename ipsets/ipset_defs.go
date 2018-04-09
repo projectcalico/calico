@@ -215,7 +215,6 @@ type ipSet struct {
 	IPSetMetadata
 
 	MainIPSetName string
-	TempIPSetName string
 
 	// members either contains the members that we've programmed or is nil, indicating that
 	// we're out of sync.
@@ -295,14 +294,8 @@ func NewIPVersionConfig(
 	}
 }
 
-// NameForTempIPSet converts the given IP set ID (example: "qMt7iLlGDhvLnCjM0l9nzxbabcd"), to
-// a name for use in the dataplane.  The return value will have the configured prefix and is
-// guaranteed to be short enough to use as an ipset name (example:
-// "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb").
-func (c IPVersionConfig) NameForTempIPSet(setID string) string {
-	// Since IP set IDs are chosen with a secure hash already, we can simply truncate them
-	// to length to get maximum entropy.
-	return combineAndTrunc(c.tempSetNamePrefix, setID, MaxIPSetNameLength)
+func (c IPVersionConfig) NameForTempIPSet(n uint) string {
+	return fmt.Sprint(c.tempSetNamePrefix, n)
 }
 
 // NameForMainIPSet converts the given IP set ID (example: "qMt7iLlGDhvLnCjM0l9nzxbabcd"), to
@@ -319,6 +312,10 @@ func (c IPVersionConfig) NameForMainIPSet(setID string) string {
 // starts with an expected prefix.
 func (c IPVersionConfig) OwnsIPSet(setName string) bool {
 	return c.ourNamePrefixesRegexp.MatchString(setName)
+}
+
+func (c IPVersionConfig) IsTempIPSetName(setName string) bool {
+	return strings.HasPrefix(setName, c.tempSetNamePrefix)
 }
 
 // combineAndTrunc concatenates the given prefix and suffix and truncates the result to maxLength.
