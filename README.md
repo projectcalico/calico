@@ -100,18 +100,26 @@ namespace similar to the following.
     istio-ingress-174722661-3fv5x        1/1       Running   0          20h
     istio-pilot-1557643696-zt8jg         1/1       Running   0          20h
 
-You should see a `dikastes-node` pod for each host in your cluster.  Dikastes is a Calico component that computes
-authorization policy for the Istio proxies on each host.  It is a separate component in this technical preview, but our
-plan is to integrate it into the `calico-node` pod in future versions.
-
 Note that Istio Mixer is not included in this demo because it is not required.  You can add a
 Mixer deployment and [use it for telemetry or additional authorization checks](#can-i-use-dikastes-with-istio-mixer?).
 
-Finally, add the Sidecar Injector, which automatically adds the Istio Proxy sidecar to each deployment you add to your
-cluster.
+Finally, add the Sidecar Injector, which automatically adds `Istio Proxy and Calico Dikastes` sidecar to each
+deployment you add to your cluster.
 
     kubectl apply -f config/install/20-istio-sidecar-injector.yaml
-    
+
+Dikastes is a Calico component that computes authorization policy for the Istio proxies on each host. Calico
+utilizes [Istio's automatic sidecar injection](https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection)
+to inject Dikastes container into a pod at pod creation time.
+
+### Optional: Enable sidecar injection for additional namespaces.
+
+The `20-istio-sidecar-injector.yaml` manifest enables sidecar injection for the `default` namespace where the rest of this demo is run.  If you want to experiment with applications in other namespaces, run the following command to enable sidecar injection in your namespace.
+
+```
+kubectl label namespace <your namespace name> istio-injection=enabled
+```
+
 ### Install the demo application
 
 We will use a simple microservice application to demonstrate Calico application layer policy.  The [YAO Bank] 
