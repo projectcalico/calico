@@ -1,4 +1,6 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+//+build windows
+
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +31,7 @@ var _ = Describe("Constructor test", func() {
 	JustBeforeEach(func() {
 		configParams = config.New()
 
-		dpConfig := windataplane.Config{
+		dpConfig = windataplane.Config{
 			IPv6Enabled: configParams.Ipv6Support,
 		}
 	})
