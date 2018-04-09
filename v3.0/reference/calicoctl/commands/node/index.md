@@ -1,7 +1,6 @@
 ---
 title: calicoctl node
 canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/node/
-redirect_from: latest/reference/calicoctl/commands/node/index
 ---
 
 This section describes the `calicoctl node` commands.

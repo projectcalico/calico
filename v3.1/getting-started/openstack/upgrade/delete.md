@@ -1,5 +1,6 @@
 ---
 title: Deleting old data
+redirect_from: latest/getting-started/openstack/upgrade/delete
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/openstack/upgrade/delete'
 ---
 

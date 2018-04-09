@@ -1,7 +1,6 @@
 ---
 title: Releases
 canonical_url: https://docs.projectcalico.org/v3.0/releases/
-redirect_from: latest/releases/index
 ---
 
 The following table shows component versioning for Calico  **{{ page.version }}**.

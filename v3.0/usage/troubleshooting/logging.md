@@ -1,7 +1,6 @@
 ---
 title: Logging
 canonical_url: https://docs.projectcalico.org/v3.0/usage/troubleshooting/logging
-redirect_from: latest/usage/troubleshooting/logging
 ---
 
 ## The calico-node container

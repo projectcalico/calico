@@ -1,5 +1,6 @@
 ---
 title: Worked Examples Using Calico-based OpenStack
+redirect_from: latest/getting-started/openstack/tutorials
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/tutorials'
 ---
 

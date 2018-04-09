@@ -2,7 +2,6 @@
 subtitle: 'At scale, and no, we''re not joking'
 title: Calico over an Ethernet interconnect fabric
 canonical_url: https://docs.projectcalico.org/v3.0/reference/private-cloud/l2-interconnect-fabric
-redirect_from: latest/reference/private-cloud/l2-interconnect-fabric
 ---
 
 

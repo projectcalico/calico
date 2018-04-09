@@ -1,5 +1,6 @@
 ---
 title: Previous releases
+redirect_from: latest/reference/previous-releases
 ---
 
 

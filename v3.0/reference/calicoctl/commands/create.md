@@ -1,7 +1,6 @@
 ---
 title: calicoctl create
 canonical_url: https://docs.projectcalico.org/v3.0/reference/calicoctl/commands/create
-redirect_from: latest/reference/calicoctl/commands/create
 ---
 
 This sections describes the `calicoctl create` command.

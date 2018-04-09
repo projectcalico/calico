@@ -1,7 +1,6 @@
 ---
 title: Configuring Felix
 canonical_url: https://docs.projectcalico.org/v3.0/reference/felix/configuration
-redirect_from: latest/reference/felix/configuration
 ---
 
 Configuration for Felix is read from one of four possible locations, in

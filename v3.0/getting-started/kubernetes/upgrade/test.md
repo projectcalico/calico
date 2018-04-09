@@ -1,7 +1,6 @@
 ---
 title: Testing the data migration
 canonical_url: https://docs.projectcalico.org/v3.0/getting-started/kubernetes/upgrade/test
-redirect_from: latest/getting-started/kubernetes/upgrade/test
 ---
 
 

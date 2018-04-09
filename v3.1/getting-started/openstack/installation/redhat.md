@@ -1,5 +1,6 @@
 ---
 title: Red Hat Enterprise Linux packaged install
+redirect_from: latest/getting-started/openstack/installation/redhat
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openstack/installation/redhat'
 ---
 
