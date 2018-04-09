@@ -71,5 +71,5 @@ following conditions.
 ### Next steps
 
 Return to [Upgrading a self-hosted installation that uses the Kubernetes API
-datastore](upgrade#upgrading-a-self-hosted-installation-that-uses-the-kubernetes-api-datastore)
+datastore](upgrade#upgrading-an-installation-that-uses-the-kubernetes-api-datastore)
 to try again.

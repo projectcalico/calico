@@ -20,10 +20,10 @@ canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/u
 The steps to upgrade differ according to your current version and datastore type.
 
 - **Kubernetes API datastore, {{site.prodname}} v2.6.5 or later**: Complete the steps in 
-  [Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-a-self-hosted-installation-that-uses-the-kubernetes-api-datastore).
+  [Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-an-installation-that-uses-the-kubernetes-api-datastore).
   
 - **etcd datastore, {{site.prodname}} v3.x**: Complete the steps in 
-  [Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-a-self-hosted-installation-that-uses-the-etcd-datastore).
+  [Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-an-installation-that-uses-an-etcd-datastore).
   
 - **etcd datastore, {{site.prodname}} v2.6.x**: You must migrate your data before
   you can upgrade. Complete the steps in each of the following sections.
@@ -34,4 +34,4 @@ The steps to upgrade differ according to your current version and datastore type
 
   1. **[Migrate {{site.prodname}} data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate)** 
 
-  1. **[Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-a-self-hosted-installation-that-uses-the-etcd-datastore)** 
+  1. **[Upgrade {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/upgrade#upgrading-an-installation-that-uses-an-etcd-datastore)** 
