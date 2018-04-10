@@ -7,7 +7,7 @@ test: ut
 # Define some constants
 #######################
 K8S_VERSION       = v1.8.1
-GO_BUILD_VER     ?= v0.9
+GO_BUILD_VER     ?= v0.12
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
 PACKAGE_NAME     ?= projectcalico/libcalico-go
 LOCAL_USER_ID    ?= $(shell id -u $$USER)
