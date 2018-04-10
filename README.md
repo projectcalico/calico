@@ -30,14 +30,29 @@ For simplicity, `calicoctl` can be built in a Docker container, eliminating
 the need for any dependencies in your host developer environment, using the following command:
 
 ```
-make dist/calicoctl
+make build
 ```
 
-The binary will be put in `./dist`:
+The binary will be put in `./dist/` and named `calicoctl-<os>-<arch>`, e.g.:
 
 ```
-./dist/calicoctl --help
+$ ls -1 ./dist/
+calicoctl-linux-amd64
+calicoctl-linux-arm64
+calicoctl-linux-ppc64le
+calicoctl-linux-s390x
+calicoctl-darwin-amd64
+calicoctl-windows-amd64.exe
 ```
+
+To build for a different OS or ARCH, simply define it as a var to `make`, e.g.:
+
+```
+$ make build ARCH=arm64
+$ make build OS=darwin ARCH=amd64
+```
+
+To list all possible targets, run `make help`.
 
 ##### Native Builds
 
@@ -68,4 +83,10 @@ Tests can be run in a container to ensure all build dependencies are met.
 To run the tests
 ```
 make test
+```
+
+**Note:** Tests depend on the test image `calico/test`, which is available only on `amd64`. The actual image used as set by the make variable `TEST_CONTAINER_NAME`. If you have a local build of that image or one for a different architecture, you can override it by setting the variable, e.g.:
+
+```
+$ make test TEST_CONTAINER_NAME=some/container:tag
 ```

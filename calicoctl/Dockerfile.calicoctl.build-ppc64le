@@ -1,8 +1,0 @@
-FROM ppc64le/golang:1.8.3
-MAINTAINER Tom Denham <tom@tigera.io>
-
-# These are only required for running the tests in a container.
-RUN go get github.com/onsi/ginkgo/ginkgo
-RUN go get github.com/onsi/gomega
-
-WORKDIR /go/src/github.com/projectcalico/calicoctl
