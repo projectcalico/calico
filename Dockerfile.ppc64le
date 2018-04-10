@@ -1,0 +1,10 @@
+FROM ppc64le/alpine:3.7
+MAINTAINER Tom Denham <tom@projectcalico.org>
+
+ADD dist/calicoctl-linux-ppc64le /calicoctl
+
+ENV CALICO_CTL_CONTAINER=TRUE
+ENV PATH=$PATH:/
+
+WORKDIR /root
+ENTRYPOINT ["/calicoctl"]
