@@ -11,40 +11,55 @@ test: test-containerized st                             ## Run all the tests
 ###############################################################################
 
 ###############################################################################
-# The build architecture is select by setting the ARCH variable.
-# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
-# When ARCH is undefined it defaults to amd64.
-ARCH?=amd64
-ifeq ($(ARCH),amd64)
-	ARCHTAG?=
-	GO_BUILD_VER:=v0.9
+# Both native and cross architecture builds are supported.
+# The target architecture is select by setting the ARCH variable.
+# When ARCH is undefined it is set to the detected host architecture.
+# When ARCH differs from the host architecture a crossbuild will be performed.
+ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
+
+# BUILDARCH is the host architecture
+# ARCH is the target architecture
+# we need to keep track of them separately
+BUILDARCH ?= $(shell uname -m)
+BUILDOS ?= $(shell uname -s | tr A-Z a-z)
+
+# canonicalized names for host architecture
+ifeq ($(BUILDARCH),aarch64)
+        BUILDARCH=arm64
+endif
+ifeq ($(BUILDARCH),x86_64)
+        BUILDARCH=amd64
 endif
 
-ifeq ($(ARCH),ppc64le)
-	ARCHTAG:=-ppc64le
-	GO_BUILD_VER:=latest
-endif
+# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
+ARCH ?= $(BUILDARCH)
 
-ifeq ($(ARCH),s390x)
-	ARCHTAG:=-s390x
-	GO_BUILD_VER:=latest
+# canonicalized names for target architecture
+ifeq ($(ARCH),aarch64)
+        override ARCH=arm64
+endif
+ifeq ($(ARCH),x86_64)
+        override ARCH=amd64
 endif
 
 # Determine which OS.
 OS := $(shell uname -s | tr A-Z a-z)
 
 ###############################################################################
+GO_BUILD_VER ?= v0.14
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_DIR=calicoctl
-CTL_CONTAINER_NAME?=calico/ctl$(ARCHTAG)
+CTL_CONTAINER_NAME?=calico/ctl
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
+
+TEST_CONTAINER_NAME ?= calico/test
 
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calicoctl
@@ -55,11 +70,14 @@ LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(CALICOCTL_VERS
 
 LIBCALICOGO_PATH?=none
 
-calico/ctl: $(CTL_CONTAINER_CREATED)      ## Create the calico/ctl image
-
 .PHONY: clean-calicoctl
 clean-calicoctl:
+	docker rmi $(CTL_CONTAINER_NAME):latest-$(ARCH) || true
+	docker rmi $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH) || true
+ifeq ($(ARCH),amd64)
 	docker rmi $(CTL_CONTAINER_NAME):latest || true
+	docker rmi $(CTL_CONTAINER_NAME):$(VERSION) || true
+endif
 
 #Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
@@ -75,16 +93,18 @@ vendor: glide.yaml
     -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
     -v $(HOME)/.glide:/home/user/.glide:rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) /bin/sh -c ' \
+    $(GO_BUILD_CONTAINER) /bin/sh -c ' \
 		  cd /go/src/$(PACKAGE_NAME) && \
       glide install -strip-vendor'
 
-# build calico_ctl image
-$(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl$(ARCHTAG) dist/calicoctl
-	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl$(ARCHTAG) .
+## build calico_ctl image
+image: calico/ctl
+calico/ctl: $(CTL_CONTAINER_CREATED)
+$(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) dist/calicoctl
+	docker build -t $(CTL_CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
 	touch $@
 
-## Build calicoctl
+## Build calicoctl on local system with installed go
 binary: $(CALICOCTL_FILES) vendor
 	# Don't try to "install" the intermediate build files (.a .o) when not on linux
 	# since there are no write permissions for them in our linux build container.
@@ -93,27 +113,38 @@ binary: $(CALICOCTL_FILES) vendor
 	fi; \
 	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
+
 dist/calicoctl: $(CALICOCTL_FILES) vendor
-	$(MAKE) dist/calicoctl-linux-$(ARCH)
-	cp dist/calicoctl-linux-$(ARCH) dist/calicoctl
+	$(MAKE) dist/calicoctl-linux-amd64
+	cp dist/calicoctl-linux-amd64 dist/calicoctl
 
+## build for linux on amd64
 dist/calicoctl-linux-amd64: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=linux ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
+	$(MAKE) OS=linux ARCH=amd64 binary-containerized
 
+## build for linux on arm64
+dist/calicoctl-linux-arm64: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=linux ARCH=arm64 binary-containerized
+
+## build for linux on ppc64le
 dist/calicoctl-linux-ppc64le: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=linux ARCH=ppc64le ARCHTAG=$(ARCHTAG) binary-containerized
+	$(MAKE) OS=linux ARCH=ppc64le binary-containerized
 
+## build for linux on s390x
 dist/calicoctl-linux-s390x: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=linux ARCH=s390x ARCHTAG=$(ARCHTAG) binary-containerized
+	$(MAKE) OS=linux ARCH=s390x binary-containerized
 
+## build for darwin on amd64
 dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=darwin ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
+	$(MAKE) OS=darwin ARCH=amd64 binary-containerized
 
+## build for windows on amd64
 dist/calicoctl-windows-amd64.exe: $(CALICOCTL_FILES) vendor
-	$(MAKE) OS=windows ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
+	$(MAKE) OS=windows ARCH=amd64 binary-containerized
 	mv dist/calicoctl-windows-amd64 dist/calicoctl-windows-amd64.exe
 
-## Run the build in a container. Useful for CI
+## Run the build in a container for the current docker OS and ARCH
+build: binary-containerized
 binary-containerized: $(CALICOCTL_FILES) vendor
 	mkdir -p dist
 	-mkdir -p .go-pkg-cache
@@ -125,7 +156,7 @@ binary-containerized: $(CALICOCTL_FILES) vendor
 	  -v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
-	  $(CALICO_BUILD) sh -c '\
+	  $(GO_BUILD_CONTAINER) sh -c '\
 	    cd /go/src/$(PACKAGE_NAME) && \
 	    make OS=$(OS) ARCH=$(ARCH) \
 	         CALICOCTL_VERSION=$(CALICOCTL_VERSION)  \
@@ -164,7 +195,7 @@ PHONY: test-containerized
 test-containerized: dist/calicoctl
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make ut'
+    $(GO_BUILD_CONTAINER) sh -c 'cd /go/src/$(PACKAGE_NAME) && make ut'
 
 ## Perform static checks on the code. The golint checks are allowed to fail, the others must pass.
 .PHONY: static-checks
@@ -173,7 +204,7 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) sh -c '\
+		$(GO_BUILD_CONTAINER) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
 
@@ -198,18 +229,28 @@ st: dist/calicoctl run-etcd-host
 	           --rm -t \
 	           -v $(SOURCE_DIR):/code \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
-	           calico/test$(ARCHTAG) \
+	           $(TEST_CONTAINER_NAME) \
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 
 	$(MAKE) stop-etcd
 
 ## Etcd is used by the STs
+# NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
+# amd64: 3.2.5
+# arm64: 3.2.5-arm64
+# ppc64le: 3.2.5-ppc64le
+# s390x is not available
+COREOS_ETCD ?= quay.io/coreos/etcd:v3.2.5-$(ARCH)
+ifeq ($(ARCH),amd64)
+COREOS_ETCD = quay.io/coreos/etcd:v3.2.5
+endif
 .PHONY: run-etcd-host
 run-etcd-host:
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd:v3.2.5$(ARCHTAG) \
+	--name calico-etcd \
+	$(COREOS_ETCD) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"
@@ -251,21 +292,26 @@ endif
 	# Check that the version output includes the version specified.
 	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
 	# Release is currently supported on darwin / linux only.
-	if ! docker run $(CTL_CONTAINER_NAME) version | grep 'Version:\s*$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(CTL_CONTAINER_NAME) version` "\nExpected version: $(VERSION)"; \
+	if ! docker run $(CTL_CONTAINER_NAME):latest-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(CTL_CONTAINER_NAME):latest-$(ARCH) version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
 	fi
 
 	# Retag images with corect version and quay
-	docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$(VERSION)
-	docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$(VERSION)
-	docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):latest
+	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)
+	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) quay.io/$(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)
+	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) quay.io/$(CTL_CONTAINER_NAME):latest-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):latest
+	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):$(VERSION)
+endif
+
 
 	# Check that images were created recently and that the IDs of the versioned and latest images match
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME)
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME):$(VERSION)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME):latest-$(ARCH)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)
 
 	@echo ""
 	@echo "# Push the created tag to GitHub"
@@ -273,18 +319,30 @@ endif
 	@echo ""
 	@echo "# Now, create a GitHub release from the tag, add release notes, and attach the following binaries:"
 	@echo "- dist/calicoctl"
+	@echo "- dist/calicoctl-linux-amd64"
+	@echo "- dist/calicoctl-linux-arm64"
+	@echo "- dist/calicoctl-linux-ppc64le"
+	@echo "- dist/calicoctl-linux-s390x"
 	@echo "- dist/calicoctl-darwin-amd64"
 	@echo "- dist/calicoctl-windows-amd64.exe"
 	@echo "# To find commit messages for the release notes:  git log --oneline <old_release_version>...$(VERSION)"
 	@echo ""
 	@echo "# Now push the newly created release images."
-	@echo "  docker push calico/ctl:$(VERSION)"
-	@echo "  docker push quay.io/calico/ctl:$(VERSION)"
+	@echo "  docker push $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)"
+	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)"
+ifeq ($(ARCH),amd64)
+	@echo "  docker push $(CTL_CONTAINER_NAME):$(VERSION)"
+	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):$(VERSION)"
+endif
 	@echo ""
 	@echo "# For the final release only, push the latest tag"
-	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES" 
-	@echo "  docker push calico/ctl:latest"
-	@echo "  docker push quay.io/calico/ctl:latest"
+	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES"
+	@echo "  docker push $(CTL_CONTAINER_NAME):latest-$(ARCH)"
+	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):latest-$(ARCH)"
+ifeq ($(ARCH),amd64)
+	@echo "  docker push $(CTL_CONTAINER_NAME):latest"
+	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):latest"
+endif
 	@echo ""
 	@echo "See RELEASING.md for detailed instructions."
 
@@ -296,6 +354,15 @@ clean: clean-calicoctl
 .PHONY: help
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
+	@echo "calicoctl Makefile"
+	@echo
+	@echo "Dependencies: docker 1.12+; go 1.8+"
+	@echo
+	@echo "For any target, set ARCH=<target> OS=<os> to build for a given target architecture and OS."
+	@echo "For example, to build for linux on arm64:"
+	@echo
+	@echo "  make build OS=linux ARCH=arm64"
+	@echo
 	$(info Available targets)
 	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
 		nb = sub( /^## /, "", helpMsg );                                \
@@ -309,4 +376,12 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
-	@echo "Building for $(OS)-$(ARCH) INSTALL_FLAG=$(INSTALL_FLAG). Use: ARCH=xyz make <...> to change the build architecture."
+	@echo
+	@echo "-----------------------------------------"
+	@echo "Building for $(OS)-$(ARCH) INSTALL_FLAG=$(INSTALL_FLAG)"
+	@echo
+	@echo "ARCH (target):          $(ARCH)"
+	@echo "OS (target):            $(OS)"
+	@echo "BUILDARCH (host):       $(BUILDARCH)"
+	@echo "GO_BUILD_CONTAINER:     $(GO_BUILD_CONTAINER)"
+	@echo "-----------------------------------------"
