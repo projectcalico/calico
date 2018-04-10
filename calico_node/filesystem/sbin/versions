@@ -1,8 +1,6 @@
 #!/bin/sh
 confd -version
 bird --version
-echo -n "libnetwork-plugin: "
-libnetwork-plugin -v
 echo -n "calico-bgp-daemon: "
 calico-bgp-daemon -v
 echo ""

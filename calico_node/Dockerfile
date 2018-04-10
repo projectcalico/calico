@@ -14,9 +14,6 @@
 FROM alpine
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-# Set the minimum Docker API version required for libnetwork.
-ENV DOCKER_API_VERSION 1.21
-
 # Download and install glibc for use by non-static binaries that require it.
 RUN apk --no-cache add wget ca-certificates libgcc && \
     wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub && \
