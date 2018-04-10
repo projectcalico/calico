@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,7 +113,11 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 		// before the explicit Types feature was available.  Calico's previous behaviour was
 		// always to apply policy to both ingress and egress traffic, so in this case we
 		// return Types as [ ingress, egress ].
-		ap.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+		if bp.PreDNAT {
+			ap.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+		} else {
+			ap.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+		}
 	} else {
 		// Convert from the backend-specified Types.
 		ap.Spec.Types = make([]api.PolicyType, len(bp.Types))

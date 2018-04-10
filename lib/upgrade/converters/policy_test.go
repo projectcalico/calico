@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -259,6 +259,7 @@ var policyTable = []struct {
 		},
 	},
 	{
+		// Not a valid policy because there are Egress rules with PreDNAT set true
 		description: "policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
 		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
@@ -272,7 +273,7 @@ var policyTable = []struct {
 				Selector:     "thing == 'value'",
 				DoNotTrack:   true,
 				PreDNAT:      true,
-				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress, apiv1.PolicyTypeEgress},
+				Types:        []apiv1.PolicyType{},
 			},
 		},
 		v1KVP: &model.KVPair{
@@ -378,6 +379,65 @@ func TestCanConvertV1ToV3Policy(t *testing.T) {
 			Expect(err).NotTo(HaveOccurred(), entry.description)
 			Expect(v1KVPResult.Key.(model.PolicyKey).Name).To(Equal(entry.v1KVP.Key.(model.PolicyKey).Name))
 			Expect(v1KVPResult.Value.(*model.Policy)).To(Equal(entry.v1KVP.Value))
+
+			// Test and assert v1 backend to v3 API logic.
+			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
+			Expect(err).NotTo(HaveOccurred(), entry.description)
+			Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(entry.v3API.Name), entry.description)
+			Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(entry.v3API.Spec), entry.description)
+		})
+	}
+}
+
+var policyTableBackend = []struct {
+	description string
+	v1KVP       *model.KVPair
+	v3API       apiv3.GlobalNetworkPolicy
+}{
+	{
+		description: "policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
+		v1KVP: &model.KVPair{
+			Key: model.PolicyKey{
+				Name: "MaKe.-.MaKe",
+			},
+			Value: &model.Policy{
+				Order: &order1,
+				// Source Nets selector in V1ModelInRule1 and V1ModelEgressRule1 are non-strictly masked CIDRs.
+				InboundRules:   []model.Rule{V1ModelInRule1},
+				OutboundRules:  []model.Rule{V1ModelEgressRule1},
+				Selector:       "thing == 'value'",
+				DoNotTrack:     true,
+				PreDNAT:        false,
+				ApplyOnForward: true,
+				Types:          []string{},
+			},
+		},
+		v3API: apiv3.GlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{
+				Name: "make-make-1b6971c8",
+			},
+			Spec: apiv3.GlobalNetworkPolicySpec{
+				Order: &order1,
+				// Source Nets selector in V3InRule1 and V3EgressRule1 are strictly masked CIDRs.
+				Ingress:        []apiv3.Rule{V3InRule1},
+				Egress:         []apiv3.Rule{V3EgressRule1},
+				Selector:       "thing == 'value'",
+				DoNotTrack:     true,
+				PreDNAT:        false,
+				ApplyOnForward: true,
+				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
+			},
+		},
+	},
+}
+
+func TestCanConvertKVModelToV3Policy(t *testing.T) {
+
+	for _, entry := range policyTable {
+		t.Run(entry.description, func(t *testing.T) {
+			RegisterTestingT(t)
+
+			p := Policy{}
 
 			// Test and assert v1 backend to v3 API logic.
 			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
