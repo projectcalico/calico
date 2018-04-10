@@ -1926,9 +1926,6 @@ master:
      calico-bgp-daemon:
       version: v0.2.2
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.2
-     libnetwork-plugin:
-      version: master
-      url: ""
      calico/kube-controllers:
       version: release-v3.1
       url: ""
@@ -1983,9 +1980,6 @@ v3.1:
     calico-bgp-daemon:
       version: v0.2.1
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
-    libnetwork-plugin:
-      version: v1.1.0
-      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
 
 - title: v3.1.0-rc1
   note: ""
@@ -2025,9 +2019,6 @@ v3.1:
     calico-bgp-daemon:
       version: v0.2.1
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
-    libnetwork-plugin:
-      version: v1.1.0
-      url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     networking-calico:
       version: 2.0.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=2.0.0
