@@ -15,9 +15,6 @@
 FROM ppc64le/alpine:3.7
 MAINTAINER David Wilder <wilder@us.ibm.com>
 
-# Set the minimum Docker API version required for libnetwork.
-ENV DOCKER_API_VERSION 1.21
-
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit file
 

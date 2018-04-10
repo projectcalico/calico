@@ -14,9 +14,6 @@
 FROM alpine:3.7
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-# Set the minimum Docker API version required for libnetwork.
-ENV DOCKER_API_VERSION 1.21
-
 # Set glibc version
 ENV GLIBC_VERSION 2.27-r0
 
