@@ -41,7 +41,7 @@ Bird and Bird6 are used for distributing IPv4 and IPv6 routes between {{site.pro
 enabled hosts.  The logs are output in the `bird` and `bird6` sub-directories
 of the `{{site.nodecontainer}}` logging directory.
 
-See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
+See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig)
 for details on how to modify the logging level. For example:
 
 ```
@@ -88,9 +88,3 @@ editing configuration within the node image.
 
 For more information on the allowed levels, see the
 [documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
-
-## Docker network and IPAM driver
-
-When running {{site.prodname}} as a Docker network plugin, the {{site.prodname}} network driver runs
-inside the `{{site.nodecontainer}}` container.  The logs are output in the `libnetwork` sub-directory
-of the `{{site.nodecontainer}}` logging directory.

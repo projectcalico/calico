@@ -12,7 +12,7 @@ systemd, inside either of the following container types:
 
 This section describes how to run `calico/node` as a Docker container.
 
-> **Note**: We include examples for systemd, but the commands can be 
+> **Note**: We include examples for systemd, but the commands can be
 > applied to other init daemons such as upstart.
 {: .alert .alert-info}
 
@@ -32,7 +32,6 @@ CALICO_NO_DEFAULT_POOLS=""
 CALICO_IP=""
 CALICO_IP6=""
 CALICO_AS=""
-CALICO_LIBNETWORK_ENABLED=true
 CALICO_NETWORKING_BACKEND=bird
 ```
 
@@ -91,7 +90,6 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -e CALICO_NETWORKING_BACKEND=${CALICO_NETWORKING_BACKEND} \
  -e AS=${CALICO_AS} \
  -e NO_DEFAULT_POOLS=${CALICO_NO_DEFAULT_POOLS} \
- -e CALICO_LIBNETWORK_ENABLED=${CALICO_LIBNETWORK_ENABLED} \
  -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
  -e ETCD_CA_CERT_FILE=${ETCD_CA_CERT_FILE} \
  -e ETCD_CERT_FILE=${ETCD_CERT_FILE} \
