@@ -152,8 +152,10 @@ type FelixConfigurationSpec struct {
 
 	DisableConntrackInvalidCheck *bool `json:"disableConntrackInvalidCheck,omitempty"`
 
-	HealthEnabled *bool `json:"healthEnabled,omitempty"`
-	HealthPort    *int  `json:"healthPort,omitempty"`
+	HealthEnabled *bool   `json:"healthEnabled,omitempty"`
+	HealthHost    *string `json:"healthHost,omitempty"`
+	HealthPort    *int    `json:"healthPort,omitempty"`
+
 	// PrometheusMetricsEnabled enables the experimental Prometheus metrics server in Felix if set to true. [Default: false]
 	PrometheusMetricsEnabled *bool `json:"prometheusMetricsEnabled,omitempty"`
 	// PrometheusMetricsPort is the TCP port that the experimental Prometheus metrics server should bind to. [Default:9091]
