@@ -19,6 +19,9 @@ Should you wish to modify the manifests before applying them, refer to
 If you prefer not to use Kubernetes to start the {{site.prodname}} services, refer to the
 [Integration guide](integration).
 
+If you will be using {{site.prodname}} application layer policy then you will need to install
+[Istio](https://istio.io/) and use {{site.prodname}} manifests that enable this feature. Refer
+to [Application Layer Policy](app-layer-policy) for more details.
 
 ## Third-party solutions
 
