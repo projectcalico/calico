@@ -13,6 +13,11 @@ ifeq ($(ARCH),ppc64le)
 	GO_BUILD_VER?=latest
 endif
 
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER?=latest
+endif
+
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.8.0-beta.1
 ETCD_IMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
 
