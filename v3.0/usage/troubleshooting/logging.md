@@ -40,7 +40,7 @@ Bird and Bird6 are used for distributing IPv4 and IPv6 routes between Calico
 enabled hosts.  The logs are output in the `bird` and `bird6` sub-directories
 of the calico/node logging directory.
 
-See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
+See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig)
 for details on how to modify the logging level. For example:
 
 ```
@@ -87,9 +87,3 @@ editing configuration within the node image.
 
 For more information on the allowed levels, see the
 [documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
-
-## Docker network and IPAM driver
-
-When running Calico as a Docker network plugin, the Calico network driver runs
-inside the calico/node container.  The logs are output in the `libnetwork` sub-directory
-of the calico/node logging directory.

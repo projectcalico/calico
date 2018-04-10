@@ -145,7 +145,7 @@ Enabling IPv6 forwarding
 Increasing conntrack limit
 Running the following command:
 
-docker run --net=host --privileged --name={{site.noderunning}} -d --restart=always -e ETCD_SCHEME=http -e HOSTNAME=calico -e CALICO_LIBNETWORK_ENABLED=true -e ETCD_AUTHORITY=127.0.0.1:2379 -e AS= -e NO_DEFAULT_POOLS= -e ETCD_ENDPOINTS= -e IP= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+docker run --net=host --privileged --name={{site.noderunning}} -d --restart=always -e ETCD_SCHEME=http -e HOSTNAME=calico -e ETCD_AUTHORITY=127.0.0.1:2379 -e AS= -e NO_DEFAULT_POOLS= -e ETCD_ENDPOINTS= -e IP= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 
 Waiting for etcd connection...
 Using configured IPv4 address: 192.0.2.0
@@ -153,7 +153,6 @@ No IPv6 address configured
 Using global AS number
 WARNING: Could not confirm that the provided IPv4 address is assigned to this host.
 Calico node name:  calico
-CALICO_LIBNETWORK_ENABLED is true - start libnetwork service
 Calico node started successfully
 ```
 
@@ -183,7 +182,7 @@ To set the autodetection method for IPv6, use the `--ip6-autodetection-method` o
 
 > **Note**: If you are starting the `{{site.nodecontainer}}` container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
-> variables. These are described in 
+> variables. These are described in
 > [Configuring `{{site.nodecontainer}}`]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 {: .alert .alert-info}
 
