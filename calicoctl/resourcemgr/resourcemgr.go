@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
@@ -151,6 +152,15 @@ func (rh resourceHelper) GetObjectType() reflect.Type {
 // Apply is an un-typed method to apply (create or update) a resource. This calls Create
 // and if the resource already exists then we call the Update method.
 func (rh resourceHelper) Apply(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
+	// Block operations on ClusterInfo as calico/node is responsible for managing it.
+	if _, ok := resource.(*api.ClusterInformation); ok {
+		return nil, cerrors.ErrorOperationNotSupported{
+			Operation:  "apply",
+			Identifier: "ClusterInformation",
+			Reason:     "resource is readonly",
+		}
+	}
+
 	// Store the original ResourceVersion for the Update operation later.
 	originalRV := resource.(ResourceObject).GetObjectMeta().GetResourceVersion()
 
