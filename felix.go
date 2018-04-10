@@ -211,7 +211,7 @@ configRetry:
 
 		// Each time round this loop, check that we're serving health reports if we should
 		// be, or cancel any existing server if we should not be serving any more.
-		healthAggregator.ServeHTTP(configParams.HealthEnabled, "", configParams.HealthPort)
+		healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
@@ -282,7 +282,7 @@ configRetry:
 	healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 
 	// Enable or disable the health HTTP server according to coalesced config.
-	healthAggregator.ServeHTTP(configParams.HealthEnabled, "", configParams.HealthPort)
+	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
