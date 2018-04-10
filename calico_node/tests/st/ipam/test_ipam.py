@@ -26,7 +26,6 @@ POST_DOCKER_COMMANDS = ["docker load -q -i /code/calico-node.tar",
                         "docker load -q -i /code/busybox.tar",
                         "docker load -q -i /code/workload.tar"]
 
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
