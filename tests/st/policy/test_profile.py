@@ -23,9 +23,9 @@ from tests.st.utils.network import NETWORKING_CNI, NETWORKING_LIBNETWORK
 from tests.st.utils.utils import assert_profile, \
     assert_number_endpoints, get_profile_name
 
-POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
-                        "docker load -i /code/busybox.tar",
-                        "docker load -i /code/workload.tar"]
+POST_DOCKER_COMMANDS = ["docker load -q -i /code/calico-node.tar",
+                        "docker load -q -i /code/busybox.tar",
+                        "docker load -q -i /code/workload.tar"]
 
 
 _log = logging.getLogger(__name__)
