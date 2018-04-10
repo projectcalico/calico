@@ -25,6 +25,11 @@ ifeq ($(ARCH),ppc64le)
 	GO_BUILD_VER:=latest
 endif
 
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER:=latest
+endif
+
 # Determine which OS.
 OS := $(shell uname -s | tr A-Z a-z)
 
@@ -97,6 +102,9 @@ dist/calicoctl-linux-amd64: $(CALICOCTL_FILES) vendor
 
 dist/calicoctl-linux-ppc64le: $(CALICOCTL_FILES) vendor
 	$(MAKE) OS=linux ARCH=ppc64le ARCHTAG=$(ARCHTAG) binary-containerized
+
+dist/calicoctl-linux-s390x: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=linux ARCH=s390x ARCHTAG=$(ARCHTAG) binary-containerized
 
 dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
 	$(MAKE) OS=darwin ARCH=amd64 ARCHTAG=$(ARCHTAG) binary-containerized
