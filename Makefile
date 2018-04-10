@@ -5,7 +5,7 @@
 ARCH?=amd64
 ifeq ($(ARCH),amd64)
         ARCHTAG?=
-	GO_BUILD_VER?=v0.9
+	GO_BUILD_VER?=v0.12
 endif
 
 ifeq ($(ARCH),ppc64le)
