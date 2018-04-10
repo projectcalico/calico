@@ -80,8 +80,8 @@ class DockerHost(object):
 
     def __init__(self, name, start_calico=True, dind=True,
                  additional_docker_options="",
-                 post_docker_commands=["docker load -i /code/calico-node.tar",
-                                       "docker load -i /code/busybox.tar"],
+                 post_docker_commands=["docker load -q -i /code/calico-node.tar",
+                                       "docker load -q -i /code/busybox.tar"],
                  calico_node_autodetect_ip=False,
                  simulate_gce_routing=False,
                  override_hostname=False,
