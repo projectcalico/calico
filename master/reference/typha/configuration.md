@@ -48,3 +48,37 @@ The full list of parameters which can be set is as follows.
 #### Kubernetes API datastore configuration
 
 The Kubernetes API datastore driver reads its configuration from Kubernetes-provided environment variables.
+
+#### Felix-Typha TLS configuration
+
+{% include {{page.version}}/felix-typha-tls-intro.md %}
+
+To use TLS, each Typha instance must have a certificate and key pair signed by
+a trusted CA.  Typha then only accepts TLS connections, and requires each
+connecting client to present a certificate that is signed by a trusted CA and
+has an expected identity in its Common Name or URI SAN field.  Either
+`ClientCN` or `ClientURISAN` must be configured, and Typha will check the
+presented certificate accordingly.
+
+-  For a [SPIFFE](https://github.com/spiffe/spiffe)-compliant deployment you
+   should configure `ClientURISAN` with a [SPIFFE
+   Identity](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity)
+   and provision client certificates with the same identity in their URI SAN
+   field.
+
+-  Alternatively you can configure `ClientCN` and provision client certificates
+   with that `ClientCN` value in their Common Name field.
+
+If both those parameters are set, a client certificate only has to match one of
+them; this is intended for when a deployment is migrating from using Common
+Name to using a URI SAN, to express identity.
+
+| Configuration parameter | Environment variable   | Description | Schema |
+| ----------------------- | ---------------------- | ----------- | ------ |
+| `CAFile`                | `TYPHA_CAFILE`         | The full path to the certificate file for the Certificate Authorities that Typha trusts for Felix-Typha communications. | string |
+| `ClientCN`              | `TYPHA_CLIENTCN`       | If set, the Common Name that each connecting client certificate must have. [Default: not set] | string |
+| `ClientURISAN`          | `TYPHA_CLIENTURISAN`   | If set, a URI SAN that each connecting client certificate must have. [Default: not set] | string |
+| `ServerCertFile`        | `TYPHA_SERVERCERTFILE` | The full path to the certificate file for this Typha instance. | string |
+| `ServerKeyFile`         | `TYPHA_SERVERKEYFILE`  | The full path to the private key file for this Typha instance. | string |
+
+{% include {{page.version}}/felix-typha-tls-howto.md %}

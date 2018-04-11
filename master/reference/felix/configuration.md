@@ -115,6 +115,40 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | ----------------------- | ----------------------- | ----------- | ------ |
 | `InterfacePrefix`       | `FELIX_INTERFACEPREFIX` | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces. Accepts more than one interface name prefix in comma-delimited format, e.g., `tap,cali`. Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the `cali` value, and our OpenStack integration sets the `tap` value. [Default: `cali`] | string |
 
+#### Felix-Typha TLS configuration
+
+{% include {{page.version}}/felix-typha-tls-intro.md %}
+
+To use TLS, each Felix instance must have a certificate and key pair signed by
+a trusted CA.  Felix then uses TLS when connecting to Typha, and requires Typha
+to present a certificate that is signed by a trusted CA and
+has an expected identity in its Common Name or URI SAN field.  Either
+`TyphaCN` or `TyphaURISAN` must be configured, and Felix will check the
+presented certificate accordingly.
+
+-  For a [SPIFFE](https://github.com/spiffe/spiffe)-compliant deployment you
+   should configure `TyphaURISAN` with a [SPIFFE
+   Identity](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity)
+   and provision Typha certificates with the same identity in their URI SAN
+   field.
+
+-  Alternatively you can configure `TyphaCN` and provision Typha certificates
+   with that `TyphaCN` value in their Common Name field.
+
+If both those parameters are set, a Typha certificate only has to match one of
+them; this is intended for when a deployment is migrating from using Common
+Name to using a URI SAN, to express identity.
+
+| Configuration parameter | Environment variable   | Description | Schema |
+| ----------------------- | ---------------------- | ----------- | ------ |
+| `TyphaCAFile`           | `FELIX_TYPHACAFILE`    | The full path to the certificate file for the Certificate Authorities that Felix trusts for Felix-Typha communications. | string |
+| `TyphaCertFile`         | `FELIX_TYPHACERTFILE`  | The full path to the certificate file for this Felix instance to use to connect to Typha. | string |
+| `TyphaCN`               | `FELIX_TYPHACN`        | If set, the Common Name that Typha's certificate must have. [Default: not set] | string |
+| `TyphaKeyFile`          | `FELIX_TYPHAKEYFILE`   | The full path to the private key file for this Felix instance to use to connect to Typha. | string |
+| `TyphaURISAN`           | `FELIX_TYPHAURISAN`    | If set, a URI SAN that Typha's certificate must have. [Default: not set] | string |
+
+{% include {{page.version}}/felix-typha-tls-howto.md %}
+
 Environment variables
 ---------------------
 
