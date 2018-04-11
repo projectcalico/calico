@@ -60,9 +60,9 @@ The full list of parameters which can be set is as follows.
 | `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd private key file. | string |
 
 
-#### Kubernetes datastore configuration
+#### Kubernetes API datastore configuration
 
-The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables.
+The Kubernetes API datastore driver reads its configuration from Kubernetes-provided environment variables.
 
 #### iptables dataplane configuration
 

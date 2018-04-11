@@ -79,12 +79,16 @@ toc:
   section:
   - title: Configuration
     path: /reference/node/configuration
-- title: felix
+- title: Felix
   section:
   - title: Configuration
     path: /reference/felix/configuration
   - title: Prometheus Statistics
     path: /reference/felix/prometheus
+- title: Typha
+  section:
+  - title: Configuration
+    path: /reference/typha/configuration
 - title: Calico CNI Plugins
   path: /reference/cni-plugin/configuration
 - title: Calico Kubernetes Controllers
