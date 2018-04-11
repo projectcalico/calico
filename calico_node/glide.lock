@@ -1,5 +1,5 @@
 hash: 93ea2bd5417653c14c4833321189e92f80d1d48d79ff689776d373bd9363dc50
-updated: 2018-03-19T15:30:49.096997254Z
+updated: 2018-04-11T21:11:33.141420983Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -170,7 +170,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 374c033568ef75c2dc83637cb2d075e84a45ecac
+  version: aab7cad849ac211a68f9399b967df143a5f9281d
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -273,7 +273,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
+  version: 314a259e304ff91bd6985da2a7149bbf91237993
   subpackages:
   - unix
   - windows
@@ -303,7 +303,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 5bee14b453b4c71be47ec1781b0fa61c2ea182db
+  version: 0a24098c0ec68416ec050f567f75df563d6b231e
   subpackages:
   - internal
   - internal/app_identity
