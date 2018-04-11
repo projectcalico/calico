@@ -4,7 +4,7 @@ canonical_url: https://docs.projectcalico.org/v3.1/reference/felix/configuration
 ---
 
 Configuration for Felix is read from one of four possible locations, in
-order, as follows. 
+order, as follows.
 
 1.  Environment variables.
 2.  The Felix configuration file.
@@ -12,16 +12,16 @@ order, as follows.
 4.  The global `FelixConfiguration` resource (`default`).
 
 The value of any configuration parameter is the value read from the
-*first* location containing a value. For example, if an environment variable 
+*first* location containing a value. For example, if an environment variable
 contains a value, it takes top precedence.
 
-If not set in any of these locations, most configuration parameters have 
+If not set in any of these locations, most configuration parameters have
 defaults, and it should be rare to have to explicitly set them.
 
 The full list of parameters which can be set is as follows.
 
-> **Note**: The following tables detail the configuration file and 
-> environment variable parameters. For `FelixConfiguration` resource settings, 
+> **Note**: The following tables detail the configuration file and
+> environment variable parameters. For `FelixConfiguration` resource settings,
 > refer to [Felix Configuration Resource](../calicoctl/resources/felixconfig).
 {: .alert .alert-info}
 
@@ -56,12 +56,12 @@ The full list of parameters which can be set is as follows.
 | `EtcdCaFile`            | `FELIX_ETCDCAFILE`    | The full path to the etcd Certificate Authority certificate file. To disable authentication of the server by Felix, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
 | `EtcdCertFile`          | `FELIX_ETCDCERTFILE`  | The full path to the etcd certificate file. | string |
 | `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://etcd1:2379,http://etcd2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
-| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd public key file. | string |
+| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd private key file. | string |
 
 
 #### Kubernetes datastore configuration
 
-The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables. 
+The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables.
 
 #### iptables dataplane configuration
 

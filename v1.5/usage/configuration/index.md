@@ -61,7 +61,7 @@ The full list of parameters which can be set is as follows.
 |-----------------------------|-------------------|-----------------------------------------|
 | EtcdAddr                    | localhost:4001    | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.                      |
 | EtcdScheme                  | http              | The protocol type (http or https) of the etcd node or proxy that Felix connects to.                            |
-| EtcdKeyFile                 | None              | The full path to the etcd public key file, as described in usingtlswithetcd  |
+| EtcdKeyFile                 | None              | The full path to the etcd private key file, as described in usingtlswithetcd  |
 | EtcdCertFile                | None              | The full path to the etcd certificate file, as described in usingtlswithetcd  |
 | EtcdCaFile                  | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".                |
 | DefaultEndpointToHostAction | DROP              | By default Calico blocks traffic from   endpoints to the host itself by using   an iptables DROP action. If you want to allow some or all traffic from endpoint to host then set this parameter to "RETURN" (which causes the rest of the  iptables INPUT chain to be processed)   or "ACCEPT" (which immediately accepts  packets). |
@@ -86,7 +86,7 @@ The full list of parameters which can be set is as follows.
 | EtcdDriverPrometheusMetricsPort | 9092              | TCP port that the Prometheus metrics server in the etcd driver process should bind to. |
 | UsageReportingEnabled | "true"              | Reports anonymous Calico version number and cluster size to projectcalico.org.  Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. |
 | FailsafeInboundHostPorts    | 22                | Comma-delimited list of TCP ports that   Felix will allow incoming traffic to     host endpoints on irrespective of the    security policy. This is useful to       avoid accidently cutting off a host      with incorrect configuration. The        default value allows ssh access.        |
-| FailsafeOutboundHostPorts   | 2379,2380,4001,7001 | Comma-delimited list of TCP ports that   Felix will allow outgoing from traffic   from host endpoints to irrespective of   the security policy. This is useful to   avoid accidently cutting off a host      with incorrect configuration. The        default value opens etcd's standard      ports to ensure that Felix does not get  cut off from etcd.                     
+| FailsafeOutboundHostPorts   | 2379,2380,4001,7001 | Comma-delimited list of TCP ports that   Felix will allow outgoing from traffic   from host endpoints to irrespective of   the security policy. This is useful to   avoid accidently cutting off a host      with incorrect configuration. The        default value opens etcd's standard      ports to ensure that Felix does not get  cut off from etcd.
 
 Environment variables
 ---------------------

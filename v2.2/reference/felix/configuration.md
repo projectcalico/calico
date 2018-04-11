@@ -44,7 +44,7 @@ The full list of parameters which can be set is as follows.
 | EtcdEndpoints                           | FELIX_ETCDENDPOINTS                     | "EtcdScheme://EtcdAddr"              | Comma-delimited list of etcd endpoints to connect to; for example "http://etcd1:2379,http://etcd2:2379".  |
 | _Deprecated_ EtcdAddr                   | FELIX_ETCDADDR                          | 127.0.0.1:2379                       | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.  |
 | _Deprecated_ EtcdScheme                 | FELIX_ETCDSCHEME                        | http                                 | The protocol type (http or https) of the etcd node or proxy that Felix connects to.  |
-| EtcdKeyFile                             | FELIX_ETCDKEYFILE                       | None                                 | The full path to the etcd public key file, as described in usingtlswithetcd  |
+| EtcdKeyFile                             | FELIX_ETCDKEYFILE                       | None                                 | The full path to the etcd private key file, as described in usingtlswithetcd  |
 | EtcdCertFile                            | FELIX_ETCDCERTFILE                      | None                                 | The full path to the etcd certificate file, as described in usingtlswithetcd  |
 | EtcdCaFile                              | FELIX_ETCDCAFILE                        | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".  |
 

@@ -57,7 +57,7 @@ The full list of parameters which can be set is as follows.
 | `EtcdCaFile`            | `FELIX_ETCDCAFILE`    | The full path to the etcd Certificate Authority certificate file. To disable authentication of the server by Felix, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
 | `EtcdCertFile`          | `FELIX_ETCDCERTFILE`  | The full path to the etcd certificate file. | string |
 | `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://etcd1:2379,http://etcd2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
-| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd public key file. | string |
+| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd private key file. | string |
 
 
 #### Kubernetes datastore configuration
