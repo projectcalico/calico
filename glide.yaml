@@ -3,11 +3,11 @@ import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/golang/protobuf
-  version: master
+  #version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
   subpackages:
   - proto
 - package: github.com/projectcalico/libcalico-go
-  version: master
+  version: d725fa5db923e8abe1430a74ce4e38f6bee6573a
   subpackages:
   - lib/apis/v3
   - lib/client
@@ -26,12 +26,13 @@ import:
   subpackages:
   - pkg/util/validation
 - package: github.com/envoyproxy/data-plane-api
-  version: 28d28198e583aec75b6242ee02682654197b745e
-  subpackages:
-  - api/auth
+  version: 771aeeaeece5ab035724871ff9cbbb337f8c98c8
 - package: github.com/google/protobuf
   version: v3.5.0.1
 - package: github.com/lyft/protoc-gen-validate
   version: v0.0.5
 - package: github.com/googleapis/googleapis
 - package: google.golang.org/genproto/googleapis/
+- package: github.com/onsi/gomega
+  version: ^1.1.0
+- package: github.com/gogo/protobuf

@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Calico Version v3.0.0-beta1
-# https://docs.projectcalico.org/v3.0/releases#v3.0.0-beta1
-# This manifest includes the following component versions:
-#   calico/node:v3.0.0-beta1
-#   calico/cni:v2.0.0-beta1
-
+# Calico Version master
+# https://docs.projectcalico.org/master/releases#master
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
@@ -45,14 +41,6 @@ rules:
       - patch
   - apiGroups: [""]
     resources:
-      - nodes
-    verbs:
-      - get
-      - list
-      - update
-      - watch
-  - apiGroups: [""]
-    resources:
       - services
     verbs:
       - get
@@ -63,10 +51,11 @@ rules:
       - get
   - apiGroups: [""]
     resources:
-      - serviceaccounts
+      - nodes
     verbs:
       - get
       - list
+      - update
       - watch
   - apiGroups: ["extensions"]
     resources:
@@ -75,6 +64,12 @@ rules:
       - get
       - list
       - watch
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - networkpolicies
+    verbs:
+      - watch
+      - list
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - globalfelixconfigs
@@ -84,15 +79,23 @@ rules:
       - bgpconfigurations
       - ippools
       - globalnetworkpolicies
+      - globalnetworksets
       - networkpolicies
       - clusterinformations
+      - hostendpoints
     verbs:
       - create
       - get
       - list
       - update
       - watch
-
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+      - watch
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -190,12 +193,19 @@ spec:
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
+      initContainers:
+      - name: flexvol-driver
+        image: quay.io/saurabh/flexvol:latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: flexvol-driver-host
+          mountPath: /host/driver
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:v3.0.1
+          image: quay.io/calico/node:v3.0.1-271-gf169e508
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -243,6 +253,8 @@ spec:
             # Enable Alpha features for Application Layer Policy
             - name: ALPHA_FEATURES
               value: serviceaccounts,httprules
+            - name: FELIX_POLICYSYNCPATHPREFIX
+              value: "/var/run/nodeagent"
           securityContext:
             privileged: true
           resources:
@@ -267,6 +279,8 @@ spec:
             - mountPath: /var/run/calico
               name: var-run-calico
               readOnly: false
+            - name: test-workload
+              mountPath: /var/run/nodeagent
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -307,6 +321,14 @@ spec:
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
+        - name: test-workload
+          hostPath:
+            type: DirectoryOrCreate
+            path: /var/run/nodeagent
+        - name: flexvol-driver-host
+          hostPath:
+            type: DirectoryOrCreate
+            path: /opt/bin/volume-plugins/nodeagent~uds
 
 # Create all the CustomResourceDefinitions needed for
 # Calico policy and networking mode.
@@ -377,6 +399,22 @@ spec:
 ---
 
 apiVersion: apiextensions.k8s.io/v1beta1
+description: Calico HostEndpoints
+kind: CustomResourceDefinition
+metadata:
+  name: hostendpoints.crd.projectcalico.org
+spec:
+  scope: Cluster
+  group: crd.projectcalico.org
+  version: v1
+  names:
+    kind: HostEndpoint
+    plural: hostendpoints
+    singular: hostendpoint
+
+---
+
+apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Cluster Information
 kind: CustomResourceDefinition
 metadata:
@@ -405,6 +443,22 @@ spec:
     kind: GlobalNetworkPolicy
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
+
+---
+
+apiVersion: apiextensions.k8s.io/v1beta1
+description: Calico Global Network Sets
+kind: CustomResourceDefinition
+metadata:
+  name: globalnetworksets.crd.projectcalico.org
+spec:
+  scope: Cluster
+  group: crd.projectcalico.org
+  version: v1
+  names:
+    kind: GlobalNetworkSet
+    plural: globalnetworksets
+    singular: globalnetworkset
 
 ---
 
