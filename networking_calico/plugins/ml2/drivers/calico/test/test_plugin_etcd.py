@@ -1616,10 +1616,12 @@ class TestStatusWatcher(_TestEtcdBase):
         m_response.key = "/calico/felix/v1/host/hostname/status"
         self.watcher._on_status_del(m_response, "hostname")
 
+        # Check that nothing hapens to the port.  (Previously, we used to mark
+        # the port as in ERROR but that behaviour was removed due to its
+        # impact at high scale.)
         self.assertEqual(
             [
                 mock.call("hostname", "epid", {"status": "up"}),
-                mock.call("hostname", "epid", None),
             ],
             self.driver.on_port_status_changed.mock_calls)
 

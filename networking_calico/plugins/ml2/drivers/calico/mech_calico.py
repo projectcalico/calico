@@ -34,6 +34,7 @@ import uuid
 import eventlet
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
+
 try:
     from neutron_lib.agent import topics
 except ImportError:
@@ -194,6 +195,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # * we don't recreate the queue in _post_fork_init() so that we can't
         #   possibly lose updates that had already been queued.
         self._port_status_queue = eventlet.Queue(maxsize=10000)
+        self._port_status_queue_too_long = False
+
         # RPC client for fanning out agent state reports.
         self.state_report_rpc = None
         # Whether the version of update_port_status() available in this version
@@ -393,16 +396,22 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # hold up reading from etcd.  In particular, we don't want to block
             # Felix status updates while we wait on the DB.
             self._port_status_queue.put(port_status_key)
-            if self._port_status_queue.qsize() > 10:
+            qsize = self._port_status_queue.qsize()
+            if qsize > 10:
                 now = monotonic_time()
                 if (now - self._last_status_queue_log_time >
                         QUEUE_WARN_LOG_INTERVAL_SECS):
                     LOG.warning("Port status update queue length is high: %s",
-                                self._port_status_queue.qsize())
+                                qsize)
                     self._last_status_queue_log_time = now
+                    self._port_status_queue_too_long = True
                 # Queue is getting large, make sure the DB writer threads
                 # get CPU.
                 eventlet.sleep()
+            elif self._port_status_queue_too_long and qsize < 5:
+                self._port_status_queue_too_long = False
+                LOG.warning("Port status update queue back to normal: %s",
+                            qsize)
 
     @logging_exceptions(LOG)
     def _loop_writing_port_statuses(self, expected_epoch):
