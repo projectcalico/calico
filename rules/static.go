@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 	return []*Chain{
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
-		r.failsafeInChain(),
+		r.failsafeInChain("filter"),
 	}
 }
 
@@ -201,7 +201,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 	}
 }
 
-func (r *DefaultRuleRenderer) failsafeInChain() *Chain {
+func (r *DefaultRuleRenderer) failsafeInChain(table string) *Chain {
 	rules := []Rule{}
 
 	for _, protoPort := range r.Config.FailsafeInboundHostPorts {
@@ -213,13 +213,28 @@ func (r *DefaultRuleRenderer) failsafeInChain() *Chain {
 		})
 	}
 
+	if table == "raw" {
+		// We're in the raw table, before conntrack, so we need to whitelist response traffic.
+		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
+		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
+		// table, where it'll only be accepted if there's a conntrack entry.
+		for _, protoPort := range r.Config.FailsafeOutboundHostPorts {
+			rules = append(rules, Rule{
+				Match: Match().
+					Protocol(protoPort.Protocol).
+					SourcePorts(protoPort.Port),
+				Action: AcceptAction{},
+			})
+		}
+	}
+
 	return &Chain{
 		Name:  ChainFailsafeIn,
 		Rules: rules,
 	}
 }
 
-func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
+func (r *DefaultRuleRenderer) failsafeOutChain(table string) *Chain {
 	rules := []Rule{}
 
 	for _, protoPort := range r.Config.FailsafeOutboundHostPorts {
@@ -229,6 +244,21 @@ func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 				DestPorts(protoPort.Port),
 			Action: AcceptAction{},
 		})
+	}
+
+	if table == "raw" {
+		// We're in the raw table, before conntrack, so we need to whitelist response traffic.
+		// Otherwise, it could fall through to some doNotTrack policy and half of the connection
+		// would get untracked.  If we ACCEPT here then the traffic falls through to the filter
+		// table, where it'll only be accepted if there's a conntrack entry.
+		for _, protoPort := range r.Config.FailsafeInboundHostPorts {
+			rules = append(rules, Rule{
+				Match: Match().
+					Protocol(protoPort.Protocol).
+					SourcePorts(protoPort.Port),
+				Action: AcceptAction{},
+			})
+		}
 	}
 
 	return &Chain{
@@ -306,7 +336,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*Chain {
 	return []*Chain{
 		r.filterOutputChain(ipVersion),
-		r.failsafeOutChain(),
+		r.failsafeOutChain("filter"),
 	}
 }
 
@@ -473,7 +503,7 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 
 func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) (chains []*Chain) {
 	return []*Chain{
-		r.failsafeInChain(),
+		r.failsafeInChain("mangle"),
 		r.StaticManglePreroutingChain(ipVersion),
 	}
 }
@@ -542,8 +572,8 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 
 func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	return []*Chain{
-		r.failsafeInChain(),
-		r.failsafeOutChain(),
+		r.failsafeInChain("raw"),
+		r.failsafeOutChain("raw"),
 		r.StaticRawPreroutingChain(ipVersion),
 		r.StaticRawOutputChain(),
 	}
