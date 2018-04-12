@@ -222,10 +222,6 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 }
 
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err error) {
-	return CreateContainerNamespaceWithCid("")
-}
-
-func CreateContainerNamespaceWithCid(container_id string) (containerNs ns.NetNS, containerId string, err error) {
 	containerNs, err = ns.NewNS()
 	if err != nil {
 		return nil, "", err
@@ -233,10 +229,6 @@ func CreateContainerNamespaceWithCid(container_id string) (containerNs ns.NetNS,
 
 	netnsname := path.Base(containerNs.Path())
 	containerId = netnsname[:10]
-
-	if container_id != "" {
-		containerId = container_id
-	}
 
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		lo, err := netlink.LinkByName("lo")
@@ -249,19 +241,31 @@ func CreateContainerNamespaceWithCid(container_id string) (containerNs ns.NetNS,
 	return
 }
 
-func CreateContainer(netconf, podName, podNamespace string, ip string) (container_id string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
-	return CreateContainerWithId(netconf, podName, podNamespace, ip, "")
-}
-
-// Create container with the giving containerId when containerId is not empty
-func CreateContainerWithId(netconf, podName, podNamespace, ip, containerId string) (container_id string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
-	targetNs, container_id, err = CreateContainerNamespaceWithCid(containerId)
-
+func CreateContainer(netconf, podName, podNamespace string, ip string) (containerID string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+	targetNs, containerID, err = CreateContainerNamespace()
 	if err != nil {
 		return "", nil, nil, nil, nil, nil, err
 	}
 
-	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, container_id, "", targetNs)
+	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
+
+	return
+}
+
+// Create container with the giving containerId when containerId is not empty
+//
+// Deprecated: Please call CreateContainerNamespace and then RunCNIPluginWithID directly.
+func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID string) (containerID string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+	targetNs, containerID, err = CreateContainerNamespace()
+	if err != nil {
+		return "", nil, nil, nil, nil, nil, err
+	}
+
+	if overrideContainerID != "" {
+		containerID = overrideContainerID
+	}
+
+	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
 
 	return
 }
