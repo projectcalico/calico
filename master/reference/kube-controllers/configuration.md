@@ -1,5 +1,5 @@
 ---
-title: Configuring the {{site.prodname}} Kubernetes controllers
+title: Configuring the Calico Kubernetes controllers
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/kube-controllers/configuration'
 ---
 
