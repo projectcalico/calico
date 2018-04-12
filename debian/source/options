@@ -1,0 +1,2 @@
+tar-ignore = ".tox/*"
+tar-ignore = "*env/*"
