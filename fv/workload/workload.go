@@ -78,6 +78,17 @@ func (w *Workload) Stop() {
 }
 
 func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol string) (w *Workload) {
+	w, err := run(c, name, profile, ip, ports, protocol)
+	if err != nil {
+		log.WithError(err).Info("Starting workload failed, retrying")
+		w, err = run(c, name, profile, ip, ports, protocol)
+	}
+	Expect(err).NotTo(HaveOccurred())
+
+	return w
+}
+
+func run(c *infrastructure.Felix, name, profile, ip, ports string, protocol string) (w *Workload, err error) {
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
 	interfaceName := conversion.VethNameForWorkload(profile, n)
@@ -112,13 +123,18 @@ func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol stri
 			w.InterfaceName,
 			w.IP,
 			w.Ports))
-	var err error
 	w.outPipe, err = w.runCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return nil, fmt.Errorf("Getting StdoutPipe failed: %v", err)
+	}
 	w.errPipe, err = w.runCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return nil, fmt.Errorf("Getting StderrPipe failed: %v", err)
+	}
 	err = w.runCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return nil, fmt.Errorf("runCmd Start failed: %v", err)
+	}
 
 	// Read the workload's namespace path, which it writes to its standard output.
 	stdoutReader := bufio.NewReader(w.outPipe)
@@ -142,7 +158,9 @@ func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol stri
 	if err != nil {
 		// (Only) if we fail here, wait for the stderr to be output before returning.
 		defer errDone.Wait()
-		Expect(err).NotTo(HaveOccurred())
+		if err != nil {
+			return nil, fmt.Errorf("Reading from stdout failed: %v", err)
+		}
 	}
 
 	w.namespacePath = strings.TrimSpace(namespacePath)
@@ -175,7 +193,7 @@ func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol stri
 	wep.Spec.Profiles = []string{profile}
 	w.WorkloadEndpoint = wep
 
-	return
+	return w, nil
 }
 
 func (w *Workload) IPNet() string {
