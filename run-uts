@@ -15,7 +15,7 @@ find . -name "*.coverprofile" -type f -delete
 if [ -z $WHAT ]
 then
     echo "Calculating packages to cover..."
-    go_dirs=$(find -type f -name '*.go' | \
+    go_dirs=$(find . -type f -name '*.go' | \
 	          grep -vE '/vendor/|.glide|.git' | \
 	          xargs -n 1 dirname | \
 	          sort | uniq | \

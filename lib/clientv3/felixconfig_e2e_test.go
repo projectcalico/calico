@@ -42,6 +42,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 	ptrFalse := false
 	ptrInt1 := 1432
 	ptrInt2 := 6341
+	hostString := "localhost"
 	spec1 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver: &ptrTrue,
 		DataplaneDriver:            "test-dataplane-driver1",
@@ -50,6 +51,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 	spec2 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver: &ptrFalse,
 		DataplaneDriver:            "test-dataplane-driver2",
+		HealthHost:                 &hostString,
 		HealthPort:                 &ptrInt2,
 	}
 
