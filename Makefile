@@ -1,16 +1,7 @@
-###############################################################################
-# Determine whether there's a local yaml installed or use dockerized version.
-# Note, to install yaml: "go get github.com/mikefarah/yaml"
-GO_BUILD_VER?=v0.12
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
-YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
-
-###############################################################################
 # Versions
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 
-###############################################################################
 JEKYLL_VERSION=pages
 DEV?=false
 
