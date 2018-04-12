@@ -38,6 +38,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
 var exitCode int
@@ -873,4 +874,35 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			cs.CoreV1().Nodes().Delete(node.Name, &metav1.DeleteOptions{})
 		}
 	})
+})
+
+var _ = Describe("UT for node name determination", func() {
+	hn, _ := names.Hostname()
+	DescribeTable("Test variations on how node names are detected.",
+		func(nodenameEnv, hostnameEnv, expectedNodeName string) {
+
+			if nodenameEnv != "" {
+				os.Setenv("NODENAME", nodenameEnv)
+			} else {
+				os.Unsetenv("NODENAME")
+			}
+			if hostnameEnv != "" {
+				os.Setenv("HOSTNAME", hostnameEnv)
+			} else {
+				os.Unsetenv("HOSTNAME")
+			}
+			nodeName := determineNodeName()
+			os.Unsetenv("NODENAME")
+			os.Unsetenv("HOSTNAME")
+			Expect(nodeName).To(Equal(expectedNodeName))
+
+		},
+
+		Entry("Valid NODENAME and valid HOSTNAME", "abc-def.ghi123", "foo1.bar2-baz3", "abc-def.ghi123"),
+		Entry("Uppercase NODENAME and valid HOSTNAME (leaves uppercase)", "MyHostname-123", "valid.hostname", "MyHostname-123"),
+		Entry("Whitespace NODENAME, valid HOSTNAME", "  ", "host123", "host123"),
+		Entry("No NODENAME, uppercase HOSTNAME", "", "HOSTName", "hostname"),
+		Entry("No NODENAME, no HOSTNAME", "", "", hn),
+		Entry("Whitespace NODENAME and HOSTNAME", "  ", "  ", hn),
+	)
 })
