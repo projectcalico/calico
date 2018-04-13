@@ -22,9 +22,9 @@ from nose_parameterized import parameterized
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 
-POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
-                        "docker load -i /code/busybox.tar",
-                        "docker load -i /code/workload.tar"]
+POST_DOCKER_COMMANDS = ["docker load -q -i /code/calico-node.tar",
+                        "docker load -q -i /code/busybox.tar",
+                        "docker load -q -i /code/workload.tar"]
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)

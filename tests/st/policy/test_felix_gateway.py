@@ -27,9 +27,9 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
 POST_DOCKER_COMMANDS = [
-    "docker load -i /code/calico-node.tar",
-    "docker load -i /code/busybox.tar",
-    "docker load -i /code/workload.tar",
+    "docker load -q -i /code/calico-node.tar",
+    "docker load -q -i /code/busybox.tar",
+    "docker load -q -i /code/workload.tar",
 ]
 
 
