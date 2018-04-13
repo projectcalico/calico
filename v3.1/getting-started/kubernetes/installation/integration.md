@@ -80,15 +80,16 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name={{site.noderunning}
   -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
   -e NODENAME=${HOSTNAME} \
   -e IP= \
-  -e NO_DEFAULT_POOLS= \
-  -e AS= \
   -e IP6= \
+  -e AS= \
+  -e NO_DEFAULT_POOLS= \
   -e CALICO_NETWORKING_BACKEND=bird \
   -e FELIX_DEFAULTENDPOINTTOHOSTACTION=ACCEPT \
-  -v /var/run/calico:/var/run/calico \
   -v /lib/modules:/lib/modules \
   -v /run/docker/plugins:/run/docker/plugins \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /var/run/calico:/var/run/calico \
+  -v /var/lib/calico:/var/lib/calico \
   -v /var/log/calico:/var/log/calico \
   {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ExecStop=/usr/bin/docker rm -f {{site.noderunning}}
