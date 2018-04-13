@@ -64,12 +64,9 @@ class StatusWatcher(etcdutils.EtcdWatcher):
                                             "/round-trip-check")
         self.calico_driver = calico_driver
 
-        # Track the set of endpoints that are on each host so we can generate
-        # endpoint notifications if a Felix goes down.
+        # Track the set of endpoints that are on each host so we can spot
+        # removed endpoints during a resync.
         self._endpoints_by_host = collections.defaultdict(set)
-
-        # Track the hosts with a live Felix.
-        self._hosts_with_live_felix = set()
 
         # Map of live Felix notifications: hostname -> the latest mod_revision
         # that we have handled for that host.  We track mod_revision because
@@ -94,44 +91,21 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         # Save off current endpoint status, then reset current state, so we
         # will be able to identify any changes in the new snapshot.
         old_endpoints_by_host = self._endpoints_by_host
-        self._hosts_with_live_felix = set()
         self._endpoints_by_host = collections.defaultdict(set)
         return old_endpoints_by_host
 
     def _post_snapshot_hook(self, old_endpoints_by_host):
-        # Collect hosts for each old endpoint status.  For each of those hosts
-        # we will check if we now have a Felix status.
-        all_hosts_with_endpoint_status = set()
-        for hostname in old_endpoints_by_host.keys():
-            all_hosts_with_endpoint_status.add(hostname)
-
-        # There might be new endpoint statuses with new hosts, for which we
-        # should also check if we also have Felix status for those hosts.
-        for hostname in self._endpoints_by_host.keys():
-            all_hosts_with_endpoint_status.add(hostname)
-
-        # For each of those hosts...
-        for hostname in all_hosts_with_endpoint_status:
+        # Look for previous endpoints that are no longer present...
+        for hostname, ep_ids in old_endpoints_by_host.iteritems():
             LOG.info("host: %s", hostname)
-            if hostname not in self._hosts_with_live_felix:
-                # Status for a Felix has disappeared in the new snapshot.
-                # Signal port status None for both the endpoints that we had
-                # for that Felix _before_ the snapshot, _and_ those that we
-                # have in the new snapshot.
-                LOG.info("has disappeared")
-                for ep_id in (old_endpoints_by_host[hostname] |
-                              self._endpoints_by_host[hostname]):
-                    LOG.info("signal None for %s", ep_id.endpoint)
-                    self.calico_driver.on_port_status_changed(
-                        hostname,
-                        ep_id.endpoint,
-                        None)
-            else:
-                # Felix is still there, but we should check for particular
-                # endpoints that have disappeared, and signal those.
-                LOG.info("is still alive")
-                for ep_id in (old_endpoints_by_host[hostname] -
-                              self._endpoints_by_host[hostname]):
+            # Check for particular endpoints that have disappeared, and
+            # signal those.
+            for ep_id in ep_ids:
+                # Avoid self._endpoints_by_host[hostname] since that would
+                # auto-create the entry in the new dict, which would cause a
+                # leak.
+                new_ep_ids = self._endpoints_by_host.get(hostname, set())
+                if ep_ids not in new_ep_ids:
                     LOG.info("signal None for %s", ep_id.endpoint)
                     self.calico_driver.on_port_status_changed(
                         hostname,
@@ -147,7 +121,6 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             LOG.warning("Bad JSON data for key %s: %s",
                         response.key, response.value)
         else:
-            self._hosts_with_live_felix.add(hostname)
             mod_revision = response.mod_revision
             if self._felix_live_rev.get(hostname) != mod_revision:
                 self.calico_driver.on_felix_alive(
@@ -158,20 +131,16 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
     def _on_status_del(self, response, hostname):
         """Called when Felix's status key expires.  Implies felix is dead."""
-        LOG.error("Felix on host %s failed to check in.  Marking the "
-                  "ports it was managing as in-error.", hostname)
-        self._hosts_with_live_felix.discard(hostname)
-        for endpoint_id in self._endpoints_by_host[hostname]:
-            # Flag all the ports as being in error.  They're no longer
-            # receiving security updates.
-            self.calico_driver.on_port_status_changed(
-                hostname,
-                endpoint_id.endpoint,
-                None,
-            )
-        # Then discard our cache of endpoints.  If felix comes back up, it will
-        # repopulate.
-        self._endpoints_by_host.pop(hostname)
+        # Notes:
+        #
+        # - we used to mark the ports that Felix was managing as in-ERROR
+        #   here but, at high scale, that can cause a DoS if the failure is
+        #   not limited to a single Felix (an etcd connectivity outage, for
+        #   example).
+        #
+        # - There's no way to report the failure to neutron; neutron spots
+        #   agent failures by timeout.
+        LOG.error("Felix on host %s failed to check in.", hostname)
 
     def _on_ep_set(self, response, hostname, workload, endpoint):
         """Called when the status key for a particular endpoint is updated.
