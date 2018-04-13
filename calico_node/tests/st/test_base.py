@@ -34,7 +34,6 @@ NUM_BATCHES = 6
 HOST_IPV6 = get_ip(v6=True)
 HOST_IPV4 = get_ip()
 
-logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 # Disable spammy logging from the sh module
