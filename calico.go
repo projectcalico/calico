@@ -191,7 +191,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 	} else {
-		// Default CNI behavior - use the CNI network name as the Calico profile.
+		// Default CNI behavior
+		// Validate enabled features
+		if conf.FeatureControl.IPAddrsNoIpam {
+			return errors.New("requested feature is not supported for this runtime: ip_addrs_no_ipam")
+		}
+
+		// use the CNI network name as the Calico profile.
 		profileID := conf.Name
 
 		endpointAlreadyExisted := endpoint != nil

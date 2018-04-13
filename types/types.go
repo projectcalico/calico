@@ -30,6 +30,11 @@ type Policy struct {
 	K8sCertificateAuthority string `json:"k8s_certificate_authority"`
 }
 
+// FeatureControl is a struct which controls which features are enabled in Calico.
+type FeatureControl struct {
+	IPAddrsNoIpam bool `json:"ip_addrs_no_ipam"`
+}
+
 // Kubernetes a K8s specific struct to hold config
 type Kubernetes struct {
 	K8sAPIRoot string `json:"k8s_api_root"`
@@ -78,6 +83,7 @@ type NetConf struct {
 	LogLevel             string            `json:"log_level"`
 	Policy               Policy            `json:"policy"`
 	Kubernetes           Kubernetes        `json:"kubernetes"`
+	FeatureControl       FeatureControl    `json:"feature_control"`
 	EtcdScheme           string            `json:"etcd_scheme"`
 	EtcdKeyFile          string            `json:"etcd_key_file"`
 	EtcdCertFile         string            `json:"etcd_cert_file"`
