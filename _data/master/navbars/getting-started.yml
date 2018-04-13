@@ -27,8 +27,6 @@ toc:
       path: /getting-started/kubernetes/installation/integration
   - title: Tutorials
     section:
-    - title: Using calicoctl
-      path: /getting-started/kubernetes/tutorials/using-calicoctl
     - title: Simple Policy Demo
       path: /getting-started/kubernetes/tutorials/simple-policy
     - title: Stars Policy Demo
