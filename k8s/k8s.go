@@ -210,6 +210,12 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			logger.Error(e)
 			return nil, e
 		case ipAddrsNoIpam != "":
+			if !conf.FeatureControl.IPAddrsNoIpam {
+				e := fmt.Errorf("requested feature is not enabled: ip_addrs_no_ipam")
+				logger.Error(e)
+				return nil, e
+			}
+
 			// ipAddrsNoIpam annotation is set so bypass IPAM, and set the IPs manually.
 			overriddenResult, err := overrideIPAMResult(ipAddrsNoIpam, logger)
 			if err != nil {

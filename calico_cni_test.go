@@ -14,6 +14,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 	"github.com/projectcalico/cni-plugin/testutils"
 	"github.com/projectcalico/cni-plugin/utils"
@@ -459,6 +460,34 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Describe("Run Calico CNI plugin", func() {
+		Context("feature flag processing", func() {
+			It("errors if ip_addrs_no_ipam if not running kubernetes", func() {
+				netconf := fmt.Sprintf(`
+				{
+					"cniVersion": "%s",
+					"name": "net1",
+					"type": "calico",
+					"feature_control": {
+						"ip_addrs_no_ipam": true
+					},
+					"etcd_endpoints": "http://%s:2379",
+					"nodename": "named-nodename",
+					"nodename_file_optional": true,
+					"datastore_type": "%s",
+					"ipam": {
+						"type": "host-local",
+						"subnet": "10.0.0.0/8"
+					}
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+				containerNs, containerId, err := testutils.CreateContainerNamespace()
+				Expect(err).ToNot(HaveOccurred())
+
+				s, _, _, _, err := testutils.RunCNIPluginWithId(netconf, "", testutils.K8S_TEST_NS, "", containerId, "", containerNs)
+				Eventually(s).Should(gexec.Exit())
+				Expect(s.Out).Should(gbytes.Say("requested feature is not supported for this runtime: ip_addrs_no_ipam"))
+			})
+		})
 		Context("deprecate Hostname for nodename", func() {
 			netconf := fmt.Sprintf(`
 			{

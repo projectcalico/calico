@@ -15,6 +15,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gexec"
 	"github.com/projectcalico/cni-plugin/testutils"
 	"github.com/projectcalico/cni-plugin/utils"
@@ -460,6 +461,9 @@ var _ = Describe("CalicoCni", func() {
 			      "cniVersion": "%s",
 				  "name": "net3",
 				  "type": "calico",
+				  "feature_control": {
+					"ip_addrs_no_ipam": true
+				  },
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
 			          "nodename_file_optional": true,
@@ -553,7 +557,58 @@ var _ = Describe("CalicoCni", func() {
 				})
 			})
 
-			Context("using ipAddrs annotation to assign IP address to a pod, through Calico IPAM", func() {
+			Context("using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
+				It("should fail if ipAddrsNoIpam is not enabled", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "cniVersion": "%s",
+				  "name": "net3",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "datastore_type": "%s",
+			          "nodename_file_optional": true,
+			 	  "ipam": {},
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in an IP address.
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: name,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\"]",
+							},
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  name,
+								Image: "ignore",
+							}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					log.Infof("Created POD object: %v", pod)
+
+					_, session, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
+					Eventually(session).Should(gexec.Exit())
+					Expect(session.Out).Should(gbytes.Say("requested feature is not enabled: ip_addrs_no_ipam"))
+
+					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
 
 				It("should successfully assigns the annotated IP address", func() {
 					netconfCalicoIPAM := fmt.Sprintf(`
@@ -1364,6 +1419,9 @@ var _ = Describe("CalicoCni", func() {
 			      "cniVersion": "%s",
 				  "name": "net9",
 				  "type": "calico",
+				  "feature_control": {
+					  "ip_addrs_no_ipam": true
+				  },
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
            			  "nodename_file_optional": true,
