@@ -95,6 +95,22 @@ func (eds *EtcdDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.Work
 	return eds.GetCalicoClient().WorkloadEndpoints().Create(utils.Ctx, wep, utils.NoOptions)
 }
 
+func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
+	// Create a policy to allow egress from the host so that we don't cut off Felix's datastore connection
+	// when we enable the host endpoint.
+	policy := api.NewGlobalNetworkPolicy()
+	policy.Name = "allow-egress"
+	policy.Spec.Selector = selector
+	policy.Spec.Egress = []api.Rule{{
+		Action: api.Allow,
+		Destination: api.EntityRule{
+			Nets: []string{eds.etcdContainer.IP + "/32"},
+		},
+	}}
+	_, err := eds.GetCalicoClient().GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+	return err
+}
+
 func (eds *EtcdDatastoreInfra) AddDefaultAllow() error {
 	defaultProfile := api.NewProfile()
 	defaultProfile.Name = "default"

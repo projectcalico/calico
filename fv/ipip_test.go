@@ -133,12 +133,19 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 
 	Context("with host protection policy in place", func() {
 		BeforeEach(func() {
+			// Make sure our new host endpoints don't cut felix off from the datastore.
+			err := infra.AddAllowToDatastore("host-endpoint=='true'")
+			Expect(err).NotTo(HaveOccurred())
+
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 
 			for _, f := range felixes {
 				hep := api.NewHostEndpoint()
 				hep.Name = "eth0-" + f.Name
+				hep.Labels = map[string]string{
+					"host-endpoint": "true",
+				}
 				hep.Spec.Node = f.Hostname
 				hep.Spec.ExpectedIPs = []string{f.IP}
 				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})

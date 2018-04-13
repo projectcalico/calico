@@ -52,6 +52,9 @@ type DatastoreInfra interface {
 	// AddDefaultDeny will ensure that the datastore is configured so that
 	// the default profile/namespace will deny ingress traffic.
 	AddDefaultDeny() error
+	// AddAllowToDatastore adds a policy to allow endpoints that match the given
+	// selector to reach the datastore.
+	AddAllowToDatastore(selector string) error
 
 	// DumpErrorData prints out extra information that may help when an error
 	// occurs.
