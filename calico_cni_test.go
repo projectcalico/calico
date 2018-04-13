@@ -126,6 +126,13 @@ var _ = Describe("CalicoCni", func() {
 				err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", hostVethName), "1")
 				Expect(err).ShouldNot(HaveOccurred())
 
+				// Assert the container sysctl values are set to what we expect for IPv4.
+				targetNs, _ := ns.GetNS(contNs.Path())
+				err = targetNs.Do(func(_ ns.NetNS) error {
+					return testutils.CheckSysctlValue("/proc/sys/net/ipv4/ip_forward", "0")
+				})
+				Expect(err).ShouldNot(HaveOccurred())
+
 				// Assert if the host side route is programmed correctly.
 				hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
 				Expect(err).ShouldNot(HaveOccurred())
@@ -168,7 +175,6 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items).Should(HaveLen(0))
 
 				// Make sure the interface has been removed from the namespace
-				targetNs, _ := ns.GetNS(contNs.Path())
 				err = targetNs.Do(func(_ ns.NetNS) error {
 					_, err = netlink.LinkByName("eth0")
 					return err
@@ -249,6 +255,49 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(exitCode).ShouldNot(Equal(0))
 				})
+			})
+		})
+	})
+
+	Context("With IP forwarding enabled", func() {
+		netconf := fmt.Sprintf(`
+			{
+			  "cniVersion": "%s",
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "log_level": "debug",
+			  "nodename_file_optional": true,
+			  "datastore_type": "%s",
+			  "container_settings": {
+			    "allow_ip_forwarding": true
+			  },
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  }
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+		It("should enable IPv4 forwarding", func() {
+			containerID := fmt.Sprintf("con%d", rand.Uint32())
+			_, session, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", containerID)
+
+			By("successfully networking the container", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit(0))
+			})
+
+			By("asserting IPv4 forwarding is enabled", func() {
+				targetNs, _ := ns.GetNS(contNs.Path())
+				err = targetNs.Do(func(_ ns.NetNS) error {
+					return testutils.CheckSysctlValue("/proc/sys/net/ipv4/ip_forward", "1")
+				})
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+
+			By("tearing down the container", func() {
+				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
+				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})
 	})

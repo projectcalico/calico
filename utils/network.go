@@ -169,7 +169,7 @@ func DoNetworking(args *skel.CmdArgs, conf types.NetConf, result *current.Result
 			}
 		}
 
-		if err = configureContainerSysctls(hasIPv4, hasIPv6); err != nil {
+		if err = configureContainerSysctls(logger, conf.ContainerSettings, hasIPv4, hasIPv6); err != nil {
 			return fmt.Errorf("error configuring sysctls for the container netns, error: %s", err)
 		}
 
@@ -314,24 +314,36 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 }
 
 // configureContainerSysctls configures necessary sysctls required inside the container netns.
-func configureContainerSysctls(hasIPv4, hasIPv6 bool) error {
-	var err error
-
-	// Globally disable IP forwarding of packets inside the container netns.
-	// Generally, we don't expect containers to be routing anything.
-
+func configureContainerSysctls(logger *logrus.Entry, settings types.ContainerSettings, hasIPv4, hasIPv6 bool) error {
+	// If an IPv4 address is assigned, then configure IPv4 sysctls.
 	if hasIPv4 {
-		if err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "0"); err != nil {
-			return err
+		if settings.AllowIPForwarding {
+			logger.Info("Enabling IPv4 forwarding")
+			if err := writeProcSys("/proc/sys/net/ipv4/ip_forward", "1"); err != nil {
+				return err
+			}
+		} else {
+			logger.Info("Disabling IPv4 forwarding")
+			if err := writeProcSys("/proc/sys/net/ipv4/ip_forward", "0"); err != nil {
+				return err
+			}
 		}
 	}
 
+	// If an IPv6 address is assigned, then configure IPv6 sysctls.
 	if hasIPv6 {
-		if err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "0"); err != nil {
-			return err
+		if settings.AllowIPForwarding {
+			logger.Info("Enabling IPv6 forwarding")
+			if err := writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1"); err != nil {
+				return err
+			}
+		} else {
+			logger.Info("Disabling IPv6 forwarding")
+			if err := writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "0"); err != nil {
+				return err
+			}
 		}
 	}
-
 	return nil
 }
 
