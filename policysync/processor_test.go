@@ -916,7 +916,10 @@ var _ = Describe("Processor", func() {
 						Expect(&g).To(HavePayload(msg))
 
 						// Remove reference
-						msg.GetEndpoint().ProfileIds = []string{}
+						msg = &proto.WorkloadEndpointUpdate{
+							Id:       &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{}},
+						}
 						updates <- msg
 
 						g = <-output[0]
@@ -956,7 +959,10 @@ var _ = Describe("Processor", func() {
 						Expect(&g).To(HavePayload(msg2))
 
 						// Switch profiles
-						msg2.GetEndpoint().ProfileIds = []string{newName}
+						msg2 = &proto.WorkloadEndpointUpdate{
+							Id:       &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{ProfileIds: []string{newName}},
+						}
 						updates <- msg2
 
 						g = <-output[0]
@@ -1011,7 +1017,14 @@ var _ = Describe("Processor", func() {
 						Expect(&g).To(HavePayload(msg))
 
 						// Remove reference
-						msg.GetEndpoint().GetTiers()[0].IngressPolicies = nil
+						msg = &proto.WorkloadEndpointUpdate{
+							Id: &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
+								{
+									Name: TierName,
+								},
+							}},
+						}
 						updates <- msg
 
 						g = <-output[0]
@@ -1056,7 +1069,15 @@ var _ = Describe("Processor", func() {
 						Expect(&g).To(HavePayload(msg2))
 
 						// Switch profiles
-						msg2.GetEndpoint().GetTiers()[0].EgressPolicies = []string{newName}
+						msg2 = &proto.WorkloadEndpointUpdate{
+							Id: &wepID[0],
+							Endpoint: &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{
+								{
+									Name:           TierName,
+									EgressPolicies: []string{newName},
+								},
+							}},
+						}
 						updates <- msg2
 
 						g = <-output[0]
