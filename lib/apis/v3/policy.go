@@ -62,10 +62,29 @@ type Rule struct {
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
 }
 
+// HTTPPath specifies an HTTP path to match. It may be either of the form:
+// exact: <path>: which matches the path exactly or
+// prefix: <path-prefix>: which matches the path prefix
+type HTTPPath struct {
+	Exact  string `json:"exact,omitempty" validate:"omitempty"`
+	Prefix string `json:"prefix,omitempty" validate:"omitempty"`
+}
+
+// HTTPMatch is an optional field that apply only to HTTP requests
+// The Methods and Path fields are joined with AND
 type HTTPMatch struct {
 	// Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed
 	// HTTP Methods (e.g. GET, PUT, etc.)
+	// Multiple methods are OR'd together.
 	Methods []string `json:"methods,omitempty" validate:"omitempty"`
+	// Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed
+	// HTTP Paths.
+	// Multiple paths are OR'd together.
+	// e.g:
+	// - exact: /foo
+	// - prefix: /bar
+	// NOTE: Each entry may ONLY specify either a `exact` or a `prefix` match. The validator will check for it.
+	Paths []HTTPPath `json:"paths,omitempty" validate:"omitempty"`
 }
 
 // ICMPFields defines structure for ICMP and NotICMP sub-struct for ICMP code and type

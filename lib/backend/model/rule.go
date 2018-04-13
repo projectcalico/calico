@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -82,7 +83,8 @@ type Rule struct {
 }
 
 type HTTPMatch struct {
-	Methods []string `json:"methods,omitempty" validate:"omitempty"`
+	Methods []string         `json:"methods,omitempty" validate:"omitempty"`
+	Paths   []apiv3.HTTPPath `json:"paths,omitempty" validate:"omitempty"`
 }
 
 func combineNets(n *net.IPNet, nets []*net.IPNet) []*net.IPNet {
@@ -233,6 +235,16 @@ func (r Rule) String() string {
 		notDstNets := r.AllNotDstNets()
 		if len(notDstNets) != 0 {
 			toParts = append(toParts, "!cidr", joinNets(notDstNets))
+		}
+
+		// HTTPMatch are destination rules.
+		if r.HTTPMatch != nil {
+			if len(r.HTTPMatch.Methods) > 0 {
+				toParts = append(toParts, "httpMethods", fmt.Sprintf("%+v", r.HTTPMatch.Methods))
+			}
+			if len(r.HTTPMatch.Paths) > 0 {
+				toParts = append(toParts, "httpPaths", fmt.Sprintf("%+v", r.HTTPMatch.Paths))
+			}
 		}
 
 		if len(toParts) > 0 {

@@ -32,6 +32,7 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // Split the validation into three groups.  Since a struct validator will trump
@@ -171,6 +172,7 @@ func init() {
 	registerStructValidator(validatorPrimary, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validatorPrimary, validateNodeSpec, api.NodeSpec{})
 	registerStructValidator(validatorPrimary, validateObjectMeta, metav1.ObjectMeta{})
+	registerStructValidator(validatorPrimary, validateHTTPRule, api.HTTPMatch{})
 
 	// Register structs that have one level of additional structs to validate.
 	registerStructValidator(validatorSecondary, validateFelixConfigSpec, api.FelixConfigurationSpec{})
@@ -425,6 +427,49 @@ func validateCIDR(v *validator.Validate, topStruct reflect.Value, currentStructO
 	log.Debugf("Validate IP network: %s", n)
 	_, _, err := cnet.ParseCIDROrIP(n)
 	return err == nil
+}
+
+// validateHTTPMethods checks if the HTTP method match clauses are valid.
+func validateHTTPMethods(methods []string) error {
+	// check for duplicates
+	s := set.FromArray(methods)
+	if s.Len() != len(methods) {
+		return fmt.Errorf("Invalid methods (duplicates): %v", methods)
+	}
+	return nil
+}
+
+// validateHTTPPaths checks if the HTTP path match clauses are valid.
+func validateHTTPPaths(paths []api.HTTPPath) error {
+	for _, path := range paths {
+		if path.Exact != "" && path.Prefix != "" {
+			return fmt.Errorf("Invalid path match. Both 'exact' and 'prefix' are set")
+		}
+		v := path.Exact
+		if v == "" {
+			v = path.Prefix
+		}
+		if v == "" {
+			return fmt.Errorf("Invalid path match. Either 'exact' or 'prefix' must be set")
+		}
+		// Checks from https://tools.ietf.org/html/rfc3986#page-22
+		if !strings.HasPrefix(v, "/") ||
+			strings.ContainsAny(v, "? #") {
+			return fmt.Errorf("Invalid path %s. (must start with `/` and not contain `?` or `#`", v)
+		}
+	}
+	return nil
+}
+
+func validateHTTPRule(v *validator.Validate, structLevel *validator.StructLevel) {
+	h := structLevel.CurrentStruct.Interface().(api.HTTPMatch)
+	log.Debug("Validate HTTP Rule: %v", h)
+	if err := validateHTTPMethods(h.Methods); err != nil {
+		structLevel.ReportError(reflect.ValueOf(h.Methods), "Methods", "", reason(err.Error()))
+	}
+	if err := validateHTTPPaths(h.Paths); err != nil {
+		structLevel.ReportError(reflect.ValueOf(h.Paths), "Paths", "", reason(err.Error()))
+	}
 }
 
 func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -850,6 +895,15 @@ func validateNetworkPolicy(v *validator.Validate, structLevel *validator.StructL
 
 	validateObjectMetaAnnotations(v, structLevel, np.Annotations)
 	validateObjectMetaLabels(v, structLevel, np.Labels)
+
+	// Check (and disallow) rules with HTTPMatch for egress rules.
+	if len(spec.Egress) > 0 {
+		for _, r := range spec.Egress {
+			if r.HTTP != nil {
+				structLevel.ReportError(reflect.ValueOf(r.HTTP), "HTTP", "", reason("HTTP match not allowed in egress rule"))
+			}
+		}
+	}
 }
 
 func validateGlobalNetworkSet(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -928,6 +982,15 @@ func validateGlobalNetworkPolicy(v *validator.Validate, structLevel *validator.S
 				"GlobalNetworkPolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
 		} else {
 			mp[t] = true
+		}
+	}
+
+	// Check (and disallow) rules with HTTPMatch for egress rules.
+	if len(spec.Egress) > 0 {
+		for _, r := range spec.Egress {
+			if r.HTTP != nil {
+				structLevel.ReportError(reflect.ValueOf(r.HTTP), "HTTP", "", reason("HTTP match not allowed in egress rules"))
+			}
 		}
 	}
 }
