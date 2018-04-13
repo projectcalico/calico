@@ -616,7 +616,7 @@ var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndN
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2.withKVUpdates(
 	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
-// No longer any matches.
+	// No longer any matches.
 }).withName("2 local WEPs with policy not matching inherited labels")
 
 // Alternatively, prevent EP2 from matching by removing its profiles.
@@ -638,7 +638,7 @@ var localEpsAndNamedPortPolicyEP2ProfileRemoved = localEpsAndNamedPortPolicyMatc
 var localEpsAndNamedPortPolicyBothEPsProfilesRemoved = localEpsAndNamedPortPolicyEP2ProfileRemoved.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1WithLabelsButNoProfiles},
 ).withIPSet(namedPortInheritIPSetID, []string{
-// Neither EP matches.
+	// Neither EP matches.
 }).withActiveProfiles().withName("2 local WEPs with no matches due to removing profiles from endpoints")
 
 // localEpsWithPolicyUpdatedIPs, when used with localEpsWithPolicy checks

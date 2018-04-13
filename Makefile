@@ -534,6 +534,10 @@ check-typha-pins: vendor/.up-to-date
 static-checks:
 	$(MAKE) check-typha-pins go-meta-linter check-licenses
 
+.PHONY: pre-commit
+pre-commit:
+	$(DOCKER_GO_BUILD) git-hooks/pre-commit-in-container
+
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs without coverage.
