@@ -133,6 +133,10 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		Context("with pre-DNAT policy to prevent access from outside", func() {
 
 			BeforeEach(func() {
+				// Make sure our new host endpoints don't cut felix off from the datastore.
+				err := infra.AddAllowToDatastore("has(host-endpoint)")
+				Expect(err).NotTo(HaveOccurred())
+
 				policy := api.NewGlobalNetworkPolicy()
 				policy.Name = "deny-ingress"
 				order := float64(20)
@@ -141,7 +145,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				policy.Spec.ApplyOnForward = true
 				policy.Spec.Ingress = []api.Rule{{Action: api.Deny}}
 				policy.Spec.Selector = "has(host-endpoint)"
-				_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 
 				hostEp := api.NewHostEndpoint()
