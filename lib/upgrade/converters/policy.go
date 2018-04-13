@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -124,7 +124,11 @@ func (_ Policy) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 		// before the explicit Types feature was available.  Calico's previous behaviour was
 		// always to apply policy to both ingress and egress traffic, so in this case we
 		// return Types as [ ingress, egress ].
-		ap.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress}
+		if bp.PreDNAT {
+			ap.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeIngress}
+		} else {
+			ap.Spec.Types = []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress}
+		}
 	} else {
 		// Convert from the backend-specified Types.
 		ap.Spec.Types = make([]apiv3.PolicyType, len(bp.Types))
