@@ -259,7 +259,6 @@ var policyTable = []struct {
 		},
 	},
 	{
-		// Not a valid policy because there are Egress rules with PreDNAT set true
 		description: "policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
 		v1API: &apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
@@ -272,8 +271,8 @@ var policyTable = []struct {
 				EgressRules:  []apiv1.Rule{V1EgressRule1},
 				Selector:     "thing == 'value'",
 				DoNotTrack:   true,
-				PreDNAT:      true,
-				Types:        []apiv1.PolicyType{},
+				PreDNAT:      false,
+				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress, apiv1.PolicyTypeEgress},
 			},
 		},
 		v1KVP: &model.KVPair{
@@ -287,7 +286,7 @@ var policyTable = []struct {
 				OutboundRules:  []model.Rule{V1ModelEgressRule1},
 				Selector:       "thing == 'value'",
 				DoNotTrack:     true,
-				PreDNAT:        true,
+				PreDNAT:        false,
 				ApplyOnForward: true,
 				Types:          []string{"ingress", "egress"},
 			},
@@ -303,7 +302,7 @@ var policyTable = []struct {
 				Egress:         []apiv3.Rule{V3EgressRule1},
 				Selector:       "thing == 'value'",
 				DoNotTrack:     true,
-				PreDNAT:        true,
+				PreDNAT:        false,
 				ApplyOnForward: true,
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			},
@@ -395,35 +394,35 @@ var policyTableBackend = []struct {
 	v3API       apiv3.GlobalNetworkPolicy
 }{
 	{
-		description: "policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
+		description: "converting model with no Types with preDNAT to v3 API only has Ingress for Types",
 		v1KVP: &model.KVPair{
 			Key: model.PolicyKey{
-				Name: "MaKe.-.MaKe",
+				Name: "somekey",
 			},
 			Value: &model.Policy{
 				Order: &order1,
 				// Source Nets selector in V1ModelInRule1 and V1ModelEgressRule1 are non-strictly masked CIDRs.
 				InboundRules:   []model.Rule{V1ModelInRule1},
-				OutboundRules:  []model.Rule{V1ModelEgressRule1},
+				OutboundRules:  []model.Rule{},
 				Selector:       "thing == 'value'",
 				DoNotTrack:     true,
-				PreDNAT:        false,
+				PreDNAT:        true,
 				ApplyOnForward: true,
 				Types:          []string{},
 			},
 		},
 		v3API: apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
-				Name: "make-make-1b6971c8",
+				Name: "somekey",
 			},
 			Spec: apiv3.GlobalNetworkPolicySpec{
 				Order: &order1,
 				// Source Nets selector in V3InRule1 and V3EgressRule1 are strictly masked CIDRs.
 				Ingress:        []apiv3.Rule{V3InRule1},
-				Egress:         []apiv3.Rule{V3EgressRule1},
+				Egress:         []apiv3.Rule{},
 				Selector:       "thing == 'value'",
 				DoNotTrack:     true,
-				PreDNAT:        false,
+				PreDNAT:        true,
 				ApplyOnForward: true,
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
@@ -433,7 +432,7 @@ var policyTableBackend = []struct {
 
 func TestCanConvertKVModelToV3Policy(t *testing.T) {
 
-	for _, entry := range policyTable {
+	for _, entry := range policyTableBackend {
 		t.Run(entry.description, func(t *testing.T) {
 			RegisterTestingT(t)
 

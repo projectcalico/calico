@@ -78,7 +78,6 @@ func (_ Policy) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) 
 		d.Value.(*model.Policy).Types = make([]string, len(ap.Spec.Types))
 		for i, t := range ap.Spec.Types {
 			d.Value.(*model.Policy).Types[i] = string(t)
-
 		}
 	}
 
