@@ -220,6 +220,10 @@ var _ = DescribeTable("Config parsing",
 	Entry("MaxIpsetSize", "MaxIpsetSize", "12345", int(12345)),
 	Entry("IptablesMarkMask", "IptablesMarkMask", "0xf0f0", uint32(0xf0f0)),
 
+	Entry("HealthEnabled", "HealthEnabled", "true", true),
+	Entry("HealthHost", "HealthHost", "127.0.0.1", "127.0.0.1"),
+	Entry("HealthPort", "HealthPort", "1234", int(1234)),
+
 	Entry("PrometheusMetricsEnabled", "PrometheusMetricsEnabled", "true", true),
 	Entry("PrometheusMetricsPort", "PrometheusMetricsPort", "1234", int(1234)),
 	Entry("PrometheusGoMetricsEnabled", "PrometheusGoMetricsEnabled", "false", false),

@@ -157,12 +157,13 @@ type Config struct {
 
 	DisableConntrackInvalidCheck bool `config:"bool;false"`
 
-	HealthEnabled                   bool `config:"bool;false"`
-	HealthPort                      int  `config:"int(0,65535);9099"`
-	PrometheusMetricsEnabled        bool `config:"bool;false"`
-	PrometheusMetricsPort           int  `config:"int(0,65535);9091"`
-	PrometheusGoMetricsEnabled      bool `config:"bool;true"`
-	PrometheusProcessMetricsEnabled bool `config:"bool;true"`
+	HealthEnabled                   bool   `config:"bool;false"`
+	HealthPort                      int    `config:"int(0,65535);9099"`
+	HealthHost                      string `config:"string;localhost"`
+	PrometheusMetricsEnabled        bool   `config:"bool;false"`
+	PrometheusMetricsPort           int    `config:"int(0,65535);9091"`
+	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
+	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
