@@ -25,14 +25,6 @@ toc:
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced) 
       path: /getting-started/kubernetes/installation/integration
-    - title: Additional install methods
-      section:
-      - title: Amazon Web Services
-        path: /getting-started/kubernetes/installation/aws
-      - title: Google Compute Engine
-        path: /getting-started/kubernetes/installation/gce
-      - title: Azure 
-        path: /getting-started/kubernetes/installation/azure
   - title: Tutorials
     section:
     - title: Using calicoctl
