@@ -83,7 +83,7 @@ the host. Instead, continue directly to the
 1. Confirm that all of the pods are running with the following command.
 
    ```
-   watch kubectl get pods --all-namespaces
+   watch kubectl get pods --all-namespaces -w
    ```
    
    Wait until each pod has the `STATUS` of `Running`.
