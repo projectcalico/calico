@@ -81,6 +81,16 @@ help:
 all: calico/typha bin/typha-client-$(ARCH)
 test: ut
 
+# Targets used when cross building.
+.PHONY: register
+# Enable binfmt adding support for miscellaneous binary formats.
+# This is only needed when running non-native binaries.
+register:
+ifneq ($(BUILDARCH),$(ARCH))
+	docker run --rm --privileged multiarch/qemu-user-static:register || true
+endif
+
+
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
 GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
@@ -133,6 +143,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(MY_UID) \
+                              -e GOARCH=$(ARCH) \
                               -v $${PWD}:/go/src/github.com/projectcalico/typha:rw \
                               -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/github.com/projectcalico/typha \
@@ -172,6 +183,7 @@ LDFLAGS:=-ldflags "\
 build: bin/calico-typha
 bin/calico-typha: bin/calico-typha-$(ARCH)
 bin/calico-typha-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
+	$(MAKE) register
 	@echo Building typha...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
@@ -181,6 +193,7 @@ bin/calico-typha-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
 		( echo "Error: bin/calico-typha was not statically linked"; false ) )'
 
 bin/typha-client-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
+	$(MAKE) register
 	@echo Building typha client...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
