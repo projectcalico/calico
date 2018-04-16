@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,17 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	// FieldForceFlush is a field name used to signal to the BackgroundHook that it should flush the log after this
+	// message.  It can be used as follows: logrus.WithField(FieldForceFlush, true).Info("...")
+	FieldForceFlush = "__flush__"
+
+	// fieldFileName is a reserved field name used to pass the filename from the ContextHook to our Formatter.
+	fieldFileName = "__file__"
+	// fieldLineNumber is a reserved field name used to pass the line number from the ContextHook to our Formatter.
+	fieldLineNumber = "__line__"
 )
 
 // FilterLevels returns all the logrus.Level values <= maxLevel.
@@ -61,8 +72,8 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 	stamp := entry.Time.Format("2006-01-02 15:04:05.000")
 	levelStr := strings.ToUpper(entry.Level.String())
 	pid := os.Getpid()
-	fileName := entry.Data["__file__"]
-	lineNo := entry.Data["__line__"]
+	fileName := entry.Data[fieldFileName]
+	lineNo := entry.Data[fieldLineNumber]
 	b := entry.Buffer
 	if b == nil {
 		b = &bytes.Buffer{}
@@ -80,8 +91,8 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 //    ifaceName="cali1234"
 func FormatForSyslog(entry *log.Entry) string {
 	levelStr := strings.ToUpper(entry.Level.String())
-	fileName := entry.Data["__file__"]
-	lineNo := entry.Data["__line__"]
+	fileName := entry.Data[fieldFileName]
+	lineNo := entry.Data[fieldLineNumber]
 	b := entry.Buffer
 	if b == nil {
 		b = &bytes.Buffer{}
@@ -102,7 +113,7 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		if key == "__file__" || key == "__line__" {
+		if key == fieldFileName || key == fieldLineNumber || key == FieldForceFlush {
 			continue
 		}
 		var value interface{} = entry.Data[key]
@@ -146,8 +157,8 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 		for {
 			frame, more := frames.Next()
 			if !shouldSkipFrame(frame) {
-				entry.Data["__file__"] = path.Base(frame.File)
-				entry.Data["__line__"] = frame.Line
+				entry.Data[fieldFileName] = path.Base(frame.File)
+				entry.Data[fieldLineNumber] = frame.Line
 				break
 			}
 			if !more {
@@ -190,7 +201,7 @@ func NewStreamDestination(
 ) *Destination {
 	return &Destination{
 		Level:   level,
-		channel: c,
+		Channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
 				fmt.Fprintf(writer, "... dropped %d logs ...\n",
@@ -213,7 +224,7 @@ func NewSyslogDestination(
 ) *Destination {
 	return &Destination{
 		Level:   level,
-		channel: c,
+		Channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
 				writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
@@ -232,7 +243,7 @@ type Destination struct {
 	Level log.Level
 	// Channel is the channel used to queue logs to the background worker thread.  Public for
 	// test purposes.
-	channel chan QueuedLog
+	Channel chan QueuedLog
 	// WriteLog is the function to actually make a log.  The constructors above initialise this
 	// with a function that logs to a stream or to syslog, for example.
 	writeLog func(ql QueuedLog) error
@@ -252,7 +263,7 @@ type Destination struct {
 // is blocked.
 func (d *Destination) Send(ql QueuedLog) (ok bool) {
 	if d.disableLogDropping {
-		d.channel <- ql
+		d.Channel <- ql
 		ok = true
 		return
 	}
@@ -260,7 +271,7 @@ func (d *Destination) Send(ql QueuedLog) (ok bool) {
 	d.lock.Lock()
 	ql.NumSkippedLogs = d.numDroppedLogs
 	select {
-	case d.channel <- ql:
+	case d.Channel <- ql:
 		// We've now queued reporting of all the dropped logs, zero out the counter.
 		d.numDroppedLogs = 0
 		ok = true
@@ -274,7 +285,7 @@ func (d *Destination) Send(ql QueuedLog) (ok bool) {
 // LoopWritingLogs is intended to be used as a background go-routine.  It processes the logs from
 // the channel.
 func (d *Destination) LoopWritingLogs() {
-	for ql := range d.channel {
+	for ql := range d.Channel {
 		err := d.writeLog(ql)
 		if err != nil {
 			// Increment the number of errors while trying to write to log
@@ -288,7 +299,7 @@ func (d *Destination) LoopWritingLogs() {
 // Close closes the channel to the background goroutine.  This is only safe to call if you know
 // that the destination is no longer in use by any thread; in tests, for example.
 func (d *Destination) Close() {
-	close(d.channel)
+	close(d.Channel)
 }
 
 type syslogWriter interface {
@@ -338,7 +349,12 @@ type BackgroundHook struct {
 	counter prometheus.Counter
 }
 
-func NewBackgroundHook(levels []log.Level, syslogLevel log.Level, destinations []*Destination, counter prometheus.Counter) *BackgroundHook {
+func NewBackgroundHook(
+	levels []log.Level,
+	syslogLevel log.Level,
+	destinations []*Destination,
+	counter prometheus.Counter,
+) *BackgroundHook {
 	return &BackgroundHook{
 		destinations: destinations,
 		levels:       levels,
@@ -377,9 +393,8 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 	}
 
 	var waitGroup *sync.WaitGroup
-	if entry.Level <= log.FatalLevel {
-		// This is a panic or a fatal log so we'll get killed immediately after we return.
-		// Use a wait group to wait for the log to get written.
+	if entry.Level <= log.FatalLevel || entry.Data[FieldForceFlush] == true {
+		// If the process is about to be killed (or we're asked to do so), flush the log.
 		waitGroup = &sync.WaitGroup{}
 		ql.WaitGroup = waitGroup
 	}

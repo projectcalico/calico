@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -101,8 +101,9 @@ var _ = DescribeTable("Formatter",
 			Level: log.InfoLevel,
 			Time:  theTime(),
 			Data: log.Fields{
-				"__file__": "foo.go",
-				"__line__": 123,
+				"__file__":  "foo.go",
+				"__line__":  123,
+				"__flush__": true, // Internal value, should be ignored.
 			},
 			Message: "The answer is 42.",
 		},
@@ -147,6 +148,96 @@ var (
 		SyslogMessage: "syslog message2",
 	}
 )
+
+var _ = Describe("BackgroundHook log flushing tests", func() {
+	var counter prometheus.Counter
+	var bh *BackgroundHook
+	var counterIdx int
+	var c chan QueuedLog
+	var logger *log.Logger
+
+	BeforeEach(func() {
+		// Set up a background hook that will queue its logs to our channel.
+		counter = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "logutilstests",
+			Name:      fmt.Sprint(counterIdx),
+		})
+		counterIdx++
+		c = make(chan QueuedLog, 10)
+		testDest := &Destination{
+			Level:   log.DebugLevel,
+			Channel: c,
+		}
+		bh = NewBackgroundHook(log.AllLevels, log.DebugLevel, []*Destination{testDest}, counter)
+
+		logger = log.New()
+		logger.AddHook(bh)
+
+		// Suppress the output of this logger.
+		logger.Out = &NullWriter{}
+	})
+
+	It("when calling Panic, should block waiting for the background thread", func() {
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(done)
+			Expect(func() {
+				logger.Panic("Should flush")
+			}).To(Panic())
+		}()
+
+		timeout := time.After(1 * time.Second)
+
+		select {
+		case <-timeout:
+			Fail("Didn't receive queued log")
+		case ql := <-c:
+			Expect(ql.WaitGroup).ToNot(BeNil())
+			Consistently(done).ShouldNot(BeClosed())
+			ql.WaitGroup.Done()
+			Eventually(done).Should(BeClosed())
+		}
+	})
+
+	It("with FieldForceFlush, should block waiting for the background thread", func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			logger.WithField(FieldForceFlush, true).Info("Should flush")
+		}()
+
+		timeout := time.After(1 * time.Second)
+
+		select {
+		case <-timeout:
+			Fail("Didn't receive queued log")
+		case ql := <-c:
+			Expect(ql.WaitGroup).ToNot(BeNil())
+			Consistently(done).ShouldNot(BeClosed())
+			ql.WaitGroup.Done()
+			Eventually(done).Should(BeClosed())
+		}
+	})
+
+	It("without FieldForceFlush, should not block waiting for the background thread", func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			logger.Info("Should not flush")
+		}()
+
+		timeout := time.After(1 * time.Second)
+
+		select {
+		case <-timeout:
+			Fail("Didn't receive queued log")
+		case ql := <-c:
+			Expect(ql.WaitGroup).To(BeNil())
+			Eventually(done).Should(BeClosed())
+		}
+	})
+})
 
 var _ = Describe("Stream Destination", func() {
 	var s *Destination
