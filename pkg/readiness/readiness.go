@@ -24,7 +24,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/calico_node/readiness/bird"
+	"github.com/projectcalico/node/pkg/readiness/bird"
 )
 
 const felixReadinessEp = "http://localhost:9099/readiness"

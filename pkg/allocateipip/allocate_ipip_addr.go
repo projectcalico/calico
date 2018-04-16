@@ -5,7 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/projectcalico/calico/calico_node/calicoclient"
+	"github.com/projectcalico/node/pkg/calicoclient"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -14,6 +15,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+
 	log "github.com/sirupsen/logrus"
 )
 

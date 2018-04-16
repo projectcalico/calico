@@ -29,8 +29,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/calico_node/calicoclient"
-	"github.com/projectcalico/calico/calico_node/startup/autodetection"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -42,6 +40,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
+
+	"github.com/projectcalico/node/pkg/calicoclient"
+	"github.com/projectcalico/node/pkg/startup/autodetection"
 )
 
 const (
