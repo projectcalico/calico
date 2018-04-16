@@ -29,6 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"

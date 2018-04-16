@@ -73,7 +73,7 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-GO_BUILD_VER ?= v0.10
+GO_BUILD_VER ?= v0.14
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
@@ -533,6 +533,10 @@ check-typha-pins: vendor/.up-to-date
 .PHONY: static-checks
 static-checks:
 	$(MAKE) check-typha-pins go-meta-linter check-licenses
+
+.PHONY: pre-commit
+pre-commit:
+	$(DOCKER_GO_BUILD) git-hooks/pre-commit-in-container
 
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
