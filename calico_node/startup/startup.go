@@ -395,7 +395,7 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 			log.Warnf("Autodetection of IPv4 address failed, keeping existing value: %s", node.Spec.BGP.IPv4Address)
 			validateIP(node.Spec.BGP.IPv4Address)
 		}
-	} else {
+	} else if ipv4Env != "none" {
 		if ipv4Env != "" {
 			node.Spec.BGP.IPv4Address = parseIPEnvironment("IP", ipv4Env, 4)
 		}
@@ -427,8 +427,13 @@ func configureIPsAndSubnets(node *api.Node) (bool, error) {
 		validateIP(node.Spec.BGP.IPv6Address)
 	}
 
+	if ipv4Env == "none" && ipv6Env == "" {
+		log.Warn("No IP Addresses configured or set to autodetect")
+		terminate()
+	}
+
 	// Detect if we've seen the IP address change, and flag that we need to check for conflicting Nodes
-	if oldIpv4 == "" || node.Spec.BGP.IPv4Address != oldIpv4 {
+	if (oldIpv4 == "" && node.Spec.BGP.IPv4Address != "") || (oldIpv4 != "" && node.Spec.BGP.IPv4Address != oldIpv4) {
 		log.Info("Node IPv4 changed, will check for conflicts")
 		return true, nil
 	}
