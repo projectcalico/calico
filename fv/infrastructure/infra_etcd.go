@@ -70,7 +70,7 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 }
 
 func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
-	return utils.GetEtcdClient(eds.etcdContainer.IP, "")
+	return utils.GetEtcdClient(eds.etcdContainer.IP)
 }
 
 func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {

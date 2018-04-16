@@ -34,7 +34,7 @@ type ProfileDecoder struct {
 }
 
 func NewProfileDecoder(callbacks passthruCallbacks) *ProfileDecoder {
-	return &ProfileDecoder{callbacks: callbacks, converter: conversion.Converter{true}}
+	return &ProfileDecoder{callbacks: callbacks, converter: conversion.Converter{}}
 }
 
 func (p *ProfileDecoder) RegisterWith(d *dispatcher.Dispatcher) {
