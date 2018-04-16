@@ -182,7 +182,8 @@ LDFLAGS:=-ldflags "\
 .PHONY: build
 build: bin/calico-typha
 bin/calico-typha: bin/calico-typha-$(ARCH)
-bin/calico-typha-$(ARCH): $(TYPHA_GO_FILES) register vendor/.up-to-date
+bin/calico-typha-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
+	$(MAKE) register
 	@echo Building typha...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
@@ -192,6 +193,7 @@ bin/calico-typha-$(ARCH): $(TYPHA_GO_FILES) register vendor/.up-to-date
 		( echo "Error: bin/calico-typha was not statically linked"; false ) )'
 
 bin/typha-client-$(ARCH): $(TYPHA_GO_FILES) vendor/.up-to-date
+	$(MAKE) register
 	@echo Building typha client...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
