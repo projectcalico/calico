@@ -61,12 +61,12 @@ The full list of parameters which can be set is as follows.
 | FailsafeInboundHostPorts                | 22                                   | Comma-delimited list of TCP ports that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. To disable all inbound host ports, use the value "none". This is useful to avoid accidently cutting off a host with incorrect configuration. The default value allows ssh access.  |
 | FailsafeOutboundHostPorts               | 2379,2380,4001,7001                  | Comma-delimited list of TCP ports that Felix will allow outgoing from traffic from host endpoints to irrespective of the security policy. To disable all outbound host ports, use the value "none". This is useful to avoid accidently cutting off a host with incorrect configuration. The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd.  |
 | ReportingIntervalSecs                   | 30                                   | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments. |
-| ReportingTTLSecs                        | 90                                   | Time-to-live setting for process-wide status reports.  | 
+| ReportingTTLSecs                        | 90                                   | Time-to-live setting for process-wide status reports.  |
 | **etcdv2 datastore**                    |                                      |                                                                                                                |
 | EtcdEndpoints                           | "EtcdScheme://EtcdAddr"              | Comma-delimited list of etcd endpoints to connect to; for example "http://etcd1:2379,http://etcd2:2379".     |
 | _Deprecated_ EtcdAddr                   | 127.0.0.1:2379                       | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.                  |
 | _Deprecated_ EtcdScheme                 | http                                 | The protocol type (http or https) of the etcd node or proxy that Felix connects to.                            |
-| EtcdKeyFile                             | None                                 | The full path to the etcd public key file, as described in usingtlswithetcd                                    |
+| EtcdKeyFile                             | None                                 | The full path to the etcd private key file, as described in usingtlswithetcd                                    |
 | EtcdCertFile                            | None                                 | The full path to the etcd certificate file, as described in usingtlswithetcd                                   |
 | EtcdCaFile                              | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".                |
 | **Kubernetes datastore**                |                                      |  |
@@ -111,7 +111,7 @@ are set from it.
 >     configuration can be read.
 >
 
-when using the etcd datastore driver, etcd configuration is read from 
+when using the etcd datastore driver, etcd configuration is read from
 etcd from two places.
 
 1.  For a host of FelixHostname value `HOSTNAME` and a parameter named

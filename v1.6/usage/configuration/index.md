@@ -61,7 +61,7 @@ The full list of parameters which can be set is as follows.
 |-----------------------------|-------------------|-----------------------------------------|
 | EtcdAddr                    | localhost:4001    | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.                      |
 | EtcdScheme                  | http              | The protocol type (http or https) of the etcd node or proxy that Felix connects to.                            |
-| EtcdKeyFile                 | None              | The full path to the etcd public key file, as described in usingtlswithetcd  |
+| EtcdKeyFile                 | None              | The full path to the etcd private key file, as described in usingtlswithetcd  |
 | EtcdCertFile                | None              | The full path to the etcd certificate file, as described in usingtlswithetcd  |
 | EtcdCaFile                  | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".                |
 | DefaultEndpointToHostAction | DROP              | By default Calico blocks traffic from   endpoints to the host itself by using   an iptables DROP action. If you want to allow some or all traffic from endpoint to host then set this parameter to "RETURN" (which causes the rest of the  iptables INPUT chain to be processed)   or "ACCEPT" (which immediately accepts  packets). |
