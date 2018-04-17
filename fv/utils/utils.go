@@ -121,14 +121,13 @@ func Command(name string, args ...string) *exec.Cmd {
 	return exec.Command(name, args...)
 }
 
-func GetEtcdClient(etcdIP string, alphaFeatures string) client.Interface {
+func GetEtcdClient(etcdIP string) client.Interface {
 	client, err := client.New(apiconfig.CalicoAPIConfig{
 		Spec: apiconfig.CalicoAPIConfigSpec{
 			DatastoreType: apiconfig.EtcdV3,
 			EtcdConfig: apiconfig.EtcdConfig{
 				EtcdEndpoints: "http://" + etcdIP + ":2379",
 			},
-			AlphaFeatures: alphaFeatures,
 		},
 	})
 	Expect(err).NotTo(HaveOccurred())
