@@ -35,7 +35,7 @@ section that matches your type.
 
    ```
    kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
    ```
    > **Note**: You can also
    > [view the manifest in your browser](hosted/rbac-kdd.yaml){:target="_blank"}.
