@@ -1,14 +1,56 @@
-# Versions
+##############################################################################
+# The build architecture is select by setting the ARCH variable.
+# # For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
+# # When ARCH is undefined it defaults to amd64.
+ARCH?=amd64
+ifeq ($(ARCH),amd64)
+	ARCHTAG?=
+	GO_BUILD_VER?=v0.12
+endif
+
+ifeq ($(ARCH),ppc64le)
+	ARCHTAG:=-ppc64le
+	GO_BUILD_VER?=latest
+endif
+
+ifeq ($(ARCH),s390x)
+	ARCHTAG:=-s390x
+	GO_BUILD_VER?=latest
+endif
+##############################################################################
+
+CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
-
 JEKYLL_VERSION=pages
 DEV?=false
-
 CONFIG=--config _config.yml
 ifeq ($(DEV),true)
 	CONFIG:=$(CONFIG),_config_dev.yml
 endif
+
+# Determine whether there's a local yaml installed or use dockerized version.
+# Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
+YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+
+##############################################################################
+# Version information used for cutting a release.
+RELEASE_STREAM?=
+
+# Use := so that these V_ variables are computed only once per make run.
+CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
+NODE_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
+CTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
+CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
+KUBE_CONTROLLERS_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
+TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+
+$(info $(shell printf "%-21s = %-10s\n" "NODE_VER" $(NODE_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "CTL_VER" $(CTL_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "KUBE_CONTROLLERS_VER" $(KUBE_CONTROLLERS_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "TYPHA_VER" $(TYPHA_VER)))
+##############################################################################
 
 serve:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -p 4000:4000 -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll serve --incremental $(CONFIG)
@@ -17,8 +59,17 @@ serve:
 _site build:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
 
+## Clean enough that a new release build will be clean
 clean:
+	# Clean jekyll
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
+
+	# Remove any release directories 
+	rm -rf _output 
+
+###############################################################################
+# CI / test targets 
+###############################################################################
 
 htmlproofer: clean _site
 	# Run htmlproofer, failing if we hit any errors. 
@@ -27,9 +78,12 @@ htmlproofer: clean _site
 	# Run kubeval to check master manifests are valid Kubernetes resources.
 	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\).yaml" | xargs /kubeval'
 
+###############################################################################
+# Docs automation 
+###############################################################################
+
 strip_redirects:
 	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
-
 
 add_redirects_for_latest: strip_redirects
 ifndef VERSION
@@ -51,3 +105,151 @@ update_canonical_urls:
 	# You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.0 NEW=v3.1
 	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
 	find . \( -name '*.md' -o -name '*.html' \) -exec sed -i '/canonical_url:/s/$(OLD)/$(NEW)/g' {} \;
+
+###############################################################################
+# Release targets 
+###############################################################################
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) release-tag
+	$(MAKE) release-build
+	$(MAKE) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the release."
+	@echo ""
+	@echo "  make RELEASE_STREAM=$(RELEASE_STREAM) release-publish"
+	@echo ""
+
+## Produces a git tag for the release.
+release-tag: release-prereqs
+	git tag $(CALICO_VER)
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+	# Create the release archive.
+	$(MAKE) release-archive
+
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	@echo "TODO: Implement release tar verification"
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(CALICO_VER)
+
+	@echo "Finalize the GitHub release based on the pushed tag and attach release-$(CALICO_VER).tgz"
+	@echo ""
+	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
+	@echo ""
+
+## Generates release notes for the given version.
+release-notes: release-prereqs
+	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
+	
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef RELEASE_STREAM 
+	$(error RELEASE_STREAM is undefined - run using make release RELEASE_STREAM=vX.Y)
+endif
+	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
+		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
+		exit 1; fi
+
+RELEASE_DIR?=_output/release-$(CALICO_VER)
+RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
+RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
+RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
+MANIFEST_SRC ?= ./_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation
+
+## Create an archive that contains a complete "Calico" release
+release-archive: release-prereqs $(RELEASE_DIR).tgz
+
+$(RELEASE_DIR).tgz: $(RELEASE_DIR) $(RELEASE_DIR_K8S_MANIFESTS) $(RELEASE_DIR_IMAGES) $(RELEASE_DIR_BIN) $(RELEASE_DIR)/README
+	tar -czvf $(RELEASE_DIR).tgz $(RELEASE_DIR)/*
+
+$(RELEASE_DIR_IMAGES): $(RELEASE_DIR_IMAGES)/calico-node.tar $(RELEASE_DIR_IMAGES)/calico-typha.tar $(RELEASE_DIR_IMAGES)/calico-cni.tar $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar
+$(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-windows-amd64.exe $(RELEASE_DIR_BIN)/calicoctl-darwin-amd64
+
+$(RELEASE_DIR)/README:
+	@echo "This directory contains a complete release of Calico $(CALICO_VER)" >> $@
+	@echo "Documentation for this release can be found at http://docs.projectcalico.org/$(RELEASE_STREAM)" >> $@
+	@echo "" >> $@
+	@echo "Docker images (under 'images'). Load them with 'docker load'" >> $@
+	@echo "* The calico/node docker image  (version $(NODE_VERS))" >> $@
+	@echo "* The calico/typha docker image  (version $(TYPHA_VER))" >> $@
+	@echo "* The calico/cni docker image  (version $(CNI_VERS))" >> $@
+	@echo "* The calico/kube-controllers docker image (version $(KUBE_CONTROLLERS_VER))" >> $@
+	@echo "" >> $@
+	@echo "Binaries (for amd64) (under 'bin')" >> $@
+	@echo "* The calicoctl binary (for Linux) (version $(CTL_VER))" >> $@
+	@echo "* The calicoctl-windows-amd64.exe binary (for Windows) (version $(CTL_VER))" >> $@
+	@echo "* The calicoctl-darwin-amd64 binary (for Mac) (version $(CTL_VER))" >> $@
+	@echo "" >> $@
+	@echo "Kubernetes manifests (under 'k8s-manifests directory')" >> $@
+
+$(RELEASE_DIR):
+	mkdir -p $(RELEASE_DIR)
+
+$(RELEASE_DIR_K8S_MANIFESTS):
+	# Ensure that the docs site is generated
+	rm -rf ../_site
+	$(MAKE) _site
+
+	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
+	# -printf "%P\n" prints the file name and directory structure with the search dir stripped off
+	find $(MANIFEST_SRC)/hosted -name  '*.yaml' -printf "%P\n" | \
+	  xargs -I FILE sh -c \
+	    'mkdir -p $(RELEASE_DIR_K8S_MANIFESTS)/hosted/`dirname FILE`;\
+	    cp $(MANIFEST_SRC)/hosted/FILE $(RELEASE_DIR_K8S_MANIFESTS)/hosted/`dirname FILE`;'
+
+	# Copy the non-hosted manifets too
+	cp $(MANIFEST_SRC)/*.yaml $(RELEASE_DIR_K8S_MANIFESTS)
+
+$(RELEASE_DIR_IMAGES)/calico-node.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/node:$(NODE_VER)
+	docker save --output $@ calico/node:$(NODE_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-typha.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/typha:$(TYPHA_VER)
+	docker save --output $@ calico/typha:$(TYPHA_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-cni.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/cni:$(CNI_VER)
+	docker save --output $@ calico/cni:$(CNI_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
+	docker save --output $@ calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
+
+$(RELEASE_DIR_BIN)/%:
+	mkdir -p $(RELEASE_DIR_BIN)
+	wget https://github.com/projectcalico/calicoctl/releases/download/$(CTL_VER)/$(@F) -O $@
+	chmod +x $@
+
+###############################################################################
+# Utilities 
+###############################################################################
+
+.PHONY: help
+## Display this help text
+help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
+	$(info Available targets)
+	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
+		nb = sub( /^## /, "", helpMsg );                                \
+		if(nb == 0) {                                                   \
+			helpMsg = $$0;                                              \
+			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
+		}                                                               \
+		if (nb)                                                         \
+			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
+	}                                                                   \
+	{ helpMsg = $$0 }'                                                  \
+	width=20                                                            \
+	$(MAKEFILE_LIST)

@@ -1845,9 +1845,7 @@ v2.1:
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.1
 
 
-# The master release stream is used to generate the master version of the docs,
-# as well as for builds of `calico/node:master` via CI.  Submit PRs to update the
-# versions when a component changes.
+# The master release stream is used to generate the master version of the docs.  
 master:
 - title: master
   note: ""

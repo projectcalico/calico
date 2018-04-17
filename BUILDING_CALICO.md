@@ -11,7 +11,7 @@ source code.
 -  [bird and bird6](https://github.com/projectcalico/bird) (Calico specific fork)
 -  [libnetwork plugin](https://github.com/projectcalico/libnetwork-plugin)
 -  [calicoctl](https://github.com/projectcalico/calicoctl)
--  [calico/node](https://github.com/projectcalico/calico)
+-  [calico/node](https://github.com/projectcalico/node)
 
 See each component repository for more details on the build process for that component.
 
@@ -158,7 +158,7 @@ This builds the following:
 -  The `dist/calico` binary (included in the Docker image)
 -  The `dist/calico-ipam` binary (included in the Docker image)
 
-The following binaries (included in the Docker image) are pulled directly from the 
+The following binaries (included in the Docker image) are pulled directly from the
 [containernetworking/cni releases](https://github.com/containernetworking/cni/releases):
 
 -  The `dist/flannel` binary (included in the Docker image)
@@ -166,7 +166,7 @@ The following binaries (included in the Docker image) are pulled directly from t
 -  The `dist/loopback` binary (included in the Docker image)
 
 The following binary (included in the Docker image) is pulled from the [Calico CNI plugin releases page](https://github.com/projectcalico/cni-plugin/releases/download/v1.9.0/portmap)
-and is a build of the [containernetworking/cni portmap plugin](https://github.com/containernetworking/plugins/tree/master/plugins/meta/portmap).  The build 
+and is a build of the [containernetworking/cni portmap plugin](https://github.com/containernetworking/plugins/tree/master/plugins/meta/portmap).  The build
 process for this plugin has yet to be formalized:
 
 -  The `dist/portmap` binary (included in the Docker image)
@@ -295,26 +295,25 @@ This builds the following:
 
 
 ### 9. calico/node
-To build the calico/node container, clone the calico repo and
+To build the calico/node container, clone the node repo and
 checkout the correct tag
 
 ```
 cd $BASEDIR
-git clone --depth 1 --single-branch --branch $VERSION_CALICO git@github.com:projectcalico/calico.git
-cd calico
+git clone --depth 1 --single-branch --branch $VERSION_CALICO git@github.com:projectcalico/node.git
+cd node
 ```
-
 
 To build the calico/node image using the images built in the previous steps, start
 by copying the various binaries into the working directory:
 
 ```
-mkdir -p calico_node/filesystem/bin
-cp $BASEDIR/confd/bin/confd $BASEDIR/calico/calico_node/confd
-cp $BASEDIR/bird/dist/* $BASEDIR/calico/calico_node/
-cp $BASEDIR/felix/bin/calico-felix $BASEDIR/calico/calico_node/calico-felix
-cp $BASEDIR/calico-bgp-daemon/dist/* $BASEDIR/calico/calico_node/
-cp $BASEDIR/libnetwork-plugin/dist/libnetwork-plugin $BASEDIR/calico/calico_node/calico-bgp-daemon
+mkdir -p filesystem/bin
+cp $BASEDIR/confd/bin/confd $BASEDIR/node/filesystem/bin/confd
+cp $BASEDIR/bird/dist/* $BASEDIR/node/filesystem/bin
+cp $BASEDIR/felix/bin/calico-felix $BASEDIR/node/filesystem/bin/calico-felix
+cp $BASEDIR/calico-bgp-daemon/dist/* $BASEDIR/node/filesystsem/bin/
+cp $BASEDIR/libnetwork-plugin/dist/libnetwork-plugin $BASEDIR/node/filesystsem/bin/libnetwork-plugin
 ```
 
 Build the `calico/node` container:
