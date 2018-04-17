@@ -109,12 +109,15 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 	Context("with host endpoint defined", func() {
 
 		BeforeEach(func() {
+			err := infra.AddAllowToDatastore("host-endpoint=='true'")
+			Expect(err).NotTo(HaveOccurred())
+
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = "host-endpoint-1"
 			hostEp.Labels = map[string]string{"host-endpoint": "true"}
 			hostEp.Spec.Node = felix.Hostname
 			hostEp.Spec.InterfaceName = "eth0"
-			_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
+			_, err = client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

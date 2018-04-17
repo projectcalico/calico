@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -x
 
 # Copyright (c) 2018 Tigera, Inc. All rights reserved.
 #
@@ -18,6 +18,7 @@
 : ${FV_BATCHES_TO_RUN:=1 2 3 4}
 : ${FV_SLOW_SPEC_THRESH:=90}
 : ${GINKGO_ARGS:=}
+: ${GINKGO_FOCUS:=.*}
 
 for batch in ${FV_BATCHES_TO_RUN}; do
   (
@@ -27,13 +28,29 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.seed 1 \
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
-               ${GINKGO_ARGS}; \
+               -ginkgo.focus="${GINKGO_FOCUS}" \
+               ${GINKGO_ARGS}
+     status=$?
+     echo "Test batch $batch completed with status $status"
+     exit $status
   ) &
   pids[${batch}]=$!
 done
 
+result=0
 for batch in ${FV_BATCHES_TO_RUN}; do
   echo "Waiting on batch $batch; PID=${pids[$batch]}"
   wait ${pids[$batch]}
-  echo "Result: $?"
+  st=$?
+  echo "Result: $st"
+  if [ $st -ne 0 ]; then
+    result=1
+  fi
 done
+
+if [ $result -eq 0 ]; then
+  echo "All tests passed"
+else
+  echo "Tests failed"
+  exit 1
+fi

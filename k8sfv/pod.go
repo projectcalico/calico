@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,15 @@ var localNetworkingMap = map[string]*localNetworking{}
 var localNetworkingMutex = sync.Mutex{}
 
 func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spec podSpec) *v1.Pod {
+	// Create a handle for our operations in this function, this ensures that they all go through the
+	// same netlink socket.  Doing that seems to work around some consistency issues, where we would create
+	// the link but then LinkByName wouldn't find it.  It's not clear why doing that helps but it
+	// may be that the kernel enforces consistency when you re-use the same socket, or, it may be
+	// that load causes the issue and we put less load on the kernel.
+	handle, err := netlink.NewHandle()
+	panicIfError(err)
+	defer handle.Delete()
+
 	name := spec.name
 	if name == "" {
 		name = fmt.Sprintf("run%d", rand.Uint32())
@@ -118,14 +127,15 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
 			PeerName:  "p" + interfaceName[1:],
 		}
-		err = netlink.LinkAdd(veth)
+
+		err = handle.LinkAdd(veth)
 		panicIfError(err)
 		log.WithField("veth", veth).Debug("Created veth pair")
 
 		// Move the pod end of the pair into the namespace, and set it up.
 		linkByNameRetries := 3
 	retry:
-		podIf, err := netlink.LinkByName(veth.PeerName)
+		podIf, err := handle.LinkByName(veth.PeerName)
 		log.WithField("podIf", podIf).Debug("Pod end")
 		if (err != nil) && linkByNameRetries > 0 {
 			log.WithField("name", veth.PeerName).WithError(err).Info("LinkByName failed, retrying...")
@@ -134,8 +144,9 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 			goto retry
 		}
 		panicIfError(err)
-		err = netlink.LinkSetNsFd(podIf, int(podNamespace.Fd()))
+		err = handle.LinkSetNsFd(podIf, int(podNamespace.Fd()))
 		panicIfError(err)
+
 		err = podNamespace.Do(func(_ ns.NetNS) (err error) {
 			err = runCommand("ip", "link", "set", veth.PeerName, "up")
 			if err != nil {
@@ -155,10 +166,10 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		panicIfError(err)
 
 		// Set the host end up too.
-		hostIf, err := netlink.LinkByName(veth.LinkAttrs.Name)
+		hostIf, err := handle.LinkByName(veth.LinkAttrs.Name)
 		log.WithField("hostIf", hostIf).Debug("Host end")
 		panicIfError(err)
-		err = netlink.LinkSetUp(hostIf)
+		err = handle.LinkSetUp(hostIf)
 		panicIfError(err)
 
 		// Lock mutex, to enable pod creation from multiple goroutines.
