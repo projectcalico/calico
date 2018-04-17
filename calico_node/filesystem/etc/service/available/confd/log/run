@@ -1,4 +1,0 @@
-#!/bin/sh
-LOGDIR=/var/log/calico/confd
-mkdir -p $LOGDIR
-exec svlogd $LOGDIR
