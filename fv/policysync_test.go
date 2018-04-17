@@ -401,9 +401,7 @@ var _ = Context("policy sync API tests", func() {
 											Action:              "allow",
 											OriginalSrcSelector: "all()",
 											SrcIpSetIds: []string{
-												// Copy over the SrcIpSetIds from the Policy.
-												// as it is not a mix of src selector and src ServiceAccountMatch
-												policy.InboundRules[0].SrcIpSetIds[0],
+												utils.IPSetIDForSelector(`(pcsa.foo == "bar" && all())`),
 											},
 											SrcServiceAccountMatch: &proto.ServiceAccountMatch{
 												Selector: "foo == 'bar'",
