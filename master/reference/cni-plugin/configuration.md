@@ -280,6 +280,26 @@ There are two annotations to request a specific IP address:
         "cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\"]"
    ```
 
+   The ipAddrsNoIpam feature is disabled by default. It can be enabled in the feature_control section of the CNI network config:
+
+   ```json
+   {
+        "name": "any_name",
+        "cniVersion": "0.1.0",
+        "type": "calico",
+        "ipam": {
+            "type": "calico-ipam"
+        },
+       "feature_control": {
+           "ip_addrs_no_ipam": true
+       }
+   }
+   ```
+
+   > **Warning**: This feature allows for the bypassing of network policy via IP spoofing.
+   > Users should make sure the proper admission control is in place to prevent users from selecting arbitrary IP addresses.
+   {: .alert .alert-danger}
+
 > **Note**:
 > - The `ipAddrs` and `ipAddrsNoIpam` annotations can't be used together.
 > - You can only specify one IPv4/IPv6 or one IPv4 and one IPv6 address with these annotations.
