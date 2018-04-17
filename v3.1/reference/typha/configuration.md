@@ -32,7 +32,7 @@ The full list of parameters which can be set is as follows.
 | `LogSeverityScreen`               | `TYPHA_LOGSEVERITYSCREEN`               | The log severity above which logs are sent to the stdout. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `LogSeveritySys`                  | `TYPHA_LOGSEVERITYSYS`                  | The log severity above which logs are sent to the syslog. Set to `""` for no logging to syslog. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `PrometheusGoMetricsEnabled`      | `TYPHA_PROMETHEUSGOMETRICSENABLED`      | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`]  | boolean |
-| `PrometheusMetricsEnabled`        | `TYPHA_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the experimental Prometheus metrics server in Typha. [Default: `false`] | boolean |
+| `PrometheusMetricsEnabled`        | `TYPHA_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the Prometheus metrics server in Typha. [Default: `false`] | boolean |
 | `PrometheusMetricsPort`           | `TYPHA_PROMETHEUSMETRICSPORT`           | Experimental: TCP port that the Prometheus metrics server should bind to. [Default: `9091`] | int |
 | `PrometheusProcessMetricsEnabled` | `TYPHA_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
 
