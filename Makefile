@@ -122,9 +122,10 @@ ut: vendor
 
 .PHONY: fv
 ## Build and run the FV tests.
+GINKGO_FOCUS?=.*
 fv: tests/fv/fv.test image
 	@echo Running Go FVs.
-	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME) ./fv.test -ginkgo.slowSpecThreshold 30
+	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME) ./fv.test -ginkgo.slowSpecThreshold 30 -ginkgo.focus $(GINKGO_FOCUS)
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
@@ -168,13 +169,27 @@ check-copyright:
 ###############################################################################
 # Release targets 
 ###############################################################################
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
+
 ## Produces a git tag for the release.
-release-tag: release-prereqs
-	git tag $(VERSION)
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
 	@echo ""
 	@echo "Now you can build the release:"
 	@echo ""
-	@echo "  make release-build VERSION=$(VERSION)"
+	@echo "  make VERSION=$(VERSION) release-build"
 	@echo ""
 
 ## Produces a clean build of release artifacts at the specified version.
@@ -191,22 +206,20 @@ endif
 	# Generate the `latest` images.
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
 
-	@echo "Now verify the release and push the git tag and artifacts:"
-	@echo ""
-	@echo "  make release-verify release-publish VERSION=$(VERSION)"
-	@echo ""
-	@echo "If this is the latest stable release, also push latest images:"
-	@echo ""
-	@echo "  make release-publish-latest VERSION=$(VERSION)" 
-
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
 	if ! docker run calico/kube-controllers:$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-controllers:$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/calico/kube-controllers:$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/kube-controllers:$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	# Run FV tests against the produced image.
-	$(MAKE) CONTAINER_NAME=calico/kube-controllers:$(VERSION) st
+	# Run FV tests against the produced image. We only run the subset tagged as release tests.
+	$(MAKE) CONTAINER_NAME=calico/kube-controllers:$(VERSION) GINKGO_FOCUS="Release" fv
+
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
@@ -217,8 +230,14 @@ release-publish: release-prereqs
 	docker push calico/kube-controllers:$(VERSION)
 	docker push quay.io/calico/kube-controllers:$(VERSION)
 
-	@echo "Complete the release process on GitHub"
-	@echo " - https://github.com/projectcalico/kube-controllers/releases"
+	@echo "Finalize the GitHub release based on the pushed tag."
+	@echo ""
+	@echo "  https://github.com/projectcalico/kube-controllers/releases/tag/$(VERSION)"
+	@echo ""
+	@echo "If this is the latest stable release, then run the following to push 'latest' images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish-latest"
+	@echo ""
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
