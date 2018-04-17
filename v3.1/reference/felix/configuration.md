@@ -40,7 +40,7 @@ The full list of parameters which can be set is as follows.
 | `LogSeverityScreen`               | `FELIX_LOGSEVERITYSCREEN`               | The log severity above which logs are sent to the stdout. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `LogSeveritySys`                  | `FELIX_LOGSEVERITYSYS`                  | The log severity above which logs are sent to the syslog. Set to `""` for no logging to syslog. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `PrometheusGoMetricsEnabled`      | `FELIX_PROMETHEUSGOMETRICSENABLED`      | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`]  | boolean |
-| `PrometheusMetricsEnabled`        | `FELIX_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the experimental Prometheus metrics server in Felix. [Default: `false`] | boolean |
+| `PrometheusMetricsEnabled`        | `FELIX_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the Prometheus metrics server in Felix. [Default: `false`] | boolean |
 | `PrometheusMetricsPort`           | `FELIX_PROMETHEUSMETRICSPORT`           | Experimental: TCP port that the Prometheus metrics server should bind to. [Default: `9091`] | int |
 | `PrometheusProcessMetricsEnabled` | `FELIX_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
@@ -60,9 +60,9 @@ The full list of parameters which can be set is as follows.
 | `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd private key file. | string |
 
 
-#### Kubernetes datastore configuration
+#### Kubernetes API datastore configuration
 
-The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables.
+The Kubernetes API datastore driver reads its configuration from Kubernetes-provided environment variables.
 
 #### iptables dataplane configuration
 

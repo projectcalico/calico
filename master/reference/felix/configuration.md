@@ -40,7 +40,7 @@ The full list of parameters which can be set is as follows.
 | `LogSeveritySys`                  | `FELIX_LOGSEVERITYSYS`                  | The log severity above which logs are sent to the syslog. Set to `""` for no logging to syslog. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `PolicySyncPathPrefix`            | `FELIX_POLICYSYNCPATHPREFIX`            | File system path where Felix notifies services of policy changes over Unix domain sockets. This is only required if you're configuring [application layer policy](https://github.com/projectcalico/app-policy). Set to `""` to disable. [Default: `""`] | `/var/run/nodeagent` |
 | `PrometheusGoMetricsEnabled`      | `FELIX_PROMETHEUSGOMETRICSENABLED`      | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`]  | boolean |
-| `PrometheusMetricsEnabled`        | `FELIX_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the experimental Prometheus metrics server in Felix. [Default: `false`] | boolean |
+| `PrometheusMetricsEnabled`        | `FELIX_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the Prometheus metrics server in Felix. [Default: `false`] | boolean |
 | `PrometheusMetricsPort`           | `FELIX_PROMETHEUSMETRICSPORT`           | Experimental: TCP port that the Prometheus metrics server should bind to. [Default: `9091`] | int |
 | `PrometheusProcessMetricsEnabled` | `FELIX_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
@@ -60,9 +60,9 @@ The full list of parameters which can be set is as follows.
 | `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd private key file. | string |
 
 
-#### Kubernetes datastore configuration
+#### Kubernetes API datastore configuration
 
-The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables.
+The Kubernetes API datastore driver reads its configuration from Kubernetes-provided environment variables.
 
 #### iptables dataplane configuration
 
@@ -70,7 +70,7 @@ The Kubernetes datastore driver reads its configuration from Kubernetes-provided
 | ------------------------------------ | ------------------------------------------ | ----------- | ------ |
 | `ChainInsertMode`                    | `FELIX_CHAININSERTMODE`                    | Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom.  `Insert` is the safe default since it prevents {{site.prodname}}'s rules from being bypassed.  If you switch to `Append` mode, be sure that the other rules in the chains signal acceptance by falling through to the {{site.prodname}} rules, otherwise the {{site.prodname}} policy will be bypassed. [Default: `Insert`]  | `Insert`, `Append` |
 | `DefaultEndpointToHostAction`        | `FELIX_DEFAULTENDPOINTTOHOSTACTION`        | This parameter controls what happens to traffic that goes from a workload endpoint to the host itself (after the traffic hits the endpoint egress policy). By default {{site.prodname}} blocks traffic from workload endpoints to the host itself with an iptables `Drop` action. If you want to allow some or all traffic from endpoint to host, set this parameter to `Return` or `Accept`.  Use `Return` if you have your own rules in the iptables "INPUT" chain; {{site.prodname}} will insert its rules at the top of that chain, then `Return` packets to the "INPUT" chain once it has completed processing workload endpoint egress policy. Use `Accept` to unconditionally accept packets from workloads after processing workload endpoint egress policy. [Default: `Drop`] | `Drop`, `Return`, `Accept` |
-| `HealthEnabled`                      | `FELIX_HEALTHENABLED`                      | When enabled, exposes felix health information via an http endpoint. | boolean |
+| `HealthEnabled`                      | `FELIX_HEALTHENABLED`                      | When enabled, exposes Felix health information via an http endpoint. | boolean |
 | `IgnoreLooseRPF`                     | `FELIX_IGNORELOOSERPF`                     | Set to `true` to allow Felix to run on systems with loose reverse path forwarding (RPF). **Warning**: {{site.prodname}} relies on "strict" RPF checking being enabled to prevent workloads, such as VMs and privileged containers, from spoofing their IP addresses and impersonating other workloads (or hosts). Only enable this flag if you need to run with "loose" RPF and you either trust your workloads or have another mechanism in place to prevent spoofing. | `true`,`false` |
 | `InterfaceExclude`                   | `FELIX_INTERFACEEXCLUDE`                   | A comma-separated list of interface names that should be excluded when Felix is resolving host endpoints. The default value ensures that Felix ignores Kubernetes' internal `kube-ipvs0` device. [Default: `kube-ipvs0`] | string |
 | `IpInIpEnabled`                      | `FELIX_IPINIPENABLED`                      | Whether Felix should configure an IPinIP interface on the host. Set automatically to `true` by `{{site.nodecontainer}}` or `calicoctl` when you create an IPIP-enabled pool. [Default: `false`] | boolean |
