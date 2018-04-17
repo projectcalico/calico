@@ -1,4 +1,4 @@
-package: github.com/projectcalico/calico/calico_node
+package: github.com/projectcalico/node
 import:
 - package: github.com/sirupsen/logrus
   version: v1.0.4
