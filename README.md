@@ -9,21 +9,18 @@ For users who want to learn more about the project or get started with Calico, s
 
 ## Get Started Developing Calico
 
+Contributions to this code are welcome! Before starting, make sure you've read [the Calico contributor guide][contrib].
+
 ### Dependencies
 
 The entire build can be run within a container, which means the only dependencies you'll need are a [functioning Docker installation](https://docs.docker.com/engine/installation/).
 
-If you'd like to run the build and tests locally outside of a container, you'll need the following dependencies:
-
-- [go v1.8+](https://golang.org/doc/install)
-- [glide](https://github.com/Masterminds/glide/)
-
 ### Building
 
-Contributions to this code are welcome!  The code in this repository can be built and tested using the Makefile.
+The code in this repository can be built and tested using the Makefile.
 
-- `make calico/node` will produce a docker image containing the artifacts suitable for deploying to kubernetes.
+- `make calico/node` will produce the `calico/node` docker image.
 
 For more information, see `make help`.
 
-[kdd]: http://docs.projectcalico.org/v2.0/getting-started/kubernetes/installation/hosted/k8s-backend/
+[contrib]: https://github.com/projectcalico/calico/blob/master/CONTRIBUTING_CODE.md
