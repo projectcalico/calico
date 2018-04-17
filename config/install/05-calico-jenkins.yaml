@@ -7,6 +7,8 @@ metadata:
 data:
   # The CNI network configuration to install on each node.
   typha_service_name: "none"
+  # Configure the MTU to use
+  veth_mtu: "1440"
   cni_network_config: |-
     {
       "name": "k8s-pod-network",
@@ -123,7 +125,10 @@ spec:
               value: "false"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
-              value: "1440"
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Wait for the datastore.
             - name: WAIT_FOR_DATASTORE
               value: "true"
@@ -166,13 +171,16 @@ spec:
             httpGet:
               path: /liveness
               port: 9099
+              host: localhost
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
           readinessProbe:
-            httpGet:
-              path: /readiness
-              port: 9099
+            exec:
+              command:
+              - /bin/readiness
+              - -bird
+              - -felix
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules
@@ -186,7 +194,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:v2.0.3
+          image: quay.io/calico/cni:master
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
@@ -198,6 +206,12 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
             # Set the hostname based on the k8s node name.
             - name: KUBERNETES_NODE_NAME
               valueFrom:
