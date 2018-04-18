@@ -9,7 +9,7 @@ filter calico_pools {
   reject;
 }
 
-{{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}{{$network := getv $network_key}}
+{{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}{{if exists $network_key}}{{$network := getv $network_key}}
 filter calico_ipip {
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
   if ( net ~ {{$data.cidr}} ) then {
@@ -29,3 +29,6 @@ filter calico_ipip {
 {{end}}
   accept;                                  {{/* Destination is not in any ipPool, accept  */}}
 }
+{{else}}
+filter calico_ipip { accept; }
+{{end}}{{/* End of 'exists $network_key' */}}
