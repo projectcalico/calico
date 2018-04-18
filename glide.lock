@@ -1,5 +1,5 @@
-hash: b97c6f977d1d8e0b06a0827d2d7ba5f01157d806ee7c08493011a393b82fd74a
-updated: 2018-04-17T08:30:28.304369284Z
+hash: 8386fdfcbb55d7580cb3d3fc58b080aa9ad5ee0eac4ef7614d89c130dc77d03a
+updated: 2018-04-18T13:46:02.234781755Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -205,7 +205,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 3c080a2cf53e8bf21b78d33eb5f681d97daad102
+  version: 2bcac53953f662bc5cb1879c93781a5b64f8579d
   subpackages:
   - lib
   - lib/apiconfig
@@ -244,7 +244,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: eedb59cb28644bb7ca8e06ff110538a662299e41
+  version: eab0924d2709f94f1e6b5e331d0e592dd520010f
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -354,7 +354,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 7fd901a49ba6a7f87732eb344f6e3c5b19d1b200
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
   - googleapis
   - googleapis/rpc/status
@@ -385,7 +385,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
+  version: ceb25c9d04f0c3a10a185499c03194f54069b290
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -412,7 +412,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
+  version: 62737119932505aba8df99644184e0705ea58df1
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
