@@ -1,5 +1,5 @@
-hash: e84a8c3dbfc278ace067288b75793dbc92ca5e49613cf56dbbf7d3e399ed4b90
-updated: 2018-04-03T11:30:44.657129527-07:00
+hash: b8fab36fda2feeef951f9d031c34d17ddc9c6ede41501885cd686a27f6466f02
+updated: 2018-04-18T22:24:42.93080851Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -191,7 +191,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9070d94a5bf7214a417372890fa0ad28eb13e813
+  version: e3351395c934cee118999b9d29508e9280fa75ec
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -233,7 +233,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a
+  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -253,11 +253,11 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -313,7 +313,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
+  version: 0a24098c0ec68416ec050f567f75df563d6b231e
   subpackages:
   - internal
   - internal/app_identity
@@ -356,7 +356,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
+  version: ceb25c9d04f0c3a10a185499c03194f54069b290
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -383,7 +383,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 4972c8e335e32ab65ba45bde0a99c6544c8a8e4c
+  version: 62737119932505aba8df99644184e0705ea58df1
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
