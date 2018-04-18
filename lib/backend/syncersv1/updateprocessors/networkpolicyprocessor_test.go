@@ -314,6 +314,48 @@ var expected1 = []*model.KVPair{
 	},
 }
 
+// np2 is a NeteworkPolicy with a single Ingress rule which allows from all namespaces.
+var np2 = networkingv1.NetworkPolicy{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "test.policy",
+		Namespace: "default",
+	},
+	Spec: networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{},
+		Ingress: []networkingv1.NetworkPolicyIngressRule{
+			networkingv1.NetworkPolicyIngressRule{
+				From: []networkingv1.NetworkPolicyPeer{
+					{
+						NamespaceSelector: &metav1.LabelSelector{},
+					},
+				},
+			},
+		},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+	},
+}
+var expected2 = []*model.KVPair{
+	&model.KVPair{
+		Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
+		Value: &model.Policy{
+			Namespace:      "default",
+			Order:          &order,
+			Selector:       "(projectcalico.org/orchestrator == 'k8s') && projectcalico.org/namespace == 'default'",
+			Types:          []string{"ingress"},
+			ApplyOnForward: true,
+			InboundRules: []model.Rule{
+				{
+					Action:                       "allow",
+					SrcSelector:                  "(has(projectcalico.org/namespace)) && (projectcalico.org/orchestrator == 'k8s')",
+					DstSelector:                  "",
+					OriginalSrcSelector:          "projectcalico.org/orchestrator == 'k8s'",
+					OriginalSrcNamespaceSelector: "all()",
+				},
+			},
+		},
+	},
+}
+
 var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
 	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
 
@@ -333,6 +375,7 @@ var _ = Describe("Test the NetworkPolicy update processor + conversion", func() 
 		},
 
 		Entry("should handle a NetworkPolicy with no rule selectors", np1, expected1),
+		Entry("should handle a NetworkPolicy with an empty ns selector", np2, expected2),
 	)
 
 })
