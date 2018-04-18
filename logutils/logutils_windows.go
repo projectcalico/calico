@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*log
 }
 
 // Stub, this func is not used on Windows
-func DumpHeapMemoryOnSignal(configParams *config.Config) {
+func RegisterProfilingSignalHandlers(configParams *config.Config) {
 	return
 }
 

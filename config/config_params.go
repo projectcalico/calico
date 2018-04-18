@@ -178,6 +178,7 @@ type Config struct {
 	CalicoVersion                  string        `config:"string;"`
 
 	DebugMemoryProfilePath          string        `config:"file;;"`
+	DebugCPUProfilePath             string        `config:"file;/tmp/felix-cpu-<timestamp>.pprof;"`
 	DebugDisableLogDropping         bool          `config:"bool;false"`
 	DebugSimulateCalcGraphHangAfter time.Duration `config:"seconds;0"`
 	DebugSimulateDataplaneHangAfter time.Duration `config:"seconds;0"`

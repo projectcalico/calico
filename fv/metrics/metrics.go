@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,4 +64,12 @@ func GetFelixMetricInt(felixIP, name string) (metric int, err error) {
 		return 0, err
 	}
 	return strconv.Atoi(s)
+}
+
+func GetFelixMetricFloat(felixIP, name string) (metric float64, err error) {
+	s, err := GetFelixMetric(felixIP, name)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(s, 64)
 }
