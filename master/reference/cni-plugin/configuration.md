@@ -3,10 +3,10 @@ title: Configuring the Calico CNI plugins
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/cni-plugin/configuration'
 ---
 
-The Calico CNI plugin is configured through the standard CNI 
+The Calico CNI plugin is configured through the standard CNI
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)
 
-A minimal configuration file that uses {{site.prodname}} for networking 
+A minimal configuration file that uses {{site.prodname}} for networking
 and IPAM looks like this
 
 ```json
@@ -123,6 +123,26 @@ Example CNI config:
 
 Any IP pools specified in the CNI config must have already been created. It is an error to specify IP pools in the config that do not exist.
 
+### Container settings
+
+The following options allow configuration of settings within the container namespace.
+
+* allow_ip_forwarding (default is `false`)
+
+```json
+{
+    "name": "any_name",
+    "cniVersion": "0.1.0",
+    "type": "calico",
+    "ipam": {
+        "type": "calico-ipam"
+    },
+    "container_settings": {
+        "allow_ip_forwarding": true
+    }
+}
+```
+
 ## Kubernetes specific
 
 When using the Calico CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
@@ -181,21 +201,6 @@ you must also run calico/kube-controllers with the policy, profile, and workload
 ```
 
 When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
-
-Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calicoctl/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
-
-### Deprecated ways of specifying Kubernetes API access details
-
-From the examples above, you can see that the `k8s_api_root` can appear in either the `kubernetes` or `policy` configuration blocks.
-
-* `k8s_api_root` (default `http://127.0.0.1:8080`)
-
-In addition, the following methods are supported in the `policy` section of the CNI network config only. None of them have default values.
-
-* `k8s_auth_token`
-* `k8s_client_certificate`
-* `k8s_client_key`
-* `k8s_certificate_authority`
 
 ## IPAM
 
