@@ -25,7 +25,7 @@ htmlproofer: clean _site
 	./htmlproofer.sh
 
 	# Run kubeval to check master manifests are valid Kubernetes resources.
-	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'find /calico/_site/master -name "*.yaml" |grep -v config.yaml | xargs /kubeval'
+	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\).yaml" | xargs /kubeval'
 
 strip_redirects:
 	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
