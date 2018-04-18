@@ -54,10 +54,13 @@ func (s *PolicyStore) Write(writeFn func(store *PolicyStore)) {
 	// TODO (spikecurtis) create a correlator that can be tracked for logging.
 	log.Debug("About to write lock PolicyStore")
 	s.RWMutex.Lock()
+	// We have a lock: Make sure we unlock under all exit conditions
+	defer func() {
+		s.RWMutex.Unlock()
+		log.Debug("PolicyStore write unlocked")
+	}()
 	log.Debug("PolicyStore write locked")
 	writeFn(s)
-	s.RWMutex.Unlock()
-	log.Debug("PolicyStore write unlocked")
 }
 
 // Read the PolicyStore, handling locking logic.
@@ -65,8 +68,11 @@ func (s *PolicyStore) Write(writeFn func(store *PolicyStore)) {
 func (s *PolicyStore) Read(readFn func(store *PolicyStore)) {
 	log.Debug("About to read lock PolicyStore")
 	s.RWMutex.RLock()
+	// We have a lock: Make sure we unlock under all exit conditions
+	defer func() {
+		s.RWMutex.RUnlock()
+		log.Debug("PolicyStore read unlocked")
+	}()
 	log.Debug("PolicyStore read locked")
 	readFn(s)
-	s.RWMutex.RUnlock()
-	log.Debug("PolicyStore read unlocked")
 }

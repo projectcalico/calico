@@ -21,6 +21,8 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 
+	"fmt"
+
 	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
@@ -34,6 +36,16 @@ var (
 type namespaceMatch struct {
 	Names    []string
 	Selector string
+}
+
+// InvalidDataFromDataPlane is an error is used when we get data from
+// dataplane (Envoy) which is invalid.
+type InvalidDataFromDataPlane struct {
+	string
+}
+
+func (i *InvalidDataFromDataPlane) Error() string {
+	return "Invalid data from dataplane " + i.string
 }
 
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
@@ -167,7 +179,7 @@ func matchHTTP(rule *proto.HTTPMatch, req *authz.AttributeContext_HttpRequest) b
 		log.Debug("nil HTTPRule.  Return true")
 		return true
 	}
-	return matchHTTPMethods(rule.GetMethods(), req.GetMethod())
+	return matchHTTPMethods(rule.GetMethods(), req.GetMethod()) && matchHTTPPaths(rule.GetPaths(), req.GetPath())
 }
 
 func matchHTTPMethods(methods []string, reqMethod string) bool {
@@ -190,6 +202,44 @@ func matchHTTPMethods(methods []string, reqMethod string) bool {
 		}
 	}
 	log.Debug("HTTP Method not matched.")
+	return false
+}
+
+func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath string) bool {
+	log.WithFields(log.Fields{
+		"paths":   paths,
+		"reqPath": reqPath,
+	}).Debug("Matching HTTP Paths")
+	if len(paths) == 0 {
+		log.Debug("Rule has 0 HTTP Paths, matched.")
+		return true
+	}
+	// Accept only valid paths
+	if !strings.HasPrefix(reqPath, "/") {
+		s := fmt.Sprintf("Invalid HTTP Path \"%s\"", reqPath)
+		log.Error(s)
+		// Let the caller recover from the panic.
+		panic(&InvalidDataFromDataPlane{s})
+	}
+	// Strip out the query '?' and fragment '#' identifier
+	for _, s := range []string{"?", "#"} {
+		reqPath = strings.Split(reqPath, s)[0]
+	}
+	for _, pathMatch := range paths {
+		switch pathMatch.GetPathMatch().(type) {
+		case *proto.HTTPMatch_PathMatch_Exact:
+			if reqPath == pathMatch.GetExact() {
+				log.Debug("HTTP Path exact matched.")
+				return true
+			}
+		case *proto.HTTPMatch_PathMatch_Prefix:
+			if strings.HasPrefix(reqPath, pathMatch.GetPrefix()) {
+				log.Debugf("HTTP Path prefix %s matched.", pathMatch.GetPrefix())
+				return true
+			}
+		}
+	}
+	log.Debug("HTTP Path not matched.")
 	return false
 }
 
