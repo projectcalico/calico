@@ -380,6 +380,13 @@ func (c Converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType sel
 		selectors = append(selectors, fmt.Sprintf("%s == 'k8s'", apiv3.LabelOrchestrator))
 	}
 
+	// For namespace selectors, if they are present but have no terms, it means "select all
+	// namespaces". We use empty string to represent the nil namespace selector, so use all() to
+	// represent all namespaces.
+	if selectorType == SelectorNamespace && len(s.MatchLabels) == 0 && len(s.MatchExpressions) == 0 {
+		return "all()"
+	}
+
 	// matchLabels is a map key => value, it means match if (label[key] ==
 	// value) for all keys.
 	keys := make([]string, 0, len(s.MatchLabels))
