@@ -31,7 +31,7 @@ Refer to the section that corresponds to your orchestrator for details.
 #### Host prerequisites
 
 - Each Kubernetes host must have an IPv6 address that is reachable from
-  the other hosts as well as an IPv4 address.
+  the other hosts.
 - Each host must have the sysctl setting `net.ipv6.conf.all.forwarding`
   setting it to `1`.  This ensures both Kubernetes service traffic
   and {{site.prodname}} traffic is forwarded appropriately.
@@ -106,6 +106,13 @@ steps below.
 1. Ensure in the `calico.yaml` file that the environment variable
    `FELIX_IPV6SUPPORT` is set `true` on the calico-node Daemonset.
 1. Apply the `calico.yaml` manifest with `kubectl apply -f calico.yaml`.
+
+#### Using only IPv6
+
+If you wish to only use IPv6 (by disabling IPv4) or your hosts only have
+IPv6 addresses, you must disable autodetection of IPv4 by setting `IP`
+to `none`.  With that set you must also pass a `CALICO_ROUTER_ID` to each
+calico-node pod.
 
 ### Modifying your DNS for IPv6
 
