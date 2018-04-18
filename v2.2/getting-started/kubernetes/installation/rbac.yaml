@@ -9,7 +9,6 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: calico-policy-controller
-  namespace: kube-system
 rules:
   - apiGroups:
     - ""
@@ -39,7 +38,6 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: calico-node
-  namespace: kube-system
 rules:
   - apiGroups: [""]
     resources:
