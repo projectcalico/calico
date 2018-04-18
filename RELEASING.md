@@ -19,7 +19,7 @@ These steps are for creating a new major/minor release, with the expectation
 that a release candidate will be created, published and tested before the final
 release is announced.
 
-1. Run `./release-scripts/do_release.py` to copy master directory to the new version directory
+1. Run `python2 ./release-scripts/do_release.py` to copy master directory to the new version directory
 1. Add the new version to `_data/versions.yml` (add the date of the release in the description)
    - Add new versions that are a release candidate to the end of the file.
      If a release is added to the top of the file it will become the 'Latest Release'.
