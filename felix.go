@@ -56,6 +56,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	errors2 "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/health"
+	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
@@ -639,13 +640,13 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 }
 
 func exitWithCustomRC(rc int, message string) {
-	// To ensure that the logs get flushed, we need to exit with Panic() or Fatal().
-	// However, Fatal() doesn't let us set a custom RC.  To work around that, we create a panic,
-	// but then intercept it and exit with the desired RC.
-	log.WithField("rc", rc).Info("Exiting with custom RC")
-	defer os.Exit(rc)
-	log.Panic(message)
-	panic(message) // defensive.
+	// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
+	// all the in-flight logs get written before we exit.
+	log.WithFields(log.Fields{
+		"rc": rc,
+		lclogutils.FieldForceFlush: true,
+	}).Info("Exiting")
+	os.Exit(rc)
 }
 
 var (
