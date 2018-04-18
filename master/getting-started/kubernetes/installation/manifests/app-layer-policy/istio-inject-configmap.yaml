@@ -1,7 +1,6 @@
 ---
 layout: null
 ---
-
 kind: ConfigMap
 metadata:
   name: istio-inject
@@ -10,13 +9,13 @@ apiVersion: v1
 data:
   config: |
     policy: enabled
-    template: |-{% raw %}
+    template: |-
       initContainers:
       - name: istio-init
         image: docker.io/istio/proxy_init:0.6.0
         args:
         - "-p"
-        - {{ .MeshConfig.ProxyListenPort }}
+        - {% raw %}{{ .MeshConfig.ProxyListenPort }}{% endraw %}      
         - "-u"
         - 1337
         imagePullPolicy: IfNotPresent
@@ -46,7 +45,7 @@ data:
         - proxy
         - sidecar
         - --configPath
-        - {{ .ProxyConfig.ConfigPath }}
+        - {% raw %}{{ .ProxyConfig.ConfigPath }}
         - --binaryPath
         - {{ .ProxyConfig.BinaryPath }}
         - --serviceCluster
@@ -72,7 +71,7 @@ data:
         - --proxyAdminPort
         - {{ .ProxyConfig.ProxyAdminPort }}
         - --controlPlaneAuthPolicy
-        - {{ .ProxyConfig.ControlPlaneAuthPolicy }}
+        - {{ .ProxyConfig.ControlPlaneAuthPolicy }}{% endraw %}      
         env:
         - name: POD_NAME
           valueFrom:
@@ -103,7 +102,7 @@ data:
         - mountPath: /var/run/dikastes
           name: dikastes-sock
       - name: dikastes
-        image: {% endraw %}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}{% raw %}
+        image: {{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}
         args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket", "--debug"]
         volumeMounts:
         - mountPath: /var/run/dikastes
@@ -117,7 +116,7 @@ data:
       - name: istio-certs
         secret:
           optional: true
-          {{ if eq .Spec.ServiceAccountName "" }}secretName: istio.default{{ else }}secretName: {{ printf "istio.%s" .Spec.ServiceAccountName }}{{ end }}{% endraw %}
+          {% raw %}{{ if eq .Spec.ServiceAccountName "" }}secretName: istio.default{{ else }}secretName: {{ printf "istio.%s" .Spec.ServiceAccountName }}{{ end }}{% endraw %}
       - name: dikastes-sock
         emptyDir:
           medium: Memory
