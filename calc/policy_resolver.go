@@ -97,7 +97,9 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 	case model.PolicyKey:
 		log.Debugf("Policy update: %v", key)
 		policiesDirty = pr.policySorter.OnUpdate(update)
-		pr.markEndpointsMatchingPolicyDirty(key)
+		if policiesDirty {
+			pr.markEndpointsMatchingPolicyDirty(key)
+		}
 	}
 	pr.sortRequired = pr.sortRequired || policiesDirty
 	pr.maybeFlush()

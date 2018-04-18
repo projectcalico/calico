@@ -22,8 +22,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -42,7 +43,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		eb := NewEventSequencer(nil)
 		var messageReceived interface{}
 		eb.Callback = func(message interface{}) {
-			logrus.WithField("message", message).Info("Received message")
+			log.WithField("message", message).Info("Received message")
 			messageReceived = message
 		}
 		cg := NewCalculationGraph(eb, "hostname").AllUpdDispatcher
@@ -126,7 +127,7 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		eb = NewEventSequencer(nil)
 		messagesReceived = nil
 		eb.Callback = func(message interface{}) {
-			logrus.WithField("message", message).Info("Received message")
+			log.WithField("message", message).Info("Received message")
 			messagesReceived = append(messagesReceived, message)
 		}
 		cg = NewCalculationGraph(eb, "hostname").AllUpdDispatcher
@@ -219,5 +220,43 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 				Ipv4Addr: "10.0.0.1",
 			},
 		))
+	})
+})
+
+var _ = Describe("specific scenario tests", func() {
+	var validationFilter *ValidationFilter
+	var calcGraph *CalcGraph
+	var mockDataplane *mock.MockDataplane
+	var eventBuf *EventSequencer
+	var lastStats StatsUpdate
+
+	BeforeEach(func() {
+		mockDataplane = mock.NewMockDataplane()
+		eventBuf = NewEventSequencer(mockDataplane)
+		eventBuf.Callback = mockDataplane.OnEvent
+		calcGraph = NewCalculationGraph(eventBuf, localHostname)
+		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
+			log.WithField("stats", stats).Info("Stats update")
+			lastStats = stats
+			return nil
+		})
+		statsCollector.RegisterWith(calcGraph)
+		validationFilter = NewValidationFilter(calcGraph.AllUpdDispatcher)
+	})
+
+	It("should squash no-op policy updates", func() {
+		// First set up a state with an endpoint and some policy.
+		validationFilter.OnUpdates(localEp1WithPolicy.KVDeltas(empty))
+		validationFilter.OnStatusUpdated(api.InSync)
+		eventBuf.Flush()
+
+		numEventsBeforeSendingDupe := mockDataplane.NumEventsRecorded()
+		validationFilter.OnUpdates([]api.Update{{
+			KVPair:     pol1KVPair,
+			UpdateType: api.UpdateTypeKVUpdated,
+		}})
+		eventBuf.Flush()
+
+		Expect(mockDataplane.NumEventsRecorded()).To(Equal(numEventsBeforeSendingDupe))
 	})
 })

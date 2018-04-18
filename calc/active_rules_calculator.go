@@ -145,6 +145,10 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	case model.ProfileRulesKey:
 		if update.Value != nil {
 			rules := update.Value.(*model.ProfileRules)
+			if reflect.DeepEqual(arc.allProfileRules[key.Name], rules) {
+				log.WithField("key", update.Key).Debug("No-op profile change; ignoring.")
+				return
+			}
 			arc.allProfileRules[key.Name] = rules
 			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
 				log.Debugf("Profile rules updated while active: %v", key.Name)
@@ -167,6 +171,10 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
 			policy := update.Value.(*model.Policy)
+			if reflect.DeepEqual(arc.allPolicies[key], policy) {
+				log.WithField("key", update.Key).Debug("No-op policy change; ignoring.")
+				return
+			}
 			arc.allPolicies[key] = policy
 			// Update the index, which will call us back if the selector no
 			// longer matches.
