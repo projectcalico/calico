@@ -25,6 +25,8 @@ toc:
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced) 
       path: /getting-started/kubernetes/installation/integration
+    - title: Enabling Application Layer Policy
+      path: /getting-started/kubernetes/installation/app-layer-policy
   - title: Tutorials
     section:
     - title: Simple Policy Demo

@@ -2044,3 +2044,9 @@ master:
       url: ""
      flannel:
       version: v0.9.1
+     calico/dikastes:
+      version: 20180328162858
+     flexvol:
+      version: 04102018
+     pilot-webhook:
+      version: 20180319220721

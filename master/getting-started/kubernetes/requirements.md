@@ -17,6 +17,8 @@ We test {{site.prodname}} {{page.version}} against the following Kubernetes vers
 Other versions are likely to work, but we do not actively test {{site.prodname}} 
 {{page.version}} against them.
 
+Application Layer Policy requires Kubernetes 1.9 or later.
+
 #### CNI plug-in enabled
 
 {{site.prodname}} is installed as a CNI plugin. The kubelet must be configured 
@@ -47,5 +49,9 @@ IP ranges in your network, including:
 Our manifests default to `192.168.0.0/16` for the pod IP range except [Canal/flannel](./installation/flannel), 
 which defaults to `10.244.0.0/16`. Refer to [Configuring the pod IP range](./installation/config-options#configuring-the-pod-ip-range)
 for information on modifying the defaults.
+
+#### Mutating webhooks
+
+Application Layer Policy requires [Mutating Webhooks](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19) to be enabled.
 
 {% include {{page.version}}/reqs-kernel.md %}

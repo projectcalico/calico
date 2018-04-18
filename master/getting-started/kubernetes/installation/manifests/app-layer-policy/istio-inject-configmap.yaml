@@ -1,0 +1,127 @@
+---
+layout: null
+---
+
+kind: ConfigMap
+metadata:
+  name: istio-inject
+  namespace: istio-system
+apiVersion: v1
+data:
+  config: |
+    policy: enabled
+    template: |-{% raw %}
+      initContainers:
+      - name: istio-init
+        image: docker.io/istio/proxy_init:0.6.0
+        args:
+        - "-p"
+        - {{ .MeshConfig.ProxyListenPort }}
+        - "-u"
+        - 1337
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+          privileged: true
+        restartPolicy: Always
+      - args:
+        - -c
+        #/etc/istio/proxy value here matches ConfigPathDir const in context.go
+        - sysctl -w kernel.core_pattern=/etc/istio/proxy/core.%e.%p.%t && ulimit -c
+          unlimited
+        command:
+        - /bin/sh
+        image: alpine
+        imagePullPolicy: IfNotPresent
+        name: enable-core-dump
+        resources: {}
+        securityContext:
+          privileged: true
+      containers:
+      - name: istio-proxy
+        image: quay.io/calico/istio-proxy_debug:20180118230747
+        args:
+        - proxy
+        - sidecar
+        - --configPath
+        - {{ .ProxyConfig.ConfigPath }}
+        - --binaryPath
+        - {{ .ProxyConfig.BinaryPath }}
+        - --serviceCluster
+        {{ if ne "" (index .ObjectMeta.Labels "app") -}}
+        - {{ index .ObjectMeta.Labels "app" }}
+        {{ else -}}
+        - "istio-proxy"
+        {{ end -}}
+        - --drainDuration
+        - {{ formatDuration .ProxyConfig.DrainDuration }}
+        - --parentShutdownDuration
+        - {{ formatDuration .ProxyConfig.ParentShutdownDuration }}
+        - --discoveryAddress
+        - {{ .ProxyConfig.DiscoveryAddress }}
+        - --discoveryRefreshDelay
+        - {{ formatDuration .ProxyConfig.DiscoveryRefreshDelay }}
+        - --zipkinAddress
+        - {{ .ProxyConfig.ZipkinAddress }}
+        - --connectTimeout
+        - {{ formatDuration .ProxyConfig.ConnectTimeout }}
+        - --statsdUdpAddress
+        - {{ .ProxyConfig.StatsdUdpAddress }}
+        - --proxyAdminPort
+        - {{ .ProxyConfig.ProxyAdminPort }}
+        - --controlPlaneAuthPolicy
+        - {{ .ProxyConfig.ControlPlaneAuthPolicy }}
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: USE_EDS_V1
+          value: 1
+        imagePullPolicy: IfNotPresent
+        securityContext:
+            privileged: true
+            readOnlyRootFilesystem: false
+            runAsUser: 1337
+        restartPolicy: Always
+        volumeMounts:
+        - mountPath: /etc/istio/proxy
+          name: istio-envoy
+        - mountPath: /etc/certs/
+          name: istio-certs
+          readOnly: true
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+      - name: dikastes
+        image: {% endraw %}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}{% raw %}
+        args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket", "--debug"]
+        volumeMounts:
+        - mountPath: /var/run/dikastes
+          name: dikastes-sock
+        - mountPath: /var/run/felix
+          name: felix-sync
+      volumes:
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-certs
+        secret:
+          optional: true
+          {{ if eq .Spec.ServiceAccountName "" }}secretName: istio.default{{ else }}secretName: {{ printf "istio.%s" .Spec.ServiceAccountName }}{{ end }}{% endraw %}
+      - name: dikastes-sock
+        emptyDir:
+          medium: Memory
+      - name: felix-sync
+        flexVolume:
+          driver: nodeagent/uds
+---
