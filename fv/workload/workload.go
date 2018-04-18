@@ -507,6 +507,12 @@ func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface
 }
 
 func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
+	Expect(timeout).To(BeNumerically(">", 100*time.Millisecond),
+		"Very low timeout, did you mean to multiply by time.<Unit>?")
+	if len(optionalDescription) > 0 {
+		Expect(optionalDescription[0]).NotTo(BeAssignableToTypeOf(time.Second),
+			"Unexpected time.Duration passed for description")
+	}
 	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
 }
 

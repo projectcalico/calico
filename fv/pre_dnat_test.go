@@ -127,7 +127,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 			cc.ExpectSome(w[1], w[0], 32010)
 			cc.ExpectSome(externalClient, w[1], 32011)
 			cc.ExpectSome(externalClient, w[0], 32010)
-			cc.CheckConnectivityWithTimeout(2, 30*time.Second)
+			cc.CheckConnectivityWithTimeout(30 * time.Second)
 		})
 
 		Context("with pre-DNAT policy to prevent access from outside", func() {
@@ -163,7 +163,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				cc.ExpectSome(w[1], w[0], 32010)
 				cc.ExpectNone(externalClient, w[1], 32011)
 				cc.ExpectNone(externalClient, w[0], 32010)
-				cc.CheckConnectivityWithTimeout(10, 30*time.Second)
+				cc.CheckConnectivityWithTimeout(30 * time.Second)
 			})
 
 			Context("with pre-DNAT policy to open pinhole to 32010", func() {
