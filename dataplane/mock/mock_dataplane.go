@@ -44,6 +44,7 @@ type MockDataplane struct {
 	serviceAccounts                map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
 	namespaces                     map[proto.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
+	numEvents                      int
 }
 
 func (d *MockDataplane) InSync() bool {
@@ -154,6 +155,13 @@ func (d *MockDataplane) Namespaces() map[proto.NamespaceID]*proto.NamespaceUpdat
 	return cpy
 }
 
+func (d *MockDataplane) NumEventsRecorded() int {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.numEvents
+}
+
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
 	copy := map[string][]TierInfo{}
 	for k, v := range in {
@@ -204,6 +212,8 @@ func NewMockDataplane() *MockDataplane {
 func (d *MockDataplane) OnEvent(event interface{}) {
 	d.Lock()
 	defer d.Unlock()
+
+	d.numEvents++
 
 	evType := reflect.TypeOf(event).String()
 	fmt.Fprintf(GinkgoWriter, "       <- Event: %v %v\n", evType, event)

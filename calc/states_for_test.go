@@ -41,8 +41,9 @@ var initialisedStore = empty.withKVUpdates(
 ).withName("<initialised>")
 
 // withPolicy adds a tier and policy containing selectors for all and b=="b"
+var pol1KVPair = KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20}
 var withPolicy = initialisedStore.withKVUpdates(
-	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20},
+	pol1KVPair,
 ).withName("with policy")
 
 // withPolicyIngressOnly adds a tier and ingress policy containing selectors for all
