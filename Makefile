@@ -32,6 +32,7 @@ _site build:
 clean:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
 
+ci: htmlproofer
 htmlproofer: clean _site
 	# We don't run the link checker against the release-v3.0 branch because the docs are not built from this branch.
 	# Only run the manifest validation tool.
