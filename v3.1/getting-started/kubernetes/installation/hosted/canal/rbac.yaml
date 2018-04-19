@@ -43,7 +43,7 @@ rules:
       - list
       - update
       - watch
-  - apiGroups: ["extensions"]
+  - apiGroups: ["networking.k8s.io"]
     resources:
       - networkpolicies
     verbs:
@@ -61,6 +61,8 @@ rules:
       - globalnetworkpolicies
       - networkpolicies
       - clusterinformations
+      - hostendpoints
+      - globalnetworksets
     verbs:
       - create
       - get
