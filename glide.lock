@@ -1,5 +1,5 @@
-hash: fd6738108497b8b1eb334ec42519ab66f59a81b4c82aac3e9853d9bc41eec6f8
-updated: 2018-04-11T21:08:02.033149721Z
+hash: 71831b81c40b7f0ccc78f5b9697f6fe37acbf2d2052c6d2bf2fe306a464bbe43
+updated: 2018-04-19T17:59:44.090479624Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -51,7 +51,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 5e9692864e22d02ac79e2fa499cffb00520b4fea
+  version: ace140f73450505f33e8b8418216792275ae82a7
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -113,7 +113,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 4b54e7d2460df21c1c2d345af2337f91bfc938ca
+  version: 7ecd3df29a4a648fd3ecd1e78d19d1bfcaacee0f
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -188,7 +188,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: 8013ba5856cd701278d1111c5b4dd69e580a86c9
+  version: 6c572c00d1830223701e155de97408483dfcd14a
   subpackages:
   - ext
   - log
@@ -205,7 +205,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: aab7cad849ac211a68f9399b967df143a5f9281d
+  version: 9126d588cd56bae04420b78b2cbde26181b4f36e
   subpackages:
   - lib
   - lib/apiconfig
@@ -244,7 +244,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: c011216ea565b76c30d0cc1af7a1e40ef8343a70
+  version: 6bd6e0065a5fae6a286c3dc9adb6dcd68d565feb
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -259,7 +259,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a
+  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -366,6 +366,7 @@ imports:
   - credentials
   - grpclb/grpc_lb_v1/messages
   - grpclog
+  - health
   - health/grpc_health_v1
   - internal
   - keepalive
@@ -384,7 +385,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
+  version: ceb25c9d04f0c3a10a185499c03194f54069b290
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -411,7 +412,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
+  version: 62737119932505aba8df99644184e0705ea58df1
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
