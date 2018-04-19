@@ -35,6 +35,25 @@ clean:
 htmlproofer:
 	@echo "Do not make docs changes against this branch, please use master."
 
+###############################################################################
+# CI / test targets 
+###############################################################################
+
+ci: htmlproofer kubeval
+
+kubeval:
+	# Run kubeval to check master manifests are valid Kubernetes resources.
+		docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'ok=true; for f in `find /calico/_site/v2.6 -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok'
+
+htmlproofer-all:
+	# Run htmlproofer across _all_ files. This is not part of CI. 
+	echo "Running a soft check across all files"
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(pwd)/_site:/_site/ quay.io/calico/htmlproofer:${HP_VERSION} /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
+
+###############################################################################
+# Docs automation 
+###############################################################################
+
 strip_redirects:
 	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
 
