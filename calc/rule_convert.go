@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/proto"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -129,7 +130,31 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	}
 
 	if in.HTTPMatch != nil {
-		out.HttpMatch = &proto.HTTPMatch{Methods: in.HTTPMatch.Methods}
+		out.HttpMatch = &proto.HTTPMatch{}
+		paths := []*proto.HTTPMatchPathMatchTypes{}
+		for _, pathMatch := range in.HTTPMatch.Paths {
+			for key, value := range pathMatch {
+				log.WithFields(log.Fields{"key": key,
+					"value": value,
+				}).Debug("pathMatch.")
+
+				switch key {
+				case string(api.HTTPPathMatchExact):
+					paths = append(paths, &proto.HTTPMatchPathMatchTypes{PathMatch: &proto.HTTPMatchPathMatchTypes_Exact{Exact: value}})
+				case string(api.HTTPPatchMatchPrefix):
+					paths = append(paths, &proto.HTTPMatchPathMatchTypes{PathMatch: &proto.HTTPMatchPathMatchTypes_Prefix{Prefix: value}})
+				default:
+					log.Debug("Invalid pathMatchkey")
+				}
+			}
+		}
+		if len(paths) > 0 {
+			log.WithFields(log.Fields{"paths": paths}).Debug("protoPaths")
+			out.HttpMatch.Paths = paths
+		}
+		if len(in.HTTPMatch.Methods) > 0 {
+			out.HttpMatch.Methods = in.HTTPMatch.Methods
+		}
 	}
 
 	// Fill in the ICMP fields.  We can't follow the pattern and make a

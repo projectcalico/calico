@@ -272,6 +272,13 @@ message ServiceAccountMatch {
 
 message HTTPMatch {
   repeated string methods = 1;
+  message path_match_types{
+    oneof path_match {
+      string exact = 2;
+      string prefix = 3;
+    }
+  }
+  repeated path_match_types paths = 4;
 }
 
 message IcmpTypeAndCode {
