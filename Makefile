@@ -71,12 +71,20 @@ clean:
 # CI / test targets 
 ###############################################################################
 
+ci: htmlproofer kubeval
+
 htmlproofer: clean _site
 	# Run htmlproofer, failing if we hit any errors. 
 	./htmlproofer.sh
 
+kubeval:
 	# Run kubeval to check master manifests are valid Kubernetes resources.
 	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\).yaml" | xargs /kubeval'
+
+htmlproofer-all:
+	# Run htmlproofer across _all_ files. This is not part of CI. 
+	echo "Running a soft check across all files"
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(pwd)/_site:/_site/ quay.io/calico/htmlproofer:${HP_VERSION} /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
 
 ###############################################################################
 # Docs automation 
