@@ -1,5 +1,5 @@
-hash: a80f900705e5abb917f8279a24e089b2446bc523dfe3fc2bb79799b35730ed93
-updated: 2018-04-05T18:03:39.415006404Z
+hash: 87272ce165af9843f2d2a89ecc615a61a67eb82b6a07ff44f2137800d0dfc87a
+updated: 2018-04-19T17:29:27.206435833Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -51,7 +51,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 5e9692864e22d02ac79e2fa499cffb00520b4fea
+  version: ace140f73450505f33e8b8418216792275ae82a7
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -113,7 +113,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: 4b54e7d2460df21c1c2d345af2337f91bfc938ca
+  version: 7ecd3df29a4a648fd3ecd1e78d19d1bfcaacee0f
 - name: github.com/jbenet/go-reuseport
   version: 7eed93a5b50b20c209baefe9fafa53c3d965a33c
   repo: https://github.com/fasaxc/go-reuseport.git
@@ -188,7 +188,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: 328fceb7548c744337cd010914152b74eaf4c4ab
+  version: 6c572c00d1830223701e155de97408483dfcd14a
   subpackages:
   - ext
   - log
@@ -205,7 +205,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ae021117ebb7c4d8067ea079706b718c6a88eb7f
+  version: 513346920c8cb4a6a19d83d847b7914b8bcd929b
   subpackages:
   - lib
   - lib/apiconfig
@@ -244,7 +244,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 6913426bf2b4ce2a6d24c9fed5e97539b9f7dacf
+  version: 37ac485763239673f7f8d27df927f3a7eb6a2590
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -259,7 +259,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a
+  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -279,7 +279,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 85aa3b74a43a9fa174a588ce9a042c9b71b0842c
+  version: dc00cf9d5c07f9a1e0ccb307443b2194ca1aaacb
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -287,7 +287,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: b2aa35443fbc700ab74c586ae79b81c171851023
+  version: d6449816ce06963d9d136eee5a56fca5b0616e7e
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -342,7 +342,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
+  version: 0a24098c0ec68416ec050f567f75df563d6b231e
   subpackages:
   - internal
   - internal/app_identity
@@ -385,7 +385,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
+  version: ceb25c9d04f0c3a10a185499c03194f54069b290
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -412,7 +412,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
+  version: 62737119932505aba8df99644184e0705ea58df1
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
