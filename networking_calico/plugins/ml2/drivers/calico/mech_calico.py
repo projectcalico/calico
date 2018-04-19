@@ -32,6 +32,7 @@ import uuid
 
 # OpenStack imports.
 import eventlet
+from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
 
@@ -130,6 +131,10 @@ STARTUP_DELAY_SECS = 10
 MASTER_REFRESH_INTERVAL = 10
 MASTER_TIMEOUT = 60
 
+PRIORITY_HIGH = 0
+PRIORITY_LOW = 1
+PRIORITY_RETRY = 2
+
 # This terrible global variable points to the running instance of the
 # Calico Mechanism Driver. This variable relies on the basic assertion that
 # any Neutron process, forked or not, should only ever have *one* Calico
@@ -190,11 +195,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # port, which may exist during a migration or a re-schedule.
         self._port_status_cache = {}
         # Queue used to fan out port status updates to worker threads.  Notes:
-        # * we bound the queue so that, at some level of sustained overload
-        #   we'll be forced to resync with etcd
         # * we don't recreate the queue in _post_fork_init() so that we can't
         #   possibly lose updates that had already been queued.
-        self._port_status_queue = eventlet.Queue(maxsize=10000)
+        # * the queue contains tuples (priority, <status key>); we use a
+        #   higher priority for events and a lower priority for snapshot
+        #   keys, so that current data skips the queue.
+        self._port_status_queue = PriorityQueue()
         self._port_status_queue_too_long = False
 
         # RPC client for fanning out agent state reports.
@@ -355,7 +361,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                                            agent_state,
                                            use_call=False)
 
-    def on_port_status_changed(self, hostname, port_id, status_dict):
+    def on_port_status_changed(self, hostname, port_id, status_dict,
+                               priority="low"):
         """Called when etcd tells us that a port status has changed.
 
         :param hostname: hostname of the host containing the port.
@@ -395,7 +402,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Defer the actual update to the background thread so that we don't
             # hold up reading from etcd.  In particular, we don't want to block
             # Felix status updates while we wait on the DB.
-            self._port_status_queue.put(port_status_key)
+            sortable_priority = (
+                PRIORITY_HIGH if priority == "high" else PRIORITY_LOW,
+                monotonic_time(),
+            )
+            self._port_status_queue.put((sortable_priority, port_status_key))
             qsize = self._port_status_queue.qsize()
             if qsize > 10:
                 now = monotonic_time()
@@ -419,7 +430,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         admin_context = ctx.get_admin_context()
         while self._epoch == expected_epoch:
             # Wait for work to do.
-            port_status_key = self._port_status_queue.get()
+            _, port_status_key = self._port_status_queue.get()
             # Actually do the update.
             self._try_to_update_port_status(admin_context, port_status_key)
 
@@ -479,7 +490,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("Retrying update to port %s", port_status_key)
         # Queue up the update so that we'll go via the normal writer threads.
         # They will re-read the current state of the port from the cache.
-        self._port_status_queue.put(port_status_key)
+        self._port_status_queue.put(((PRIORITY_RETRY, monotonic_time()),
+                                     port_status_key))
 
     def _update_port_status_has_host_param(self):
         """Check whether update_port_status() supports the host parameter."""
