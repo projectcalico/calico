@@ -1513,15 +1513,12 @@ master:
      calicoctl:
       version: master
       url: "https://www.projectcalico.org/builds/calicoctl"
-      download_url: "https://www.projectcalico.org/builds/calicoctl"
      calico/node:
       version: master
       url: ""
      calico/cni:
       version: master
       url: ""
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
      libnetwork-plugin:
       version: master
       url: ""

@@ -1,0 +1,7 @@
+{%- if page.version == "master" && include.component == "calicoctl" -%}
+https://projectcalico.org/builds/calicoctl
+{%- elsif include.component == "calicoctl" -%}
+https://github.com/projectcalico/calicoctl/releases/download/{{site.data.versions[page.version].first.components.calicoctl.version}}/calicoctl
+{%- else -%}
+{% comment %} Invalid case {% endcomment %}
+{%- endif -%}
