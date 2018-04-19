@@ -1,3 +1,0 @@
-#!/bin/sh
-exec 2>&1
-exec bird -R -s /var/run/calico/bird.ctl -d -c /etc/calico/confd/config/bird.cfg
