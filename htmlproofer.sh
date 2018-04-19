@@ -29,9 +29,5 @@ for i in `seq 1 3`; do
 	sleep 10
 done
 
-# Rerun htmlproofer across _all_ files, but ignore failure, allowing us to notice legacy docs issues without failing CI
-echo "Running a soft check across all files"
-docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(pwd)/_site:/_site/ quay.io/calico/htmlproofer:${HP_VERSION} /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
-
 # Exit using the return code from the loop above.
 exit $rc
