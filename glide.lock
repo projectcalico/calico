@@ -1,5 +1,5 @@
 hash: fbba4d385452bae38622f0839ffb24a8f33525517805ab133cd892dbe2fe2ff4
-updated: 2018-04-05T18:05:01.003921888Z
+updated: 2018-04-19T17:30:44.419916097Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -179,7 +179,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ae021117ebb7c4d8067ea079706b718c6a88eb7f
+  version: 513346920c8cb4a6a19d83d847b7914b8bcd929b
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -302,7 +302,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: ad39d7fab7c60b2493fdc318c3d2cdb2128f92a4
+  version: 0a24098c0ec68416ec050f567f75df563d6b231e
   subpackages:
   - internal
   - internal/app_identity
@@ -345,7 +345,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 - name: k8s.io/api
-  version: 3c2a58f9923aeb5d27fa4d91249e45a1460ca3bd
+  version: ceb25c9d04f0c3a10a185499c03194f54069b290
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -388,7 +388,7 @@ imports:
   - tools/cache
   - tools/clientcmd
 - name: k8s.io/apimachinery
-  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
+  version: 62737119932505aba8df99644184e0705ea58df1
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
