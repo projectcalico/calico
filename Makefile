@@ -29,6 +29,7 @@ _site build:
 clean:
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
 
+ci: htmlproofer
 htmlproofer: clean _site
 	# Run htmlproofer, failing if we hit any errors. 
 	# We don't build the docs from this branch, so ignore link errors.
