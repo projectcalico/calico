@@ -501,8 +501,8 @@ configRetry:
 		go servePrometheusMetrics(configParams)
 	}
 
-	// On receipt of SIGUSR1, write out heap profile.
-	logutils.DumpHeapMemoryOnSignal(configParams)
+	// Register signal handlers to dump memory/CPU profiles.
+	logutils.RegisterProfilingSignalHandlers(configParams)
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.

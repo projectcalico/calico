@@ -32,6 +32,7 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/metrics"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -108,7 +109,31 @@ var _ = Context("etcd connection interruption", func() {
 		etcd.Stop()
 	})
 
-	It("should detect and recoonnect after the etcd connection is black-holed", func() {
+	// Blocked on fix for https://github.com/projectcalico/felix/issues/1789
+	PIt("shouldn't use excessive CPU when etcd is stopped", func() {
+		By("having initial workload to workload connectivity", func() {
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.CheckConnectivity()
+		})
+
+		etcd.Stop()
+
+		delay := 10 * time.Second
+		startCPU, err := metrics.GetFelixMetricFloat(felixes[0].IP, "process_cpu_seconds_total")
+		Expect(err).NotTo(HaveOccurred())
+		time.Sleep(delay)
+		endCPU, err := metrics.GetFelixMetricFloat(felixes[0].IP, "process_cpu_seconds_total")
+		Expect(err).NotTo(HaveOccurred())
+
+		cpuPct := (endCPU - startCPU) / delay.Seconds() * 100
+
+		time.Sleep(100000 * time.Second)
+
+		Expect(cpuPct).To(BeNumerically("<", 50))
+	})
+
+	It("should detect and reconnect after the etcd connection is black-holed", func() {
 		By("having initial workload to workload connectivity", func() {
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[1], w[0])
