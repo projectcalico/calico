@@ -247,10 +247,12 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: b996d3d3607fec1aedce72efb9b9bc8c8342153f
+  version: 006d70bf65ac0e03c46acdee468231ed553cd124
+  repo: https://github.com/neiljerram/typha
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
+  - pkg/tlsutils
 - name: github.com/prometheus/client_golang
   version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
@@ -286,7 +288,7 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto

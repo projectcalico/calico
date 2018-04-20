@@ -109,6 +109,17 @@ type Config struct {
 	TyphaReadTimeout    time.Duration `config:"seconds;30;local"`
 	TyphaWriteTimeout   time.Duration `config:"seconds;10;local"`
 
+	// Client-side TLS config for Felix's communication with Typha.  If any of these are
+	// specified, they _all_ must be - except that either TyphaCN or TyphaURISAN may be left
+	// unset.  Felix will then initiate a secure (TLS) connection to Typha.  Typha must present
+	// a certificate signed by a CA in TyphaCAFile, and with CN matching TyphaCN or URI SAN
+	// matching TyphaURISAN.
+	TyphaKeyFile  string `config:"file(must-exist);;local"`
+	TyphaCertFile string `config:"file(must-exist);;local"`
+	TyphaCAFile   string `config:"file(must-exist);;local"`
+	TyphaCN       string `config:"string;;local"`
+	TyphaURISAN   string `config:"string;;local"`
+
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
 
@@ -407,6 +418,24 @@ func (config *Config) Validate() (err error) {
 		}
 		if config.EtcdAddr == "" {
 			err = errors.New("EtcdEndpoints and EtcdAddr both missing")
+		}
+	}
+
+	// If any client-side TLS config parameters are specified, they _all_ must be - except that
+	// either TyphaCN or TyphaURISAN may be left unset.
+	if config.TyphaCAFile != "" ||
+		config.TyphaCertFile != "" ||
+		config.TyphaKeyFile != "" ||
+		config.TyphaCN != "" ||
+		config.TyphaURISAN != "" {
+		// Some TLS config specified.
+		if config.TyphaKeyFile == "" ||
+			config.TyphaCertFile == "" ||
+			config.TyphaCAFile == "" ||
+			(config.TyphaCN == "" && config.TyphaURISAN == "") {
+			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+				" they _all_ must be" +
+				" - except that either TyphaCN or TyphaURISAN may be left unset.")
 		}
 	}
 
