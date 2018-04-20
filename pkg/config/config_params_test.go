@@ -68,6 +68,10 @@ var _ = DescribeTable("Config parsing",
 	Entry("LogSeveritySys", "LogSeveritySys", "error", "ERROR"),
 	Entry("LogSeveritySys", "LogSeveritySys", "critical", "CRITICAL"),
 
+	Entry("HealthEnabled", "HealthEnabled", "true", true),
+	Entry("HealthHost", "HealthHost", "127.0.0.1", "127.0.0.1"),
+	Entry("HealthPort", "HealthPort", "1234", int(1234)),
+
 	Entry("PrometheusMetricsEnabled", "PrometheusMetricsEnabled", "true", true),
 	Entry("PrometheusMetricsPort", "PrometheusMetricsPort", "1234", int(1234)),
 	Entry("PrometheusGoMetricsEnabled", "PrometheusGoMetricsEnabled", "false", false),

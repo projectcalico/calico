@@ -360,8 +360,11 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	}
 
 	if t.ConfigParams.HealthEnabled {
-		log.WithField("port", t.ConfigParams.HealthPort).Info("Health enabled.  Starting server.")
-		t.healthAggregator.ServeHTTP(t.ConfigParams.HealthEnabled, "", t.ConfigParams.HealthPort)
+		log.WithFields(log.Fields{
+			"host": t.ConfigParams.HealthHost,
+			"port": t.ConfigParams.HealthPort,
+		}).Info("Health enabled.  Starting server.")
+		t.healthAggregator.ServeHTTP(t.ConfigParams.HealthEnabled, t.ConfigParams.HealthHost, t.ConfigParams.HealthPort)
 	}
 }
 
