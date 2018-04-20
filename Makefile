@@ -102,6 +102,9 @@ image: calico/ctl
 calico/ctl: $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+ifeq ($(ARCH),amd64)
+	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):latest
+endif
 	touch $@
 
 ## Build calicoctl on local system with installed go
