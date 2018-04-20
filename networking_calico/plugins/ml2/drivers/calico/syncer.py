@@ -90,7 +90,8 @@ class ResourceSyncer(object):
         self.resource_kind = resource_kind
 
     def resync(self, context):
-        LOG.info("Start resync for %s", self.resource_kind)
+        LOG.info("Starting resync for %s; getting data from etcd...",
+                 self.resource_kind)
 
         # Get all resources of this type from etcd - as an array of (name,
         # data, mod_revision) tuples.
@@ -98,6 +99,9 @@ class ResourceSyncer(object):
 
         # Get the corresponding Neutron resources - as a map from resource name
         # to <relevant Neutron data>.
+        LOG.info("Resync for %s; got etcd data (%s items), "
+                 "getting data from neutron...",
+                 self.resource_kind, len(etcd_resources))
         with self.txn_from_context(context, "get-all-" + self.resource_kind):
             neutron_map = self.get_all_from_neutron(context)
 
@@ -105,6 +109,8 @@ class ResourceSyncer(object):
         # already compared the existing etcd data against Neutron.
         names_compared = set()
 
+        LOG.info("Resync for %s; got neutron data (%s items), look for "
+                 "incorrect data...", self.resource_kind, len(neutron_map))
         for etcd_resource in etcd_resources:
             name, data, mod_revision = etcd_resource
             if name in neutron_map:
@@ -145,6 +151,8 @@ class ResourceSyncer(object):
                                 " data updated by another writer",
                                 self.resource_kind, name)
 
+        LOG.info("Resync for %s; got etcd data, look for deletions...",
+                 self.resource_kind)
         for name, neutron_data in neutron_map.iteritems():
             # Skip this name if we already handled it above - i.e. if we
             # already had data for it in etcd.
@@ -168,6 +176,8 @@ class ResourceSyncer(object):
                     LOG.warning("Neutron resource gone for %s %s; presume" +
                                 " deleted by another writer",
                                 self.resource_kind, name)
+
+        LOG.info("Resync for %s; done.", self.resource_kind)
 
     def etcd_write_data_matches_existing(self, write_data, existing):
         """Test whether data that we would write is the same as existing.

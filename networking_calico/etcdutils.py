@@ -160,9 +160,12 @@ class EtcdWatcher(object):
 
             # Allow subclass to do pre-snapshot processing, and to return any
             # data that it will need for reconciliation after the snapshot.
+            my_name = self.__class__.__name__
+            LOG.info("%s Calling pre-snapshot hook", my_name)
             snapshot_data = self._pre_snapshot_hook()
 
             # Get all existing values and process them through the dispatcher.
+            LOG.info("%s Loading snapshot", my_name)
             for result in etcdv3.get_prefix(self.prefix,
                                             revision=last_revision):
                 key, value, mod_revision = result
@@ -173,15 +176,18 @@ class EtcdWatcher(object):
                     value=value,
                     mod_revision=mod_revision,
                 )
-                LOG.info("status event: %s", response)
+                LOG.debug("status event: %s", response)
                 self.dispatcher.handle_event(response)
 
             # Allow subclass to do post-snapshot reconciliation.
+            LOG.info("%s Done loading snapshot, calling post snapshot hook",
+                     my_name)
             self._post_snapshot_hook(snapshot_data)
 
             # Now watch for any changes, starting after the revision above.
             try:
                 # Start a watch from just after the last known revision.
+                LOG.info("%s Starting to watch for updates", my_name)
                 event_stream, cancel = etcdv3.watch_subtree(
                     self.prefix,
                     str(last_revision + 1))
