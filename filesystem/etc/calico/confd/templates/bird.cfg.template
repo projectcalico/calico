@@ -3,7 +3,8 @@ include "bird_aggr.cfg";
 include "bird_ipam.cfg";
 {{$node_ip_key := printf "/host/%s/ip_addr_v4" (getenv "NODENAME")}}{{$node_ip := getv $node_ip_key}}
 
-router id {{$node_ip}};
+{{$router_id := getenv "CALICO_ROUTER_ID" ""}}
+router id {{if ne "" ($router_id)}}{{$router_id}}{{else}}{{$node_ip}}{{end}};
 
 {{define "LOGGING"}}
 {{$node_logging_key := printf "/host/%s/loglevel" (getenv "NODENAME")}}{{if exists $node_logging_key}}{{$logging := getv $node_logging_key}}
@@ -39,7 +40,8 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
-{{$node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
+{{if eq "" ($node_ip)}}# IPv4 disabled on this node.
+{{else}}{{$node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
   {{template "LOGGING"}}
@@ -96,3 +98,4 @@ protocol bgp Node_{{$id}} from bgp_template {
 }
 {{end}}
 {{else}}# No node-specific peers configured.{{end}}
+{{end}}{{/* End of IPv4 enable check */}}
