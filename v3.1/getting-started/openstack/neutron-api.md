@@ -134,11 +134,13 @@ All the attributes of security groups remain unchanged in {{site.prodname}}.
 ## Layer 3 Routing: Routers and Floating IPs
 
 Layer 3 routing objects are divided into two categories: routers and
-floating IPs. Neither of these objects are supported by {{site.prodname}}: they
-simply aren't required. For more information, see [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity).
+floating IPs. Routers are not supported by {{site.prodname}}: they
+simply aren't required. For more information, see [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity). 
 
-Any attempt to create these objects will fail, as {{site.prodname}} does not set up
+Any attempt to create a Router object will fail, as {{site.prodname}} does not set up
 any Neutron L3 Agents.
+
+Floating IPs are supported at beta level. For more information, see [this document]({{site.baseurl}}/{{page.version}}/usage/openstack/floating-ips).
 
 ## LBaaS (Load Balancer as a Service)
 
