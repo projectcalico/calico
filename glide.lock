@@ -1,5 +1,5 @@
-hash: 75970c689282620b8e267a1ff3e66c31362b9a864ab7643a41b748c1545898a3
-updated: 2018-04-18T22:23:29.704174354Z
+hash: 04c39dc632f1fd1a4102b7d5eb3c74b6da097ccd8e09bcde51aea0a135deefa0
+updated: 2018-04-23T12:23:20.171503719Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -23,7 +23,8 @@ imports:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: c23606781f63d09917a1e7abfcefeb337a9608ea
+  version: e8287287893bd4080040e4fe68dae8a20476b095
+  repo: https://github.com/projectcalico/etcd.git
   subpackages:
   - auth/authpb
   - client
@@ -42,6 +43,8 @@ imports:
   version: 01aeca54ebda6e0fbfafd0a524d234159c05ec20
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
+- name: github.com/dustin/go-humanize
+  version: bb3d318650d48840a39aa21a027c6630e198e626
 - name: github.com/emicklei/go-restful
   version: 777bb3f19bcafe2575ffb2a3e46af92509ae9594
   subpackages:
@@ -51,7 +54,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: ace140f73450505f33e8b8418216792275ae82a7
+  version: 6529cf7c58879c08d927016dde4477f18a0634cb
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -279,7 +282,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 85aa3b74a43a9fa174a588ce9a042c9b71b0842c
+  version: dc00cf9d5c07f9a1e0ccb307443b2194ca1aaacb
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -287,7 +290,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: d6449816ce06963d9d136eee5a56fca5b0616e7e
+  version: 2b6c08872f4b66da917bb4ce98df4f0307330f78
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -354,7 +357,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
+  version: 7fd901a49ba6a7f87732eb344f6e3c5b19d1b200
   subpackages:
   - googleapis
   - googleapis/rpc/status

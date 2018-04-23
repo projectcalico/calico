@@ -82,6 +82,8 @@ var (
 			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/inf.v0",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/dustin/go-humanize",
+			license: "MIT License (96%)"},
 
 		// Mixed license, Apache and some files under BSD-like.
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/ghodss/yaml",

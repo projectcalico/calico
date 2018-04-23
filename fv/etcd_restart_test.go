@@ -109,8 +109,7 @@ var _ = Context("etcd connection interruption", func() {
 		etcd.Stop()
 	})
 
-	// Blocked on fix for https://github.com/projectcalico/felix/issues/1789
-	PIt("shouldn't use excessive CPU when etcd is stopped", func() {
+	It("shouldn't use excessive CPU when etcd is stopped", func() {
 		By("having initial workload to workload connectivity", func() {
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[1], w[0])
@@ -127,8 +126,6 @@ var _ = Context("etcd connection interruption", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		cpuPct := (endCPU - startCPU) / delay.Seconds() * 100
-
-		time.Sleep(100000 * time.Second)
 
 		Expect(cpuPct).To(BeNumerically("<", 50))
 	})
