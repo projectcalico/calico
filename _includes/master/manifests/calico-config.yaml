@@ -19,18 +19,20 @@ metadata:
 data:
 {%- if include.datastore == "etcd" %}
   # Configure this with the location of your etcd cluster.
-  etcd_endpoints: "http://127.0.0.1:2379"
+  etcd_endpoints: "http://10.96.232.136:6666"
 
   # If you're using TLS enabled etcd uncomment the following.
   # You must also populate the Secret below with these files.
   etcd_ca: ""   # "/calico-secrets/etcd-ca"
   etcd_cert: "" # "/calico-secrets/etcd-cert"
   etcd_key: ""  # "/calico-secrets/etcd-key"
+
 {%- elsif include.datastore == "kdd" and include.typha == "true" %}
   # To enable Typha, set this to "calico-typha" *and* set a non-zero value for Typha replicas
   # below.  We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is
   # essential.
   typha_service_name: "none"
+
 {%- endif %}
 {%- if include.network == "calico" %}
   # Configure the {{site.prodname}} backend to use.
@@ -48,6 +50,7 @@ data:
   # the pod network.
   masquerade: "true"
 {%- endif %}
+
   # The CNI network configuration to install on each node.  The special
   # values in this config will be automatically populated.
 {%- if include.datastore == "etcd"  and include.network == "flannel" %}
@@ -131,6 +134,7 @@ data:
     }
 {%- endif %}
 {%- if include.network == "flannel" and include.datastore == "kdd" %}
+
   # Flannel network configuration. Mounted into the flannel container.
   net-conf.json: |
     {
