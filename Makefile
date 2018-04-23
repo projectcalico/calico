@@ -23,3 +23,11 @@ $(EXT_AUTH).proto $(ADDRESS).proto $(ATTRIBUTE_CONTEXT).proto:
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	protoc $(PROTOC_IMPORTS) proto/*.proto --go_out=plugins=grpc,$(PROTOC_MAPPINGS):proto
+
+.PHONY: build
+build: proto
+	CGO_ENABLED=0 GOOS=linux go build -o docker/dikastes
+
+.PHONY: test
+test:
+	go test -v ./...
