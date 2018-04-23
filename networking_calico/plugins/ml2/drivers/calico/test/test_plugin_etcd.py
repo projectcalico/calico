@@ -1333,13 +1333,14 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             m_queue.qsize.return_value = 100
             self.driver.on_port_status_changed("host", "port_id",
-                                               {"status": "up"})
+                                               {"status": "up"},
+                                               priority="high")
             self.assertEqual(
                 "up",
                 self.driver._port_status_cache[("host", "port_id")]
-
             )
-            self.assertEqual([mock.call(("host", "port_id"))],
+            self.assertEqual([mock.call(((0, mock.ANY),
+                                         ("host",  "port_id")))],
                              m_queue.put.mock_calls)
             m_queue.put.reset_mock()
             # Send a duplicate change.
@@ -1354,17 +1355,19 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.assertEqual([], m_queue.put.mock_calls)
             m_queue.put.reset_mock()
             # Deletion takes a different code path.
-            self.driver.on_port_status_changed("host", "port_id", None)
+            self.driver.on_port_status_changed("host", "port_id", None,
+                                               priority="low")
             self.assertEqual({}, self.driver._port_status_cache)
             # Unknown value should be treated as deletion.
             self.driver.on_port_status_changed("host", "port_id",
-                                               {"status": "unknown"})
+                                               {"status": "unknown"},
+                                               priority="low")
             self.assertEqual({}, self.driver._port_status_cache)
             # One queue put for each deletion.
             self.assertEqual(
                 [
-                    mock.call(("host", "port_id")),
-                    mock.call(("host", "port_id")),
+                    mock.call(((1, mock.ANY), ("host", "port_id"))),
+                    mock.call(((1, mock.ANY), ("host", "port_id"))),
                 ],
                 m_queue.put.mock_calls
             )
@@ -1373,7 +1376,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             with mock.patch.object(self.driver,
                                    "_try_to_update_port_status") as m_try_upd:
-                m_queue.get.side_effect = iter([("host", "port")])
+                m_queue.get.side_effect = iter([((1, mock.ANY),
+                                                 ("host", "port"))])
                 self.assertRaises(StopIteration,
                                   self.driver._loop_writing_port_statuses,
                                   self.driver._epoch)
@@ -1434,7 +1438,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             ],
             m_spawn.mock_calls)
 
-    def test_retry_port_status_update(self):
+    def _port_status_update(self):
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             self.driver._retry_port_status_update(("host", "port"))
         self.assertEqual([mock.call(("host", "port"))], m_queue.put.mock_calls)
@@ -1484,9 +1488,11 @@ class TestStatusWatcher(_TestEtcdBase):
             ep_on_unknown_host_key: '{"status": "up"}',
         }
 
-        # Arrange that the first watch call, on that status tree, will stop the
-        # watcher.
+        watch_events = []
+
         def _iterator():
+            for e in watch_events:
+                yield e
             _log.info("Stop watcher now")
             self.watcher.stop()
             yield None
@@ -1503,8 +1509,8 @@ class TestStatusWatcher(_TestEtcdBase):
         self.driver.on_felix_alive.assert_called_once_with("hostname",
                                                            new=True)
         self.driver.on_port_status_changed.assert_has_calls([
-            mock.call("unknown", "ep2", {"status": "up"}),
-            mock.call("hostname", "ep1", {"status": "up"}),
+            mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
+            mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
         # Start the watcher again, with the same etcd data.  We should see the
@@ -1515,8 +1521,8 @@ class TestStatusWatcher(_TestEtcdBase):
         self.watcher.start()
         self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
-            mock.call("unknown", "ep2", {"status": "up"}),
-            mock.call("hostname", "ep1", {"status": "up"}),
+            mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
+            mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
         # Resync after deleting the unknown host endpoint.  We should see that
@@ -1528,8 +1534,8 @@ class TestStatusWatcher(_TestEtcdBase):
         self.watcher.start()
         self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
-            mock.call("unknown", "ep2", None),
-            mock.call("hostname", "ep1", {"status": "up"}),
+            mock.call("unknown", "ep2", None, priority="low"),
+            mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
         ], any_order=True)
 
         # Resync after deleting the Felix status.  We should see the other
@@ -1541,7 +1547,26 @@ class TestStatusWatcher(_TestEtcdBase):
         self.watcher.start()
         self.driver.on_felix_alive.assert_not_called()
         self.driver.on_port_status_changed.assert_has_calls([
-            mock.call("hostname", "ep1", None),
+            mock.call("hostname", "ep1", None, priority="low"),
+        ], any_order=True)
+
+        # Resync with some follow-on events; checks that the priority goes
+        # back to high after the snapshot.
+        watch_events = [{
+            "kv": {
+                "key": "/calico/felix/v1/host/hostname/workload/openstack/"
+                       "wlid/endpoint/ep1",
+                "value": '{"status": "up"}',
+            },
+            "type": "SET",
+        }]
+        self.driver.on_felix_alive.reset_mock()
+        self.driver.on_port_status_changed.reset_mock()
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
+        self.watcher.start()
+        self.driver.on_felix_alive.assert_not_called()
+        self.driver.on_port_status_changed.assert_has_calls([
+            mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
         ], any_order=True)
 
     def test_endpoint_status_add_delete(self):
@@ -1552,8 +1577,9 @@ class TestStatusWatcher(_TestEtcdBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", {"status": "up"}),
-                mock.call("hostname", "ep1", None),
+                mock.call("hostname", "ep1", {"status": "up"},
+                          priority="high"),
+                mock.call("hostname", "ep1", None, priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls)
         self.assertEqual({}, self.watcher._endpoints_by_host)
@@ -1567,7 +1593,7 @@ class TestStatusWatcher(_TestEtcdBase):
 
         self.assertEqual(
             [
-                mock.call("hostname", "ep1", None),
+                mock.call("hostname", "ep1", None, priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls)
         self.assertEqual({}, self.watcher._endpoints_by_host)
@@ -1616,12 +1642,13 @@ class TestStatusWatcher(_TestEtcdBase):
         m_response.key = "/calico/felix/v1/host/hostname/status"
         self.watcher._on_status_del(m_response, "hostname")
 
-        # Check that nothing hapens to the port.  (Previously, we used to mark
+        # Check that nothing happens to the port.  (Previously, we used to mark
         # the port as in ERROR but that behaviour was removed due to its
         # impact at high scale.)
         self.assertEqual(
             [
-                mock.call("hostname", "epid", {"status": "up"}),
+                mock.call("hostname", "epid", {"status": "up"},
+                          priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls)
 

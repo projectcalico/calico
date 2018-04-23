@@ -64,6 +64,8 @@ class StatusWatcher(etcdutils.EtcdWatcher):
                                             "/round-trip-check")
         self.calico_driver = calico_driver
 
+        self.processing_snapshot = False
+
         # Track the set of endpoints that are on each host so we can spot
         # removed endpoints during a resync.
         self._endpoints_by_host = collections.defaultdict(set)
@@ -92,6 +94,7 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         # will be able to identify any changes in the new snapshot.
         old_endpoints_by_host = self._endpoints_by_host
         self._endpoints_by_host = collections.defaultdict(set)
+        self.processing_snapshot = True
         return old_endpoints_by_host
 
     def _post_snapshot_hook(self, old_endpoints_by_host):
@@ -110,7 +113,9 @@ class StatusWatcher(etcdutils.EtcdWatcher):
                     self.calico_driver.on_port_status_changed(
                         hostname,
                         ep_id.endpoint,
-                        None)
+                        None,
+                        priority="low")
+        self.processing_snapshot = False
 
     def _on_status_set(self, response, hostname):
         """Called when a felix uptime report is inserted/updated."""
@@ -171,6 +176,7 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             endpoint_id.host,
             endpoint_id.endpoint,
             status,
+            priority="low" if self.processing_snapshot else "high",
         )
 
     def _on_ep_delete(self, response, hostname, workload, endpoint):
@@ -188,4 +194,5 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             hostname,
             endpoint,
             None,
+            priority="low" if self.processing_snapshot else "high",
         )
