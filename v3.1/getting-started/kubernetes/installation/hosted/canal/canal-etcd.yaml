@@ -427,6 +427,7 @@ spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
+      serviceAccountName: calico-kube-controllers
       tolerations:
         # Make sure canal node can be scheduled on all nodes.
         - effect: NoSchedule
@@ -511,4 +512,12 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: canal
+  namespace: kube-system
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-kube-controllers
   namespace: kube-system

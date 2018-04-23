@@ -57,7 +57,7 @@ spec:
       terminationGracePeriodSeconds: 0
 {%- if include.app_layer_policy == "true" %}
       # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
-      # to communicate with Felix over the Policy Sync API. 
+      # to communicate with Felix over the Policy Sync API.
       initContainers:
       - name: flexvol-driver
         image: {{site.imageNames["flexvol"]}}:{{site.data.versions[page.version].first.components["flexvol"].version}}
@@ -73,7 +73,7 @@ spec:
         - name: calico-node
           image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
-{%- if include.datastore == "etcd" %}            
+{%- if include.datastore == "etcd" %}
             # The location of the {{site.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
@@ -220,6 +220,7 @@ spec:
             httpGet:
               path: /readiness
               port: 9099
+              host: localhost
 {%- else %}
             exec:
               command:
