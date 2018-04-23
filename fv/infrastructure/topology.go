@@ -30,18 +30,24 @@ import (
 )
 
 type TopologyOptions struct {
-	FelixLogSeverity string
-	EnableIPv6       bool
-	ExtraEnvVars     map[string]string
-	ExtraVolumes     map[string]string
+	FelixLogSeverity  string
+	EnableIPv6        bool
+	ExtraEnvVars      map[string]string
+	ExtraVolumes      map[string]string
+	WithTypha         bool
+	WithFelixTyphaTLS bool
+	TyphaLogSeverity  string
 }
 
 func DefaultTopologyOptions() TopologyOptions {
 	return TopologyOptions{
-		FelixLogSeverity: "info",
-		EnableIPv6:       true,
-		ExtraEnvVars:     map[string]string{},
-		ExtraVolumes:     map[string]string{},
+		FelixLogSeverity:  "info",
+		EnableIPv6:        true,
+		ExtraEnvVars:      map[string]string{},
+		ExtraVolumes:      map[string]string{},
+		WithTypha:         false,
+		WithFelixTyphaTLS: false,
+		TyphaLogSeverity:  "info",
 	}
 }
 
@@ -119,6 +125,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
 			return err
 		}).ShouldNot(HaveOccurred())
+	}
+
+	if opts.WithTypha {
+		typha := RunTypha(infra, opts)
+		opts.ExtraEnvVars["FELIX_TYPHAADDR"] = typha.IP + ":5473"
 	}
 
 	for i := 0; i < n; i++ {

@@ -57,6 +57,8 @@ func (eds *EtcdDatastoreInfra) GetDockerArgs() []string {
 	return []string{
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
+		"-e", "TYPHA_DATASTORETYPE=etcdv3",
+		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
 		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
 	}
 }
@@ -65,6 +67,8 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 	return []string{
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
+		"-e", "TYPHA_DATASTORETYPE=etcdv3",
+		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
 		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.etcdContainer.IP + ":1234",
 	}
 }

@@ -194,6 +194,7 @@ var _ = Describe("health tests", func() {
 			append(getDockerArgs(),
 				"--privileged",
 				"-e", "TYPHA_HEALTHENABLED=true",
+				"-e", "TYPHA_HEALTHHOST=0.0.0.0",
 				"-e", "TYPHA_LOGSEVERITYSCREEN=info",
 				"-e", "TYPHA_DATASTORETYPE=kubernetes",
 				"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
