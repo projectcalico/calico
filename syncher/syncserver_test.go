@@ -14,14 +14,23 @@
 package syncher
 
 import (
+	"context"
+	"io/ioutil"
+	"net"
+	"os"
+	"path"
+	"sync"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
+	"github.com/projectcalico/app-policy/uds"
 
 	envoyapi "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
+	"google.golang.org/grpc"
 )
 
 const addr1Ip = "3.4.6.8"
@@ -155,6 +164,7 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 
 	id := "test_id"
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 	update := &proto.ToDataplane{
 		Payload: &proto.ToDataplane_IpsetUpdate{IpsetUpdate: &proto.IPSetUpdate{
 			Id:   id,
@@ -163,7 +173,7 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 				addr1Ip,
 				addr2Ip,
 			}}}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // IPSetDeltaUpdate with existing ID.
@@ -217,6 +227,7 @@ func TestIPSetDeltaUpdateDispatch(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	ipset := policystore.NewIPSet(proto.IPSetUpdate_IP)
 	store.IPSetByID[id] = ipset
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetDeltaUpdate{
 		IpsetDeltaUpdate: &proto.IPSetDeltaUpdate{
@@ -227,7 +238,7 @@ func TestIPSetDeltaUpdateDispatch(t *testing.T) {
 			RemovedMembers: []string{addr3Ip},
 		},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // IPSetRemove with an existing ID.
@@ -264,11 +275,12 @@ func TestIPSetRemoveDispatch(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	ipset := policystore.NewIPSet(proto.IPSetUpdate_IP)
 	store.IPSetByID[id] = ipset
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetRemove{
 		IpsetRemove: &proto.IPSetRemove{Id: id},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // ActiveProfileUpdate with a new id
@@ -320,6 +332,7 @@ func TestActiveProfileUpdateDispatch(t *testing.T) {
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileUpdate{
 		ActiveProfileUpdate: &proto.ActiveProfileUpdate{
@@ -327,7 +340,7 @@ func TestActiveProfileUpdateDispatch(t *testing.T) {
 			Profile: profile1,
 		},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // ActiveProfileRemove with an unkown id is handled without panic.
@@ -371,11 +384,12 @@ func TestActiveProfileRemoveDispatch(t *testing.T) {
 
 	id := proto.ProfileID{Name: "test_id"}
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
 		ActiveProfileRemove: &proto.ActiveProfileRemove{Id: &id},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // ActivePolicyUpdate for a new id
@@ -427,6 +441,7 @@ func TestActivePolicyUpdateDispatch(t *testing.T) {
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
 		ActivePolicyUpdate: &proto.ActivePolicyUpdate{
@@ -434,7 +449,7 @@ func TestActivePolicyUpdateDispatch(t *testing.T) {
 			Policy: policy1,
 		},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // ActivePolicyRemove with unknown id is handled
@@ -478,11 +493,12 @@ func TestActivePolicyRemoveDispatch(t *testing.T) {
 
 	id := proto.PolicyID{Tier: "test_tier", Name: "test_id"}
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
 		ActivePolicyRemove: &proto.ActivePolicyRemove{Id: &id},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // WorkloadEndpointUpdate sets the endpoint
@@ -501,11 +517,12 @@ func TestWorkloadEndpointUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
 		WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{Endpoint: endpoint1},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 // WorkloadEndpointRemove removes the endpoint
@@ -526,19 +543,22 @@ func TestWorkloadEndpointRemoveDispatch(t *testing.T) {
 
 	store := policystore.NewPolicyStore()
 	store.Endpoint = endpoint1
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{
 		WorkloadEndpointRemove: &proto.WorkloadEndpointRemove{},
 	}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 }
 
 func TestServiceAccountUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{serviceAccount1}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{
 		*serviceAccount1.Id: serviceAccount1,
 	}))
@@ -555,10 +575,11 @@ func TestServiceAccountRemoveDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := policystore.NewPolicyStore()
 	store.ServiceAccountByID[*serviceAccount1.Id] = serviceAccount1
+	inSync := make(chan struct{})
 
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{
 		ServiceAccountRemove: &proto.ServiceAccountRemove{Id: serviceAccount1.Id}}}
-	Expect(func() { processUpdate(store, remove) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, remove) }).ToNot(Panic())
 	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{}))
 }
 
@@ -572,9 +593,10 @@ func TestServiceAccountRemoveNilId(t *testing.T) {
 func TestNamespaceUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{namespace1}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{
 		*namespace1.Id: namespace1,
 	}))
@@ -591,10 +613,11 @@ func TestNamespaceRemoveDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := policystore.NewPolicyStore()
 	store.NamespaceByID[*namespace1.Id] = namespace1
+	inSync := make(chan struct{})
 
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{
 		NamespaceRemove: &proto.NamespaceRemove{Id: namespace1.Id}}}
-	Expect(func() { processUpdate(store, remove) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, remove) }).ToNot(Panic())
 	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{}))
 }
 
@@ -610,8 +633,10 @@ func TestInSyncDispatch(t *testing.T) {
 	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_InSync{}}
-	Expect(func() { processUpdate(store, update) }).ToNot(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
+	Expect(inSync).To(BeClosed())
 }
 
 // processUpdate for an unhandled Payload causes a panic
@@ -619,6 +644,198 @@ func TestProcessUpdateUnknown(t *testing.T) {
 	RegisterTestingT(t)
 
 	store := policystore.NewPolicyStore()
+	inSync := make(chan struct{})
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ConfigUpdate{}}
-	Expect(func() { processUpdate(store, update) }).To(Panic())
+	Expect(func() { processUpdate(store, inSync, update) }).To(Panic())
+}
+
+func TestSyncRestart(t *testing.T) {
+	RegisterTestingT(t)
+
+	sCtx, sCancel := context.WithCancel(context.Background())
+	defer sCancel()
+
+	server := newTestSyncServer(sCtx)
+
+	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	stores := make(chan *policystore.PolicyStore)
+
+	cCtx, cCancel := context.WithCancel(context.Background())
+	defer cCancel()
+	go uut.Sync(cCtx, stores)
+
+	server.SendInSync()
+	select {
+	case <-time.After(1 * time.Second):
+		t.Error("Failed to get sync'd PolicyStore")
+	case <-stores:
+		// pass
+	}
+
+	server.Restart()
+	select {
+	case <-stores:
+		t.Error("New PolicyStore should wait for inSync")
+	case <-time.After(100 * time.Millisecond):
+		// pass
+	}
+
+	server.SendInSync()
+	select {
+	case <-time.After(1 * time.Second):
+		t.Error("Failed to get sync'd PolicyStore")
+	case <-stores:
+		// pass
+	}
+}
+
+func TestSyncCancelBeforeInSync(t *testing.T) {
+	RegisterTestingT(t)
+
+	sCtx, sCancel := context.WithCancel(context.Background())
+	defer sCancel()
+
+	server := newTestSyncServer(sCtx)
+
+	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	stores := make(chan *policystore.PolicyStore)
+
+	cCtx, cCancel := context.WithCancel(context.Background())
+	syncDone := make(chan struct{})
+	go func() {
+		uut.Sync(cCtx, stores)
+		close(syncDone)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	cCancel()
+	Eventually(syncDone).Should(BeClosed())
+}
+
+func TestSyncCancelAfterInSync(t *testing.T) {
+	RegisterTestingT(t)
+
+	sCtx, sCancel := context.WithCancel(context.Background())
+	defer sCancel()
+
+	server := newTestSyncServer(sCtx)
+
+	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	stores := make(chan *policystore.PolicyStore)
+
+	cCtx, cCancel := context.WithCancel(context.Background())
+	syncDone := make(chan struct{})
+	go func() {
+		uut.Sync(cCtx, stores)
+		close(syncDone)
+	}()
+
+	server.SendInSync()
+	select {
+	case <-time.After(1 * time.Second):
+		t.Error("Failed to get sync'd PolicyStore")
+	case <-stores:
+		// pass
+	}
+	cCancel()
+	Eventually(syncDone).Should(BeClosed())
+}
+
+func TestSyncServerCancelBeforeInSync(t *testing.T) {
+	RegisterTestingT(t)
+
+	sCtx, sCancel := context.WithCancel(context.Background())
+
+	server := newTestSyncServer(sCtx)
+
+	uut := NewClient(server.GetTarget(), uds.GetDialOptions())
+	stores := make(chan *policystore.PolicyStore)
+
+	cCtx, cCancel := context.WithCancel(context.Background())
+	syncDone := make(chan struct{})
+	go func() {
+		uut.Sync(cCtx, stores)
+		close(syncDone)
+	}()
+
+	sCancel()
+	time.Sleep(10 * time.Millisecond)
+	cCancel()
+	Eventually(syncDone).Should(BeClosed())
+}
+
+type testSyncServer struct {
+	context    context.Context
+	updates    chan proto.ToDataplane
+	path       string
+	gRPCServer *grpc.Server
+	listener   net.Listener
+	cLock      sync.Mutex
+	cancelFns  []func()
+}
+
+func newTestSyncServer(ctx context.Context) *testSyncServer {
+	socketDir := makeTmpListenerDir()
+	socketPath := path.Join(socketDir, ListenerSocket)
+	ss := &testSyncServer{context: ctx, updates: make(chan proto.ToDataplane), path: socketPath, gRPCServer: grpc.NewServer()}
+	proto.RegisterPolicySyncServer(ss.gRPCServer, ss)
+	ss.listen()
+	return ss
+}
+
+func (this *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
+	ctx, cancel := context.WithCancel(this.context)
+	this.cLock.Lock()
+	this.cancelFns = append(this.cancelFns, cancel)
+	this.cLock.Unlock()
+	var update proto.ToDataplane
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case update = <-this.updates:
+			stream.Send(&update)
+		}
+	}
+}
+
+func (this *testSyncServer) SendInSync() {
+	this.updates <- proto.ToDataplane{Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
+}
+
+func (this *testSyncServer) Restart() {
+	this.cLock.Lock()
+	for _, c := range this.cancelFns {
+		c()
+	}
+	this.cancelFns = make([]func(), 0)
+	this.cLock.Unlock()
+
+	err := os.Remove(this.path)
+	Expect(err).ToNot(HaveOccurred())
+
+	this.listen()
+}
+
+func (this *testSyncServer) GetTarget() string {
+	return this.path
+}
+
+func (this *testSyncServer) listen() {
+	this.listener = openListener(this.path)
+	go this.gRPCServer.Serve(this.listener)
+}
+
+const ListenerSocket = "policysync.sock"
+
+func makeTmpListenerDir() string {
+	dirPath, err := ioutil.TempDir("/tmp", "felixut")
+	Expect(err).ToNot(HaveOccurred())
+	return dirPath
+}
+
+func openListener(socketPath string) net.Listener {
+	lis, err := net.Listen("unix", socketPath)
+	Expect(err).ToNot(HaveOccurred())
+	return lis
 }

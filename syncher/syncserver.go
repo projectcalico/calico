@@ -17,6 +17,7 @@ package syncher
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
@@ -25,6 +26,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const PolicySyncRetryTime = 500 * time.Millisecond
+
 type syncClient struct {
 	target   string
 	dialOpts []grpc.DialOption
@@ -32,9 +35,10 @@ type syncClient struct {
 
 type SyncClient interface {
 
-	// Sync connects to the Policy Sync API server and processes updates from it.  It modifies the provided store with
-	// the updates.  Sync blocks until the connection to the API server is terminated.
-	Sync(ctx context.Context, store *policystore.PolicyStore)
+	// Sync connects to the Policy Sync API server and processes updates from it.  It sends PolicyStores over the
+	// channel when they are ready for enforcement.  Each time we disconnect and resync with the Policy Sync API a new
+	// PolicyStore is created.
+	Sync(ctx context.Context, stores chan<- *policystore.PolicyStore)
 }
 
 // NewClient creates a new syncClient.
@@ -42,34 +46,72 @@ func NewClient(target string, opts []grpc.DialOption) SyncClient {
 	return &syncClient{target: target, dialOpts: opts}
 }
 
-func (s *syncClient) Sync(cxt context.Context, store *policystore.PolicyStore) {
+func (s *syncClient) Sync(cxt context.Context, stores chan<- *policystore.PolicyStore) {
+	for {
+		select {
+		case <-cxt.Done():
+			return
+		default:
+			store := policystore.NewPolicyStore()
+			inSync := make(chan struct{})
+			done := make(chan struct{})
+			go s.syncStore(cxt, store, inSync, done)
+
+			// Block until we receive InSync message, or cancelled.
+			select {
+			case <-inSync:
+				stores <- store
+			// Also catch the case where syncStore ends before it gets an InSync message.
+			case <-done:
+				// pass
+			case <-cxt.Done():
+				return
+			}
+
+			// Block until syncStore() ends (e.g. disconnected), or cancelled.
+			select {
+			case <-done:
+				// pass
+			case <-cxt.Done():
+				return
+			}
+
+			time.Sleep(PolicySyncRetryTime)
+		}
+	}
+}
+
+func (s *syncClient) syncStore(cxt context.Context, store *policystore.PolicyStore, inSync chan<- struct{}, done chan<- struct{}) {
+	defer close(done)
 	// TODO: Handle connection errors more gracefully than Fatal.
 	conn, err := grpc.Dial(s.target, s.dialOpts...)
 	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
+		log.Warnf("fail to dial: %v", err)
+		return
 	}
 	defer conn.Close()
 	client := proto.NewPolicySyncClient(conn)
 	stream, err := client.Sync(cxt, &proto.SyncRequest{})
 	if err != nil {
-		log.Fatalf("failed to Sync with server: %v", err)
+		log.Warnf("failed to Sync with server: %v", err)
+		return
 	}
 	for {
 		update, err := stream.Recv()
 		if err != nil {
-			log.Fatalf("connection to Policy Sync server broken: %v", err)
+			log.Warnf("connection to Policy Sync server broken: %v", err)
+			return
 		}
-		log.WithFields(log.Fields{"proto": update.String()}).Debug("Received sync API Update")
-		store.Write(func(ps *policystore.PolicyStore) { processUpdate(ps, update) })
+		log.WithFields(log.Fields{"proto": update}).Debug("Received sync API Update")
+		store.Write(func(ps *policystore.PolicyStore) { processUpdate(ps, inSync, update) })
 	}
-	// Note that as written, this function will never return. It only ends when the connection is torn down, which
-	// terminates the entire program.
 }
 
 // Update the PolicyStore with the information passed over the Sync API.
-func processUpdate(store *policystore.PolicyStore, update *proto.ToDataplane) {
+func processUpdate(store *policystore.PolicyStore, inSync chan<- struct{}, update *proto.ToDataplane) {
 	switch payload := update.Payload.(type) {
 	case *proto.ToDataplane_InSync:
+		close(inSync)
 		processInSync(store, payload.InSync)
 	case *proto.ToDataplane_IpsetUpdate:
 		processIPSetUpdate(store, payload.IpsetUpdate)

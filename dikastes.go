@@ -21,11 +21,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/projectcalico/app-policy/checker"
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/syncher"
+	"github.com/projectcalico/app-policy/uds"
 
 	docopt "github.com/docopt/docopt-go"
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
@@ -92,17 +92,20 @@ func runServer(arguments map[string]interface{}) {
 	if err != nil {
 		log.Fatal("Unable to set write permission on socket.")
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Check server
 	gs := grpc.NewServer()
-	store := policystore.NewPolicyStore()
-	checkServer := checker.NewServer(store)
+	stores := make(chan *policystore.PolicyStore)
+	checkServer := checker.NewServer(ctx, stores)
 	authz.RegisterAuthorizationServer(gs, checkServer)
 
 	// Synchronize the policy store
-	opts := getDialOptions()
+	opts := uds.GetDialOptions()
 	syncClient := syncher.NewClient(dial, opts)
-	syncContext, cancelSync := context.WithCancel(context.Background())
-	defer cancelSync()
-	go syncClient.Sync(syncContext, store)
+	go syncClient.Sync(ctx, stores)
 
 	// Run gRPC server on separate goroutine so we catch any signals and clean up.
 	go func() {
@@ -126,7 +129,7 @@ func runClient(arguments map[string]interface{}) {
 	useMethod := arguments["--method"].(bool)
 	method := arguments["<method>"].(string)
 
-	opts := getDialOptions()
+	opts := uds.GetDialOptions()
 	conn, err := grpc.Dial(dial, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
@@ -154,16 +157,4 @@ func runClient(arguments map[string]interface{}) {
 	}
 	log.Infof("Check response:\n %v", resp)
 	return
-}
-
-func getDialer(proto string) func(string, time.Duration) (net.Conn, error) {
-	return func(target string, timeout time.Duration) (net.Conn, error) {
-		return net.DialTimeout(proto, target, timeout)
-	}
-}
-
-func getDialOptions() []grpc.DialOption {
-	return []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithDialer(getDialer("unix"))}
 }

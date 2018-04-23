@@ -28,6 +28,7 @@ import (
 
 var OK = code.Code_value["OK"]
 var PERMISSION_DENIED = code.Code_value["PERMISSION_DENIED"]
+var UNAVAILABLE = code.Code_value["UNAVAILABLE"]
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int

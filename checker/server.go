@@ -25,12 +25,15 @@ import (
 )
 
 type authServer struct {
-	Store *policystore.PolicyStore
+	stores <-chan *policystore.PolicyStore
+	Store  *policystore.PolicyStore
 }
 
 // NewServer creates a new authServer and returns a pointer to it.
-func NewServer(store *policystore.PolicyStore) *authServer {
-	return &authServer{store}
+func NewServer(ctx context.Context, stores <-chan *policystore.PolicyStore) *authServer {
+	s := &authServer{stores, nil}
+	go s.updateStores(ctx)
+	return s
 }
 
 // Check applies the currently loaded policy to a network request and renders a policy decision.
@@ -38,11 +41,36 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 	log.Debugf("Check(%v, %v)", ctx, req)
 	resp := authz.CheckResponse{Status: &status.Status{Code: code.Code_value["INTERNAL"]}}
 	var st status.Status
-	as.Store.Read(func(store *policystore.PolicyStore) { st = checkStore(store, req) })
+
+	// Ensure that we only access as.Store once per Check call. The authServer can be updated to point to a different
+	// store asynchronously with this call, so we use a local variable to reference the PolicyStore for the duration of
+	// this call for consistency.
+	store := as.Store
+	if store == nil {
+		log.Warn("Check request before synchronized to Policy, failing.")
+		resp.Status.Code = UNAVAILABLE
+		return &resp, nil
+	}
+	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, req) })
 	resp.Status = &st
 	log.WithFields(log.Fields{
 		"Request":  req,
 		"Response": resp,
 	}).Info("Check complete")
 	return &resp, nil
+}
+
+// updateStores pulls PolicyStores off the channel and assigns them.
+func (as *authServer) updateStores(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		// Variable assignment is atomic, so this is threadsafe as long as each check call accesses authServer.Store
+		// only once.
+		case as.Store = <-as.stores:
+			log.Info("Switching to new in-sync policy store.")
+			continue
+		}
+	}
 }
