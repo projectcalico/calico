@@ -1,4 +1,5 @@
 #!/bin/sh
+echo calico/node ${NODE_VERSION}
 confd -version
 bird --version
 echo -n "libnetwork-plugin: "
