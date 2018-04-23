@@ -220,3 +220,65 @@ var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
 		})
 	})
 })
+
+var _ = Context("with Typha and Felix-Typha TLS", func() {
+
+	var (
+		etcd   *containers.Container
+		felix  *infrastructure.Felix
+		client client.Interface
+		w      [3]*workload.Workload
+	)
+
+	BeforeEach(func() {
+		options := infrastructure.DefaultTopologyOptions()
+		options.WithTypha = true
+		options.WithFelixTyphaTLS = true
+		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(options)
+
+		// Install a default profile that allows workloads with this profile to talk to each
+		// other, in the absence of any Policy.
+		defaultProfile := api.NewProfile()
+		defaultProfile.Name = "default"
+		defaultProfile.Spec.LabelsToApply = map[string]string{"default": ""}
+		defaultProfile.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		defaultProfile.Spec.Ingress = []api.Rule{{
+			Action: api.Allow,
+			Source: api.EntityRule{Selector: "default == ''"},
+		}}
+		_, err := client.Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create three workloads, using that profile.
+		for ii := range w {
+			iiStr := strconv.Itoa(ii)
+			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
+			w[ii].Configure(client)
+		}
+	})
+
+	AfterEach(func() {
+
+		if CurrentGinkgoTestDescription().Failed {
+			felix.Exec("iptables-save", "-c")
+			felix.Exec("ip", "r")
+		}
+
+		for ii := range w {
+			w[ii].Stop()
+		}
+		felix.Stop()
+
+		if CurrentGinkgoTestDescription().Failed {
+			etcd.Exec("etcdctl", "ls", "--recursive", "/")
+		}
+		etcd.Stop()
+	})
+
+	It("full connectivity to and from workload 0", func() {
+		Expect(w[1]).To(HaveConnectivityTo(w[0]))
+		Expect(w[2]).To(HaveConnectivityTo(w[0]))
+		Expect(w[0]).To(HaveConnectivityTo(w[1]))
+		Expect(w[0]).To(HaveConnectivityTo(w[2]))
+	})
+})

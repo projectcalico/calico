@@ -54,4 +54,5 @@ var _ = AfterSuite(func() {
 		infrastructure.TearDownK8sInfra(infrastructure.K8sInfra)
 		infrastructure.K8sInfra = nil
 	}
+	infrastructure.RemoveTLSCredentials()
 })
