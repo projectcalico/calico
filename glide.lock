@@ -1,5 +1,5 @@
-hash: 04c39dc632f1fd1a4102b7d5eb3c74b6da097ccd8e09bcde51aea0a135deefa0
-updated: 2018-04-23T12:23:20.171503719Z
+hash: 41208200ad15c2eb5a3d87968925276d8c24fa389555baba054d1f7d21284c37
+updated: 2018-04-23T13:35:53.294152256Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -247,8 +247,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 006d70bf65ac0e03c46acdee468231ed553cd124
-  repo: https://github.com/neiljerram/typha
+  version: 4314704b12d7327b10bed036a6723501e6faa77b
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -288,7 +287,7 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto

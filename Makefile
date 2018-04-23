@@ -88,7 +88,7 @@ FV_FELIXIMAGE ?= calico/felix:latest-$(BUILDARCH)
 ifeq ($(BUILDARCH),amd64)
         FV_ETCDIMAGE=quay.io/coreos/etcd:v3.2.5
         FV_K8SIMAGE=gcr.io/google_containers/hyperkube:v1.7.5
-        FV_TYPHAIMAGE=calico/typha:latest
+        FV_TYPHAIMAGE=calico/typha:v0.7.2-25-g4314704
 endif
 
 # Total number of ginkgo batches to run.  The CI system sets this according to the number
