@@ -14,6 +14,10 @@
 FROM alpine:3.7
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
+# Populated by build with the git version.
+ARG ver="n/a"
+ENV NODE_VERSION=$ver
+
 # Set the minimum Docker API version required for libnetwork.
 ENV DOCKER_API_VERSION 1.21
 

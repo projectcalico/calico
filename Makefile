@@ -134,7 +134,7 @@ $(NODE_CONTAINER_CREATED): ./Dockerfile$(ARCHTAG) $(NODE_CONTAINER_FILES) $(addp
 	  echo; echo calico-bgp-daemon -v;   /go/bin/calico-bgp-daemon -v; \
 	  echo; echo confd --version;        /go/bin/confd --version; \
 	"
-	docker build --pull -t $(NODE_CONTAINER_NAME) . -f ./Dockerfile$(ARCHTAG)
+	docker build --pull -t $(NODE_CONTAINER_NAME) . --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile$(ARCHTAG)
 	touch $@
 
 # Get felix binaries
