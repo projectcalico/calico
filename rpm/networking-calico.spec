@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        3.1.0
+Version:        3.1.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Apr 23 2018 Neil Jerram <neil@tigera.io> 1:3.1.1-1
+  - networking-calico version 3.1.1 release
+    - Ignore tox/env directories when building debs.
+    - Stop updating port status when Felix times out.
+    - Improve logs around resyncs.
+    - Use a priority queue for port status reports.
+
 * Fri Apr 06 2018 Neil Jerram <neil@tigera.io> 1:3.1.0-1
   - networking-calico version 3.1.0 release
     - Try to trigger compaction during OpenStack CI run

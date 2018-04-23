@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.1
+
+- Ignore tox/env directories when building debs.
+- Stop updating port status when Felix times out.
+- Improve logs around resyncs.
+- Use a priority queue for port status reports.
+
 ## 3.1.0
 
 - Try to trigger compaction during OpenStack CI run
