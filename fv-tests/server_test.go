@@ -16,10 +16,14 @@ package fvtests_test
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -38,6 +42,7 @@ import (
 	"github.com/projectcalico/typha/pkg/syncclient"
 	"github.com/projectcalico/typha/pkg/syncproto"
 	"github.com/projectcalico/typha/pkg/syncserver"
+	"github.com/projectcalico/typha/pkg/tlsutils"
 )
 
 var (
@@ -769,3 +774,332 @@ func expectGaugeValue(name string, value float64) {
 		return getGauge(name)
 	}).Should(Equal(value))
 }
+
+// TLS connection tests.
+
+const (
+	clientCN     = "typha-client"
+	serverCN     = "typha-server"
+	clientURISAN = "spiffe://k8s.example.com/typha-client"
+	serverURISAN = "spiffe://k8s.example.com/typha-server"
+)
+
+var certDir string
+
+var _ = BeforeSuite(func() {
+	// Create a temporary directory for certificates.
+	var err error
+	certDir, err = ioutil.TempDir("", "typhafv")
+	tlsutils.PanicIfErr(err)
+
+	// Trusted CA.
+	caCert, caKey := tlsutils.MakeCACert("trustedCA")
+	tlsutils.WriteCert(caCert.Raw, filepath.Join(certDir, "ca.crt"))
+
+	// An untrusted CA.
+	untrustedCert, untrustedKey := tlsutils.MakeCACert("untrustedCA")
+	tlsutils.WriteCert(untrustedCert.Raw, filepath.Join(certDir, "untrusted.crt"))
+
+	// Typha server.
+	serverCert, serverKey := tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, caCert, caKey)
+	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server.key"))
+	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server.crt"))
+
+	// Typha server using untrusted CA.
+	serverCert, serverKey = tlsutils.MakePeerCert(serverCN, serverURISAN, x509.ExtKeyUsageServerAuth, untrustedCert, untrustedKey)
+	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-untrusted.key"))
+	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-untrusted.crt"))
+
+	// Typha client with good CN.
+	clientCert, clientKey := tlsutils.MakePeerCert(clientCN, "", x509.ExtKeyUsageClientAuth, caCert, caKey)
+	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcn.key"))
+	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcn.crt"))
+
+	// Typha client with good URI.
+	clientCert, clientKey = tlsutils.MakePeerCert("", clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
+	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "gooduri.key"))
+	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "gooduri.crt"))
+
+	// Typha client with good CN and URI.
+	clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, caCert, caKey)
+	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcnuri.key"))
+	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "goodcnuri.crt"))
+
+	// Typha client with bad CN and URI.
+	clientCert, clientKey = tlsutils.MakePeerCert(clientCN+"bad", clientURISAN+"bad", x509.ExtKeyUsageClientAuth, caCert, caKey)
+	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "badcnuri.key"))
+	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "badcnuri.crt"))
+
+	// Typha client using untrusted CA.
+	clientCert, clientKey = tlsutils.MakePeerCert(clientCN, clientURISAN, x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
+	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client-untrusted.key"))
+	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client-untrusted.crt"))
+})
+
+var _ = AfterSuite(func() {
+	// Remove TLS keys and certificates.
+	os.RemoveAll(certDir)
+})
+
+var _ = Describe("with server requiring TLS", func() {
+	// We'll create this pipeline for updates to flow through:
+	//
+	//    This goroutine -> callback -chan-> validation -> snapshot -> server
+	//                      decoupler        filter        cache
+	//
+	var (
+		decoupler    *calc.SyncerCallbacksDecoupler
+		valFilter    *calc.ValidationFilter
+		cacheCxt     context.Context
+		cacheCancel  context.CancelFunc
+		cache        *snapcache.Cache
+		server       *syncserver.Server
+		serverCxt    context.Context
+		serverCancel context.CancelFunc
+	)
+
+	var (
+		requiredClientCN     string
+		requiredClientURISAN string
+		serverCertName       string
+	)
+
+	// Each client we create gets recorded here for cleanup.
+	type clientState struct {
+		clientCxt    context.Context
+		clientCancel context.CancelFunc
+		client       *syncclient.SyncerClient
+		recorder     *StateRecorder
+		startErr     error
+	}
+
+	createClient := func(options *syncclient.Options) clientState {
+		clientCxt, clientCancel := context.WithCancel(context.Background())
+		recorder := NewRecorder()
+		client := syncclient.New(
+			fmt.Sprintf("127.0.0.1:%d", server.Port()),
+			"test-version",
+			"test-host-1",
+			"test-info",
+			recorder,
+			options,
+		)
+
+		err := client.Start(clientCxt)
+
+		cs := clientState{
+			clientCxt:    clientCxt,
+			client:       client,
+			clientCancel: clientCancel,
+			recorder:     recorder,
+			startErr:     err,
+		}
+		return cs
+	}
+
+	JustBeforeEach(func() {
+		// Set up a pipeline:
+		//
+		//    This goroutine -> callback -chan-> validation -> snapshot -> server
+		//                      decoupler        filter        cache
+		//
+		decoupler = calc.NewSyncerCallbacksDecoupler()
+		cache = snapcache.New(snapcache.Config{
+			// Set the batch size small so we can force new Breadcrumbs easily.
+			MaxBatchSize: 10,
+			// Reduce the wake up interval from the default to give us faster tear down.
+			WakeUpInterval: 50 * time.Millisecond,
+		})
+		cacheCxt, cacheCancel = context.WithCancel(context.Background())
+		valFilter = calc.NewValidationFilter(cache)
+		go decoupler.SendToContext(cacheCxt, valFilter)
+		server = syncserver.New(cache, syncserver.Config{
+			PingInterval: 10 * time.Second,
+			Port:         syncserver.PortRandom,
+			DropInterval: 50 * time.Millisecond,
+			KeyFile:      filepath.Join(certDir, serverCertName+".key"),
+			CertFile:     filepath.Join(certDir, serverCertName+".crt"),
+			CAFile:       filepath.Join(certDir, "ca.crt"),
+			ClientCN:     requiredClientCN,
+			ClientURISAN: requiredClientURISAN,
+		})
+		cache.Start(cacheCxt)
+		serverCxt, serverCancel = context.WithCancel(context.Background())
+		server.Start(serverCxt)
+	})
+
+	AfterEach(func() {
+		serverCancel()
+		log.Info("Waiting for server to shut down")
+		server.Finished.Wait()
+		log.Info("Done waiting for server to shut down")
+		cacheCancel()
+	})
+
+	testConnection := func(clientCertName string, expectConnection bool) {
+
+		var options *syncclient.Options = nil
+		if clientCertName != "" {
+			options = &syncclient.Options{
+				KeyFile:      filepath.Join(certDir, clientCertName+".key"),
+				CertFile:     filepath.Join(certDir, clientCertName+".crt"),
+				CAFile:       filepath.Join(certDir, "ca.crt"),
+				ServerCN:     serverCN,
+				ServerURISAN: serverURISAN,
+			}
+			// Client config's CAFile must be the CA that signed its CertFile;
+			// otherwise it appears that the golang TLS client-side code does not even
+			// send its certificate to the server.
+			if clientCertName == "client-untrusted" {
+				options.CAFile = filepath.Join(certDir, "untrusted.crt")
+			}
+		}
+		// Connect with specified TLS options.
+		clientState := createClient(options)
+		if clientCertName != "" && !expectConnection {
+			// We're attempting a TLS connection but expecting it to fail.  That shows
+			// up as Start() returning an error.
+			Expect(clientState.startErr).To(HaveOccurred())
+		} else {
+			Expect(clientState.startErr).NotTo(HaveOccurred())
+		}
+
+		// Prepare channel that will be unblocked when the client connection is closed.
+		connectionClosed := make(chan struct{})
+		go func() {
+			defer close(connectionClosed)
+			log.Info("Waiting for client to shut down")
+			clientState.client.Finished.Wait()
+			log.Info("Done waiting for client to shut down")
+		}()
+
+		// Generate a state change on the Typha server.
+		decoupler.OnStatusUpdated(api.ResyncInProgress)
+		decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+		decoupler.OnStatusUpdated(api.InSync)
+		if expectConnection {
+			// Client should be connected, so should see that state.
+			Eventually(clientState.recorder.Status).Should(Equal(api.InSync))
+			Eventually(clientState.recorder.KVs).Should(Equal(map[string]api.Update{
+				"/calico/v1/config/foobar": configFoobarBazzBiff,
+			}))
+			// Now get the client to disconnect.
+			clientState.clientCancel()
+		} else {
+			// Client connection should have failed, so should not see that state.
+			Consistently(clientState.recorder.Status).Should(Equal(api.SyncStatus(0)))
+			Consistently(clientState.recorder.KVs).Should(Equal(map[string]api.Update{}))
+		}
+
+		// Synchronize with the client connection being closed.
+		Eventually(connectionClosed).Should(BeClosed())
+	}
+
+	testNonTLS := func() {
+		testConnection("", false)
+	}
+
+	testTLSUntrusted := func() {
+		testConnection("client-untrusted", false)
+	}
+
+	testTLSGoodCN := func(expectConnection bool) func() {
+		return func() {
+			testConnection("goodcn", expectConnection)
+		}
+	}
+
+	testTLSGoodURI := func(expectConnection bool) func() {
+		return func() {
+			testConnection("gooduri", expectConnection)
+		}
+	}
+
+	testTLSGoodCNURI := func(expectConnection bool) func() {
+		return func() {
+			testConnection("goodcnuri", expectConnection)
+		}
+	}
+
+	testTLSBadCNURI := func(expectConnection bool) func() {
+		return func() {
+			testConnection("badcnuri", expectConnection)
+		}
+	}
+
+	Describe("and CN or URI SAN", func() {
+		BeforeEach(func() {
+			requiredClientCN = clientCN
+			requiredClientURISAN = clientURISAN
+			serverCertName = "server"
+		})
+
+		It("should reject non-TLS connection", testNonTLS)
+
+		It("should reject TLS untrusted", testTLSUntrusted)
+
+		It("should allow TLS with good CN", testTLSGoodCN(true))
+
+		It("should allow TLS with good URI", testTLSGoodURI(true))
+
+		It("should allow TLS with good CN and URI", testTLSGoodCNURI(true))
+
+		It("should reject TLS with bad CN and URI", testTLSBadCNURI(false))
+	})
+
+	Describe("and CN", func() {
+		BeforeEach(func() {
+			requiredClientCN = clientCN
+			requiredClientURISAN = ""
+			serverCertName = "server"
+		})
+
+		It("should reject non-TLS connection", testNonTLS)
+
+		It("should reject TLS untrusted", testTLSUntrusted)
+
+		It("should allow TLS with good CN", testTLSGoodCN(true))
+
+		It("should reject TLS with good URI", testTLSGoodURI(false))
+
+		It("should allow TLS with good CN and URI", testTLSGoodCNURI(true))
+
+		It("should reject TLS with bad CN and URI", testTLSBadCNURI(false))
+	})
+
+	Describe("and URI SAN", func() {
+		BeforeEach(func() {
+			requiredClientCN = ""
+			requiredClientURISAN = clientURISAN
+			serverCertName = "server"
+		})
+
+		It("should reject non-TLS connection", testNonTLS)
+
+		It("should reject TLS untrusted", testTLSUntrusted)
+
+		It("should reject TLS with good CN", testTLSGoodCN(false))
+
+		It("should allow TLS with good URI", testTLSGoodURI(true))
+
+		It("should allow TLS with good CN and URI", testTLSGoodCNURI(true))
+
+		It("should reject TLS with bad CN and URI", testTLSBadCNURI(false))
+	})
+
+	Describe("using untrusted certificate", func() {
+		BeforeEach(func() {
+			requiredClientCN = ""
+			requiredClientURISAN = clientURISAN
+			serverCertName = "server-untrusted"
+		})
+
+		It("non-TLS connection should fail", testNonTLS)
+
+		It("TLS connection with good CN should fail", testTLSGoodCN(false))
+
+		It("TLS connection with good URI should fail", testTLSGoodURI(false))
+
+		It("TLS connection with good CN and URI should fail", testTLSGoodCNURI(false))
+	})
+})

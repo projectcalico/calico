@@ -16,7 +16,11 @@ package syncclient
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/gob"
+	"errors"
+	"io/ioutil"
 	"net"
 	"sync"
 	"time"
@@ -25,6 +29,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/syncproto"
+	"github.com/projectcalico/typha/pkg/tlsutils"
 )
 
 var nextID uint64
@@ -37,6 +42,11 @@ const (
 type Options struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
+	KeyFile      string
+	CertFile     string
+	CAFile       string
+	ServerCN     string
+	ServerURISAN string
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -53,12 +63,39 @@ func (o *Options) writeTimeout() time.Duration {
 	return o.WriteTimeout
 }
 
+func (o *Options) requiringTLS() bool {
+	// True if any of the TLS parameters are set.
+	requiringTLS := o != nil && o.KeyFile+o.CertFile+o.CAFile+o.ServerCN+o.ServerURISAN != ""
+	log.WithField("requiringTLS", requiringTLS).Info("")
+	return requiringTLS
+}
+
+func (o *Options) validate() (err error) {
+	// If any client-side TLS options are specified, they _all_ must be - except that either
+	// ServerCN or ServerURISAN may be left unset.
+	if o.requiringTLS() {
+		// Some TLS options specified.
+		if o.KeyFile == "" ||
+			o.CertFile == "" ||
+			o.CAFile == "" ||
+			(o.ServerCN == "" && o.ServerURISAN == "") {
+			err = errors.New("If any Felix-Typha TLS options are specified," +
+				" they _all_ must be" +
+				" - except that either ServerCN or ServerURISAN may be left unset.")
+		}
+	}
+	return
+}
+
 func New(
 	addr string,
 	myVersion, myHostname, myInfo string,
 	cbs api.SyncerCallbacks,
 	options *Options,
 ) *SyncerClient {
+	if err := options.validate(); err != nil {
+		log.WithField("options", options).WithError(err).Fatal("Invalid options")
+	}
 	id := nextID
 	nextID++
 	return &SyncerClient{
@@ -125,15 +162,57 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 	log.Info("Starting Typha client")
 	var err error
 	logCxt := s.logCxt.WithField("address", s.addr)
-	for cxt.Err() == nil {
-		logCxt.Info("Connecting to Typha.")
-		s.connection, err = net.DialTimeout("tcp", s.addr, 10*time.Second)
+
+	var connFunc func() (net.Conn, error)
+	if s.options.requiringTLS() {
+		cert, err := tls.LoadX509KeyPair(s.options.CertFile, s.options.KeyFile)
 		if err != nil {
-			log.WithError(err).Error("Failed to connect to Typha, retrying...")
-			time.Sleep(2 * time.Second)
-			continue
+			log.WithError(err).Error("Failed to load certificate and key")
+			return err
 		}
-		break
+		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
+
+		// Set InsecureSkipVerify true, because when it's false crypto/tls insists on
+		// verifying the server's hostname or IP address against tlsConfig.ServerName, and
+		// we don't always want that.  We will do certificate chain verification ourselves
+		// inside CertificateVerifier.
+		tlsConfig.InsecureSkipVerify = true
+		caPEMBlock, err := ioutil.ReadFile(s.options.CAFile)
+		if err != nil {
+			log.WithError(err).Error("Failed to read CA data")
+			return err
+		}
+		tlsConfig.RootCAs = x509.NewCertPool()
+		ok := tlsConfig.RootCAs.AppendCertsFromPEM(caPEMBlock)
+		if !ok {
+			log.Error("Failed to add CA data to pool")
+			return errors.New("Failed to add CA data to pool")
+		}
+		tlsConfig.VerifyPeerCertificate = tlsutils.CertificateVerifier(
+			logCxt,
+			tlsConfig.RootCAs,
+			s.options.ServerCN,
+			s.options.ServerURISAN,
+		)
+
+		connFunc = func() (net.Conn, error) {
+			return tls.DialWithDialer(
+				&net.Dialer{Timeout: 10 * time.Second},
+				"tcp",
+				s.addr,
+				&tlsConfig)
+		}
+	} else {
+		connFunc = func() (net.Conn, error) {
+			return net.DialTimeout("tcp", s.addr, 10*time.Second)
+		}
+	}
+	if cxt.Err() == nil {
+		logCxt.Info("Connecting to Typha.")
+		s.connection, err = connFunc()
+		if err != nil {
+			return err
+		}
 	}
 	if cxt.Err() != nil {
 		if s.connection != nil {
@@ -145,6 +224,24 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 		return cxt.Err()
 	}
 	logCxt.Info("Connected to Typha.")
+
+	// Log TLS connection details.
+	tlsConn, ok := s.connection.(*tls.Conn)
+	log.WithField("ok", ok).Debug("TLS conn?")
+	if ok {
+		state := tlsConn.ConnectionState()
+		for _, v := range state.PeerCertificates {
+			bytes, _ := x509.MarshalPKIXPublicKey(v.PublicKey)
+			logCxt.Debugf("%#v", bytes)
+			logCxt.Debugf("%#v", v.Subject)
+			logCxt.Debugf("%#v", v.URIs)
+		}
+		logCxt.WithFields(log.Fields{
+			"handshake": state.HandshakeComplete,
+			"mutual":    state.NegotiatedProtocolIsMutual,
+		}).Debug("TLS negotiation")
+	}
+
 	return nil
 }
 

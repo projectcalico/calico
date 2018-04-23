@@ -120,6 +120,17 @@ type Config struct {
 	ServerPongTimeoutSecs             time.Duration `config:"seconds;60"`
 	ServerPort                        int           `config:"port;0"`
 
+	// Server-side TLS config for Typha's communication with Felix.  If any of these are
+	// specified, they _all_ must be - except that either ClientCN or ClientURISAN may be left
+	// unset - and Typha will then only accept secure (TLS) connections.  Each connecting client
+	// (Felix) must present a certificate signed by a CA in CAFile, and with CN matching
+	// ClientCN or URI SAN matching ClientURISAN.
+	ServerKeyFile  string `config:"file(must-exist);;local"`
+	ServerCertFile string `config:"file(must-exist);;local"`
+	CAFile         string `config:"file(must-exist);;local"`
+	ClientCN       string `config:"string;"`
+	ClientURISAN   string `config:"string;"`
+
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
 
@@ -295,6 +306,11 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	return *cfg
 }
 
+func (config *Config) requiringTLS() bool {
+	// True if any of the TLS parameters are set.
+	return config.ServerKeyFile+config.ServerCertFile+config.CAFile+config.ClientCN+config.ClientURISAN != ""
+}
+
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
 	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
@@ -303,6 +319,20 @@ func (config *Config) Validate() (err error) {
 		}
 		if config.EtcdAddr == "" {
 			err = errors.New("EtcdEndpoints and EtcdAddr both missing")
+		}
+	}
+
+	// If any server-side TLS config parameters are specified, they _all_ must be - except that
+	// either ClientCN or ClientURISAN may be left unset.
+	if config.requiringTLS() {
+		// Some TLS config specified.
+		if config.ServerKeyFile == "" ||
+			config.ServerCertFile == "" ||
+			config.CAFile == "" ||
+			(config.ClientCN == "" && config.ClientURISAN == "") {
+			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+				" they _all_ must be" +
+				" - except that either ClientCN or ClientURISAN may be left unset.")
 		}
 	}
 	return
