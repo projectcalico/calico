@@ -47,7 +47,6 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		"--privileged",
 		"-e", "TYPHA_LOGSEVERITYSCREEN="+options.TyphaLogSeverity,
 		"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
-		"-v", "/lib/modules:/lib/modules",
 	)
 
 	if options.WithFelixTyphaTLS {

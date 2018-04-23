@@ -281,4 +281,30 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		Expect(w[0]).To(HaveConnectivityTo(w[1]))
 		Expect(w[0]).To(HaveConnectivityTo(w[2]))
 	})
+
+	Context("with ingress-only restriction for workload 0", func() {
+
+		BeforeEach(func() {
+			policy := api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
+			allowFromW1 := api.Rule{
+				Action: api.Allow,
+				Source: api.EntityRule{
+					Selector: w[1].NameSelector(),
+				},
+			}
+			policy.Spec.Ingress = []api.Rule{allowFromW1}
+			policy.Spec.Selector = w[0].NameSelector()
+			_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("only w1 can connect into w0, but egress from w0 is unrestricted", func() {
+			Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
+			Expect(w[1]).To(HaveConnectivityTo(w[0]))
+			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+		})
+	})
 })
