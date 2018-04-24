@@ -215,7 +215,7 @@ compare_templates() {
     output=$2
     rc=0
     for f in `ls /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}`; do
-        if ! diff -q /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
+        if ! diff --ignore-blank-lines -q /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
             rc=1
             if [ $output -ne 0 ]; then
                 echo "Failed: $f templates do not match, showing diff of expected vs received"
