@@ -22,17 +22,57 @@ import (
 
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	"github.com/projectcalico/app-policy/policystore"
+	"github.com/projectcalico/app-policy/proto"
+
+	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
-func TestCheck(t *testing.T) {
+func TestCheckNoStore(t *testing.T) {
 	RegisterTestingT(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	store := policystore.NewPolicyStore()
-	uut := NewServer(store)
+	stores := make(chan *policystore.PolicyStore)
+	uut := NewServer(ctx, stores)
 
-	ctx := context.Background()
 	req := &authz.CheckRequest{}
 	resp, err := uut.Check(ctx, req)
 	Expect(err).To(BeNil())
-	Expect(resp.GetStatus().GetCode()).To(Equal(PERMISSION_DENIED))
+	Expect(resp.GetStatus().GetCode()).To(Equal(UNAVAILABLE))
+}
+
+func TestCheckStore(t *testing.T) {
+	RegisterTestingT(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stores := make(chan *policystore.PolicyStore)
+	uut := NewServer(ctx, stores)
+
+	store := policystore.NewPolicyStore()
+	store.Write(func(s *policystore.PolicyStore) {
+		s.Endpoint = &proto.WorkloadEndpoint{
+			ProfileIds: []string{"default"},
+		}
+		s.ProfileByID[proto.ProfileID{Name: "default"}] = &proto.Profile{
+			InboundRules: []*proto.Rule{{Action: "Allow"}},
+		}
+	})
+	stores <- store
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sammy",
+		},
+	}}
+
+	chk := func() *authz.CheckResponse {
+		rsp, err := uut.Check(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+		return rsp
+	}
+	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: OK}}))
 }
