@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ const (
 
 type V1ClientInterface interface {
 	Apply(d *model.KVPair) (*model.KVPair, error)
+	Update(d *model.KVPair) (*model.KVPair, error)
 	Get(k model.Key) (*model.KVPair, error)
 	List(l model.ListInterface) ([]*model.KVPair, error)
 	IsKDD() bool

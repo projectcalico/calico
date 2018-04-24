@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -201,6 +201,16 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	schemeBuilder.AddToScheme(scheme.Scheme)
 
 	return cli, nil
+}
+
+// Update an existing entry in the datastore.  This errors if the entry does
+// not exist. (Not implemented for KDD.)
+func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
+	log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
+	return nil, errors.ErrorOperationNotSupported{
+		Identifier: d.Key,
+		Operation:  "Update",
+	}
 }
 
 // Set an existing entry in the datastore.  This ignores whether an entry already

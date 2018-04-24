@@ -57,6 +57,7 @@ type Interface interface {
 	ShouldMigrate() (bool, error)
 	CanMigrate() error
 	Migrate() (*MigrationData, error)
+	IsMigrationInProgress() (bool, error)
 	Abort() error
 	Complete() error
 }
@@ -224,7 +225,7 @@ func (m *migrationHelper) Migrate() (*MigrationData, error) {
 	// and will prevent the orchestrator plugins from adding any new workloads or IP allocations
 	if !m.clientv1.IsKDD() {
 		m.status("Pausing Calico networking")
-		if err := m.setReadyV1(false); err != nil {
+		if err := m.clearReadyV1(); err != nil {
 			m.statusError("Unable to pause calico networking")
 			return nil, MigrationError{
 				Type: ErrorGeneric,
@@ -292,6 +293,29 @@ func (m *migrationHelper) abortAfterError(err error, errType ErrorType) error {
 	return MigrationError{Type: errType, Err: err, NeedsAbort: true}
 }
 
+// IsMigrationInProgress infers from ShouldMigrate and the Ready flag if the datastore
+// is being migrated and returns true if it is. If migration is needed and the Ready
+// flag is false then it is assumed migration is in progress. This could provide a
+// false positive if there was an error during migration and migration was aborted.
+// The other non-error cases will return false.
+func (m *migrationHelper) IsMigrationInProgress() (bool, error) {
+	migrateNeeded, err := m.ShouldMigrate()
+	if err != nil {
+		return false, fmt.Errorf("error checking migration progress status: %v", err)
+	} else if migrateNeeded {
+		// Migration is needed. If Ready is true then no upgrade has been started
+		// (not in progress). If Ready is false then upgrade has been started.
+
+		ready, err := m.isReady()
+		if err != nil {
+			return false, fmt.Errorf("error checking migration progress status: %v", err)
+		}
+		return !ready, nil
+	} else {
+		return false, nil
+	}
+}
+
 // Abort aborts the upgrade by re-enabling Calico networking in v1.
 // If an error is returned it will be of type MigrationError.
 func (m *migrationHelper) Abort() error {
@@ -300,7 +324,7 @@ func (m *migrationHelper) Abort() error {
 	if !m.clientv1.IsKDD() {
 		m.status("Re-enabling Calico networking for v1")
 		for i := 0; i < forceEnableReadyRetries; i++ {
-			err = m.setReadyV1(true)
+			err = m.setReadyV1()
 			if err == nil {
 				break
 			}
@@ -863,29 +887,44 @@ func (m *migrationHelper) statusError(format string, a ...interface{}) {
 	}
 }
 
-// setReadyV1 sets the ready flag in the v1 datastore.
-func (m *migrationHelper) setReadyV1(ready bool) error {
-	log.WithField("Ready", ready).Info("Updating Ready flag in v1")
-	_, err := m.clientv1.Apply(&model.KVPair{
-		Key:   model.ReadyFlagKey{},
-		Value: ready,
-	})
+func (m *migrationHelper) clearReadyV1() error {
+	log.WithField("Ready", false).Info("Updating Ready flag in v1")
+	readyKV, err := m.clientv1.Get(model.ReadyFlagKey{})
 	if err != nil {
-		if ready {
-			m.statusBullet("failed to resume Calico networking in the v1 configuration")
-		} else {
-			m.statusBullet("failed to pause Calico networking in the v1 configuration")
-		}
+		m.statusBullet("failed to get status of Calico networking in the v1 configuration")
+		return err
 	}
-	if ready {
-		m.statusBullet("successfully resumed Calico networking in the v1 configuration")
-	} else {
-		m.statusBullet("successfully paused Calico networking in the v1 configuration")
+	if !readyKV.Value.(bool) {
+		m.statusBullet("Calico networking already paused in the v1 configuration")
+		return fmt.Errorf("Calico networking already paused do not continue.")
 	}
+	readyKV.Value = false
+	_, err = m.clientv1.Update(readyKV)
+
+	if err != nil {
+		m.statusBullet("failed to pause Calico networking in the v1 configuration")
+		return err
+	}
+	m.statusBullet("successfully paused Calico networking in the v1 configuration")
 	return nil
 }
 
-// setReadyV1 sets the ready flag in the v3 datastore.
+// setReadyV1 sets the ready flag in the v1 datastore.
+func (m *migrationHelper) setReadyV1() error {
+	log.WithField("Ready", true).Info("Updating Ready flag in v1")
+	_, err := m.clientv1.Apply(&model.KVPair{
+		Key:   model.ReadyFlagKey{},
+		Value: true,
+	})
+	if err != nil {
+		m.statusBullet("failed to resume Calico networking in the v1 configuration")
+		return err
+	}
+	m.statusBullet("successfully resumed Calico networking in the v1 configuration")
+	return nil
+}
+
+// setReadyV3 sets the ready flag in the v3 datastore.
 func (m *migrationHelper) setReadyV3(ready bool) error {
 	log.WithField("Ready", ready).Info("Updating Ready flag in v3")
 	c, err := m.clientv3.ClusterInformation().Get(context.Background(), "default", options.GetOptions{})
@@ -940,6 +979,23 @@ func (m *migrationHelper) setReadyV3(ready bool) error {
 		m.statusBullet("successfully paused Calico networking in the v1 configuration (created ClusterInformation)")
 	}
 	return nil
+}
+
+// isReady reads the Ready flag from the datastore and returns its value
+func (m *migrationHelper) isReady() (bool, error) {
+	kv, err := m.clientv1.Get(model.ReadyFlagKey{})
+	if err != nil {
+		m.statusError("Unable to query the v1 datastore for ready status")
+		m.statusBullet("Cause: %v", err)
+		return false, err
+	}
+
+	if kv.Value.(bool) {
+		m.statusBullet("Ready flag is true.")
+	} else {
+		m.statusBullet("Ready flag is false.")
+	}
+	return kv.Value.(bool), nil
 }
 
 // resourceToKey creates a model.Key from a v3 resource.
