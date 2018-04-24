@@ -131,14 +131,19 @@ All the attributes of security groups remain unchanged in {{site.prodname}}.
 
 {: id="routers"}
 
-## Layer 3 Routing: Routers and Floating IPs
+## Floating IPs
 
-Layer 3 routing objects are divided into two categories: routers and
-floating IPs. Neither of these objects are supported by {{site.prodname}}: they
-simply aren't required. For more information, see [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity).
+Floating IPs are supported at beta level. For more information, see [this
+document]({{site.baseurl}}/{{page.version}}/usage/openstack/floating-ips).
 
-Any attempt to create these objects will fail, as {{site.prodname}} does not set up
-any Neutron L3 Agents.
+## Neutron Routers
+
+Calico provides connectivity by default between all Neutron networks,
+regardless of whether there are Router objects between them in the Neutron data
+model.  See [this
+document]({{site.baseurl}}/{{page.version}}/usage/openstack/semantics) for a
+fuller explanation.  Where isolation of a particular Neutron network is
+desired, we recommend expressing that through security group rules.
 
 ## LBaaS (Load Balancer as a Service)
 
