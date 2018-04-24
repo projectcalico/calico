@@ -29,5 +29,5 @@ build: proto
 	CGO_ENABLED=0 GOOS=linux go build -o docker/dikastes
 
 .PHONY: test
-test:
+test: proto
 	go test -v ./...
