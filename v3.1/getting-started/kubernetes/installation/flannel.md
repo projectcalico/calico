@@ -61,7 +61,7 @@ etcd, complete the following steps.
 
    ```
    kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac-etcd.yaml
    ```
    > **Note**: You can also
    > [view the manifest in your browser](rbac.yaml){:target="_blank"}.
