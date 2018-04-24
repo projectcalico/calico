@@ -11,8 +11,9 @@ usage() {
 usage: ${BASH_SOURCE[0]} [options ...]"
   options::
    -c ... do a clean build
+   -i ... image to build (default: nodeagent)
+   -r ... registry to use (default: quay.io)
    -t ... tag to use
-   -i ... image to build
 EOF
   exit 2
 }

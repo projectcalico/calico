@@ -34,6 +34,10 @@ type Response struct {
 	VolumeName string `json:"volumename,omitempty"`
 }
 
+type Capabilities struct {
+	Attach bool `json:"attach"`
+}
+
 // Response to the 'init' command.
 // We want to explicitly set and send Attach: false
 // that is why it is separated from the Response struct.
@@ -41,7 +45,7 @@ type InitResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 	// Capability resp.
-	Attach bool `json:"attach"`
+	Capabilities *Capabilities `json:"capabilities"`
 }
 
 // ConfigurationOptions may be used to setup the driver.
@@ -159,7 +163,7 @@ var (
 // initCommand handles the init command for the driver.
 func initCommand() error {
 	if configuration.K8sVersion == "1.8" {
-		resp, err := json.Marshal(&InitResponse{Status: "Success", Message: "Init ok.", Attach: false})
+		resp, err := json.Marshal(&InitResponse{Status: "Success", Message: "Init ok.", Capabilities: &Capabilities{Attach: false}})
 		if err != nil {
 			return err
 		}
