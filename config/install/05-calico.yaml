@@ -195,7 +195,7 @@ spec:
       terminationGracePeriodSeconds: 0
       initContainers:
       - name: flexvol-driver
-        image: quay.io/saurabh/flexvol:latest
+        image: quay.io/saurabh/flexvol:04242018
         imagePullPolicy: Always
         volumeMounts:
         - name: flexvol-driver-host
