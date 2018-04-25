@@ -83,19 +83,20 @@ func (s *syncClient) Sync(cxt context.Context, stores chan<- *policystore.Policy
 
 func (s *syncClient) syncStore(cxt context.Context, store *policystore.PolicyStore, inSync chan<- struct{}, done chan<- struct{}) {
 	defer close(done)
-	// TODO: Handle connection errors more gracefully than Fatal.
 	conn, err := grpc.Dial(s.target, s.dialOpts...)
 	if err != nil {
-		log.Warnf("fail to dial: %v", err)
+		log.Warnf("fail to dial Policy Sync server: %v", err)
 		return
 	}
+	log.Info("Successfully connected to Policy Sync server")
 	defer conn.Close()
 	client := proto.NewPolicySyncClient(conn)
 	stream, err := client.Sync(cxt, &proto.SyncRequest{})
 	if err != nil {
-		log.Warnf("failed to Sync with server: %v", err)
+		log.Warnf("failed to synchronize with Policy Sync server: %v", err)
 		return
 	}
+	log.Info("Starting synchronization with Policy Sync server")
 	for {
 		update, err := stream.Recv()
 		if err != nil {
@@ -145,7 +146,6 @@ func processUpdate(store *policystore.PolicyStore, inSync chan<- struct{}, updat
 }
 
 func processInSync(store *policystore.PolicyStore, inSync *proto.InSync) {
-	// TODO (spikecurtis): disallow requests until policy is synced
 	log.Debug("Processing InSync")
 	return
 }
