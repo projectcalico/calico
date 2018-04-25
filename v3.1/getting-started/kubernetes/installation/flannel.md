@@ -38,7 +38,7 @@ section that matches your type.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
    ```
    > **Note**: You can also
-   > [view the manifest in your browser](hosted/rbac-kdd.yaml){:target="_blank"}.
+   > [view the manifest in your browser](hosted/canal/rbac.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
 1. Issue the following command to install {{site.prodname}}.
@@ -64,7 +64,7 @@ etcd, complete the following steps.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac-etcd.yaml
    ```
    > **Note**: You can also
-   > [view the manifest in your browser](rbac.yaml){:target="_blank"}.
+   > [view the manifest in your browser](hosted/canal/rbac-etcd.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
