@@ -1981,6 +1981,6 @@ master:
      calico/dikastes:
       version: 20180328162858
      flexvol:
-      version: 04242018
+      version: latest
      pilot-webhook:
       version: 20180319220721
