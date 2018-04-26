@@ -25,6 +25,10 @@ import (
 
 type Felix struct {
 	*containers.Container
+
+	// ExpectedIPIPTunnelAddr contains the IP that the infrastructure expects to
+	// get assigned to the IPIP tunnel.  Filled in by AddNode().
+	ExpectedIPIPTunnelAddr string
 }
 
 func (f *Felix) GetFelixPID() int {

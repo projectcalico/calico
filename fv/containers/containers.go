@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,10 +40,16 @@ type Container struct {
 	Hostname string
 	runCmd   *exec.Cmd
 
-	mutex    sync.Mutex
-	binaries set.Set
+	mutex         sync.Mutex
+	binaries      set.Set
+	stdoutWatches []*watch
 
 	logFinished sync.WaitGroup
+}
+
+type watch struct {
+	regexp *regexp.Regexp
+	c      chan struct{}
 }
 
 var containerIdx = 0
@@ -175,8 +182,8 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
-	go copyOutputToLog(c.Name, "stdout", stdout, &c.logFinished)
-	go copyOutputToLog(c.Name, "stderr", stderr, &c.logFinished)
+	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches)
+	go c.copyOutputToLog("stderr", stderr, &c.logFinished, nil)
 
 	// Note: it might take a long time for the container to start running, e.g. if the image
 	// needs to be downloaded.
@@ -188,6 +195,18 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
 	return
+}
+
+func (c *Container) WatchStdoutFor(re *regexp.Regexp) chan struct{} {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	ch := make(chan struct{})
+	c.stdoutWatches = append(c.stdoutWatches, &watch{
+		regexp: re,
+		c:      ch,
+	})
+	return ch
 }
 
 // Start executes "docker start" on a container. Useful when used after Stop()
@@ -206,8 +225,8 @@ func (c *Container) Start() {
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
-	go copyOutputToLog(c.Name, "stdout", stdout, &c.logFinished)
-	go copyOutputToLog(c.Name, "stderr", stderr, &c.logFinished)
+	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches)
+	go c.copyOutputToLog("stderr", stderr, &c.logFinished, nil)
 
 	c.WaitUntilRunning()
 
@@ -224,15 +243,34 @@ func (c *Container) Remove() {
 	log.WithField("container", c).Info("Removed container.")
 }
 
-func copyOutputToLog(name string, streamName string, stream io.Reader, done *sync.WaitGroup) {
+func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *sync.WaitGroup, watches *[]*watch) {
 	defer done.Done()
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
 	for scanner.Scan() {
-		log.Info(name, "[", streamName, "] ", scanner.Text())
+		line := scanner.Text()
+		log.Info(c.Name, "[", streamName, "] ", line)
+
+		if watches == nil {
+			continue
+		}
+		c.mutex.Lock()
+		for _, w := range *watches {
+			if w.c == nil {
+				continue
+			}
+			if !w.regexp.MatchString(line) {
+				continue
+			}
+
+			log.Info(c.Name, "[", streamName, "] ", "Watch triggered:", w.regexp.String())
+			close(w.c)
+			w.c = nil
+		}
+		c.mutex.Unlock()
 	}
 	logCxt := log.WithFields(log.Fields{
-		"name":   name,
+		"name":   c.Name,
 		"stream": stream,
 	})
 	if scanner.Err() != nil {

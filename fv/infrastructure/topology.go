@@ -22,6 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
+	"regexp"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -136,8 +138,19 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		// Then start Felix and create a node for it.
 		felix := RunFelix(infra, opts)
 
+		var w chan struct{}
+		if felix.ExpectedIPIPTunnelAddr != "" {
+			// If felix has an IPIP tunnel address defined, Felix may restart after loading its config.
+			// Handle that here by monitoring the log and waiting for the correct tunnel IP to show up
+			// before we return.
+			w = felix.WatchStdoutFor(regexp.MustCompile(
+				`"IpInIpTunnelAddr":"` + regexp.QuoteMeta(felix.ExpectedIPIPTunnelAddr) + `"`))
+		}
 		infra.AddNode(felix, i, bool(n > 1))
-
+		if w != nil {
+			// Wait for any Felix restart...
+			Eventually(w, "10s").Should(BeClosed())
+		}
 		felixes = append(felixes, felix)
 	}
 
