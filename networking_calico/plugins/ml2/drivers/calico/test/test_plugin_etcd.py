@@ -1343,9 +1343,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                                          ("host",  "port_id")))],
                              m_queue.put.mock_calls)
             m_queue.put.reset_mock()
-            # Send a duplicate change.
+            # Send a duplicate low-priority change.
             self.driver.on_port_status_changed("host", "port_id",
-                                               {"status": "up"})
+                                               {"status": "up"},
+                                               priority="low")
             # Should have no effect on the cache.
             self.assertEqual(
                 "up",
@@ -1354,6 +1355,22 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             # And the queue update should be skipped.
             self.assertEqual([], m_queue.put.mock_calls)
             m_queue.put.reset_mock()
+
+            # Send a duplicate high-priority change.
+            self.driver.on_port_status_changed("host", "port_id",
+                                               {"status": "up"},
+                                               priority="high")
+            # Should have no effect on the cache.
+            self.assertEqual(
+                "up",
+                self.driver._port_status_cache[("host", "port_id")]
+            )
+            # But the queue update should happen.
+            self.assertEqual([mock.call(((0, mock.ANY),
+                                         ("host",  "port_id")))],
+                             m_queue.put.mock_calls)
+            m_queue.put.reset_mock()
+
             # Deletion takes a different code path.
             self.driver.on_port_status_changed("host", "port_id", None,
                                                priority="low")

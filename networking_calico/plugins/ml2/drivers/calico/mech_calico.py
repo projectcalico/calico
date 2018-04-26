@@ -378,7 +378,33 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         else:
             # Deletion.
             calico_status = None
-        if self._port_status_cache.get(port_status_key) != calico_status:
+
+        # Check whether this update gives us new information to pass to
+        # Neutron.  "high" priority updates come from changes spotted by Felix,
+        # including interface flaps caused by, for example, VM rebuild.  In
+        # those cases, we may be out-of-sync with Neutron because the
+        # port can be marked as down/removed by another component.
+        #
+        # "low" priority updates come from datastore resyncs.  In those cases
+        # we rely on our cache of port status to avoid spamming Neutron with
+        # many no-op updates.  It _is_ possible for our cache to be out of
+        # sync in the resync case too; however,
+        #
+        # - the impact on the database of sending port status updates to
+        #   Neutron for all ports is significant (we do have to do it as
+        #   start-of-day, because our cache is empty)
+        #
+        # - the impact of an incorrect port status for a normal, live VM is
+        #   minimal (and it shouldn't get out of sync unless another component
+        #   updates the port anyway, in which case they'll have updated the
+        #   database)
+        #
+        # - the impact of missing an update for a VM that is being (re)built
+        #   is that the VM (re)build fails; but if we're doing a resync then
+        #   we must have been disconnected from the datastore and that means
+        #   the (re)build is already likely to fail due to the disconnection.
+        if (priority == "high" or
+                self._port_status_cache.get(port_status_key) != calico_status):
             LOG.info("Status of port %s on host %s changed to %s",
                      port_status_key, hostname, calico_status)
             # We write the update to our in-memory cache, which is shared with
@@ -646,7 +672,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # If this port update is purely for a status change, don't do anything:
         # we don't care about port statuses.
         if port_status_change(port, original):
-            LOG.info('Called for port status change, no action.')
+            LOG.info(' port status changed from %s to %s, no action.',
+                     original.get("status"), port.get("status"))
             return
 
         # Now, re-read the port.
