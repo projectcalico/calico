@@ -76,12 +76,19 @@ fi
 
 cp -a "$CALICO_CFG" etc_calico
 
-# Use grep -v to attempt to strip out password information
-grep -v -i "password" /etc/nova/nova.conf > nova.conf 2>&1
-grep -v -i "password" /etc/neutron/neutron.conf > neutron.conf 2>&1
-grep -v -i "password" /etc/neutron/plugins/ml2/ml2_conf.ini > ml2_conf.ini 2>&1
-grep -v -i "password" /etc/neutron/dhcp_agent.ini > dhcp_agent.ini 2>&1
-grep -v -i "password" /etc/neutron/metadata_agent.ini > metadata_agent.ini 2>&1
+# Strip out known sensitive information.
+function copy_and_redact() {
+  in=$1
+  out=$2
+
+  sed -e 's/\(\(password\|token\|transport_url\|connection\)[ \t]*=[ \t]*\).*/\1REDACTED/' "$in" > $out 2>&1
+}
+
+copy_and_redact /etc/nova/nova.conf nova.conf
+copy_and_redact /etc/neutron/neutron.conf neutron.conf
+copy_and_redact /etc/neutron/plugins/ml2/ml2_conf.ini ml2_conf.ini
+copy_and_redact /etc/neutron/dhcp_agent.ini dhcp_agent.ini
+copy_and_redact /etc/neutron/metadata_agent.ini  metadata_agent.ini
 
 echo "  copying log files..."
 
