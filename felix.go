@@ -164,7 +164,7 @@ func main() {
 	// Load the configuration from all the different sources including the
 	// datastore and merge. Keep retrying on failure.  We'll sit in this
 	// loop until the datastore is ready.
-	log.Infof("Loading configuration...")
+	log.Info("Loading configuration...")
 	var backendClient bapi.Client
 	var configParams *config.Config
 	var typhaAddr string
@@ -217,12 +217,15 @@ configRetry:
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
 		datastoreConfig := configParams.DatastoreConfig()
+		// Can't dump the whole config because it may have sensitive information...
+		log.WithField("datastore", datastoreConfig.Spec.DatastoreType).Info("Connecting to datastore")
 		backendClient, err = backend.NewClient(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to create datastore client")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+		log.Info("Created datastore client")
 		numClientsCreated++
 		for {
 			globalConfig, hostConfig, err := loadConfigFromDatastore(
@@ -650,7 +653,7 @@ func exitWithCustomRC(rc int, message string) {
 	log.WithFields(log.Fields{
 		"rc": rc,
 		lclogutils.FieldForceFlush: true,
-	}).Info("Exiting")
+	}).Info(message)
 	os.Exit(rc)
 }
 
