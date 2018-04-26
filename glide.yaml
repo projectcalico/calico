@@ -2,8 +2,12 @@ package: github.com/kelseyhightower/confd
 import:
 - package: github.com/projectcalico/libcalico-go
   version: e3351395c934cee118999b9d29508e9280fa75ec
+
+# v3.3.3 + our fixes.  Can be reverted back to upstream if 
+# https://github.com/coreos/etcd/pull/9614 is resolved.
 - package: github.com/coreos/etcd
-  version: v3.3.0
+  version: e8287287893bd4080040e4fe68dae8a20476b095
+  repo: https://github.com/projectcalico/etcd.git
 - package: github.com/prometheus/procfs
   version: f98634e408857669d61064b283c4cde240622865
 - package: golang.org/x/net

@@ -1,5 +1,5 @@
-hash: 143a2d95f61d523d6c4307d56b2186a70cd0ef5a293b93f0b06faa10e957dc70
-updated: 2018-04-18T22:26:46.250828279Z
+hash: e81e2d7484136c1c7b7e52607e917b8741cc813b07de7b380308e409006ab621
+updated: 2018-04-23T13:03:40.74682908Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,13 +14,14 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
   version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
 - name: github.com/coreos/etcd
-  version: c23606781f63d09917a1e7abfcefeb337a9608ea
+  version: e8287287893bd4080040e4fe68dae8a20476b095
+  repo: https://github.com/projectcalico/etcd.git
   subpackages:
   - auth/authpb
   - clientv3
@@ -36,6 +37,8 @@ imports:
   - spew
 - name: github.com/dgrijalva/jwt-go
   version: d2709f9f1f31ebcda9651b03077758c1f3a0018c
+- name: github.com/dustin/go-humanize
+  version: bb3d318650d48840a39aa21a027c6630e198e626
 - name: github.com/emicklei/go-restful
   version: ff4f55a206334ef123e4f79bbf348980da81ca46
   subpackages:
@@ -115,7 +118,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/pborman/uuid
@@ -170,11 +173,11 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -194,7 +197,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: golang.org/x/crypto
-  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
+  version: 2b6c08872f4b66da917bb4ce98df4f0307330f78
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -216,7 +219,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
+  version: 79b0c6888797020a994db17c8510466c72fe75d9
   subpackages:
   - unix
   - windows
