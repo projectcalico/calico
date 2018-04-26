@@ -5,8 +5,10 @@ owners:
 - name: Shaun Crampton
   email: shaun@tigera.io
 import:
+# v3.3.3 + our fixes.
 - package: github.com/coreos/etcd
-  version: v3.3.0
+  version: e8287287893bd4080040e4fe68dae8a20476b095
+  repo: https://github.com/projectcalico/etcd.git
   subpackages:
   - client
   - pkg/transport
