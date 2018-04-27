@@ -332,6 +332,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	if err != nil {
 		panic(err)
 	}
+	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {

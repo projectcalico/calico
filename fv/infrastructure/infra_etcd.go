@@ -81,10 +81,12 @@ func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	felixNode := api.NewNode()
 	felixNode.Name = felix.Hostname
 	if needBGP {
+		tunnelAddr := fmt.Sprintf("10.65.%d.1", idx)
 		felixNode.Spec.BGP = &api.NodeBGPSpec{
 			IPv4Address:        felix.IP,
-			IPv4IPIPTunnelAddr: fmt.Sprintf("10.65.%d.1", idx),
+			IPv4IPIPTunnelAddr: tunnelAddr,
 		}
+		felix.ExpectedIPIPTunnelAddr = tunnelAddr
 	}
 	Eventually(func() error {
 		_, err := eds.GetCalicoClient().Nodes().Create(utils.Ctx, felixNode, utils.NoOptions)

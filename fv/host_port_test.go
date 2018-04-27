@@ -111,7 +111,6 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		BeforeEach(func() {
 			err := infra.AddAllowToDatastore("host-endpoint=='true'")
 			Expect(err).NotTo(HaveOccurred())
-
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = "host-endpoint-1"
 			hostEp.Labels = map[string]string{"host-endpoint": "true"}
