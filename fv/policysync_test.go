@@ -350,6 +350,9 @@ var _ = Context("policy sync API tests", func() {
 											Selector: "foo == 'bar'",
 										},
 									},
+									HTTP: &api.HTTPMatch{Methods: []string{"GET"},
+										Paths: []map[string]string{{"exact": "/path"}},
+									},
 								},
 							}
 							policy.Spec.Egress = []api.Rule{
@@ -405,6 +408,9 @@ var _ = Context("policy sync API tests", func() {
 											},
 											SrcServiceAccountMatch: &proto.ServiceAccountMatch{
 												Selector: "foo == 'bar'",
+											},
+											HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"},
+												Paths: []*proto.HTTPMatchPathMatchTypes{{&proto.HTTPMatchPathMatchTypes_Exact{Exact: "/path"}}},
 											},
 										},
 									},
