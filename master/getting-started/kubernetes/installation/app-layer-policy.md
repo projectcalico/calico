@@ -5,18 +5,18 @@ canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes
 
 Application layer policy for {{site.prodname}} allows you to write policies that
 enforce against both network layer attributes, like IP addresses or ports, and
-application layer attributes like HTTP methods or paths. It can also enforce 
+application layer attributes like HTTP methods or paths. It can also enforce
 policy based on cryptographically secure identities, allowing you to reduce
 trust in your network.  See Application Layer Policy Introduction for more
 information.
 
 # Enable {{site.prodname}} support for application layer policy
 
-Support for application layer policy is not enabled by default in 
-{{site.prodname}} installs, since it requires extra CPU and memory resources to 
+Support for application layer policy is not enabled by default in
+{{site.prodname}} installs, since it requires extra CPU and memory resources to
 operate. After installing {{site.prodname}}, return to this page and continue.
 
-Apply an updated manifest for the `calico/node` DaemonSet which enables
+Apply an updated manifest for the `{{site.nodecontainer}}` DaemonSet which enables
 application layer policy support.
 
 If you installed {{site.prodname}} for policy and networking with the etcd
@@ -46,7 +46,7 @@ If you installed {{site.prodname}} for policy only
 
 [View this manifest in your browser](manifests/app-layer-policy/kubernetes-datastore/policy-only/calico-node.yaml)
 
-**Note**: These commands overwrite the `calico/node` DaemonSet and will cause
+**Note**: These commands overwrite the `{{site.nodecontainer}}` DaemonSet and will cause
 these containers to be restarted.
 {: .alert .alert-info}
 
@@ -73,7 +73,7 @@ containers.
 
 1. Follow the [Automatic Sidecar Injection instructions](https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection)
    to install the Sidecar Injector and enable it in your chosen namespace(s)
-1. Apply the following ConfigMap to enable injection of {{site.prodname}} 
+1. Apply the following ConfigMap to enable injection of {{site.prodname}}
    components alongside the Istio Proxy.
 
 ```
@@ -130,7 +130,7 @@ Locate the `istio-pilot` Deployment in the manifest. In the `args` list of the
 `discovery` container, add `"--webhookEndpoint"` and
 `"unix:///var/run/calico/webhook.sock"` to the end of the list.
 
-Add a `volumeMount` to the `discovery` container as follows  
+Add a `volumeMount` to the `discovery` container as follows
 
 ```
         - name: webhook
@@ -155,7 +155,7 @@ Add the `webhook` volume
 
 ```
       - name: webhook
-        emptyDir: {}  
+        emptyDir: {}
 ```
 
 Here is an example of the `istio-pilot` Deployment from Istio v0.6.0 after the
@@ -251,7 +251,7 @@ an additional lightweight sidecar called Dikastes which receives Calico policy
 from Felix and applies it to incoming connections and requests.
 
 
-If you haven't already done so, download an 
+If you haven't already done so, download an
 [Istio Release](https://github.com/istio/istio/releases) and untar it to a
 working directory.
 
