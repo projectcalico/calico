@@ -492,7 +492,7 @@ bin/calico-felix-$(ARCH): $(FELIX_GO_FILES) vendor/.up-to-date
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
-	   sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
+	   sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/cmd/calico-felix" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
@@ -532,7 +532,7 @@ bin/calico-felix.exe: $(FELIX_GO_FILES) vendor/.up-to-date
 	@echo Building felix for Windows...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
-           sh -c 'GOOS=windows go build -v -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
+           sh -c 'GOOS=windows go build -v -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/cmd/calico-felix" && \
 		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
 
@@ -550,7 +550,7 @@ go-fmt goimports:
 	                          xargs goimports -w -local github.com/projectcalico/ *.go'
 
 check-licenses/dependency-licenses.txt: vendor/.up-to-date
-	$(DOCKER_GO_BUILD) sh -c 'licenses . > check-licenses/dependency-licenses.txt'
+	$(DOCKER_GO_BUILD) sh -c 'licenses ./cmd/calico-felix > check-licenses/dependency-licenses.txt'
 
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(FELIX_GO_FILES)

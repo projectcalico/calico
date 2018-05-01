@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package daemon
 
 import (
 	"context"
@@ -28,7 +28,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -86,7 +85,7 @@ const (
 	configChangedRC = 129
 )
 
-// main is the entry point to the calico-felix binary.
+// Run is the entry point to run a Felix instance.
 //
 // Its main role is to sequence Felix's startup by:
 //
@@ -112,7 +111,7 @@ const (
 // To avoid having to maintain rarely-used code paths, Felix handles updates to its
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
-func main() {
+func Run(configFile string) {
 	// Go's RNG is not seeded by default.  Do that now.
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -130,15 +129,6 @@ func main() {
 		debug.SetGCPercent(defaultGCPercent)
 	}
 
-	// Parse command-line args.
-	version := "Version:            " + buildinfo.GitVersion + "\n" +
-		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
-		"Build date:         " + buildinfo.BuildDate + "\n"
-	arguments, err := docopt.Parse(usage, nil, true, version, false)
-	if err != nil {
-		println(usage)
-		log.Fatalf("Failed to parse usage, exiting: %v", err)
-	}
 	buildInfoLogCxt := log.WithFields(log.Fields{
 		"version":    buildinfo.GitVersion,
 		"buildDate":  buildinfo.BuildDate,
@@ -146,7 +136,6 @@ func main() {
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
 	buildInfoLogCxt.Info("Felix starting up")
-	log.Infof("Command line arguments: %v", arguments)
 
 	// Health monitoring, for liveness and readiness endpoints.  The following loop can take a
 	// while before the datastore reports itself as ready - for example when there is data that
@@ -186,7 +175,7 @@ configRetry:
 		configParams = config.New()
 		envConfig := config.LoadConfigFromEnvironment(os.Environ())
 		// Then, the config file.
-		configFile := arguments["--config-file"].(string)
+		log.Infof("Loading config file: %v", configFile)
 		fileConfig, err := config.LoadConfigFile(configFile)
 		if err != nil {
 			log.WithError(err).WithField("configFile", configFile).Error(
