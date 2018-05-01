@@ -162,6 +162,10 @@ func (fc fakeClientV1) Apply(d *model.KVPair) (*model.KVPair, error) {
 	return nil, nil
 }
 
+func (fc fakeClientV1) Update(d *model.KVPair) (*model.KVPair, error) {
+	return nil, nil
+}
+
 func (fc fakeClientV1) Get(k model.Key) (*model.KVPair, error) {
 	ks := k.String()
 	for _, kvp := range fc.kvps {

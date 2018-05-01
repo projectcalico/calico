@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package etcdv2
 
 import (
 	goerrors "errors"
+	"strconv"
 	"strings"
 
 	"time"
@@ -87,6 +88,22 @@ func NewEtcdClient(config *apiv1.EtcdConfig) (*EtcdClient, error) {
 	keys := etcd.NewKeysAPI(client)
 
 	return &EtcdClient{etcdClient: client, etcdKeysAPI: keys}, nil
+}
+
+// Update an existing entry in the datastore.  This errors if the entry does
+// not exist.
+func (c *EtcdClient) Update(d *model.KVPair) (*model.KVPair, error) {
+	// If the request includes a revision, set it as the etcd previous index.
+	options := etcd.SetOptions{PrevExist: etcd.PrevExist}
+	if len(d.Revision) != 0 {
+		var err error
+		if options.PrevIndex, err = strconv.ParseUint(d.Revision, 10, 64); err != nil {
+			return nil, err
+		}
+		log.Debugf("Performing CAS against etcd index: %v\n", options.PrevIndex)
+	}
+
+	return c.set(d, &options)
 }
 
 // Set an existing entry in the datastore.  This ignores whether an entry already

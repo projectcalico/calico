@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,10 @@ func NewAdaptor(c *etcdv2.EtcdClient) *ModelAdaptor {
 // used for etcdv2, this returns false.
 func (c *ModelAdaptor) IsKDD() bool {
 	return false
+}
+
+func (c *ModelAdaptor) Update(d *model.KVPair) (*model.KVPair, error) {
+	return c.client.Update(d)
 }
 
 // Apply - this just calls through to the datastore driver (the upgrade code only
