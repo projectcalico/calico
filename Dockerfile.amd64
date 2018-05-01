@@ -16,3 +16,5 @@ LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
 # Copy in the binary.
 ADD bin/confd-amd64 /bin/confd
+
+CMD /bin/confd

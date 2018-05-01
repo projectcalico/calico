@@ -17,3 +17,5 @@ LABEL maintainer "David Wilder <wilder@us.ibm.com>"
 
 # Copy in the binary.
 ADD bin/confd-s390x /bin/confd
+
+CMD /bin/confd
