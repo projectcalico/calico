@@ -33,14 +33,7 @@ For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bi
    nodes, but it currently has no mechanism to configure peerings with non-{{site.prodname}}
    BGP speakers (e.g. edge routers)
 -  There is no `calicoctl` integration or similar.
--  If you are using Kubernetes API as the {{site.prodname}} datastore, the Route Reflector container
-   currently only supports running as a single-instance.
--  For etcdv3, the Route Reflector container may be used to form a cluster of route reflectors that
-   automatically create a full mesh between each Route Reflector.
-   -  Note that there is no `calicoctl` integration and to form a cluster it is necessary to
-      configure data directly into the `etcd` datastore for each Route Reflector instance.
-   -  It is not possible to form multiple separate meshed groups
-      of Route Reflectors using this image.
+-  The Route Reflector container currently only supports running as a single-instance. If you want to deploy multiple route reflectors, for example for redundancy, you should not use the Calico Route Reflector package but manually deploy BIRD as described here: [Configuring BIRD as a BGP Route Reflector](bird-rr-config).
 
 ## Starting and configuring your route reflectors
 
@@ -193,7 +186,6 @@ Use `calicoctl` to configure each route reflector as a global peer (i.e. it
 peers with every node in the deployment):
 
 ```
-calicoctl bgp peer add <IP_RR> as <AS_NUM>
 $ calicoctl create -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
