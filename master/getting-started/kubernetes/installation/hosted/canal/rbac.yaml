@@ -8,6 +8,7 @@ rules:
   - apiGroups: [""]
     resources:
       - namespaces
+      - serviceaccounts
     verbs:
       - get
       - list
@@ -43,7 +44,7 @@ rules:
       - list
       - update
       - watch
-  - apiGroups: ["extensions"]
+  - apiGroups: ["networking.k8s.io"]
     resources:
       - networkpolicies
     verbs:
@@ -56,6 +57,8 @@ rules:
       - felixconfigurations
       - bgppeers
       - globalbgpconfigs
+      - globalnetworksets
+      - hostendpoints
       - bgpconfigurations
       - ippools
       - globalnetworkpolicies

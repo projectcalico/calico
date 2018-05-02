@@ -235,11 +235,9 @@ spec:
             - mountPath: /var/run/calico
               name: var-run-calico
               readOnly: false
-{%- if include.network != "flannel" %}
             - mountPath: /var/lib/calico
               name: var-lib-calico
               readOnly: false
-{%- endif %}
 {%- if include.datastore == "etcd" %}
             - mountPath: /calico-secrets
               name: etcd-certs
@@ -429,6 +427,9 @@ spec:
         - name: var-run-calico
           hostPath:
             path: /var/run/calico
+        - name: var-lib-calico
+          hostPath:
+            path: /var/lib/calico
 {%- if include.network == "flannel" and include.datastore == "kdd" %}
         # Used by flannel.
         - name: run
@@ -438,17 +439,13 @@ spec:
           configMap:
             name: canal-config
 {%- elsif include.network == "flannel" and include.datastore == "etcd" %}
-        # Used by flannel daemon.
+        # Used by flannel.
         - name: run-flannel
           hostPath:
             path: /run/flannel
         - name: resolv
           hostPath:
             path: /etc/resolv.conf
-{%- else %}
-        - name: var-lib-calico
-          hostPath:
-            path: /var/lib/calico
 {%- endif %}
         # Used to install CNI.
         - name: cni-bin-dir
