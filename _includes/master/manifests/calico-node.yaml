@@ -12,7 +12,7 @@ calico-node.yaml acccepts the following include flags:
 
 {% endcomment -%}
 {% capture objname %}{% if include.network == "flannel" and include.datastore == "etcd" %}canal-node{% elsif include.network == "flannel" %}canal{% else %}calico-node{% endif %}{% endcapture -%}
-# This manifest installs the calico/node container, as well
+# This manifest installs the {{site.nodecontainer}} container, as well
 # as the {{site.prodname}} CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
@@ -67,7 +67,7 @@ spec:
           mountPath: /host/driver
 {%- endif %}
       containers:
-        # Runs calico/node container on each Kubernetes node.  This
+        # Runs {{site.nodecontainer}} container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
@@ -422,7 +422,7 @@ spec:
   {%- endif %}
 {%- endif %}
       volumes:
-        # Used by calico/node.
+        # Used by {{site.nodecontainer}}.
         - name: lib-modules
           hostPath:
             path: /lib/modules
