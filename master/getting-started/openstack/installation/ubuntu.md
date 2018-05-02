@@ -44,6 +44,12 @@ These steps are detailed in this section.
     add-apt-repository ppa:cz.nic-labs/bird
     ```
 
+    > **Tip**: If the above command fails with error
+    > `'ascii' codec can't decode byte`, try running the command with a
+    > UTF-8 enabled locale:
+    > `LC_ALL=en_US.UTF-8 add-apt-repository ppa:cz.nic-labs/bird`.
+    {: .alert .alert-success}
+
 1. Update your package manager on each machine:
 
     ```
