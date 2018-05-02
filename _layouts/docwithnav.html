@@ -91,7 +91,6 @@ The code is a little roundabout for a few reasons:
                     <li><a href="https://www.projectcalico.org/videos"><i class="fa fa-video-camera" aria-hidden="true"></i> &nbsp; Videos &amp; Webinars</a></li>
                     <li><a href="https://www.projectcalico.org/training"><i class="fa fa-graduation-cap" aria-hidden="true"></i> &nbsp; Training</a></li>
                     <li><a href="{{site.baseurl}}/latest/releases/"><i class="fa fa-clock-o" aria-hidden="true"></i> &nbsp; Releases</a></li>
-                    <!-- <li><a href="/mvp"><i class="fa fa-star" aria-hidden="true"></i> &nbsp; MVP Program</a></li> -->
                     <li><a href="https://www.projectcalico.org/blog"><i class="fa fa-bookmark" aria-hidden="true"></i> &nbsp; Blog</a></li>
                 </ul>
               </li>
@@ -99,15 +98,13 @@ The code is a little roundabout for a few reasons:
                 <ul>
                     <li><a href="https://slack.projectcalico.org/"><i class="fa fa-slack" aria-hidden="true"></i> &nbsp; Slack</a></li>
                     <!--<li><a href="https://stackoverflow.com/questions/tagged/project-calico" target="_blank"><i class="fa fa-stack-overflow" aria-hidden="true"></i> &nbsp; StackOverflow</a></li>-->
-                    <li><a href="https://www.projectcalico.org/mvp"><i class="fa fa-star" aria-hidden="true"></i> &nbsp; MVP Program</a></li>
                     <li><a href="https://www.projectcalico.org/community#events"><i class="fa fa-calendar" aria-hidden="true"></i> &nbsp; Upcoming Events</a></li>
                     <li><a href="https://www.projectcalico.org/newsletters"><i class="fa fa-envelope-o" aria-hidden="true"></i> &nbsp; Newsletter</a></li>
-                    <li><a href="https://github.com/projectcalico" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> &nbsp; GitHub</a></li> 
+                    <li><a href="https://github.com/projectcalico" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> &nbsp; GitHub</a></li>
                     <li><a href="https://www.projectcalico.org/jobs"><i class="fa fa-briefcase" aria-hidden="true"></i> &nbsp; Jobs</a></li>
                     <li><a href="https://www.projectcalico.org/blog"><i class="fa fa-bookmark" aria-hidden="true"></i> &nbsp; Blog</a></li>
                 </ul>
               </li>
-              <li><a href="https://www.projectcalico.org/mvp" style="font-weight: bold;">MVP</a></li>
               <li><a href="https://www.projectcalico.org/support">Support</a></li>
               <li class="hidden-xs"><a href="https://www.projectcalico.org/support">
                 <img class="desktopImage" width="30" align="absmiddle" src="https://www.projectcalico.org/images/tigera_trans_sm.png" alt="Tigera"></a>
@@ -205,15 +202,15 @@ The code is a little roundabout for a few reasons:
             <div id="content-main">
               <!-- TOP DOCUMENTATION PAGE NAVBAR -->
               <div style="text-align: left; padding: 18px 0 9px 0; min-width: 500px; overflow-x: hidden;">
-              
+
               <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> Edit this page</a></div>
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include version_warning.html %}
               <h1>{{ page.title }}</h1>
               {{ content }}
-              
+
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
-              <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">Rate this Page: <div class="rw-ui-container" style="margin-top: -5px;"></div> <a href="https://www.projectcalico.org/contact?type=docs&file={{page.path}}" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-envelope" aria-hidden="true"></i> Provide Feedback</a> <a href="https://www.projectcalico.org/community#slack" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-slack" aria-hidden="true"></i> Get Help via Slack</a> <a href="https://www.projectcalico.org/mvp" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-trophy" aria-hidden="true"></i> Ask our MVPs</a> <a href="https:/tigera.io/training" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-graduation-cap" aria-hidden="true"></i> Training</a></div>
+              <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">Rate this Page: <div class="rw-ui-container" style="margin-top: -5px;"></div> <a href="https://www.projectcalico.org/contact?type=docs&file={{page.path}}" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-envelope" aria-hidden="true"></i> Provide Feedback</a> <a href="https://www.projectcalico.org/community#slack" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-slack" aria-hidden="true"></i> Get Help via Slack</a> <a href="https:/tigera.io/training" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-graduation-cap" aria-hidden="true"></i> Training</a></div>
               <!-- END BOTTOM DOCUMENTATION PAGE NAVBAR -->
             </div>
           </div>
@@ -264,17 +261,17 @@ The code is a little roundabout for a few reasons:
 				"showLoader": false,
                 "style": "oxygen",
                 "isDummy": false
-            } 
+            }
         });
         RW.render();
     };
         // Append Rating-Widget JavaScript library.
     var rw, s = d.getElementsByTagName(e)[0], id = "rw-js",
-        l = d.location, ck = "Y" + t.getFullYear() + 
+        l = d.location, ck = "Y" + t.getFullYear() +
         "M" + t.getMonth() + "D" + t.getDate(), p = l.protocol,
         f = ((l.search.indexOf("DBG=") > -1) ? "" : ".min"),
         a = ("https:" == p ? "secure." + m + "js/" : "js." + m);
-    if (d.getElementById(id)) return;              
+    if (d.getElementById(id)) return;
     rw = d.createElement(e);
     rw.id = id; rw.async = true; rw.type = "text/javascript";
     rw.src = p + "//" + a + "external" + f + ".js?ck=" + ck;
