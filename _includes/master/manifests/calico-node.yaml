@@ -475,7 +475,7 @@ spec:
         - name: flexvol-driver-host
           hostPath:
             type: DirectoryOrCreate
-            path: /opt/bin/volume-plugins/nodeagent~uds
+            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
 {%- endif %}
 ---
 
