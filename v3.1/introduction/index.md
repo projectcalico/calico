@@ -4,30 +4,30 @@ redirect_from: latest/introduction/index
 canonical_url: 'https://docs.projectcalico.org/v3.1/introduction/'
 ---
 
-{{site.prodname}} provides secure network connectivity for 
+{{site.prodname}} provides secure network connectivity for
 containers and virtual machine workloads.
 
-{{site.prodname}} creates and manages a flat layer 3 network, 
-assigning each workload a fully routable IP address. 
-Workloads can communicate without IP encapsulation 
-or network address translation for bare metal 
-performance, easier troubleshooting, and better 
-interoperability. In environments that require an 
-overlay, {{site.prodname}} uses IP-in-IP tunneling or can work 
+{{site.prodname}} creates and manages a flat layer 3 network,
+assigning each workload a fully routable IP address.
+Workloads can communicate without IP encapsulation
+or network address translation for bare metal
+performance, easier troubleshooting, and better
+interoperability. In environments that require an
+overlay, {{site.prodname}} uses IP-in-IP tunneling or can work
 with other overlay networking such as flannel.
 
-{{site.prodname}} also provides dynamic enforcement of network 
-security rules. Using {{site.prodname}}'s simple policy language, 
-you can achieve fine-grained control over communications 
-between containers, virtual machine workloads, and 
+{{site.prodname}} also provides dynamic enforcement of network
+security rules. Using {{site.prodname}}'s simple policy language,
+you can achieve fine-grained control over communications
+between containers, virtual machine workloads, and
 bare metal host endpoints.
 
-Proven in production at scale, {{site.prodname}} {{page.version}} features 
+Proven in production at scale, {{site.prodname}} {{page.version}} features
 integrations with Kubernetes, OpenShift, and OpenStack.
 
-> **Note**: For integrations with the  Mesos, DC/OS, and Docker 
-> orchestrators, use [Calico v2.6](/v2.6/introduction/). We plan 
-> to resume support for these orchestrators in a future 
+> **Note**: For integrations with the  Mesos, DC/OS, and Docker
+> orchestrators, use [Calico v2.6](/v2.6/introduction/). We plan
+> to resume support for these orchestrators in a future
 > v3.x release.
 {: .alert .alert-info}
 
@@ -54,7 +54,7 @@ integrations with Kubernetes, OpenShift, and OpenStack.
 
 # How it works
 
-![{{site.prodname}} overview diagram]({{site.baseurl}}/images/calico-arch-gen.svg){: width="60%" }
+![{{site.prodname}} overview diagram]({{site.baseurl}}/images/calico-arch-gen-v3.1.svg){: width="60%" }
 
 <br>
 {{site.prodname}} leverages the routing and iptables firewall capabilities native to the Linux kernel. All traffic to and from individual containers, virtual machines, and hosts traverses these in-kernel rules before being routed to its destination.
