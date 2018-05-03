@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -46,6 +47,8 @@ var ports2 = []numorstring.Port{
 	numorstring.SinglePort(4567),
 }
 var _, cidr, _ = net.ParseCIDR("10.0.0.0/16")
+var httpMethod = &model.HTTPMatch{Methods: []string{"GET", "PUT"}}
+var httpPath = &model.HTTPMatch{Paths: []apiv3.HTTPPath{{Exact: "/foo"}, {Prefix: "/bar"}}}
 
 var ruleStringTests = []ruleTest{
 	// Empty
@@ -91,6 +94,10 @@ var ruleStringTests = []ruleTest{
 	{model.Rule{NotDstTag: "foo"}, "Allow to !tag foo"},
 	{model.Rule{NotDstSelector: "bar"}, "Allow to !selector \"bar\""},
 	{model.Rule{NotDstNet: cidr}, "Allow to !cidr 10.0.0.0/16"},
+
+	// Application layer rules.
+	{model.Rule{HTTPMatch: httpMethod}, "Allow to httpMethods [GET PUT]"},
+	{model.Rule{HTTPMatch: httpPath}, "Allow to httpPaths [{Exact:/foo Prefix:} {Exact: Prefix:/bar}]"},
 
 	// Complex rule.
 	{model.Rule{Protocol: &tcpProto,
