@@ -29,7 +29,7 @@ def create_bgp_peer(host, scope, ip, asNum, metadata=None):
     # Add optional params
     # If node is not specified, scope is global.
     if scope == "node":
-        testdata['spec']['node'] = host.get_hostname()
+        testdata['spec']['node'] = '%s' % host.get_hostname()
     if metadata is not None:
         testdata['metadata'] = metadata
 
