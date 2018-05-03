@@ -131,7 +131,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 
 	if in.HTTPMatch != nil {
 		out.HttpMatch = &proto.HTTPMatch{}
-		var paths []*proto.HTTPMatchPathMatchTypes
+		var paths []*proto.HTTPMatch_PathMatch
 		for _, pathMatch := range in.HTTPMatch.Paths {
 			for key, value := range pathMatch {
 				log.WithFields(log.Fields{"key": key,
@@ -140,9 +140,9 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 
 				switch key {
 				case string(api.HTTPPathMatchExact):
-					paths = append(paths, &proto.HTTPMatchPathMatchTypes{PathMatch: &proto.HTTPMatchPathMatchTypes_Exact{Exact: value}})
+					paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: value}})
 				case string(api.HTTPPatchMatchPrefix):
-					paths = append(paths, &proto.HTTPMatchPathMatchTypes{PathMatch: &proto.HTTPMatchPathMatchTypes_Prefix{Prefix: value}})
+					paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: value}})
 				default:
 					log.Errorf("Invalid pathMatchkey %s", key)
 				}

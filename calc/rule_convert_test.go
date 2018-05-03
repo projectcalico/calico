@@ -148,9 +148,9 @@ var fullyLoadedProtoRule = proto.Rule{
 	},
 
 	HttpMatch: &proto.HTTPMatch{Methods: []string{"GET", "POST"},
-		Paths: []*proto.HTTPMatchPathMatchTypes{
-			{&proto.HTTPMatchPathMatchTypes_Exact{Exact: "/foo"}},
-			{&proto.HTTPMatchPathMatchTypes_Prefix{Prefix: "/bar"}},
+		Paths: []*proto.HTTPMatch_PathMatch{
+			{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
+			{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/bar"}},
 		}},
 }
 

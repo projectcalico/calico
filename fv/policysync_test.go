@@ -410,7 +410,7 @@ var _ = Context("policy sync API tests", func() {
 												Selector: "foo == 'bar'",
 											},
 											HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"},
-												Paths: []*proto.HTTPMatchPathMatchTypes{{&proto.HTTPMatchPathMatchTypes_Exact{Exact: "/path"}}},
+												Paths: []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/path"}}},
 											},
 										},
 									},
