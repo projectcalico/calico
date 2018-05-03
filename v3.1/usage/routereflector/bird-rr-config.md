@@ -37,6 +37,12 @@ PPA, run:
 
     sudo add-apt-repository ppa:cz.nic-labs/bird
 
+    > **Tip**: If the above command fails with error
+    > `'ascii' codec can't decode byte`, try running the command with a
+    > UTF-8 enabled locale:
+    > `LC_ALL=en_US.UTF-8 add-apt-repository ppa:cz.nic-labs/bird`.
+    {: .alert .alert-success}
+
 Once that's done, update your package manager and install BIRD (the
 single `bird` package installs both IPv4 and IPv6 BIRD):
 
