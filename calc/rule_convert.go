@@ -21,7 +21,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/proto"
-	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -133,19 +132,14 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		out.HttpMatch = &proto.HTTPMatch{}
 		var paths []*proto.HTTPMatch_PathMatch
 		for _, pathMatch := range in.HTTPMatch.Paths {
-			for key, value := range pathMatch {
-				log.WithFields(log.Fields{"key": key,
-					"value": value,
-				}).Debug("pathMatch.")
-
-				switch key {
-				case string(api.HTTPPathMatchExact):
-					paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: value}})
-				case string(api.HTTPPatchMatchPrefix):
-					paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: value}})
-				default:
-					log.Errorf("Invalid pathMatchkey %s", key)
-				}
+			if pathMatch.Exact != "" {
+				protoMatch := &proto.HTTPMatch_PathMatch_Exact{Exact: pathMatch.Exact}
+				paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: protoMatch})
+			} else if pathMatch.Prefix != "" {
+				protoMatch := &proto.HTTPMatch_PathMatch_Prefix{Prefix: pathMatch.Prefix}
+				paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: protoMatch})
+			} else {
+				log.Error("Ignoring unknown patch match type", pathMatch)
 			}
 		}
 		if len(paths) > 0 {

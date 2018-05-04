@@ -351,7 +351,7 @@ var _ = Context("policy sync API tests", func() {
 										},
 									},
 									HTTP: &api.HTTPMatch{Methods: []string{"GET"},
-										Paths: []map[string]string{{"exact": "/path"}},
+										Paths: []api.HTTPPath{{Exact: "/path"}},
 									},
 								},
 							}
