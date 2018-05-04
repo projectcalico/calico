@@ -29,6 +29,7 @@ import (
 	"sort"
 
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -146,7 +147,13 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 	Entry("OriginalSrcServiceAccountSelector", model.Rule{OriginalSrcServiceAccountSelector: "all()"}, ParsedRule{OriginalSrcServiceAccountSelector: "all()"}),
 	Entry("OriginalDstServiceAccountSelector", model.Rule{OriginalDstServiceAccountSelector: "all()"}, ParsedRule{OriginalDstServiceAccountSelector: "all()"}),
 
-	Entry("HTTPMatch", model.Rule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}}}, ParsedRule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}}}),
+	Entry("HTTPMatch", model.Rule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}, Paths: []v3.HTTPPath{
+		{Exact: "/foo"},
+		{Prefix: "/bar"},
+	}}}, ParsedRule{HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "HEAD"}, Paths: []v3.HTTPPath{
+		{Exact: "/foo"},
+		{Prefix: "/bar"},
+	}}}),
 
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),

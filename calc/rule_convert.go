@@ -129,7 +129,26 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	}
 
 	if in.HTTPMatch != nil {
-		out.HttpMatch = &proto.HTTPMatch{Methods: in.HTTPMatch.Methods}
+		out.HttpMatch = &proto.HTTPMatch{}
+		var paths []*proto.HTTPMatch_PathMatch
+		for _, pathMatch := range in.HTTPMatch.Paths {
+			if pathMatch.Exact != "" {
+				protoMatch := &proto.HTTPMatch_PathMatch_Exact{Exact: pathMatch.Exact}
+				paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: protoMatch})
+			} else if pathMatch.Prefix != "" {
+				protoMatch := &proto.HTTPMatch_PathMatch_Prefix{Prefix: pathMatch.Prefix}
+				paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: protoMatch})
+			} else {
+				log.Error("Ignoring unknown patch match type", pathMatch)
+			}
+		}
+		if len(paths) > 0 {
+			log.WithFields(log.Fields{"paths": paths}).Debug("protoPaths")
+			out.HttpMatch.Paths = paths
+		}
+		if len(in.HTTPMatch.Methods) > 0 {
+			out.HttpMatch.Methods = in.HTTPMatch.Methods
+		}
 	}
 
 	// Fill in the ICMP fields.  We can't follow the pattern and make a

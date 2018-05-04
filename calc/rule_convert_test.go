@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -85,7 +86,10 @@ var fullyLoadedParsedRule = ParsedRule{
 	OriginalDstServiceAccountSelector: "has(sa-dst)",
 	OriginalDstServiceAccountNames:    []string{"dst-1"},
 
-	HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "POST"}},
+	HTTPMatch: &model.HTTPMatch{Methods: []string{"GET", "POST"}, Paths: []v3.HTTPPath{
+		{Exact: "/foo"},
+		{Prefix: "/bar"},
+	}},
 }
 
 var fullyLoadedProtoRule = proto.Rule{
@@ -147,7 +151,11 @@ var fullyLoadedProtoRule = proto.Rule{
 		Names:    []string{"dst-1"},
 	},
 
-	HttpMatch: &proto.HTTPMatch{Methods: []string{"GET", "POST"}},
+	HttpMatch: &proto.HTTPMatch{Methods: []string{"GET", "POST"},
+		Paths: []*proto.HTTPMatch_PathMatch{
+			{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
+			{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/bar"}},
+		}},
 }
 
 var _ = DescribeTable("ParsedRulesToProtoRules",
