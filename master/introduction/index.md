@@ -58,10 +58,12 @@ integrations with Kubernetes, OpenShift, and OpenStack.
 <br>
 {{site.prodname}} leverages the routing and iptables firewall capabilities native to the Linux kernel. All traffic to and from individual containers, virtual machines, and hosts traverses these in-kernel rules before being routed to its destination.
 
-- **calicoctl**: allows you to achieve advanced policies and networking from a simple, command-line interface.
+- **`calicoctl`**: allows you to achieve advanced policies and networking from a simple, command-line interface.
 
 - **orchestrator plugins**: provide close integration and synchronization with a variety of popular orchestrators.
 
 - **key/value store**: holds {{site.prodname}}'s policy and network configuration state.
 
-- **{{site.nodecontainer}}**: runs on each host, reads relevant policy and network configuration information from the key/value store, and implements it in the Linux kernel.
+- **``{{site.nodecontainer}}``**: runs on each host, reads relevant policy and network configuration information from the key/value store, and implements it in the Linux kernel.
+
+- **Dikastes/Envoy**: optional Kubernetes sidecars that secure workload-to-workload communications with mutual TLS authentication and enforce application layer policy.
