@@ -74,6 +74,27 @@ export VERSION_CALICO=v2.3.0
 
 ```
 
+#### Build targets
+The following are the standard `Makefile` targets that are in every project repository.
+
+* `make build`: build the binary for the current architecture. Normally will be in `bin/` or `dist/` and named `NAME-ARCH`, e.g. `felix-arm64` or `typha-amd64`. If there are multiple OSes available, then named `NAME-OS-ARCH`, e.g. `calicoctl-darwin-amd64`.
+* `make build ARCH=<ARCH>`: build the binary for the given `ARCH`. Output binary will be in `bin/` or `dist/` and follows the naming convention listed above.
+* `make build-all`: build binaries for all supported architectures. Output binaries will be in `bin/` or `dist/` and follow the naming convention listed above.
+* `make image`: create a docker image for the current architecture. It will be named `NAME:latest-ARCH`, e.g. `calico/felix:latest-amd64` or `calico/typha:latest-s390x`. If multiple operating systems are available, will be named `NAME:latest-OS-ARCH`, e.g. `calico/ctl:latest-linux-ppc64le`
+* `make image ARCH=<ARCH>`: create a docker image for the given `ARCH`. Images will be named according to the convention listed above.
+* `make image-all`: create docker images for all supported architectures. Images will be named according to the convention listed above in `make image`.
+* `make push IMAGETAG=<IMAGETAG>`: push the docker image for the current architecture to all registries, specifically docker hub and quay.io. The images will be named `NAME:IMAGETAG-ARCH`, e.g. `make push IMAGETAG=foo` will push images `calico/felix:foo-amd64` or `calico/typha:foo-ppc64le`. 
+* `make push IMAGETAG=<IMAGETAG> ARCH=<ARCH>`: push the docker image for the given `ARCH` to all registries, specifically docker hub and quay.io. The images will be named `NAME:IMAGETAG-ARCH`, e.g. `make push IMAGETAG=foo ARCH=arm64` will push images `calico/felix:foo-arm64`. 
+* `make push-all IMAGETAG=<IMAGETAG>`: push the docker images for all supported architectures to all registries, specifically docker hub and quay.io. The images will be named `NAME:IMAGETAG-ARCH`, e.g. `make push-all IMAGETAG=foo` will push images `calico/felix:foo-arm64` and `calico/felix:foo-amd64` and etc. 
+* `make tag-images IMAGETAG=<IMAGETAG>`: tag the docker image built locally, usually as `latest`, for the current architecture to `$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)` and `quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)`. e.g. `make tag-images IMAGETAG=foo` will tag the locally built image to `calico/felix:foo-amd64` or `calico/typha:foo-ppc64le`. 
+* `make tag-images IMAGETAG=<IMAGETAG> ARCH=<ARCH>`: tag the docker image built locally for the given `ARCH` to `$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)` and `quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)`. e.g. `make tag-images IMAGETAG=foo ARCH=arm64` will tag the locally built `arm64` image to `calico/felix:foo-arm64` or `calico/typha:foo-arm64`.
+* `make tag-images-all IMAGETAG=<IMAGETAG>`: tag locally built images for all supported architectures to `$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)` and `quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)`.
+* `make test`: run all tests
+* `make ci`: run all CI steps, likely other targets. **WARNING:** It is **not** recommended to run `make ci` locally, as the actions it takes may be destructive, e.g. pushing out images. For your safety, it only will work if you run `make ci CONFIRM=true`, which only should be run by the proper CI system.
+
+
+NB: Some are still in the process of being added.
+
 ## Build instructions
 
 The following sections should be followed in order as there are cross dependencies
