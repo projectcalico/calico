@@ -40,7 +40,7 @@ const addr3Ip = "2.2.2.2"
 var addr1 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
 		Address:  addr1Ip,
-		Protocol: envoyapi.SocketAddress_TCP,
+		Protocol: envoyapi.TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 5429,
 		},
@@ -49,7 +49,7 @@ var addr1 = &envoyapi.Address{
 var addr2 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
 		Address:  addr2Ip,
-		Protocol: envoyapi.SocketAddress_TCP,
+		Protocol: envoyapi.TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 6632,
 		},
@@ -58,7 +58,7 @@ var addr2 = &envoyapi.Address{
 var addr3 = &envoyapi.Address{
 	Address: &envoyapi.Address_SocketAddress{SocketAddress: &envoyapi.SocketAddress{
 		Address:  addr3Ip,
-		Protocol: envoyapi.SocketAddress_TCP,
+		Protocol: envoyapi.TCP,
 		PortSpecifier: &envoyapi.SocketAddress_PortValue{
 			PortValue: 2222,
 		},

@@ -18,10 +18,9 @@ import (
 	"github.com/projectcalico/app-policy/policystore"
 
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	"github.com/gogo/googleapis/google/rpc"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
 type authServer struct {
@@ -39,8 +38,8 @@ func NewServer(ctx context.Context, stores <-chan *policystore.PolicyStore) *aut
 // Check applies the currently loaded policy to a network request and renders a policy decision.
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	log.Debugf("Check(%v, %v)", ctx, req)
-	resp := authz.CheckResponse{Status: &status.Status{Code: code.Code_value["INTERNAL"]}}
-	var st status.Status
+	resp := authz.CheckResponse{Status: &rpc.Status{Code: INTERNAL}}
+	var st rpc.Status
 
 	// Ensure that we only access as.Store once per Check call. The authServer can be updated to point to a different
 	// store asynchronously with this call, so we use a local variable to reference the PolicyStore for the duration of

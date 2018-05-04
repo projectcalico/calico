@@ -21,15 +21,15 @@ import (
 	"github.com/projectcalico/app-policy/proto"
 
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	"github.com/gogo/googleapis/google/rpc"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
-var OK = code.Code_value["OK"]
-var PERMISSION_DENIED = code.Code_value["PERMISSION_DENIED"]
-var UNAVAILABLE = code.Code_value["UNAVAILABLE"]
-var INVALID_ARGUMENT = code.Code_value["INVALID_ARGUMENT"]
+var OK = rpc.Code_value["OK"]
+var PERMISSION_DENIED = rpc.Code_value["PERMISSION_DENIED"]
+var UNAVAILABLE = rpc.Code_value["UNAVAILABLE"]
+var INVALID_ARGUMENT = rpc.Code_value["INVALID_ARGUMENT"]
+var INTERNAL = rpc.Code_value["INTERNAL"]
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int
@@ -44,8 +44,8 @@ const (
 
 // checkStore applies the policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if the
 // check fails. Note, if no policy matches, the default is PERMISSION_DENIED.
-func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s status.Status) {
-	s = status.Status{Code: PERMISSION_DENIED}
+func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s rpc.Status) {
+	s = rpc.Status{Code: PERMISSION_DENIED}
 	ep := store.Endpoint
 	if ep == nil {
 		log.Warning("CheckRequest before we synced Endpoint information.")
@@ -60,7 +60,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		if r := recover(); r != nil {
 			// Recover from the panic if we know what it is and we know what to do with it.
 			if _, ok := r.(*InvalidDataFromDataPlane); ok {
-				s = status.Status{Code: INVALID_ARGUMENT}
+				s = rpc.Status{Code: INVALID_ARGUMENT}
 			} else {
 				panic(r)
 			}

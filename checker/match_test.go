@@ -29,7 +29,7 @@ var (
 	socketAddressProtocolTCP = &core.Address{
 		&core.Address_SocketAddress{
 			&core.SocketAddress{
-				Protocol: core.SocketAddress_TCP,
+				Protocol: core.TCP,
 			},
 		},
 	}
@@ -37,7 +37,7 @@ var (
 	socketAddressProtocolUDP = &core.Address{
 		&core.Address_SocketAddress{
 			&core.SocketAddress{
-				Protocol: core.SocketAddress_UDP,
+				Protocol: core.UDP,
 			},
 		},
 	}
@@ -202,7 +202,7 @@ func TestMatchRule(t *testing.T) {
 			Address: &core.Address{Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
 					Address:       srcAddr,
-					Protocol:      core.SocketAddress_TCP,
+					Protocol:      core.TCP,
 					PortSpecifier: &core.SocketAddress_PortValue{PortValue: 8458},
 				}}},
 		},
@@ -211,7 +211,7 @@ func TestMatchRule(t *testing.T) {
 			Address: &core.Address{Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
 					Address:       dstAddr,
-					Protocol:      core.SocketAddress_TCP,
+					Protocol:      core.TCP,
 					PortSpecifier: &core.SocketAddress_PortValue{PortValue: 80},
 				}}},
 		},

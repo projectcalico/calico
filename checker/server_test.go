@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 
-	"google.golang.org/genproto/googleapis/rpc/status"
+	"github.com/gogo/googleapis/google/rpc"
 )
 
 func TestCheckNoStore(t *testing.T) {
@@ -74,5 +74,5 @@ func TestCheckStore(t *testing.T) {
 		Expect(err).ToNot(HaveOccurred())
 		return rsp
 	}
-	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: OK}}))
+	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &rpc.Status{Code: OK}}))
 }
