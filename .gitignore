@@ -1,8 +1,4 @@
 .idea/
-bazel-bin
-bazel-dikastes
-bazel-genfiles
-bazel-out
-bazel-testlogs
 docker/dikastes
 vendor/
+proto/*.pb.go

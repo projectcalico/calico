@@ -2,10 +2,6 @@ package: github.com/projectcalico/app-policy
 import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
-- package: github.com/golang/protobuf
-  #version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
-  subpackages:
-  - proto
 - package: github.com/projectcalico/libcalico-go
   version: d725fa5db923e8abe1430a74ce4e38f6bee6573a
   subpackages:
@@ -31,8 +27,7 @@ import:
   version: v3.5.0.1
 - package: github.com/lyft/protoc-gen-validate
   version: v0.0.5
-- package: github.com/googleapis/googleapis
-- package: google.golang.org/genproto/googleapis/
+- package: github.com/gogo/googleapis
 - package: github.com/onsi/gomega
   version: ^1.1.0
 - package: github.com/gogo/protobuf

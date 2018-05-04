@@ -1,5 +1,5 @@
-hash: 7fdd5a5728141fc959e06c8687c5187cac6af4b7a66d61f688fe2baf50eee506
-updated: 2018-04-17T16:40:16.975266717-07:00
+hash: 7dda396f8a4b89e70532488b59d250e54ccef4434de354434eb60dbb4ca2a5d7
+updated: 2018-05-04T11:25:33.863626331-07:00
 imports:
 - name: github.com/alecthomas/template
   version: a0175ee3bccc567396460bf5acd36800cb10c49c
@@ -14,8 +14,12 @@ imports:
   subpackages:
   - envoy/api/v2/core
   - envoy/service/auth/v2
+- name: github.com/gogo/googleapis
+  version: b23578765ee54ff6bceff57f397d833bf4ca6869
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
+  subpackages:
+  - proto
 - name: github.com/golang/protobuf
   version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
@@ -23,8 +27,6 @@ imports:
   - ptypes/any
 - name: github.com/google/protobuf
   version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
-- name: github.com/googleapis/googleapis
-  version: c5d0b08ecd3049c378972d833a49df99f779f97f
 - name: github.com/lyft/protoc-gen-validate
   version: 8e6aaf55f4954f1ef9d3ee2e8f5a50e79cc04f8f
 - name: github.com/onsi/gomega
@@ -104,7 +106,6 @@ imports:
 - name: google.golang.org/genproto
   version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
-  - googleapis/
   - googleapis/rpc/code
   - googleapis/rpc/status
 - name: google.golang.org/grpc
@@ -125,7 +126,7 @@ imports:
 - name: gopkg.in/alecthomas/kingpin.v2
   version: 947dcec5ba9c011838740e680966fd7087a71d0d
 - name: k8s.io/apimachinery
-  version: 62737119932505aba8df99644184e0705ea58df1
+  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
   subpackages:
   - pkg/util/validation
 testImports:
