@@ -13,19 +13,19 @@ for instructions.
 
 - [Installing {{site.prodname}} for policy (advanced)](other)
 
+After installing {{site.prodname}}, you can [enable application layer policy](app-layer-policy).
+Enabling application layer policy also secures workload-to-workload communications with mutual 
+TLS authentication.
+
 Should you wish to modify the manifests before applying them, refer to
 [Customizing the manifests](config-options).
 
 If you prefer not to use Kubernetes to start the {{site.prodname}} services, refer to the
 [Integration guide](integration).
 
-If you will be using {{site.prodname}} application layer policy then you will need to install
-[Istio](https://istio.io/) and use {{site.prodname}} manifests that enable this feature. Refer
-to [Application Layer Policy](app-layer-policy) for more details.
-
 ## Third-party solutions
 
-Several third-party vendors also provide tools to install Kubernetes with {{site.prodname}} in a varienty of
+Several third-party vendors also provide tools to install Kubernetes with {{site.prodname}} in a variety of
 environments.
 
 | Name                               | Description |

@@ -15,7 +15,7 @@ data:
         image: docker.io/istio/proxy_init:0.6.0
         args:
         - "-p"
-        - {% raw %}{{ .MeshConfig.ProxyListenPort }}{% endraw %}      
+        - {% raw %}{{ .MeshConfig.ProxyListenPort }}{% endraw %}
         - "-u"
         - 1337
         imagePullPolicy: IfNotPresent
@@ -71,7 +71,7 @@ data:
         - --proxyAdminPort
         - {{ .ProxyConfig.ProxyAdminPort }}
         - --controlPlaneAuthPolicy
-        - {{ .ProxyConfig.ControlPlaneAuthPolicy }}{% endraw %}      
+        - {{ .ProxyConfig.ControlPlaneAuthPolicy }}{% endraw %}
         env:
         - name: POD_NAME
           valueFrom:
@@ -123,4 +123,5 @@ data:
       - name: felix-sync
         flexVolume:
           driver: nodeagent/uds
+
 ---
