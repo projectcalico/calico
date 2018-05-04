@@ -110,12 +110,52 @@ func TestMatchHTTPMethods(t *testing.T) {
 	}
 }
 
+// HTTP Paths clause with empty list will match any path.
+func TestMatchHTTPPaths(t *testing.T) {
+	testCases := []struct {
+		title   string
+		paths   []*proto.HTTPMatch_PathMatch
+		reqPath string
+		result  bool
+	}{
+		{"empty", []*proto.HTTPMatch_PathMatch{}, "/foo", true},
+		{"exact", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo", true},
+		{"prefix", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/foobar", true},
+		{"exact fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joo", false},
+		{"exact not match prefix", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foobar", false},
+		{"prefix fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/joobar", false},
+		{"multiple", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/joo"}}, {&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joobar", true},
+		{"exact path with query", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo?xyz", true},
+		{"exact path with fragment", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo#xyz", true},
+		{"prefix path with query fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo?bar", false},
+		{"prefix path with fragment fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo#bar", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(matchHTTPPaths(tc.paths, tc.reqPath)).To(Equal(tc.result))
+		})
+	}
+}
+
 // An omitted HTTP Match clause always matches.
 func TestMatchHTTPNil(t *testing.T) {
 	RegisterTestingT(t)
 
 	req := &auth.AttributeContext_HttpRequest{}
 	Expect(matchHTTP(nil, req)).To(BeTrue())
+}
+
+// Test HTTPPaths panic on invalid data.
+func TestPanicHTTPPaths(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer func() {
+		Expect(recover()).To(BeAssignableToTypeOf(&InvalidDataFromDataPlane{}))
+	}()
+	paths := []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}
+	matchHTTPPaths(paths, "foo")
 }
 
 // Matching a whole rule should require matching all subclauses.
@@ -138,6 +178,7 @@ func TestMatchRule(t *testing.T) {
 
 		HttpMatch: &proto.HTTPMatch{
 			Methods: []string{"GET", "POST"},
+			Paths:   []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/path"}}, {&proto.HTTPMatch_PathMatch_Exact{Exact: "/pathlong"}}},
 		},
 		Protocol: &proto.Protocol{
 			NumberOrName: &proto.Protocol_Name{
@@ -177,6 +218,7 @@ func TestMatchRule(t *testing.T) {
 		Request: &auth.AttributeContext_Request{
 			Http: &auth.AttributeContext_HttpRequest{
 				Method: "GET",
+				Path:   "/path",
 			},
 		},
 	}}
@@ -241,6 +283,13 @@ func TestMatchRule(t *testing.T) {
 	rule.HttpMatch.Methods = []string{"HEAD"}
 	Expect(match(rule, reqCache, "")).To(BeFalse())
 	rule.HttpMatch.Methods = ohm
+	Expect(match(rule, reqCache, "")).To(BeTrue())
+
+	// HTTPPath
+	ohp := rule.HttpMatch.Paths
+	rule.HttpMatch.Paths = []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{"/nopath"}}}
+	Expect(match(rule, reqCache, "")).To(BeFalse())
+	rule.HttpMatch.Paths = ohp
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 
 	// Protocol

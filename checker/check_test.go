@@ -378,3 +378,40 @@ func TestCheckStoreInitFails(t *testing.T) {
 	status := checkStore(store, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
+
+// Ensure checkStore returns INVALID_ARGUMENT on invalid input
+func TestCheckStoreWithInvalidData(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{{
+			Name:            "tier1",
+			IngressPolicies: []string{"policy1", "policy2"},
+		}},
+		ProfileIds: []string{"profile1"},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{InboundRules: []*proto.Rule{
+		{
+			Action: "allow",
+			HttpMatch: &proto.HTTPMatch{
+				Methods: []string{"GET", "POST"},
+				Paths:   []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{"/foo"}}},
+			},
+		},
+	}}
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sue",
+		},
+		Request: &authz.AttributeContext_Request{
+			// the path is invalid data as it does not have the `/' prefix
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET", Path: "foo"},
+		},
+	}}
+	status := checkStore(store, req)
+	Expect(status.Code).To(Equal(INVALID_ARGUMENT))
+}

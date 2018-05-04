@@ -29,6 +29,7 @@ import (
 var OK = code.Code_value["OK"]
 var PERMISSION_DENIED = code.Code_value["PERMISSION_DENIED"]
 var UNAVAILABLE = code.Code_value["UNAVAILABLE"]
+var INVALID_ARGUMENT = code.Code_value["INVALID_ARGUMENT"]
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int
@@ -55,6 +56,16 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 		log.WithField("error", err).Error("Failed to init requestCache")
 		return
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			// Recover from the panic if we know what it is and we know what to do with it.
+			if _, ok := r.(*InvalidDataFromDataPlane); ok {
+				s = status.Status{Code: INVALID_ARGUMENT}
+			} else {
+				panic(r)
+			}
+		}
+	}()
 	if len(ep.Tiers) > 0 {
 		// We only support a single tier.
 		log.Debug("Checking policy tier 1.")
