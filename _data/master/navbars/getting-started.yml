@@ -21,12 +21,12 @@ toc:
       path: /getting-started/kubernetes/installation/flannel
     - title: Installing Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
+    - title: Enabling application layer policy (optional)
+      path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests (advanced)
       path: /getting-started/kubernetes/installation/config-options
-    - title: Integration guide (advanced) 
+    - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
-    - title: Enabling Application Layer Policy
-      path: /getting-started/kubernetes/installation/app-layer-policy
   - title: Tutorials
     section:
     - title: Simple Policy Demo
@@ -135,7 +135,7 @@ toc:
       path: /getting-started/openstack/installation/
     - title: Ubuntu
       path: /getting-started/openstack/installation/ubuntu
-    - title: Red Hat Enterprise Linux 
+    - title: Red Hat Enterprise Linux
       path: /getting-started/openstack/installation/redhat
     - title: DevStack
       path: /getting-started/openstack/installation/devstack

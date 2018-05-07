@@ -50,6 +50,9 @@ section that matches your type.
    > **Note**: You can also [view the manifest in your browser](hosted/canal/canal.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
+1. If you wish to enforce application layer policies and secure workload-to-workload
+   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+
 ### Installing with the etcd datastore
 
 We strongly recommend using the Kubernetes API datastore, but if you prefer to use
@@ -85,3 +88,6 @@ etcd, complete the following steps.
    ```bash
    kubectl apply -f canal-etcd.yaml
    ```
+
+1. If you wish to enforce application layer policies and secure workload-to-workload
+   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
