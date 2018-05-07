@@ -1,22 +1,37 @@
 ###############################################################################
-# The build architecture is select by setting the ARCH variable.
-# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
-# When ARCH is undefined it defaults to amd64.
-ARCH?=amd64
-ifeq ($(ARCH),amd64)
-        ARCHTAG?=
-	GO_BUILD_VER:=v0.9
+# Both native and cross architecture builds are supported.
+# The target architecture is select by setting the ARCH variable.
+# When ARCH is undefined it is set to the detected host architecture.
+# When ARCH differs from the host architecture a crossbuild will be performed.
+ARCHES=amd64 arm64 ppc64le s390x
+
+# BUILDARCH is the host architecture
+# ARCH is the target architecture
+# we need to keep track of them separately
+BUILDARCH ?= $(shell uname -m)
+
+# canonicalized names for host architecture
+ifeq ($(BUILDARCH),aarch64)
+        BUILDARCH=arm64
+endif
+ifeq ($(BUILDARCH),x86_64)
+        BUILDARCH=amd64
 endif
 
-ifeq ($(ARCH),ppc64le)
-        ARCHTAG:=-ppc64le
-	GO_BUILD_VER:=latest
+# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
+ARCH ?= $(BUILDARCH)
+
+# canonicalized names for target architecture
+ifeq ($(ARCH),aarch64)
+        override ARCH=arm64
+endif
+ifeq ($(ARCH),x86_64)
+        override ARCH=amd64
 endif
 
-ifeq ($(ARCH),s390x)
-	ARCHTAG:=-s390x
-	GO_BUILD_VER:=latest
-endif
+GO_BUILD_VER ?= v0.15
+
+
 
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
@@ -41,11 +56,15 @@ CNI_SPEC_VERSION?=0.3.1
 DIST=dist/$(ARCH)
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p $(DIST))
-CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
-CONTAINER_NAME=calico/cni$(ARCHTAG)
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
-ETCD_CONTAINER?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+ETCD_CONTAINER ?= quay.io/coreos/etcd:v3.2.5-$(BUILDARCH)
+# If building on amd64 omit the arch in the container name.
+ifeq ($(BUILDARCH),amd64)
+        ETCD_CONTAINER=quay.io/coreos/etcd:v3.2.5
+endif
 
 LIBCALICOGO_PATH?=none
 
@@ -53,20 +72,69 @@ DATASTORE_TYPE?=etcdv3
 
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
-.PHONY: all binary plugin ipam
+.PHONY: all binary plugin ipam image image-all
 default: all
 all: vendor build-containerized test-containerized
 binary:  plugin ipam
 plugin: $(DIST)/calico
 ipam: $(DIST)/calico-ipam
 image: $(DEPLOY_CONTAINER_MARKER)
+image-all: $(addprefix sub-image-,$(ARCHES))
+sub-image-%:
+	$(MAKE) image ARCH=$*
+
 
 .PHONY: clean
 clean:
 	rm -rf $(DIST) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 
+
 ###############################################################################
-# Release targets 
+# tag and push images of any tag
+###############################################################################
+
+
+# ensure we have a real imagetag
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push one arch
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## push all archs
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+
+## tag images of one arch
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
+
+
+
+###############################################################################
+
+###############################################################################
+# Release targets
 ###############################################################################
 PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
 
@@ -97,27 +165,17 @@ release-build: release-prereqs clean
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-
 	$(MAKE) image
-	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
-	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
-
-	# Tag the GCR images.
-	docker tag $(CONTAINER_NAME):latest gcr.io/projectcalico-org/cni:$(VERSION)
-	docker tag $(CONTAINER_NAME):latest eu.gcr.io/projectcalico-org/cni:$(VERSION)
-	docker tag $(CONTAINER_NAME):latest asia.gcr.io/projectcalico-org/cni:$(VERSION)
-	docker tag $(CONTAINER_NAME):latest us.gcr.io/projectcalico-org/cni:$(VERSION)
-
-	# Generate the `latest` images.
-	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
+	$(MAKE) tag-images IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm calico/cni:$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm calico/cni:$(VERSION)-$(ARCH) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni:$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
 
 	# TODO: Some sort of quick validation of the produced binaries.
 
@@ -133,8 +191,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	docker push calico/cni$(ARCHTAG):$(VERSION)
-	docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)
+	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
 	# Push GCR images.
 	docker push gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
@@ -157,11 +214,10 @@ release-publish: release-prereqs
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
 	# Check latest versions match.
-	if ! docker run calico/cni$(ARCHTAG):latest calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/cni$(ARCHTAG):latest calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/calico/cni$(ARCHTAG):latest calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/cni$(ARCHTAG):latest calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	docker push calico/cni$(ARCHTAG):latest
-	docker push quay.io/calico/cni$(ARCHTAG):latest
+	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
@@ -183,18 +239,18 @@ vendor: glide.yaml
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		$(CALICO_BUILD) /bin/sh -c ' \
 			cd /go/src/github.com/projectcalico/cni-plugin && \
-			glide install -strip-vendor' 
+			glide install -strip-vendor'
 
 ## Build the Calico network plugin
 $(DIST)/calico: $(SRCFILES) vendor
 	mkdir -p $(@D)
-	CGO_ENABLED=0 go build -v -i -o $(DIST)/calico \
+	CGO_ENABLED=0 GOARCH=$(ARCH) go build -v -i -o $(DIST)/calico \
 	-ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" calico.go
 
 ## Build the Calico ipam plugin
 $(DIST)/calico-ipam: $(SRCFILES) vendor
 	mkdir -p $(@D)
-	CGO_ENABLED=0 go build -v -i -o $(DIST)/calico-ipam  \
+	CGO_ENABLED=0 GOARCH=$(ARCH) go build -v -i -o $(DIST)/calico-ipam  \
 	-ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ipam/calico-ipam.go
 
 .PHONY: test
@@ -209,8 +265,8 @@ test-watch: $(DIST)/calico $(DIST)/calico-ipam run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
 
-$(DEPLOY_CONTAINER_MARKER): Dockerfile$(ARCHTAG) build-containerized fetch-cni-bins
-	docker build -f Dockerfile$(ARCHTAG) -t $(CONTAINER_NAME) .
+$(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build-containerized fetch-cni-bins
+	docker build -f Dockerfile.$(ARCH) -t $(CONTAINER_NAME):latest-$(ARCH) .
 	touch $@
 
 .PHONY: fetch-cni-bins
@@ -289,8 +345,9 @@ test-containerized-cni-versions: build-containerized $(DIST)/host-local;
 		make run-test-containerized-without-building CNI_SPEC_VERSION=$$cniversion; \
 	done
 
-.PHONY: build-containerized
+.PHONY: build-containerized build
 ## Run the build in a container. Useful for CI
+build: build-containerized
 build-containerized: vendor
 	-mkdir -p $(DIST)
 	-mkdir -p .go-pkg-cache
@@ -352,7 +409,7 @@ run-k8s-apiserver: stop-k8s-apiserver
 	  --name calico-k8s-apiserver \
   	gcr.io/google_containers/hyperkube-$(ARCH):v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		  --service-cluster-ip-range=10.101.0.0/16 
+		  --service-cluster-ip-range=10.101.0.0/16
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:
@@ -398,7 +455,7 @@ deploy-rkt: binary
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod --net=dev
 
 ## Run kubernetes master
-run-kubernetes-master: stop-kubernetes-master run-etcd-host binary 
+run-kubernetes-master: stop-kubernetes-master run-etcd-host binary
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	mkdir -p net.d
 	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "usePodCidr"}}' >net.d/10-calico.conf
@@ -471,4 +528,3 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
-
