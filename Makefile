@@ -1,27 +1,50 @@
 ###############################################################################
-# The build architecture is select by setting the ARCH variable.
-# For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
-# When ARCH is undefined it defaults to amd64.
-ARCH?=amd64
-ifeq ($(ARCH),amd64)
-        ARCHTAG?=
+# Both native and cross architecture builds are supported.
+# The target architecture is select by setting the ARCH variable.
+# When ARCH is undefined it is set to the detected host architecture.
+# When ARCH differs from the host architecture a crossbuild will be performed.
+ARCHES=amd64 arm64 ppc64le s390x
+
+# BUILDARCH is the host architecture
+# ARCH is the target architecture
+# we need to keep track of them separately
+BUILDARCH ?= $(shell uname -m)
+
+# canonicalized names for host architecture
+ifeq ($(BUILDARCH),aarch64)
+        BUILDARCH=arm64
+endif
+ifeq ($(BUILDARCH),x86_64)
+        BUILDARCH=amd64
 endif
 
-ifeq ($(ARCH),ppc64le)
-        ARCHTAG:=-ppc64le
+# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
+ARCH ?= $(BUILDARCH)
+
+# canonicalized names for target architecture
+ifeq ($(ARCH),aarch64)
+        override ARCH=arm64
 endif
+ifeq ($(ARCH),x86_64)
+    override ARCH=amd64
+endif
+
+GO_BUILD_VER ?= v0.15
 
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):v1.8.0-beta.1
-ETCD_IMAGE?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
+ETCD_IMAGE ?= quay.io/coreos/etcd:v3.2.5-$(BUILDARCH)
+# If building on amd64 omit the arch in the container name.
+ifeq ($(BUILDARCH),amd64)
+        ETCD_IMAGE=quay.io/coreos/etcd:v3.2.5
+endif
 
 .PHONY: all binary build test clean help image
 default: help
 
-# Makefile configuration options 
-CONTAINER_NAME=calico/kube-controllers$(ARCHTAG)
+# Makefile configuration options
+CONTAINER_NAME=calico/kube-controllers
 PACKAGE_NAME?=github.com/projectcalico/kube-controllers
-GO_BUILD_VER:=v0.8
-CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
@@ -41,14 +64,18 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               $(CALICO_BUILD)
 
 ###############################################################################
-# Build targets 
+# Build targets
 ###############################################################################
 ## Builds the controller binary and docker image.
-image: image.created$(ARCHTAG)
-image.created$(ARCHTAG): dist/kube-controllers-linux-$(ARCH)
+image: image.created-$(ARCH)
+image.created-$(ARCH): dist/kube-controllers-linux-$(ARCH)
 	# Build the docker image for the policy controller.
-	docker build --pull -t $(CONTAINER_NAME) -f Dockerfile$(ARCHTAG) .
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
 	touch $@
+
+image-all: $(addprefix sub-image-,$(ARCHES))
+sub-image-%:
+	$(MAKE) image ARCH=$*
 
 dist/kube-controllers-linux-$(ARCH):
 	$(MAKE) OS=linux ARCH=$(ARCH) binary-containerized
@@ -84,7 +111,12 @@ binary: vendor
 	-ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
 
 ## Builds the controller binary in a container.
-build: binary-containerized
+.PHONY: build-all
+build-all: $(addprefix sub-build-,$(ARCHES))
+sub-build-%:
+	$(MAKE) build ARCH=$*
+
+build: dist/kube-controllers-linux-$(ARCH)
 binary-containerized: vendor
 	mkdir -p dist
 	-mkdir -p .go-pkg-cache
@@ -92,14 +124,13 @@ binary-containerized: vendor
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	  -v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
+	  -w /go/src/$(PACKAGE_NAME) \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
-	  $(CALICO_BUILD) sh -c '\
-	    cd /go/src/$(PACKAGE_NAME) && \
-	    make OS=$(OS) ARCH=$(ARCH) binary'
+	  $(CALICO_BUILD) make OS=$(OS) ARCH=$(ARCH) binary
 
 ###############################################################################
-# Test targets 
+# Test targets
 ###############################################################################
 
 ## Builds the code and runs all tests.
@@ -119,13 +150,13 @@ ut: vendor
 GINKGO_FOCUS?=.*
 fv: tests/fv/fv.test image
 	@echo Running Go FVs.
-	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME) ./fv.test -ginkgo.slowSpecThreshold 30 -ginkgo.focus $(GINKGO_FOCUS)
+	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(CONTAINER_NAME):latest-$(ARCH) ./fv.test -ginkgo.slowSpecThreshold 30 -ginkgo.focus $(GINKGO_FOCUS)
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.7.5
 ## Runs system tests.
 st: image run-etcd run-k8s-apiserver
-	./tests/system/apiserver-reconnection.sh $(ARCHTAG)
+	./tests/system/apiserver-reconnection.sh $(CONTAINER_NAME):latest-$(ARCH)
 	$(MAKE) stop-k8s-apiserver stop-etcd
 
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
@@ -158,10 +189,49 @@ stop-etcd:
 
 # Make sure that a copyright statement exists on all go files.
 check-copyright:
-	./check-copyrights.sh 
+	./check-copyrights.sh
 
 ###############################################################################
-# Release targets 
+# tag and push images of any tag
+###############################################################################
+
+
+# ensure we have a real imagetag
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push one arch
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+## tag images of one arch
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
+
+
+###############################################################################
+# Release targets
 ###############################################################################
 PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
 
@@ -194,11 +264,9 @@ ifneq ($(VERSION), $(GIT_VERSION))
 endif
 
 	$(MAKE) image
-	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
-	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
-
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
+	$(MAKE) tag-images IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -221,8 +289,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	docker push calico/kube-controllers:$(VERSION)
-	docker push quay.io/calico/kube-controllers:$(VERSION)
+	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -241,8 +308,7 @@ release-publish-latest: release-prereqs
 	if ! docker run calico/kube-controllers:latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-controllers:latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/calico/kube-controllers:latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/kube-controllers:latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	docker push calico/kube-controllers:latest
-	docker push quay.io/calico/kube-controllers:latest
+	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
@@ -252,13 +318,13 @@ endif
 
 ## Removes all build artifacts.
 clean:
-	rm -rf dist image.created$(ARCHTAG)
+	rm -rf dist image.created-$(ARCH)
 	-docker rmi $(CONTAINER_NAME)
 	rm -f st-kubeconfig.yaml
 	rm -f tests/fv/fv.test
 
 ###############################################################################
-# Utilities 
+# Utilities
 ###############################################################################
 
 .PHONY: help
