@@ -9,7 +9,7 @@ dist/
 *.tmp
 *~
 .vscode/
-image.created
+image.created*
 vendor/
 dist/kube-controllers
 .go-pkg-cache
