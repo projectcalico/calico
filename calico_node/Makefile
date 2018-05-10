@@ -21,7 +21,8 @@ endif
 # vX.Y format: redefine during a release, e.g. "RELEASE_STREAM=v3.1 make release"
 RELEASE_STREAM ?= v3.0
 
-CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+BUILD_IMAGE_ORG ?= calico
+CALICO_BUILD?=$(BUILD_IMAGE_ORG)/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
