@@ -49,7 +49,7 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
     sudo apt-get update
     sudo apt-get install bird
 
-#### RHEL
+#### RHEL / CentOS 7
 
 > **Note**: The following commands require root privileges. You can either open a root shell
 > or prefix them with `sudo`.
@@ -67,7 +67,7 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
    ```
    [bird]
    name=Network.CZ Repository
-   baseurl=ftp://repo.network.cz/pub/redhat/
+   baseurl=ftp://repo.network.cz/pub/bird/centos/7/x86_64/
    enabled=1
    gpgcheck=0
    gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-network.cz
