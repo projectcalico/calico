@@ -270,7 +270,7 @@ func (kds *K8sDatastoreInfra) EnsureReady() {
 	}
 	ready := true
 	info.Spec.DatastoreReady = &ready
-	info, err = kds.GetCalicoClient().ClusterInformation().Update(
+	_, err = kds.GetCalicoClient().ClusterInformation().Update(
 		context.Background(),
 		info,
 		options.SetOptions{},
