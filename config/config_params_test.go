@@ -161,6 +161,7 @@ var _ = DescribeTable("Config parsing",
 	Entry("InterfaceExclude list", "InterfaceExclude", "kube-ipvs0,dummy", "kube-ipvs0,dummy"),
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
+	Entry("ChainInsertMode append", "ChainInsertMode", "Append", "append"),
 
 	Entry("IptablesPostWriteCheckIntervalSecs", "IptablesPostWriteCheckIntervalSecs",
 		"1.5", 1500*time.Millisecond),
