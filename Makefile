@@ -52,6 +52,7 @@ CNI_VERSION=v0.6.0
 
 # Get version from git.
 GIT_VERSION?=$(shell git describe --tags --dirty)
+BUILD_IMAGE_ORG?=calico
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -59,11 +60,11 @@ CNI_SPEC_VERSION?=0.3.1
 BIN=bin/$(ARCH)
 # Ensure that the bin directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p $(BIN))
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD?=$(BUILD_IMAGE_ORG)/go-build:$(GO_BUILD_VER)$(ARCHTAG)
 
 PACKAGE_NAME?=github.com/projectcalico/cni-plugin
 
-CONTAINER_NAME=calico/cni
+CONTAINER_NAME=calico/cni$(ARCHTAG)
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
 ETCD_VER=v3.3.7
