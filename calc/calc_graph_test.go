@@ -228,7 +228,6 @@ var _ = Describe("specific scenario tests", func() {
 	var calcGraph *CalcGraph
 	var mockDataplane *mock.MockDataplane
 	var eventBuf *EventSequencer
-	var lastStats StatsUpdate
 
 	BeforeEach(func() {
 		mockDataplane = mock.NewMockDataplane()
@@ -237,7 +236,6 @@ var _ = Describe("specific scenario tests", func() {
 		calcGraph = NewCalculationGraph(eventBuf, localHostname)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
-			lastStats = stats
 			return nil
 		})
 		statsCollector.RegisterWith(calcGraph)

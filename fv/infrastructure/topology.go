@@ -75,7 +75,7 @@ func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd
 	eds, err := GetEtcdDatastoreInfra()
 	Expect(err).ToNot(HaveOccurred())
 
-	felixes, client = StartNNodeTopology(n, opts, eds)
+	felixes, _ = StartNNodeTopology(n, opts, eds)
 
 	client = utils.GetEtcdClient(eds.etcdContainer.IP)
 
