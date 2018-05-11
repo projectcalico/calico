@@ -231,9 +231,6 @@ The `kubelet` can be configured to use Calico by starting it with the following 
 For Kubernetes versions prior to v1.4.0, the `cni-conf-dir` and `cni-bin-dir` options are
 not supported.  Use `--network-plugin-dir=/etc/cni/net.d` instead.
 
-See the [`kubelet` documentation](https://kubernetes.io/docs/reference/generated/kubelet/)
-for more details.
-
 ### Configuring the kube-proxy
 
 In order to use Calico policy with Kubernetes, the `kube-proxy` component must
@@ -246,6 +243,3 @@ there are two ways to enable this behavior.
 
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
 - Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
-
-See the [kube-proxy documentation](http://kubernetes.io/docs/admin/kube-proxy/)
-for more details.
