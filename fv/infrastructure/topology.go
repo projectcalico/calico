@@ -25,7 +25,6 @@ import (
 	"regexp"
 
 	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -74,12 +73,11 @@ func StartNNodeEtcdTopology(n int, opts TopologyOptions) (felixes []*Felix, etcd
 
 	eds, err := GetEtcdDatastoreInfra()
 	Expect(err).ToNot(HaveOccurred())
+	etcd = eds.etcdContainer
 
-	felixes, _ = StartNNodeTopology(n, opts, eds)
+	felixes, client = StartNNodeTopology(n, opts, eds)
 
-	client = utils.GetEtcdClient(eds.etcdContainer.IP)
-
-	return felixes, eds.etcdContainer, client
+	return
 }
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
