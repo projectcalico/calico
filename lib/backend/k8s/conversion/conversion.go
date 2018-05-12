@@ -18,6 +18,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -55,7 +56,17 @@ func VethNameForWorkload(namespace, podname string) string {
 	// veth name and mac addr.
 	h := sha1.New()
 	h.Write([]byte(fmt.Sprintf("%s.%s", namespace, podname)))
-	return fmt.Sprintf("cali%s", hex.EncodeToString(h.Sum(nil))[:11])
+	prefix := os.Getenv("FELIX_INTERFACEPREFIX")
+	if prefix == "" {
+		// Prefix is not set. Default to "cali"
+		prefix = "cali"
+	} else {
+		// Prefix is set - use the first value in the list.
+		splits := strings.Split(prefix, ",")
+		prefix = splits[0]
+	}
+	log.WithField("prefix", prefix).Debugf("Using prefix to create a WorkloadEndpoint veth name")
+	return fmt.Sprintf("%s%s", prefix, hex.EncodeToString(h.Sum(nil))[:11])
 }
 
 // ParseWorkloadName extracts the Node name, Orchestrator, Pod name and endpoint from the

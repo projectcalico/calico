@@ -15,6 +15,8 @@
 package conversion
 
 import (
+	"os"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -42,6 +44,14 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(weid.Orchestrator).To(Equal("k8s"))
 		Expect(weid.Endpoint).To(Equal("eth0"))
 		Expect(weid.Pod).To(Equal("pod-name"))
+	})
+
+	It("generate a veth name with the right prefix", func() {
+		os.Setenv("FELIX_INTERFACEPREFIX", "eni,veth,foo")
+		defer os.Setenv("FELIX_INTERFACEPREFIX", "")
+
+		name := VethNameForWorkload("namespace", "podname")
+		Expect(name).To(Equal("eni82111e10a96"))
 	})
 
 	It("should parse valid profile names", func() {
