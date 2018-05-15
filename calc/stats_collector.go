@@ -61,6 +61,7 @@ type StatsCollector struct {
 	numHostEndpoints     int
 	numPolicies          int
 	numProfiles          int
+	numALPPolicies       int
 
 	lastUpdate StatsUpdate
 	inSync     bool
@@ -74,6 +75,7 @@ type StatsUpdate struct {
 	NumHostEndpoints     int
 	NumPolicies          int
 	NumProfiles          int
+	NumALPPolicies       int
 }
 
 func (s StatsUpdate) String() string {
@@ -153,17 +155,19 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 	return
 }
 
-func (s *StatsCollector) UpdatePolicyCounts(numPolicies, numProfiles int) {
-	if numPolicies == s.numPolicies && numProfiles == s.numProfiles {
+func (s *StatsCollector) UpdatePolicyCounts(numPolicies, numProfiles, numALPPolicies int) {
+	if numPolicies == s.numPolicies && numProfiles == s.numProfiles && numALPPolicies == s.numALPPolicies {
 		return
 	}
 
 	log.WithFields(log.Fields{
-		"numPolicies": numPolicies,
-		"numProfiles": numProfiles,
+		"numPolicies":    numPolicies,
+		"numProfiles":    numProfiles,
+		"numALPPolicies": numALPPolicies,
 	}).Debug("Number of policies/profiles changed")
 	s.numPolicies = numPolicies
 	s.numProfiles = numProfiles
+	s.numALPPolicies = numALPPolicies
 	s.sendUpdate()
 }
 
@@ -175,6 +179,7 @@ func (s *StatsCollector) sendUpdate() {
 		NumWorkloadEndpoints: s.numWorkloadEndpoints,
 		NumPolicies:          s.numPolicies,
 		NumProfiles:          s.numProfiles,
+		NumALPPolicies:       s.numALPPolicies,
 	}
 	gaugeClusNumHosts.Set(float64(len(s.keyCountByHost)))
 	gaugeClusNumWorkloadEndpoints.Set(float64(s.numWorkloadEndpoints))

@@ -60,7 +60,7 @@ var _ = Describe("Stats collector", func() {
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 		It("should do nothing on policy count update", func() {
-			sc.UpdatePolicyCounts(10, 10)
+			sc.UpdatePolicyCounts(10, 10, 10)
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 	})
@@ -94,15 +94,21 @@ var _ = Describe("Stats collector", func() {
 			}))
 		})
 		It("should count a policy", func() {
-			sc.UpdatePolicyCounts(1, 0)
+			sc.UpdatePolicyCounts(1, 0, 0)
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumPolicies: 1,
 			}))
 		})
 		It("should count a profile", func() {
-			sc.UpdatePolicyCounts(0, 1)
+			sc.UpdatePolicyCounts(0, 1, 0)
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumProfiles: 1,
+			}))
+		})
+		It("should count a ALP policy", func() {
+			sc.UpdatePolicyCounts(0, 0, 1)
+			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
+				NumALPPolicies: 1,
 			}))
 		})
 
