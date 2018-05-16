@@ -1,5 +1,5 @@
 hash: 0ffa6b223f7e63eda69a64d25034d07e454d73615a0e20dc326880f0fbbed4e5
-updated: 2018-04-19T17:54:08.708482806Z
+updated: 2018-05-16T15:51:59.019084665Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
@@ -119,11 +119,11 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
   subpackages:
   - pbutil
 - name: github.com/onsi/ginkgo
-  version: 9eda700730cba42af70d53180f9dcce9266bc2bc
+  version: fa5fabab2a1bfbd924faf4c067d07ae414e2aedf
   subpackages:
   - config
   - extensions/table
@@ -144,7 +144,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: b7d1a52235cc433a76c556aa3f4229e63b95e7da
+  version: 62bff4df71bdbc266561a0caee19f0594b17c240
   subpackages:
   - format
   - internal/assertion
@@ -170,7 +170,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 513346920c8cb4a6a19d83d847b7914b8bcd929b
+  version: 2f135aa0cbc197fc6c28127a744924acc49c38c2
   subpackages:
   - lib/api
   - lib/apiconfig
@@ -217,11 +217,11 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 99fa1f4be8e564e8a6b613da7fa6f46c9edafc6c
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -270,7 +270,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
+  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
   subpackages:
   - unix
   - windows
@@ -300,7 +300,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 0a24098c0ec68416ec050f567f75df563d6b231e
+  version: 962cbd1200af94a5a35ba8d512e9f91271b4d01a
   subpackages:
   - internal
   - internal/app_identity
@@ -343,7 +343,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: ceb25c9d04f0c3a10a185499c03194f54069b290
+  version: a315a049e7a93e5455f7fefce1ba136d85054687
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -370,7 +370,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 62737119932505aba8df99644184e0705ea58df1
+  version: 40eaf68ee1889b1da1c528b1a075ecfe94e66837
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -468,7 +468,7 @@ imports:
   - util/integer
   - util/jsonpath
 - name: k8s.io/kube-openapi
-  version: 868f2f29720b192240e18284659231b440f9cda5
+  version: 0c329704159e3b051aafac400b15baacf2a94a04
   subpackages:
   - pkg/common
 testImports: []
