@@ -43,7 +43,7 @@ The full list of parameters which can be set is as follows.
 | `EtcdCaFile`            | `TYPHA_ETCDCAFILE`    | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the Typha host. Otherwise, use this parameter to supply Typha with the path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures Typha to trust the signature on the certificates provided by the etcd server. To disable authentication of the server by Typha, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
 | `EtcdCertFile`          | `TYPHA_ETCDCERTFILE`  | Path to the file containing the client certificate issued to Typha. Enables Typha to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/typha/cert.pem` (optional) | string |
 | `EtcdEndpoints`         | `TYPHA_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://etcd1:2379,http://etcd2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
-| `EtcdKeyFile`           | `TYPHA_ETCDKEYFILE`   | Path to the file containing the private key of the Typha client certificate. Enables Typha to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
+| `EtcdKeyFile`           | `TYPHA_ETCDKEYFILE`   | Path to the file containing the private key matching the Typha client certificate. Enables Typha to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
 
 #### Kubernetes API datastore configuration
 
@@ -51,34 +51,13 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 
 #### Felix-Typha TLS configuration
 
-{% include {{page.version}}/felix-typha-tls-intro.md %}
-
-To use TLS, each Typha instance must have a certificate and key pair signed by
-a trusted CA.  Typha then only accepts TLS connections, and requires each
-connecting client to present a certificate that is signed by a trusted CA and
-has an expected identity in its Common Name or URI SAN field.  Either
-`ClientCN` or `ClientURISAN` must be configured, and Typha will check the
-presented certificate accordingly.
-
--  For a [SPIFFE](https://github.com/spiffe/spiffe)-compliant deployment you
-   should configure `ClientURISAN` with a [SPIFFE
-   Identity](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity)
-   and provision client certificates with the same identity in their URI SAN
-   field.
-
--  Alternatively you can configure `ClientCN` and provision client certificates
-   with that `ClientCN` value in their Common Name field.
-
-If both those parameters are set, a client certificate only has to match one of
-them; this is intended for when a deployment is migrating from using Common
-Name to using a URI SAN, to express identity.
-
 | Configuration parameter | Environment variable   | Description | Schema |
 | ----------------------- | ---------------------- | ----------- | ------ |
-| `CAFile`                | `TYPHA_CAFILE`         | The full path to the certificate file for the Certificate Authorities that Typha trusts for Felix-Typha communications. | string |
-| `ClientCN`              | `TYPHA_CLIENTCN`       | If set, the Common Name that each connecting client certificate must have. [Default: not set] | string |
-| `ClientURISAN`          | `TYPHA_CLIENTURISAN`   | If set, a URI SAN that each connecting client certificate must have. [Default: not set] | string |
-| `ServerCertFile`        | `TYPHA_SERVERCERTFILE` | The full path to the certificate file for this Typha instance. | string |
-| `ServerKeyFile`         | `TYPHA_SERVERKEYFILE`  | The full path to the private key file for this Typha instance. | string |
+| `CAFile`                | `TYPHA_CAFILE`         | Path to the file containing the root certificate of the CA that issued the Felix client certificate. Configures Typha to trust the CA that signed the Felix client certificate. The file may contain multiple root certificates, causing Typha to trust each of the CAs included. Example: `/etc/typha/ca.pem` | string |
+| `ClientCN`              | `TYPHA_CLIENTCN`       | If set, the `Common Name` that Felix's certificate must have. If you have enabled TLS on the communications from Felix to Typha, you must set a value here or in `ClientURISAN`. You can set values in both, as well, such as to facilitate a migration from using one to the other. If either matches, the communication succeeds. [Default: none] | string |
+| `ClientURISAN`          | `TYPHA_CLIENTURISAN`   | If set, a URI SAN that Felix's certificate must have. We recommend populating this with a [SPIFFE](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity) string that identifies Felix. All Felix instances should use the same SPIFFE ID. If you have enabled TLS on the communications from Felix to Typha, you must set a value here or in `ClientCN`. You can set values in both, as well, such as to facilitate a migration from using one to the other. If either matches, the communication succeeds. [Default: none] | string |
+| `ServerCertFile`        | `TYPHA_SERVERCERTFILE` |  Path to the file containing the server certificate issued to Typha. Typha presents this to Felix clients during the TLS handshake. Example: `/etc/typha/cert.pem` | string |
+| `ServerKeyFile`         | `TYPHA_SERVERKEYFILE`  | Path to the file containing the private key matching the Typha server certificate. Example: `/etc/typha/key.pem` (optional) | string |
 
-{% include {{page.version}}/felix-typha-tls-howto.md %}
+For more information on how to use and set these variables, refer to
+[Connections from Felix to Typha (Kubernetes)](../../usage/encrypt-comms#connections-from-felix-to-typha-kubernetes).
