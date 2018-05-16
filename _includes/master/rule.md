@@ -8,6 +8,7 @@
 | ipVersion   | Positive IP version match.                 | `4`, `6`                                                          | integer                   |            |
 | source      | Source match parameters.                   |                                                                   | [EntityRule](#entityrule) |            |
 | destination | Destination match parameters.              |                                                                   | [EntityRule](#entityrule) |            |
+| http        | Match HTTP request parameters. Application layer policy must be enabled to use this field. |                   | [HTTPMatch](#httpmatch)   |            |
 
 An `action` of `Pass` will skip over the remaining policies and jump to the
 first [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) assigned to the endpoint, applying the policy configured in the
