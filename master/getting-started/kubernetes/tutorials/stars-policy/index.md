@@ -4,7 +4,7 @@ title: Stars Policy Demo
 The included demo sets up a frontend and backend service, as well as a client service, all
 running on Kubernetes.  It then configures network policy on each service.
 
-## Pre-requisites
+## Prerequisites
 
 To create a Kubernetes cluster which supports the Kubernetes network policy API, follow
 one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).
