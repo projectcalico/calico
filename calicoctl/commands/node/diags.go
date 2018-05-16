@@ -165,7 +165,7 @@ func getNodeContainerLogs(logDir string) {
 	os.Mkdir(logDir, os.ModeDir)
 
 	// Get a list of Calico containers running on this Node.
-	result, err := exec.Command("docker", "ps", "-a", "--filter", "\"name=calico\"", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
+	result, err := exec.Command("docker", "ps", "-a", "--filter", "name=calico", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
 	if err != nil {
 		fmt.Printf("Could not run docker command: %s\n", string(result))
 		return
