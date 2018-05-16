@@ -1,5 +1,5 @@
 hash: e96b23a4efe79774ffb6036e266dedfc1c35b875b143a9ed5a04c032443efd70
-updated: 2018-04-19T18:00:45.792678694Z
+updated: 2018-05-16T15:26:59.589485613Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -137,7 +137,7 @@ imports:
 - name: github.com/mcuadros/go-version
   version: 88e56e02bea1c203c99222c365fa52a69996ccac
 - name: github.com/onsi/ginkgo
-  version: 9eda700730cba42af70d53180f9dcce9266bc2bc
+  version: fa5fabab2a1bfbd924faf4c067d07ae414e2aedf
   subpackages:
   - config
   - extensions/table
@@ -158,7 +158,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 003f63b7f4cff3fc95357005358af2de0f5fe152
+  version: 62bff4df71bdbc266561a0caee19f0594b17c240
   subpackages:
   - format
   - gbytes
@@ -191,7 +191,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9126d588cd56bae04420b78b2cbde26181b4f36e
+  version: ee5c6740bfd31ef13b6de51f0b52f60f9578183c
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -236,7 +236,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
+  version: d811d2e9bf898806ecfb6ef6296774b13ffc314c
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -316,7 +316,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 0a24098c0ec68416ec050f567f75df563d6b231e
+  version: 962cbd1200af94a5a35ba8d512e9f91271b4d01a
   subpackages:
   - internal
   - internal/app_identity
@@ -359,7 +359,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: ceb25c9d04f0c3a10a185499c03194f54069b290
+  version: a315a049e7a93e5455f7fefce1ba136d85054687
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -386,7 +386,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 62737119932505aba8df99644184e0705ea58df1
+  version: 40eaf68ee1889b1da1c528b1a075ecfe94e66837
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -484,7 +484,7 @@ imports:
   - util/integer
   - util/jsonpath
 - name: k8s.io/kube-openapi
-  version: 868f2f29720b192240e18284659231b440f9cda5
+  version: 0c329704159e3b051aafac400b15baacf2a94a04
   subpackages:
   - pkg/common
 testImports: []
