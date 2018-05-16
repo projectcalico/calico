@@ -370,7 +370,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Eventually(func() *api.Profile {
 				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
 				return profile
-			}).ShouldNot(BeNil())
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
 		})
 
 		It("should write new profiles in etcd to match namespaces in k8s ", func() {
@@ -426,7 +426,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Eventually(func() *api.Profile {
 				profile, _ := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
 				return profile
-			}).ShouldNot(BeNil())
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeNil())
 		})
 
 		It("should write new profiles in etcd to match service account in k8s ", func() {
