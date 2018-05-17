@@ -1,5 +1,5 @@
-hash: 7eb3e4d3043666043697e40004e8a7fbd13f1904cdc4c3aab40b3d990b63f0a6
-updated: 2018-05-03T21:53:07.324808089Z
+hash: e728d2927813c7f457d164403c2e058e1ed7b75db03a9f49f11708be31fe2efd
+updated: 2018-05-16T16:16:45.460919474Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -34,7 +34,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -155,7 +155,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: b7d1a52235cc433a76c556aa3f4229e63b95e7da
+  version: 62bff4df71bdbc266561a0caee19f0594b17c240
   subpackages:
   - format
   - internal/assertion
@@ -181,7 +181,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5646fa11213b9b5314cca7f5b3aa28ea9811c908
+  version: d3230e0d9ba41b54c082aeaf1c42f6ee98cb3331
   subpackages:
   - lib
   - lib/apiconfig
@@ -266,7 +266,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 1a580b3eff7814fc9b40602fd35256c63b50f491
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -365,7 +365,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: ceb25c9d04f0c3a10a185499c03194f54069b290
+  version: a315a049e7a93e5455f7fefce1ba136d85054687
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -392,7 +392,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 62737119932505aba8df99644184e0705ea58df1
+  version: 40eaf68ee1889b1da1c528b1a075ecfe94e66837
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -490,7 +490,7 @@ imports:
   - util/integer
   - util/jsonpath
 - name: k8s.io/kube-openapi
-  version: 868f2f29720b192240e18284659231b440f9cda5
+  version: 0c329704159e3b051aafac400b15baacf2a94a04
   subpackages:
   - pkg/common
 testImports: []
