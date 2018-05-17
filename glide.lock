@@ -1,5 +1,5 @@
 hash: fbba4d385452bae38622f0839ffb24a8f33525517805ab133cd892dbe2fe2ff4
-updated: 2018-04-19T17:30:44.419916097Z
+updated: 2018-05-16T15:46:58.214160755Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -124,7 +124,7 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/onsi/ginkgo
-  version: 9eda700730cba42af70d53180f9dcce9266bc2bc
+  version: fa5fabab2a1bfbd924faf4c067d07ae414e2aedf
   subpackages:
   - config
   - internal/codelocation
@@ -144,7 +144,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 003f63b7f4cff3fc95357005358af2de0f5fe152
+  version: 62bff4df71bdbc266561a0caee19f0594b17c240
   subpackages:
   - format
   - internal/assertion
@@ -179,7 +179,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 513346920c8cb4a6a19d83d847b7914b8bcd929b
+  version: 2f135aa0cbc197fc6c28127a744924acc49c38c2
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -302,7 +302,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 0a24098c0ec68416ec050f567f75df563d6b231e
+  version: 962cbd1200af94a5a35ba8d512e9f91271b4d01a
   subpackages:
   - internal
   - internal/app_identity
@@ -345,7 +345,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 - name: k8s.io/api
-  version: ceb25c9d04f0c3a10a185499c03194f54069b290
+  version: a315a049e7a93e5455f7fefce1ba136d85054687
   subpackages:
   - admissionregistration/v1alpha1
   - apps/v1beta1
@@ -388,7 +388,7 @@ imports:
   - tools/cache
   - tools/clientcmd
 - name: k8s.io/apimachinery
-  version: 62737119932505aba8df99644184e0705ea58df1
+  version: 40eaf68ee1889b1da1c528b1a075ecfe94e66837
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
