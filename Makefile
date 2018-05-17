@@ -202,11 +202,11 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile$(ARCHTAG) build-containerized fetch-cni-b
 	touch $@
 
 .PHONY: fetch-cni-bins
-fetch-cni-bins: $(DIST)/flannel $(DIST)/loopback $(DIST)/host-local $(DIST)/portmap
+fetch-cni-bins: $(DIST)/flannel $(DIST)/loopback $(DIST)/host-local $(DIST)/portmap $(DIST)/tuning
 
-$(DIST)/flannel $(DIST)/loopback $(DIST)/host-local $(DIST)/portmap:
+$(DIST)/flannel $(DIST)/loopback $(DIST)/host-local $(DIST)/portmap $(DIST)/tuning:
 	mkdir -p $(DIST)
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C $(DIST) ./flannel ./loopback ./host-local ./portmap
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C $(DIST) ./flannel ./loopback ./host-local ./portmap ./tuning
 
 # Useful for CI but currently slow for local development because the
 # .go-pkg-cache can't be used (since tests run as root)
