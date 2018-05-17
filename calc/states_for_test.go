@@ -66,6 +66,26 @@ var withPreDNATPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1"}, Value: &policy1_order20_pre_dnat},
 ).withName("with pre-DNAT policy")
 
+// withHttpMethodPolicy adds a policy containing http method selector.
+var withHttpMethodPolicy = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_http_match},
+).withTotalALPPolicies(
+	1,
+).withName("with http-method policy")
+
+// withServiceAccountPolicy adds two policies containing service account selector.
+var withServiceAccountPolicy = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_src_service_account},
+	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20_dst_service_account},
+).withTotalALPPolicies(
+	2,
+).withName("with service-account policy")
+
+// withNonALPPolicy adds a non ALP policy.
+var withNonALPPolicy = withPolicy.withTotalALPPolicies(
+	0,
+).withName("with non-ALP policy")
+
 // localEp1WithPolicy adds a local endpoint to the mix.  It matches all and b=="b".
 var localEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},

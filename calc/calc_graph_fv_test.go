@@ -233,6 +233,14 @@ var baseTests = []StateList{
 		hostEp1WithPolicyAndANetworkSet,
 	},
 
+	// ALP policy count
+	{
+		withPolicy,
+		withServiceAccountPolicy,
+		withHttpMethodPolicy,
+		withNonALPPolicy,
+	},
+
 	// TODO(smc): Test config calculation
 	// TODO(smc): Test mutation of endpoints
 	// TODO(smc): Test mutation of host endpoints
@@ -510,6 +518,9 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			state.Name, spew.Sdump(state.DatastoreState))
 		Expect(lastStats.NumProfiles).To(Equal(state.NumProfileRules()),
 			"number of profiles stat incorrect after moving to state: %v\n%+v",
+			state.Name, spew.Sdump(state.DatastoreState))
+		Expect(lastStats.NumALPPolicies).To(Equal(state.NumALPPolicies()),
+			"number of ALP policies stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
 	}))
 }

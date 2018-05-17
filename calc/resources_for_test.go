@@ -47,6 +47,8 @@ var (
 	namedPortAllUDPID           = namedPortID(allSelector, "udp", "udpport")
 	inheritSelector             = "profile == 'prof-1'"
 	namedPortInheritIPSetID     = namedPortID(inheritSelector, "tcp", "tcpport")
+	httpMatchMethod             = HTTPMatch{Methods: []string{"GET"}}
+	serviceAccountSelector      = "name == 'sa1'"
 )
 
 // Canned workload endpoints.
@@ -453,6 +455,30 @@ var policy1_order20_pre_dnat = Policy{
 		{SrcSelector: allSelector},
 	},
 	PreDNAT: true,
+}
+
+var policy1_order20_http_match = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{HTTPMatch: &httpMatchMethod},
+	},
+}
+
+var policy1_order20_src_service_account = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{OriginalSrcServiceAccountSelector: serviceAccountSelector},
+	},
+}
+
+var policy1_order20_dst_service_account = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	OutboundRules: []Rule{
+		{OriginalDstServiceAccountSelector: serviceAccountSelector},
+	},
 }
 
 var profileRules1 = ProfileRules{
