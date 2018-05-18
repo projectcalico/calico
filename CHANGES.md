@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.2
+
+- Always send high-priority port statuses to Neutron.
+
 ## 3.1.1
 
 - Ignore tox/env directories when building debs.

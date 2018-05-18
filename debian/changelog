@@ -1,3 +1,17 @@
+networking-calico (1:3.1.2~xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit 7bfe655).
+    - Always send high-priority port statuses to Neutron.
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 18 May 2018 07:13:33 -0700
+
+networking-calico (1:3.1.2~trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit 7bfe655).
+    - Always send high-priority port statuses to Neutron.
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 18 May 2018 07:13:33 -0700
+
 networking-calico (1:3.1.1~xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit b7a2ed1).
