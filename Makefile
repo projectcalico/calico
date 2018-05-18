@@ -32,7 +32,8 @@ CURL=curl -sSf
 K8S_VERSION=1.6.1
 CNI_VERSION=v0.6.0
 
-CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
+# Get version from git.
+GIT_VERSION?=$(shell git describe --tags --dirty)
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -41,7 +42,7 @@ DIST=dist/$(ARCH)
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p $(DIST))
 CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
-DEPLOY_CONTAINER_NAME=calico/cni$(ARCHTAG)
+CONTAINER_NAME=calico/cni$(ARCHTAG)
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
 ETCD_CONTAINER?=quay.io/coreos/etcd:v3.2.5$(ARCHTAG)
@@ -58,43 +59,103 @@ all: vendor build-containerized test-containerized
 binary:  plugin ipam
 plugin: $(DIST)/calico
 ipam: $(DIST)/calico-ipam
-docker-image: $(DEPLOY_CONTAINER_MARKER)
+image: $(DEPLOY_CONTAINER_MARKER)
 
 .PHONY: clean
 clean:
 	rm -rf $(DIST) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 
-release: clean
+###############################################################################
+# Release targets 
+###############################################################################
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
+
+## Produces a git tag for the release.
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-build"
+	@echo ""
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
+endif
+
+	$(MAKE) image
+	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
+	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
+
+	# Generate the `latest` images.
+	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
+
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/calico/cni$(ARCHTAG):$(VERSION) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+
+	# TODO: Some sort of quick validation of the produced binaries.
+
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
+
+	# Push images.
+	docker push calico/cni$(ARCHTAG):$(VERSION)
+	docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)
+
+	@echo "Finalize the GitHub release based on the pushed tag."
+	@echo "Attach the $(DIST)/calico and $(DIST)/calico-ipam binaries."
+	@echo ""
+	@echo "  https://github.com/projectcalico/cni-plugin/releases/tag/$(VERSION)"
+	@echo ""
+	@echo "If this is the latest stable release, then run the following to push 'latest' images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish-latest"
+	@echo ""
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check latest versions match.
+	if ! docker run calico/cni$(ARCHTAG):latest calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/cni$(ARCHTAG):latest calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/calico/cni$(ARCHTAG):latest calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/cni$(ARCHTAG):latest calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+
+	docker push calico/cni$(ARCHTAG):latest
+	docker push quay.io/calico/cni$(ARCHTAG):latest
+
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
-	git tag $(VERSION)
-	$(MAKE) build-containerized $(DEPLOY_CONTAINER_MARKER)
-	# Check that the version output appears on a line of its own (the -x option to grep).
-# Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
-	@echo "Checking if the tag made it into the binary"
-	docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(VERSION)
-	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION)
-	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):latest
-
-	@echo ""
-	@echo "Push the git tag."
-	@echo ""
-	@echo "  git push origin $(VERSION)"
-	@echo ""
-	@echo "Then create a release on Github and attach the $(DIST)/calico and $(DIST)/calico-ipam binaries"
-	@echo ""
-	@echo "Push the versioned release images."
-	@echo ""
-	@echo "  docker push calico/cni$(ARCHTAG):$(VERSION)"
-	@echo "  docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)"
-	@echo ""
-	@echo "If this is a stable release, push the latest images as well."
-	@echo ""
-	@echo "  docker push calico/cni$(ARCHTAG):latest"
-	@echo "  docker push quay.io/calico/cni$(ARCHTAG):latest"
 
 # To update upstream dependencies, delete the glide.lock file first.
 ## Use this to populate the vendor directory after checking out the repository.
@@ -116,13 +177,13 @@ vendor: glide.yaml
 $(DIST)/calico: $(SRCFILES) vendor
 	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -i -o $(DIST)/calico \
-	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go
+	-ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" calico.go
 
 ## Build the Calico ipam plugin
 $(DIST)/calico-ipam: $(SRCFILES) vendor
 	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -i -o $(DIST)/calico-ipam  \
-	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go
+	-ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ipam/calico-ipam.go
 
 .PHONY: test
 ## Run the unit tests.
@@ -137,7 +198,7 @@ test-watch: $(DIST)/calico $(DIST)/calico-ipam run-etcd run-k8s-apiserver
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile$(ARCHTAG) build-containerized fetch-cni-bins
-	docker build -f Dockerfile$(ARCHTAG) -t $(DEPLOY_CONTAINER_NAME) .
+	docker build -f Dockerfile$(ARCHTAG) -t $(CONTAINER_NAME) .
 	touch $@
 
 .PHONY: fetch-cni-bins
@@ -189,8 +250,8 @@ k8s-install/scripts/install_cni.test: vendor
 
 .PHONY: test-install-cni
 ## Test the install-cni.sh script
-test-install-cni: docker-image k8s-install/scripts/install_cni.test
-	cd k8s-install/scripts && DEPLOY_CONTAINER_NAME=$(DEPLOY_CONTAINER_NAME) ./install_cni.test
+test-install-cni: image k8s-install/scripts/install_cni.test
+	cd k8s-install/scripts && CONTAINER_NAME=$(CONTAINER_NAME) ./install_cni.test
 
 run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	docker run --rm --privileged --net=host \
@@ -381,7 +442,7 @@ run-kube-proxy:
 	-docker rm -f calico-kube-proxy
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:v$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
 
-ci: clean static-checks test-containerized-cni-versions docker-image test-install-cni
+ci: clean static-checks test-containerized-cni-versions image test-install-cni
 
 .PHONY: help
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
