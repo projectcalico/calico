@@ -47,6 +47,7 @@ import:
 - package: github.com/gogo/protobuf
   version: ^0.5.0
 - package: github.com/vishvananda/netlink
+  version: dc00cf9d5c07f9a1e0ccb307443b2194ca1aaacb
 - package: github.com/onsi/ginkgo
   version: ^1.4.0
 - package: github.com/onsi/gomega
@@ -54,7 +55,7 @@ import:
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: github.com/projectcalico/typha
-  version: 37ac485763239673f7f8d27df927f3a7eb6a2590
+  version: 1d5864193af5e089f71ecc60f635f2ae380de0e4
   subpackages:
   - pkg/syncclient
 - package: github.com/emicklei/go-restful
