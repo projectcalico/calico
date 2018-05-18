@@ -10,7 +10,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 1. Download the calicoctl binary:
 
    ```
-   sudo wget -O /usr/local/bin/calicoctl https://github.com/projectcalico/calicoctl/releases/download/v1.0.2/calicoctl
+   sudo wget -O /usr/local/bin/calicoctl https://github.com/projectcalico/calicoctl/releases/download/v1.6.4/calicoctl
    sudo chmod +x /usr/local/bin/calicoctl
    ```
 
