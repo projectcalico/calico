@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        3.1.0
+Version:        3.1.2
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -151,6 +151,22 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri May 18 2018 Neil Jerram <neil@tigera.io> 3.1.2-1
+  - Felix 3.1.2 (from Git commit c4f5a06).
+    [Changes recorded in 3.1.2 tag]
+    - Update libcalico-go to release-v3.1
+    [Changes recorded in 3.1.1 tag]
+    - Deb/RPM packaging for Felix 3.1.0
+    - Merge pull request #1736 from tmjd/kdd-hep-tests
+    - Merge pull request #1762 from tmjd/cleanup-kdd-hostendpoints
+    - Merge pull request #1764 from tmjd/ginkgo-focus-fvs
+    - Merge pull request #1781 from tmjd/batch-job-tweaking
+    - Merge pull request #1788 from tmjd/eof-paired-down-flake-work
+    - Merge pull request #1791 from fasaxc/link-not-found-workaround
+    - Merge pull request #1793 from fasaxc/fix-connectivity-cutoff
+    - Merge pull request #1803 from fasaxc/fix-dnat-timeout
+    - Update libcalico-go to release-v3.1
+
 * Fri Apr 06 2018 Neil Jerram <neil@tigera.io> 3.1.0-1
   - Felix 3.1.0 (from Git commit dba3279).
     [Changes recorded in 3.1.0 tag]
