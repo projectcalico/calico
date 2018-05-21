@@ -89,6 +89,10 @@ toc:
   section:
   - title: Configuration
     path: /reference/typha/configuration
+- title: Dikastes
+  section:
+  - title: Configuration
+    path: /reference/dikastes/configuration
 - title: Calico CNI Plugins
   path: /reference/cni-plugin/configuration
 - title: Calico Kubernetes Controllers
