@@ -38,7 +38,7 @@ your contribution.
 ## How do I build Felix?
 
 Felix mostly uses Docker for builds.  We develop on Ubuntu 16.04 but other
-Linux distributions should work (there are known Makefile that prevent building on OS X).  
+Linux distributions should work (there are known `Makefile` issues that prevent building on OS X).  
 To build Felix, you will need:
 
 - A suitable linux box.
@@ -53,15 +53,37 @@ Then, as a one-off, run
 make update-tools
 ```
 which will install a couple more go tools that we haven't yet containerised.
- 
+
 Then, to build the calico-felix binary:
 ```
-make bin/calico-felix
+make build
 ```
 or, the `calico/felix` docker image:
 ```
-make calico/felix
+make image
 ```
+
+### Other architectures
+When you run `make build` or `make image`, it creates the felix binary or docker image for linux on your architecture. The outputs are as follows:
+
+* Binary: `bin/calico-felix-${ARCH}`, e.g. `bin/calico-felix-amd64` or `bin/calico-felix-arm64`
+* Image: `calico/felix:${TAG}-${ARCH}`, e.g. `calico/felix:3.0.0-amd64` or `calico/felix:latest-ppc64le`
+
+When you are running on `amd64`, you can build the binaries and images for other platforms by setting the `ARCH` variable. For example:
+
+```
+$ make build ARCH=arm64 # OR
+$ make image ARCH=ppc64le
+```
+
+If you wish to make **all** of the binaries or images, use the standard calico project targets `build-all` and `image-all`:
+
+```
+$ make build-all # OR
+$ make image-all
+```
+
+Note that the `image` and `image-all` targets have the `build` targets as a depedency.
 
 ## How can I run Felix's unit tests?
 
@@ -79,7 +101,7 @@ To get coverage stats:
 ```
 make cover-report
 ```
-or 
+or
 ```
 make cover-browser
 ```
@@ -108,7 +130,7 @@ Ginkgo will re-run tests as files are modified and saved.
 
 ### Docker
 
-After building the docker image (see above), you can run Felix and log to screen 
+After building the docker image (see above), you can run Felix and log to screen
 with, for example:
 
 ```
