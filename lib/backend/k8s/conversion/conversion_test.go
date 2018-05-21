@@ -95,20 +95,20 @@ var _ = Describe("Test parsing strings", func() {
 
 var _ = Describe("Test selector conversion", func() {
 	DescribeTable("selector conversion table",
-		func(inSelector metav1.LabelSelector, selectorType selectorType, expected string) {
+		func(inSelector *metav1.LabelSelector, selectorType selectorType, expected string) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
 			c := Converter{}
 
-			converted := c.k8sSelectorToCalico(&inSelector, selectorType)
+			converted := c.k8sSelectorToCalico(inSelector, selectorType)
 
 			// Finally, assert the expected result.
 			Expect(converted).To(Equal(expected))
 		},
 
-		Entry("should handle an empty pod selector", metav1.LabelSelector{}, SelectorPod, "projectcalico.org/orchestrator == 'k8s'"),
-		Entry("should handle an empty namespace selector", metav1.LabelSelector{}, SelectorNamespace, "all()"),
+		Entry("should handle an empty pod selector", &metav1.LabelSelector{}, SelectorPod, "projectcalico.org/orchestrator == 'k8s'"),
+		Entry("should handle an empty namespace selector", &metav1.LabelSelector{}, SelectorNamespace, "all()"),
 		Entry("should handle an OpDoesNotExist namespace selector",
-			metav1.LabelSelector{
+			&metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{Key: "toast", Operator: metav1.LabelSelectorOpDoesNotExist},
 				},
@@ -117,7 +117,7 @@ var _ = Describe("Test selector conversion", func() {
 			"! has(toast)",
 		),
 		Entry("should handle an OpExists namespace selector",
-			metav1.LabelSelector{
+			&metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{Key: "toast", Operator: metav1.LabelSelectorOpExists},
 				},
@@ -126,7 +126,7 @@ var _ = Describe("Test selector conversion", func() {
 			"has(toast)",
 		),
 		Entry("should handle an OpIn namespace selector",
-			metav1.LabelSelector{
+			&metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{Key: "toast", Operator: metav1.LabelSelectorOpIn, Values: []string{"butter", "jam"}},
 				},
@@ -135,7 +135,7 @@ var _ = Describe("Test selector conversion", func() {
 			"toast in { 'butter', 'jam' }",
 		),
 		Entry("should handle an OpNotIn namespace selector",
-			metav1.LabelSelector{
+			&metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{Key: "toast", Operator: metav1.LabelSelectorOpNotIn, Values: []string{"marmite", "milk"}},
 				},
@@ -144,7 +144,7 @@ var _ = Describe("Test selector conversion", func() {
 			"toast not in { 'marmite', 'milk' }",
 		),
 		Entry("should handle an OpDoesNotExist pod selector",
-			metav1.LabelSelector{
+			&metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{Key: "toast", Operator: metav1.LabelSelectorOpDoesNotExist},
 				},
@@ -152,6 +152,8 @@ var _ = Describe("Test selector conversion", func() {
 			SelectorPod,
 			"projectcalico.org/orchestrator == 'k8s' && ! has(toast)",
 		),
+		Entry("should handle nil pod selector", nil, SelectorPod, "projectcalico.org/orchestrator == 'k8s'"),
+		Entry("should handle nil namespace selector", nil, SelectorNamespace, ""),
 	)
 })
 
@@ -1162,6 +1164,62 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.NamespaceSelector).To(Equal("all()"))
+
+		// There should be no Egress rules.
+		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress)).To(Equal(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Types)).To(Equal(1))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+	})
+
+	It("should parse a NetworkPolicy with pod and namespace selectors", func() {
+		np := networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test.policy",
+				Namespace: "default",
+			},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
+					{
+						From: []networkingv1.NetworkPolicyPeer{
+							{
+								NamespaceSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"namespaceRole": "dev",
+										"namespaceFoo":  "bar",
+									},
+								},
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"podA": "B",
+										"podC": "D",
+									},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.K8sNetworkPolicyToCalico(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("knp.default.test.policy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && podA == 'B' && podC == 'D'"))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.NamespaceSelector).To(Equal("namespaceFoo == 'bar' && namespaceRole == 'dev'"))
 
 		// There should be no Egress rules.
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress)).To(Equal(0))
