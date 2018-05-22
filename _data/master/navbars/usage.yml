@@ -17,7 +17,7 @@ toc:
       path: /usage/calicoctl/configure/etcd
     - title: Kubernetes API datastore options
       path: /usage/calicoctl/configure/kdd
-- title: Securing Calico's Prometheus endpoints 
+- title: Securing Calico's Prometheus endpoints
   path: /usage/policy/secure-metrics
 - title: Running calico/node with an init system
   path: /usage/configuration/as-service
@@ -49,7 +49,7 @@ toc:
   path: /usage/configuration/conntrack
 - title: Calico for OpenStack
   section:
-  - title: Configuration 
+  - title: Configuration
     path: /usage/openstack/configuration
   - title: Detailed Semantics
     path: /usage/openstack/semantics

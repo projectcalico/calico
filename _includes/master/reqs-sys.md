@@ -31,19 +31,24 @@ to connect to, we provide instructions in the [installation documentation](./ins
 
 ## Network requirements
 
-{{site.prodname}} requires the network to allow the following types of traffic.
+Ensure that your hosts and firewalls allow the following traffic.
 
-| Traffic | Protocol | Port |
-| ------- | -------- | ---- |
-| BGP     | TCP      | 179  |
-| IPIP\*  | 4        | n/a  |
+| Configuration                                                | Host                | Connection type | Port/protocol |
+|--------------------------------------------------------------|---------------------|-----------------|---------------|
+| {{site.prodname}} networking (BGP)                           | All                 | Bidirectional   | TCP 179 |
+| {{site.prodname}} networking in IP-in-IP mode (default mode) | All                 | Bidirectional   | IP-in-IP, often represented by its protocol number `4` |
+{%- if include.orch == "Kubernetes" %}
+| flannel networking (VXLAN)                                   | All                 | Bidirectional   | UDP 4789 |
+| etcd datastore                                               | etcd hosts          | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
+| {{site.prodname}} networking, cluster of more than 50 nodes  | Typha agent hosts   | Incoming        | TCP 5473 (default) |
+| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 6443: check the `port` value returned by `kubectl get svc kubernetes -o yaml` |
+{%- else %}
+| All                                                          | etcd hosts          | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
+{%- endif %}
+{%- if include.orch == "OpenShift" %}
+| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 8443: check the `port` value returned by `kubectl get svc kubernetes -o yaml` |
+{%- endif %}
+{%- if include.orch == "OpenStack" %}
 
-\* {% if include.orch == "OpenStack" %} If your compute hosts connect directly
-   and don't use IPIP, you don't need to allow IPIP traffic. {% else %} Our
-   manifests enable IPIP by default.  If you disable IPIP, you won't need to
-   allow IPIP traffic. {% endif %} Refer to [Configuring
-   IP-in-IP](../../usage/configuration/ip-in-ip) for more information.
-
-> **Tip**: On GCE, you can allow this traffic using firewall rules. In AWS, use
-> EC2 security group rules.
-{: .alert .alert-success}
+\* _If your compute hosts connect directly and don't use IP-in-IP, you don't need to allow IP-in-IP traffic._
+{% endif -%}
