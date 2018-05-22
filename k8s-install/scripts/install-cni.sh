@@ -32,26 +32,26 @@ rm -f /host/etc/cni/net.d/calico-tls/*
 # First check if the dir exists and has anything in it.
 if [ "$(ls ${SECRETS_MOUNT_DIR} 3>/dev/null)" ];
 then
-	echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
-	mkdir -p /host/etc/cni/net.d/calico-tls
-	cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+  echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
+  mkdir -p /host/etc/cni/net.d/calico-tls
+  cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
 fi
 
 # If the TLS assets actually exist, update the variables to populate into the
 # CNI network config.  Otherwise, we'll just fill that in with blanks.
 if [ -e "/host/etc/cni/net.d/calico-tls/etcd-ca" ];
 then
-	CNI_CONF_ETCD_CA=${HOST_SECRETS_DIR}/etcd-ca
+  CNI_CONF_ETCD_CA=${HOST_SECRETS_DIR}/etcd-ca
 fi
 
 if [ -e "/host/etc/cni/net.d/calico-tls/etcd-key" ];
 then
-	CNI_CONF_ETCD_KEY=${HOST_SECRETS_DIR}/etcd-key
+  CNI_CONF_ETCD_KEY=${HOST_SECRETS_DIR}/etcd-key
 fi
 
 if [ -e "/host/etc/cni/net.d/calico-tls/etcd-cert" ];
 then
-	CNI_CONF_ETCD_CERT=${HOST_SECRETS_DIR}/etcd-cert
+  CNI_CONF_ETCD_CERT=${HOST_SECRETS_DIR}/etcd-cert
 fi
 
 # Choose which default cni binaries should be copied
@@ -62,35 +62,35 @@ UPDATE_CNI_BINARIES=${UPDATE_CNI_BINARIES:-"true"}
 # Place the new binaries if the directory is writeable.
 for dir in /host/opt/cni/bin /host/secondary-bin-dir
 do
-	if [ ! -w "$dir" ];
-	then
-		echo "$dir is non-writeable, skipping"
-		continue
-	fi
-	for path in /opt/cni/bin/*;
-	do
-		filename="$(basename $path)"
-		tmp=",$filename,"
-		if [ "${SKIP_CNI_BINARIES#*$tmp}" != "$SKIP_CNI_BINARIES" ];
-		then
-			echo "$filename is in SKIP_CNI_BINARIES, skipping"
-			continue
-		fi
-		if [ "${UPDATE_CNI_BINARIES}" != "true" -a -f $dir/$filename ];
-		then
-			echo "$dir/$filename is already here and UPDATE_CNI_BINARIES isn't true, skipping"
-			continue
-		fi
-		cp $path $dir/
-		if [ "$?" != "0" ];
-		then
-			echo "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
-			exit 1
-		fi
-	done
+  if [ ! -w "$dir" ];
+  then
+    echo "$dir is non-writeable, skipping"
+    continue
+  fi
+  for path in /opt/cni/bin/*;
+  do
+    filename="$(basename $path)"
+    tmp=",$filename,"
+    if [ "${SKIP_CNI_BINARIES#*$tmp}" != "$SKIP_CNI_BINARIES" ];
+    then
+      echo "$filename is in SKIP_CNI_BINARIES, skipping"
+      continue
+    fi
+    if [ "${UPDATE_CNI_BINARIES}" != "true" -a -f $dir/$filename ];
+    then
+      echo "$dir/$filename is already here and UPDATE_CNI_BINARIES isn't true, skipping"
+      continue
+    fi
+    cp $path $dir/
+    if [ "$?" != "0" ];
+    then
+      echo "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
+      exit 1
+    fi
+  done
 
-	echo "Wrote Calico CNI binaries to $dir"
-	echo "CNI plugin version: $($dir/calico -v)"
+  echo "Wrote Calico CNI binaries to $dir"
+  echo "CNI plugin version: $($dir/calico -v)"
 done
 
 TMP_CONF='/calico.conf.tmp'
@@ -106,21 +106,21 @@ SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 
 # Check if we're running as a k8s pod.
 if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
-	# We're running as a k8d pod - expect some variables.
-	if [ -z ${KUBERNETES_SERVICE_HOST} ]; then
-		echo "KUBERNETES_SERVICE_HOST not set"; exit 1;
-	fi
-	if [ -z ${KUBERNETES_SERVICE_PORT} ]; then
-		echo "KUBERNETES_SERVICE_PORT not set"; exit 1;
-	fi
+  # We're running as a k8d pod - expect some variables.
+  if [ -z ${KUBERNETES_SERVICE_HOST} ]; then
+    echo "KUBERNETES_SERVICE_HOST not set"; exit 1;
+  fi
+  if [ -z ${KUBERNETES_SERVICE_PORT} ]; then
+    echo "KUBERNETES_SERVICE_PORT not set"; exit 1;
+  fi
 
-	# Write a kubeconfig file for the CNI plugin.  Do this
-	# to skip TLS verification for now.  We should eventually support
-	# writing more complete kubeconfig files. This is only used
-	# if the provided CNI network config references it.
-	touch /host/etc/cni/net.d/calico-kubeconfig
-	chmod ${KUBECONFIG_MODE:-600} /host/etc/cni/net.d/calico-kubeconfig
-	cat > /host/etc/cni/net.d/calico-kubeconfig <<EOF
+  # Write a kubeconfig file for the CNI plugin.  Do this
+  # to skip TLS verification for now.  We should eventually support
+  # writing more complete kubeconfig files. This is only used
+  # if the provided CNI network config references it.
+  touch /host/etc/cni/net.d/calico-kubeconfig
+  chmod ${KUBECONFIG_MODE:-600} /host/etc/cni/net.d/calico-kubeconfig
+  cat > /host/etc/cni/net.d/calico-kubeconfig <<EOF
 # Kubeconfig file for Calico CNI plugin.
 apiVersion: v1
 kind: Config
@@ -175,8 +175,8 @@ fi
 mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME}
 if [ "$?" != "0" ];
 then
-	echo "Failed to mv files. This may be caused by selinux configuration on the host, or something else."
-	exit 1
+  echo "Failed to mv files. This may be caused by selinux configuration on the host, or something else."
+  exit 1
 fi
 
 echo "Created CNI config ${CNI_CONF_NAME}"
@@ -186,18 +186,18 @@ echo "Created CNI config ${CNI_CONF_NAME}"
 should_sleep=${SLEEP:-"true"}
 echo "Done configuring CNI.  Sleep=$should_sleep"
 while [ "$should_sleep" == "true"  ]; do
-	# Kubernetes Secrets can be updated.  If so, we need to install the updated
-	# version to the host. Just check the timestamp on the certificate to see if it
-	# has been updated.  A bit hokey, but likely good enough.
-	if [ -e ${SECRETS_MOUNT_DIR}/etcd-cert ];
-	then
-        stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
-        sleep 10;
-        if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
-            echo "Updating installed secrets at: $(date)"
-            cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
-        fi
-    else
-        sleep 10
+  # Kubernetes Secrets can be updated.  If so, we need to install the updated
+  # version to the host. Just check the timestamp on the certificate to see if it
+  # has been updated.  A bit hokey, but likely good enough.
+  if [ -e ${SECRETS_MOUNT_DIR}/etcd-cert ];
+  then
+    stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
+    sleep 10;
+    if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
+      echo "Updating installed secrets at: $(date)"
+      cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
     fi
+  else
+    sleep 10
+  fi
 done
