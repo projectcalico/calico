@@ -169,7 +169,7 @@ while [ "$should_sleep" == "true"  ]; do
 	# Kubernetes Secrets can be updated.  If so, we need to install the updated
 	# version to the host. Just check the timestamp on the certificate to see if it
 	# has been updated.  A bit hokey, but likely good enough.
-	if [ "$(ls ${SECRETS_MOUNT_DIR} 2>/dev/null)" ];
+	if [ -e ${SECRETS_MOUNT_DIR}/etcd-cert ];
 	then
         stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
         sleep 10;
