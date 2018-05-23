@@ -48,18 +48,20 @@ The Calico CNI plugin supports the following datastore types:
 * etcdv3 (default)
 * kubernetes
 
-### Etcd location
+### etcd location
 
 The following options are valid when `datastore_type` is `etcdv3`.
 
-Configure access to your etcd cluster using the following options
+Configure access to your etcd cluster using the following options.
 
-* `etcd_endpoints` (no default. Format is comma separated list of etcd servers e.g. `http://1.2.3.4:2379,http://5.6.7.8:2379`)
-* `etcd_key_file` (no default. Format is an absolute path to a file)
-* `etcd_cert_file` (no default. Format is an absolute path to a file)
-* `etcd_ca_cert_file` (no default. Format is an absolute path to a file)
+| Option name         | Default | Description
+|---------------------|---------|-------------
+| `etcd_endpoints`    | None    | Comma-separated list of etcd servers e.g. `http://1.2.3.4:2379,http://5.6.7.8:2379`
+| `etcd_key_file`     | None    | Absolute path to the file containing the private key of the CNI plugin's client certificate. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/key.pem` (optional) | string
+| `etcd_cert_file`    | None    | Absolute path to the file containing the client certificate issued to the CNI plugin. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/cert.pem` (optional) | string
+| `etcd_ca_cert_file` | None    | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the CNI plugin host. Otherwise, use this parameter to supply the CNI plugin with the absolute path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures the CNI plugin to trust the signature on the certificates provided by the etcd server. Example: `/etc/calico-cni/ca.pem` (optional) | string
 
-The following deprecated options are also supported
+The following options are deprecated.
 
 * `etcd_authority` (default is `127.0.0.1:2379`)
   * If `etcd_authority` is set at the same time as `etcd_endpoints` then `etcd_endpoints` is used.

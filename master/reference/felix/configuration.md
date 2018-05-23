@@ -52,14 +52,14 @@ The full list of parameters which can be set is as follows.
 | `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
 
 
-#### etcdv3 datastore configuration
+#### etcd datastore configuration
 
 | Configuration parameter | Environment variable  | Description | Schema |
 | ----------------------- | --------------------- | ----------- | ------ |
-| `EtcdCaFile`            | `FELIX_ETCDCAFILE`    | The full path to the etcd Certificate Authority certificate file. To disable authentication of the server by Felix, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
-| `EtcdCertFile`          | `FELIX_ETCDCERTFILE`  | The full path to the etcd certificate file. | string |
+| `EtcdCaFile`            | `FELIX_ETCDCAFILE`    | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the Felix host. Otherwise, use this parameter to supply Felix with the path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures Felix to trust the signature on the certificates provided by the etcd server. To disable authentication of the server by Felix, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
+| `EtcdCertFile`          | `FELIX_ETCDCERTFILE`  | Path to the file containing the client certificate issued to Felix. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/cert.pem` (optional) | string |
 | `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://etcd1:2379,http://etcd2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
-| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | The full path to the etcd private key file. | string |
+| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | Path to the file containing the private key of the Felix client certificate. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
 
 
 #### Kubernetes API datastore configuration
