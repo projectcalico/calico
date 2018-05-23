@@ -47,14 +47,26 @@ With OpenStack releases earlier than Liberty you will also need:
 |-------------------------|--------------------------|----------------------------|
 | dhcp_agents_per_network | 9999                     | Allow unlimited DHCP agents per network |
 
-Optionally -- depending on how you want the {{site.prodname}} mechanism driver to
-connect to the etcd cluster -- you can also set the following options in
-the `[calico]` section of `/etc/neutron/neutron.conf`.
+The following options in the `[calico]` section of `/etc/neutron/neutron.conf` govern how
+the {{site.prodname}} plugin/driver and DHCP agent connect to the {{site.prodname}} etcd
+datastore.  You should set `etcd_host` to the IP of your etcd server, and `etcd_port` if
+that server is using a non-standard port.  If the etcd server is TLS-secured, also set:
 
-| Setting   | Default Value | Meaning                                   |
-|-----------|---------------|-------------------------------------------|
-| etcd_host | localhost     | The hostname or IP of the etcd node/proxy |
-| etcd_port | 4001          | The port to use for the etcd node/proxy   |
+-  `etcd_cert_file` to a client certificate, which must be signed by a Certificate
+   Authority that the server trusts
+
+-  `etcd_key_file` to the corresponding private key file
+
+-  `etcd_ca_cert_file` to a file containing data for the Certificate Authorities that you
+   trust to sign the etcd server's certificate.
+
+| Setting           | Default Value | Meaning                                                      |
+|-------------------|---------------|--------------------------------------------------------------|
+| etcd_host         | 127.0.0.1     | The hostname or IP of the etcd server                        |
+| etcd_port         | 2379          | The port to use for the etcd node/proxy                      |
+| etcd_key_file     |               | The path to the TLS key file to use with etcd                |
+| etcd_cert_file    |               | The path to the TLS client certificate file to use with etcd |
+| etcd_ca_cert_file |               | The path to the TLS CA certificate file to use with etcd     |
 
 ### ML2 (.../ml2_conf.ini)
 
