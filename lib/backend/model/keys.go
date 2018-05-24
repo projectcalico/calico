@@ -15,12 +15,12 @@
 package model
 
 import (
+	"bytes"
 	"encoding/json"
-	"reflect"
-	"strings"
-
 	"fmt"
 	net2 "net"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -288,10 +288,25 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	iface := value.Interface()
 	err = json.Unmarshal(rawData, iface)
 	if err != nil {
-		log.Warningf("Failed to unmarshal %#v into value %#v",
-			string(rawData), value)
-		return nil, err
+		// This is a special case to address backwards compatibility from the time when we had no state information as block affinity value.
+		// example:
+		// Key: "/calico/ipam/v2/host/myhost.io/ipv4/block/172.29.82.0-26"
+		// Value: ""
+		// In 3.0.7 we added block affinity state as the value, so old "" value is no longer a valid JSON, so for that
+		// particular case we replace the "" with a "{}" so it can be parsed and we don't leak blocks after upgrade to Calico 3.0.7
+		// See: https://github.com/projectcalico/calico/issues/1956
+		if bytes.Equal(rawData, []byte(``)) && valueType == typeBlockAff {
+			rawData = []byte(`{}`)
+			if err = json.Unmarshal(rawData, iface); err != nil {
+				return nil, err
+			}
+		} else {
+			log.Warningf("Failed to unmarshal %#v into value %#v",
+				string(rawData), value)
+			return nil, err
+		}
 	}
+
 	if elem.Kind() != reflect.Struct {
 		// Pointer to a map or slice, unwrap.
 		iface = elem.Interface()

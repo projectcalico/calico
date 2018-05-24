@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -98,6 +99,60 @@ var _ = DescribeTable(
 		"ready flag",
 		"/calico/v1/Ready",
 		ReadyFlagKey{},
+	),
+)
+
+var _ = DescribeTable(
+	"value parsing",
+	func(key Key, rawVal string, expectedVal interface{}) {
+		val, err := ParseValue(key, []byte(rawVal))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(val).To(Equal(expectedVal))
+	},
+	Entry(
+		"Block affinity claims with confirmed state",
+		BlockAffinityKey{
+			CIDR: mustParseCIDR("172.29.128.64/26"),
+			Host: "happyhost.io",
+		},
+		`{"state":"confirmed"}`,
+		&BlockAffinity{State: StateConfirmed},
+	),
+	Entry(
+		"Block affinity claims with pending state",
+		BlockAffinityKey{
+			CIDR: mustParseCIDR("172.29.128.0/26"),
+			Host: "slightlyhappyhost.io",
+		},
+		`{"state":"pending"}`,
+		&BlockAffinity{State: StatePending},
+	),
+	Entry(
+		"Block affinity claims with pending-deletion state",
+		BlockAffinityKey{
+			CIDR: mustParseCIDR("172.29.128.192/26"),
+			Host: "notsohappyhost.io",
+		},
+		`{"state":"pendingDeletion"}`,
+		&BlockAffinity{State: StatePendingDeletion},
+	),
+	Entry(
+		"Pre-3.0.7 style block affinity claims with no state i.e. empty string in value",
+		BlockAffinityKey{
+			CIDR: mustParseCIDR("172.29.128.128/26"),
+			Host: "oldhost.io",
+		},
+		``,
+		&BlockAffinity{},
+	),
+	Entry(
+		"Block affinity claims with empty state {} in value",
+		BlockAffinityKey{
+			CIDR: mustParseCIDR("172.29.128.128/26"),
+			Host: "oldhost.io",
+		},
+		`{}`,
+		&BlockAffinity{},
 	),
 )
 
