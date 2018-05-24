@@ -71,6 +71,10 @@ image: image.created-$(ARCH)
 image.created-$(ARCH): dist/kube-controllers-linux-$(ARCH)
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+ifeq ($(ARCH),amd64)
+	# Need amd64 builds tagged as :latest because Semaphore depends on that
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
+endif
 	touch $@
 
 image-all: $(addprefix sub-image-,$(ARCHES))
