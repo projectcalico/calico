@@ -1222,7 +1222,7 @@ var _ = Describe("CalicoCni", func() {
 					// IPAM reservation should still be in place.
 					handleID, _ := utils.GetHandleID("net8", containerID, workloadName)
 					ipamIPs, err := calicoClient.IPAM().IPsByHandle(context.Background(), handleID)
-					ExpectWithOffset(1, err).NotTo(HaveOccurred())
+					ExpectWithOffset(1, err).NotTo(HaveOccurred(), "error getting IPs")
 					ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
 						"There should be an IPAM handle for endpoint")
 					ExpectWithOffset(1, ipamIPs[0].String()+"/32").To(Equal(endpointSpec.IPNetworks[0]))
@@ -1304,16 +1304,22 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 
-				It("a second ADD for the same container should be a no-op", func() {
-					// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-					session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth0", contNs)
+				It("a second ADD for the same container should work, assigning a new IP", func() {
+					// Try to create the same pod with a different container (so CNI receives the ADD for the same endpoint again)
+					session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 					Expect(err).NotTo(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
 
 					resultSecondAdd, err := testutils.GetResultForCurrent(session, cniVersion)
 					Expect(err).NotTo(HaveOccurred())
-
 					log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
+
+					// The IP addresses shouldn't be the same, since we'll reassign one.
+					Expect(resultSecondAdd.IPs).ShouldNot(Equal(result.IPs))
+
+					// Otherwise, they should be the same.
+					resultSecondAdd.IPs = nil
+					result.IPs = nil
 					Expect(resultSecondAdd).Should(Equal(result))
 
 					// IPAM reservation should still be in place.
@@ -1340,9 +1346,10 @@ var _ = Describe("CalicoCni", func() {
 						renameVeth(realVethName, tweakedVethName)
 					})
 
-					It("a second ADD should leave the datastore untouched", func() {
+					It("a second ADD should fail, but not clean up the original IPAM allocation", func() {
 						// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-						session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth0", contNs)
+						// Use a different container ID but the same Pod Name/Namespace
+						session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 						Expect(err).ShouldNot(HaveOccurred())
 						Eventually(session).Should(gexec.Exit(1))
 
