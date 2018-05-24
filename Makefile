@@ -42,6 +42,8 @@ all: clean test
 GO_BUILD_VER?=latest
 GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 
+CONTAINER_NAME=calico/confd
+
 CALICOCTL_VER=master
 CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 K8S_VERSION=v1.8.1
@@ -92,7 +94,7 @@ help:
 	@echo "Builds:"
 	@echo
 	@echo "  make build           Build the binary."
-	@echo "  make image           Build calico/confd docker image."
+	@echo "  make image           Build $(CONTAINER_NAME) docker image."
 	@echo
 	@echo "Tests:"
 	@echo
@@ -131,11 +133,53 @@ vendor vendor/.up-to-date: glide.lock
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
+###############################################################################
+# tag and push images of any tag
+###############################################################################
+
+
+# ensure we have a real imagetag
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push one arch
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## push all archs
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+
+## tag images of one arch
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
+
+###############################################################################
+
 
 image: bin/confd
-	docker build -t calico/confd:latest-$(ARCH) -f Dockerfile.$(ARCH) .
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
-	docker tag calico/confd:latest-$(ARCH) calico/confd:latest
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
 endif
 
 # the standard for calico is the make target "image", but there used to be a "container" target in confd, so we leave it
@@ -275,28 +319,20 @@ endif
 	# Check that the version output includes the version specified.
 	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
 	# Release is currently supported on darwin / linux only.
-	if ! docker run calico/confd:latest-$(ARCH) /bin/confd --version | grep '$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run calico/confd /bin/confd --version` "\nExpected version: $(VERSION)"; \
+	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) /bin/confd --version | grep '$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run  $(CONTAINER_NAME) /bin/confd --version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
 	fi
 
 	# create defaults for amd64
-ifeq ($(ARCH),amd64)
-	docker tag calico/confd:latest-$(ARCH) calico/confd:latest
-	docker tag calico/confd:latest-$(ARCH) quay.io/calico/confd:latest
-	docker tag calico/confd:latest calico/confd:$(VERSION)
-	docker tag calico/confd:$(VERSION) quay.io/calico/confd:$(VERSION)
-endif
-	# Retag images with corect version and quay
-	docker tag calico/confd:latest-$(ARCH) calico/confd:$(VERSION)-$(ARCH)
-	docker tag calico/confd:latest-$(ARCH) quay.io/calico/confd:$(VERSION)-$(ARCH)
-	docker tag calico/confd:latest-$(ARCH) quay.io/calico/confd:latest-$(ARCH)
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
+	$(MAKE) tag-images IMAGETAG=latest
 
 	# Check that images were created recently and that the IDs of the versioned and latest images match
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd:latest-$(ARCH)
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" calico/confd:$(VERSION)-$(ARCH)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CONTAINER_NAME):latest-$(ARCH)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CONTAINER_NAME):$(VERSION)-$(ARCH)
 
 	@echo ""
 	@echo "# Push the created tag to GitHub"
@@ -310,22 +346,12 @@ endif
 	@echo ""
 	@echo "# Now push the newly created release images."
 	@echo ""
-	@echo "  docker push calico/confd:$(VERSION)-$(ARCH)"
-	@echo "  docker push quay.io/calico/confd:$(VERSION)-$(ARCH)"
-ifeq ($(ARCH),amd64)
-	@echo "  docker push calico/confd:$(VERSION)"
-	@echo "  docker push quay.io/calico/confd:$(VERSION)"
-endif
+	@echo "  $(MAKE) push IMAGETAG=$(VERSION)"
 	@echo ""
 	@echo "# For the final release only, push the latest tag"
 	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES"
 	@echo ""
-	@echo "  docker push calico/confd:latest-$(ARCH)"
-	@echo "  docker push quay.io/calico/confd:latest-$(ARCH)"
-ifeq ($(ARCH),amd64)
-	@echo "  docker push calico/confd:latest"
-	@echo "  docker push quay.io/calico/confd:latest"
-endif
+	@echo "  $(MAKE) push IMAGETAG=latest"
 	@echo ""
 	@echo "See RELEASING.md for detailed instructions."
 
@@ -333,13 +359,13 @@ endif
 clean:
 	rm -rf bin/*
 	rm -rf tests/logs
-	-docker rmi -f calico/confd:latest-$(ARCH)
-	-docker rmi -f calico/confd:$(VERSION)-$(ARCH)
-	-docker rmi -f quay.io/calico/confd:latest-$(ARCH)
-	-docker rmi -f quay.io/calico/confd:$(VERSION)-$(ARCH)
+	-docker rmi -f $(CONTAINER_NAME):latest-$(ARCH)
+	-docker rmi -f $(CONTAINER_NAME):$(VERSION)-$(ARCH)
+	-docker rmi -f quay.io/$(CONTAINER_NAME):latest-$(ARCH)
+	-docker rmi -f quay.io/$(CONTAINER_NAME):$(VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
-	-docker rmi -f calico/confd:latest
-	-docker rmi -f calico/confd:$(VERSION)
-	-docker rmi -f quay.io/calico/confd:latest
-	-docker rmi -f quay.io/calico/confd:$(VERSION)
+	-docker rmi -f $(CONTAINER_NAME):latest
+	-docker rmi -f $(CONTAINER_NAME):$(VERSION)
+	-docker rmi -f quay.io/$(CONTAINER_NAME):latest
+	-docker rmi -f quay.io/$(CONTAINER_NAME):$(VERSION)
 endif
