@@ -101,17 +101,26 @@ ${CNI_NETWORK_CONFIG:-}
 EOF
 fi
 
+SERVICE_ACCOUNT_PATH=/var/run/secrets/kubernetes.io/serviceaccount
+KUBE_CA_FILE=${KUBE_CA_FILE:-$SERVICE_ACCOUNT_PATH/ca.crt}
+SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
 # Pull out service account token.
-SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+SERVICEACCOUNT_TOKEN=$(cat $SERVICE_ACCOUNT_PATH/token)
 
 # Check if we're running as a k8s pod.
-if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]; then
+if [ -f "$SERVICE_ACCOUNT_PATH/token" ]; then
   # We're running as a k8d pod - expect some variables.
   if [ -z ${KUBERNETES_SERVICE_HOST} ]; then
     echo "KUBERNETES_SERVICE_HOST not set"; exit 1;
   fi
   if [ -z ${KUBERNETES_SERVICE_PORT} ]; then
     echo "KUBERNETES_SERVICE_PORT not set"; exit 1;
+  fi
+
+  if [ "$SKIP_TLS_VERIFY" == "true" ]; then
+    TLS_CFG="insecure-skip-tls-verify: true"
+  elif [ -f "$KUBE_CA_FILE" ]; then
+    TLS_CFG="certificate-authority-data: $(cat $KUBE_CA_FILE | base64 | tr -d '\n')"
   fi
 
   # Write a kubeconfig file for the CNI plugin.  Do this
@@ -128,7 +137,7 @@ clusters:
 - name: local
   cluster:
     server: ${KUBERNETES_SERVICE_PROTOCOL:-https}://[${KUBERNETES_SERVICE_HOST}]:${KUBERNETES_SERVICE_PORT}
-    insecure-skip-tls-verify: true
+    $TLS_CFG
 users:
 - name: calico
   user:
