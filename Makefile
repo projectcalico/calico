@@ -267,6 +267,10 @@ test-watch: $(DIST)/calico $(DIST)/calico-ipam run-etcd run-k8s-apiserver
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build-containerized fetch-cni-bins
 	docker build -f Dockerfile.$(ARCH) -t $(CONTAINER_NAME):latest-$(ARCH) .
+ifeq ($(ARCH),amd64)
+	# Need amd64 builds tagged as :latest because Semaphore depends on that
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
+endif
 	touch $@
 
 .PHONY: fetch-cni-bins
