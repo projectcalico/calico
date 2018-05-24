@@ -64,30 +64,30 @@ clean:
 	# Clean jekyll
 	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
 
-	# Remove any release directories 
-	rm -rf _output 
+	# Remove any release directories
+	rm -rf _output
 
 ###############################################################################
-# CI / test targets 
+# CI / test targets
 ###############################################################################
 
 ci: htmlproofer kubeval
 
 htmlproofer: clean _site
-	# Run htmlproofer, failing if we hit any errors. 
+	# Run htmlproofer, failing if we hit any errors.
 	./htmlproofer.sh
 
 kubeval:
 	# Run kubeval to check master manifests are valid Kubernetes resources.
-	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\).yaml" | xargs /kubeval'
+	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'ok=true; for f in `find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok'
 
 htmlproofer-all:
-	# Run htmlproofer across _all_ files. This is not part of CI. 
+	# Run htmlproofer across _all_ files. This is not part of CI.
 	echo "Running a soft check across all files"
 	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(pwd)/_site:/_site/ quay.io/calico/htmlproofer:${HP_VERSION} /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
 
 ###############################################################################
-# Docs automation 
+# Docs automation
 ###############################################################################
 
 strip_redirects:
@@ -108,14 +108,14 @@ endif
 
 	# Check the redirect_from lines and strip the .md from the URL
 	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
-    
+
 update_canonical_urls:
 	# You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.0 NEW=v3.1
 	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
 	find . \( -name '*.md' -o -name '*.html' \) -exec sed -i '/canonical_url:/s/$(OLD)/$(NEW)/g' {} \;
 
 ###############################################################################
-# Release targets 
+# Release targets
 ###############################################################################
 
 ## Tags and builds a release from start to finish.
@@ -156,10 +156,10 @@ release-publish: release-prereqs
 ## Generates release notes for the given version.
 release-notes: release-prereqs
 	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
-	
+
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
-ifndef RELEASE_STREAM 
+ifndef RELEASE_STREAM
 	$(error RELEASE_STREAM is undefined - run using make release RELEASE_STREAM=vX.Y)
 endif
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
@@ -242,7 +242,7 @@ $(RELEASE_DIR_BIN)/%:
 	chmod +x $@
 
 ###############################################################################
-# Utilities 
+# Utilities
 ###############################################################################
 
 .PHONY: help
