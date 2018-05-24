@@ -29,7 +29,7 @@ the demo.
 If you do not have a test cluster running Kubernetes 1.8 or later with RBAC and Initializers, this section will walk you through
 creating one on your local machine using [Vagrant].
 
-If you already have a test cluster, you can skip to [installing Calico](#install-calico).
+If you already have a test cluster, you can skip to [installing `calicoctl`](#install-calicoctl).
 
 #### Prerequisites
 
@@ -72,6 +72,26 @@ Verify your kubeconfig is working, for example:
 
     kubectl get pods
     
+Since we are using the Kubernetes API server as the Calico datastore in this demo cluster
+(KDD mode), we need to configure calicoctl to use that datastore as well.  This can be done
+by setting the following environment variables
+
+    export CALICO_DATASTORE_TYPE=kubernetes CALICO_KUBECONFIG=<your kube config file>
+
+### Install calicoctl
+
+You will need the latest (nightly) build of `calicoctl`.
+
+    wget https://www.projectcalico.org/builds/calicoctl
+    chmod +x calicoctl
+
+Configure calicoctl to connect to your Calico datastore by
+[following the instructions appropriate for your cluster](https://docs.projectcalico.org/master/usage/calicoctl/configure/).
+If you followed the directions for installing a Vagrant cluster above, you have already completed this configuration.
+    
+The policy uses alpha features of Calico behind a feature flag.  Enable these features.
+
+    export ALPHA_FEATURES=serviceaccounts,httprules
 
 ### Install Calico
 
@@ -293,15 +313,6 @@ Return to your web browser and refresh to confirm the new balance.
 #### Policy
 
 We can mitigate both of the above deficiencies with a Calico policy.
-
-You will need the latest (nightly) build of `calicoctl`.  Exit out of any pods you are exec'd into.
-
-    wget https://www.projectcalico.org/builds/calicoctl
-    chmod +x calicoctl
-    
-The policy uses alpha features of Calico behind a feature flag.  Enable these features.
-
-    export ALPHA_FEATURES=serviceaccounts,httprules
 
 Apply the sample policy.
 
