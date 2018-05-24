@@ -371,3 +371,14 @@ spec:
   natOutgoing: true
 EOF
 ```
+
+### On AWS with IP in IP, why do I see no connectivity between workloads or only see connectivity if I ping in both directions?
+
+By default, AWS security groups block incoming IP in IP traffic.
+
+However, if an instance has recently sent some IP in IP traffic out when it receives some incoming IP in IP traffic,
+then AWS sees that as a response to an outgoing connection and it allows the incoming traffic.  This leads to some very
+confusing behavior where traffic can be blocked and then suddenly start working!
+
+To resolve the issue, add a rule to your security groups that allows inbound and outbound IP in IP traffic (IP protocol
+number 4) between your hosts.
