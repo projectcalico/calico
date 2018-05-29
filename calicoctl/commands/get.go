@@ -95,10 +95,10 @@ Description:
     wide                  As per the ps option, but includes more headings.
     custom-columns        As per the ps option, but only display the columns
                           that are requested in the comma-separated list.
-    golang-template       Display the results using the specified golang
+    go-template           Display the results using the specified golang
                           template.  This can be used to filter results, for
                           example to return a specific value.
-    golang-template-file  Display the results using the golang template that is
+    go-template-file      Display the results using the golang template that is
                           contained in the specified file.
     yaml                  Display the results in YAML output format.
     json                  Display the results in JSON output format.
