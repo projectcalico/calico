@@ -610,6 +610,12 @@ release: clean
 	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)
 	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):latest
 
+	# Retag for GKE.
+	docker tag $(NODE_CONTAINER_NAME) gcr.io/projectcalico-org/node:$(CALICO_VER)
+	docker tag $(NODE_CONTAINER_NAME) eu.gcr.io/projectcalico-org/node:$(CALICO_VER)
+	docker tag $(NODE_CONTAINER_NAME) asia.gcr.io/projectcalico-org/node:$(CALICO_VER)
+	docker tag $(NODE_CONTAINER_NAME) us.gcr.io/projectcalico-org/node:$(CALICO_VER)
+
 	# Create the release archive
 	$(MAKE) release-archive
 
@@ -624,6 +630,10 @@ release: clean
 	@echo "# Now push release images."
 	@echo "  docker push $(NODE_CONTAINER_NAME):$(CALICO_VER)"
 	@echo "  docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)"
+	@echo "  docker push gcr.io/projectcalico-org/node:$(CALICO_VER)"
+	@echo "  docker push eu.gcr.io/projectcalico-org/node:$(CALICO_VER)"
+	@echo "  docker push asia.gcr.io/projectcalico-org/node:$(CALICO_VER)"
+	@echo "  docker push us.gcr.io/projectcalico-org/node:$(CALICO_VER)"
 
 	@echo "# For the final release only, push the latest tag (not for RCs)"
 	@echo "  docker push $(NODE_CONTAINER_NAME):latest"
