@@ -37,6 +37,8 @@ join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 # the one for the host should contain all the necessary cross-compilation tools
 GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 
+CONTAINER_NAME=calico/typha
+
 help:
 	@echo "Typha Makefile"
 	@echo
@@ -54,7 +56,7 @@ help:
 	@echo "Builds:"
 	@echo
 	@echo "  make all           Build all the binary packages."
-	@echo "  make calico/typha  Build calico/typha docker image."
+	@echo "  make image         Build $(CONTAINER_NAME) docker image."
 	@echo
 	@echo "Tests:"
 	@echo
@@ -78,8 +80,54 @@ help:
 # considerably.
 .SUFFIXES:
 
-all: calico/typha bin/typha-client-$(ARCH)
+all: $(CONTAINER_NAME) bin/typha-client-$(ARCH)
 test: ut
+
+###############################################################################
+# tag and push images of any tag
+###############################################################################
+
+
+# ensure we have a real imagetag
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push one arch
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## push all archs
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+## tag images of one arch
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
+
+
+
+###############################################################################
+
+
+
 
 # Targets used when cross building.
 .PHONY: register
@@ -114,15 +162,15 @@ MY_UID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
 # Build the calico/typha docker image, which contains only Typha.
-.PHONY: image calico/typha
-image: calico/typha
-calico/typha: bin/calico-typha-$(ARCH)
+.PHONY: image $(CONTAINER_NAME)
+image: $(CONTAINER_NAME)
+$(CONTAINER_NAME): bin/calico-typha-$(ARCH)
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-typha-$(ARCH) docker-image/bin/
-	docker build --pull -t calico/typha:latest-$(ARCH) docker-image --file docker-image/Dockerfile.$(ARCH)
+	docker build --pull -t $(CONTAINER_NAME):latest-$(ARCH) docker-image --file docker-image/Dockerfile.$(ARCH)
 ifeq ($(ARCH),amd64)
-	docker tag calico/typha:latest-$(ARCH) calico/typha:latest
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
 endif
 
 # Pre-configured docker run command that runs as this user with the repo
@@ -338,19 +386,12 @@ release-once-tagged:
 	@echo
 	@echo "Will now build release artifacts..."
 	@echo
-	$(MAKE) bin/calico-typha calico/typha
-	ifeq ($(ARCH),amd64)
-	docker tag calico/typha:latest-$(ARCH) calico/typha:latest
-	docker tag calico/typha:latest-$(ARCH) quay.io/calico/typha:latest
-	docker tag calico/typha:latest calico/typha:$(VERSION)
-	docker tag calico/typha:$(VERSION) quay.io/calico/typha:$(VERSION)
-	endif
-	docker tag calico/typha:latest-$(ARCH) calico/typha:$(VERSION)-$(ARCH)
-	docker tag calico/typha:latest-$(ARCH) quay.io/calico/typha:latest-$(ARCH)
-	docker tag calico/typha:$(VERSION)-$(ARCH) quay.io/calico/typha:$(VERSION)-$(ARCH)
+	$(MAKE) bin/calico-typha $(CONTAINER_NAME)
+	$(MAKE) tag-images IMAGETAG=latest
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
 	@echo
 	@echo "Checking built typha has correct version..."
-	@if docker run quay.io/calico/typha:$(VERSION)-$(ARCH) calico-typha --version | grep -q '$(VERSION)$$'; \
+	@if docker run quay.io/$(CONTAINER_NAME):$(VERSION)-$(ARCH) calico-typha --version | grep -q '$(VERSION)$$'; \
 	then \
 	  echo "Check successful."; \
 	else \
@@ -361,8 +402,8 @@ release-once-tagged:
 	@echo "Typha release artifacts have been built:"
 	@echo
 	@echo "- Binary:                 bin/calico-typha-$(ARCH)"
-	@echo "- Docker container image: calico/typha:$(VERSION)-$(ARCH)"
-	@echo "- Same, tagged for Quay:  quay.io/calico/typha:$(VERSION)-$(ARCH)"
+	@echo "- Docker container image: $(CONTAINER_NAME):$(VERSION)-$(ARCH)"
+	@echo "- Same, tagged for Quay:  quay.io/$(CONTAINER_NAME):$(VERSION)-$(ARCH)"
 	@echo
 	@echo "Now to publish this release to Github:"
 	@echo
@@ -383,23 +424,10 @@ release-once-tagged:
 	@echo
 	@echo "Then, push the versioned docker images to Dockerhub and Quay:"
 	@echo
-	@echo "- docker push calico/typha:$(VERSION)-$(ARCH)"
-	ifeq ($(ARCH),amd64)
-	@echo "- docker push calico/typha:$(VERSION)"
-	endif
-	@echo "- docker push quay.io/calico/typha:$(VERSION)-$(ARCH)"
-	ifeq ($(ARCH),amd64)
-	@echo "- docker push quay.io/calico/typha:$(VERSION)"
-	endif
+	@echo "- $(MAKE) push IMAGETAG=$(VERSION)
 	@echo
 	@echo "If this is the latest release from the most recent stable"
 	@echo "release series, also push the 'latest' tag:"
 	@echo
-	@echo "- docker push calico/typha:latest-$(ARCH)"
-	ifeq ($(ARCH),amd64)
-	@echo "- docker push calico/typha:latest"
-	endif
-	@echo "- docker push quay.io/calico/typha:latest-$(ARCH)"
-	ifeq ($(ARCH),amd64)
-	@echo "- docker push quay.io/calico/typha:latest"
-	endif
+	@echo "- $(MAKE) push IMAGETAG=latest
+	@echo
