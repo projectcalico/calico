@@ -102,6 +102,12 @@ endif
 	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
 
+	# Tag the GCR images.
+	docker tag $(CONTAINER_NAME):latest gcr.io/projectcalico-org/cni:$(VERSION)
+	docker tag $(CONTAINER_NAME):latest eu.gcr.io/projectcalico-org/cni:$(VERSION)
+	docker tag $(CONTAINER_NAME):latest asia.gcr.io/projectcalico-org/cni:$(VERSION)
+	docker tag $(CONTAINER_NAME):latest us.gcr.io/projectcalico-org/cni:$(VERSION)
+
 	# Generate the `latest` images.
 	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):latest
 
@@ -129,6 +135,12 @@ release-publish: release-prereqs
 	# Push images.
 	docker push calico/cni$(ARCHTAG):$(VERSION)
 	docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)
+
+	# Push GCR images.
+	docker push gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
+	docker push eu.gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
+	docker push asia.gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
+	docker push us.gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo "Attach the $(DIST)/calico and $(DIST)/calico-ipam binaries."
