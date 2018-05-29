@@ -295,6 +295,10 @@ release-once-tagged:
 	docker tag calico/typha$(ARCHTAG) calico/typha$(ARCHTAG):$(VERSION)
 	docker tag calico/typha$(ARCHTAG) quay.io/calico/typha$(ARCHTAG):latest
 	docker tag calico/typha$(ARCHTAG):$(VERSION) quay.io/calico/typha$(ARCHTAG):$(VERSION)
+	docker tag calico/typha$(ARCHTAG):$(VERSION) gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)
+	docker tag calico/typha$(ARCHTAG):$(VERSION) eu.gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)
+	docker tag calico/typha$(ARCHTAG):$(VERSION) asia.gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)
+	docker tag calico/typha$(ARCHTAG):$(VERSION) us.gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)
 	@echo
 	@echo "Checking built typha has correct version..."
 	@if docker run quay.io/calico/typha$(ARCHTAG):$(VERSION) calico-typha --version | grep -q '$(VERSION)$$'; \
@@ -328,10 +332,14 @@ release-once-tagged:
 	@echo "- Click the 'This is a pre-release' checkbox, if appropriate"
 	@echo "- Click 'Publish release'"
 	@echo
-	@echo "Then, push the versioned docker images to Dockerhub and Quay:"
+	@echo "Then, push the versioned docker images to Dockerhub, Quay, and GCR:"
 	@echo
-	@echo "- docker push calico/typha$(ARCHTAG):$(VERSION)"
-	@echo "- docker push quay.io/calico/typha$(ARCHTAG):$(VERSION)"
+	@echo " docker push calico/typha$(ARCHTAG):$(VERSION)"
+	@echo " docker push quay.io/calico/typha$(ARCHTAG):$(VERSION)"
+	@echo " docker push gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)"
+	@echo " docker push eu.gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)"
+	@echo " docker push asia.gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)"
+	@echo " docker push us.gcr.io/projectcalico-org/typha$(ARCHTAG):$(VERSION)"
 	@echo
 	@echo "If this is the latest release from the most recent stable"
 	@echo "release series, also push the 'latest' tag:"
