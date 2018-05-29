@@ -1,5 +1,5 @@
-hash: 3a43b9c5627557f9f6ed8f95bacf867095c6c7dbbda52cc1c6012d7c19a35dec
-updated: 2018-05-17T05:53:46.184914616-07:00
+hash: 181fc83609430fca17ea62d94311dce93de49c504f5c232b131767037cabe3d4
+updated: 2018-05-29T20:06:59.180363739Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -51,7 +51,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 6529cf7c58879c08d927016dde4477f18a0634cb
+  version: 06f5f3d67269ccec1fe5fe4134ba6e982984f7f5
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -209,7 +209,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2f135aa0cbc197fc6c28127a744924acc49c38c2
+  version: 0417ab6e1ea49be2abb978df365b25f20fdb3c6f
   subpackages:
   - lib
   - lib/apiconfig
@@ -248,7 +248,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 1d5864193af5e089f71ecc60f635f2ae380de0e4
+  version: 5374e9f32bde159a4aa19c821618920f491004be
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -263,7 +263,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: d0f7cd64bda49e08b22ae8a730aa57aa0db125d6
+  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -291,7 +291,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: d6449816ce06963d9d136eee5a56fca5b0616e7e
+  version: ab813273cd59e1333f7ae7bff5d027d4aadf528c
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -346,7 +346,7 @@ imports:
   - unicode/norm
   - width
 - name: google.golang.org/appengine
-  version: 0a24098c0ec68416ec050f567f75df563d6b231e
+  version: b1f26356af11148e710935ed1ac8a7f5702c7612
   subpackages:
   - internal
   - internal/app_identity
