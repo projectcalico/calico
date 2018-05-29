@@ -3,7 +3,7 @@ import:
 - package: github.com/sirupsen/logrus
   version: v1.0.4
 - package: github.com/projectcalico/libcalico-go
-  version: e3351395c934cee118999b9d29508e9280fa75ec
+  version: d6aff54dc3527357f016c0cd5c5364f21a15e9b4
   subpackages:
   - lib/api
   - lib/client
