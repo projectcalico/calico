@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM alpine:3.5
+FROM alpine:3.7
 LABEL maintainer "Casey Davenport <casey@tigera.io>" 
 
 ADD dist/kube-controllers-linux-amd64 /usr/bin/kube-controllers
