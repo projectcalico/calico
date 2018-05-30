@@ -433,11 +433,8 @@ ifneq ("$(ARCH)","ppc64le") # no ppc64le support in centos6
 endif
 	utils/make-packages.sh rpm
 
-.PHONY: protobuf
-protobuf: proto/felixbackend.pb.go
-
 # Generate the protobuf bindings for go.
-proto/felixbackend.pb.go: proto/felixbackend.proto
+protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}/proto:/src:rw \
 	              $(PROTOC_CONTAINER) \
 	              --gogofaster_out=plugins=grpc:. \
