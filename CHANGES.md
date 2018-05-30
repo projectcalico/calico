@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.3
+
+- No changes
+
 ## 3.1.2
 
 - Always send high-priority port statuses to Neutron.

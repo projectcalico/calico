@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        3.1.2
+Version:        3.1.3
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed May 30 2018 Neil Jerram <neil@tigera.io> 1:3.1.3-1
+  - networking-calico version 3.1.3 release
+    - No changes
+
 * Fri May 18 2018 Neil Jerram <neil@tigera.io> 1:3.1.2-1
   - networking-calico version 3.1.2 release
     - Always send high-priority port statuses to Neutron.
