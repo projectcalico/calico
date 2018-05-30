@@ -34,7 +34,7 @@ policy, the main entry point to managing Calico configuration is through
 the client.
 
 -  Documentation for the client is in [lib/client GoDoc](https://godoc.org/github.com/projectcalico/libcalico-go/lib/client).
--  The resource structure definitions are defined in [lib/api](https://godoc.org/github.com/projectcalico/libcalico-go/lib/api), this
+-  The resource structure definitions are defined in [lib/apis](https://godoc.org/github.com/projectcalico/libcalico-go/lib/apis), this
    includes detailed per-resource and per-field level descriptions.
 
 
