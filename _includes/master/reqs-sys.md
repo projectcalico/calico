@@ -41,13 +41,17 @@ Ensure that your hosts and firewalls allow the following traffic.
 | flannel networking (VXLAN)                                   | All                 | Bidirectional   | UDP 4789 |
 | etcd datastore                                               | etcd hosts          | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
 | {{site.prodname}} networking, cluster of more than 50 nodes  | Typha agent hosts   | Incoming        | TCP 5473 (default) |
-| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 6443: check the `port` value returned by `kubectl get svc kubernetes -o yaml` |
+| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 6443\* |
 {%- else %}
 | All                                                          | etcd hosts          | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
 {%- endif %}
 {%- if include.orch == "OpenShift" %}
-| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 8443: check the `port` value returned by `kubectl get svc kubernetes -o yaml` |
+| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 8443\* |
 {%- endif %}
+{%- if include.orch == "Kubernetes" or include.orch == "OpenShift" %}
+
+\* _The value passed to kube-apiserver using the `--secure-port` flag. If you cannot locate this, check the `targetPort` value returned by `kubectl get svc kubernetes -o yaml`._
+{% endif -%}
 {%- if include.orch == "OpenStack" %}
 
 \* _If your compute hosts connect directly and don't use IP-in-IP, you don't need to allow IP-in-IP traffic._
