@@ -1,3 +1,13 @@
+felix (3.1.3~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 3.1.3 (from Git commit 4d7bb9a).
+    [Changes recorded in 3.1.3 tag]
+    - dep + rpm packages for Calico v3.1.2
+    - Fix staticchecks lint.
+    - Update libcalico-go to release-v3.1
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 30 May 2018 10:21:04 -0700
+
 felix (3.1.2~__STREAM__) __STREAM__; urgency=low
 
   * Felix 3.1.2 (from Git commit c4f5a06).
