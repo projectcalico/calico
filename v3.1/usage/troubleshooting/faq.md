@@ -376,3 +376,14 @@ EOF
 ## Can {{site.prodname}} coexist with my own iptables rules?
 
 Yes. By default, Felix will write its own rules at the top of the iptables chain. If you want your rules to have priority, then change the chainInsertMode setting in your [Felix Configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig) to `Append`.
+
+### On AWS with IP in IP, why do I see no connectivity between workloads or only see connectivity if I ping in both directions?
+
+By default, AWS security groups block incoming IP in IP traffic.
+
+However, if an instance has recently sent some IP in IP traffic out when it receives some incoming IP in IP traffic,
+then AWS sees that as a response to an outgoing connection and it allows the incoming traffic.  This leads to some very
+confusing behavior where traffic can be blocked and then suddenly start working!
+
+To resolve the issue, add a rule to your security groups that allows inbound and outbound IP in IP traffic (IP protocol
+number 4) between your hosts.
