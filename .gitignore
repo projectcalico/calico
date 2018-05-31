@@ -8,7 +8,6 @@
 # Global glob patterns.
 *.log
 *.coverprofile
-*.pb.go
 /.noseids
 /nosetests.xml
 /release-notes-*
