@@ -237,9 +237,10 @@ func KeyFromDefaultPath(path string) Key {
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
 		_, c, err := net.ParseCIDR(cidr)
 		if err != nil {
-			panic(err)
+			log.WithError(err).Warningf("Failed to parse CIDR %s", cidr)
+		} else {
+			return IPPoolKey{CIDR: *c}
 		}
-		return IPPoolKey{CIDR: *c}
 	} else if m := matchGlobalConfig.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a global felix config: %v", path)
 		return GlobalConfigKey{Name: m[1]}

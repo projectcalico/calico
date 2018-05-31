@@ -25,32 +25,40 @@ import (
 
 var _ = DescribeTable(
 	"key parsing",
-	func(strKey string, expected Key) {
+	func(strKey string, expected Key, shouldFail bool) {
 		key := KeyFromDefaultPath(strKey)
-		Expect(key).To(Equal(expected))
-		serialized, err := KeyToDefaultPath(expected)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(serialized).To(Equal(strKey))
+		if shouldFail {
+			Expect(key).To(BeNil())
+		} else {
+			Expect(key).To(Equal(expected))
+			serialized, err := KeyToDefaultPath(expected)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(serialized).To(Equal(strKey))
+		}
 	},
 	Entry(
 		"profile rules with a /",
 		"/calico/v1/policy/profile/foo%2fbar/rules",
 		ProfileRulesKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
+		false,
 	),
 	Entry(
 		"profile tags with a /",
 		"/calico/v1/policy/profile/foo%2fbar/tags",
 		ProfileTagsKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
+		false,
 	),
 	Entry(
 		"profile labels with a /",
 		"/calico/v1/policy/profile/foo%2fbar/labels",
 		ProfileLabelsKey{ProfileKey: ProfileKey{Name: "foo/bar"}},
+		false,
 	),
 	Entry(
 		"policy with a /",
 		"/calico/v1/policy/tier/default/policy/biff%2fbop",
 		PolicyKey{Name: "biff/bop"},
+		false,
 	),
 	Entry(
 		"workload with a /",
@@ -61,6 +69,7 @@ var _ = DescribeTable(
 			WorkloadID:     "work/load",
 			EndpointID:     "end/point",
 		},
+		false,
 	),
 	Entry(
 		"host endpoint with a /",
@@ -69,36 +78,49 @@ var _ = DescribeTable(
 			Hostname:   "foobar",
 			EndpointID: "end/point",
 		},
+		false,
 	),
 	Entry(
 		"host IP",
 		"/calico/v1/host/foobar/bird_ip",
 		HostIPKey{Hostname: "foobar"},
+		false,
 	),
 	Entry(
 		"IP pool",
 		"/calico/v1/ipam/v4/pool/10.0.0.0-8",
 		IPPoolKey{CIDR: mustParseCIDR("10.0.0.0/8")},
+		false,
+	),
+	Entry(
+		"poorly formated IP pool",
+		"/calico/v1/ipam/v4/pool/577559",
+		nil,
+		true,
 	),
 	Entry(
 		"global felix config",
 		"/calico/v1/config/foo",
 		GlobalConfigKey{Name: "foo"},
+		false,
 	),
 	Entry(
 		"host config",
 		"/calico/v1/host/hostname/config/foo",
 		HostConfigKey{Hostname: "hostname", Name: "foo"},
+		false,
 	),
 	Entry(
 		"network set",
 		"/calico/v1/netset/netsetname",
 		NetworkSetKey{Name: "netsetname"},
+		false,
 	),
 	Entry(
 		"ready flag",
 		"/calico/v1/Ready",
 		ReadyFlagKey{},
+		false,
 	),
 )
 
