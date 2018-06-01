@@ -40,10 +40,10 @@ The full list of parameters which can be set is as follows.
 
 | Configuration parameter | Environment variable  | Description | Schema |
 | ----------------------- | --------------------- | ----------- | ------ |
-| `EtcdCaFile`            | `TYPHA_ETCDCAFILE`    | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the Typha host. Otherwise, use this parameter to supply Typha with the path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures Typha to trust the signature on the certificates provided by the etcd server. To disable authentication of the server by Typha, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
+| `EtcdCaFile`            | `TYPHA_ETCDCAFILE`    | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures Typha to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing Typha to trust each of the CAs included. To disable authentication of the server by Typha, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
 | `EtcdCertFile`          | `TYPHA_ETCDCERTFILE`  | Path to the file containing the client certificate issued to Typha. Enables Typha to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/typha/cert.pem` (optional) | string |
-| `EtcdEndpoints`         | `TYPHA_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://etcd1:2379,http://etcd2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
-| `EtcdKeyFile`           | `TYPHA_ETCDKEYFILE`   | Path to the file containing the private key matching the Typha client certificate. Enables Typha to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
+| `EtcdEndpoints`         | `TYPHA_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
+| `EtcdKeyFile`           | `TYPHA_ETCDKEYFILE`   | Path to the file containing the private key matching the Typha client certificate. Enables Typha to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/typha/key.pem` (optional) | string |
 
 #### Kubernetes API datastore configuration
 
