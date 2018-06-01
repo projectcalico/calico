@@ -30,7 +30,7 @@ The full list of parameters which can be set is as follows.
 | Configuration parameter           | Environment variable                    | Description  | Schema |
 | --------------------------------- | --------------------------------------- | -------------| ------ |
 | `DatastoreType`                   | `FELIX_DATASTORETYPE`                   | The datastore that Felix should read endpoints and policy information from. [Default: `etcdv3`] | `etcdv3`, `kubernetes`|
-| `FailsafeInboundHostPorts`        | `FELIX_FAILSAFEINBOUNDHOSTPORTS`        | Comma-delimited list of UDP/TCP ports that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration. Each port should be specified as `tcp:<port-number>` or `udp:<port-number>`. For backwards compatibility, if the protocol is not specified, it defaults to "tcp". To disable all inbound host ports, use the value `none`. The default value allows ssh access, DHCP, BGP and etcd. [Default: `tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6666, tcp:6667`] | string |
+| `FailsafeInboundHostPorts`        | `FELIX_FAILSAFEINBOUNDHOSTPORTS`        | Comma-delimited list of UDP/TCP ports that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. Each port should be specified as `tcp:<port-number>` or `udp:<port-number>`. For backwards compatibility, if the protocol is not specified, it defaults to "tcp". To disable all inbound host ports, use the value `none`. The default value allows ssh access, DHCP, BGP and etcd. [Default: `tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:6666, tcp:6667`] | string |
 | `FailsafeOutboundHostPorts`       | `FELIX_FAILSAFEOUTBOUNDHOSTPORTS`       | Comma-delimited list of UDP/TCP ports that Felix will allow outgoing traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration. Each port should be specified as `tcp:<port-number>` or `udp:<port-number>`.  For backwards compatibility, if the protocol is not specified, it defaults to "tcp". To disable all outbound host ports, use the value `none`. The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd as well as allowing DHCP, DNS, BGP. [Default: `udp:53, udp:67, tcp:179, tcp:2379, tcp:2380, tcp:6666, tcp:6667`]  | string |
 | `FelixHostname`                   | `FELIX_FELIXHOSTNAME`                   | The hostname Felix reports to the plugin. Should be used if the hostname Felix autodetects is incorrect or does not match what the plugin will expect. [Default: `socket.gethostname()`] | string |
 | `HealthEnabled`                   | `FELIX_HEALTHENABLED`                   | When enabled, exposes felix health information via an http endpoint. | boolean |
@@ -117,40 +117,18 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 
 #### Felix-Typha TLS configuration
 
-{% include {{page.version}}/felix-typha-tls-intro.md %}
-
-To use TLS, each Felix instance must have a certificate and key pair signed by
-a trusted CA.  Felix then uses TLS when connecting to Typha, and requires Typha
-to present a certificate that is signed by a trusted CA and
-has an expected identity in its Common Name or URI SAN field.  Either
-`TyphaCN` or `TyphaURISAN` must be configured, and Felix will check the
-presented certificate accordingly.
-
--  For a [SPIFFE](https://github.com/spiffe/spiffe)-compliant deployment you
-   should configure `TyphaURISAN` with a [SPIFFE
-   Identity](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity)
-   and provision Typha certificates with the same identity in their URI SAN
-   field.
-
--  Alternatively you can configure `TyphaCN` and provision Typha certificates
-   with that `TyphaCN` value in their Common Name field.
-
-If both those parameters are set, a Typha certificate only has to match one of
-them; this is intended for when a deployment is migrating from using Common
-Name to using a URI SAN, to express identity.
-
 | Configuration parameter | Environment variable   | Description | Schema |
 | ----------------------- | ---------------------- | ----------- | ------ |
-| `TyphaCAFile`           | `FELIX_TYPHACAFILE`    | The full path to the certificate file for the Certificate Authorities that Felix trusts for Felix-Typha communications. | string |
-| `TyphaCertFile`         | `FELIX_TYPHACERTFILE`  | The full path to the certificate file for this Felix instance to use to connect to Typha. | string |
-| `TyphaCN`               | `FELIX_TYPHACN`        | If set, the Common Name that Typha's certificate must have. [Default: not set] | string |
-| `TyphaKeyFile`          | `FELIX_TYPHAKEYFILE`   | The full path to the private key file for this Felix instance to use to connect to Typha. | string |
-| `TyphaURISAN`           | `FELIX_TYPHAURISAN`    | If set, a URI SAN that Typha's certificate must have. [Default: not set] | string |
+| `TyphaCAFile`           | `FELIX_TYPHACAFILE`    | Path to the file containing the root certificate of the CA that issued the Typha server certificate. Configures Felix to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing Felix to trust each of the CAs included. Example: `/etc/felix/ca.pem` | string |
+| `TyphaCertFile`         | `FELIX_TYPHACERTFILE`  | Path to the file containing the client certificate issued to Felix. Enables Felix to participate in mutual TLS authentication and identify itself to the Typha server. Example: `/etc/felix/cert.pem` | string |
+| `TyphaCN`               | `FELIX_TYPHACN`        | If set, the `Common Name` that Typha's certificate must have. If you have enabled TLS on the communications from Felix to Typha, you must set a value here or in `TyphaURISAN`. You can set values in both, as well, such as to facilitate a migration from using one to the other. If either matches, the communication succeeds. [Default: none] | string |
+| `TyphaKeyFile`          | `FELIX_TYPHAKEYFILE`   | Path to the file containing the private key matching the Felix client certificate. Enables Felix to participate in mutual TLS authentication and identify itself to the Typha server. Example: `/etc/felix/key.pem` (optional) | string |
+| `TyphaURISAN`           | `FELIX_TYPHAURISAN`    | If set, a URI SAN that Typha's certificate must have. We recommend populating this with a [SPIFFE](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity) string that identifies Typha. All Typha instances should use the same SPIFFE ID. If you have enabled TLS on the communications from Felix to Typha, you must set a value here or in `TyphaCN`. You can set values in both, as well, such as to facilitate a migration from using one to the other. If either matches, the communication succeeds. [Default: none] | string |
 
-{% include {{page.version}}/felix-typha-tls-howto.md %}
+For more information on how to use and set these variables, refer to
+[Connections from Felix to Typha (Kubernetes)](../../usage/encrypt-comms#connections-from-felix-to-typha-kubernetes).
 
-Environment variables
----------------------
+### Environment variables
 
 The highest priority of configuration is that read from environment
 variables. To set a configuration parameter via an environment variable,
