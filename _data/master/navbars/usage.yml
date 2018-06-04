@@ -25,6 +25,8 @@ toc:
     path: /usage/encrypt-comms
   - title: Securing Calico's Prometheus endpoints
     path: /usage/policy/secure-metrics
+  - title: Securing Calico's own communications
+    path: /usage/policy/whitelist-comms
 - title: Running calico/node with an init system
   path: /usage/configuration/as-service
 - title: Configuring BGP Peers
