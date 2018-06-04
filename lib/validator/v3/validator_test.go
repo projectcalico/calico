@@ -1112,6 +1112,16 @@ func init() {
 				Protocol:  protocolFromString("ICMP"),
 				IPVersion: &V6,
 			}, false),
+		Entry("should accept Allow rule with HTTP clause",
+			api.Rule{
+				Action: "Allow",
+				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
+			}, true),
+		Entry("should reject Deny rule with HTTP clause",
+			api.Rule{
+				Action: "Deny",
+				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
+			}, false),
 
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),

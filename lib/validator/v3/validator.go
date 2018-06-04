@@ -790,6 +790,12 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 	scanNets(rule.Source.NotNets, "Source.NotNets")
 	scanNets(rule.Destination.Nets, "Destination.Nets")
 	scanNets(rule.Destination.NotNets, "Destination.NotNets")
+
+	usesALP, alpValue, alpField := ruleUsesAppLayerPolicy(&rule)
+	if rule.Action != api.Allow && usesALP {
+		structLevel.ReportError(alpValue, alpField,
+			"", reason("only valid for Allow rules"))
+	}
 }
 
 func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel) {
@@ -896,11 +902,12 @@ func validateNetworkPolicy(v *validator.Validate, structLevel *validator.StructL
 	validateObjectMetaAnnotations(v, structLevel, np.Annotations)
 	validateObjectMetaLabels(v, structLevel, np.Labels)
 
-	// Check (and disallow) rules with HTTPMatch for egress rules.
+	// Check (and disallow) rules with application layer policy for egress rules.
 	if len(spec.Egress) > 0 {
 		for _, r := range spec.Egress {
-			if r.HTTP != nil {
-				structLevel.ReportError(reflect.ValueOf(r.HTTP), "HTTP", "", reason("HTTP match not allowed in egress rule"))
+			useALP, v, f := ruleUsesAppLayerPolicy(&r)
+			if useALP {
+				structLevel.ReportError(v, f, "", reason("not allowed in egress rule"))
 			}
 		}
 	}
@@ -985,11 +992,12 @@ func validateGlobalNetworkPolicy(v *validator.Validate, structLevel *validator.S
 		}
 	}
 
-	// Check (and disallow) rules with HTTPMatch for egress rules.
+	// Check (and disallow) rules with application layer policy for egress rules.
 	if len(spec.Egress) > 0 {
 		for _, r := range spec.Egress {
-			if r.HTTP != nil {
-				structLevel.ReportError(reflect.ValueOf(r.HTTP), "HTTP", "", reason("HTTP match not allowed in egress rules"))
+			useALP, v, f := ruleUsesAppLayerPolicy(&r)
+			if useALP {
+				structLevel.ReportError(v, f, "", reason("not allowed in egress rules"))
 			}
 		}
 	}
@@ -1038,4 +1046,20 @@ func validateObjectMetaLabels(v *validator.Validate, structLevel *validator.Stru
 			)
 		}
 	}
+}
+
+// ruleUsesAppLayerPolicy checks if a rule uses application layer policy, and
+// if it does, returns true and the type of application layer clause. If it does
+// not it returns false and the empty string.
+func ruleUsesAppLayerPolicy(rule *api.Rule) (bool, reflect.Value, string) {
+	if rule.HTTP != nil {
+		return true, reflect.ValueOf(rule.HTTP), "HTTP"
+	}
+	if rule.Source.ServiceAccounts != nil {
+		return true, reflect.ValueOf(rule.Source.ServiceAccounts), "Source.ServiceAccounts"
+	}
+	if rule.Destination.ServiceAccounts != nil {
+		return true, reflect.ValueOf(rule.Destination.ServiceAccounts), "Destination.ServiceAccounts"
+	}
+	return false, reflect.Value{}, ""
 }
