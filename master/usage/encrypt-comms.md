@@ -21,7 +21,7 @@ its connections as follows.
   - [Felix](../reference/felix/configuration#etcd-datastore-configuration) (on [bare metal hosts](../getting-started/bare-metal/installation/))
   - [Typha](../reference/typha/configuration#etcd-datastore-configuration) (often deployed in
     larger Kubernetes deployments)
-  - [Neutron or ML2 driver](./openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
+  - [Neutron plugin or ML2 driver](./openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
   - [DHCP agent](./openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)
 
 ### Connections from {{site.prodname}} components to kube-apiserver (Kubernetes and OpenShift)
