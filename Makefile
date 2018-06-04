@@ -30,7 +30,7 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-GO_BUILD_VER ?= v0.14
+GO_BUILD_VER ?= v0.15
 join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 # for building, we use the go-build image for the *host* architecture, even if the target is different
