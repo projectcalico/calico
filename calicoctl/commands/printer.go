@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -193,17 +193,19 @@ func join(items interface{}, separator string) string {
 		return strings.Join(s, separator)
 	}
 
-	// Otherwise, provided this is a slice, just convert each item to a string and
-	// join together.
-	switch reflect.TypeOf(items).Kind() {
-	case reflect.Slice:
-		slice := reflect.ValueOf(items)
-		buf := new(bytes.Buffer)
-		for i := 0; i < slice.Len(); i++ {
-			if i > 0 {
-				buf.WriteString(separator)
-			}
-			fmt.Fprint(buf, slice.Index(i).Interface())
+	slice := reflect.ValueOf(items)
+	buf := new(bytes.Buffer)
+	for i := 0; i < slice.Len(); i++ {
+		if i > 0 {
+			buf.WriteString(separator)
+		}
+		fmt.Fprint(buf, slice.Index(i).Interface())
+		if maxLen > 0 && buf.Len() > maxLen {
+			// Break out early so that we don't have to stringify a long list, only to then throw it away.
+			const truncationSuffix = "..."
+			buf.Truncate(maxLen - len(truncationSuffix))
+			buf.WriteString(truncationSuffix)
+			break
 		}
 		return buf.String()
 	}
