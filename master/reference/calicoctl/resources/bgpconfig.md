@@ -3,7 +3,8 @@ title: BGP Configuration Resource (BGPConfiguration)
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/bgpconfig'
 ---
 
-A BGP configuration resource (`BGPConfiguration`) represents BGP specific configuration options for the cluster.
+A BGP configuration resource (`BGPConfiguration`) represents BGP specific configuration options for the cluster or a
+specific node.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `bgpconfiguration`, `bgpconfig`, `bgpconfigurations`, `bgpconfigs`.
@@ -37,8 +38,8 @@ spec:
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
 | logSeverityScreen | Global log level | Debug, Info, Warning, Error, Fatal | string | `Info` |
-| nodeToNodeMeshEnabled | Full BGP node-to-node mesh | true, false  | string | true |
-| asNumber | The AS Number of this peer. | A valid AS Number, may be specified in dotted notation. | integer/string | 64512 |
+| nodeToNodeMeshEnabled | Full BGP node-to-node mesh. Only valid on the global `default` BGPConfiguration. | true, false  | string | true |
+| asNumber | The default local AS Number that {{site.prodname}} should use when speaking with BGP peers. Only valid on the global `default` BGPConfiguration; to set a per-node override, use the `bgp` field on the [Node resource](./node). | A valid AS Number, may be specified in dotted notation. | integer/string | 64512 |
 
 ### Supported operations
 

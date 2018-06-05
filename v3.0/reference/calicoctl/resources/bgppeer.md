@@ -39,7 +39,12 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | node     | If specified, the scope is node level, otherwise the scope is global. | The hostname of the node to which this peer applies. | string | |
 | peerIP   | The IP address of this peer. | Valid IPv4 or IPv6 address.  | string | |
-| asNumber | The AS Number of this peer. | A valid AS Number, may be specified in dotted notation. | integer/string |
+| asNumber | The remote AS Number of the peer. | A valid AS Number, may be specified in dotted notation. | integer/string | |
+
+> **Tip**: the cluster-wide default local AS number used when speaking with a peer is controlled by the
+> [BGPConfiguration resource](./bgpconfig).  That value can be overriden per-node by using the `bgp` field of
+> the [Node resource](./node).
+{: .alert .alert-success}
 
 ### Peer Scopes
 
