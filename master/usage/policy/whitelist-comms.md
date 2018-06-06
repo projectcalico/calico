@@ -144,6 +144,13 @@ with:
 -  the `bl-default-allow: true` if you are generally allowing traffic through
    HostEndpoints that is _not_ to a protected server.
 
+> **Tip**: If you have a protected server running on a host that is
+> not yet {{site.prodname}}-protected, first [set
+> up](../../getting-started/bare-metal/installation/container) [host
+> protection](../../getting-started/bare-metal/bare-metal) on that
+> host.
+{: .alert .alert-success}
+
 ## Pruning Felix's failsafe ports
 
 {{site.prodname}}'s Felix component is normally configured with a set of failsafe ports
