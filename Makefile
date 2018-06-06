@@ -1,7 +1,7 @@
 # Shortcut targets
 default: build
 
-## Build binaries for all platforms and architectures
+## Build binary for current platform
 all: build
 
 ## Run the tests for the current platform/architecture
@@ -80,14 +80,16 @@ ifeq ($(ARCH),amd64)
 	docker rmi $(CTL_CONTAINER_NAME):$(VERSION) || true
 endif
 
-
-
 ###############################################################################
 # Building the binary
 ###############################################################################
-.PHONY: build
+.PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build: $(addprefix bin/calicoctl-linux-,$(ARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64
+build-all: $(addprefix bin/calicoctl-linux-,$(ARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64
+
+.PHONY: build
+## Build the binary for the current architecture and platform
+build: bin/calicoctl-$(OS)-$(ARCH)
 
 ## Create the vendor directory
 vendor: glide.yaml
@@ -134,7 +136,7 @@ bin/calicoctl-%: $(CALICOCTL_FILES) vendor
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
-	mv $< $@
+	cp $< $@
 bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 	mv $< $@
 
