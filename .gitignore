@@ -1,5 +1,6 @@
 .go-pkg-cache
 dist
+bin
 kubeconfig
 .idea
 *~

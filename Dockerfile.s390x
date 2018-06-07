@@ -2,7 +2,7 @@ FROM s390x/busybox:1.28.3
 
 LABEL maintainer "LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)"
 
-ADD dist/s390x/ /opt/cni/bin/
+ADD bin/s390x/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
