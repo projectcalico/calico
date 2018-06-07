@@ -161,6 +161,7 @@ type WorkloadEndpoint struct {
 	IPv4Gateway      *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
 	IPv6Gateway      *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
 	Ports            []EndpointPort    `json:"ports,omitempty" validate:"dive"`
+	GenerateName     string            `json:"generate_name,omitempty"`
 }
 
 type EndpointPort struct {

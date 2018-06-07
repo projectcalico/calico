@@ -498,6 +498,29 @@ var _ = Describe("Test Pod conversion", func() {
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision).To(Equal("1234"))
 	})
+
+	It("should parse a Pod with GenerateName set in metadata", func() {
+		gname := "generatedname"
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:         "podA",
+				Namespace:    "default",
+				GenerateName: gname,
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "nodeA",
+			},
+			Status: kapiv1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Make sure the GenerateName information is correct.
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).GenerateName).To(Equal(gname))
+	})
 })
 
 var _ = Describe("Test NetworkPolicy conversion", func() {
