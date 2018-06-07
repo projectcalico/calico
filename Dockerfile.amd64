@@ -2,7 +2,7 @@ FROM amd64/busybox:1.28.3
 
 LABEL maintainer "Tom Denham <tom@tigera.io>"
 
-ADD dist/amd64/ /opt/cni/bin/
+ADD bin/amd64/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
