@@ -287,11 +287,11 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run calico/kube-controllers:$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-controllers:$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/calico/kube-controllers:$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/kube-controllers:$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(CONTAINER_NAME):$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(CONTAINER_NAME):$(VERSION) -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):$(VERSION) -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	# Run FV tests against the produced image. We only run the subset tagged as release tests.
-	$(MAKE) CONTAINER_NAME=calico/kube-controllers:$(VERSION) GINKGO_FOCUS="Release" fv
+	$(MAKE) CONTAINER_NAME=$(CONTAINER_NAME):$(VERSION) GINKGO_FOCUS="Release" fv
 
 ## Generates release notes based on commits in this version.
 release-notes: release-prereqs
@@ -321,8 +321,8 @@ release-publish: release-prereqs
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-prereqs
 	# Check latest versions match.
-	if ! docker run calico/kube-controllers:latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run calico/kube-controllers:latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/calico/kube-controllers:latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/calico/kube-controllers:latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(CONTAINER_NAME):latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(CONTAINER_NAME):latest -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):latest -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
