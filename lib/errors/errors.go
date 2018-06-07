@@ -71,7 +71,7 @@ type ErrorConnectionUnauthorized struct {
 }
 
 func (e ErrorConnectionUnauthorized) Error() string {
-	return "connection is unauthorized"
+	return fmt.Sprintf("connection is unauthorized: %v", e.Err)
 }
 
 // Validation error containing the fields that are failed validation.
@@ -100,7 +100,7 @@ func (e ErroredField) String() string {
 
 func (e ErrorValidation) Error() string {
 	if len(e.ErroredFields) == 0 {
-		return "unknown validation error"
+		return fmt.Sprintf("unknown validation error: %v", e)
 	} else if len(e.ErroredFields) == 1 {
 		f := e.ErroredFields[0]
 		return fmt.Sprintf("error with field %s", f)
@@ -141,7 +141,7 @@ type ErrorPartialFailure struct {
 }
 
 func (e ErrorPartialFailure) Error() string {
-	return "operation partially failed"
+	return fmt.Sprintf("operation partially failed: %v", e.Err)
 }
 
 // UpdateErrorIdentifier modifies the supplied error to use the new resource
