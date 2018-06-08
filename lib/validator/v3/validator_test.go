@@ -1139,6 +1139,7 @@ func init() {
 
 		// GlobalNetworkPolicy validation.
 		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
+		Entry("disallow name with mixed case characters", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "tHiNg"}}, false),
 		Entry("allow valid name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
 		Entry("disallow k8s policy name", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"}}, false),
 		Entry("disallow name with dot", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
@@ -1411,6 +1412,7 @@ func init() {
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
 		Entry("disallow name with dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("disallow name with mixed case", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "tHiNg"}}, false),
 		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
 		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
 		Entry("allow k8s policy name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"}}, true),

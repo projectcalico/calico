@@ -119,7 +119,7 @@ func convertError(err error) errors.ErrorValidation {
 			errors.ErroredField{
 				Name:   f.Name,
 				Value:  f.Value,
-				Reason: extractReason(f.Tag),
+				Reason: extractReason(f),
 			})
 	}
 	return verr
@@ -195,11 +195,15 @@ func reason(r string) string {
 
 // extractReason extracts the error reason from the field tag in a validator
 // field error (if there is one).
-func extractReason(tag string) string {
-	if strings.HasPrefix(tag, reasonString) {
-		return strings.TrimPrefix(tag, reasonString)
+func extractReason(e *validator.FieldError) string {
+	if strings.HasPrefix(e.Tag, reasonString) {
+		return strings.TrimPrefix(e.Tag, reasonString)
 	}
-	return ""
+	return fmt.Sprintf("%sfailed to validate Field: %s because of Tag: %s ",
+		reasonString,
+		e.Field,
+		e.Tag,
+	)
 }
 
 func registerFieldValidator(key string, fn validator.Func) {
