@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ func joinAndTruncate(items interface{}, separator string, maxLen int) string {
 		if maxLen > 0 && buf.Len() > maxLen {
 			// Break out early so that we don't have to stringify a long list, only to then throw it away.
 			const truncationSuffix = "..."
-			buf.Truncate(maxLen-len(truncationSuffix))
+			buf.Truncate(maxLen - len(truncationSuffix))
 			buf.WriteString(truncationSuffix)
 			break
 		}
