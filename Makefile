@@ -48,7 +48,7 @@ GO_BUILD_VER ?= v0.14
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_DIR=calicoctl
-CTL_CONTAINER_NAME?=calico/ctl
+CONTAINER_NAME?=calico/ctl
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
 
@@ -56,6 +56,7 @@ TEST_CONTAINER_NAME ?= calico/test
 
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
+GIT_VERSION?=$(shell git describe --tags --dirty)
 
 GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 LOCAL_USER_ID?=$(shell id -u $$USER)
@@ -73,11 +74,11 @@ LIBCALICOGO_PATH?=none
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
 	rm -rf bin build certs *.tar vendor
-	docker rmi $(CTL_CONTAINER_NAME):latest-$(ARCH) || true
-	docker rmi $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH) || true
+	docker rmi $(CONTAINER_NAME):latest-$(ARCH) || true
+	docker rmi $(CONTAINER_NAME):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
-	docker rmi $(CTL_CONTAINER_NAME):latest || true
-	docker rmi $(CTL_CONTAINER_NAME):$(VERSION) || true
+	docker rmi $(CONTAINER_NAME):latest || true
+	docker rmi $(CONTAINER_NAME):$(VERSION) || true
 endif
 
 ###############################################################################
@@ -147,12 +148,44 @@ bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 image: calico/ctl
 calico/ctl: $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile.$(ARCH) bin/calicoctl-linux-$(ARCH)
-	docker build -t $(CTL_CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
-	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):latest
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
 endif
 	touch $@
 
+# ensure we have a real imagetag
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push one arch
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+## tag images of one arch
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
 ###############################################################################
 # Static checks
@@ -245,55 +278,89 @@ stop-etcd:
 ## Run what CI runs
 ci: clean build static-checks ut st calico/ctl
 
+###############################################################################
+# CD
+###############################################################################
+.PHONY: cd
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 ###############################################################################
 # Release
 ###############################################################################
-.PHONY: release
-## Do a release
-release: clean
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
+
+## Produces a git tag for the release.
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-build"
+	@echo ""
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-	git tag $(VERSION)
 
-	# Check to make sure the tag isn't "-dirty".
-	if git describe --tags --dirty | grep dirty; \
-	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
+	$(MAKE) image
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
+	# Generate the `latest` images.
+	$(MAKE) tag-images IMAGETAG=latest
 
-	# Build the calicoctl binaries, as well as the calico/ctl and calico/node images.
-	$(MAKE) bin/calicoctl bin/calicoctl-darwin-amd64 bin/calicoctl-windows-amd64.exe
-	$(MAKE) calico/ctl
-
-	# Check that the version output includes the version specified.
-	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
-	# Release is currently supported on darwin / linux only.
-	if ! docker run $(CTL_CONTAINER_NAME):latest-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(CTL_CONTAINER_NAME):latest-$(ARCH) version` "\nExpected version: $(VERSION)"; \
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	if ! docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
 	fi
 
-	# Retag images with corect version and quay
-	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)
-	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) quay.io/$(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)
-	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) quay.io/$(CTL_CONTAINER_NAME):latest-$(ARCH)
-ifeq ($(ARCH),amd64)
-	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):latest
-	docker tag $(CTL_CONTAINER_NAME):latest-$(ARCH) $(CTL_CONTAINER_NAME):$(VERSION)
-endif
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
 
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
 
-	# Check that images were created recently and that the IDs of the versioned and latest images match
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME):latest-$(ARCH)
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)
+	# Push images.
+	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
+	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
-	@echo "# Push the created tag to GitHub"
-	@echo "  git push origin $(VERSION)"
+	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
 	@echo ""
-	@echo "# Now, create a GitHub release from the tag, add release notes, and attach the following binaries:"
+	@echo "Attach the following binaries to the release."
+	@echo ""
 	@echo "- bin/calicoctl"
 	@echo "- bin/calicoctl-linux-amd64"
 	@echo "- bin/calicoctl-linux-arm64"
@@ -301,27 +368,35 @@ endif
 	@echo "- bin/calicoctl-linux-s390x"
 	@echo "- bin/calicoctl-darwin-amd64"
 	@echo "- bin/calicoctl-windows-amd64.exe"
-	@echo "# To find commit messages for the release notes:  git log --oneline <old_release_version>...$(VERSION)"
 	@echo ""
-	@echo "# Now push the newly created release images."
-	@echo "  docker push $(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)"
-	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):$(VERSION)-$(ARCH)"
-ifeq ($(ARCH),amd64)
-	@echo "  docker push $(CTL_CONTAINER_NAME):$(VERSION)"
-	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):$(VERSION)"
-endif
+	@echo "If this is the latest stable release, then run the following to push 'latest' images."
 	@echo ""
-	@echo "# For the final release only, push the latest tag"
-	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES"
-	@echo "  docker push $(CTL_CONTAINER_NAME):latest-$(ARCH)"
-	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):latest-$(ARCH)"
-ifeq ($(ARCH),amd64)
-	@echo "  docker push $(CTL_CONTAINER_NAME):latest"
-	@echo "  docker push quay.io/$(CTL_CONTAINER_NAME):latest"
-endif
+	@echo "  make VERSION=$(VERSION) release-publish-latest"
 	@echo ""
-	@echo "See RELEASING.md for detailed instructions."
 
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check latest versions match.
+	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(CONTAINER_NAME):latest-$(ARCH) version` "\nExpected version: $(VERSION)"; \
+	  false; \
+	else \
+	  echo "Version check passed\n"; \
+	fi
+
+	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
+
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+
+###############################################################################
+# Developer helper scripts (not used by build or test)
+###############################################################################
 .PHONY: help
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
