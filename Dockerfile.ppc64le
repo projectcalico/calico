@@ -1,4 +1,4 @@
-# Copyright 2015-2017 Tigera, Inc
+# Copyright 2015-2018 Tigera, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,5 +14,5 @@
 FROM ppc64le/alpine:3.7
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
-ADD dist/kube-controllers-linux-ppc64le /usr/bin/kube-controllers
+ADD bin/kube-controllers-linux-ppc64le /usr/bin/kube-controllers
 ENTRYPOINT ["/usr/bin/kube-controllers"]
