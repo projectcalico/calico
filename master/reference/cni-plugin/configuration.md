@@ -56,10 +56,10 @@ Configure access to your etcd cluster using the following options.
 
 | Option name         | Default | Description
 |---------------------|---------|-------------
-| `etcd_endpoints`    | None    | Comma-separated list of etcd servers e.g. `http://1.2.3.4:2379,http://5.6.7.8:2379`
-| `etcd_key_file`     | None    | Absolute path to the file containing the private key of the CNI plugin's client certificate. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/key.pem` (optional) | string
-| `etcd_cert_file`    | None    | Absolute path to the file containing the client certificate issued to the CNI plugin. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/cert.pem` (optional) | string
-| `etcd_ca_cert_file` | None    | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the CNI plugin host. Otherwise, use this parameter to supply the CNI plugin with the absolute path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures the CNI plugin to trust the signature on the certificates provided by the etcd server. Example: `/etc/calico-cni/ca.pem` (optional) | string
+| `etcd_endpoints`    | None    | Comma-separated list of endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379` | string
+| `etcd_key_file`     | None    | Path to the file containing the private key matching the CNI plugin's client certificate. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/key.pem` (optional) | string
+| `etcd_cert_file`    | None    | Path to the file containing the client certificate issued to the CNI plugin. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/cert.pem` (optional) | string
+| `etcd_ca_cert_file` | None    | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures the CNI plugin to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing the CNI plugin to trust each of the CAs included. | string
 
 The following options are deprecated.
 

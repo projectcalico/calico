@@ -8,12 +8,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.1/usage/calicoctl/configure/et
 | Configuration file option | Environment variable | Description                                                                           | Schema
 | --------------------------| -------------------- | ------------------------------------------------------------------------------------- | ------
 | `datastoreType`           | `DATASTORE_TYPE`     | Indicates the datastore to use. If unspecified, defaults to `etcdv3`. (optional)      | `kubernetes`, `etcdv3`
-| `etcdEndpoints`           | `ETCD_ENDPOINTS`     | A comma separated list of etcd endpoints. Example: `http://127.0.0.1:2379` (required) | string
+| `etcdEndpoints`           | `ETCD_ENDPOINTS`     | A comma-separated list of etcd endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379` (required) | string
 | `etcdUsername`            | `ETCD_USERNAME`      | User name for RBAC. Example: `user` (optional)                                        | string
 | `etcdPassword`            | `ETCD_PASSWORD`      | Password for the given user name. Example: `password` (optional)                      | string
-| `etcdKeyFile`             | `ETCD_KEY_FILE`      | Path to the file containing the private key of the `calicoctl` client certificate. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico/key.pem` (optional) | string
-| `etcdCertFile`            | `ETCD_CERT_FILE`     | Path to the file containing the client certificate issued to `calicoctl`. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico/cert.pem` (optional) | string
-| `etcdCACertFile`          | `ETCD_CA_CERT_FILE`  | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the `calicoctl` host. Otherwise, use this parameter to supply `calicoctl` with the path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures `calicoctl` to trust the signature on the certificates provided by the etcd server. Example: `/etc/calico/ca.pem` (optional) | string
+| `etcdKeyFile`             | `ETCD_KEY_FILE`      | Path to the file containing the private key matching the `calicoctl` client certificate. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calicoctl/key.pem` (optional) | string
+| `etcdCertFile`            | `ETCD_CERT_FILE`     | Path to the file containing the client certificate issued to `calicoctl`. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calicoctl/cert.pem` (optional) | string
+| `etcdCACertFile`          | `ETCD_CA_CERT_FILE`  | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures `calicoctl` to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing `calicoctl` to trust each of the CAs included. Example: `/etc/calicoctl/ca.pem` (optional) | string
 
 > **Note**:
 > - If you are running with TLS enabled, ensure your endpoint addresses use HTTPS.

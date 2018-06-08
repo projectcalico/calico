@@ -56,10 +56,10 @@ The full list of parameters which can be set is as follows.
 
 | Configuration parameter | Environment variable  | Description | Schema |
 | ----------------------- | --------------------- | ----------- | ------ |
-| `EtcdCaFile`            | `FELIX_ETCDCAFILE`    | Unnecessary if the CA that issued the etcd server certificate is in the list of trusted root CAs on the Felix host. Otherwise, use this parameter to supply Felix with the path to the file containing the root certificate of the CA that issued the etcd server certificate. Configures Felix to trust the signature on the certificates provided by the etcd server. To disable authentication of the server by Felix, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
+| `EtcdCaFile`            | `FELIX_ETCDCAFILE`    | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures Felix to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing Felix to trust each of the CAs included. To disable authentication of the server by Felix, set the value to `none`. [Default: `/etc/ssl/certs/ca-certificates.crt`] | string |
 | `EtcdCertFile`          | `FELIX_ETCDCERTFILE`  | Path to the file containing the client certificate issued to Felix. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/cert.pem` (optional) | string |
-| `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://etcd1:2379,http://etcd2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
-| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | Path to the file containing the private key of the Felix client certificate. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
+| `EtcdEndpoints`         | `FELIX_ETCDENDPOINTS` | Comma-delimited list of etcd endpoints to connect to. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`. | `<scheme>://<ip-or-fqdn>:<port>` |
+| `EtcdKeyFile`           | `FELIX_ETCDKEYFILE`   | Path to the file containing the private key matching Felix's client certificate. Enables Felix to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/felix/key.pem` (optional) | string |
 
 
 #### Kubernetes API datastore configuration
