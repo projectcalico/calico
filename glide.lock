@@ -1,5 +1,5 @@
 hash: e394ba7842e4c65d984564c39a50cbf31634bd206f980fa3e19d6d3e5c8c2bb2
-updated: 2018-05-29T20:08:22.043311045Z
+updated: 2018-06-08T17:14:28.359062157-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -191,7 +191,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 0417ab6e1ea49be2abb978df365b25f20fdb3c6f
+  version: 19c0325c4b18b526ded50e6a79a0cfb3e449d6e8
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -253,11 +253,11 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: 6e453822d85ef5721799774b654d4d02fed62afb
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
