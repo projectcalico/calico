@@ -1,5 +1,5 @@
-hash: e394ba7842e4c65d984564c39a50cbf31634bd206f980fa3e19d6d3e5c8c2bb2
-updated: 2018-06-08T17:14:28.359062157-07:00
+hash: ecb13099b2d66417330a5810c990733df64ecc01c81fb77e651cfb4ddbc6d2ff
+updated: 2018-06-08T17:19:05.0405162-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -253,7 +253,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/vishvananda/netlink
-  version: 6e453822d85ef5721799774b654d4d02fed62afb
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
