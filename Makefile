@@ -301,11 +301,23 @@ test-install-cni: image k8s-install/scripts/install_cni.test
 	cd k8s-install/scripts && CONTAINER_NAME=$(CONTAINER_NAME) ./install_cni.test
 
 ###############################################################################
-# CI
+# CI/CD
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
 ci: clean static-checks test-cni-versions image test-install-cni
+
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+
 
 ###############################################################################
 # Release
