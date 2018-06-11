@@ -32,7 +32,7 @@ insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
 apiVersion: projectcalico.org/v3
 kind: WorkloadEndpoint
 metadata:
-  name: node1-k8s-frontend--5gs43-eth0
+  name: node1-k8s-my--nginx--b1337a-eth0
   namespace: default
   labels:
     app: frontend
@@ -48,16 +48,16 @@ spec:
   interfaceName: cali0ef24ba
   mac: ca:fe:1d:52:bb:e9
   ipNetworks:
-  - 192.168.0.0/16
+  - 192.168.0.0/32
   profiles:
   - profile1
   ports:
   - name: some-port
     port: 1234
-    protocol: tcp
+    protocol: TCP
   - name: another-port
     port: 5432
-    protocol: udp
+    protocol: UDP
 ```
 
 ### Definitions

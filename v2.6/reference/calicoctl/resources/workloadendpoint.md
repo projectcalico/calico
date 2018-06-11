@@ -37,7 +37,7 @@ spec:
   interfaceName: cali0ef24ba
   mac: ca:fe:1d:52:bb:e9
   ipNetworks:
-  - 192.168.0.0/16
+  - 192.168.0.0/32
   profiles:
   - profile1
 ```
