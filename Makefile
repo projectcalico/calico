@@ -51,7 +51,7 @@ CONTAINER_NAME=calico/confd
 
 CALICOCTL_VER=master
 CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
-K8S_VERSION=v1.8.1
+K8S_VERSION=v1.10.4
 ETCD_VER=v3.3.7
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
