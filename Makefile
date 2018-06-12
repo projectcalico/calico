@@ -1,3 +1,13 @@
+# Shortcut targets
+default: build
+
+## Build binary for current platform
+all: build
+
+## Run the tests for the current platform/architecture
+test: test-kdd test-etcd
+
+###############################################################################
 # Both native and cross architecture builds are supported.
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
@@ -29,25 +39,20 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
+###############################################################################
+GO_BUILD_VER ?= v0.16
 
 # Select which release branch to test.
 RELEASE_BRANCH?=master
 
-# Disable make's implicit rules, which are not useful for golang, and slow down the build
-# considerably.
-.SUFFIXES:
-
-all: clean test
-
-GO_BUILD_VER?=latest
-GO_BUILD_CONTAINER = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
+CALICO_BUILD = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 
 CONTAINER_NAME=calico/confd
 
 CALICOCTL_VER=master
 CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 K8S_VERSION=v1.8.1
-ETCD_VER=v3.2.5
+ETCD_VER=v3.3.7
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
@@ -57,105 +62,92 @@ LDFLAGS=-ldflags "-X main.VERSION=$(CONFD_VERSION)"
 # Ensure that the bin directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p bin)
 
-# All go files.
-GO_FILES:=$(shell find . -type f -name '*.go')
-
 # Figure out the users UID.  This is needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
-MY_UID:=$(shell id -u)
+LOCAL_USER_ID?=$(shell id -u $$USER)
+
+PACKAGE_NAME?=github.com/kelseyhightower/confd
+
+# All go files.
+SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
 
 DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                    docker run --rm \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
-                              -e LOCAL_USER_ID=$(MY_UID) \
+                              -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
                               -e GOARCH=$(ARCH) \
-                              -v ${CURDIR}:/go/src/github.com/kelseyhightower/confd:rw \
+                              -v ${CURDIR}:/go/src/$(PACKAGE_NAME):rw \
                               -v ${CURDIR}/.go-pkg-cache:/go/pkg:rw \
-                              -w /go/src/github.com/kelseyhightower/confd \
-                              $(GO_BUILD_CONTAINER)
-
-
-help:
-	@echo "confd Makefile"
-	@echo
-	@echo "Dependencies: docker 1.12+; go 1.8+"
-	@echo
-	@echo "For any target, set ARCH=<target> to build for a given target."
-	@echo "For example, to build for arm64:"
-	@echo
-	@echo "  make build ARCH=arm64"
-	@echo
-	@echo "Initial set-up:"
-	@echo
-	@echo "  make vendor  Update/install the go build dependencies."
-	@echo
-	@echo "Builds:"
-	@echo
-	@echo "  make build           Build the binary."
-	@echo "  make image           Build $(CONTAINER_NAME) docker image."
-	@echo
-	@echo "Tests:"
-	@echo
-	@echo "  make test                Run all tests."
-	@echo "  make test-kdd            Run kdd tests."
-	@echo "  make test-etcd           Run etcd tests."
-	@echo
-	@echo "Maintenance:"
-	@echo
-	@echo "  make update-vendor  Update the vendor directory with new "
-	@echo "                      versions of upstream packages.  Record results"
-	@echo "                      in glide.lock."
-	@echo "  make clean         Remove binary files and docker images."
-	@echo "-----------------------------------------"
-	@echo "ARCH (target):          $(ARCH)"
-	@echo "BUILDARCH (host):       $(BUILDARCH)"
-	@echo "GO_BUILD_CONTAINER:     $(GO_BUILD_CONTAINER)"
-	@echo "-----------------------------------------"
+                              -w /go/src/$(PACKAGE_NAME) \
+                              $(CALICO_BUILD)
 
 
 
-# Update the vendored dependencies with the latest upstream versions matching
-# our glide.yaml.  If there are any changes, this updates glide.lock
-# as a side effect.  Unless you're adding/updating a dependency, you probably
-# want to use the vendor target to install the versions from glide.lock.
-.PHONY: update-vendor
-update-vendor:
-	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide up --strip-vendor
-	touch vendor/.up-to-date
-
-# vendor is a shortcut for force rebuilding the go vendor directory.
-.PHONY: vendor
-vendor vendor/.up-to-date: glide.lock
-	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
-	touch vendor/.up-to-date
-
-
-###############################################################################
-# standard ci/cd targets
-###############################################################################
-
-## Builds the code and runs all tests.
-ci: all container
-
-## Deploys images to registry
-cd:
-ifndef CONFIRM
-	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+.PHONY: clean
+clean:
+	rm -rf bin/*
+	rm -rf tests/logs
+	-docker rmi -f $(CONTAINER_NAME):latest-$(ARCH)
+	-docker rmi -f $(CONTAINER_NAME):$(VERSION)-$(ARCH)
+	-docker rmi -f quay.io/$(CONTAINER_NAME):latest-$(ARCH)
+	-docker rmi -f quay.io/$(CONTAINER_NAME):$(VERSION)-$(ARCH)
+ifeq ($(ARCH),amd64)
+	-docker rmi -f $(CONTAINER_NAME):latest
+	-docker rmi -f $(CONTAINER_NAME):$(VERSION)
+	-docker rmi -f quay.io/$(CONTAINER_NAME):latest
+	-docker rmi -f quay.io/$(CONTAINER_NAME):$(VERSION)
 endif
-ifndef BRANCH_NAME
-	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+
+###############################################################################
+# Building the binary
+###############################################################################
+build: bin/confd
+build-all: $(addprefix sub-build-,$(ARCHES))
+sub-build-%:
+	$(MAKE) build ARCH=$*
+
+## Create the vendor directory
+vendor: glide.lock
+	# Ensure that the glide cache directory exists.
+	mkdir -p $(HOME)/.glide
+
+	# To build without Docker just run "glide install -strip-vendor"
+	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
+          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	fi; \
+    docker run --rm -i \
+      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+      -v $(HOME)/.glide:/home/user/.glide:rw \
+      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+      $(CALICO_BUILD) /bin/sh -c ' \
+		  cd /go/src/$(PACKAGE_NAME) && \
+          glide install -strip-vendor'
+
+bin/confd-$(ARCH): $(SRC_FILES) vendor
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ $(LDFLAGS) "$(PACKAGE_NAME)" && \
+		( ldd bin/confd-$(ARCH) 2>&1 | grep -q -e "Not a valid dynamic program" \
+			-e "not a dynamic executable" || \
+	             ( echo "Error: bin/confd was not statically linked"; false ) )'
+
+bin/confd: bin/confd-$(ARCH)
+ifeq ($(ARCH),amd64)
+	ln -f bin/confd-$(ARCH) bin/confd
 endif
-	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
-	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 ###############################################################################
-# tag and push images of any tag
+# Building the image
 ###############################################################################
-
+image-all: $(addprefix sub-image-,$(ARCHES))
+sub-image-%:
+	$(MAKE) image ARCH=$*
+image: build
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+ifeq ($(ARCH),amd64)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
+endif
 
 # ensure we have a real imagetag
 imagetag:
@@ -193,37 +185,26 @@ sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
 ###############################################################################
+# Static checks
+###############################################################################
+.PHONY: static-checks
+## Perform static checks on the code.
+static-checks: vendor
+	docker run --rm \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) sh -c '\
+			cd  /go/src/$(PACKAGE_NAME) && \
+			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
 
+.PHONY: fix
+## Fix static checks
+fix:
+	goimports -w $(SRC_FILES)
 
-image: bin/confd
-	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
-ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
-endif
-
-# the standard for calico is the make target "image", but there used to be a "container" target in confd, so we leave it
-container: image
-
-
-build: bin/confd
-bin/confd: bin/confd-$(ARCH)
-ifeq ($(ARCH),amd64)
-	ln -f bin/confd-$(ARCH) bin/confd
-endif
-
-bin/confd-$(ARCH): $(GO_FILES) vendor/.up-to-date
-	@echo Building confd...
-	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -v -i -o $@ $(LDFLAGS) "github.com/kelseyhightower/confd" && \
-		( ldd bin/confd-$(ARCH) 2>&1 | grep -q -e "Not a valid dynamic program" \
-			-e "not a dynamic executable" || \
-	             ( echo "Error: bin/confd was not statically linked"; false ) )'
-
-
-.PHONY: test
-## Run all tests
-test: test-kdd test-etcd
-
+###############################################################################
+# Unit Tests
+###############################################################################
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/allocate-ipip-addr bin/calicoctl run-k8s-apiserver
@@ -232,7 +213,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/allocate-ipip-addr bin/ca
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
-		$(GO_BUILD_CONTAINER) /tests/test_suite_kdd.sh
+		$(CALICO_BUILD) /tests/test_suite_kdd.sh
 
 .PHONY: test-etcd
 ## Run template tests against etcd
@@ -242,18 +223,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/allocate-ipip-addr bin/c
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
-		$(GO_BUILD_CONTAINER) /tests/test_suite_etcd.sh
-
-.PHONY: test-etcd
-## Run template tests against etcd
-run-build: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calicoctl run-etcd
-	docker run --rm --net=host \
-		-v $(CURDIR)/tests/:/tests/ \
-		-v $(CURDIR)/bin:/calico/bin/ \
-		-e LOCAL_USER_ID=0 \
-		-tid \
-		--name calico-build \
-		$(GO_BUILD_CONTAINER) sh
+		$(CALICO_BUILD) /tests/test_suite_etcd.sh
 
 ## Etcd is used by the kubernetes
 # NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
@@ -322,6 +292,27 @@ bin/calicoctl:
 	  touch $@
 	-docker rm -f calico-ctl
 
+###############################################################################
+# CI/CD
+###############################################################################
+.PHONY: ci
+## Run what CI runs
+ci: clean static-checks test
+
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+
+###############################################################################
+# Release
+###############################################################################
 release: clean
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
@@ -374,17 +365,38 @@ endif
 	@echo ""
 	@echo "See RELEASING.md for detailed instructions."
 
-.PHONY: clean
-clean:
-	rm -rf bin/*
-	rm -rf tests/logs
-	-docker rmi -f $(CONTAINER_NAME):latest-$(ARCH)
-	-docker rmi -f $(CONTAINER_NAME):$(VERSION)-$(ARCH)
-	-docker rmi -f quay.io/$(CONTAINER_NAME):latest-$(ARCH)
-	-docker rmi -f quay.io/$(CONTAINER_NAME):$(VERSION)-$(ARCH)
-ifeq ($(ARCH),amd64)
-	-docker rmi -f $(CONTAINER_NAME):latest
-	-docker rmi -f $(CONTAINER_NAME):$(VERSION)
-	-docker rmi -f quay.io/$(CONTAINER_NAME):latest
-	-docker rmi -f quay.io/$(CONTAINER_NAME):$(VERSION)
-endif
+###############################################################################
+# Developer helper scripts (not used by build or test)
+###############################################################################
+help:
+	@echo "confd Makefile"
+	@echo
+	@echo "Dependencies: docker 1.12+; go 1.8+"
+	@echo
+	@echo "For any target, set ARCH=<target> to build for a given target."
+	@echo "For example, to build for arm64:"
+	@echo
+	@echo "  make build ARCH=arm64"
+	@echo
+	@echo "Initial set-up:"
+	@echo
+	@echo "  make vendor  Update/install the go build dependencies."
+	@echo
+	@echo "Builds:"
+	@echo
+	@echo "  make build           Build the binary."
+	@echo "  make image           Build $(CONTAINER_NAME) docker image."
+	@echo
+	@echo "Tests:"
+	@echo
+	@echo "  make test                Run all tests."
+	@echo "  make test-kdd            Run kdd tests."
+	@echo "  make test-etcd           Run etcd tests."
+	@echo
+	@echo "Maintenance:"
+	@echo "  make clean         Remove binary files and docker images."
+	@echo "-----------------------------------------"
+	@echo "ARCH (target):          $(ARCH)"
+	@echo "BUILDARCH (host):       $(BUILDARCH)"
+	@echo "CALICO_BUILD:     $(CALICO_BUILD)"
+	@echo "-----------------------------------------"
