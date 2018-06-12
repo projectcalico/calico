@@ -86,7 +86,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: IPPool(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new IPPool with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.IPPools().Create(ctx, &apiv3.IPPool{
@@ -127,7 +127,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			By("Getting IPPool (name2) before it is created")
 			_, outError = c.IPPools().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: IPPool(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 
 			By("Listing all the IPPools, expecting a single result with name1/spec1")
 			outList, outError := c.IPPools().List(ctx, options.ListOptions{})
@@ -253,7 +253,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				time.Sleep(2 * time.Second)
 				_, outError = c.IPPools().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: IPPool(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 
 				By("Creating IPPool name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.IPPools().Create(ctx, &apiv3.IPPool{
@@ -267,7 +267,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				time.Sleep(2 * time.Second)
 				_, outError = c.IPPools().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: IPPool(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -282,7 +282,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			By("Attempting to deleting IPPool (name2) again")
 			_, outError = c.IPPools().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: IPPool(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 
 			By("Listing all IPPools and expecting no items")
 			outList, outError = c.IPPools().List(ctx, options.ListOptions{})
@@ -292,7 +292,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			By("Getting IPPool (name2) and expecting an error")
 			_, outError = c.IPPools().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: IPPool(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: IPPool(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.

@@ -107,12 +107,12 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ") with error:"))
 
 			By("Attempting to get a WorkloadEndpoint before it is created")
 			_, outError = c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace1 + "/" + name1 + ") with error:"))
 
 			By("Attempting to create a new WorkloadEndpoint with name1/spec1_1 and a non-empty ResourceVersion")
 			_, outError = c.WorkloadEndpoints().Create(ctx, &apiv3.WorkloadEndpoint{
@@ -157,7 +157,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Getting WorkloadEndpoint (name2) before it is created")
 			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 
 			By("Listing all the WorkloadEndpoints in namespace1, expecting a single result with name1/spec1_1")
 			outList, outError := c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: namespace1})
@@ -286,7 +286,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			time.Sleep(2 * time.Second)
 			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 
 			By("Creating WorkloadEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.WorkloadEndpoints().Create(ctx, &apiv3.WorkloadEndpoint{
@@ -300,12 +300,12 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			time.Sleep(2 * time.Second)
 			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 
 			By("Attempting to deleting WorkloadEndpoint (name2) again")
 			_, outError = c.WorkloadEndpoints().Delete(ctx, namespace2, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 
 			By("Listing all WorkloadEndpoints and expecting no items")
 			outList, outError = c.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -315,7 +315,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Getting WorkloadEndpoint (name2) and expecting an error")
 			_, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: WorkloadEndpoint(" + namespace2 + "/" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated WorkloadEndpointSpecs and expect the series of operations to succeed.

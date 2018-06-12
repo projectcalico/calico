@@ -64,7 +64,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Profile(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Profile(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new Profile with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.Profiles().Create(ctx, &apiv3.Profile{
@@ -102,7 +102,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			By("Getting Profile (name2) before it is created")
 			_, outError = c.Profiles().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Profile(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 
 			By("Listing all the Profiles, expecting a single result with name1/spec1")
 			outList, outError := c.Profiles().List(ctx, options.ListOptions{})
@@ -216,7 +216,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			time.Sleep(2 * time.Second)
 			_, outError = c.Profiles().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Profile(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 
 			By("Creating Profile name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Profiles().Create(ctx, &apiv3.Profile{
@@ -230,12 +230,12 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			time.Sleep(2 * time.Second)
 			_, outError = c.Profiles().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Profile(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 
 			By("Attempting to deleting Profile (name2) again")
 			_, outError = c.Profiles().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Profile(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 
 			By("Listing all Profiles and expecting no items")
 			outList, outError = c.Profiles().List(ctx, options.ListOptions{})
@@ -245,7 +245,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			By("Getting Profile (name2) and expecting an error")
 			_, outError = c.Profiles().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Profile(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Profile(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated ProfileSpecs and expect the series of operations to succeed.

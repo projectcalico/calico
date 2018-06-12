@@ -65,7 +65,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new BGPPeer with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.BGPPeers().Create(ctx, &apiv3.BGPPeer{
@@ -103,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			By("Getting BGPPeer (name2) before it is created")
 			_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 
 			By("Listing all the BGPPeers, expecting a single result with name1/spec1")
 			outList, outError := c.BGPPeers().List(ctx, options.ListOptions{})
@@ -224,7 +224,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				time.Sleep(2 * time.Second)
 				_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 
 				By("Creating BGPPeer name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.BGPPeers().Create(ctx, &apiv3.BGPPeer{
@@ -238,7 +238,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				time.Sleep(2 * time.Second)
 				_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -251,7 +251,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			By("Attempting to deleting BGPPeer (name2) again")
 			_, outError = c.BGPPeers().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 
 			By("Listing all BGPPeers and expecting no items")
 			outList, outError = c.BGPPeers().List(ctx, options.ListOptions{})
@@ -261,7 +261,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			By("Getting BGPPeer (name2) and expecting an error")
 			_, outError = c.BGPPeers().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPPeer(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated BGPPeerSpecs and expect the series of operations to succeed.

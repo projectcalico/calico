@@ -82,7 +82,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: HostEndpoint(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: HostEndpoint(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new HostEndpoint with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.HostEndpoints().Create(ctx, &apiv3.HostEndpoint{
@@ -120,7 +120,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			By("Getting HostEndpoint (name2) before it is created")
 			_, outError = c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: HostEndpoint(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 
 			By("Listing all the HostEndpoints, expecting a single result with name1/spec1")
 			outList, outError := c.HostEndpoints().List(ctx, options.ListOptions{})
@@ -234,7 +234,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			time.Sleep(2 * time.Second)
 			_, outError = c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: HostEndpoint(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 
 			By("Creating HostEndpoint name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.HostEndpoints().Create(ctx, &apiv3.HostEndpoint{
@@ -248,12 +248,12 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			time.Sleep(2 * time.Second)
 			_, outError = c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: HostEndpoint(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 
 			By("Attempting to deleting HostEndpoint (name2) again")
 			_, outError = c.HostEndpoints().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: HostEndpoint(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 
 			By("Listing all HostEndpoints and expecting no items")
 			outList, outError = c.HostEndpoints().List(ctx, options.ListOptions{})
@@ -263,7 +263,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			By("Getting HostEndpoint (name2) and expecting an error")
 			_, outError = c.HostEndpoints().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: HostEndpoint(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: HostEndpoint(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated HostEndpointSpecs and expect the series of operations to succeed.

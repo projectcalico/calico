@@ -70,7 +70,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: FelixConfiguration(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new FelixConfiguration with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.FelixConfigurations().Create(ctx, &apiv3.FelixConfiguration{
@@ -108,7 +108,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Getting FelixConfiguration (name2) before it is created")
 			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: FelixConfiguration(" + name2 + ") with error:"))
 
 			By("Listing all the FelixConfigurations, expecting a single result with name1/spec1")
 			outList, outError := c.FelixConfigurations().List(ctx, options.ListOptions{})
@@ -229,7 +229,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 				time.Sleep(2 * time.Second)
 				_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: FelixConfiguration(" + name2 + ") with error:"))
 
 				By("Creating FelixConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.FelixConfigurations().Create(ctx, &apiv3.FelixConfiguration{
@@ -243,7 +243,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 				time.Sleep(2 * time.Second)
 				_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: FelixConfiguration(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -256,7 +256,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Attempting to deleting FelixConfiguration (name2) again")
 			_, outError = c.FelixConfigurations().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: FelixConfiguration(" + name2 + ") with error:"))
 
 			By("Listing all FelixConfigurations and expecting no items")
 			outList, outError = c.FelixConfigurations().List(ctx, options.ListOptions{})
@@ -266,7 +266,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 			By("Getting FelixConfiguration (name2) and expecting an error")
 			_, outError = c.FelixConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: FelixConfiguration(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: FelixConfiguration(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated FelixConfigurationSpecs and expect the series of operations to succeed.

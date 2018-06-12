@@ -66,7 +66,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkSet(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new GlobalNetworkSet with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.GlobalNetworkSets().Create(ctx, &apiv3.GlobalNetworkSet{
@@ -104,7 +104,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Getting GlobalNetworkSet (name2) before it is created")
 			_, outError = c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkSet(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name2 + ") with error:"))
 
 			By("Listing all the GlobalNetworkSets, expecting a single result with name1/spec1")
 			outList, outError := c.GlobalNetworkSets().List(ctx, options.ListOptions{})
@@ -225,7 +225,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				time.Sleep(2 * time.Second)
 				_, outError = c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkSet(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name2 + ") with error:"))
 
 				By("Creating GlobalNetworkSet name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.GlobalNetworkSets().Create(ctx, &apiv3.GlobalNetworkSet{
@@ -239,7 +239,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				time.Sleep(2 * time.Second)
 				_, outError = c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkSet(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -257,7 +257,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Getting GlobalNetworkSet (name2) and expecting an error")
 			_, outError = c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: GlobalNetworkSet(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkSet(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated GlobalNetworkSetSpecs and expect the series of operations to succeed.
