@@ -93,6 +93,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	labels := make(map[string]string)
 	annot := make(map[string]string)
 	var ports []api.EndpointPort
+	var generateName string
 
 	// Only attempt to fetch the labels and annotations from Kubernetes
 	// if the policy type has been set to "k8s". This allows users to
@@ -101,7 +102,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	if conf.Policy.PolicyType == "k8s" {
 		var err error
 
-		labels, annot, ports, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
+		labels, annot, ports, generateName, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -242,6 +243,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	endpoint.Name = epIDs.WEPName
 	endpoint.Namespace = epIDs.Namespace
 	endpoint.Labels = labels
+	endpoint.GenerateName = generateName
 	endpoint.Spec.Endpoint = epIDs.Endpoint
 	endpoint.Spec.Node = epIDs.Node
 	endpoint.Spec.Orchestrator = epIDs.Orchestrator
@@ -655,23 +657,24 @@ func newK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	return kubernetes.NewForConfig(config)
 }
 
-func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, err error) {
+func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, generateName string, err error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(podName, metav1.GetOptions{})
 	logrus.Infof("pod info %+v", pod)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, "", err
 	}
 
 	var c k8sconversion.Converter
 	kvp, err := c.PodToWorkloadEndpoint(pod)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, "", err
 	}
 
 	ports = kvp.Value.(*api.WorkloadEndpoint).Spec.Ports
 	labels = kvp.Value.(*api.WorkloadEndpoint).Labels
+	generateName = kvp.Value.(*api.WorkloadEndpoint).GenerateName
 
-	return labels, pod.Annotations, ports, nil
+	return labels, pod.Annotations, ports, generateName, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename string) (string, error) {

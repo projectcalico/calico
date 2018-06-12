@@ -1632,6 +1632,101 @@ var _ = Describe("CalicoCni", func() {
 					Expect(ep.Spec.ContainerID).Should(Equal(containerID2))
 				})
 			})
+
+			Context("when pod has a GenerateName", func() {
+				It("should add a workload endpoint with the GenerateName", func() {
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					if err != nil {
+						panic(err)
+					}
+					clientset, err := kubernetes.NewForConfig(config)
+					if err != nil {
+						panic(err)
+					}
+
+					name := fmt.Sprintf("run%d", rand.Uint32())
+
+					// Create a K8s pod with GenerateName
+					generateName := "test-gen-name"
+					_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Name: name,
+							GenerateName: generateName},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name),
+								Image: "ignore",
+								Ports: []v1.ContainerPort{{
+									Name:          "anamedport",
+									ContainerPort: 555,
+								}},
+							}},
+							NodeName: hostname,
+						},
+					})
+					if err != nil {
+						panic(err)
+					}
+					containerID, session, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					result, err := testutils.GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+
+					ids := names.WorkloadEndpointIdentifiers{
+						Node:         hostname,
+						Orchestrator: api.OrchestratorKubernetes,
+						Endpoint:     "eth0",
+						Pod:          name,
+						ContainerID:  containerID,
+					}
+
+					wrkload, err := ids.CalculateWorkloadEndpointName(false)
+					Expect(err).NotTo(HaveOccurred())
+
+					mac := contVeth.Attrs().HardwareAddr
+					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+
+					// The endpoint is created
+					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
+					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
+					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
+						"projectcalico.org/namespace":    "test",
+						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+					}))
+					// Make sure that the GenerateName is there.
+					Expect(endpoints.Items[0].GenerateName).Should(Equal(generateName))
+
+					// Let's just check that the Spec is good too.
+					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+						Pod:           name,
+						InterfaceName: interfaceName,
+						IPNetworks:    []string{result.IPs[0].Address.String()},
+						MAC:           mac.String(),
+						Profiles:      []string{"kns.test"},
+						Node:          hostname,
+						Endpoint:      "eth0",
+						Workload:      "",
+						ContainerID:   containerID,
+						Orchestrator:  api.OrchestratorKubernetes,
+						Ports: []api.EndpointPort{{
+							Name:     "anamedport",
+							Protocol: numorstring.ProtocolFromString("TCP"),
+							Port:     555,
+						}},
+					}))
+
+					_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
 		})
 	})
 })

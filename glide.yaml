@@ -33,6 +33,7 @@ import:
   - lib/net
   - lib/logutils
 - package: github.com/vishvananda/netlink
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
 - package: k8s.io/client-go
   version: 82aa063804cf055e16e8911250f888bc216e8b61
   subpackages:
