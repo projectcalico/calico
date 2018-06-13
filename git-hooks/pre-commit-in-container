@@ -122,7 +122,7 @@ done
 if $gofmt_failed; then
   echo
   echo "Some files failed gofmt check.  Run "
-  echo "  make go-fmt"
+  echo "  make fix"
   echo "to format all files."
   echo
   exit 1
