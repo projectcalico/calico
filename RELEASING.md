@@ -1,82 +1,145 @@
-# Felix release artifacts
+# Release process
 
-Running the main `make release` target, described below, guides you
-through creating and distributing the following artifacts:
+There are two main steps to complete:
 
-- A git tag for the release, annotated with the release note; ready to
-  push to Github.
-- File `dist/calico-felix-$VERSION.tgz`; the "PyInstaller bundle"
-  containing the Felix binaries.  We attach that file to the
-  Github release.
-- Docker container images: `calico/felix:$VERSION` and
-  `quay.io/calico/felix:$VERSION` containing the Felix binaries.  These
-  are ready to push to Dockerhub and Quay.  They primarily form the input
-  to the downstream `calico/node` build process but they could also
-  be used to run Felix as a stand-alone container.
+- [Building a release](#building-a-release)
+- [Releasing debs and rpms](#releasing-debs-and-rpms)
 
-As a second step, running `make deb rpm` after `make release`, produces
-debs and RPMs for the release which can be uploaded to our PPAs and
-RPM repositories.  The debs and RPMs are created in subfolders of
-`/dist/`.
+## Preparing for a release
 
-# Felix release process
+Checkout the branch from which you want to release. For a major or minor release,
+you will need to create a new `release-vX.Y` branch based on the target Calico version.
 
-In a nutshell:
+Make sure the branch is in a good state, e.g. Update any pins in glide.yaml, create PR, ensure tests pass and merge.
 
-- We make a Felix release by creating and pushing an annotated Git tag.  The
-  name of the tag is the Felix version for that release, and the tag content is
-  the release notes.
+You should have no local changes and tests should be passing.
 
-- There are no hardcoded version numbers anywhere in the codebase (except in
-  packaging files, as described next).  Instead, build processes generate a
-  unique and monotonic Felix version number from the last Git tag and the
-  number of commits since that tag - equally whether they are processing
-  release code (i.e. there is a release tag on HEAD) or code in between
-  releases, or since the last release.
+## Building a release
 
-- The building of Debian and RPM packages is considered to be an optional
-  separate step from the release tagging above.
+### Creating a patch release
 
-So, to make a Felix release:
+1. Choose a version e.g. `v1.0.1`
 
-- Consider whether you should update the libcalico-go pin in glide.yaml.
-  If you do so, you should run `make update-vendor` to update the
-  `glide.lock` file.  Be wary of any additional libraries that get
-  revved if they aren't being pulled in by the libcalico-go update. At
-  this late stage, it's safer to only update commit IDs that you're
-  explicitly expecting (i.e. undo any changes that `make update-vendor`
-  makes that you weren't expecting).  If in doubt consult a Felix/glide
-  expert!
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
 
-- Run `make release VERSION=<new version>` and follow the instructions.  This
-  creates the annotated release tag, builds the release artifacts, and tells
-  you what else you need to do to publish those.  The release script
-  expects a version number of the form "2.0.0", with optional suffixes
-  such as "-beta1-rc3".
+   ```
+   make VERSION=v1.0.1 release
+   ```
 
-# Felix packages for OpenStack and Host Protection deployments
+1. Publish the release.
 
-Apart from OpenStack, the platforms that Calico targets are container-based, so
-the container image artifacts already documented above are appropriate for
-installing Felix on those platforms.  OpenStack installations, however, are
-commonly based on packages, so for Calico with OpenStack we provide packages
-for the OS platforms that are popular for OpenStack installs: Debian packages
-for Ubuntu Trusty and Xenial, and RPM packages for CentOS 7 or RHEL 7.  These
-packages can also be used for [Host Protection
-deployments](https://docs.projectcalico.org/master/getting-started/bare-metal/bare-metal#installing-felix).
+   ```
+   make VERSION=v1.0.1 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description or the generated release notes file, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits - e.g. libcalico-go updates.
+   - Title the release the same as the tag - e.g. `v1.0.1`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
+
+### Creating a major / minor release
+
+1. Choose a version e.g. `v1.1.0`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.1.0 PREVIOUS_RELEASE=v1.0.0 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.1.0 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description or the generated release notes file, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits - e.g. libcalico-go updates.
+   - Title the release the same as the tag - e.g. `v1.1.0`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
+
+## Releasing debs and rpms
+
+### Build the packages
+
+After completing the above `make release` process, you should produce and publish
+the deb/rpm artifacts.
 
 To build Debian and RPM packages for a release:
 
-- Following the above, run `make deb rpm`.  You should see debian/changelog and
-  rpm/felix.spec being updated with the new version number and release notes,
-  and packages built under `dist/`.
+- Build the packages
+
+  ```
+  make deb rpm
+  ```
+
+  You should see debian/changelog and rpm/felix.spec being updated with the new version
+  number and release notes, and packages built under `dist/`.
 
 - Create a PR to get those changes, in particular the release notes, reviewed.
   If you need to make changes, do so, and run
 
-      FORCE_VERSION=<new version> make deb rpm
+  ```
+  FORCE_VERSION=<new version> make deb rpm
+  ```
 
   to rebuild packages with those changes in.  (Where `<new version>` is exactly
   the same as when you ran `make release VERSION=<new version>` above.)
 
 - Once the changes are approved and any testing looks good, merge the PR.
+
+### Publish the packages
+
+For an official release, also build and publish the deb and rpm packages with the
+following steps. These steps assume you have the correct GPG keys and accounts set up to
+sign and publish the packages.
+
+#### Debian packages
+
+Perform the following steps in both the `dist/xenial` and `dist/trust` directories.
+
+- Change into the desired `dist/<distro>` directory.
+
+- Sign the package and `.changes` file with
+
+  ```
+  debsign -k<your key ID> *_source.changes
+  ```
+
+- Upload the signed package and `.changes` file with
+
+  ```
+  dput ppa:project-calico/calico-X.Y *_source.changes
+  ```
+
+  replacing `X.Y` with the actual series numbers.
+
+It can take a long time for Launchpad to build and publish binary
+packages. Usually about an hour, but occasionally many hours.
+
+The PPA is only ready for use when the [PPA package detailspage](https://launchpad.net/~project-calico/+archive/ubuntu/calico-2.6/+packages) shows
+all green ticks in its Build Status column.
+
+#### RPMs
+
+- Sign the RPMs
+
+- Copy the signed RPMs to `/usr/share/nginx/html/rpm/calico-X.Y/x86_64` on the binaries server.
+
+For more information, see [the full package release process](https://github.com/tigera/process/blob/master/releases/packages.md)
