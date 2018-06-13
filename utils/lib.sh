@@ -40,6 +40,10 @@ function git_commit_id {
     git rev-parse HEAD | cut -c-7
 }
 
+function strip_v {
+	echo $1 | cut -d "v" -f 2
+}
+
 # Convert PEP 440 version to Debian.
 function git_version_to_deb {
     echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1~\2/'

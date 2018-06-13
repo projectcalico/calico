@@ -39,6 +39,7 @@ for package_type in "$@"; do
 	deb )
 	    # The Debian version that we are about to generate.
 	    debver=`git_version_to_deb ${version}`
+	    debver=`strip_v ${debver}`
 
 	    # The last Git tag that was packaged, according to the
 	    # debian/changelog file.
@@ -95,6 +96,7 @@ EOF
 
 	rpm )
 	    debver=`git_version_to_rpm ${version}`
+	    debver=`strip_v ${debver}`
 	    rpm_spec=rpm/felix.spec
 
 	    # The last Git tag that was packaged, according to the RPM
