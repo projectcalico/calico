@@ -223,7 +223,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: ClusterInformation(" + name + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: ClusterInformation(" + name + ") with error:"))
 
 			By("Attempting to creating a new ClusterInformation with name/spec1 and a non-empty ResourceVersion")
 			_, outError = c.ClusterInformation().Create(ctx, &apiv3.ClusterInformation{
@@ -236,7 +236,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			By("Getting ClusterInformation (name) before it is created")
 			_, outError = c.ClusterInformation().Get(ctx, name, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: ClusterInformation(" + name + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: ClusterInformation(" + name + ") with error:"))
 
 			By("Attempting to create a new ClusterInformation with a non-default name and spec1")
 			_, outError = c.ClusterInformation().Create(ctx, &apiv3.ClusterInformation{

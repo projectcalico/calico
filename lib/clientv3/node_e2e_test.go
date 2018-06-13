@@ -238,7 +238,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Node(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name1 + ") with error:"))
 
 			By("Attempting to creating a new Node with name1/spec1 and a non-empty ResourceVersion")
 			_, outError = c.Nodes().Create(ctx, &apiv3.Node{
@@ -276,7 +276,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			By("Getting Node (name2) before it is created")
 			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Node(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Listing all the Nodes, expecting a single result with name1/spec1")
 			outList, outError := c.Nodes().List(ctx, options.ListOptions{})
@@ -390,7 +390,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			time.Sleep(2 * time.Second)
 			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Node(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Creating Node name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Nodes().Create(ctx, &apiv3.Node{
@@ -404,12 +404,12 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			time.Sleep(2 * time.Second)
 			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Node(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Attempting to deleting Node (name2) again")
 			_, outError = c.Nodes().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Node(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 
 			By("Listing all Nodes and expecting no items")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{})
@@ -419,7 +419,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			By("Getting Node (name2) and expecting an error")
 			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: Node(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
 		},
 
 		// Test 1: Pass two fully populated NodeSpecs and expect the series of operations to succeed.

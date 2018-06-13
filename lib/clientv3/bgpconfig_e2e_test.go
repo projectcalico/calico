@@ -76,7 +76,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specDefault1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + nameDefault + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPConfiguration(" + nameDefault + ") with error:"))
 
 			By("Attempting to creating a new BGPConfiguration with name1/specInfo and a non-empty ResourceVersion")
 			_, outError = c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
@@ -114,7 +114,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Getting BGPConfiguration (name2) before it is created")
 			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPConfiguration(" + name2 + ") with error:"))
 
 			By("Listing all the BGPConfigurations, expecting a single result with name1/specInfo")
 			outList, outError := c.BGPConfigurations().List(ctx, options.ListOptions{})
@@ -235,7 +235,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				time.Sleep(2 * time.Second)
 				_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPConfiguration(" + name2 + ") with error:"))
 
 				By("Creating BGPConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
 				_, outError = c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
@@ -249,7 +249,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				time.Sleep(2 * time.Second)
 				_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPConfiguration(" + name2 + ") with error:"))
 			}
 
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
@@ -263,7 +263,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Attempting to deleting BGPConfiguration (name2) again")
 			_, outError = c.BGPConfigurations().Delete(ctx, name2, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPConfiguration(" + name2 + ") with error:"))
 
 			By("Listing all BGPConfigurations and expecting no items")
 			outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{})
@@ -273,7 +273,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Getting BGPConfiguration (name2) and expecting an error")
 			_, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource does not exist: BGPConfiguration(" + name2 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPConfiguration(" + name2 + ") with error:"))
 
 			By("Creating a default BGPConfiguration with node to node mesh enabled and a default AS number")
 			resDefault, outError := c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{

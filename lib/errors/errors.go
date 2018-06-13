@@ -36,7 +36,7 @@ type ErrorResourceDoesNotExist struct {
 }
 
 func (e ErrorResourceDoesNotExist) Error() string {
-	return fmt.Sprintf("resource does not exist: %v", e.Identifier)
+	return fmt.Sprintf("resource does not exist: %v with error: %v", e.Identifier, e.Err)
 }
 
 // Error indicating an operation is not supported.
