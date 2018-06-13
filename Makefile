@@ -331,6 +331,108 @@ tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
 sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
+###############################################################################
+# Release
+###############################################################################
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+GIT_VERSION?=$(shell git describe --tags --dirty)
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
+
+## Produces a git tag for the release.
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-build"
+	@echo ""
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
+endif
+
+	$(MAKE) image
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
+	# Generate the `latest` images.
+	$(MAKE) tag-images IMAGETAG=latest
+
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	for img in $(CONTAINER_NAME):$(VERSION)-$(ARCH) quay.io/$(CONTAINER_NAME):$(VERSION)-$(ARCH); do \
+	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
+	  then \
+	    echo "Check successful. ($$img)"; \
+	  else \
+	    echo "Incorrect version in docker image $$img!"; \
+	    result=false; \
+	  fi \
+	done; \
+
+	# Run FV tests against the produced image. We only run the subset tagged as release tests.
+	$(MAKE) CONTAINER_NAME=$(CONTAINER_NAME):$(VERSION) GINKGO_FOCUS="Release" fv
+
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
+
+	# Push images.
+	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
+
+	@echo "Finalize the GitHub release based on the pushed tag."
+	@echo ""
+	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
+	@echo ""
+	@echo "Build and publish the debs and rpms for this release."
+	@echo ""
+	@echo "If this is the latest stable release, then run the following to push 'latest' images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish-latest"
+	@echo ""
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check latest versions match.
+	for img in $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):latest-$(ARCH); do \
+	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
+	  then \
+	    echo "Check successful. ($$img)"; \
+	  else \
+	    echo "Incorrect version in docker image $$img!"; \
+	    result=false; \
+	  fi \
+	done; \
+
+	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
+
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
@@ -689,81 +791,3 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
-
-.PHONY: release release-once-tagged
-release: clean version
-ifeq ($(GIT_COMMIT),<unknown>)
-	$(error git commit ID couldn't be determined, releases must be done from a git working copy)
-endif
-	$(DOCKER_GO_BUILD) utils/tag-release.sh $(VERSION)
-
-.PHONY: continue-release
-continue-release: version
-	@echo "Edited release notes are:"
-	@echo
-	@cat ./release-notes-$(VERSION)
-	@echo
-	@echo "Hit Return to go ahead and create the tag, or Ctrl-C to cancel."
-	@bash -c read
-	# Create annotated release tag.
-	git tag $(VERSION) -F ./release-notes-$(VERSION)
-	rm ./release-notes-$(VERSION)
-
-	# Now decouple onto another make invocation, as we want some variables
-	# (GIT_DESCRIPTION and BUNDLE_FILENAME) to be recalculated based on the
-	# new tag.
-	$(MAKE) release-once-tagged
-
-release-once-tagged: version
-	@echo
-	@echo "Will now build release artifacts..."
-	@echo
-	$(MAKE) build-all image-all
-	@echo
-	@echo "Checking built felix has correct version..."
-	@result=true; \
-	for img in calico/felix:latest-$(ARCH) quay.io/calico/felix:latest-$(ARCH) calico/felix:$(VERSION)-$(ARCH) quay.io/calico/felix:$(VERSION)-$(ARCH); do \
-	  if docker run $$img calico-felix --version | grep -q '$(VERSION)$$'; \
-	  then \
-	    echo "Check successful. ($$img)"; \
-	  else \
-	    echo "Incorrect version in docker image $$img!"; \
-	    result=false; \
-	  fi \
-	done; \
-	$$result
-	@echo
-	@echo "Felix release artifacts have been built:"
-	@echo
-	@echo "- Binaries:                 $(addprefix bin/calico-felix-,$(ARCHES))"
-	@echo "- Docker container images:  $(addprefix calico/felix:$(VERSION)-,$(ARCHES))"
-	@echo "- Same, tagged for Quay:    $(addprefix quay.io/calico/felix:$(VERSION)-,$(ARCHES))"
-	@echo
-	@echo "Now to publish this release to Github:"
-	@echo
-	@echo "- Push the new tag ($(VERSION)) to https://github.com/projectcalico/felix"
-	@echo "- Go to https://github.com/projectcalico/felix/releases/tag/$(VERSION)"
-	@echo "- Copy the tag content (release notes) shown on that page"
-	@echo "- Go to https://github.com/projectcalico/felix/releases/new?tag=$(VERSION)"
-	@echo "- Name the GitHub release:"
-	@echo "  - For a stable release: 'Felix $(VERSION)'"
-	@echo "  - For a test release:   'Felix $(VERSION) pre-release for testing'"
-	@echo "- Paste the copied tag content into the large textbox"
-	@echo "- Add an introduction message and, for a significant release,"
-	@echo "  append information about where to get the release.  (See the 2.2.0"
-	@echo "  release for an example.)"
-	@echo "- Attach the binary"
-	@echo "- Click the 'This is a pre-release' checkbox, if appropriate"
-	@echo "- Click 'Publish release'"
-	@echo
-	@echo "Then, push the versioned docker images to Dockerhub and Quay:"
-	@echo
-	@echo "$(MAKE) push-all IMAGETAG=$(VERSION)"
-	@echo
-	@echo "If this is the latest release from the most recent stable"
-	@echo "release series, also push the 'latest' tag:"
-	@echo
-	@echo "$(MAKE) push-all IMAGETAG=latest"
-	@echo
-	@echo "If you also want to build Debian/Ubuntu and RPM packages for"
-	@echo "the new release, use 'make deb' and 'make rpm'."
