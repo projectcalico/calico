@@ -1,7 +1,9 @@
 package main
 
 import (
+	"math/rand"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -116,11 +118,27 @@ func assignHostTunnelAddr(c *client.Client, nodename string, ipipCidrs []net.IPN
 		IPv4Pools: ipipCidrs,
 	}
 
-	if ipv4Addrs, _, err := c.IPAM().AutoAssign(args); err != nil {
-		log.WithError(err).Fatal("Unable to autoassign an address for IPIP")
-	} else if len(ipv4Addrs) == 0 {
+	var ipv4Addrs []net.IP
+
+	// Retry loop around AutoAssign to recover from a distributed race in case
+	// all nodes in a large cluster respond to a change in /pools simultaneously.
+	for a := 3; a > 0; a-- {
+		var err error
+		ipv4Addrs, _, err = c.IPAM().AutoAssign(args)
+
+		if err != nil {
+			log.WithError(err).Error("Unable to autoassign an address for IPIP:")
+			time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+		}
+
+		break
+	}
+
+	if len(ipv4Addrs) == 0 {
 		log.Fatal("Unable to autoassign an address for IPIP - pools are likely exhausted.")
-	} else if err = c.Config().SetNodeIPIPTunnelAddress(nodename, &ipv4Addrs[0]); err != nil {
+	}
+
+	if err := c.Config().SetNodeIPIPTunnelAddress(nodename, &ipv4Addrs[0]); err != nil {
 		log.WithError(err).WithField("IP", ipv4Addrs[0].String()).Fatal("Unable to set IPIP tunnel address")
 	} else {
 		log.WithField("IP", ipv4Addrs[0].String()).Info("Set IPIP tunnel address")
