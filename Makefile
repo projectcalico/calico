@@ -10,7 +10,8 @@ test: ut
 # Define some constants
 #######################
 K8S_VERSION      ?= v1.10.4
-GO_BUILD_VER     ?= v0.12
+ETCD_VERSION     ?= v3.3.7
+GO_BUILD_VER     ?= v0.16
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
 PACKAGE_NAME     ?= projectcalico/libcalico-go
 LOCAL_USER_ID    ?= $(shell id -u $$USER)
@@ -144,7 +145,7 @@ run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
 	--entrypoint=/usr/local/bin/etcd \
-	--name calico-etcd quay.io/coreos/etcd:v3.1.7 \
+	--name calico-etcd quay.io/coreos/etcd:$(ETCD_VERSION) \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
