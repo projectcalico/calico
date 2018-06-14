@@ -313,22 +313,80 @@ endif
 ###############################################################################
 # Release
 ###############################################################################
-release: clean
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+GIT_VERSION?=$(shell git describe --tags --dirty)
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
+
+## Produces a git tag for the release.
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-build"
+	@echo ""
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-	git tag $(VERSION)
 
-	# Check to make sure the tag isn't "-dirty".
-	if git describe --tags --dirty | grep dirty; \
-	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
-
-	# Build binary and docker image.
 	$(MAKE) image
+	$(MAKE) tag-images IMAGETAG=$(VERSION)
+	# Generate the `latest` images.
+	$(MAKE) tag-images IMAGETAG=latest
 
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
 	# Check that the version output includes the version specified.
-	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
-	# Release is currently supported on darwin / linux only.
+	if ! docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) /bin/confd --version | grep '$(VERSION)$$'; then \
+		echo "Reported version:" `docker run  $(CONTAINER_NAME):$(VERSION)-$(ARCH) /bin/confd --version` "\nExpected version: $(VERSION)"; \
+	  false; \
+	else \
+	  echo "Version check passed\n"; \
+	fi
+
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
+
+	# Push images.
+	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
+
+	@echo "Finalize the GitHub release based on the pushed tag."
+	@echo ""
+	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
+	@echo ""
+	@echo "If this is the latest stable release, then run the following to push 'latest' images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish-latest"
+	@echo ""
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check that the version output includes the version specified.
 	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) /bin/confd --version | grep '$(VERSION)$$'; then \
 	  echo "Reported version:" `docker run  $(CONTAINER_NAME) /bin/confd --version` "\nExpected version: $(VERSION)"; \
 	  false; \
@@ -336,34 +394,14 @@ endif
 	  echo "Version check passed\n"; \
 	fi
 
-	# create defaults for amd64
-	$(MAKE) tag-images IMAGETAG=$(VERSION)
-	$(MAKE) tag-images IMAGETAG=latest
 
-	# Check that images were created recently and that the IDs of the versioned and latest images match
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CONTAINER_NAME):latest-$(ARCH)
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CONTAINER_NAME):$(VERSION)-$(ARCH)
+	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
-	@echo ""
-	@echo "# Push the created tag to GitHub"
-	@echo "  git push origin $(VERSION)"
-	@echo ""
-	@echo "# Now, create a GitHub release from the tag, add release notes, and attach the following binaries:"
-	@echo ""
-	@echo "- bin/confd"
-	@echo ""
-	@echo "# To find commit messages for the release notes:  git log --oneline <old_release_version>...$(VERSION)"
-	@echo ""
-	@echo "# Now push the newly created release images."
-	@echo ""
-	@echo "  $(MAKE) push IMAGETAG=$(VERSION)"
-	@echo ""
-	@echo "# For the final release only, push the latest tag"
-	@echo "# DO NOT PUSH THESE IMAGES FOR RELEASE CANDIDATES OR ALPHA RELEASES"
-	@echo ""
-	@echo "  $(MAKE) push IMAGETAG=latest"
-	@echo ""
-	@echo "See RELEASING.md for detailed instructions."
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)
