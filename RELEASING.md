@@ -1,43 +1,81 @@
 # Release process
 
 ## Resulting artifacts
+
 Creating a new release creates the following artifacts:
+
 - Container images:
   - `calico/ctl:$VERSION` and `calico/ctl:latest`
   - `quay.io/calico/ctl:$VERSION` and `quay.io/calico/ctl:latest`
+
 - Binaries (stored in the `dist` directory) :
   - `calicoctl`
   - `calicoctl-darwin-amd64`
   - `calicoctl-windows-amd64.exe`
 
 ## Preparing for a release
-1. Make sure you are on the master branch and don't have any local uncommitted changes. e.g. Update the libcalico-go pin to the latest release in `glide.yaml` and run `glide up -v`, create PR, ensure test pass and merge.
 
-2. Pre-requisites for pushing container images:
-   - Make sure you have write access to calico orgs on Dockerhub and quay.io.
-   - Login using your dockerhub credentials.
-   - `docker login` in your terminal.
-   - For quay.io:
-     1. Go to your account on quay.io
-     2. Go to the account settings
-     3. Go to the "settings" tab
-     4. Click on "Generate Encrypted Password", it will popup a new sub-window
-     5. Go to "Docker login" tab in that window
-     6. Copy the command with encrypted password and paste it in your terminal
-   - Now you should be able to push the container images with `docker push` command.
+Checkout the branch from which you want to release. For a major or minor release,
+you will need to create a new `release-vX.Y` branch based on the target Calico version.
 
-3. Update the sub-component versions in the Makefile:
-     - `GO_BUILD_VER`
+Make sure the branch is in a good state, e.g. Update any pins in glide.yaml, create PR, ensure tests pass and merge.
 
-4. If build fails during `make release`, make sure git tag is deleted before doing `make release` again. (This can be done with `git tag -d <tag>`)
+You should have no local changes and tests should be passing.
 
-## Creating the release
-1. Choose a version e.g. `export VERSION=v1.0.0`
-2. Create the release artifacts repositories `make release VERSION=$VERSION`.
-3. Follow the instructions to push the artifacts and git tag.
-4. Create a release on Github, using the tag which was just pushed.
-5. Attach the following `calicoctl` binaries:
-   - `calicoctl`
-   - `calicoctl-darwin-amd64`
-   - `calicoctl-windows-amd64.exe`
-6. Add release notes for `calicoctl`. Use `https://github.com/projectcalico/calicoctl/compare/<previous_release>...<new_release>` to find all the commit messages since the last release.
+## Creating a patch release
+
+1. Choose a version e.g. `v1.0.1`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.0.1 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.0.1 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits - e.g. libcalico-go updates.
+   - Title the release the same as the tag - e.g. `v1.0.1`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
+
+## Creating a major / minor release
+
+1. Choose a version e.g. `v1.1.0`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.1.0 PREVIOUS_RELEASE=v1.0.0 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.1.0 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits - e.g. libcalico-go updates.
+   - Title the release the same as the tag - e.g. `v1.1.0`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
