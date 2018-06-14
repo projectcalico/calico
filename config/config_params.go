@@ -180,6 +180,7 @@ type Config struct {
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:6666,tcp:6667;die-on-fail"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
+	NatPortRange       string             `config:"portrange;"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
 	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
@@ -516,6 +517,8 @@ func loadParams() {
 			param = &EndpointListParam{}
 		case "port-list":
 			param = &PortListParam{}
+		case "portrange":
+			param = &PortRangeParam{}
 		case "portrange-list":
 			param = &PortRangeListParam{}
 		case "hostname":

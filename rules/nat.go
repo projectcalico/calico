@@ -26,13 +26,38 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 		ipConf := r.ipSetConfig(ipVersion)
 		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
-		rules = []iptables.Rule{
-			{
-				Action: iptables.MasqAction{},
-				Match: iptables.Match().
-					SourceIPSet(masqIPsSetName).
-					NotDestIPSet(allIPsSetName),
-			},
+		if r.Config.NATPortRange != "" {
+			rules = []iptables.Rule{
+				{
+					Action: iptables.MasqAction{ToPorts: r.Config.NATPortRange},
+					Match: iptables.Match().
+						SourceIPSet(masqIPsSetName).
+						NotDestIPSet(allIPsSetName).
+						Protocol("udp"),
+				},
+				{
+					Action: iptables.MasqAction{ToPorts: r.Config.NATPortRange},
+					Match: iptables.Match().
+						SourceIPSet(masqIPsSetName).
+						NotDestIPSet(allIPsSetName).
+						Protocol("tcp"),
+				},
+				{
+					Action: iptables.MasqAction{},
+					Match: iptables.Match().
+						SourceIPSet(masqIPsSetName).
+						NotDestIPSet(allIPsSetName),
+				},
+			}
+		} else {
+			rules = []iptables.Rule{
+				{
+					Action: iptables.MasqAction{},
+					Match: iptables.Match().
+						SourceIPSet(masqIPsSetName).
+						NotDestIPSet(allIPsSetName),
+				},
+			}
 		}
 	}
 	return &iptables.Chain{

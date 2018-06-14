@@ -130,6 +130,8 @@ func StartDataplaneDriver(configParams *config.Config,
 				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
 
 				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
+
+				NATPortRange: configParams.NatPortRange,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
 			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
