@@ -128,6 +128,8 @@ func assignHostTunnelAddr(c *client.Client, nodename string, ipipCidrs []net.IPN
 		if err != nil {
 			log.WithError(err).Error("Unable to autoassign an address for IPIP")
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+
+			continue
 		}
 
 		break
