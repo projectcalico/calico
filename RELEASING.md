@@ -1,44 +1,74 @@
-# Typha release artifacts
+# Release process
 
-Running the main `make release` target, described below, guides you
-through creating and distributing the following artifacts:
+## Resulting artifacts
 
-- A git tag for the release, annotated with the release note; ready to
-  push to Github.
-- File `bin/calico-typha`; the static binary relase, which we attach to 
-  the GitHub release.
-- Docker container images: `calico/typha:$VERSION` and
-  `quay.io/calico/typha:$VERSION` containing the Typha binaries.  These
-  are ready to push to Dockerhub and Quay.
+* `bin/calico-typha-amd64` - the static binary relase, which we attach to the GitHub release.
 
-# Typha release process
+* `calico/typha:$VERSION` container images (and the quay.io variant)
 
-In a nutshell:
+## Preparing for a release
 
-- We make a Typha release by creating and pushing an annotated Git tag.  The
-  name of the tag is the Typha version for that release, and the tag content is
-  the release notes.
+Checkout the branch from which you want to release. For a major or minor release,
+you will need to create a new `release-vX.Y` branch based on the target Calico version.
 
-- There are no hardcoded version numbers anywhere in the codebase (except in
-  packaging files, as described next).  Instead, build processes generate a
-  unique and monotonic Typha version number from the last Git tag and the
-  number of commits since that tag - equally whether they are processing
-  release code (i.e. there is a release tag on HEAD) or code in between
-  releases, or since the last release.
+Make sure the branch is in a good state, e.g. Update any pins in glide.yaml, create PR, ensure tests pass and merge.
 
-So, to make a Typha release:
+You should have no local changes and tests should be passing.
 
-- Consider whether you should update the libcalico-go pin in glide.yaml.
-  If you do so, you should run `make update-vendor` to update the
-  `glide.lock` file.  Be wary of any additional libraries that get
-  revved if they aren't being pulled in by the libcalico-go update. At
-  this late stage, it's safer to only update commit IDs that you're
-  explicitly expecting (i.e. undo any changes that `make update-vendor`
-  makes that you weren't expecting).  If in doubt consult a Typha/glide
-  expert!
+## Creating a patch release
 
-- Run `make release VERSION=<new version>` and follow the instructions.  This
-  creates the annotated release tag, builds the release artifacts, and tells
-  you what else you need to do to publish those.  The release script
-  expects a version number of the form "2.0.0", with optional suffixes
-  such as "-beta1-rc3".
+1. Choose a version e.g. `v1.0.1`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.0.1 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.0.1 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits - e.g. libcalico-go updates.
+   - Title the release the same as the tag - e.g. `v1.0.1`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
+
+## Creating a major / minor release
+
+1. Choose a version e.g. `v1.1.0`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.1.0 PREVIOUS_RELEASE=v1.0.0 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.1.0 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits - e.g. libcalico-go updates.
+   - Title the release the same as the tag - e.g. `v1.1.0`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
