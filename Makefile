@@ -40,7 +40,7 @@ ifeq ($(ARCH),x86_64)
 endif
 
 ###############################################################################
-GO_BUILD_VER ?= v0.16
+GO_BUILD_VER?=v0.16
 
 # Select which release branch to test.
 RELEASE_BRANCH?=release-v3.0
@@ -51,8 +51,8 @@ CONTAINER_NAME=calico/confd
 
 CALICOCTL_VER=master
 CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
-K8S_VERSION=v1.10.4
-ETCD_VER=v3.3.7
+K8S_VERSION?=v1.10.4
+ETCD_VER?=v3.3.7
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
