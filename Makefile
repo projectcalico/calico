@@ -44,7 +44,8 @@ endif
 OS := $(shell uname -s | tr A-Z a-z)
 
 ###############################################################################
-GO_BUILD_VER ?= v0.14
+GO_BUILD_VER?=v0.16
+ETCD_VER?=v3.3.7
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_DIR=calicoctl
@@ -248,13 +249,13 @@ st: bin/calicoctl-linux-amd64 run-etcd-host
 
 ## Etcd is used by the STs
 # NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
-# amd64: 3.2.5
-# arm64: 3.2.5-arm64
-# ppc64le: 3.2.5-ppc64le
+# amd64: 3.3.7
+# arm64: 3.3.7-arm64
+# ppc64le: 3.3.7-ppc64le
 # s390x is not available
-COREOS_ETCD ?= quay.io/coreos/etcd:v3.2.5-$(ARCH)
+COREOS_ETCD?=quay.io/coreos/etcd:$(ETCD_VER)-$(ARCH)
 ifeq ($(ARCH),amd64)
-COREOS_ETCD = quay.io/coreos/etcd:v3.2.5
+COREOS_ETCD=quay.io/coreos/etcd:$(ETCD_VER)
 endif
 .PHONY: run-etcd-host
 run-etcd-host:
