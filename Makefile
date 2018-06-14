@@ -38,7 +38,7 @@ ifeq ($(ARCH),x86_64)
         override ARCH=amd64
 endif
 ###############################################################################
-GO_BUILD_VER ?= v0.15
+GO_BUILD_VER ?= v0.16
 
 SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.go
 TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
@@ -66,10 +66,11 @@ PACKAGE_NAME?=github.com/projectcalico/cni-plugin
 CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
-ETCD_CONTAINER ?= quay.io/coreos/etcd:v3.2.5-$(BUILDARCH)
+ETCD_VER=v3.3.7
+ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VER)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
 ifeq ($(BUILDARCH),amd64)
-        ETCD_CONTAINER=quay.io/coreos/etcd:v3.2.5
+        ETCD_CONTAINER=quay.io/coreos/etcd:$(ETCD_VER)
 endif
 
 LIBCALICOGO_PATH?=none
