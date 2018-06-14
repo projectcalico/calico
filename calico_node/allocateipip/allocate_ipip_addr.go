@@ -122,12 +122,11 @@ func assignHostTunnelAddr(c *client.Client, nodename string, ipipCidrs []net.IPN
 
 	// Retry loop around AutoAssign to recover from a distributed race in case
 	// all nodes in a large cluster respond to a change in /pools simultaneously.
-	for a := 3; a > 0; a-- {
+	for a := 10; a > 0; a-- {
 		var err error
 		ipv4Addrs, _, err = c.IPAM().AutoAssign(args)
-
 		if err != nil {
-			log.WithError(err).Error("Unable to autoassign an address for IPIP:")
+			log.WithError(err).Error("Unable to autoassign an address for IPIP")
 			time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 		}
 
