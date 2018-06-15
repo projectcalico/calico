@@ -201,6 +201,11 @@ func (c *Container) WatchStdoutFor(re *regexp.Regexp) chan struct{} {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	log.WithFields(log.Fields{
+		"container": c.Name,
+		"regex":     re,
+	}).Info("Start watching stdout")
+
 	ch := make(chan struct{})
 	c.stdoutWatches = append(c.stdoutWatches, &watch{
 		regexp: re,

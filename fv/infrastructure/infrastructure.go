@@ -34,6 +34,10 @@ type DatastoreInfra interface {
 	// GetCalicoClient will return a client.Interface configured to access
 	// the datastore.
 	GetCalicoClient() client.Interface
+	// SetExpectedIPIPTunnelAddr will set the Felix object's
+	// ExpectedIPIPTunnelAddr field, if we expect Felix to see that field being
+	// set after it has started up for the first time.
+	SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool)
 	// AddNode will take the appropriate steps to add a node to the datastore.
 	// From the passed in felix the Hostname and IPv4 address will be pulled
 	// and added to the Node appropriately.

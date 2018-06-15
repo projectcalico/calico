@@ -316,6 +316,10 @@ func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 	return kds.calicoClient
 }
 
+func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool) {
+	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+}
+
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	node_in := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -332,7 +336,6 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	if err != nil {
 		panic(err)
 	}
-	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
