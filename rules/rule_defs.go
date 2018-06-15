@@ -247,7 +247,7 @@ type Config struct {
 
 	DisableConntrackInvalid bool
 
-	NATPortRange string
+	NATPortRange numorstring.Port
 }
 
 func (c *Config) validate() {

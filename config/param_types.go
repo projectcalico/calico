@@ -290,7 +290,10 @@ func (p *PortRangeParam) Parse(raw string) (interface{}, error) {
 	if err != nil {
 		return nil, p.parseFailed(raw, fmt.Sprintf("%s is not a valid port range", raw))
 	}
-	return portRange.String(), nil
+	if len(portRange.PortName) > 0 {
+		return nil, p.parseFailed(raw, fmt.Sprintf("%s has port name set", raw))
+	}
+	return portRange, nil
 }
 
 type PortRangeListParam struct {
