@@ -211,27 +211,33 @@ build-all: $(addprefix sub-build-,$(ARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-## Create the vendor directory
-vendor: glide.lock
-	# Ensure that the glide cache directory exists.
-	mkdir -p $(HOME)/.glide
+# Update the vendored dependencies with the latest upstream versions matching
+# our glide.yaml.  If there area any changes, this updates glide.lock
+# as a side effect.  Unless you're adding/updating a dependency, you probably
+# want to use the vendor target to install the versions from glide.lock.
+VENDOR_REMADE := false
+.PHONY: update-vendor
+update-vendor glide.lock:
+	mkdir -p $$HOME/.glide
+	$(DOCKER_GO_BUILD) glide up --strip-vendor
+	touch vendor/.up-to-date
+	# Optimization: since glide up does the job of glide install, flag to the
+	# vendor target that it doesn't need to do anything.
+	$(eval VENDOR_REMADE := true)
 
-	# To build without Docker just run "glide install -strip-vendor"
-	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
-          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
-	fi; \
-    docker run --rm -i \
-      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
-      -v $(HOME)/.glide:/home/user/.glide:rw \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      $(CALICO_BUILD) /bin/sh -c ' \
-		  cd /go/src/$(PACKAGE_NAME) && \
-          glide install -strip-vendor'
+# vendor is a shortcut for force rebuilding the go vendor directory.
+.PHONY: vendor
+vendor vendor/.up-to-date: glide.lock
+	if ! $(VENDOR_REMADE); then \
+	  mkdir -p $$HOME/.glide && \
+	  $(DOCKER_GO_BUILD) glide install --strip-vendor && \
+	  touch vendor/.up-to-date; \
+	fi
 
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
-bin/calico-felix-$(ARCH): $(SRC_FILES) vendor
+bin/calico-felix-$(ARCH): $(SRC_FILES) vendor/.up-to-date
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
@@ -241,7 +247,7 @@ bin/calico-felix-$(ARCH): $(SRC_FILES) vendor
 		( echo "Error: $@ was not statically linked"; false ) )'
 
 # Cross-compile Felix for Windows
-bin/calico-felix.exe: $(SRC_FILES) vendor
+bin/calico-felix.exe: $(SRC_FILES) vendor/.up-to-date
 	@echo Building felix for Windows...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
@@ -391,11 +397,11 @@ check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
 	@echo Checking dependency licenses
 	$(DOCKER_GO_BUILD) bin/check-licenses
 
-check-licenses/dependency-licenses.txt: vendor
+check-licenses/dependency-licenses.txt: vendor/.up-to-date
 	$(DOCKER_GO_BUILD) sh -c 'licenses ./cmd/calico-felix > check-licenses/dependency-licenses.txt'
 
 .PHONY: go-meta-linter
-go-meta-linter: vendor $(GENERATED_GO_FILES)
+go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
 	# Run staticcheck stand-alone since gometalinter runs concurrent copies, which
 	# uses a lot of RAM.
 	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs -n 3 staticcheck'
@@ -413,7 +419,7 @@ fix go-fmt goimports:
 
 
 .PHONY: check-typha-pins
-check-typha-pins: vendor
+check-typha-pins: vendor/.up-to-date
 	@echo "Checking Typha's libcalico-go pin matches ours (so that any datamodel"
 	@echo "changes are reflected in the Typha-Felix API)."
 	@echo
@@ -440,7 +446,7 @@ install-git-hooks:
 # Unit Tests
 ###############################################################################
 .PHONY: ut
-ut combined.coverprofile: vendor $(SRC_FILES)
+ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
 
@@ -454,7 +460,7 @@ endif
 ###############################################################################
 # FV Tests
 ###############################################################################
-fv/fv.test: vendor $(SRC_FILES)
+fv/fv.test: vendor/.up-to-date $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_GO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
@@ -510,7 +516,7 @@ k8sfv-test-existing-felix: bin/k8sfv.test
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	k8sfv/run-test
 
-bin/k8sfv.test: $(K8SFV_GO_FILES) vendor
+bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go test -c -o $@ ./k8sfv && \
@@ -550,19 +556,19 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
-bin/iptables-locker: $(SRC_FILES) vendor
+bin/iptables-locker: $(SRC_FILES) vendor/.up-to-date
 	@echo Building iptables-locker...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
-bin/test-workload: $(SRC_FILES) vendor
+bin/test-workload: $(SRC_FILES) vendor/.up-to-date
 	@echo Building test-workload...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
-bin/test-connection: $(SRC_FILES) vendor
+bin/test-connection: $(SRC_FILES) vendor/.up-to-date
 	@echo Building test-connection...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
@@ -680,12 +686,12 @@ endif
 # Developer helper scripts (not used by build or test)
 ###############################################################################
 .PHONY: ut-no-cover
-ut-no-cover: vendor $(SRC_FILES)
+ut-no-cover: vendor/.up-to-date $(SRC_FILES)
 	@echo Running Go UTs without coverage.
 	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
 
 .PHONY: ut-watch
-ut-watch: vendor $(SRC_FILES)
+ut-watch: vendor/.up-to-date $(SRC_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
 
