@@ -1,4 +1,4 @@
-# Copyright 2015-2017 Tigera, Inc
+# Copyright 2015-2018 Tigera, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM s390x/alpine:3.6
-LABEL maintainer "LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)"
+FROM amd64/alpine:3.7
+LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
-ADD dist/kube-controllers-linux-s390x /usr/bin/kube-controllers
+ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ENTRYPOINT ["/usr/bin/kube-controllers"]
