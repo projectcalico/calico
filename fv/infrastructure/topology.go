@@ -135,6 +135,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	for i := 0; i < n; i++ {
 		// Then start Felix and create a node for it.
 		felix := RunFelix(infra, opts)
+		infra.SetExpectedIPIPTunnelAddr(felix, i, bool(n > 1))
 
 		var w chan struct{}
 		if felix.ExpectedIPIPTunnelAddr != "" {
@@ -147,6 +148,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		infra.AddNode(felix, i, bool(n > 1))
 		if w != nil {
 			// Wait for any Felix restart...
+			log.Info("Wait for Felix to restart")
 			Eventually(w, "10s").Should(BeClosed())
 		}
 		felixes = append(felixes, felix)
