@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
 	k8s "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -32,7 +33,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 )
 
 // VERSION is filled out during the build process (using git describe output)

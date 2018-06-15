@@ -20,19 +20,19 @@ package testutils
 
 import (
 	"fmt"
-	"os/exec"
 	"os"
+	"os/exec"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const KubeconfigTemplate = `apiVersion: v1
@@ -52,7 +52,7 @@ current-context: test-context`
 
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
-		fmt.Sprintf("%s",os.Getenv("HYPERKUBE_IMAGE")),
+		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
 		"/hyperkube", "apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=AlwaysAllow",
@@ -64,7 +64,7 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
-		fmt.Sprintf("%s",os.Getenv("ETCD_IMAGE")),
+		fmt.Sprintf("%s", os.Getenv("ETCD_IMAGE")),
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379")

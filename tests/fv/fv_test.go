@@ -17,9 +17,9 @@ package fv_test
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"time"
-	"net"
 
 	extensions "github.com/projectcalico/libcalico-go/lib/backend/extensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,9 +34,9 @@ import (
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
-	"k8s.io/client-go/rest"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"k8s.io/client-go/rest"
 )
 
 var _ = Describe("PolicyController", func() {
@@ -104,7 +104,7 @@ var _ = Describe("PolicyController", func() {
 				Spec: api.NodeSpec{
 					OrchRefs: []api.OrchRef{
 						{
-							NodeName: kNodeName,
+							NodeName:     kNodeName,
 							Orchestrator: "k8s",
 						},
 					},
@@ -128,7 +128,7 @@ var _ = Describe("PolicyController", func() {
 				Spec: api.NodeSpec{
 					OrchRefs: []api.OrchRef{
 						{
-							NodeName: "k8sfakenode",
+							NodeName:     "k8sfakenode",
 							Orchestrator: "k8s",
 						},
 					},
@@ -160,11 +160,10 @@ var _ = Describe("PolicyController", func() {
 				Spec: api.NodeSpec{
 					OrchRefs: []api.OrchRef{
 						{
-							NodeName: kNodeName,
+							NodeName:     kNodeName,
 							Orchestrator: "mesos",
 						},
 					},
-
 				},
 			}
 			_, err = calicoClient.Nodes().Create(cn)
@@ -203,7 +202,7 @@ var _ = Describe("PolicyController", func() {
 				Metadata: api.IPPoolMetadata{
 					CIDR: cnet.IPNet{
 						IPNet: net.IPNet{
-							IP: net.IP{192, 168, 0, 0},
+							IP:   net.IP{192, 168, 0, 0},
 							Mask: net.IPMask{255, 255, 0, 0},
 						},
 					},
@@ -212,7 +211,7 @@ var _ = Describe("PolicyController", func() {
 
 			affBlock := cnet.IPNet{
 				IPNet: net.IPNet{
-					IP: net.IP{192, 168, 0, 0},
+					IP:   net.IP{192, 168, 0, 0},
 					Mask: net.IPMask{255, 255, 255, 0},
 				},
 			}
@@ -221,7 +220,7 @@ var _ = Describe("PolicyController", func() {
 
 			_, err := calicoClient.IPPools().Create(&pool)
 			Expect(err).NotTo(HaveOccurred())
-			
+
 			kn := &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kNodeName,
@@ -237,7 +236,7 @@ var _ = Describe("PolicyController", func() {
 				Spec: api.NodeSpec{
 					OrchRefs: []api.OrchRef{
 						api.OrchRef{
-							NodeName: kNodeName,
+							NodeName:     kNodeName,
 							Orchestrator: "k8s",
 						},
 					},
@@ -251,7 +250,7 @@ var _ = Describe("PolicyController", func() {
 
 			handle := "myhandle"
 			err = calicoClient.IPAM().AssignIP(client.AssignIPArgs{
-				IP: cnet.IP{wepIp},
+				IP:       cnet.IP{wepIp},
 				Hostname: cNodeName,
 				HandleID: &handle,
 			})
@@ -295,10 +294,10 @@ var _ = Describe("PolicyController", func() {
 			// Check that all other node-specific data was also removed
 			// starting with the wep.
 			_, err = calicoClient.WorkloadEndpoints().Get(api.WorkloadEndpointMetadata{
-				Name: "eth0",
-				Node: cNodeName,
+				Name:         "eth0",
+				Node:         cNodeName,
 				Orchestrator: "k8s",
-				Workload: "default.fakepod",
+				Workload:     "default.fakepod",
 			})
 
 			_, ok := err.(cerrors.ErrorResourceDoesNotExist)

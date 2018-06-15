@@ -47,11 +47,11 @@ type cache struct {
 // It keeps a cache of known calico nodes and their corresponding kubernetes nodes to
 // accomplish this.
 type NodeController struct {
-	informer                corecache.Controller
+	informer         corecache.Controller
 	k8sResourceCache calicocache.ResourceCache
-	nodeLookupCache   *cache
-	calicoClient            *client.Client
-	k8sClientset            *kubernetes.Clientset
+	nodeLookupCache  *cache
+	calicoClient     *client.Client
+	k8sClientset     *kubernetes.Clientset
 }
 
 type nodeData struct {
@@ -62,7 +62,7 @@ type nodeData struct {
 func NewNodeController(k8sClientset *kubernetes.Clientset, calicoClient *client.Client) controller.Controller {
 	cacheArgs := calicocache.ResourceCacheArgs{
 		ObjectType: reflect.TypeOf(nodeData{}),
-		ListFunc:   func() (map[string]interface{}, error) {
+		ListFunc: func() (map[string]interface{}, error) {
 			// Get all nodes from the Calico datastore
 			calicoNodes, err := calicoClient.Nodes().List(api.NodeMetadata{})
 			if err != nil {
@@ -83,8 +83,8 @@ func NewNodeController(k8sClientset *kubernetes.Clientset, calicoClient *client.
 		},
 		ReconcilerConfig: calicocache.ReconcilerConfig{
 			DisableMissingInDatastore: true,
-			DisableMissingInCache: false,
-			DisableUpdateOnChange: false,
+			DisableMissingInCache:     false,
+			DisableUpdateOnChange:     false,
 		},
 	}
 
@@ -120,7 +120,7 @@ func NewNodeController(k8sClientset *kubernetes.Clientset, calicoClient *client.
 		},
 	}, corecache.Indexers{})
 
-	return &NodeController{ informer, k8sResourceCache, &nodeLookupCache, calicoClient, k8sClientset}
+	return &NodeController{informer, k8sResourceCache, &nodeLookupCache, calicoClient, k8sClientset}
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
@@ -172,7 +172,8 @@ func (c *NodeController) Run(threadiness int, reconcilerPeriod string, stopCh ch
 }
 
 func (c *NodeController) runWorker() {
-	for c.processNextItem() {}
+	for c.processNextItem() {
+	}
 }
 
 func (c *NodeController) processNextItem() bool {
