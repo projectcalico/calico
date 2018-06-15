@@ -123,9 +123,9 @@ install-git-hooks:
 ###############################################################################
 # Tests
 ###############################################################################
-.PHONY: ut-native
-## Run the UTs natively.  This requires a local etcd and local kubernetes master to be running.
-ut-native: vendor
+.PHONY: ut-cover
+## Run the UTs natively with code coverage.  This requires a local etcd and local kubernetes master to be running.
+ut-cover: vendor
 	./run-uts
 
 .PHONY:ut
@@ -137,7 +137,7 @@ ut: vendor run-etcd run-kubernetes-master
     -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
     -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
     -e GOCACHE=/go-cache \
-    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && make WHAT=$(WHAT) SKIP=$(SKIP) ut-native'
+    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor .'
 
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd
