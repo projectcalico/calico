@@ -6,23 +6,34 @@ canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/p
 If `applyOnForward` is `false`, the host endpoint policy applies to traffic to/from
  local processes only. 
 
-If `applyOnForward` is `true`, the host endpoint policy applies to forwarded traffic:
-- Incoming traffic from a host endpoint to a local workload (container/pod/VM).
-- Outgoing traffic from a local workload to a host endpoint.
-- Traffic from one host endpoint that is forwarded to another host endpoint.
+If `applyOnForward` is `true`, the host endpoint policy also applies to forwarded traffic:
+- Traffic that comes in via a host endpoint and forwarded to a local workload (container/pod/VM).
+- Traffic from a local workload forwarded outbound via a host endpoint.
+- Traffic that comes in via host endpoint and forwarded out another host endpoint.
 
 By default, `applyOnForward` is `false`. 
 
 Untracked policies and pre-DNAT policies must have `applyOnForward` set to `true`
 because they apply to all forwarded traffic.
 
-Forwarded traffic is allowed by default. In other words, if a host endpoint is
-configured, but there are no rules that explicitly allow or deny a particular
-forwarding flow (in any of policies with `applyOnForward` set to `true` that apply
-to that host endpoint), that flow is still allowed. This is different from how {{site.prodname}}
-treats traffic to or from a local process: traffic to or from a local process is
-denied by default, if a host endpoint is configured but there is no applicable
-policy that explicitly allows that traffic.
+Forwarded traffic is allowed by default if no policies apply to the endpoint and direction. In
+other words, if a host endpoint is configured, but there are no policies with `applyOnForward`
+set to `true` that apply to that host endpoint and traffic direction, forwarded traffic is 
+allowed in that direction. For example if a forwarded flow is incoming via a host endpoint, but there are
+no Ingress policies with `applyOnForward: true` that apply to that host endpoint, the flow is
+allowed.  If there are `applyOnForward: true` policies that select the host endpoint and direction,
+but no rules in the policies allow the traffic, the traffic is denied.
+
+This is different from how {{site.prodname}} treats traffic to or from a local process:
+if a host endpoint is configured and there are no policies that select the host endpoint in
+the traffic direction, or no rules that allow the traffic, the traffic is denied.
+
+Traffic that traverses a host endpoint and is forwarded to a workload endpoint must also pass
+the applicable workload endpoint policy, if any. That is to say, if an `applyOnForward: true` host
+endpoint policy allows the traffic, but workload endpoint policy denies it, the packet is still dropped.
+
+Traffic that ingresses one host endpoint, is forwarded, and egresses host endpoint must
+pass ingress policy on the first host endpoint and egress policy on the second host endpoint.
 
 > **Note**: {{site.prodname}}'s handling of host endpoint policy has changed, since before
 > Calico v2.7.0, in two ways:
