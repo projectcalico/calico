@@ -38,6 +38,7 @@ type TopologyOptions struct {
 	WithTypha         bool
 	WithFelixTyphaTLS bool
 	TyphaLogSeverity  string
+	IPIPEnabled       bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -49,6 +50,7 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithTypha:         false,
 		WithFelixTyphaTLS: false,
 		TyphaLogSeverity:  "info",
+		IPIPEnabled:       true,
 	}
 }
 
@@ -121,7 +123,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			ipPool := api.NewIPPool()
 			ipPool.Name = "test-pool"
 			ipPool.Spec.CIDR = "10.65.0.0/16"
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			if opts.IPIPEnabled {
+				ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			} else {
+				ipPool.Spec.IPIPMode = api.IPIPModeNever
+			}
 			_, err = client.IPPools().Create(ctx, ipPool, options.SetOptions{})
 			return err
 		}).ShouldNot(HaveOccurred())
@@ -135,7 +141,9 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 	for i := 0; i < n; i++ {
 		// Then start Felix and create a node for it.
 		felix := RunFelix(infra, opts)
-		infra.SetExpectedIPIPTunnelAddr(felix, i, bool(n > 1))
+		if opts.IPIPEnabled {
+			infra.SetExpectedIPIPTunnelAddr(felix, i, bool(n > 1))
+		}
 
 		var w chan struct{}
 		if felix.ExpectedIPIPTunnelAddr != "" {
@@ -163,8 +171,13 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			}
 
 			jBlock := fmt.Sprintf("10.65.%d.0/24", j)
-			err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-			Expect(err).ToNot(HaveOccurred())
+			if opts.IPIPEnabled {
+				err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+				Expect(err).ToNot(HaveOccurred())
+			} else {
+				err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
+				Expect(err).ToNot(HaveOccurred())
+			}
 		}
 	}
 	success = true
