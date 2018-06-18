@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -207,7 +207,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if tableKind == "normal" || tableKind == "applyOnForward" {
+			if tableKind == "normal" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -224,6 +224,18 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Match:   iptables.Match(),
 				Action:  iptables.DropAction{},
 				Comment: "Drop if no profiles matched",
+			})
+		}
+
+		if tableKind == "applyOnForward" {
+			// Expect forwarded traffic to be allowed by default.
+			outRules = append(outRules, iptables.Rule{
+				Action:  iptables.SetMarkAction{Mark: 8},
+				Comment: "Allow forwarded traffic by default",
+			})
+			outRules = append(outRules, iptables.Rule{
+				Action:  iptables.ReturnAction{},
+				Comment: "Return for accepted forward traffic",
 			})
 		}
 
@@ -274,7 +286,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if tableKind == "normal" || tableKind == "applyOnForward" {
+			if tableKind == "normal" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -292,6 +304,19 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Comment: "Drop if no profiles matched",
 			})
 		}
+
+		if tableKind == "applyOnForward" {
+			// Expect forwarded traffic to be allowed by default.
+			inRules = append(inRules, iptables.Rule{
+				Action:  iptables.SetMarkAction{Mark: 8},
+				Comment: "Allow forwarded traffic by default",
+			})
+			inRules = append(inRules, iptables.Rule{
+				Action:  iptables.ReturnAction{},
+				Comment: "Return for accepted forward traffic",
+			})
+		}
+
 		if tableKind == "preDNAT" {
 			chains = append(chains,
 				&iptables.Chain{
