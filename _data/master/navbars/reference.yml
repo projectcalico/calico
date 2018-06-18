@@ -105,6 +105,8 @@ toc:
       path: /reference/public-cloud/azure
     - title: Google Compute Engine
       path: /reference/public-cloud/gce
+    - title: IBM Cloud
+      path: /reference/public-cloud/ibm
 - title: Network design
   section:
     - title: Calico Over Ethernet Fabrics
