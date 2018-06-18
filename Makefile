@@ -321,30 +321,6 @@ dist/calico-cni-plugin dist/calico-ipam-plugin:
 	  touch dist/calico-ipam-plugin
 	-docker rm -f calico-cni
 
-## Generate the keys and certificates for running etcd with SSL.
-ssl-certs: certs/.certificates.created
-certs/.certificates.created: certs/cfssl certs/cfssljson
-	certs/cfssl gencert -initca tests/st/ssl-config/ca-csr.json | certs/cfssljson -bare certs/ca
-	certs/cfssl gencert \
-	  -ca certs/ca.pem \
-	  -ca-key certs/ca-key.pem \
-	  -config tests/st/ssl-config/ca-config.json \
-	  tests/st/ssl-config/req-csr.json | certs/cfssljson -bare certs/client
-	certs/cfssl gencert \
-	  -ca certs/ca.pem \
-	  -ca-key certs/ca-key.pem \
-	  -config tests/st/ssl-config/ca-config.json \
-	  tests/st/ssl-config/req-csr.json | certs/cfssljson -bare certs/server
-
-	touch certs/.certificates.created
-
-certs/cfssl certs/cfssljson:
-	mkdir -p certs
-	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssl" -o certs/cfssl
-	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssljson" -o certs/cfssljson
-	chmod a+x certs/cfssl
-	chmod a+x certs/cfssljson
-
 # Create images for containers used in the tests
 busybox.tar:
 	docker pull $(ARCH)/busybox:latest
@@ -359,22 +335,7 @@ workload.tar:
 	docker save --output workload.tar workload
 
 stop-etcd:
-	@-docker rm -f calico-etcd calico-etcd-ssl
-
-.PHONY: run-etcd-ssl
-# Run etcd in a container with SSL verification. Used primarily by STs.
-run-etcd-ssl: certs/.certificates.created add-ssl-hostname
-	$(MAKE) stop-etcd
-	docker run --detach \
-	--net=host \
-	-v $(CURDIR)/certs:/etc/calico/certs \
-	--name calico-etcd-ssl $(ETCD_IMAGE) \
-	etcd \
-	--cert-file "/etc/calico/certs/server.pem" \
-	--key-file "/etc/calico/certs/server-key.pem" \
-	--trusted-ca-file "/etc/calico/certs/ca.pem" \
-	--advertise-client-urls "https://etcd-authority-ssl:2379,https://localhost:2379" \
-	--listen-client-urls "https://0.0.0.0:2379"
+	@-docker rm -f calico-etcd
 
 IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
 
@@ -437,54 +398,12 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
-# Run the STs in a container using etcd with SSL certificate/key/CA verification.
-.PHONY: st-ssl
-st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.tar workload.tar calico_test.created
-	# Use the host, PID and network namespaces from the host.
-	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
-	# Map the docker socket in so docker can be used from inside the container
-	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
-	# All of code under test is mounted into the container.
-	#   - This also provides access to calicoctl and the docker client
-	# Mount the full path to the etcd certs directory.
-	#   - docker copies this directory directly from the host, but the
-	#     calicoctl node command reads the files from the test container
-	$(MAKE) st-checks
-	docker run --uts=host \
-	           --pid=host \
-	           --net=host \
-	           --privileged \
-	           -e HOST_CHECKOUT_DIR=$(CURDIR) \
-	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
-	           -e MY_IP=$(LOCAL_IP_ENV) \
-	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
-		   -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME):$(RR_VER) \
-	           -e ETCD_SCHEME=https \
-	           -e ETCD_CA_CERT_FILE=$(CURDIR)/certs/ca.pem \
-	           -e ETCD_CERT_FILE=$(CURDIR)/certs/client.pem \
-	           -e ETCD_KEY_FILE=$(CURDIR)/certs/client-key.pem \
-	           --rm -t \
-	           -v /var/run/docker.sock:/var/run/docker.sock \
-	           -v $(CURDIR):/code \
-	           -v $(CURDIR)/certs:$(CURDIR)/certs \
-	           $(TEST_CONTAINER_NAME) \
-	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
-	$(MAKE) stop-etcd
-
-.PHONY: add-ssl-hostname
-add-ssl-hostname:
-	# Set "LOCAL_IP etcd-authority-ssl" in /etc/hosts to use as a hostname for etcd with ssl
-	if ! grep -q "etcd-authority-ssl" /etc/hosts; then \
-	  echo "\n# Host used by Calico's ETCD with SSL\n$(LOCAL_IP_ENV) etcd-authority-ssl" >> /etc/hosts; \
-	fi
 
 ###############################################################################
 # CI
 ###############################################################################
 .PHONY: ci
 ci: static-checks fv $(NODE_CONTAINER_NAME) st
-	# Run a small subset of the tests for testing SSL support.
-	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
 # This depends on clean to ensure that dependent images get untagged and repulled
 # THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
