@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -339,7 +339,7 @@ func RunEtcd() *Container {
 
 func RunFelix(etcdIP string) *Container {
 	log.Info("Starting felix")
-	return Run("felix",
+	c := Run("felix",
 		RunOpts{AutoRemove: true},
 		"--privileged",
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
@@ -350,6 +350,16 @@ func RunFelix(etcdIP string) *Container {
 		"-e", "FELIX_USAGEREPORTINGENABLED=false",
 		"-e", "FELIX_IPV6SUPPORT=false",
 		"calico/felix:latest")
+
+	// Configure our model host to drop forwarded traffic by default.  Modern
+	// Kubernetes/Docker hosts now have this setting, and the consequence is that
+	// whenever Calico policy intends to allow a packet, it must explicitly ACCEPT
+	// that packet, not just allow it to pass through cali-FORWARD and assume it will
+	// be accepted by the rest of the chain.  Establishing that setting in this FV
+	// allows us to test that.
+	c.Exec("iptables", "-P", "FORWARD", "DROP")
+
+	return c
 }
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
