@@ -7,9 +7,9 @@ If `applyOnForward` is `false`, the host endpoint policy applies to traffic to/f
  local processes only. 
 
 If `applyOnForward` is `true`, the host endpoint policy also applies to forwarded traffic:
-- Traffic that comes in via a host endpoint and forwarded to a local workload (container/pod/VM).
-- Traffic from a local workload forwarded outbound via a host endpoint.
-- Traffic that comes in via host endpoint and forwarded out another host endpoint.
+- Traffic that comes in via a host endpoint and is forwarded to a local workload (container/pod/VM).
+- Traffic from a local workload that is forwarded out via a host endpoint.
+- Traffic that comes in via a host endpoint and is forwarded out via another host endpoint.
 
 By default, `applyOnForward` is `false`. 
 
@@ -36,12 +36,12 @@ Traffic that ingresses one host endpoint, is forwarded, and egresses host endpoi
 pass ingress policy on the first host endpoint and egress policy on the second host endpoint.
 
 > **Note**: {{site.prodname}}'s handling of host endpoint policy has changed, since before
-> Calico v2.7.0, in two ways:
+> Calico v3.0, in two ways:
 > - It will not apply at all to forwarded traffic, by default. If you have an existing
 > policy and you want it to apply to forwarded traffic, you need to add `applyOnForward: true` to the policy.
 > - Even with `applyOnForward: true`, the treatment is not quite the same in
-> Calico v2.7.0 as in previous releases, because–once a host endpoint is configured–
-> Calico v2.7.0 allows forwarded traffic through that endpoint by default, whereas
+> Calico v3.0 as in previous releases, because–once a host endpoint is configured–
+> Calico v3.0 allows forwarded traffic through that endpoint by default, whereas
 > previous releases denied forwarded traffic through that endpoint by default.
 > If you want to maintain the default-deny behavior for all host-endpoint forwarded
 > traffic, you can create an empty policy with `applyOnForward` set to `true`
