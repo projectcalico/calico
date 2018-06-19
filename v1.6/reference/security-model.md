@@ -1,5 +1,6 @@
 ---
 title: Security Policy Model
+sitemap: false 
 ---
 
 Calico applies security policy to **endpoints**. Calico policy is

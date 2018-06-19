@@ -1,5 +1,6 @@
 ---
 title: Preparing the environment for Calico without Docker networking
+sitemap: false 
 ---
 
 The worked example in the _Calico without Docker networking tutorial_ is run on

@@ -1,5 +1,6 @@
 ---
 title: Etcdless Hosted Install
+sitemap: false 
 ---
 
 This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  Note that this feature is

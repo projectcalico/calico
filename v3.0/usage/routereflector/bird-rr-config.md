@@ -1,5 +1,6 @@
 ---
 title: Configuring BIRD as a BGP route reflector
+sitemap: false 
 canonical_url: https://docs.projectcalico.org/v3.1/usage/routereflector/bird-rr-config
 ---
 

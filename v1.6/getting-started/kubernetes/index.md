@@ -1,5 +1,6 @@
 ---
 title: Kubernetes
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/'
 ---
 Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy in a Kubernetes cluster.

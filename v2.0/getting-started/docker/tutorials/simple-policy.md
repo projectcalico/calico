@@ -1,5 +1,6 @@
 ---
 title: Simple Policy
+sitemap: false 
 ---
 
 The following guide walks through a simple policy demo.

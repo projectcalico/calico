@@ -1,5 +1,6 @@
 ---
 title:  Manual Installation of Calico with rkt
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/rkt/installation/manual'
 ---
 

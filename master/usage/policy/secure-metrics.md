@@ -1,5 +1,6 @@
 ---
 title: Securing Calico's Prometheus endpoints
+sitemap: false 
 ---
 
 ## About securing access to {{site.prodname}}'s metrics endpoints

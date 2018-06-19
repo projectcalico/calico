@@ -1,6 +1,7 @@
 ---
-tile: Installing Calico in DC/OS
+title: Installing Calico in DC/OS
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/'
+sitemap: false
 ---
 
 

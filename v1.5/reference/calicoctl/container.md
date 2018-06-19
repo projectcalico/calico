@@ -1,5 +1,6 @@
 ---
 title: calicoctl container
+sitemap: false 
 ---
 
 > NOTE: The `calicoctl container` configuration commands are used specifically

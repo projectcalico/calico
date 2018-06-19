@@ -1,5 +1,6 @@
 ---
 title: Previous releases
+sitemap: false 
 ---
 
 

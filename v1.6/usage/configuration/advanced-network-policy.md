@@ -1,5 +1,6 @@
 ---
 title: Advanced Network Policy
+sitemap: false 
 ---
 
 Calico endpoints are assigned their network policy by configuring them with a

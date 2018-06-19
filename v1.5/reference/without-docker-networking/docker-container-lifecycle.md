@@ -1,5 +1,6 @@
 ---
 title: Lifecycle of a container (Calico without Docker networking)
+sitemap: false 
 ---
 
 

@@ -1,5 +1,6 @@
 ---
 title: Contribution Guidelines
+sitemap: false 
 ---
 
 Features or any changes to the codebase should be done as follows:

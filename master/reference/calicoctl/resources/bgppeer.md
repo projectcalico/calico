@@ -1,5 +1,6 @@
 ---
 title: BGP Peer Resource (BGPPeer)
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/bgppeer'
 ---
 

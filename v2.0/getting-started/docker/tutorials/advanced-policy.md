@@ -1,5 +1,6 @@
 ---
 title: Advanced Policy
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v2.0/getting-started/docker/tutorials/advanced-policy'
 ---
 

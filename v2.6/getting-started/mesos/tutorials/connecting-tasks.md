@@ -12,8 +12,8 @@ service discovery solutions available for Mesos.
 
 ### Mesos-DNS
 
-> **Important**: Modifying Mesos-DNS **in DC/OS** may break components 
-> which rely on Mesos-DNS resolving to Agent IPs. It is instead 
+> **Important**: Modifying Mesos-DNS **in DC/OS** may break components
+> which rely on Mesos-DNS resolving to Agent IPs. It is instead
 > recommended to use Navstar DNS entries.
 > Skip ahead for information on how to use this alternative DNS service.
 {: .alert .alert-danger}

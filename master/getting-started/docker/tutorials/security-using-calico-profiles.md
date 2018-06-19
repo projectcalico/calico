@@ -1,5 +1,6 @@
 ---
 title: Security using Calico Profiles
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/tutorials/security-using-calico-profiles'
 ---
 

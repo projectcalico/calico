@@ -1,5 +1,6 @@
 ---
 title: Customizing the Calico Universe Framework
+sitemap: false 
 ---
 
 The the Calico Universe Framework includes customization options which support

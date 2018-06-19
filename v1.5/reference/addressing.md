@@ -1,5 +1,6 @@
 ---
 title: Addressing and Connectivity Overview
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v1.6/reference/addressing'
 ---
 

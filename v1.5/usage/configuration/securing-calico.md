@@ -1,5 +1,6 @@
 ---
 title: Securing Calico
+sitemap: false 
 ---
 
 What Calico does and does not provide

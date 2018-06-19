@@ -1,5 +1,6 @@
 ---
 title: Host routes
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/host-routes'
 ---
 

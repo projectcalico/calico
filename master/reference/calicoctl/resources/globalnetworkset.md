@@ -1,5 +1,6 @@
 ---
 title: Global Network Set Resource (GlobalNetworkSet)
+sitemap: false 
 ---
 
 A global network set resource (GlobalNetworkSet) represents an arbitrary set of IP subnetworks/CIDRs, 

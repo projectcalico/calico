@@ -1,5 +1,6 @@
 ---
 title: # Running the Calico tutorials on GCE
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/installation/gce'
 ---
 

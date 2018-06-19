@@ -1,5 +1,6 @@
 ---
 title: Dockerless Calico - Manual Installation
+sitemap: false 
 ---
 Project Calico releases are primarily distributed as docker containers for quick, easy, and consistant deployment. However, it is possible to run the core Calico components directly on the host, removing the dependency on docker.
 

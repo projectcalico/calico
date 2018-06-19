@@ -1,5 +1,6 @@
 ---
 title: Changing IP pools
+sitemap: false 
 ---
 
 ## About changing IP pools

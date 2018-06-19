@@ -1,5 +1,6 @@
 ---
 title: Selector-based policy
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/policy/selector'
 ---
 

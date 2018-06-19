@@ -1,5 +1,6 @@
 ---
-Title: Calico IPv6 networking as a Docker network plugin (Optional)
+title: Calico IPv6 networking as a Docker network plugin (Optional)
+sitemap: false
 canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/tutorials/ipv6'
 ---
 

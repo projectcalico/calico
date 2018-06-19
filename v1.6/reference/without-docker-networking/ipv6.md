@@ -1,5 +1,6 @@
 ---
 title: Calico IPv6 networking without Docker networking (Optional)
+sitemap: false 
 ---
 
 This tutorial is a continuation of the main

@@ -1,5 +1,6 @@
 ---
 title: Configuring Calico
+sitemap: false 
 ---
 
 This page describes the configuration options for Calico's per-host agent,

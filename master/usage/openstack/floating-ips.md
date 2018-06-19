@@ -1,5 +1,6 @@
 ---
 title: Floating IPs
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/floating-ips'
 ---
 

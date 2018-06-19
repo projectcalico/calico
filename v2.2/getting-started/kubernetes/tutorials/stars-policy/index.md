@@ -1,5 +1,6 @@
 ---
 title: Stars Policy Demo
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/tutorials/stars-policy/'
 ---
 The included demo sets up a frontend and backend service, as well as a client service, all
