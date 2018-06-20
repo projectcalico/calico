@@ -207,7 +207,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if tableKind == "normal" {
+			if tableKind == "normal" || tableKind == "applyOnForward" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -217,18 +217,10 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 					Comment: "Drop if no policies passed packet",
 				})
 			}
-		}
 
-		if tableKind == "normal" {
-			outRules = append(outRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.DropAction{},
-				Comment: "Drop if no profiles matched",
-			})
-		}
-
-		if tableKind == "applyOnForward" {
-			// Expect forwarded traffic to be allowed by default.
+		} else if tableKind == "applyOnForward" {
+			// Expect forwarded traffic to be allowed when there are no
+			// applicable policies.
 			outRules = append(outRules, iptables.Rule{
 				Action:  iptables.SetMarkAction{Mark: 8},
 				Comment: "Allow forwarded traffic by default",
@@ -236,6 +228,14 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 			outRules = append(outRules, iptables.Rule{
 				Action:  iptables.ReturnAction{},
 				Comment: "Return for accepted forward traffic",
+			})
+		}
+
+		if tableKind == "normal" {
+			outRules = append(outRules, iptables.Rule{
+				Match:   iptables.Match(),
+				Action:  iptables.DropAction{},
+				Comment: "Drop if no profiles matched",
 			})
 		}
 
@@ -286,7 +286,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if tableKind == "normal" {
+			if tableKind == "normal" || tableKind == "applyOnForward" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -296,17 +296,10 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 					Comment: "Drop if no policies passed packet",
 				})
 			}
-		}
-		if tableKind == "normal" {
-			inRules = append(inRules, iptables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.DropAction{},
-				Comment: "Drop if no profiles matched",
-			})
-		}
 
-		if tableKind == "applyOnForward" {
-			// Expect forwarded traffic to be allowed by default.
+		} else if tableKind == "applyOnForward" {
+			// Expect forwarded traffic to be allowed when there are no
+			// applicable policies.
 			inRules = append(inRules, iptables.Rule{
 				Action:  iptables.SetMarkAction{Mark: 8},
 				Comment: "Allow forwarded traffic by default",
@@ -314,6 +307,14 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 			inRules = append(inRules, iptables.Rule{
 				Action:  iptables.ReturnAction{},
 				Comment: "Return for accepted forward traffic",
+			})
+		}
+
+		if tableKind == "normal" {
+			inRules = append(inRules, iptables.Rule{
+				Match:   iptables.Match(),
+				Action:  iptables.DropAction{},
+				Comment: "Drop if no profiles matched",
 			})
 		}
 
