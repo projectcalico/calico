@@ -1,25 +1,3 @@
-##############################################################################
-# The build architecture is select by setting the ARCH variable.
-# # For example: When building on ppc64le you could use ARCH=ppc64le make <....>.
-# # When ARCH is undefined it defaults to amd64.
-ARCH?=amd64
-ifeq ($(ARCH),amd64)
-	ARCHTAG?=
-	GO_BUILD_VER?=v0.12
-endif
-
-ifeq ($(ARCH),ppc64le)
-	ARCHTAG:=-ppc64le
-	GO_BUILD_VER?=latest
-endif
-
-ifeq ($(ARCH),s390x)
-	ARCHTAG:=-s390x
-	GO_BUILD_VER?=latest
-endif
-##############################################################################
-
-CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 JEKYLL_VERSION=pages
@@ -31,7 +9,7 @@ endif
 
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
-YAML_CMD:=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
+YAML_CMD:=$(shell which yaml || echo docker run --rm -i calico/yaml)
 
 ##############################################################################
 # Version information used for cutting a release.
