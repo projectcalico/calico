@@ -1,13 +1,8 @@
-FROM s390x/busybox
+FROM s390x/busybox:1.28.3
 
 LABEL maintainer "LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)"
 
-ADD dist/s390x/calico /opt/cni/bin/calico
-ADD dist/s390x/flannel /opt/cni/bin/flannel
-ADD dist/s390x/loopback /opt/cni/bin/loopback
-ADD dist/s390x/host-local /opt/cni/bin/host-local
-ADD dist/s390x/portmap /opt/cni/bin/portmap
-ADD dist/s390x/calico-ipam /opt/cni/bin/calico-ipam
+ADD bin/s390x/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
