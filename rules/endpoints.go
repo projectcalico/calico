@@ -332,25 +332,22 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			})
 		}
 
-		if chainType == chainTypeNormal {
-			// When rendering normal rules, if no policy marked the packet as "pass",
-			// drop the packet.
+		if chainType == chainTypeNormal || chainType == chainTypeForward {
+			// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
+			// packet.
 			//
 			// For untracked and pre-DNAT rules, we don't do that because there may be
 			// normal rules still to be applied to the packet in the filter table.
-			//
-			// For applyOnForward rules, we don't do that because we document that
-			// forwarded traffic is allowed by default.
 			rules = append(rules, Rule{
 				Match:   Match().MarkClear(r.IptablesMarkPass),
 				Action:  DropAction{},
 				Comment: "Drop if no policies passed packet",
 			})
 		}
-	}
 
-	if chainType == chainTypeForward {
-		// Forwarded traffic is allowed by default.
+	} else if chainType == chainTypeForward {
+		// Forwarded traffic is allowed when there are no policies with
+		// applyOnForward that apply to this endpoint (and in this direction).
 		rules = append(rules, Rule{
 			Action:  SetMarkAction{Mark: r.IptablesMarkAccept},
 			Comment: "Allow forwarded traffic by default",
