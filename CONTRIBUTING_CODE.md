@@ -44,13 +44,20 @@ Once you've agreed on a design for your bugfix or new feature, development again
 #### Patching an older release
 
 If your contribution is intended for an older release, the change will need to be cherry-picked into the appropriate release branch after it has been reviewed
-and merged into master. Once your reviewer agrees the patch is valid for cherry-picking, perform the following steps to create the cherry-pick PR.
+and merged into master. **To make sure this happens, apply the `cherry-pick-candidate` label to the pull request or ask your reviewer to do so.**
+
+Once your reviewer agrees the patch is valid for cherry-picking, perform the following steps to create the cherry-pick PR.
 
 1. Check out the release branch corresponding to your target release, for example: `git fetch upstream; git checkout release-v2.5`.
-1. Create the cherry-pick branch, for example: `git checkout -b cherry-pick-pr12345`
+1. Create the cherry-pick branch based off of the target branch, for example: `git checkout -b cherry-pick-pr12345-v2.5 release-v2.5`
 1. Cherry-pick the commit to your new branch: `git cherry-pick [ORIGINAL_COMMIT_HASH]`
 1. Push the branch to your fork and create a PR against the appropriate `release-vX.Y` branch.
+   - Title the PR `[release-vX.Y] cherry-pick: ORIGINAL_TITLE`
+   - In the description, provide a link to the original PR so it can be traced more easily.
+   - Make sure the pull request is in the correct GitHub milestone for the next vX.Y.Z release.
+   - Make sure to write a release note, and apply the `release-note-required` label to the PR.
 1. Notify your original reviewer on the PR.
+1. Once your PR is merged, remove the `cherry-pick-candidate` label from the original PR and replace it with `cherry-pick-completed`.
 
 ### Release notes
 
