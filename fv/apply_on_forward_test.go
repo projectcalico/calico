@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -104,6 +105,21 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 		cc.CheckConnectivity()
 	})
 
+	// The following tests verify that a HostEndpoint does not block forwarded traffic
+	// when there is no applyOnForward policy that applies to that HostEndpoint.  We
+	// create a HostEndpoint for eth0 on two hosts (A and B) and then test two cases:
+	//
+	// 1. Workload on host A -> Workload on host B.  In this case, the traffic is
+	// forwarded on both hosts.
+	//
+	// 2. Workload on host A -> Local process on host B.  In this case, the traffic is
+	// forwarded on host A, but _not_ on host B.
+	//
+	// For case (2), in order to allow the traffic to be received on host B, we have
+	// to configure an Allow policy that applies to the endpoint there.  But note that
+	// this is _not_ an applyOnForward policy, so it is still the case that there is
+	// no applyOnForward policy that applies to the HostEndpoints.
+	//
 	Context("with host endpoints defined", func() {
 		var (
 			ctx    context.Context
@@ -134,10 +150,16 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 				hep.Spec.ExpectedIPs = []string{f.IP}
 				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
+
+				// Wait for felix to see and program that host endpoint.
+				hostEndpointProgrammed := func() bool {
+					out, err := f.ExecOutput("iptables-save", "-t", "filter")
+					Expect(err).NotTo(HaveOccurred())
+					return (strings.Count(out, "cali-thfw-eth0") > 0)
+				}
+				Eventually(hostEndpointProgrammed, "10s", "1s").Should(BeTrue(),
+					"Expected HostEndpoint iptables rules to appear")
 			}
-			// Wait so as to be sure that the felixes have
-			// seen and programmed those host endpoints.
-			time.Sleep(5 * time.Second)
 		})
 
 		It("should have workload to workload/host connectivity", func() {
