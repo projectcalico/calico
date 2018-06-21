@@ -344,6 +344,18 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Comment: "Drop if no policies passed packet",
 			})
 		}
+
+	} else if chainType == chainTypeForward {
+		// Forwarded traffic is allowed when there are no policies with
+		// applyOnForward that apply to this endpoint (and in this direction).
+		rules = append(rules, Rule{
+			Action:  SetMarkAction{Mark: r.IptablesMarkAccept},
+			Comment: "Allow forwarded traffic by default",
+		})
+		rules = append(rules, Rule{
+			Action:  ReturnAction{},
+			Comment: "Return for accepted forward traffic",
+		})
 	}
 
 	if chainType == chainTypeNormal {
