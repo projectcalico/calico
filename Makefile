@@ -259,6 +259,7 @@ run-etcd:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run \
 		--net=host --name st-apiserver \
+		-v  $(CRD_PATH):/manifests \
 		--detach \
 		${HYPERKUBE_IMAGE} \
 		/hyperkube apiserver \
@@ -277,18 +278,16 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 		--clusterrole=cluster-admin \
 		--user=system:anonymous; \
 		do echo "Trying to create ClusterRoleBinding"; \
-		sleep 2; \
+		sleep 1; \
 		done
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	# from the manifest crds.yaml
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CRD_PATH):/manifests \
-		lachlanevenson/k8s-kubectl$(ARCHTAG):$(K8S_VERSION) \
-		--server=http://localhost:8080 \
-		apply -f /manifests/crds.yaml
+	while ! docker exec st-apiserver kubectl \
+		apply -f /manifests/crds.yaml; \
+		do echo "Trying to create CRDs"; \
+		sleep 1; \
+		done
 
 # Stop Kubernetes apiserver
 stop-k8s-apiserver:
