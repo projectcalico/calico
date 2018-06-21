@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -292,6 +292,18 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Comment: "Drop if no policies passed packet",
 			})
 		}
+
+	} else if chainType == chainTypeForward {
+		// Forwarded traffic is allowed when there are no policies with
+		// applyOnForward that apply to this endpoint (and in this direction).
+		rules = append(rules, Rule{
+			Action:  SetMarkAction{Mark: r.IptablesMarkAccept},
+			Comment: "Allow forwarded traffic by default",
+		})
+		rules = append(rules, Rule{
+			Action:  ReturnAction{},
+			Comment: "Return for accepted forward traffic",
+		})
 	}
 
 	if chainType == chainTypeNormal {

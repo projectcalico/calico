@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -217,6 +217,18 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 					Comment: "Drop if no policies passed packet",
 				})
 			}
+
+		} else if tableKind == "applyOnForward" {
+			// Expect forwarded traffic to be allowed when there are no
+			// applicable policies.
+			outRules = append(outRules, iptables.Rule{
+				Action:  iptables.SetMarkAction{Mark: 8},
+				Comment: "Allow forwarded traffic by default",
+			})
+			outRules = append(outRules, iptables.Rule{
+				Action:  iptables.ReturnAction{},
+				Comment: "Return for accepted forward traffic",
+			})
 		}
 
 		if tableKind == "normal" {
@@ -284,7 +296,20 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 					Comment: "Drop if no policies passed packet",
 				})
 			}
+
+		} else if tableKind == "applyOnForward" {
+			// Expect forwarded traffic to be allowed when there are no
+			// applicable policies.
+			inRules = append(inRules, iptables.Rule{
+				Action:  iptables.SetMarkAction{Mark: 8},
+				Comment: "Allow forwarded traffic by default",
+			})
+			inRules = append(inRules, iptables.Rule{
+				Action:  iptables.ReturnAction{},
+				Comment: "Return for accepted forward traffic",
+			})
 		}
+
 		if tableKind == "normal" {
 			inRules = append(inRules, iptables.Rule{
 				Match:   iptables.Match(),
@@ -292,6 +317,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*ipt
 				Comment: "Drop if no profiles matched",
 			})
 		}
+
 		if tableKind == "preDNAT" {
 			chains = append(chains,
 				&iptables.Chain{
