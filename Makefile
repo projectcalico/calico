@@ -60,11 +60,11 @@ CNI_SPEC_VERSION?=0.3.1
 BIN=bin/$(ARCH)
 # Ensure that the bin directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p $(BIN))
-CALICO_BUILD?=$(BUILD_IMAGE_ORG)/go-build:$(GO_BUILD_VER)$(ARCHTAG)
+CALICO_BUILD?=$(BUILD_IMAGE_ORG)/go-build:$(GO_BUILD_VER)
 
 PACKAGE_NAME?=github.com/projectcalico/cni-plugin
 
-CONTAINER_NAME=calico/cni$(ARCHTAG)
+CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
 ETCD_VER=v3.3.7
