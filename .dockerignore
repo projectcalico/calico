@@ -1,0 +1,3 @@
+# Ignore everything except the filesystem that gets copied in
+*
+!filesystem

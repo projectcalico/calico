@@ -150,7 +150,6 @@ $(BUILT_BINARIES): vendor
 ###############################################################################
 ## Create the calico/node image.
 image: $(NODE_CONTAINER_NAME)
-calico/node: $(NODE_CONTAINER_NAME)
 $(NODE_CONTAINER_NAME): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): ./Dockerfile$(ARCHTAG) $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
 	# Check versions of the binaries that we're going to use to build calico/node.
