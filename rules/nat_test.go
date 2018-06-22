@@ -73,7 +73,19 @@ var _ = Describe("NAT", func() {
 						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
 				},
 				{
+					Action: ReturnAction{},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+				},
+				{
 					Action: MasqAction{ToPorts: "99-100"},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+				},
+				{
+					Action: ReturnAction{},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
 						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),

@@ -38,7 +38,21 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 						Protocol("tcp"),
 				},
 				{
+					Action: iptables.ReturnAction{},
+					Match: iptables.Match().
+						SourceIPSet(masqIPsSetName).
+						NotDestIPSet(allIPsSetName).
+						Protocol("tcp"),
+				},
+				{
 					Action: iptables.MasqAction{ToPorts: toPorts},
+					Match: iptables.Match().
+						SourceIPSet(masqIPsSetName).
+						NotDestIPSet(allIPsSetName).
+						Protocol("udp"),
+				},
+				{
+					Action: iptables.ReturnAction{},
 					Match: iptables.Match().
 						SourceIPSet(masqIPsSetName).
 						NotDestIPSet(allIPsSetName).
