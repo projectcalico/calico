@@ -60,7 +60,7 @@ var _ = Describe("NAT", func() {
 
 		//copy struct
 		localConfig := rrConfigNormal
-		localConfig.NATPortRange = numorstring.Port{99, 100, ""}
+		localConfig.NATPortRange, _ = numorstring.PortFromRange(99, 100)
 		renderer = NewRenderer(localConfig)
 
 		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&Chain{
