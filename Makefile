@@ -231,7 +231,7 @@ install-git-hooks:
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: run-k8s-apiserver build $(BIN)/host-local
+ut: run-k8s-apiserver run-k8s-controller build $(BIN)/host-local
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
@@ -260,13 +260,32 @@ test-cni-versions:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
+	  -v `pwd`/testutils/private.key:/private.key \
 	gcr.io/google_containers/hyperkube-$(ARCH):v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
-		  --service-cluster-ip-range=10.101.0.0/16
+		  --service-cluster-ip-range=10.101.0.0/16 \
+		  --service-account-key-file=/private.key
+
+## Kubernetes controller manager used for tests
+run-k8s-controller: stop-k8s-controller run-k8s-apiserver
+	docker run --detach --net=host \
+	  -v `pwd`/testutils/private.key:/private.key \
+	  --name calico-k8s-controller \
+	gcr.io/google_containers/hyperkube-$(ARCH):v$(K8S_VERSION) \
+		  /hyperkube controller-manager --master=127.0.0.1:8080 \
+	          --min-resync-period=3m \
+		  --allocate-node-cidrs=true \
+		  --cluster-cidr=192.168.0.0/16 \
+		  --v=5 \
+		  --service-account-private-key-file=/private.key
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:
 	@-docker rm -f calico-k8s-apiserver
+
+## Stop Kubernetes controller manager
+stop-k8s-controller:
+	@-docker rm -f calico-k8s-controller
 
 ## Etcd is used by the tests
 run-etcd: stop-etcd

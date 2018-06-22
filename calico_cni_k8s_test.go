@@ -34,6 +34,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+func ensureNamespace(clientset *kubernetes.Clientset, name string) {
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+	}
+	_, err := clientset.CoreV1().Namespaces().Create(ns)
+	Expect(err).NotTo(HaveOccurred())
+}
+
 var _ = Describe("CalicoCni", func() {
 	// Create a random seed
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -92,6 +100,7 @@ var _ = Describe("CalicoCni", func() {
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
 				// Create a K8s pod w/o any special params
+				ensureNamespace(clientset, testutils.K8S_TEST_NS)
 				_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{
@@ -146,8 +155,9 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 				Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 				Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-					"projectcalico.org/namespace":    "test",
-					"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+					"projectcalico.org/namespace":      "test",
+					"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+					"projectcalico.org/serviceaccount": "default",
 				}))
 
 				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
@@ -155,7 +165,7 @@ var _ = Describe("CalicoCni", func() {
 					InterfaceName: interfaceName,
 					IPNetworks:    []string{result.IPs[0].Address.String()},
 					MAC:           mac.String(),
-					Profiles:      []string{"kns.test"},
+					Profiles:      []string{"kns.test", "ksa.test.default"},
 					Node:          hostname,
 					Endpoint:      "eth0",
 					Workload:      "",
@@ -306,15 +316,16 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
 						Pod:           name,
 						InterfaceName: interfaceName,
 						IPNetworks:    []string{result.IPs[0].Address.String()},
 						MAC:           mac.String(),
-						Profiles:      []string{"kns.test"},
+						Profiles:      []string{"kns.test", "ksa.test.default"},
 						Node:          hostname,
 						Endpoint:      "eth0",
 						Workload:      "",
@@ -534,8 +545,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
@@ -543,7 +555,7 @@ var _ = Describe("CalicoCni", func() {
 						InterfaceName: interfaceName,
 						IPNetworks:    []string{assignIP.String() + "/32"},
 						MAC:           mac.String(),
-						Profiles:      []string{"kns.test"},
+						Profiles:      []string{"kns.test", "ksa.test.default"},
 						Node:          hostname,
 						Endpoint:      "eth0",
 						Workload:      "",
@@ -696,8 +708,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
@@ -705,7 +718,7 @@ var _ = Describe("CalicoCni", func() {
 						InterfaceName: interfaceName,
 						IPNetworks:    []string{assignIP.String() + "/32"},
 						MAC:           mac.String(),
-						Profiles:      []string{"kns.test"},
+						Profiles:      []string{"kns.test", "ksa.test.default"},
 						Node:          hostname,
 						Endpoint:      "eth0",
 						Workload:      "",
@@ -805,8 +818,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
@@ -814,7 +828,7 @@ var _ = Describe("CalicoCni", func() {
 						InterfaceName: interfaceName,
 						IPNetworks:    []string{assignIP.String() + "/32"},
 						MAC:           mac.String(),
-						Profiles:      []string{"kns.test"},
+						Profiles:      []string{"kns.test", "ksa.test.default"},
 						Node:          hostname,
 						Endpoint:      "eth0",
 						Workload:      "",
@@ -1004,8 +1018,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkloadX))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDX))
@@ -1051,8 +1066,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
@@ -1070,8 +1086,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
@@ -1169,8 +1186,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkloadX))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDX))
@@ -1205,8 +1223,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
@@ -1224,8 +1243,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
@@ -1344,8 +1364,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(workloadName))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					endpointSpec = endpoints.Items[0].Spec
@@ -1569,8 +1590,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wepName))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(containerID))
@@ -1596,8 +1618,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wepName))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					// Explicitly assert that endpoint name is still 'eth0' (which was the case from the first ADD)
@@ -1682,8 +1705,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(ep.Name).Should(Equal(wrkload2))
 					Expect(ep.Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(ep.Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 
 					// Assert this WEP has the new containerID for the second pod.
@@ -1877,8 +1901,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":    "test",
-						"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
+						"projectcalico.org/namespace":      "test",
+						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+						"projectcalico.org/serviceaccount": "default",
 					}))
 					// Make sure that the GenerateName is there.
 					Expect(endpoints.Items[0].GenerateName).Should(Equal(generateName))
@@ -1889,7 +1914,7 @@ var _ = Describe("CalicoCni", func() {
 						InterfaceName: interfaceName,
 						IPNetworks:    []string{result.IPs[0].Address.String()},
 						MAC:           mac.String(),
-						Profiles:      []string{"kns.test"},
+						Profiles:      []string{"kns.test", "ksa.test.default"},
 						Node:          hostname,
 						Endpoint:      "eth0",
 						Workload:      "",
