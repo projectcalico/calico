@@ -44,11 +44,12 @@ import (
 
 var _ = Describe("kube-controllers FV tests", func() {
 	var (
-		etcd             *containers.Container
-		policyController *containers.Container
-		apiserver        *containers.Container
-		calicoClient     client.Interface
-		k8sClient        *kubernetes.Clientset
+		etcd              *containers.Container
+		policyController  *containers.Container
+		apiserver         *containers.Container
+		calicoClient      client.Interface
+		k8sClient         *kubernetes.Clientset
+		controllerManager *containers.Container
 	)
 
 	const kNodeName = "k8snodename"
@@ -79,12 +80,20 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
 			return err
 		}, 15*time.Second, 500*time.Millisecond).Should(BeNil())
+
+		// Run controller manager.  Empirically it can take around 10s until the
+		// controller manager is ready to create default service accounts, even
+		// when the hyperkube image has already been downloaded to run the API
+		// server.  We use Eventually to allow for possible delay when doing
+		// initial pod creation below.
+		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
 	AfterEach(func() {
-		etcd.Stop()
+		controllerManager.Stop()
 		policyController.Stop()
 		apiserver.Stop()
+		etcd.Stop()
 	})
 
 	It("should initialize the datastore at start-of-day", func() {
@@ -675,8 +684,10 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}
 
 			By("creating a Pod in the k8s API", func() {
-				_, err := k8sClient.CoreV1().Pods("default").Create(&pod)
-				Expect(err).NotTo(HaveOccurred())
+				Eventually(func() error {
+					_, err := k8sClient.CoreV1().Pods("default").Create(&pod)
+					return err
+				}, "20s", "2s").ShouldNot(HaveOccurred())
 			})
 
 			By("updating the pod's status to be running", func() {
@@ -713,8 +724,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 			By("updating the pod's labels to trigger a cache update", func() {
 				// Definitively trigger a pod controller cache update by updating the pod's labels
 				// in the Kubernetes API. This ensures the controller has the cached WEP with container-id-1.
+				podNow, err := k8sClient.CoreV1().Pods("default").Get(podName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				pod = *podNow
 				pod.Labels["foo"] = "label2"
-				_, err := k8sClient.CoreV1().Pods("default").Update(&pod)
+				_, err = k8sClient.CoreV1().Pods("default").Update(&pod)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -756,8 +770,11 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 			By("updating the pod's labels a second time to trigger a datastore sync", func() {
 				// Trigger a pod 'update' in the pod controller by updating the pod's labels.
+				podNow, err := k8sClient.CoreV1().Pods("default").Get(podName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				pod = *podNow
 				pod.Labels["foo"] = "label3"
-				_, err := k8sClient.CoreV1().Pods(podNamespace).Update(&pod)
+				_, err = k8sClient.CoreV1().Pods(podNamespace).Update(&pod)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -806,13 +823,18 @@ var _ = Describe("kube-controllers FV tests", func() {
 		}
 
 		By("creating a Pod in the k8s API", func() {
-			_, err := k8sClient.CoreV1().Pods("default").Create(&pod)
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				_, err := k8sClient.CoreV1().Pods("default").Create(&pod)
+				return err
+			}, "20s", "2s").ShouldNot(HaveOccurred())
 		})
 
 		By("updating that pod's labels", func() {
+			podNow, err := k8sClient.CoreV1().Pods("default").Get(podName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			pod = *podNow
 			pod.Labels["foo"] = "label2"
-			_, err := k8sClient.CoreV1().Pods("default").Update(&pod)
+			_, err = k8sClient.CoreV1().Pods("default").Update(&pod)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
