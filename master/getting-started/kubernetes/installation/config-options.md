@@ -57,7 +57,7 @@ want to disable IP-in-IP encapsulation, such as under the following circumstance
 To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the
 manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
-### etcd configuration
+### Configuring etcd
 
 By default, these manifests do not configure secure access to etcd and assume an
 etcd proxy is running on each host. The following configuration options let you
@@ -67,23 +67,79 @@ The following table outlines the supported `ConfigMap` options for etcd:
 
 | Option                 | Description    | Default
 |------------------------|----------------|----------
-| etcd_endpoints         | A comma separated list of etcd nodes. | http://127.0.0.1:2379
-| etcd_ca                | The location of the CA mounted in the pods deployed by the DaemonSet. | None
-| etcd_key               | The location of the client cert mounted in the pods deployed by the DaemonSet. | None
-| etcd_cert              | The location of the client key mounted in the pods deployed by the DaemonSet. | None
+| etcd_endpoints         | Comma-delimited list of etcd endpoints to connect to. | http://127.0.0.1:2379
+| etcd_ca                | The file containing the root certificate of the CA that issued the etcd server certificate. Configures `{{site.nodecontainer}}`, the CNI plugin, and the Kubernetes controllers to trust the signature on the certificates provided by the etcd server. | None
+| etcd_key               | The file containing the private key of the `{{site.nodecontainer}}`, the CNI plugin, and the Kubernetes controllers client certificate. Enables these components to participate in mutual TLS authentication and identify themselves to the etcd server. | None
+| etcd_cert              | The file containing the client certificate issued to `{{site.nodecontainer}}`, the CNI plugin, and the Kubernetes controllers. Enables these components to participate in mutual TLS authentication and identify themselves to the etcd server. | None
 
 To use these manifests with a TLS-enabled etcd cluster you must do the following:
 
-- Populate the `calico-etcd-secrets` secret with the contents of the following files:
-  - `etcd-ca`
-  - `etcd-key`
-  - `etcd-cert`
+1. Download the {{page.version}} manifest that corresponds to your installation method.
 
-- Populate the following options in the `ConfigMap` which will trigger the various
-  services to expect the provided TLS assets:
-  - `etcd_ca: /calico-secrets/etcd-ca`
-  - `etcd_key: /calico-secrets/etcd-key`
-  - `etcd_cert: /calico-secrets/etcd-cert`
+   **{{site.prodname}} for policy and networking**
+   ```bash
+   curl \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml \
+   -O
+   ```
+
+   **{{site.prodname}} for policy and flannel for networking**
+   ```bash
+   curl \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal.yaml \
+   -O
+   ```
+
+1. Within the `ConfigMap` section, uncomment the `etcd_ca`, `etcd_key`, and `etcd_cert`
+   lines so that they look as follows.
+
+   ```yaml
+   etcd_ca: "/calico-secrets/etcd-ca"
+   etcd_cert: "/calico-secrets/etcd-cert"
+   etcd_key: "/calico-secrets/etcd-key"
+   ```
+
+1. Ensure that you have three files, one containing the `etcd_ca` value, another containing
+   the `etcd_key` value, and a third containing the `etcd_cert` value.
+
+1. Using a command like the following to strip the newlines from the files and
+   base64-encode their contents.
+
+   ```bash
+   cat <file> | base64 -w 0
+   ```
+
+1. In the `Secret` named `calico-etcd-secrets`, uncomment `etcd_ca`, `etcd_key`, and `etcd_cert`
+   and paste in the appropriate base64-encoded values.
+
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   type: Opaque
+   metadata:
+     name: calico-etcd-secrets
+     namespace: kube-system
+   data:
+     # Populate the following files with etcd TLS configuration if desired, but leave blank if
+     # not using TLS for etcd.
+     # This self-hosted install expects three files with the following names.  The values
+     # should be base64 encoded strings of the entire contents of each file.
+     etcd-key: LS0tLS1CRUdJTiB...VZBVEUgS0VZLS0tLS0=
+     etcd-cert: LS0tLS1...ElGSUNBVEUtLS0tLQ==
+     etcd-ca: LS0tLS1CRUdJTiBD...JRklDQVRFLS0tLS0=
+   ```
+
+1. Apply the manifest.
+
+   **{{site.prodname}} for policy and networking**
+   ```bash
+   kubectl apply -f calico.yaml
+   ```
+
+   **{{site.prodname}} for policy and flannel for networking**
+   ```bash
+   kubectl apply -f canal.yaml
+   ```
 
 ### Authorization options
 
