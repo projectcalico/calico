@@ -6,6 +6,8 @@ exclude:
   - RELEASING.md
   - BUILDING_CALICO.md
   - CONTRIBUTING_DOCS.md
+  - CONTRIBUTING_CODE.md
+  - DOC_STYLE_GUIDE.md
   - hack
   - calico_node
   - v1.5
@@ -16,3 +18,6 @@ exclude:
   - v2.3
   - v2.4
   - v2.5
+  - v2.6
+  - v3.0
+  - v3.1
