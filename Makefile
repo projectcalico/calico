@@ -311,8 +311,37 @@ ifndef COVERALLS_REPO_TOKEN
 endif
 	$(DOCKER_GO_BUILD) goveralls -repotoken=$(COVERALLS_REPO_TOKEN) -coverprofile=combined.coverprofile
 ###############################################################################
-# CI
+# CI/CD
 ###############################################################################
+
+.PHONY: cd ci version
+
+## checks that we can get the version
+version: image
+	docker run --rm $(CONTAINER_NAME):latest-$(ARCH) calico-typha --version
+
+## Builds the code and runs all tests.
+ci: image version static-checks ut upload-to-coveralls
+ifeq (,$(filter k8sfv-test, $(EXCEPT)))
+	@$(MAKE) k8sfv-test
+endif
+
+
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=$(BRANCH_NAME)
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+
+k8sfv-tests: image
+	cd .. && git clone https://github.com/projectcalico/felix.git && cd felix; \
+	[ ! -e ../typha/semaphore-felix-branch ] || git checkout $(cat ../typha/semaphore-felix-branch); \
+	JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest $(MAKE) k8sfv-test
 
 
 ###############################################################################
