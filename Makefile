@@ -466,6 +466,19 @@ fv/fv.test: vendor/.up-to-date $(SRC_FILES)
 	$(DOCKER_GO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
+# runs all of the fv tests
+# to run it in parallel, decide how many parallel engines you will run, and in each one call:
+#         $(MAKE) fv FV_BATCHES_TO_RUN="<num>" FV_NUM_BATCHES=<num>
+# where
+#         FV_NUM_BATCHES = total parallel batches
+#         FV_BATCHES_TO_RUN = which number this is
+# e.g. to run it in 10 parallel runs:
+#         $(MAKE) fv FV_BATCHES_TO_RUN="1" FV_NUM_BATCHES=10     # the first 1/10
+#         $(MAKE) fv FV_BATCHES_TO_RUN="2" FV_NUM_BATCHES=10     # the second 1/10
+#         $(MAKE) fv FV_BATCHES_TO_RUN="3" FV_NUM_BATCHES=10     # the third 1/10
+#         ...
+#         $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
+#         etc.
 fv fv/latency.log: calico/felix bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
@@ -505,6 +518,10 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 
 .PHONY: k8sfv-test k8sfv-test-existing-felix
 # Run k8sfv test with Felix built from current code.
+# control whether or not we use typha with USE_TYPHA=true or USE_TYPHA=false
+# e.g.
+#       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+#       $(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 k8sfv-test: calico/felix k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
@@ -575,8 +592,30 @@ bin/test-connection: $(SRC_FILES) vendor/.up-to-date
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 
 ###############################################################################
-# CI
+# CI/CD
 ###############################################################################
+.PHONY: ci cd
+
+## run CI cycle - build, test, etc.
+ci: image bin/calico-felix.exe ut upload-to-coveralls static-checks
+ifeq (,$(filter fv, $(EXCEPT)))
+	@$(MAKE) fv
+endif
+ifeq (,$(filter k8sfv-test, $(EXCEPT)))
+	@$(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+	@$(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+endif
+
+## Deploy images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=$(BRANCH_NAME)
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 
 ###############################################################################
