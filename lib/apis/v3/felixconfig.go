@@ -196,6 +196,10 @@ type FelixConfigurationSpec struct {
 	// UsageReportingInterval controls the interval at which Felix makes reports. [Default: 86400s]
 	UsageReportingInterval *metav1.Duration `json:"usageReportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"UsageReportingIntervalSecs"`
 
+	//NATPortRange specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behaivor of the
+	//network stack is used.
+	NatPortRange *numorstring.Port `json: natPortRange,omitempty`
+
 	DebugMemoryProfilePath          string           `json:"debugMemoryProfilePath,omitempty"`
 	DebugDisableLogDropping         *bool            `json:"debugDisableLogDropping,omitempty"`
 	DebugSimulateCalcGraphHangAfter *metav1.Duration `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`
