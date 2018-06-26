@@ -925,8 +925,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			**out = **in
 		}
 	}
-	if in.NatPortRange != nil {
-		in, out := &in.NatPortRange, &out.NatPortRange
+	if in.NATPortRange != nil {
+		in, out := &in.NATPortRange, &out.NATPortRange
 		if *in == nil {
 			*out = nil
 		} else {
