@@ -41,12 +41,12 @@ endif
 # Determine which OS.
 OS?=$(shell uname -s | tr A-Z a-z)
 ###############################################################################
-GO_BUILD_VER ?= v0.15
+GO_BUILD_VER?=v0.16
 
 K8S_VERSION?=v1.10.4
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
-ETCD_VERSION=v3.2.5
-ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
+ETCD_VERSION?=v3.3.7
+ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
 ifeq ($(BUILDARCH),amd64)
         ETCD_IMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
