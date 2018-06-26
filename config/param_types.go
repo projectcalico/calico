@@ -281,6 +281,21 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 	return result, nil
 }
 
+type PortRangeParam struct {
+	Metadata
+}
+
+func (p *PortRangeParam) Parse(raw string) (interface{}, error) {
+	portRange, err := numorstring.PortFromString(raw)
+	if err != nil {
+		return nil, p.parseFailed(raw, fmt.Sprintf("%s is not a valid port range", raw))
+	}
+	if len(portRange.PortName) > 0 {
+		return nil, p.parseFailed(raw, fmt.Sprintf("%s has port name set", raw))
+	}
+	return portRange, nil
+}
+
 type PortRangeListParam struct {
 	Metadata
 }

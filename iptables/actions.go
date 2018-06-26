@@ -127,10 +127,14 @@ func (g SNATAction) String() string {
 }
 
 type MasqAction struct {
+	ToPorts  string
 	TypeMasq struct{}
 }
 
 func (g MasqAction) ToFragment() string {
+	if g.ToPorts != "" {
+		return fmt.Sprintf("--jump MASQUERADE --to-ports %s", g.ToPorts)
+	}
 	return "--jump MASQUERADE"
 }
 

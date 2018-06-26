@@ -1,5 +1,5 @@
-hash: 41ad0474efa259eeb1b352e7fc636c3539d68b61ed4f67d5135fe48a3d975714
-updated: 2018-05-29T16:18:20.167258908Z
+hash: 34a79aa2a9f35f43318d0bc9ee535e0f2cd2b1b45ef1c27e27f645c879637629
+updated: 2018-06-26T10:41:22.2309252Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -116,7 +116,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: b9df188d0fae32d69c1a519fa81741668a12f55a
+  version: 5dc2060baaf8db344f31dafd852340b93811d03f
   subpackages:
   - tracer
   - tracer/wire
@@ -195,7 +195,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: 6c572c00d1830223701e155de97408483dfcd14a
+  version: bd9c3193394760d98b2fa6ebb2291f0cd1d06a7d
   subpackages:
   - ext
   - log
@@ -212,7 +212,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d6aff54dc3527357f016c0cd5c5364f21a15e9b4
+  version: 8bf1e12ff13ecf994ae410efdf7808ed934a53fc
   subpackages:
   - lib
   - lib/apiconfig
@@ -251,7 +251,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 7b5833a1ae2d67d23d1e1930f65d4024ceaf8cb4
+  version: 5ef90ad5dd6d0d6a12ecb736d8f813b4b7020739
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -295,7 +295,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: ab813273cd59e1333f7ae7bff5d027d4aadf528c
+  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net

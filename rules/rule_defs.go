@@ -246,6 +246,8 @@ type Config struct {
 	FailsafeOutboundHostPorts []config.ProtoPort
 
 	DisableConntrackInvalid bool
+
+	NATPortRange numorstring.Port
 }
 
 func (c *Config) validate() {
