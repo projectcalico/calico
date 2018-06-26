@@ -1,5 +1,5 @@
-hash: c1690c659304c910c3c1b34c0f9a2fb7b26ee4d4f9c2b7b6d8ab41cc9f661d6e
-updated: 2018-05-29T16:17:05.195958715Z
+hash: f439b62a5169990d07b6add11b96a23b02a171e9f053858170f69aa5341ed90b
+updated: 2018-06-26T09:50:17.0106247Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -34,7 +34,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -155,7 +155,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 7ac6b01f7d376befdf752224be59eed5d21fab4b
+  version: 9be84105672ba4433a3b61f1b4d7f9ff8b022293
   subpackages:
   - format
   - internal/assertion
@@ -181,7 +181,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d6aff54dc3527357f016c0cd5c5364f21a15e9b4
+  version: 8bf1e12ff13ecf994ae410efdf7808ed934a53fc
   subpackages:
   - lib
   - lib/apiconfig
@@ -266,7 +266,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: ab813273cd59e1333f7ae7bff5d027d4aadf528c
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
