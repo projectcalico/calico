@@ -19,6 +19,8 @@ toc:
       path: /getting-started/kubernetes/installation/calico
     - title: Installing Calico for policy and flannel for networking
       path: /getting-started/kubernetes/installation/flannel
+    - title: Installing Calico for policy and Amazon VPC CNI for networking
+      path: /getting-started/kubernetes/installation/amazon-vpc-cni-k8s
     - title: Installing Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
     - title: Enabling application layer policy (optional)
