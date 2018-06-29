@@ -70,7 +70,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/$(PACKAGE_NAME) \
                               $(CALICO_BUILD)
-SRCFILES=main.go $(shell find pkg -name '*.go')
+SRCFILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
 ## Removes all build artifacts.
 clean:
@@ -114,7 +114,7 @@ bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
-	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
+	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
 
 ###############################################################################
 # Building the image
@@ -185,7 +185,7 @@ static-checks: vendor check-copyright
 ## Fix static checks
 fix goimports:
 	goimports -l -w ./pkg
-	goimports -l -w ./main.go
+	goimports -l -w ./cmd/kube-controllers/main.go
 
 .PHONY: install-git-hooks
 ## Install Git hooks
