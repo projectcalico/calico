@@ -392,7 +392,6 @@ release-publish-latest: release-prereqs
 	  echo "Version check passed\n"; \
 	fi
 
-
 	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
 # release-prereqs checks that the environment is configured properly to create a release.

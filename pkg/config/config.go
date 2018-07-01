@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"flag"
@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -21,18 +20,15 @@ var (
 	configFile        = ""
 	defaultConfigFile = "/etc/confd/confd.toml"
 	confdir           string
-	config            Config // holds the global confd config.
-	interval          int
-	keepStageFile     bool
-	noop              bool
-	onetime           bool
-	prefix            string
-	printVersion      bool
-	syncOnly          bool
-	templateConfig    template.Config
-	backendsConfig    backends.Config
-	calicoconfig      string
-	routereflector    bool
+	// config            Config // holds the global confd config.
+	interval       int
+	keepStageFile  bool
+	noop           bool
+	onetime        bool
+	prefix         string
+	syncOnly       bool
+	calicoconfig   string
+	routereflector bool
 )
 
 // A Config structure is used to configure confd.
@@ -44,6 +40,10 @@ type Config struct {
 	SyncOnly       bool   `toml:"sync-only"`
 	CalicoConfig   string `toml:"calicoconfig"`
 	RouteReflector bool   `toml:"routereflector"`
+	Onetime        bool   `toml:"onetime"`
+	KeepStageFile  bool   `toml:"keep-stage-file"`
+	TemplateConfig template.Config
+	BackendsConfig backends.Config
 }
 
 func init() {
@@ -54,25 +54,24 @@ func init() {
 	flag.BoolVar(&noop, "noop", false, "only show pending changes")
 	flag.BoolVar(&onetime, "onetime", false, "run once and exit")
 	flag.StringVar(&prefix, "prefix", "", "key path prefix")
-	flag.BoolVar(&printVersion, "version", false, "print version and exit")
 	flag.BoolVar(&syncOnly, "sync-only", false, "sync without check_cmd and reload_cmd")
 	flag.StringVar(&calicoconfig, "calicoconfig", "", "Calico apiconfig file path")
 	flag.BoolVar(&routereflector, "routereflector", false, "generate config for a route reflector")
 }
 
-// initConfig initializes the confd configuration by first setting defaults,
+// InitConfig initializes the confd configuration by first setting defaults,
 // then overriding settings from the confd config file, then overriding
 // settings from environment variables, and finally overriding
 // settings from flags set on the command line.
 // It returns an error if any.
-func initConfig() error {
+func InitConfig(ignoreFlags bool) (*Config, error) {
 	if configFile == "" {
 		if _, err := os.Stat(defaultConfigFile); !os.IsNotExist(err) {
 			configFile = defaultConfigFile
 		}
 	}
 	// Set defaults.
-	config = Config{
+	config := Config{
 		ConfDir:  "/etc/confd",
 		Interval: 600,
 		Prefix:   "",
@@ -84,16 +83,18 @@ func initConfig() error {
 		log.Info("Loading " + configFile)
 		configBytes, err := ioutil.ReadFile(configFile)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		_, err = toml.Decode(string(configBytes), &config)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	// Update config from commandline flags.
-	processFlags()
+	if !ignoreFlags {
+		// Update config from commandline flags.
+		processFlags(&config)
+	}
 
 	if level := os.Getenv("BGP_LOGSEVERITYSCREEN"); level != "" {
 		// If specified, use the provided log level.
@@ -103,21 +104,7 @@ func initConfig() error {
 		logutils.SetLevel("info")
 	}
 
-	backendsConfig = backends.Config{
-		Calicoconfig:   config.CalicoConfig,
-		RouteReflector: config.RouteReflector,
-	}
-	// Template configuration.
-	templateConfig = template.Config{
-		ConfDir:       config.ConfDir,
-		ConfigDir:     filepath.Join(config.ConfDir, "conf.d"),
-		KeepStageFile: keepStageFile,
-		Noop:          config.Noop,
-		Prefix:        config.Prefix,
-		SyncOnly:      config.SyncOnly,
-		TemplateDir:   filepath.Join(config.ConfDir, "templates"),
-	}
-	return nil
+	return &config, nil
 }
 
 func getBackendNodesFromSRV(record, scheme string) ([]string, error) {
@@ -138,25 +125,35 @@ func getBackendNodesFromSRV(record, scheme string) ([]string, error) {
 
 // processFlags iterates through each flag set on the command line and
 // overrides corresponding configuration settings.
-func processFlags() {
-	flag.Visit(setConfigFromFlag)
+func processFlags(config *Config) {
+	log.Info("Processing command line flags")
+	v := ConfigVisitor{config: config}
+	flag.Visit(v.setConfigFromFlag)
 }
 
-func setConfigFromFlag(f *flag.Flag) {
+type ConfigVisitor struct {
+	config *Config
+}
+
+func (c *ConfigVisitor) setConfigFromFlag(f *flag.Flag) {
 	switch f.Name {
 	case "confdir":
-		config.ConfDir = confdir
+		c.config.ConfDir = confdir
 	case "interval":
-		config.Interval = interval
+		c.config.Interval = interval
 	case "noop":
-		config.Noop = noop
+		c.config.Noop = noop
 	case "prefix":
-		config.Prefix = prefix
+		c.config.Prefix = prefix
 	case "sync-only":
-		config.SyncOnly = syncOnly
+		c.config.SyncOnly = syncOnly
 	case "calicoconfig":
-		config.CalicoConfig = calicoconfig
+		c.config.CalicoConfig = calicoconfig
 	case "routereflector":
-		config.RouteReflector = routereflector
+		c.config.RouteReflector = routereflector
+	case "onetime":
+		c.config.Onetime = onetime
+	case "keep-stage-file":
+		c.config.Onetime = keepStageFile
 	}
 }
