@@ -372,7 +372,7 @@ class TestFelixConfig(TestBase):
                 'labels': {'nodeEth': 'host'}
             },
             'spec': {
-                'node': node_name,
+                'node': '%s' % node_name,
                 'interfaceName': 'eth0',
                 'expectedIPs': [str(ip)],
             }

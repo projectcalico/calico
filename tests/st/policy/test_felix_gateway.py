@@ -726,7 +726,7 @@ class TestFelixOnGateway(TestBase):
                 'labels': {'nodeEth': 'gateway-int'}
             },
             'spec': {
-                'node': self.gateway_hostname,
+                'node': '%s' % self.gateway_hostname,
                 'interfaceName': 'eth0'
             }
         }
@@ -741,7 +741,7 @@ class TestFelixOnGateway(TestBase):
                 'labels': {'nodeEth': 'gateway-ext'}
             },
             'spec': {
-                'node': self.gateway_hostname,
+                'node': '%s' % self.gateway_hostname,
                 'interfaceName': 'eth1'
             }
         }
@@ -756,7 +756,7 @@ class TestFelixOnGateway(TestBase):
                 'labels': {'nodeEth': 'host'}
             },
             'spec': {
-                'node': self.host_hostname,
+                'node': '%s' % self.host_hostname,
                 'interfaceName': 'eth0',
                 'expectedIPs': [str(self.host.ip)],
             }
