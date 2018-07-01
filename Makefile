@@ -83,8 +83,6 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               -w /go/src/$(PACKAGE_NAME) \
                               $(CALICO_BUILD)
 
-
-
 .PHONY: clean
 clean:
 	rm -rf bin/*

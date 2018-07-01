@@ -1,7 +1,7 @@
 package backends
 
 import (
-	"github.com/kelseyhightower/confd/backends/calico"
+	"github.com/kelseyhightower/confd/pkg/backends/calico"
 )
 
 // The StoreClient interface is implemented by objects that can retrieve

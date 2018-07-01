@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/kelseyhightower/confd/backends"
-	logutils "github.com/kelseyhightower/confd/log"
-	"github.com/kelseyhightower/confd/resource/template"
+	"github.com/kelseyhightower/confd/pkg/backends"
+	logutils "github.com/kelseyhightower/confd/pkg/log"
+	"github.com/kelseyhightower/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
 )
 

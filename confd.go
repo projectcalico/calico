@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kelseyhightower/confd/backends"
-	"github.com/kelseyhightower/confd/resource/template"
+	"github.com/kelseyhightower/confd/pkg/backends"
+	"github.com/kelseyhightower/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
 )
 
