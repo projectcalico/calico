@@ -338,7 +338,7 @@ endif
 	$(MAKE) tag-images push IMAGETAG=$(BRANCH_NAME)
 	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
-k8sfv-tests: image
+k8sfv-test: image
 	cd .. && git clone https://github.com/projectcalico/felix.git && cd felix; \
 	[ ! -e ../typha/semaphore-felix-branch ] || git checkout $(cat ../typha/semaphore-felix-branch); \
 	JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=calico/typha:latest TYPHA_VERSION=latest $(MAKE) k8sfv-test
