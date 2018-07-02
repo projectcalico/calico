@@ -31,22 +31,22 @@ to connect to, we provide instructions in the [installation documentation](./ins
 
 ## Network requirements
 
-Ensure that your hosts and firewalls allow the following traffic.
+Ensure that your hosts and firewalls allow the necessary traffic based on your configuration.
 
-| Configuration                                                | Host                | Connection type | Port/protocol |
-|--------------------------------------------------------------|---------------------|-----------------|---------------|
-| {{site.prodname}} networking (BGP)                           | All                 | Bidirectional   | TCP 179 |
-| {{site.prodname}} networking in IP-in-IP mode (default mode) | All                 | Bidirectional   | IP-in-IP, often represented by its protocol number `4` |
+| Configuration                                                | Host(s)              | Connection type | Port/protocol |
+|--------------------------------------------------------------|----------------------|-----------------|---------------|
+| {{site.prodname}} networking (BGP)                           | All                  | Bidirectional   | TCP 179 |
+| {{site.prodname}} networking with IP-in-IP enabled (default) | All                  | Bidirectional   | IP-in-IP, often represented by its protocol number `4` |
 {%- if include.orch == "Kubernetes" %}
-| flannel networking (VXLAN)                                   | All                 | Bidirectional   | UDP 4789 |
-| etcd datastore                                               | etcd hosts          | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
-| {{site.prodname}} networking, cluster of more than 50 nodes  | Typha agent hosts   | Incoming        | TCP 5473 (default) |
-| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 6443\* |
+| {{site.prodname}} networking with Typha enabled              | Typha agent hosts    | Incoming        | TCP 5473 (default) |
+| flannel networking (VXLAN)                                   | All                  | Bidirectional   | UDP 4789 |
+| All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 6443\* |
+| etcd datastore                                               | etcd hosts           | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
 {%- else %}
-| All                                                          | etcd hosts          | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
+| All                                                          | etcd hosts           | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
 {%- endif %}
 {%- if include.orch == "OpenShift" %}
-| All                                                          | kube-apiserver host | Incoming        | Often TCP 443 or 8443\* |
+| All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 8443\* |
 {%- endif %}
 {%- if include.orch == "Kubernetes" or include.orch == "OpenShift" %}
 
