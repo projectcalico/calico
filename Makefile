@@ -441,20 +441,23 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
-
 ###############################################################################
-# CI
+# CI/CD
 ###############################################################################
 .PHONY: ci
+## Run what CI runs
 ci: static-checks fv $(NODE_CONTAINER_NAME) st
 
-# This depends on clean to ensure that dependent images get untagged and repulled
-# THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
-.PHONY: semaphore
-semaphore:
-	# Clean up unwanted files to free disk space.
-	bash -c 'rm -rf /usr/local/golang /opt /var/lib/mongodb /usr/lib/jvm /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
-	$(MAKE) ci
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 ###############################################################################
 # Release
