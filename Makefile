@@ -207,19 +207,19 @@ push: imagetag
 	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
 
 	# Push images to gcr.io, used by GKE.
-	docker push gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
+	docker push gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker push eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker push asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker push us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
 ifeq ($(ARCH),amd64)
 	docker push $(CONTAINER_NAME):$(IMAGETAG)
 	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
 
 	# Push images to gcr.io, used by GKE.
-	docker push gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
+	docker push gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker push eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker push asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker push us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
 endif
 
 ## push all archs
@@ -233,19 +233,19 @@ tag-images: imagetag
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
 
 	# Tag images for gcr.io, used by GKE.
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
 ifeq ($(ARCH),amd64)
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
 
 	# Tag images for gcr.io, used by GKE.
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
 endif
 
 ## tag images of all archs
