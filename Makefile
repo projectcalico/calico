@@ -138,7 +138,7 @@ image-all: $(addprefix sub-image-,$(ARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH)
+image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)

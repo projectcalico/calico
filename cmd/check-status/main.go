@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/projectcalico/kube-controllers/pkg/status"
 )
@@ -49,15 +48,8 @@ func main() {
 	if *checkReady {
 		var st *status.Status
 		var err error
-		// Try reading the status file up to 3 times.
-		for i := 0; i < 3; i++ {
-			st, err = status.ReadStatusFile(*file)
-			if err != nil {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			break
-		}
+
+		st, err = status.ReadStatusFile(*file)
 		if err != nil {
 			fmt.Printf("Failed to read status file %s: %v\n", *file, err)
 			os.Exit(1)

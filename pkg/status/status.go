@@ -111,7 +111,7 @@ func (s *Status) GetNotReadyConditions() string {
 
 // WriteStatus writes out the status in json format.
 func (c *Status) WriteStatus() error {
-	b, err := json.Marshal(*c)
+	b, err := json.Marshal(c)
 	if err != nil {
 		logrus.Errorf("Failed to marshal readiness: %s", err)
 		return err
