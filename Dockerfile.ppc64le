@@ -15,4 +15,5 @@ FROM ppc64le/alpine:3.7
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
 ADD bin/kube-controllers-linux-ppc64le /usr/bin/kube-controllers
+ADD bin/check-status-linux-ppc64le /usr/bin/check-status
 ENTRYPOINT ["/usr/bin/kube-controllers"]
