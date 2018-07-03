@@ -226,6 +226,14 @@ push: imagetag
 ifeq ($(ARCH),amd64)
 	docker push $(NODE_CONTAINER_NAME):$(IMAGETAG)
 	docker push quay.io/$(NODE_CONTAINER_NAME):$(IMAGETAG)
+
+ifeq ($(RELEASE),true)
+	# If this is a release, also push the GKE images to gcr. 
+	docker push gcr.io/projectcalico-org/node:$(IMAGETAG)
+	docker push eu.gcr.io/projectcalico-org/node:$(IMAGETAG)
+	docker push asia.gcr.io/projectcalico-org/node:$(IMAGETAG)
+	docker push us.gcr.io/projectcalico-org/node:$(IMAGETAG)
+endif
 endif
 
 push-all: imagetag $(addprefix sub-push-,$(ARCHES))
@@ -517,7 +525,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	$(MAKE) push RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -536,7 +544,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(NODE_CONTAINER_NAME):latest-$(ARCH) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run $(NODE_CONTAINER_NAME):latest-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(NODE_CONTAINER_NAME):latest-$(ARCH) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run quay.io/$(NODE_CONTAINER_NAME):latest-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
+	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
