@@ -29,15 +29,16 @@ import:
   version: ^2.2.6
   subpackages:
   - patricia
+# Versions of k8s.io/api and k8s/apimachinery are set by k8s.io/client-go
 - package: k8s.io/apimachinery
-  version: release-1.8
 - package: k8s.io/api
-  version: release-1.8
 - package: k8s.io/client-go
-  version: 82aa063804cf055e16e8911250f888bc216e8b61
+  version: v7.0.0
+# Version of k8s.io/code-generator set to commit id of release-1.10 branch
+# Set it explicitly here because no obvious dependency info from k8s.io/client-go.
 - package: k8s.io/code-generator
-  version: release-1.8
+  version: 9de8e796a74d16d2a285165727d04c185ebca6dc
 - package: k8s.io/gengo
-  version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
+  version: fdcf9f9480fdd5bf2b3c3df9bf4ecd22b25b87e2
 testImport:
 - package: github.com/onsi/gomega
