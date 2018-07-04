@@ -215,13 +215,13 @@ ifeq ($(ARCH),amd64)
 	docker push $(CONTAINER_NAME):$(IMAGETAG)
 	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
 
-ifeq ($(RELEASE),true)
-	# Push images to gcr.io, used by GKE. Only do this for releases.
-	docker push gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker push eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker push asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker push us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-endif
+	if [ "$(RELEASE)" = "true" ]; then \
+	  # Push images to gcr.io, used by GKE. Only do this for releases. \
+	  docker push gcr.io/projectcalico-org/typha:$(IMAGETAG) && \
+	  docker push eu.gcr.io/projectcalico-org/typha:$(IMAGETAG) && \
+	  docker push asia.gcr.io/projectcalico-org/typha:$(IMAGETAG) && \
+	  docker push us.gcr.io/projectcalico-org/typha:$(IMAGETAG); \
+	fi;
 endif
 
 ## push all archs
