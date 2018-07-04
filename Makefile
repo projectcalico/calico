@@ -237,10 +237,10 @@ tag-images: imagetag
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
 
 	# Tag images for gcr.io, used by GKE.
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH)
+	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH)
 ifeq ($(ARCH),amd64)
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
