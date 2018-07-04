@@ -207,10 +207,12 @@ push: imagetag
 	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
 
 	# Push images to gcr.io, used by GKE.
-	docker push gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker push eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker push asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)
-	docker push us.gcr.io/projectcalico-org/typha:$(IMAGETAG)
+	if [ "$(RELEASE)" = "true" ]; then \
+	  docker push gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH) && \
+	  docker push eu.gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH) && \
+	  docker push asia.gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH) && \
+	  docker push us.gcr.io/projectcalico-org/typha:$(IMAGETAG)-$(ARCH); \
+	fi;
 ifeq ($(ARCH),amd64)
 	docker push $(CONTAINER_NAME):$(IMAGETAG)
 	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
