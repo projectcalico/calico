@@ -1,13 +1,5 @@
-FROM alpine:3.7 as qemu
-
-ARG QEMU_VERSION=2.9.1-1
-ARG CROSS_ARCHS="aarch64 ppc64le"
-
-RUN apk --update add curl
-
-# Enable non-native runs on amd64 architecture hosts
-RUN for i in ${CROSS_ARCHS}; do curl -L https://github.com/multiarch/qemu-user-static/releases/download/v${QEMU_VERSION}/qemu-${i}-static.tar.gz | tar zxvf - -C /usr/bin; done
-RUN chmod +x /usr/bin/qemu-*
+ARG QEMU_IMAGE=calico/go-build:latest
+FROM ${QEMU_IMAGE} as qemu
 
 FROM ppc64le/alpine:3.6 as base
 MAINTAINER Shaun Crampton <shaun@tigera.io>
@@ -15,7 +7,8 @@ MAINTAINER Shaun Crampton <shaun@tigera.io>
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 # we only need this for the intermediate "base" image, so we can run all the apk and other commands
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
+# when running on a kernel >= 4.8, this will become less relevant
+COPY --from=qemu /usr/bin/qemu-ppc64le-static /usr/bin/
 
 RUN apk --no-cache add --update tini
 # Install Felix's dependencies.
