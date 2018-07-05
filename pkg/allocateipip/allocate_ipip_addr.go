@@ -1,4 +1,4 @@
-package main
+package allocateipip
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 // address if there are any available, otherwise it removes any tunnel address
 // that is configured.
 
-func main() {
+func Run() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
 	// fluentd's default configuration.
 	log.SetOutput(os.Stdout)

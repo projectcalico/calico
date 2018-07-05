@@ -1,3 +1,3 @@
 #!/bin/sh
 exec 2>&1
-exec confd -confdir=/etc/calico/confd 
+exec calico-node -confd

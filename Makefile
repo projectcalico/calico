@@ -31,18 +31,10 @@ CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
 
 # Versions and location of dependencies used in the build.
-CONFD_VER?=master
-FELIX_VER?=master
 BIRD_VER?=v0.3.2
-GOBGPD_VER?=v0.2.1
-FELIX_REPO?=calico/felix
-FELIX_CONTAINER_NAME?=$(FELIX_REPO)$(ARCHTAG):$(FELIX_VER)
-CONFD_REPO?=calico/confd
-CONFD_CONTAINER_NAME?=$(CONFD_REPO)$(ARCHTAG):$(CONFD_VER)
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/birdcl
-CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/calico-bgp-daemon
 
 # Versions and locations of dependencies used in tests.
 CALICOCTL_VER?=master
@@ -71,16 +63,11 @@ CURL=curl -sSf
 NODE_CONTAINER_NAME?=calico/node$(ARCHTAG)
 NODE_CONTAINER_CREATED=.calico_node.created
 NODE_CONTAINER_BIN_DIR=./filesystem/bin
-NODE_CONTAINER_BINARIES=startup readiness allocate-ipip-addr calico-felix bird calico-bgp-daemon confd
-# Whether the update-felix target should pull the felix image.
-PULL_FELIX?=true
+NODE_CONTAINER_BINARIES=bird bird6 birdcl calico-node
 
 # Variables for building the local binaries that go into calico/node
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist .go-pkg-cache $(NODE_CONTAINER_BIN_DIR))
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
-STARTUP_FILES=$(shell find ./pkg/startup -name '*.go')
-ALLOCATE_IPIP_FILES=$(shell find ./pkg/allocateipip -name '*.go')
-READINESS_FILES=$(shell find ./pkg/readiness -name '*.go')
 SRCFILES=$(shell find ./pkg -name '*.go')
 LOCAL_USER_ID?=$(shell id -u $$USER)
 LDFLAGS=-ldflags "-X main.VERSION=$(CALICO_GIT_VER)"
@@ -104,15 +91,10 @@ clean:
 	docker rmi $(NODE_CONTAINER_NAME):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 
-	# Retag and remove external images so that they will be pulled again
-	# We avoid just deleting the image. We didn't build them here so it would be impolite to delete it.
-	docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME) || true
-
 ###############################################################################
 # Building the binary
 ###############################################################################
-BUILT_BINARIES=$(NODE_CONTAINER_BIN_DIR)/startup $(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr $(NODE_CONTAINER_BIN_DIR)/readiness
-build:  $(BUILT_BINARIES)
+build:  $(NODE_CONTAINER_BIN_DIR)/calico-node 
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.lock
@@ -131,26 +113,17 @@ vendor: glide.lock
 		$(CALICO_BUILD) \
 		/bin/sh -c 'cd /go/src/$(PACKAGE_NAME) && glide install -strip-vendor'
 
-$(NODE_CONTAINER_BIN_DIR)/startup: MAIN=pkg/startup/startup.go
-$(NODE_CONTAINER_BIN_DIR)/startup: $(STARTUP_FILES)
-
-$(NODE_CONTAINER_BIN_DIR)/readiness: MAIN=pkg/readiness/readiness.go
-$(NODE_CONTAINER_BIN_DIR)/readiness: $(HEALTHCHECK_FILES)
-
-$(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr: MAIN=pkg/allocateipip/allocate_ipip_addr.go
-$(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr: $(ALLOCATE_IPIP_FILES)
-
-$(BUILT_BINARIES): vendor
+$(NODE_CONTAINER_BIN_DIR)/calico-node: vendor
 	docker run --rm \
 		-e GOARCH=$(ARCH) \
 		-e GOOS=linux \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-    	-e GOCACHE=/go-cache \
+		-e GOCACHE=/go-cache \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-	  	$(CALICO_BUILD) sh -c '\
+		$(CALICO_BUILD) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
-			go build -v -o $@ $(LDFLAGS) $(MAIN)'
+			go build -v -o $@ $(LDFLAGS) ./cmd/calico-node/main.go'
 
 ###############################################################################
 # Building the image
@@ -160,54 +133,14 @@ image: $(NODE_CONTAINER_NAME)
 $(NODE_CONTAINER_NAME): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): ./Dockerfile$(ARCHTAG) $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
 	# Check versions of the binaries that we're going to use to build calico/node.
-	# startup: doesn't support --version or -v
-	# allocate-ipip-addr: doesn't support --version or -v
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
 	docker run --rm -v $(CURDIR)/$(NODE_CONTAINER_BIN_DIR):/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
-	  echo; echo calico-felix --version; /go/bin/calico-felix --version; \
+	  echo; echo calico-node -v;         /go/bin/calico-node -v; \
 	  echo; echo bird --version;         /go/bin/bird --version; \
-	  echo; echo calico-bgp-daemon -v;   /go/bin/calico-bgp-daemon -v; \
-	  echo; echo confd --version;        /go/bin/confd --version; \
 	"
 	docker build --pull -t $(NODE_CONTAINER_NAME):latest-$(ARCH) . --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile$(ARCHTAG)
 	touch $@
-
-# Get felix binaries
-.PHONY: update-felix
-$(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
-	-docker rm -f calico-felix
-	# Latest felix binaries are stored in automated builds of calico/felix.
-	# To get them, we create (but don't start) a container from that image.
-	if $(PULL_FELIX); then docker pull $(FELIX_CONTAINER_NAME); fi
-	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
-	# Then we copy the files out of the container.  Since docker preserves
-	# mtimes on its copy, check the file really did appear, then touch it
-	# to make sure that downstream targets get rebuilt.
-	docker cp calico-felix:/code/. $(NODE_CONTAINER_BIN_DIR) && \
-	  test -e $(NODE_CONTAINER_BIN_DIR)/calico-felix && \
-	  touch $(NODE_CONTAINER_BIN_DIR)/calico-felix
-	-docker rm -f calico-felix
-
-# Get the confd binary
-$(NODE_CONTAINER_BIN_DIR)/confd:
-	-docker rm -f calico-confd
-	# Latest confd binaries are stored in automated builds of calico/confd.
-	# To get them, we create (but don't start) a container from that image.
-	docker pull $(CONFD_CONTAINER_NAME)
-	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
-	# Then we copy the files out of the container.  Since docker preserves
-	# mtimes on its copy, check the file really did appear, then touch it
-	# to make sure that downstream targets get rebuilt.
-	docker cp calico-confd:/bin/confd $(NODE_CONTAINER_BIN_DIR) && \
-	  test -e $(NODE_CONTAINER_BIN_DIR)/confd && \
-	  touch $(NODE_CONTAINER_BIN_DIR)/confd
-	-docker rm -f calico-confd
-
-# Get the calico-bgp-daemon binary
-$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
-	$(CURL) -L $(CALICO_BGP_DAEMON_URL) -o $@
-	chmod +x $(@D)/*
 
 # Get bird binaries
 $(NODE_CONTAINER_BIN_DIR)/bird:
@@ -384,10 +317,7 @@ calico-node.tar: $(NODE_CONTAINER_CREATED)
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
 	docker run --rm $(NODE_CONTAINER_NAME):latest-$(ARCH) /bin/sh -c "\
-	  echo calico-felix --version; /bin/calico-felix --version; \
 	  echo bird --version;         /bin/bird --version; \
-	  echo calico-bgp-daemon -v;   /bin/calico-bgp-daemon -v; \
-	  echo confd --version;        /bin/confd --version; \
 	"
 	docker save --output $@ $(NODE_CONTAINER_NAME):latest-$(ARCH)
 
@@ -543,9 +473,6 @@ endif
 # Run calico/node docker-image acceptance tests
 node-test-at: release-prereq
 	docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
-        -e CALICO_BGP_DAEMON_VER=$(GOBGPD_VER) \
-        -e CALICO_FELIX_VER=$(FELIX_VER) \
-        -e CONFD_VER=$(CONFD_VER) \
 	calico/node:$(VERSION) /bin/sh -c 'apk --no-cache add wget ca-certificates && \
 	wget -q -O /tmp/goss \
 	https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
@@ -580,10 +507,7 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 
 
 $(info "Build dependency versions")
-$(info $(shell printf "%-21s = %-10s\n" "FELIX_VER" $(FELIX_VER)))
 $(info $(shell printf "%-21s = %-10s\n" "BIRD_VER" $(BIRD_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "CONFD_VER" $(CONFD_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "GOBGPD_VER" $(GOBGPD_VER)))
 
 $(info "Test dependency versions")
 $(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))

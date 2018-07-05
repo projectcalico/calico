@@ -2,6 +2,11 @@ package: github.com/projectcalico/node
 import:
 - package: github.com/sirupsen/logrus
   version: v1.0.4
+- package: github.com/projectcalico/felix
+  version: master
+- package: github.com/kelseyhightower/confd
+  repo: https://github.com/projectcalico/confd.git
+  version: master
 - package: github.com/projectcalico/libcalico-go
   version: d6aff54dc3527357f016c0cd5c5364f21a15e9b4
   subpackages:

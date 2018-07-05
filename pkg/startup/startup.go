@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package main
+package startup
 
 import (
 	"context"
@@ -82,7 +82,7 @@ var (
 // -  Configuring the node resource with IP/AS information provided in the
 //    environment, or autodetected.
 // -  Creating default IP Pools for quick-start use
-func main() {
+func Run() {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	configureLogging()
 

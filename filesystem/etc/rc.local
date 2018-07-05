@@ -10,9 +10,9 @@ fi
 
 # Run the startup initialisation script.  These ensure the node is correctly
 # configured to run.
-startup || exit 1
+calico-node -startup || exit 1
 
-# Set the nodename based on the value picked by the startup binary.
+# Set the nodename based on the value picked by the startup procedure.
 if [ ! -f "/var/lib/calico/nodename" ]; then
 	echo "/var/lib/calico/nodename does not exist, exiting"
 	exit 1
@@ -20,7 +20,7 @@ fi
 export NODENAME=$(cat /var/lib/calico/nodename)
 
 # If possible pre-allocate the IP address on the IPIP tunnel.
-allocate-ipip-addr || exit 1
+calico-node -allocate-ipip-addr || exit 1
 
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled
@@ -61,7 +61,7 @@ case "$CALICO_NETWORKING_BACKEND" in
 
 	# Run confd once - this ensures we have sensible config generated at the point we start
 	# bird.
-    confd -confdir=/etc/calico/confd -onetime -keep-stage-file >/felix-startup-1.log 2>&1 || true
+	calico-node -confd -confd-onetime -confd-keep-stage-file >/felix-startup-1.log 2>&1 || true
 
 	# Enable the confd and bird services
 	cp -a /etc/service/available/bird  /etc/service/enabled/

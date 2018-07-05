@@ -15,4 +15,4 @@ export FELIX_ETCDCERTFILE=$ETCD_CERT_FILE
 if [ ! -z $DATASTORE_TYPE ]; then
     export FELIX_DATASTORETYPE=$DATASTORE_TYPE
 fi
-exec calico-felix
+exec calico-node -felix 
