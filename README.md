@@ -73,7 +73,7 @@ To list all possible targets, run `make help`.
 
 3. Build the binary:
    ```
-   make binary
+   make build
    ```
 
 ## Tests
