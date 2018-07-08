@@ -129,8 +129,11 @@ var _ = Describe("health tests", func() {
 
 		AfterEach(func() {
 			for _, name := range podsToCleanUp {
-				err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
-				Expect(err).NotTo(HaveOccurred())
+				// It is possible for a local pod to be deleted by GC if node is gone.
+				if k8sInfra.PodExist("default", name) {
+					err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}
 			}
 			podsToCleanUp = nil
 		})

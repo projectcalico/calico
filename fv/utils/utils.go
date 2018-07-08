@@ -38,7 +38,7 @@ import (
 type EnvConfig struct {
 	FelixImage   string `default:"calico/felix:latest"`
 	EtcdImage    string `default:"quay.io/coreos/etcd"`
-	K8sImage     string `default:"gcr.io/google_containers/hyperkube-amd64:v1.7.5"`
+	K8sImage     string `default:"gcr.io/google_containers/hyperkube-amd64:v1.10.4"`
 	TyphaImage   string `default:"calico/typha:latest"` // Note: this is overridden in the Makefile!
 	BusyboxImage string `default:"busybox:latest"`
 }
