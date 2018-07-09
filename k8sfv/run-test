@@ -21,7 +21,7 @@ if ! test -n "${FV_K8SIMAGE}"; then
 fi
 
 if ! test -f "${PRIVATE_KEY}"; then
-    echo PRIVATE_KEY must be set and file does exit.
+    echo PRIVATE_KEY must be set and file must exist.
     exit -1
 fi
 
@@ -133,6 +133,7 @@ etcd_ip=$(get_container_ip ${prefix}-etcd)
 # authorization mode instead, and create a ClusterRoleBinding that
 # gives the "system:anonymous" user unlimited power (aka the
 # "cluster-admin" role).
+# Enable insecure connection from controller manager to API server port 8080.
 docker run --detach --name ${prefix}-apiserver \
        -v ${PRIVATE_KEY}:/private.key \
        $FV_K8SIMAGE \

@@ -27,6 +27,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -79,9 +80,15 @@ var (
 )
 
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {
-	kds.etcdContainer.Stop()
-	kds.k8sApiContainer.Stop()
-	kds.k8sControllerManager.Stop()
+	if kds.etcdContainer != nil {
+		kds.etcdContainer.Stop()
+	}
+	if kds.k8sApiContainer != nil {
+		kds.k8sApiContainer.Stop()
+	}
+	if kds.k8sControllerManager != nil {
+		kds.k8sControllerManager.Stop()
+	}
 }
 
 func createK8sDatastoreInfra() (DatastoreInfra, error) {
@@ -107,7 +114,7 @@ func runK8sApiserver(etcdIp string) *containers.Container {
 		"/hyperkube", "apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=RBAC",
-		"--insecure-port=8080",
+		"--insecure-port=8080", // allow insecure connection from controller manager.
 		"--insecure-bind-address=0.0.0.0",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIp),
 		"--service-account-key-file=/private.key",
@@ -152,11 +159,11 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	kds.k8sApiContainer = runK8sApiserver(kds.etcdContainer.IP)
 
 	if kds.k8sApiContainer == nil {
-		kds.etcdContainer.Stop()
+		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s API server container")
 	}
 
-	log.Info("Start API server")
+	log.Info("Started API server")
 
 	start := time.Now()
 	for {
@@ -192,8 +199,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 90*time.Second && err != nil {
 			log.WithError(err).Error("Failed to install role binding")
-			kds.etcdContainer.Stop()
-			kds.k8sApiContainer.Stop()
+			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -207,8 +213,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 		}
 		if time.Since(start) > 15*time.Second && err != nil {
 			log.WithError(err).Error("Failed to list namespaces.")
-			kds.etcdContainer.Stop()
-			kds.k8sApiContainer.Stop()
+			TearDownK8sInfra(kds)
 			return nil, err
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -217,12 +222,11 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 
 	kds.k8sControllerManager = runK8sControllerManager(kds.k8sApiContainer.IP)
 	if kds.k8sApiContainer == nil {
-		kds.etcdContainer.Stop()
-		kds.k8sApiContainer.Stop()
+		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s contoller manager container")
 	}
 
-	log.Info("Start controller manager.")
+	log.Info("Started controller manager.")
 
 	// Copy CRD registration manifest into the API server container, and apply it.
 	err := kds.k8sApiContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
@@ -412,28 +416,23 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 }
 
 func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
-	if isSystemNamespace(name) {
+	// Try to get namespace. Return if it already exists.
+	_, err := kds.K8sClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	if err == nil {
 		return
+	}
+
+	if !apierrs.IsNotFound(err) {
+		panic(err)
 	}
 
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 	}
-	_, err := kds.K8sClient.CoreV1().Namespaces().Create(ns)
+	_, err = kds.K8sClient.CoreV1().Namespaces().Create(ns)
 	if err != nil {
 		panic(err)
 	}
-}
-
-func (kds *K8sDatastoreInfra) PodExist(ns, podName string) bool {
-	if pods, err := kds.K8sClient.CoreV1().Pods(ns).List(metav1.ListOptions{}); err == nil {
-		for _, pod := range pods.Items {
-			if pod.Name == podName {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {

@@ -45,6 +45,7 @@ import (
 	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -130,8 +131,8 @@ var _ = Describe("health tests", func() {
 		AfterEach(func() {
 			for _, name := range podsToCleanUp {
 				// It is possible for a local pod to be deleted by GC if node is gone.
-				if k8sInfra.PodExist("default", name) {
-					err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+				err := k8sInfra.K8sClient.CoreV1().Pods("default").Delete(name, &metav1.DeleteOptions{})
+				if err != nil && !apierrs.IsNotFound(err) {
 					Expect(err).NotTo(HaveOccurred())
 				}
 			}
