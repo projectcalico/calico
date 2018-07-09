@@ -19,6 +19,12 @@ if ! test -n "${FV_K8SIMAGE}"; then
     echo FV_K8SIMAGE must be set to indicate the hyperkube image to use.
     exit -1
 fi
+
+if ! test -f "${PRIVATE_KEY}"; then
+    echo PRIVATE_KEY must be set and file does exit.
+    exit -1
+fi
+
 #
 # A string to insert into the container names that we use; a calling
 # script can set this to something to make the container names unique,
@@ -82,6 +88,7 @@ function cleanup {
     # Clean up the containers that this script generates.
     docker rm -f ${prefix}-felix || true
     docker rm -f ${prefix}-typha || true
+    docker rm -f ${prefix}-controller-manager || true
     docker rm -f ${prefix}-apiserver || true
     docker rm -f ${prefix}-etcd || true
     # List all remaining containers.
@@ -127,15 +134,34 @@ etcd_ip=$(get_container_ip ${prefix}-etcd)
 # gives the "system:anonymous" user unlimited power (aka the
 # "cluster-admin" role).
 docker run --detach --name ${prefix}-apiserver \
+       -v ${PRIVATE_KEY}:/private.key \
        $FV_K8SIMAGE \
        /hyperkube apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
        --service-cluster-ip-range=10.101.0.0/16 -v=10 \
-       --authorization-mode=RBAC
+       --authorization-mode=RBAC \
+       --insecure-port=8080 \
+       --insecure-bind-address=0.0.0.0 \
+       --service-account-key-file=/private.key
 k8s_ip=$(get_container_ip ${prefix}-apiserver)
 k8s_api_endpoint=https://${k8s_ip}:6443
 
 while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
+    sleep 2
+done
+
+docker run --detach --name ${prefix}-controller-manager \
+	  -v ${PRIVATE_KEY}:/private.key \
+          $FV_K8SIMAGE \
+	  /hyperkube controller-manager \
+            --master=${k8s_ip}:8080 \
+	    --min-resync-period=3m \
+	    --allocate-node-cidrs=true \
+	    --cluster-cidr=192.168.0.0/16 \
+	    --v=5 \
+	    --service-account-private-key-file=/private.key
+
+while ! docker exec ${prefix}-apiserver kubectl get serviceaccounts default; do
     sleep 2
 done
 

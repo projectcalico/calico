@@ -532,6 +532,7 @@ k8sfv-test-existing-felix: bin/k8sfv.test
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	PRIVATE_KEY=`pwd`/fv/private.key \
 	k8sfv/run-test
 
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
