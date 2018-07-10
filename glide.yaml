@@ -22,7 +22,7 @@ import:
   subpackages:
   - pkg/util/validation
 - package: github.com/envoyproxy/data-plane-api
-  version: 771aeeaeece5ab035724871ff9cbbb337f8c98c8
+  version: 5d8712556c09c4c630e8d3479eddf212e9c88cd5
 - package: github.com/google/protobuf
   version: v3.5.0.1
 - package: github.com/lyft/protoc-gen-validate

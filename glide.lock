@@ -1,5 +1,5 @@
-hash: 7dda396f8a4b89e70532488b59d250e54ccef4434de354434eb60dbb4ca2a5d7
-updated: 2018-05-04T11:25:33.863626331-07:00
+hash: 192f8ebe61f3354e904ecd0d94319b041241c30de2e27b55fb01ed0f517fa1b0
+updated: 2018-07-09T16:46:42.310244418-07:00
 imports:
 - name: github.com/alecthomas/template
   version: a0175ee3bccc567396460bf5acd36800cb10c49c
@@ -10,27 +10,30 @@ imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/envoyproxy/data-plane-api
-  version: 771aeeaeece5ab035724871ff9cbbb337f8c98c8
+  version: 5d8712556c09c4c630e8d3479eddf212e9c88cd5
   subpackages:
   - envoy/api/v2/core
-  - envoy/service/auth/v2
+  - envoy/service/auth/v2alpha
 - name: github.com/gogo/googleapis
   version: b23578765ee54ff6bceff57f397d833bf4ca6869
+  subpackages:
+  - google/rpc
 - name: github.com/gogo/protobuf
-  version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
+  version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
   - proto
+  - sortkeys
+  - types
 - name: github.com/golang/protobuf
   version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
   - proto
-  - ptypes/any
 - name: github.com/google/protobuf
   version: 457f6a607ce167132b833c049b0eaf3a9c4b3f5f
 - name: github.com/lyft/protoc-gen-validate
   version: 8e6aaf55f4954f1ef9d3ee2e8f5a50e79cc04f8f
 - name: github.com/onsi/gomega
-  version: 003f63b7f4cff3fc95357005358af2de0f5fe152
+  version: 62bff4df71bdbc266561a0caee19f0594b17c240
   subpackages:
   - format
   - internal/assertion
@@ -53,13 +56,13 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 61f87aac8082fa8c3c5655c7608d7478d46ac2ad
   subpackages:
   - log
 - name: github.com/sirupsen/logrus
   version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: golang.org/x/crypto
-  version: 81e90905daefcd6fd217b62423c0908922eadb30
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -76,14 +79,14 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
+  version: ebfc5b4631820b793c9010c87fd8fef0f39eb082
   subpackages:
   - unix
   - windows
   - windows/registry
   - windows/svc/eventlog
 - name: golang.org/x/text
-  version: 4ee4af566555f5fbe026368b75596286a312663a
+  version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
   - encoding
   - encoding/charmap
@@ -103,11 +106,6 @@ imports:
   - transform
   - unicode/bidi
   - unicode/norm
-- name: google.golang.org/genproto
-  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
-  subpackages:
-  - googleapis/rpc/code
-  - googleapis/rpc/status
 - name: google.golang.org/grpc
   version: 8050b9cbc271307e5a716a9d782803d09b0d6f2d
   subpackages:
@@ -126,7 +124,7 @@ imports:
 - name: gopkg.in/alecthomas/kingpin.v2
   version: 947dcec5ba9c011838740e680966fd7087a71d0d
 - name: k8s.io/apimachinery
-  version: ab7fc865fb0881d161f37adef3e5a67b89a18d05
+  version: b593b18191da3eff9afdfd373da5f5e08fe5ac5f
   subpackages:
   - pkg/util/validation
 testImports:
