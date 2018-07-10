@@ -28,7 +28,7 @@ import (
 	"github.com/projectcalico/app-policy/uds"
 
 	docopt "github.com/docopt/docopt-go"
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )

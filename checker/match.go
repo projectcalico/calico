@@ -24,7 +24,7 @@ import (
 	"fmt"
 
 	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
 	log "github.com/sirupsen/logrus"
 )
 

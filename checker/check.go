@@ -20,7 +20,7 @@ import (
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
 	"github.com/gogo/googleapis/google/rpc"
 	log "github.com/sirupsen/logrus"
 )
