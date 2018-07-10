@@ -87,6 +87,13 @@ LDFLAGS=-ldflags "-X main.VERSION=$(CALICO_GIT_VER)"
 PACKAGE_NAME?=github.com/projectcalico/node
 LIBCALICOGO_PATH?=none
 
+# Variables for controlling image tagging and pushing.
+DOCKER_REPOS=calico quay.io/calico
+ifeq ($(RELEASE),true)
+# If this is a release, also tag and push GCR images. 
+DOCKER_REPOS+=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico.org us.gcr.io/projectcalico.org
+endif
+
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created' -exec rm -f {} +
@@ -94,7 +101,7 @@ clean:
 	rm -rf certs *.tar vendor $(NODE_CONTAINER_BIN_DIR)
 
 	# Delete images that we built in this repo
-	docker rmi $(NODE_CONTAINER_NAME):latest || true
+	docker rmi $(NODE_CONTAINER_NAME):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 
 	# Retag and remove external images so that they will be pulled again
@@ -163,7 +170,7 @@ $(NODE_CONTAINER_CREATED): ./Dockerfile$(ARCHTAG) $(NODE_CONTAINER_FILES) $(addp
 	  echo; echo calico-bgp-daemon -v;   /go/bin/calico-bgp-daemon -v; \
 	  echo; echo confd --version;        /go/bin/confd --version; \
 	"
-	docker build --pull -t $(NODE_CONTAINER_NAME) . --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile$(ARCHTAG)
+	docker build --pull -t $(NODE_CONTAINER_NAME):latest-$(ARCH) . --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile$(ARCHTAG)
 	touch $@
 
 # Get felix binaries
@@ -212,6 +219,35 @@ $(NODE_CONTAINER_BIN_DIR)/bird6:
 $(NODE_CONTAINER_BIN_DIR)/birdcl:
 	$(CURL) -L $(BIRDCL_URL) -o $(@D)/birdcl
 	chmod +x $(@D)/*
+
+# ensure we have a real imagetag
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push one arch
+push: imagetag
+	for r in $(DOCKER_REPOS); do docker push $$r/node:$(IMAGETAG)-$(ARCH); done
+ifeq ($(ARCH),amd64)
+	for r in $(DOCKER_REPOS); do docker push $$r/node:$(IMAGETAG); done
+endif
+
+push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+sub-push-%:
+	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
+
+## tag images of one arch
+tag-images: imagetag
+	for r in $(DOCKER_REPOS); do docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $$r/node:$(IMAGETAG)-$(ARCH); done
+ifeq ($(ARCH),amd64)
+	for r in $(DOCKER_REPOS); do docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $$r/node:$(IMAGETAG); done
+endif
+
+## tag images of all archs
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+sub-tag-images-%:
+	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
 ###############################################################################
 # Static checks
@@ -347,13 +383,13 @@ calico-node.tar: $(NODE_CONTAINER_CREATED)
 	# Check versions of the Calico binaries that will be in calico-node.tar.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
-	docker run --rm $(NODE_CONTAINER_NAME) /bin/sh -c "\
+	docker run --rm $(NODE_CONTAINER_NAME):latest-$(ARCH) /bin/sh -c "\
 	  echo calico-felix --version; /bin/calico-felix --version; \
 	  echo bird --version;         /bin/bird --version; \
 	  echo calico-bgp-daemon -v;   /bin/calico-bgp-daemon -v; \
 	  echo confd --version;        /bin/confd --version; \
 	"
-	docker save --output $@ $(NODE_CONTAINER_NAME)
+	docker save --output $@ $(NODE_CONTAINER_NAME):latest-$(ARCH)
 
 .PHONY: st-checks
 st-checks:
@@ -388,64 +424,120 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           -e HOST_CHECKOUT_DIR=$(CURDIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
-	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
-             -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME):$(RR_VER) \
+	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME):latest-$(ARCH) \
+	           -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME):$(RR_VER) \
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
-
 ###############################################################################
-# CI
+# CI/CD
 ###############################################################################
 .PHONY: ci
+## Run what CI runs
 ci: static-checks fv $(NODE_CONTAINER_NAME) st
 
-# This depends on clean to ensure that dependent images get untagged and repulled
-# THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
-.PHONY: semaphore
-semaphore:
-	# Clean up unwanted files to free disk space.
-	bash -c 'rm -rf /usr/local/golang /opt /var/lib/mongodb /usr/lib/jvm /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
-	$(MAKE) ci
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 ###############################################################################
 # Release
 ###############################################################################
-release: clean release-prereqs 
-	git tag $(VERSION)
+GIT_VERSION?=$(shell git describe --tags --dirty)
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
 
-	# Build the calico/node images.
-	$(MAKE) $(NODE_CONTAINER_NAME)
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
 
-	# Retag images with corect version and quay
-	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(VERSION)
-	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(VERSION)
-	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):latest
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
 
-	# Create the release archive
-	$(MAKE) release-archive
+## Produces a git tag for the release.
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-build"
+	@echo ""
 
-	# Check that images were created recently and that the IDs of the versioned and latest images match
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME)
-	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME):$(VERSION)
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
+endif
 
-	# Check that the images container the right sub-components
-	docker run $(NODE_CONTAINER_NAME) calico-felix --version
+	$(MAKE) image
+	$(MAKE) tag-images RELEASE=true IMAGETAG=$(VERSION)
+	# Generate the `latest` images.
+	$(MAKE) tag-images RELEASE=true IMAGETAG=latest
 
-	@echo "# See RELEASING.md for detailed instructions."
-	@echo "# Now push release images."
-	@echo "  docker push $(NODE_CONTAINER_NAME):$(VERSION)"
-	@echo "  docker push quay.io/$(NODE_CONTAINER_NAME):$(VERSION)"
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	if ! docker run $(NODE_CONTAINER_NAME):$(VERSION) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run $(NODE_CONTAINER_NAME):$(VERSION) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(NODE_CONTAINER_NAME):$(VERSION) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run quay.io/$(NODE_CONTAINER_NAME):$(VERSION) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	@echo "# For the final release only, push the latest tag (not for RCs)"
-	@echo "  docker push $(NODE_CONTAINER_NAME):latest"
-	@echo "  docker push quay.io/$(NODE_CONTAINER_NAME):latest"
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	echo "" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
 
-	@echo "# Only push the git tag AFTER this branch is merged to origin/master"
-	@echo "  git push origin $(VERSION)"
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
+
+	# Push images.
+	$(MAKE) push RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
+
+	@echo "Finalize the GitHub release based on the pushed tag."
+	@echo ""
+	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
+	@echo ""
+	@echo "If this is the latest stable release, then run the following to push 'latest' images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish-latest"
+	@echo ""
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	# Check latest versions match.
+	if ! docker run $(NODE_CONTAINER_NAME):latest-$(ARCH) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run $(NODE_CONTAINER_NAME):latest-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run quay.io/$(NODE_CONTAINER_NAME):latest-$(ARCH) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run quay.io/$(NODE_CONTAINER_NAME):latest-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+
+	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
+
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+
+###############################################################################
+# Release
+###############################################################################
 
 .PHONY: node-test-at
 # Run calico/node docker-image acceptance tests
