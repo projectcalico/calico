@@ -58,5 +58,3 @@ import:
   version: v3.3.0
 - package: github.com/prometheus/procfs
   version: f98634e408857669d61064b283c4cde240622865
-- package: github.com/sirupsen/logrus
-  version: v1.0.4
