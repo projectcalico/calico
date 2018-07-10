@@ -106,7 +106,7 @@ GO_BUILD_VER?=v0.16
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 CALICO_BUILD=calico/go-build:$(GO_BUILD_VER)
 ETCD_VERSION?=v3.2.5
-K8S_VERSION?=v1.7.5
+K8S_VERSION?=v1.10.4
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER ?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
@@ -487,6 +487,7 @@ fv fv/latency.log: calico/felix bin/iptables-locker bin/test-workload bin/test-c
 	  FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
+	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
 	  ./run-batches
@@ -531,6 +532,7 @@ k8sfv-test-existing-felix: bin/k8sfv.test
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
+	PRIVATE_KEY=`pwd`/fv/private.key \
 	k8sfv/run-test
 
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date

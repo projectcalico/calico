@@ -178,6 +178,7 @@ func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 		return
 	}, "60s", "2s").ShouldNot(HaveOccurred())
 
+	log.Info("Initialization is Done.")
 	return
 }
 
