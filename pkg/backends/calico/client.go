@@ -20,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	logutils "github.com/kelseyhightower/confd/log"
+	logutils "github.com/kelseyhightower/confd/pkg/log"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"

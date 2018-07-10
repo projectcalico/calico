@@ -4,58 +4,31 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/kelseyhightower/confd/backends"
-	"github.com/kelseyhightower/confd/resource/template"
+	"github.com/kelseyhightower/confd/pkg/config"
+	"github.com/kelseyhightower/confd/pkg/run"
 	log "github.com/sirupsen/logrus"
 )
 
 var VERSION string
 
+var (
+	printVersion bool
+)
+
 func main() {
+	flag.BoolVar(&printVersion, "version", false, "print version and exit")
 	flag.Parse()
 	if printVersion {
 		fmt.Printf("confd %s\n", VERSION)
 		os.Exit(0)
 	}
-	if err := initConfig(); err != nil {
-		log.Fatal(err.Error())
-	}
 
-	log.Info("Starting calico-confd")
-	storeClient, err := backends.New(backendsConfig)
+	c, err := config.InitConfig(false)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	templateConfig.StoreClient = storeClient
-	if onetime {
-		if err := template.Process(templateConfig); err != nil {
-			log.Fatal(err.Error())
-		}
-		os.Exit(0)
-	}
-
-	stopChan := make(chan bool)
-	doneChan := make(chan bool)
-	errChan := make(chan error, 10)
-
-	processor := template.WatchProcessor(templateConfig, stopChan, doneChan, errChan)
-	go processor.Process()
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	for {
-		select {
-		case err := <-errChan:
-			log.Error(err.Error())
-		case s := <-signalChan:
-			log.Info(fmt.Sprintf("Captured %v. Exiting...", s))
-			close(doneChan)
-		case <-doneChan:
-			os.Exit(0)
-		}
-	}
+	// Run confd.
+	run.Run(c)
 }

@@ -83,8 +83,6 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               -w /go/src/$(PACKAGE_NAME) \
                               $(CALICO_BUILD)
 
-
-
 .PHONY: clean
 clean:
 	rm -rf bin/*
@@ -393,7 +391,6 @@ release-publish-latest: release-prereqs
 	else \
 	  echo "Version check passed\n"; \
 	fi
-
 
 	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
