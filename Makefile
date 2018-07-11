@@ -121,6 +121,17 @@ goimports go-fmt format-code fix: vendor
 install-git-hooks:
 	./install-git-hooks
 
+## Check if glide up creates any warnings. Skip if there are any local changes to the glide files.
+check-glide-warnings:
+	@mkdir -p ~/.glide
+	@if ! git status glide.lock glide.yaml --porcelain | grep "."; then \
+		$(DOCKER_GO_BUILD) sh -c 'glide up --strip-vendor 2>&1' | grep '\[WARN\]'; RESULT=$$?; \
+		git checkout -- glide.yaml glide.lock; \
+		if [ $$RESULT -eq 1 ]; then true; else false; fi; \
+	else \
+		echo "Skipping glide checks as there are local updates"; \
+	fi
+
 ###############################################################################
 # Tests
 ###############################################################################
@@ -226,7 +237,7 @@ stop-etcd:
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks test
+ci: clean check-glide-warnings static-checks test
 
 
 .PHONY: help
