@@ -27,10 +27,10 @@ import (
 	"reflect"
 
 	"github.com/docopt/docopt-go"
-	gops "github.com/mitchellh/go-ps"
 	"github.com/olekukonko/tablewriter"
 	gobgp "github.com/osrg/gobgp/client"
 	"github.com/osrg/gobgp/packet/bgp"
+	"github.com/shirou/gopsutil/process"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -60,11 +60,13 @@ Description:
 	enforceRoot()
 
 	// Go through running processes and check if `calico-felix` processes is not running
-	processes, err := gops.Processes()
+	processes, err := process.Processes()
 	if err != nil {
 		fmt.Println(err)
 	}
-	if !psContains("calico-felix", processes) {
+
+	// For older versions of calico/node, the process was called `calico-felix`. Newer ones use `calico-node -felix`.
+	if !psContains([]string{"calico-felix"}, processes) && !psContains([]string{"calico-node", "-felix"}, processes) {
 		// Return and print message if calico-node is not running
 		fmt.Printf("Calico process is not running.\n")
 		os.Exit(1)
@@ -72,20 +74,20 @@ Description:
 
 	fmt.Printf("Calico process is running.\n")
 
-	if psContains("bird", processes) || psContains("bird6", processes) {
+	if psContains([]string{"bird"}, processes) || psContains([]string{"bird6"}, processes) {
 		// Check if birdv4 process is running, print the BGP peer table if it is, else print a warning
-		if psContains("bird", processes) {
+		if psContains([]string{"bird"}, processes) {
 			printBIRDPeers("4")
 		} else {
 			fmt.Printf("\nINFO: BIRDv4 process: 'bird' is not running.\n")
 		}
 		// Check if birdv6 process is running, print the BGP peer table if it is, else print a warning
-		if psContains("bird6", processes) {
+		if psContains([]string{"bird6"}, processes) {
 			printBIRDPeers("6")
 		} else {
 			fmt.Printf("\nINFO: BIRDv6 process: 'bird6' is not running.\n")
 		}
-	} else if psContains("calico-bgp-daemon", processes) {
+	} else if psContains([]string{"calico-bgp-daemon"}, processes) {
 		printGoBGPPeers("4")
 		printGoBGPPeers("6")
 	} else {
@@ -97,15 +99,24 @@ Description:
 	fmt.Println()
 }
 
-func psContains(proc string, procList []gops.Process) bool {
-	if len(proc) > 15 {
-		// go-ps returns executable name which is truncated to 15 characters.
-		// Some work is proceeding to fix this. https://github.com/mitchellh/go-ps/pull/14
-		// Until this get fixed, truncate proc to size 15.
-		proc = proc[:15]
-	}
+func psContains(proc []string, procList []*process.Process) bool {
 	for _, p := range procList {
-		if p.Executable() == proc {
+		cmds, err := p.CmdlineSlice()
+		if err != nil {
+			panic(err)
+		}
+		var match bool
+		for i, p := range proc {
+			if i >= len(cmds) {
+				break
+			} else if cmds[i] == p {
+				match = true
+			}
+		}
+
+		// If we got a match, return true. Otherwise, try the next
+		// process in the list.
+		if match {
 			return true
 		}
 	}
