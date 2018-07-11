@@ -7,7 +7,7 @@ owners:
 import:
 - package: github.com/docopt/docopt-go
 - package: github.com/mcuadros/go-version
-- package: github.com/mitchellh/go-ps
+- package: github.com/shirou/gopsutil
 - package: github.com/olekukonko/tablewriter
 - package: github.com/osrg/gobgp
   version: v1.22
