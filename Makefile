@@ -383,6 +383,18 @@ run-kube-proxy:
 
 ci: clean static-checks test-containerized-cni-versions docker-image test-install-cni
 
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	docker tag calico/cni:latest calico/cni:$(BRANCH_NAME) && docker push calico/cni:$(BRANCH_NAME)
+	docker tag calico/cni:latest quay.io/calico/cni:$(BRANCH_NAME) && docker push quay.io/calico/cni:$(BRANCH_NAME);
+	export VERSION=`git describe --tags --dirty --long`; docker tag calico/cni:latest calico/cni:$$VERSION && docker push calico/cni:$$VERSION; docker tag calico/cni:latest quay.io/calico/cni:$$VERSION && docker push quay.io/calico/cni:$$VERSION
+
 .PHONY: help
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
 	$(info Available targets)
