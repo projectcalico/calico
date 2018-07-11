@@ -31,22 +31,3 @@ package:
     installed: true
   iputils:
     installed: true
-command:
-  /bin/calico-bgp-daemon -v:
-    exit-status: 0
-    stdout:
-    - {{.Env.CALICO_BGP_DAEMON_VER}} 
-    stderr: []
-    timeout: 10000
-  /bin/calico-felix --version:
-    exit-status: 0
-    stdout:
-    - {{.Env.CALICO_FELIX_VER}}
-    stderr: []
-    timeout: 10000
-  /bin/confd -version:
-    exit-status: 0
-    stdout:
-    - {{.Env.CONFD_VER}}
-    stderr: []
-    timeout: 10000

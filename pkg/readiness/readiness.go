@@ -11,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package main
+package readiness
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,33 +28,28 @@ import (
 
 const felixReadinessEp = "http://localhost:9099/readiness"
 
-var enableBIRDChecks = flag.Bool("bird", false, "Enable BIRD readiness checks")
-var enableBIRD6Checks = flag.Bool("bird6", false, "Enable BIRD6 readiness checks")
-var enableFelixChecks = flag.Bool("felix", false, "Enable felix readiness checks")
+func Run(bird, bird6, felix bool) {
 
-func main() {
-	flag.Parse()
-
-	if !*enableBIRDChecks && !*enableFelixChecks && !*enableBIRD6Checks {
+	if !bird && !felix && !bird6 {
 		fmt.Printf("calico/node readiness check error: must specify at least one of -bird, -bird6, or -felix")
 		os.Exit(1)
 	}
 
-	if *enableFelixChecks {
+	if felix {
 		if err := checkFelixReady(); err != nil {
 			fmt.Printf("calico/node is not ready: felix is not ready: %+v", err)
 			os.Exit(1)
 		}
 	}
 
-	if *enableBIRDChecks {
+	if bird {
 		if err := checkBIRDReady("4"); err != nil {
 			fmt.Printf("calico/node is not ready: BIRD is not ready: %+v", err)
 			os.Exit(1)
 		}
 	}
 
-	if *enableBIRD6Checks {
+	if bird6 {
 		if err := checkBIRDReady("6"); err != nil {
 			fmt.Printf("calico/node is not ready: BIRD6 is not ready: %+v", err)
 			os.Exit(1)
