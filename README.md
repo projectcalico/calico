@@ -80,7 +80,7 @@ by setting the following environment variables
 
 ### Install calicoctl
 
-You will need the latest (nightly) build of `calicoctl`.
+You will need an updated version of `calicoctl`.
 
     wget https://www.projectcalico.org/builds/calicoctl
     chmod +x calicoctl
@@ -89,9 +89,6 @@ Configure calicoctl to connect to your Calico datastore by
 [following the instructions appropriate for your cluster](https://docs.projectcalico.org/master/usage/calicoctl/configure/).
 If you followed the directions for installing a Vagrant cluster above, you have already completed this configuration.
     
-The policy uses alpha features of Calico behind a feature flag.  Enable these features.
-
-    export ALPHA_FEATURES=serviceaccounts,httprules
 
 ### Install Calico
 
@@ -111,30 +108,45 @@ namespace similar to the following.
  
     kubectl get pods --namespace=istio-system 
  
-    NAME                                 READY     STATUS    RESTARTS   AGE
-    istio-ca-3883180085-wdrqr            1/1       Running   0          20h
-    istio-egress-1389168910-tfnh0        1/1       Running   0          20h
-    istio-ingress-174722661-3fv5x        1/1       Running   0          20h
-    istio-pilot-1557643696-zt8jg         1/1       Running   0          20h
+    NAME                                        READY     STATUS      RESTARTS   AGE
+    istio-citadel-55bbf4ddff-hdbqb              1/1       Running     0          48m
+    istio-cleanup-old-ca-c97g4                  0/1       Completed   0          48m
+    istio-cleanup-secrets-2jvjx                 0/1       Completed   0          48m
+    istio-egressgateway-6864b4f8cf-hcrtr        1/1       Running     0          48m
+    istio-galley-68559fd97f-sglj2               1/1       Running     0          48m
+    istio-ingress-598f66ccbf-scgj2              1/1       Running     0          48m
+    istio-ingressgateway-59f87688f-6txhr        1/1       Running     0          48m
+    istio-mixer-post-install-v6fn4              0/1       Completed   0          48m
+    istio-pilot-796444c567-sf89w                2/2       Running     0          48m
+    istio-policy-77b65686bb-rzxp4               2/2       Running     0          48m
+    istio-security-post-install-hn5g2           0/1       Completed   0          48m
+    istio-sidecar-injector-896658cbd-h6xk5      1/1       Running     0          48m
+    istio-statsd-prom-bridge-6dbb7dcc7f-75q7g   1/1       Running     0          48m
+    istio-telemetry-65968c56f8-qg672            2/2       Running     0          48m
+    prometheus-586d95b8d9-ww8jq                 1/1       Running     0          48m
 
-Note that Istio Mixer is not included in this demo because it is not required.  You can add a
-Mixer deployment and [use it for telemetry or additional authorization checks](#can-i-use-dikastes-with-istio-mixer?).
-
-Finally, add the Sidecar Injector, which automatically adds `Istio Proxy and Calico Dikastes` sidecar to each
-deployment you add to your cluster.
-
-    kubectl apply -f config/install/20-istio-sidecar-injector.yaml
 
 Dikastes is a Calico component that computes authorization policy for the Istio proxies on each host. Calico
 utilizes [Istio's automatic sidecar injection](https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection)
 to inject Dikastes container into a pod at pod creation time.
 
-### Optional: Enable sidecar injection for additional namespaces.
+### Enable sidecar injection for the default namespace
 
-The `20-istio-sidecar-injector.yaml` manifest enables sidecar injection for the `default` namespace where the rest of this demo is run.  If you want to experiment with applications in other namespaces, run the following command to enable sidecar injection in your namespace.
+Enable sidecar injection for the `default` namespace where the rest of this demo is run.  
 
 ```
-kubectl label namespace <your namespace name> istio-injection=enabled
+kubectl label namespace default istio-injection=enabled
+```
+
+If you want to experiment with applications in other namespaces, label them using the same command.
+
+### Enable Calico Application Layer Policy
+
+Apply the manifest to configure Istio to use Calico Application Layer Policy for authorization.
+
+```
+kubectl apply -f 20-app-policy.yaml
+
 ```
 
 ### Install the demo application
@@ -182,46 +194,12 @@ corresponding service account identities are used by Dikastes in authorization p
 
 ### Determining Ingress IP & Port
 
-You will use the `istio-ingress` service to access the YAO Bank application.
+You will use the `istio-ingressgateway` service to access the YAO Bank application.
 
-1. If your Kubernetes cluster is running in an environment that supports external load balancers, the IP address of 
-   ingress can be  obtained by the following command:
-
-   ```bash
-   kubectl get ingress -o wide
-   ```
-
-   whose output should be similar to
-
-   ```bash
-   NAME      HOSTS     ADDRESS                 PORTS     AGE
-   gateway   *         130.211.10.121          80        1d
-   ```
-
-   The address of the ingress service would then be
+External load balancers are not supported in the Vagrant test cluster. You can use the host IP of the ingress service, along with the NodePort, to access the ingress.
    
    ```bash
-   export GATEWAY_URL=130.211.10.121:80
-   ```
-
-1. _GKE:_ Sometimes when the service is unable to obtain an external IP, `kubectl get ingress -o wide` may display a list of worker node addresses. In this case, you can use any of the addresses, along with the NodePort, to access the ingress. If the cluster has a firewall, you will also need to create a firewall rule to allow TCP traffic to the NodePort.
-
-   ```bash
-   export GATEWAY_URL=<workerNodeAddress>:$(kubectl get svc istio-ingress -n istio-system -o jsonpath='{.spec.ports[0].nodePort}')
-   gcloud compute firewall-rules create allow-book --allow tcp:$(kubectl get svc istio-ingress -n istio-system -o jsonpath='{.spec.ports[0].nodePort}')
-   ```
-
-1. _IBM Bluemix Free Tier:_ External load balancer is not available for kubernetes clusters in the free tier in Bluemix. You can use the public IP of the worker node, along with the NodePort, to access the ingress. The public IP of the worker node can be obtained from the output of the following command:
-
-   ```bash
-   bx cs workers <cluster-name or id>
-   export GATEWAY_URL=<public IP of the worker node>:$(kubectl get svc istio-ingress -n istio-system -o jsonpath='{.spec.ports[0].nodePort}')
-   ```
-
-1. _Vagrant:_ External load balancers are not supported in the Vagrant test cluster. You can use the host IP of the ingress service, along with the NodePort, to access the ingress.
-   
-   ```bash
-   export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingress -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingress -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
+   export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingressgateway -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingress -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
    ```
 
 Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning correctly.  It may take
