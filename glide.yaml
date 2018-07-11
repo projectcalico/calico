@@ -1,51 +1,83 @@
 package: github.com/projectcalico/libcalico-go
 import:
+# Pin to v3.3.8 since updates on master use a breaking version of grpc.
+# The version of golang.org/x/sys that other dependencies use does not have
+# all the unix methods that the updated version of grpc requires.
 - package: github.com/coreos/etcd
-  version: ^3.3.0
+  version: v3.3.8
   subpackages:
   - client
   - clientv3
   - mvcc/mvccpb
   - pkg/transport
+- package: github.com/coreos/go-semver
+  subpackages:
+  - semver
 - package: github.com/kelseyhightower/envconfig
-  version: ^1.3.0
 - package: github.com/onsi/ginkgo
-  version: ^1.4.0
+- package: github.com/onsi/gomega
+  subpackages:
+  - types
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/prometheus/client_golang
-  version: ^0.9.0-pre1
   subpackages:
   - prometheus
+# 1.1.0+ needed since our code expects the v4 uuid creation function to return a single value.
 - package: github.com/satori/go.uuid
   version: ^1.1.0
+# There are concerns about later versions not being compatible with our log formatting code.
 - package: github.com/sirupsen/logrus
   version: ^1.0.3
 - package: golang.org/x/net
   subpackages:
   - context
 - package: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - package: gopkg.in/tchap/go-patricia.v2
-  version: ^2.2.6
   subpackages:
   - patricia
-# Version of k8s.io/api needs to be set to track the kubernetes 1.10.0 versions.
-# For package which dependent on libcalico-go e.g. typha, glide does not pick up 
-# client-go dependency for this package.
+# Pin to kubernetes 1.11.0. This is so projects that import libcalico-go will
+# choose this version.
+# k8s.io/client-go also imports this package and it complains if the version is 
+# set to the tag name. To work around this the *EXACT* hash of the tag is used.
 - package: k8s.io/api
-  version: kubernetes-1.10.0
-# Version of k8s.io/apimachinery needs to be set to track the kubernetes 1.10.0 versions.
-# For some reason, glide does not pick up the client-go dependency for this package.
+  version: 072894a440bdee3a891dea811fe42902311cd2a3
+  subpackages:
+  - core/v1
+  - networking/v1
+# Pin to kubernetes 1.11.0. This is so projects that import libcalico-go will
+# choose this version.
+# k8s.io/client-go also imports this package and it complains if the version is 
+# set to the tag name. To work around this the *EXACT* hash of the tag is used.
 - package: k8s.io/apimachinery
-  version: kubernetes-1.10.0
-- package: k8s.io/client-go
-  version: v7.0.0
-# Version of k8s.io/code-generator needs to be set to track the kubernetes 1.10.0 versions.
-# Set it explicitly here because no obvious dependency info from k8s.io/client-go.
+  version: 103fd098999dc9c0c88536f5c9ad2e5da39373ae
+  subpackages:
+  - pkg/api/errors
+  - pkg/api/meta
+  - pkg/apis/meta/v1
+  - pkg/conversion
+  - pkg/fields
+  - pkg/runtime
+  - pkg/runtime/schema
+  - pkg/runtime/serializer
+  - pkg/types
+  - pkg/util/intstr
+  - pkg/util/uuid
+  - pkg/util/validation
+  - pkg/util/wait
+  - pkg/watch
+# Pin to kubernetes 1.11.0. This is so projects that import libcalico-go will
+# choose this version.
+# k8s.io/client-go doesn't import this package so it's OK to use the tag name.
 - package: k8s.io/code-generator
-  version: kubernetes-1.10.0
-# Version of k8s.io/gengo needs to be set current latest version.
+  version: kubernetes-1.11.0 
 - package: k8s.io/gengo
-  version: fdcf9f9480fdd5bf2b3c3df9bf4ecd22b25b87e2
-testImport:
-- package: github.com/onsi/gomega
+# Pin client-go to the exact tag release for K8s 1.11.0
+- package: k8s.io/client-go
+  version: v8.0.0
+  subpackages:
+  - kubernetes
+  - kubernetes/scheme
+  - plugin/pkg/client/auth
+  - rest
+  - tools/cache
+  - tools/clientcmd
