@@ -192,7 +192,7 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml"):
     elif data and not load_as_stdin:
         option_file = ' -f /tmp/input-data'
 
-    calicoctl_bin = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+    calicoctl_bin = os.environ.get("CALICOCTL", "/code/bin/calicoctl-linux-amd64")
 
     if ETCD_SCHEME == "https":
         etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL

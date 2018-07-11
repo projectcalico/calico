@@ -30,7 +30,11 @@ import:
   - ssh/terminal
 - package: github.com/projectcalico/go-yaml-wrapper
 # v1.0.5 seems to have a bad interaction with our logging hooks.
+# need to use aliasing because of this https://github.com/sirupsen/logrus/issues/553#issuecomment-306591437
+# and case difference between sirupsen and Sirupsen
 - package: github.com/sirupsen/logrus
+  repo: git@github.com:/sirupsen/logrus
+  vcs: git
   version: v1.0.4
 - package: github.com/projectcalico/libcalico-go
   version: release-v3.1

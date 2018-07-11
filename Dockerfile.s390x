@@ -1,7 +1,7 @@
-FROM s390x/alpine:3.6
+FROM s390x/alpine:3.7
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
-ADD dist/calicoctl-linux-s390x ./calicoctl
+ADD bin/calicoctl-linux-s390x /calicoctl
 
 ENV CALICO_CTL_CONTAINER=TRUE
 ENV PATH=$PATH:/
