@@ -118,7 +118,8 @@ $(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN) \
-	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+	-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+	-e GOCACHE=/go-cache \
 		$(CALICO_BUILD) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
 			go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" calico.go ; \
