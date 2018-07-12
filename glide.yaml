@@ -38,6 +38,7 @@ import:
   subpackages:
   - core/v1
 - package: k8s.io/client-go
+  version: v8.0.0
   subpackages:
   - kubernetes
   - tools/clientcmd
