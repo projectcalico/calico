@@ -14,5 +14,6 @@
 FROM arm64v8/alpine:3.7
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
-ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
+ADD bin/kube-controllers-linux-arm64 /usr/bin/kube-controllers
+ADD bin/check-status-linux-arm64 /usr/bin/check-status
 ENTRYPOINT ["/usr/bin/kube-controllers"]

@@ -70,7 +70,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/$(PACKAGE_NAME) \
                               $(CALICO_BUILD)
-SRCFILES=main.go $(shell find pkg -name '*.go')
+SRCFILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
 ## Removes all build artifacts.
 clean:
@@ -81,7 +81,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: bin/kube-controllers-linux-$(ARCH)
+build: bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
 build-all: $(addprefix sub-build-,$(ARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -114,7 +114,20 @@ bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
-	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./main.go
+	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/ 
+
+bin/check-status-linux-$(ARCH): vendor $(SRCFILES)
+	mkdir -p bin
+	-mkdir -p .go-pkg-cache
+	docker run --rm \
+	  -e GOOS=$(OS) -e GOARCH=$(ARCH) \
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+      -e GOCACHE=/go-cache \
+	  $(CALICO_BUILD) go build -v -o bin/check-status-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/check-status/
 
 ###############################################################################
 # Building the image
@@ -125,7 +138,7 @@ image-all: $(addprefix sub-image-,$(ARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH)
+image.created-$(ARCH): bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
@@ -185,7 +198,8 @@ static-checks: vendor check-copyright
 ## Fix static checks
 fix goimports:
 	goimports -l -w ./pkg
-	goimports -l -w ./main.go
+	goimports -l -w ./cmd/kube-controllers/main.go
+	goimports -l -w ./cmd/check-status/main.go
 
 .PHONY: install-git-hooks
 ## Install Git hooks

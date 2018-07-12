@@ -39,6 +39,9 @@ type Config struct {
 
 	// Path to a kubeconfig file to use for accessing the k8s API.
 	Kubeconfig string `default:"" split_words:"false"`
+
+	// Enable healthchecks
+	HealthEnabled bool `default:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct
