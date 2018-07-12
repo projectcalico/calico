@@ -213,9 +213,9 @@ spec:
 {%- if include.network == "calico" %}
             exec:
               command:
-              - /bin/readiness
-              - -bird
-              - -felix
+              - /bin/calico-node
+              - -bird-ready
+              - -felix-ready
 {%- elsif include.network == "flannel" %}
             httpGet:
               path: /readiness
@@ -224,8 +224,8 @@ spec:
 {%- else %}
             exec:
               command:
-              - /bin/readiness
-              - -felix
+              - /bin/calico-node
+              - -felix-ready
 {%- endif %}
             periodSeconds: 10
           volumeMounts:
