@@ -3,46 +3,46 @@ description: Calico Policy Controller
 homepage: https://projectcalico.org
 license: Apache-2.0
 import:
-- package: github.com/sirupsen/logrus
-  version: v1.0.4
+- package: github.com/coreos/etcd
+  subpackages:
+  - clientv3
+  - pkg/transport
 - package: github.com/kelseyhightower/envconfig
-  version: ~1.3.0
-- package: k8s.io/apiserver
-  version: 7001bc4df8883d4a0ec84cd4b2117655a0009b6c
-- package: k8s.io/apimachinery
-  version: release-1.8
+- package: github.com/onsi/gomega
+- package: github.com/patrickmn/go-cache
+- package: github.com/projectcalico/felix
+  subpackages:
+  - fv/containers
+- package: github.com/projectcalico/libcalico-go
+  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
+  subpackages:
+  - lib/apiconfig
+  - lib/apis/v3
+  - lib/backend
+  - lib/backend/api
+  - lib/backend/k8s/conversion
+  - lib/clientv3
+  - lib/errors
+  - lib/logutils
+  - lib/options
+- package: github.com/sirupsen/logrus
 - package: k8s.io/api
-  version: release-1.8
+  subpackages:
+  - core/v1
+  - networking/v1
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/apis/meta/v1
+  - pkg/fields
+  - pkg/util/runtime
+  - pkg/util/wait
+- package: k8s.io/apiserver
+  subpackages:
+  - pkg/storage/etcd3
+- package: k8s.io/client-go
   subpackages:
   - kubernetes
-  - pkg/api
-  - pkg/api/errors
-  - pkg/api/meta
-  - pkg/api/unversioned
-  - pkg/api/v1
-  - pkg/apis/extensions/v1beta1
-  - pkg/fields
-  - pkg/runtime
-  - pkg/runtime/schema
-  - pkg/runtime/serializer
-  - pkg/util/wait
-  - pkg/watch
-  - rest
   - tools/cache
   - tools/clientcmd
-- package: github.com/projectcalico/libcalico-go
-  version: d6aff54dc3527357f016c0cd5c5364f21a15e9b4
-- package: github.com/projectcalico/felix
-  version: 518dbc352494a962e46d50f8bfe72a70c86951bf
-  subpackages:
-  - fv
-  - fv.containers
-- package: github.com/coreos/etcd
-  version: v3.3.0
-# Version of pflag needed for k8s.io/release-1.8 series of pins.
-- package: github.com/spf13/pflag
-  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
-- package: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
-- package: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
+  - util/workqueue
+- package: github.com/onsi/ginkgo
