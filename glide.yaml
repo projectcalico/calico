@@ -1,16 +1,17 @@
 package: github.com/kelseyhightower/confd
 import:
+- package: github.com/BurntSushi/toml
+- package: github.com/kelseyhightower/memkv
 - package: github.com/projectcalico/libcalico-go
-  version: d6aff54dc3527357f016c0cd5c5364f21a15e9b4
-
-# v3.3.3 + our fixes.  Can be reverted back to upstream if 
-# https://github.com/coreos/etcd/pull/9614 is resolved.
-- package: github.com/coreos/etcd
-  version: e8287287893bd4080040e4fe68dae8a20476b095
-  repo: https://github.com/projectcalico/etcd.git
-- package: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
-- package: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
+  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
+  subpackages:
+  - lib/apiconfig
+  - lib/backend/api
+  - lib/backend/model
+  - lib/backend/syncersv1/bgpsyncer
+  - lib/clientv3
+  - lib/errors
+  - lib/logutils
+  - lib/options
 - package: github.com/sirupsen/logrus
   version: v1.0.4
