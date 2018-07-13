@@ -74,6 +74,11 @@ spec:
             # Mount in the etcd TLS secrets.
             - mountPath: /calico-secrets
               name: etcd-certs
+          readinessProbe:
+            exec:
+              command:
+              - /usr/bin/check-status
+              - -r
       volumes:
         # Mount in the etcd TLS secrets with mode 400.
         # See https://kubernetes.io/docs/concepts/configuration/secret/
