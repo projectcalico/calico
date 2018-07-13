@@ -53,6 +53,7 @@ current-context: test-context`
 
 func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
+		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
 		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
 		"/hyperkube", "apiserver",
@@ -67,6 +68,7 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 
 func RunK8sControllerManager(apiserverIp string) *containers.Container {
 	c := containers.Run("st-controller-manager",
+		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
 		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
 		"/hyperkube", "controller-manager",
@@ -82,6 +84,7 @@ func RunK8sControllerManager(apiserverIp string) *containers.Container {
 
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
+		containers.RunOpts{AutoRemove: true},
 		fmt.Sprintf("%s", os.Getenv("ETCD_IMAGE")),
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
