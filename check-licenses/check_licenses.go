@@ -40,8 +40,6 @@ var (
 		// allowing us to distribute a binary based on them as long as we don't modify them.
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/juju/ratelimit",
 			license: "GNU Lesser General Public License v3.0 (94%)"},
-		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/yaml.v2",
-			license: "GNU Lesser General Public License v3.0 (95%)"},
 
 		// Variants on MIT/BSD; files tend to include updated copyright statement.
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/PuerkitoBio/urlesc",
@@ -103,6 +101,9 @@ var (
 		// under a *GPL license (if we wanted to do that).
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/golang-lru/simplelru",
 			license: "Mozilla Public License 2.0"},
+		// Not detected properly - But it's apache license - https://github.com/go-yaml/yaml/blob/v2.2.1/LICENSE
+		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/yaml.v2",
+			license: "? (The Unlicense, 35%)"},
 	})
 	whitelistedPrefixes = []string{
 		// Standard golang BSD-like license.

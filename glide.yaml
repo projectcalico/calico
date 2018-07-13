@@ -1,84 +1,103 @@
 package: github.com/projectcalico/felix
 homepage: https://projectcalico.org
 license: Apache-2.0
-owners:
-- name: Rob Brockbank
-  email: rob@tigera.io
 import:
-# v3.3.3 + our fixes.
-- package: github.com/coreos/etcd
-  version: e8287287893bd4080040e4fe68dae8a20476b095
-  repo: https://github.com/projectcalico/etcd.git
+- package: github.com/containernetworking/cni
   subpackages:
-  - client
-  - pkg/transport
-# gRPC version that etcd requires.
-- package: google.golang.org/grpc
-  version: v1.7.5
+  - pkg/ns
 - package: github.com/docopt/docopt-go
-  version: ^0.6.2
-- package: github.com/ghodss/yaml
-  version: ^1.0.0
-- package: github.com/golang/glog
-- package: github.com/kelseyhightower/envconfig
-  version: ^1.3.0
-- package: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
-  subpackages:
-  - context
-- package: golang.org/x/sys
-  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
-  subpackages:
-  - unix
-  - windows
-- package: gopkg.in/go-playground/validator.v8
-- package: github.com/satori/go.uuid
-  version: ^1.1.0
 - package: github.com/go-ini/ini
-  version: ^1.21.0
-- package: github.com/projectcalico/libcalico-go
-  version: 8bf1e12ff13ecf994ae410efdf7808ed934a53fc
-  subpackages:
-  - lib
-- package: github.com/sirupsen/logrus
-  version: v1.0.4
-- package: github.com/kardianos/osext
-- package: github.com/mipearson/rfw
-- package: github.com/prometheus/client_golang
-  version: v0.9.0-pre1
 - package: github.com/gogo/protobuf
-  version: ^0.5.0
-- package: github.com/vishvananda/netlink
-  version: f07d9d5231b9cd05ddf2e5a8ef6582f385bc1770
+  subpackages:
+  - proto
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
+- package: github.com/jbenet/go-reuseport
+- package: github.com/kardianos/osext
+- package: github.com/kelseyhightower/envconfig
+- package: github.com/mipearson/rfw
+  # containernetworkin/cni tries to pull in really old versions of ginkgo and gomega.
+  # Pin to get newer ones
 - package: github.com/onsi/ginkgo
   version: ^1.4.0
 - package: github.com/onsi/gomega
   version: ^1.1.0
-- package: k8s.io/client-go
-  version: 82aa063804cf055e16e8911250f888bc216e8b61
+  subpackages:
+  - types
+- package: github.com/projectcalico/libcalico-go
+  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
+  subpackages:
+  - lib/apiconfig
+  - lib/apis/v3
+  - lib/backend
+  - lib/backend/api
+  - lib/backend/k8s/conversion
+  - lib/backend/model
+  - lib/backend/syncersv1/felixsyncer
+  - lib/backend/syncersv1/updateprocessors
+  - lib/backend/watchersyncer
+  - lib/clientv3
+  - lib/errors
+  - lib/hash
+  - lib/health
+  - lib/logutils
+  - lib/names
+  - lib/net
+  - lib/numorstring
+  - lib/options
+  - lib/selector
+  - lib/selector/parser
+  - lib/set
+  - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: 5ef90ad5dd6d0d6a12ecb736d8f813b4b7020739
+  version: b9ee88996167b43cb0617fd0107aac410ec4482d
   subpackages:
   - pkg/syncclient
-- package: github.com/emicklei/go-restful
-  version: v1.2
-- package: github.com/containernetworking/cni
-  version: v0.5.2
-- package: github.com/jbenet/go-reuseport
-  repo: https://github.com/fasaxc/go-reuseport.git
-  version: disable-dial-check
-- package: github.com/jbenet/go-sockaddr
-  version: 2e7ea655c10e4d4d73365f0f073b81b39cb08ee1
+  - pkg/tlsutils
+- package: github.com/prometheus/client_golang
   subpackages:
-  - net
+  - prometheus
+  - prometheus/promhttp
+  - prometheus/push
+- package: github.com/satori/go.uuid
+- package: github.com/sirupsen/logrus
+  version: v1.0.4
+- package: github.com/vishvananda/netlink
+# containernetworking/cni pulls in an old version, so pin to the version we need here.
+  version: f07d9d5231b9cd05ddf2e5a8ef6582f385bc1770
+- package: golang.org/x/net
+  subpackages:
+  - context
+# A number of packages pull in x/sys but it's important that we get a recent one for the x/crypto package.
+# Most notably, containernetworking/plugins wants a version from ~2 years ago.
+# It should also be safe to take the latest here (it's generally just adding more symbols)
+- package: golang.org/x/sys
+  version: 1b2967e3c290b7c545b3db0deeda16e9be4f98a2
+  subpackages:
+  - unix
+- package: google.golang.org/grpc
+  subpackages:
+  - credentials
+  - peer
+- package: k8s.io/api
+  subpackages:
+  - core/v1
+  - networking/v1
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/api/errors
+  - pkg/apis/meta/v1
+- package: k8s.io/client-go
+  subpackages:
+  - kubernetes
+  - rest
+  - tools/clientcmd
+  - tools/clientcmd/api
 - package: github.com/Microsoft/go-winio
   version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
 - package: github.com/Microsoft/hcsshim
   version: 34a629f78a5d50f7de07727e41a948685c45e026
-- package: google.golang.org/genproto
+- package: github.com/davecgh/go-spew
   subpackages:
-  - googleapis
-- package: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
-  subpackages:
-  - xfs
+  - spew
