@@ -18,7 +18,8 @@ Before attempting to create a Calico release you must do the following.
 
 1. Choose a Calico version number, e.g. `v3.2.0`.
 
-1. Select the appropriate component version numbers, and create any necessary releases.
+1. Select the appropriate component version numbers, and create any necessary releases. Follow the instructions
+   in each repository for further information.
 
    The following components _must_ use the same version number as the Calico version number
    chosen above, and thus must be re-released for every Calico release.
@@ -29,13 +30,9 @@ Before attempting to create a Calico release you must do the following.
    - [calico/kube-controllers](https://github.com/projectcalico/kube-controllers/releases)
    - [calico/felix](https://github.com/projectcalico/felix/releases)
    - [calico/typha](https://github.com/projectcalico/typha/releases)
+   - [networking-calico](https://github.com/openstack/networking-calico)
    - [calico/dikastes](https://github.com/projectcalico/app-policy/releases)
    - [calico/pod2daemon-flexvol](https://github.com/projectcalico/pod2daemon/releases)
-
-   The following components do not yet use the same versioning as the Calico repo, and
-   so the version to include may differ.
-
-   - [networking-calico](https://github.com/projectcalico/networking-calico)
 
    The following components do not share a version with the Calico release, but are included in the documentation.
 
@@ -52,6 +49,7 @@ Before attempting to create a Calico release you must do the following.
    ```
 
 Your next steps depend on the type of release:
+
 - [Creating a new major/minor release](#major-minor)
 - [Promoting a release candidate](#promoting)
 - [Creating a patch release](#patch)
