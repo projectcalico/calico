@@ -1,65 +1,43 @@
 package: github.com/projectcalico/typha
 homepage: https://projectcalico.org
 license: Apache-2.0
-owners:
-- name: Shaun Crampton
-  email: shaun@tigera.io
 import:
-# v3.3.3 + our fixes.
-- package: github.com/coreos/etcd
-  version: e8287287893bd4080040e4fe68dae8a20476b095
-  repo: https://github.com/projectcalico/etcd.git
+- package: github.com/Workiva/go-datastructures
   subpackages:
-  - client
-  - pkg/transport
+  - trie/ctrie
 - package: github.com/docopt/docopt-go
-  version: ^0.6.2
-- package: github.com/ghodss/yaml
-  version: ^1.0.0
-- package: github.com/kelseyhightower/envconfig
-  version: ^1.3.0
-- package: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
-  subpackages:
-  - context
-  - idna/
-- package: gopkg.in/go-playground/validator.v8
-- package: github.com/satori/go.uuid
-  version: ^1.1.0
 - package: github.com/go-ini/ini
-  version: ^1.21.0
+- package: github.com/kardianos/osext
+- package: github.com/mipearson/rfw
 - package: github.com/projectcalico/libcalico-go
-  version: 8bf1e12ff13ecf994ae410efdf7808ed934a53fc
+  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
   subpackages:
-  - lib
+  - lib/apiconfig
+  - lib/backend/api
+  - lib/backend/model
+  - lib/backend/syncersv1/felixsyncer
+  - lib/clientv3
+  - lib/health
+  - lib/set
+  - lib/upgrade/migrator
+  - lib/upgrade/migrator/clients
+  - lib/validator/v1
+- package: github.com/prometheus/client_golang
+  subpackages:
+  - prometheus
+  - prometheus/promhttp
 - package: github.com/sirupsen/logrus
   # v1.0.5 causes test breakages.
   version: v1.0.4
-- package: github.com/kardianos/osext
-- package: github.com/mipearson/rfw
-- package: github.com/prometheus/client_golang
-  version: ^0.9.0-pre1
-- package: github.com/onsi/ginkgo
-  version: f40a49d81e5c12e90400620b6242fb29a8e7c9
-- package: github.com/Workiva/go-datastructures
-  version: v1.0.42
-  subpackages:
-  - trie/ctrie
-- package: golang.org/x/text
-  version: 4ee4af566555f5fbe026368b75596286a312663a
-  subpackages:
-  - secure/bidirule
-- package: github.com/emicklei/go-restful
-  version: v1.2
-- package: k8s.io/client-go
-  version: 82aa063804cf055e16e8911250f888bc216e8b61
 - package: k8s.io/apimachinery
-  version: release-1.8
-- package: github.com/gogo/protobuf
-  version: ^0.3.0
-- package: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
   subpackages:
-  - xfs
+  - pkg/apis/meta/v1
+- package: k8s.io/client-go
+  subpackages:
+  - kubernetes
+  - rest
 testImport:
+- package: github.com/onsi/ginkgo
+  subpackages:
+  - extensions/table
 - package: github.com/onsi/gomega
