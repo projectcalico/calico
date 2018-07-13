@@ -466,20 +466,10 @@ release-publish-latest: release-prereqs
 
 	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
 
-# release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
-ifndef VERSION
-	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
-endif
-
-###############################################################################
-# Release
-###############################################################################
-
 .PHONY: node-test-at
 # Run calico/node docker-image acceptance tests
-node-test-at: release-prereq
-	docker run -v $(CALICO_NODE_DIR)tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
+node-test-at: release-prereqs
+	docker run -v $(PWD)/tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
 	calico/node:$(VERSION) /bin/sh -c 'apk --no-cache add wget ca-certificates && \
 	wget -q -O /tmp/goss \
 	https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
