@@ -67,6 +67,14 @@ PACKAGE_NAME?=github.com/projectcalico/cni-plugin
 CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
+# Variables for controlling image tagging and pushing.
+DOCKER_REPOS=calico quay.io/calico
+ifeq ($(RELEASE),true)
+# If this is a release, also tag and push GCR images. 
+DOCKER_REPOS+=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico.org us.gcr.io/projectcalico.org
+endif
+
+
 ETCD_VER=v3.3.7
 ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VER)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
@@ -141,49 +149,20 @@ endif
 
 ## push one arch
 push: imagetag
-	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-
-	# Push images to gcr.io, used by GKE.
-	docker push gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker push eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker push asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker push us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	for r in $(DOCKER_REPOS); do docker push $$r/node:$(IMAGETAG)-$(ARCH); done
 ifeq ($(ARCH),amd64)
-	docker push $(CONTAINER_NAME):$(IMAGETAG)
-	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
-
-	# Push images to gcr.io, used by GKE.
-	docker push gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker push us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
+	for r in $(DOCKER_REPOS); do docker push $$r/node:$(IMAGETAG); done
 endif
 
-## push all archs
 push-all: imagetag $(addprefix sub-push-,$(ARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
 ## tag images of one arch
 tag-images: imagetag
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-
-	# Tag images for gcr.io, used by GKE.
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+	for r in $(DOCKER_REPOS); do docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $$r/node:$(IMAGETAG)-$(ARCH); done
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
-
-	# Tag images for gcr.io, used by GKE.
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) eu.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) asia.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) us.gcr.io/projectcalico-org/$(CONTAINER_NAME):$(IMAGETAG)
+	for r in $(DOCKER_REPOS); do docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $$r/node:$(IMAGETAG); done
 endif
 
 ## tag images of all archs
