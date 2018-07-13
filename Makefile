@@ -149,9 +149,9 @@ endif
 
 ## push one arch
 push: imagetag
-	for r in $(DOCKER_REPOS); do docker push $$r/node:$(IMAGETAG)-$(ARCH); done
+	for r in $(DOCKER_REPOS); do docker push $$r/cni:$(IMAGETAG)-$(ARCH); done
 ifeq ($(ARCH),amd64)
-	for r in $(DOCKER_REPOS); do docker push $$r/node:$(IMAGETAG); done
+	for r in $(DOCKER_REPOS); do docker push $$r/cni:$(IMAGETAG); done
 endif
 
 push-all: imagetag $(addprefix sub-push-,$(ARCHES))
@@ -160,9 +160,9 @@ sub-push-%:
 
 ## tag images of one arch
 tag-images: imagetag
-	for r in $(DOCKER_REPOS); do docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $$r/node:$(IMAGETAG)-$(ARCH); done
+	for r in $(DOCKER_REPOS); do docker tag $(CONTAINER_NAME):latest-$(ARCH) $$r/cni:$(IMAGETAG)-$(ARCH); done
 ifeq ($(ARCH),amd64)
-	for r in $(DOCKER_REPOS); do docker tag $(NODE_CONTAINER_NAME):latest-$(ARCH) $$r/node:$(IMAGETAG); done
+	for r in $(DOCKER_REPOS); do docker tag $(CONTAINER_NAME):latest-$(ARCH) $$r/cni:$(IMAGETAG); done
 endif
 
 ## tag images of all archs
