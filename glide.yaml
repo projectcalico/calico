@@ -6,47 +6,47 @@ import:
   subpackages:
   - pkg/skel
   - pkg/types
+  - pkg/types/020
+  - pkg/types/current
+  - pkg/version
 - package: github.com/containernetworking/plugins
   version: v0.6.0
   subpackages:
   - pkg/ip
   - pkg/ipam
   - pkg/ns
-- package: github.com/coreos/go-iptables
-  version: ^0.2.0
-- package: github.com/golang/glog
+- package: github.com/mcuadros/go-version
 - package: github.com/onsi/ginkgo
-  version: ^1.4.0
 - package: github.com/onsi/gomega
-  version: ^1.1.0
   subpackages:
   - gexec
-- package: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
 - package: github.com/projectcalico/libcalico-go
-  version: 6b28e7cc060a90b5a96582b03cf42521abc39347
+  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
   subpackages:
   - lib/apiconfig
-  - lib/apis/v2
-  - lib/clientv2
+  - lib/apis/v3
+  - lib/backend
+  - lib/backend/k8s/conversion
+  - lib/clientv3
   - lib/errors
-  - lib/net
+  - lib/ipam
   - lib/logutils
+  - lib/names
+  - lib/net
+  - lib/options
 - package: github.com/vishvananda/netlink
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/apis/meta/v1
 - package: k8s.io/client-go
-  version: 82aa063804cf055e16e8911250f888bc216e8b61
   subpackages:
   - kubernetes
   - tools/clientcmd
-- package: github.com/mcuadros/go-version
-- package: github.com/projectcalico/felix
-  version: fa15f1776244d1db9e30fcd99f51b8b99be509c8
+- package: k8s.io/api
   subpackages:
-  - fv
-  - fv.containers
-- package: github.com/coreos/etcd
-  version: v3.3.0
-- package: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
-- package: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
+  - core/v1
+# A number of packages pull in x/sys but it's important that we get a recent one for the x/crypto package.
+# Most notably, containernetworking/plugins wants a version from ~2 years ago.
+# It should also be safe to take the latest here (it's generally just adding more symbols)
+- package: golang.org/x/sys
+  version: 1b2967e3c290b7c545b3db0deeda16e9be4f98a2
