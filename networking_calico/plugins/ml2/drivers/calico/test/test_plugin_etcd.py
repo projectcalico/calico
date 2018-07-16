@@ -317,6 +317,7 @@ class TestPluginEtcd(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.etcd_key_file = None
         lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
         lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
+        lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
 
     sg_default_key_v3 = (
         '/calico/resources/v3/projectcalico.org/networkpolicies/' +
@@ -383,6 +384,11 @@ class TestPluginEtcd(_TestEtcdBase):
             self.test_start_two_ports()
             self.etcd_data = {}
 
+    def make_context(self):
+        context = mock.MagicMock()
+        context._plugin_context.to_dict.return_value = {}
+        return context
+
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data."""
         # Provide two Neutron ports.
@@ -413,8 +419,13 @@ class TestPluginEtcd(_TestEtcdBase):
                          '--1-DEADBEEF--1234--5678'),
                 'namespace': 'openstack',
                 'labels': {
-                    'sg.projectcalico.org/openstack-SGID-default': '',
+                    'sg.projectcalico.org/openstack-SGID-default':
+                    'My_default_SG',
+                    'sg-name.projectcalico.org/openstack-My_default_SG':
+                    'SGID-default',
                     'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/openstack-project-id': 'jane3',
+                    'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/orchestrator': 'openstack'
                 }
             },
@@ -440,8 +451,13 @@ class TestPluginEtcd(_TestEtcdBase):
                          '--2-FACEBEEF--1234--5678'),
                 'namespace': 'openstack',
                 'labels': {
-                    'sg.projectcalico.org/openstack-SGID-default': '',
+                    'sg.projectcalico.org/openstack-SGID-default':
+                    'My_default_SG',
+                    'sg-name.projectcalico.org/openstack-My_default_SG':
+                    'SGID-default',
                     'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/openstack-project-id': 'jane3',
+                    'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/orchestrator': 'openstack'
                 }
             },
@@ -472,7 +488,7 @@ class TestPluginEtcd(_TestEtcdBase):
         self.assertEtcdDeletes(set())
 
         # Delete lib.port1.
-        context = mock.MagicMock()
+        context = self.make_context()
         context._port = lib.port1
         context._plugin_context.session.query.return_value.filter_by.\
             side_effect = self.port_query
@@ -559,8 +575,13 @@ class TestPluginEtcd(_TestEtcdBase):
                          '--3-HELLO--1234--5678'),
                 'namespace': 'openstack',
                 'labels': {
-                    'sg.projectcalico.org/openstack-SGID-default': '',
+                    'sg.projectcalico.org/openstack-SGID-default':
+                    'My_default_SG',
+                    'sg-name.projectcalico.org/openstack-My_default_SG':
+                    'SGID-default',
                     'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/openstack-project-id': 'jane3',
+                    'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/orchestrator': 'openstack'
                 }
             },
@@ -585,6 +606,7 @@ class TestPluginEtcd(_TestEtcdBase):
         # Update what the DB's queries should now return.
         self.db.get_security_groups.return_value = [
             {'id': 'SGID-default',
+             'name': 'My default SG',
              'security_group_rules': [
                  {'remote_group_id': 'SGID-default',
                   'remote_ip_prefix': None,
@@ -612,6 +634,7 @@ class TestPluginEtcd(_TestEtcdBase):
                   'port_range_min': -1}
              ]},
             {'id': 'SG-1',
+             'name': 'My first SG',
              'security_group_rules': [
                  {'remote_group_id': 'SGID-default',
                   'remote_ip_prefix': None,
@@ -714,8 +737,13 @@ class TestPluginEtcd(_TestEtcdBase):
         del ep_hello_value_v3['metadata']['labels'][
             'sg.projectcalico.org/openstack-SGID-default'
         ]
+        del ep_hello_value_v3['metadata']['labels'][
+            'sg-name.projectcalico.org/openstack-My_default_SG'
+        ]
         ep_hello_value_v3['metadata']['labels'][
-            'sg.projectcalico.org/openstack-SG-1'] = ''
+            'sg.projectcalico.org/openstack-SG-1'] = 'My_first_SG'
+        ep_hello_value_v3['metadata']['labels'][
+            'sg-name.projectcalico.org/openstack-My_first_SG'] = 'SG-1'
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
             sg_1_key_v3: sg_1_value_v3
@@ -731,6 +759,7 @@ class TestPluginEtcd(_TestEtcdBase):
         # Change SG-1 to allow only port 5060.
         self.db.get_security_groups.return_value[-1] = {
             'id': 'SG-1',
+            'name': 'My first SG',
             'security_group_rules': [
                 {'remote_group_id': 'SGID-default',
                  'remote_ip_prefix': None,
@@ -786,6 +815,7 @@ class TestPluginEtcd(_TestEtcdBase):
         # group. Expect a resync to fix it up.
         self.db.get_security_groups.return_value[-1] = {
             'id': 'SG-1',
+            'name': 'My first SG',
             'security_group_rules': [
                 {'remote_group_id': 'SGID-default',
                  'remote_ip_prefix': None,
@@ -829,6 +859,7 @@ class TestPluginEtcd(_TestEtcdBase):
 
         self.db.get_security_groups.return_value[-1] = {
             'id': 'SG-1',
+            'name': 'My first SG',
             'security_group_rules': [
                 {'remote_group_id': 'SGID-default',
                  'remote_ip_prefix': None,
@@ -895,7 +926,7 @@ class TestPluginEtcd(_TestEtcdBase):
         self.osdb_subnets = [subnet1, subnet2]
 
         # Notify creation of subnet1, and expect corresponding etcd write.
-        context = mock.MagicMock()
+        context = self.make_context()
         context.current = subnet1
         self.driver.create_subnet_postcommit(context)
         self.assertEtcdWrites({

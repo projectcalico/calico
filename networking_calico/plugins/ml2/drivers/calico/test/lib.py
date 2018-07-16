@@ -56,6 +56,7 @@ sys.modules['networking_calico.compat'] = m_compat = mock.MagicMock()
 port1 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
          'id': 'DEADBEEF-1234-5678',
+         'tenant_id': 'jane3',
          'network_id': 'calico-network-id',
          'device_id': 'instance-1',
          'device_owner': 'compute:nova',
@@ -69,6 +70,7 @@ port1 = {'binding:vif_type': 'tap',
 port2 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
          'id': 'FACEBEEF-1234-5678',
+         'tenant_id': 'jane3',
          'network_id': 'calico-network-id',
          'device_id': 'instance-2',
          'device_owner': 'compute:nova',
@@ -83,6 +85,7 @@ port2 = {'binding:vif_type': 'tap',
 port3 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-2',
          'id': 'HELLO-1234-5678',
+         'tenant_id': 'jane3',
          'network_id': 'calico-network-id',
          'device_id': 'instance-3',
          'device_owner': 'compute:nova',
@@ -184,6 +187,18 @@ from networking_calico.plugins.ml2.drivers.calico import syncer
 # Replace the elector.
 mech_calico.Elector = GrandDukeOfSalzburg
 
+
+# Mock the Keystone client.
+def mock_projects_list():
+    mock_project = mock.Mock()
+    mock_project.id = "jane3"
+    mock_project.name = "pname+%s" % mock_project.id
+    return [mock_project]
+keystone_client = mock.Mock()
+keystone_client.projects.list.side_effect = mock_projects_list
+mech_calico.KeystoneClient = mock.Mock()
+mech_calico.KeystoneClient.return_value = keystone_client
+
 REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Value used to indicate 'timeout' in poll and sleep processing.
@@ -223,7 +238,7 @@ class Lib(object):
         # Hook the (mock) Neutron database.
         self.db = mech_calico.plugin_dir.get_plugin()
         self.db_context = mech_calico.ctx.get_admin_context()
-
+        self.db_context.to_dict.return_value = {}
         self.db_context.session.query.return_value.filter_by.side_effect = (
             self.port_query
         )
@@ -240,6 +255,7 @@ class Lib(object):
         # default SG).
         self.db.get_security_groups.return_value = [
             {'id': 'SGID-default',
+             'name': 'My default SG',
              'security_group_rules': [
                  {'remote_group_id': 'SGID-default',
                   'remote_ip_prefix': None,

@@ -20,11 +20,16 @@ except ImportError:
     # Ocata and earlier.
     from neutron.db.l3_db import FloatingIP
 
+from networking_calico.compat import cfg
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
 from networking_calico import datamodel_v3
 from networking_calico.plugins.ml2.drivers.calico.policy import \
     SG_LABEL_PREFIX
+from networking_calico.plugins.ml2.drivers.calico.policy import \
+    SG_NAME_LABEL_PREFIX
+from networking_calico.plugins.ml2.drivers.calico.policy import \
+    SG_NAME_MAX_LENGTH
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
@@ -32,13 +37,41 @@ from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 LOG = log.getLogger(__name__)
 
 
+# The Calico WorkloadEndpoint that represents an OpenStack VM gets a pair of
+# labels to indicate the project (aka tenant) that the VM belongs to.  The
+# label names are as follows, and the label values are the actual project ID
+# and name at the time of VM creation.
+#
+# (OpenStack allows a project's name to be updated subsequently; if that
+# happens, it is unspecified whether or not we reflect that by updating labels
+# of existing WorkloadEndpoints.  In practice the project name label will
+# probably change when the WorkloadEndpoint is next rewritten for some other
+# reason.  Deployments that use these labels are recommended not to change
+# project names post-creation.)
+PROJECT_ID_LABEL_NAME = 'projectcalico.org/openstack-project-id'
+PROJECT_NAME_LABEL_NAME = 'projectcalico.org/openstack-project-name'
+PROJECT_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
+
+# Note: Calico requires a label value to be an empty string, or to consist of
+# alphanumeric characters, '-', '_' or '.', starting and ending with an
+# alphanumeric character.  If a project name does not already meet that, we
+# substitute problem characters so that it does.
+
+# Calico-specific keys in the port dict for storing information that
+# we want to include in WorkloadEndpoints.
+PORT_KEY_PROJ_NAME = 'calico-project-name'
+PORT_KEY_SG_NAMES = 'calico-sg-names'
+
+
 class WorkloadEndpointSyncer(ResourceSyncer):
 
-    def __init__(self, db, txn_from_context, policy_syncer):
+    def __init__(self, db, txn_from_context, policy_syncer, keystone_client):
         super(WorkloadEndpointSyncer, self).__init__(db,
                                                      txn_from_context,
                                                      "WorkloadEndpoint")
         self.policy_syncer = policy_syncer
+        self.keystone = keystone_client
+        self.proj_name_cache = {}
 
     # The following methods differ from those for other resources because for
     # endpoints we need to read, compare and write labels and annotations as
@@ -182,6 +215,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         )
         self.add_port_gateways(port, context)
         self.add_port_interface_name(port)
+        self.add_port_project_name(port, context)
+        self.add_port_sg_names(port, context)
+
         return port
 
     def add_port_gateways(self, port, context):
@@ -197,6 +233,85 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             subnet = self.db.get_subnet(context, ip['subnet_id'])
             ip['gateway'] = subnet['gateway_ip']
 
+    def add_port_sg_names(self, port, context):
+        """add_port_sg_names
+
+        Determine and store the name of each security group that a port uses.
+
+        This method assumes it's being called from within a database
+        transaction and does not take out another one.
+        """
+        # Oddly, get_security_groups normally tries to create the default SG
+        # for the current tenant, and that can hit a
+        # NeutronDbObjectDuplicateEntry exception - presumably if there's a
+        # race with multiple servers or threads trying to do this at the same
+        # time.  Adding "default_sg=True" here suppresses that creation
+        # attempt.
+        port[PORT_KEY_SG_NAMES] = {}
+        filters = {'id': port['security_groups']}
+        for sg in self.db.get_security_groups(context, filters=filters,
+                                              default_sg=True):
+            sg_name = datamodel_v3.sanitize_label_name_value(
+                sg['name'],
+                SG_NAME_MAX_LENGTH
+            )
+            port[PORT_KEY_SG_NAMES][sg['id']] = sg_name
+
+    def add_port_project_name(self, port, context):
+        """add_port_project_name
+
+        Determine the OpenStack project name for a given port's
+        project/tenant ID, and add it as port['calico_project_name'].
+        """
+        proj_id = port.get('project_id', port.get('tenant_id'))
+        if proj_id is None:
+            LOG.warning("Port with no project ID: %r", port)
+            return
+
+        # If we've already cached the corresponding project name, we're done.
+        proj_name = self.proj_name_cache.get(proj_id)
+        if proj_name is not None:
+            LOG.debug("Project name %r was cached", proj_name)
+            port[PORT_KEY_PROJ_NAME] = proj_name
+            return
+
+        # Flush the cache if it has reached its maximum allowed size.
+        if len(self.proj_name_cache) >= cfg.CONF.calico.project_name_cache_max:
+            self.proj_name_cache = {}
+
+        # Get the project name from the request context if its available and
+        # matches the port's project ID.
+        cdict = context.to_dict()
+        LOG.info("Request context %s", cdict)
+        req_proj_id = cdict.get('project_id', cdict.get('tenant_id'))
+        req_proj_name = cdict.get('project_name', cdict.get('tenant_name'))
+        if req_proj_id == proj_id and req_proj_name is not None:
+            LOG.info("Got project name %r from request", req_proj_name)
+            port[PORT_KEY_PROJ_NAME] = \
+                datamodel_v3.sanitize_label_name_value(req_proj_name,
+                                                       PROJECT_NAME_MAX_LENGTH)
+            self.proj_name_cache[proj_id] = port[PORT_KEY_PROJ_NAME]
+            return
+
+        # Last resort, look up the port's project ID in the Keystone DB.
+        try:
+            wanted_proj_name = None
+            for proj in self.keystone.projects.list():
+                if proj.id not in self.proj_name_cache:
+                    LOG.info("Got project name %r from Keystone", proj.name)
+                    proj_name = datamodel_v3.sanitize_label_name_value(
+                        proj.name, PROJECT_NAME_MAX_LENGTH
+                    )
+                    self.proj_name_cache[proj.id] = proj_name
+                    if proj.id == proj_id:
+                        wanted_proj_name = proj_name
+            if wanted_proj_name is not None:
+                port[PORT_KEY_PROJ_NAME] = wanted_proj_name
+            return
+        except Exception:
+            # Probably don't have right credentials for that lookup.
+            LOG.exception("Failed to query Keystone DB")
+
 
 def endpoint_name(port):
     def escape_dashes(s):
@@ -209,10 +324,21 @@ def endpoint_name(port):
 
 
 def endpoint_labels(port):
-    labels = dict((SG_LABEL_PREFIX + sg_id, '')
-                  for sg_id in port['security_groups'])
+    labels = {}
+    for sg_id in port['security_groups']:
+        sg_name = port.get(PORT_KEY_SG_NAMES, {}).get(sg_id, '')
+        labels[SG_LABEL_PREFIX + sg_id] = sg_name
+        if sg_name:
+            labels[SG_NAME_LABEL_PREFIX + sg_name] = sg_id
     labels['projectcalico.org/namespace'] = 'openstack'
     labels['projectcalico.org/orchestrator'] = 'openstack'
+
+    proj_id = port.get('project_id', port.get('tenant_id'))
+    if proj_id is not None:
+        labels[PROJECT_ID_LABEL_NAME] = proj_id
+    if PORT_KEY_PROJ_NAME in port:
+        labels[PROJECT_NAME_LABEL_NAME] = port[PORT_KEY_PROJ_NAME]
+
     return labels
 
 
