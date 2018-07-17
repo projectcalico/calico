@@ -44,7 +44,7 @@ endif
 OS := $(shell uname -s | tr A-Z a-z)
 
 ###############################################################################
-GO_BUILD_VER?=v0.16
+GO_BUILD_VER?=v0.17
 ETCD_VER?=v3.3.7
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
@@ -116,24 +116,24 @@ LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-
 
 ## Update libcalico pin in glide.yaml
 update-libcalico:
-	@echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"
-	@export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
-    echo "Old version: $$OLD_VER";\
-    if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
-      sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
-      docker run --rm -i \
-        -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
-        -v $(HOME)/.glide:/home/user/.glide:rw \
-        -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-        $(GO_BUILD_CONTAINER) /bin/sh -c ' \
-          cd /go/src/$(PACKAGE_NAME) && \
-          if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
-            glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
-          fi;\
+	docker run --rm -i \
+      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+      -v $(HOME)/.glide:/home/user/.glide:rw \
+      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+      $(GO_BUILD_CONTAINER) /bin/sh -c ' \
+        cd /go/src/$(PACKAGE_NAME); \
+        echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
+        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        echo "Old version: $$OLD_VER";\
+        if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
+            sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
+            if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
+              glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
+            fi;\
           OUTPUT=`mktemp`;\
           glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi;'; \
-    fi
+          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+        fi'
 
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
