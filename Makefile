@@ -330,6 +330,7 @@ ifeq ($(GIT_COMMIT),<unknown>)
 endif
 	$(MAKE) calico-build/trusty
 	$(MAKE) calico-build/xenial
+	$(MAKE) calico-build/bionic
 	utils/make-packages.sh deb
 
 # Build RPMs.
@@ -353,6 +354,11 @@ calico-build/trusty:
 .PHONY: calico-build/xenial
 calico-build/xenial:
 	cd docker-build-images && docker build -f ubuntu-xenial-build.Dockerfile.$(ARCH) -t calico-build/xenial .
+
+# Build a docker image used for building debs for bionic.
+.PHONY: calico-build/bionic
+calico-build/bionic:
+	cd docker-build-images && docker build -f ubuntu-bionic-build.Dockerfile.$(ARCH) -t calico-build/bionic .
 
 # Construct a docker image for building Centos 7 RPMs.
 .PHONY: calico-build/centos7
