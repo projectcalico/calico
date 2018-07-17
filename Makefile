@@ -90,7 +90,7 @@ $(HTTP_STATUS).pb.go: $(HTTP_STATUS).proto
 	              --gogofast_out=plugins=grpc,$(PROTOC_MAPPINGS):$(ENVOY_API)
 
 $(EXT_AUTH)external_auth.proto $(ADDRESS).proto $(V2_BASE).proto $(HTTP_STATUS).proto $(EXT_AUTH)attribute_context.proto:
-	glide install
+	glide install -v
 
 proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}:/src:rw \
@@ -106,3 +106,7 @@ build: proto
 .PHONY: test
 test: proto
 	go test -v ./...
+
+.PHONY: clean
+clean:
+	rm -rf vendor
