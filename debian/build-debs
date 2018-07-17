@@ -8,7 +8,7 @@ if [ -z "${DEB_VERSION}" ]; then
   exit 1
 fi
 if [ -z "${STREAM}" ]; then
-  echo "STREAM variable should be set to trusty/xenial/..."
+  echo "STREAM variable should be set to trusty/xenial/bionic..."
   exit 1
 fi
 
