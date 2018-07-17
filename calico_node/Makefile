@@ -156,7 +156,7 @@ dist/calicoctl-v1.0.2:
 dist/calicoctl:
 	-docker rm -f calicoctl
 	docker pull $(CTL_CONTAINER_NAME)
-	docker create --name calicoctl $(CTL_CONTAINER_NAME)
+	docker create --entrypoint=/bin/true --name calicoctl $(CTL_CONTAINER_NAME)
 	docker cp calicoctl:calicoctl dist/calicoctl && \
 	  test -e dist/calicoctl && \
 	  touch dist/calicoctl
@@ -164,7 +164,7 @@ dist/calicoctl:
 dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
 	docker pull calico/cni:$(CNI_VER)
-	docker create --name calico-cni calico/cni:$(CNI_VER)
+	docker create --entrypoint=/bin/true --name calico-cni calico/cni:$(CNI_VER)
 	docker cp calico-cni:/opt/cni/bin/calico dist/calico-cni-plugin && \
 	  test -e dist/calico-cni-plugin && \
 	  touch dist/calico-cni-plugin
@@ -223,7 +223,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	# Latest felix binaries are stored in automated builds of calico/felix.
 	# To get them, we create (but don't start) a container from that image.
 	if $(PULL_FELIX); then docker pull $(FELIX_CONTAINER_NAME); fi
-	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
+	docker create --entrypoint=/bin/true --name calico-felix $(FELIX_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
 	# to make sure that downstream targets get rebuilt.
@@ -238,7 +238,7 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 	# Latest confd binaries are stored in automated builds of calico/confd.
 	# To get them, we create (but don't start) a container from that image.
 	docker pull $(CONFD_CONTAINER_NAME)
-	docker create --name calico-confd $(CONFD_CONTAINER_NAME)
+	docker create --entrypoint=/bin/true --name calico-confd $(CONFD_CONTAINER_NAME)
 	# Then we copy the files out of the container.  Since docker preserves
 	# mtimes on its copy, check the file really did appear, then touch it
 	# to make sure that downstream targets get rebuilt.
