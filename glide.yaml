@@ -3,9 +3,12 @@ homepage: https://projectcalico.org
 license: Apache-2.0
 import:
 - package: github.com/containernetworking/cni
+  version: v0.5.2
   subpackages:
   - pkg/ns
+# Need to pin to an older version as our code uses code that is deprecated in newer versions.
 - package: github.com/docopt/docopt-go
+  version: ^0.6.2
 - package: github.com/go-ini/ini
 - package: github.com/gogo/protobuf
   subpackages:
@@ -26,7 +29,6 @@ import:
   subpackages:
   - types
 - package: github.com/projectcalico/libcalico-go
-  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
