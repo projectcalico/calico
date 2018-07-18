@@ -3,7 +3,7 @@ title: Profile Resource (Profile)
 canonical_url: https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/profile
 ---
 
-A profile resource (`Profile`) represents a set of rules which are applied 
+A profile resource (`Profile`) represents a set of rules which are applied
 to the individual endpoints to which this profile has been assigned.
 
 Each Calico endpoint or host endpoint can be assigned to zero or more profiles.
@@ -25,7 +25,7 @@ kind: Profile
 metadata:
   name: profile1
   labels:
-    profile: profile1 
+    profile: profile1
 spec:
   ingress:
   - action: Deny
@@ -36,17 +36,17 @@ spec:
     source:
       selector: profile == 'profile1'
   egress:
-  - action: Allow 
+  - action: Allow
 ```
 
-### Definition 
+### Definition
 
 #### Metadata
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
 | name   | The name of the profile. Required. | Alphanumeric string with optional `.`, `_`, or `-`. | string |
-| labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
+| labels | A set of labels for this profile. |  | map of string key to string values |
 | tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 
 #### Spec
@@ -55,7 +55,7 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | ingress  | The ingress rules belonging to this profile. | | List of [Rule](#rule) |
 | egress   | The egress rules belonging to this profile. | | List of [Rule](#rule)  |
-| labels   | An option set of labels to apply to each endpoint (in addition to their own labels) |  | map | 
+| labelsToApply | An optional set of labels to apply to each endpoint in this profile (in addition to the endpoint's own labels) |  | map |
 
 #### Rule
 
