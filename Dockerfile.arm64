@@ -1,0 +1,4 @@
+FROM scratch
+
+ADD bin/dikastes-arm64 /dikastes
+CMD ["/dikastes"]

@@ -1,0 +1,4 @@
+FROM scratch
+
+ADD bin/dikastes-ppc64le /dikastes
+CMD ["/dikastes"]
