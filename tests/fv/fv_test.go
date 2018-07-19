@@ -320,7 +320,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			wepIp := net.IP{192, 168, 0, 1}
 			swepIp := "192.168.0.1/32"
 			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       cnet.IP{wepIp},
+				IP:       cnet.IP{IP: wepIp},
 				Hostname: cNodeName,
 				HandleID: &handle,
 			})
