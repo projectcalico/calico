@@ -38,8 +38,8 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 ###############################################################################
-GO_BUILD_VER?=v0.16
-GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
+GO_BUILD_VER?=v0.17
+GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
