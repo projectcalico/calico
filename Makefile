@@ -24,8 +24,8 @@ ifeq ($(ARCH),s390x)
 	ARCHTAG:=-s390x
 endif
 ###############################################################################
-GO_BUILD_VER?=v0.16
-CALICO_BUILD?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
+GO_BUILD_VER?=v0.17
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 # Version of this repository as reported by git.
 CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
