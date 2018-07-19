@@ -1,5 +1,5 @@
-hash: 9005c1f2a22af6d00a53ba00c250cb46c5ea9593f41e405086f7701962a62886
-updated: 2018-07-12T17:37:13.37649244-07:00
+hash: 15945432714a12a6889c810b136591540f5f089a0893f33040f6c5df49bc3a82
+updated: 2018-07-19T15:44:36.618139978-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -232,6 +232,10 @@ imports:
   version: c06e80d9300e4443158a03817b8a8cb37d230320
   subpackages:
   - rate
+- name: golang.org/x/tools
+  version: 4735f53fb37db012e63d1a62914417980fb3c023
+  subpackages:
+  - import
 - name: google.golang.org/appengine
   version: b1f26356af11148e710935ed1ac8a7f5702c7612
   subpackages:

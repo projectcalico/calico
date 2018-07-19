@@ -69,7 +69,10 @@ import:
 # choose this version.
 # k8s.io/client-go doesn't import this package so it's OK to use the tag name.
 - package: k8s.io/code-generator
-  version: kubernetes-1.11.0 
+  version: kubernetes-1.11.0
+# Note: code-generator (deepcopy-gen) relies on this, but it isn't picked up
+# since we only reference it from out Makefile.
+- package: golang.org/x/tools/import
 - package: k8s.io/gengo
 # Pin client-go to the exact tag release for K8s 1.11.0
 - package: k8s.io/client-go
