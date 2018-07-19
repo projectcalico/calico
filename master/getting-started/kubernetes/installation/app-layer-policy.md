@@ -68,29 +68,23 @@ kubectl apply -f \
 ## Installing Istio
 
 Application layer policy requires you to use Istio in your cluster to function
-correctly. We support Istio version 0.6.0 or newer.
+correctly. We support Istio version 1.0.0 or newer.
 
-Install Istio using the following command
+Install Istio according to the [Istio project documentation](https://istio.io/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
 
 ```bash
-kubectl apply -f \
-{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/istio.yaml
+curl -L https://git.io/getLatestIstio | sh -
+cd istio-1.0.0
+kubectl apply -f install/kubernetes/istio-demo-auth.yaml
 ```
 
-> **Note**: You can also
-> [view the manifest in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/istio.yaml){:target="_blank"}.
-{: .alert .alert-info}
-
-If you would like to install a different version of Istio or inspect the changes
-we have made to the standard Istio install manifest, see
-[Customizing the manifests](config-options).
-
-## Enabling the Istio sidecar injector
+## Updating the Istio sidecar injector
 
 The sidecar injector automatically modifies pods as they are created to work
-with Istio. It adds Envoy and Dikastes as sidecar containers.
+with Istio. This step modifies the injector configuration to add Dikastes, a
+{{site.prodname}} component, as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://istio.io/docs/setup/kubernetes/sidecar-injection.html#automatic-sidecar-injection)
+1. Follow the [Automatic sidecar injection instructions](https://istio.io/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection)
    to install the sidecar injector and enable it in your chosen namespace(s).
 
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
@@ -107,6 +101,19 @@ with Istio. It adds Envoy and Dikastes as sidecar containers.
 If you would like to install a different version of Istio or inspect the changes
 we have made to the standard sidecar injector `ConfigMap`, see
 [Customizing the manifests](config-options).
+
+## Adding {{site.prodname}} authorization services to the mesh
+
+Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions
+
+```bash
+kubectl apply -f \
+{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/istio-app-layer-policy.yaml
+```
+
+> **Note**: You can also
+> [view the manifest in your browser](manifests/app-layer-policy/istio-app-layer-policy.yaml){:target="_blank"}.
+{: .alert .alert-info} 
 
 ## Adding namespace labels
 
