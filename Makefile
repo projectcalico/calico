@@ -40,12 +40,12 @@ ifeq ($(ARCH),x86_64)
 endif
 
 ###############################################################################
-GO_BUILD_VER?=v0.16
+GO_BUILD_VER?=v0.17
 
 # Select which release branch to test.
 RELEASE_BRANCH?=master
 
-CALICO_BUILD = calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
+CALICO_BUILD = calico/go-build:$(GO_BUILD_VER)
 
 CONTAINER_NAME=calico/confd
 
