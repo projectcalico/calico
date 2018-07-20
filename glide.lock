@@ -1,5 +1,5 @@
-hash: 900f6e65e88d5d5dff2fd70a769ba38d443304f6c27a39c2a049f954c9f0e888
-updated: 2018-07-17T10:46:51.942051302-07:00
+hash: d207fe71fda21b9db8b43bf55e46fa93aaf64c2ce05100d6a2b492f2a74d5c71
+updated: 2018-07-20T13:25:29.630861291-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -235,7 +235,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: b9ee88996167b43cb0617fd0107aac410ec4482d
+  version: c3ce72f922b1f18120a204baa416f2793036bf70
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -251,7 +251,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
+  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -271,11 +271,11 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: be1fbeda19366dea804f00efff2dd73a1642fdcc
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
+  version: a2144134853fc9a27a7b1e3eb4f19f1a76df13c9
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -342,7 +342,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 2731d4fa720b67f9fe38e9051a2a9b38e4609260
+  version: fedd2861243fd1a8152376292b921b394c7bef7e
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc

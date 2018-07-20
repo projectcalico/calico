@@ -113,11 +113,10 @@ var _ = AfterSuite(func() {
 	log.Info(">>> AfterSuite <<<")
 	if prometheusPushURL != "" {
 		// Push metrics to Prometheus push gateway.
-		err := push.FromGatherer(
-			"k8sfv",
-			nil,
+
+		err := push.New(
 			prometheusPushURL,
-			prometheus.DefaultGatherer)
+			"k8sfv").Gatherer(prometheus.DefaultGatherer).Push()
 		panicIfError(err)
 	}
 
