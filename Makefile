@@ -151,6 +151,27 @@ vendor vendor/.up-to-date: glide.lock
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
+# Default the libcalico repo and version but allow them to be overridden
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
+
+## Update libcalico pin in glide.yaml
+update-libcalico:
+	$(DOCKER_GO_BUILD) sh -c '\
+        echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
+        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        echo "Old version: $$OLD_VER";\
+        if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
+            sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
+            if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
+              glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
+            fi;\
+          OUTPUT=`mktemp`;\
+          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
+          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+        fi'
+#| grep -v "golang.org/x/sys"
+#glide up --strip-vendor;
 bin/calico-typha: bin/calico-typha-$(ARCH)
 	ln -f bin/calico-typha-$(ARCH) bin/calico-typha
 
