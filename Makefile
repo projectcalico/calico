@@ -38,7 +38,7 @@ ifeq ($(ARCH),x86_64)
         override ARCH=amd64
 endif
 ###############################################################################
-GO_BUILD_VER ?= v0.16
+GO_BUILD_VER ?= v0.17
 
 SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.go
 TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)

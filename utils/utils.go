@@ -436,7 +436,7 @@ func ParsePools(pools []string, isv4 bool) ([]cnet.IPNet, error) {
 		if !isv4 && ip.To4() != nil {
 			return nil, fmt.Errorf("%q isn't a IPv6 address", ip)
 		}
-		result = append(result, cnet.IPNet{*cidr})
+		result = append(result, cnet.IPNet{IPNet: *cidr})
 	}
 	return result, nil
 }
