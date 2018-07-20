@@ -237,7 +237,7 @@ compare_templates() {
         echo "Copying bgp peers to ${LOGPATH}/bgppeers.yaml"
         calicoctl get bgppeers -o yaml > ${LOGPATH}/bgppeers.yaml
         echo "Copying ip pools to ${LOGPATH}/ippools.yaml"
-        calicoctl get ippools -o yaml > ${LOGPATH}/bgppeers.yaml
+        calicoctl get ippools -o yaml > ${LOGPATH}/ippools.yaml
         echo "Listing running processes"
         ps
     fi
