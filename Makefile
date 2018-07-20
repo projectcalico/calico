@@ -51,7 +51,7 @@ endif
 CONTAINER_NAME=calico/typha
 PACKAGE_NAME?=github.com/projectcalico/typha
 
-GO_BUILD_VER?=v0.16
+GO_BUILD_VER?=v0.17
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest

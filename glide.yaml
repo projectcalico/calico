@@ -5,7 +5,9 @@ import:
 - package: github.com/Workiva/go-datastructures
   subpackages:
   - trie/ctrie
+# Need to pin to an older version as our code uses code that is deprecated in newer versions. 
 - package: github.com/docopt/docopt-go
+  version: ^0.6.2
 - package: github.com/go-ini/ini
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
