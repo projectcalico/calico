@@ -2133,8 +2133,6 @@ master:
      flannel:
       version: v0.9.1
      calico/dikastes:
-      version: 20180328162858
+      version: 147c10c
      flexvol:
       version: latest
-     pilot-webhook:
-      version: 20180319220721

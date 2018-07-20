@@ -1,23 +1,54 @@
 ---
 layout: null
 ---
+apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: istio-inject
+  name: istio-sidecar-injector
   namespace: istio-system
-apiVersion: v1
+  labels:
+    app: istio
+    chart: istio-1.0.0
+    release: RELEASE-NAME
+    heritage: Tiller
+    istio: sidecar-injector
 data:
-  config: |
+  config: |-
     policy: enabled
     template: |-
       initContainers:
       - name: istio-init
-        image: docker.io/istio/proxy_init:0.6.0
+        image: "gcr.io/istio-release/proxy_init:1.0.0-snapshot.1"
         args:
         - "-p"
-        - {% raw %}{{ .MeshConfig.ProxyListenPort }}{% endraw %}
+        - [[ .MeshConfig.ProxyListenPort ]]
         - "-u"
         - 1337
+        - "-m"
+        - [[ or (index .ObjectMeta.Annotations "sidecar.istio.io/interceptionMode") .ProxyConfig.InterceptionMode.String ]]
+        - "-i"
+        [[ if (isset .ObjectMeta.Annotations "traffic.sidecar.istio.io/includeOutboundIPRanges") -]]
+        - "[[ index .ObjectMeta.Annotations "traffic.sidecar.istio.io/includeOutboundIPRanges"  ]]"
+        [[ else -]]
+        - "*"
+        [[ end -]]
+        - "-x"
+        [[ if (isset .ObjectMeta.Annotations "traffic.sidecar.istio.io/excludeOutboundIPRanges") -]]
+        - "[[ index .ObjectMeta.Annotations "traffic.sidecar.istio.io/excludeOutboundIPRanges"  ]]"
+        [[ else -]]
+        - ""
+        [[ end -]]
+        - "-b"
+        [[ if (isset .ObjectMeta.Annotations "traffic.sidecar.istio.io/includeInboundPorts") -]]
+        - "[[ index .ObjectMeta.Annotations "traffic.sidecar.istio.io/includeInboundPorts"  ]]"
+        [[ else -]]
+        - [[ range .Spec.Containers -]][[ range .Ports -]][[ .ContainerPort -]], [[ end -]][[ end -]][[ end]]
+        - "-d"
+        [[ if (isset .ObjectMeta.Annotations "traffic.sidecar.istio.io/excludeInboundPorts") -]]
+        - "[[ index .ObjectMeta.Annotations "traffic.sidecar.istio.io/excludeInboundPorts" ]]"
+        [[ else -]]
+        - ""
+        [[ end -]]
         imagePullPolicy: IfNotPresent
         securityContext:
           capabilities:
@@ -25,53 +56,45 @@ data:
             - NET_ADMIN
           privileged: true
         restartPolicy: Always
-      - args:
-        - -c
-        #/etc/istio/proxy value here matches ConfigPathDir const in context.go
-        - sysctl -w kernel.core_pattern=/etc/istio/proxy/core.%e.%p.%t && ulimit -c
-          unlimited
-        command:
-        - /bin/sh
-        image: alpine
-        imagePullPolicy: IfNotPresent
-        name: enable-core-dump
-        resources: {}
-        securityContext:
-          privileged: true
+      
       containers:
       - name: istio-proxy
-        image: quay.io/calico/istio-proxy_debug:20180118230747
+        image: [[ if (isset .ObjectMeta.Annotations "sidecar.istio.io/proxyImage") -]]
+        "[[ index .ObjectMeta.Annotations "sidecar.istio.io/proxyImage" ]]"
+        [[ else -]]
+        gcr.io/istio-release/proxyv2:1.0.0-snapshot.1
+        [[ end -]]
         args:
         - proxy
         - sidecar
         - --configPath
-        - {% raw %}{{ .ProxyConfig.ConfigPath }}
+        - [[ .ProxyConfig.ConfigPath ]]
         - --binaryPath
-        - {{ .ProxyConfig.BinaryPath }}
+        - [[ .ProxyConfig.BinaryPath ]]
         - --serviceCluster
-        {{ if ne "" (index .ObjectMeta.Labels "app") -}}
-        - {{ index .ObjectMeta.Labels "app" }}
-        {{ else -}}
+        [[ if ne "" (index .ObjectMeta.Labels "app") -]]
+        - [[ index .ObjectMeta.Labels "app" ]]
+        [[ else -]]
         - "istio-proxy"
-        {{ end -}}
+        [[ end -]]
         - --drainDuration
-        - {{ formatDuration .ProxyConfig.DrainDuration }}
+        - [[ formatDuration .ProxyConfig.DrainDuration ]]
         - --parentShutdownDuration
-        - {{ formatDuration .ProxyConfig.ParentShutdownDuration }}
+        - [[ formatDuration .ProxyConfig.ParentShutdownDuration ]]
         - --discoveryAddress
-        - {{ .ProxyConfig.DiscoveryAddress }}
+        - [[ .ProxyConfig.DiscoveryAddress ]]
         - --discoveryRefreshDelay
-        - {{ formatDuration .ProxyConfig.DiscoveryRefreshDelay }}
+        - [[ formatDuration .ProxyConfig.DiscoveryRefreshDelay ]]
         - --zipkinAddress
-        - {{ .ProxyConfig.ZipkinAddress }}
+        - [[ .ProxyConfig.ZipkinAddress ]]
         - --connectTimeout
-        - {{ formatDuration .ProxyConfig.ConnectTimeout }}
+        - [[ formatDuration .ProxyConfig.ConnectTimeout ]]
         - --statsdUdpAddress
-        - {{ .ProxyConfig.StatsdUdpAddress }}
+        - [[ .ProxyConfig.StatsdUdpAddress ]]
         - --proxyAdminPort
-        - {{ .ProxyConfig.ProxyAdminPort }}
+        - [[ .ProxyConfig.ProxyAdminPort ]]
         - --controlPlaneAuthPolicy
-        - {{ .ProxyConfig.ControlPlaneAuthPolicy }}{% endraw %}
+        - [[ or (index .ObjectMeta.Annotations "sidecar.istio.io/controlPlaneAuthPolicy") .ProxyConfig.ControlPlaneAuthPolicy ]]
         env:
         - name: POD_NAME
           valueFrom:
@@ -85,14 +108,35 @@ data:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: USE_EDS_V1
-          value: 1
+        - name: ISTIO_META_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ISTIO_META_INTERCEPTION_MODE
+          value: [[ or (index .ObjectMeta.Annotations "sidecar.istio.io/interceptionMode") .ProxyConfig.InterceptionMode.String ]]
         imagePullPolicy: IfNotPresent
         securityContext:
-            privileged: true
-            readOnlyRootFilesystem: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            [[ if eq (or (index .ObjectMeta.Annotations "sidecar.istio.io/interceptionMode") .ProxyConfig.InterceptionMode.String) "TPROXY" -]]
+            capabilities:
+              add:
+              - NET_ADMIN
+            runAsGroup: 1337
+            [[ else -]]
             runAsUser: 1337
+            [[ end -]]
         restartPolicy: Always
+        resources:
+          [[ if (isset .ObjectMeta.Annotations "sidecar.istio.io/proxyCPU") -]]
+          requests:
+            cpu: "[[ index .ObjectMeta.Annotations "sidecar.istio.io/proxyCPU" ]]"
+            memory: "[[ index .ObjectMeta.Annotations "sidecar.istio.io/proxyMemory" ]]"
+        [[ else -]]
+          requests:
+            cpu: 10m
+          
+        [[ end -]]
         volumeMounts:
         - mountPath: /etc/istio/proxy
           name: istio-envoy
@@ -110,18 +154,22 @@ data:
         - mountPath: /var/run/felix
           name: felix-sync
       volumes:
-      - emptyDir:
-          medium: Memory
-        name: istio-envoy
-      - name: istio-certs
-        secret:
-          optional: true
-          {% raw %}{{ if eq .Spec.ServiceAccountName "" }}secretName: istio.default{{ else }}secretName: {{ printf "istio.%s" .Spec.ServiceAccountName }}{{ end }}{% endraw %}
       - name: dikastes-sock
         emptyDir:
           medium: Memory
       - name: felix-sync
         flexVolume:
           driver: nodeagent/uds
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-certs
+        secret:
+          optional: true
+          [[ if eq .Spec.ServiceAccountName "" -]]
+          secretName: istio.default
+          [[ else -]]
+          secretName: [[ printf "istio.%s" .Spec.ServiceAccountName ]]
+          [[ end -]]
 
 ---
