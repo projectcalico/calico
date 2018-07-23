@@ -98,9 +98,33 @@ vendor: glide.yaml
       -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
       -v $(HOME)/.glide:/home/user/.glide:rw \
       -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      $(GO_BUILD_CONTAINER) /bin/sh -c ' \
-		  cd /go/src/$(PACKAGE_NAME) && \
-          glide install -strip-vendor'
+      -w /go/src/$(PACKAGE_NAME) \
+      $(GO_BUILD_CONTAINER) glide install -strip-vendor
+
+# Default the libcalico repo and version but allow them to be overridden
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
+
+## Update libcalico pin in glide.yaml
+update-libcalico:
+	docker run --rm -i \
+          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+          -v $(HOME)/.glide:/home/user/.glide:rw \
+          -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+          -w /go/src/$(PACKAGE_NAME) \
+          $(GO_BUILD_CONTAINER) sh -c '\
+        echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
+        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        echo "Old version: $$OLD_VER";\
+        if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
+            sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
+            if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
+              glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
+            fi;\
+          OUTPUT=`mktemp`;\
+          glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
+          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+        fi'
 
 bin/dikastes-amd64: ARCH=amd64
 bin/dikastes-arm64: ARCH=arm64
@@ -110,15 +134,13 @@ bin/dikastes-%: vendor proto $(SRC_FILES)
 	mkdir -p bin
 	-mkdir -p .go-pkg-cache
 	docker run --rm -ti \
-	  -e GOARCH=$(ARCH) \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
       -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
       -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
-	    $(GO_BUILD_CONTAINER) sh -c '\
-          cd /go/src/$(PACKAGE_NAME) && \
-          go build -v -o bin/dikastes-$$GOARCH'
+      -w /go/src/$(PACKAGE_NAME) \
+	    $(GO_BUILD_CONTAINER) go build -v -o bin/dikastes-$(ARCH)
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
@@ -229,9 +251,8 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		$(GO_BUILD_CONTAINER) sh -c '\
-			cd /go/src/$(PACKAGE_NAME) && \
-			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
+		-w /go/src/$(PACKAGE_NAME) \
+		$(GO_BUILD_CONTAINER) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
 
 .PHONY: fix
 ## Fix static checks
@@ -246,7 +267,8 @@ fix:
 ut: proto
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(GO_BUILD_CONTAINER) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test -v ./...'
+    -w /go/src/$(PACKAGE_NAME) \
+    $(GO_BUILD_CONTAINER) go test -v ./...
 
 ###############################################################################
 # CI
