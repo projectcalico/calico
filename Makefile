@@ -110,18 +110,27 @@ sub-build-%:
 vendor: glide.lock
 	# Ensure that the glide cache directory exists.
 	mkdir -p $(HOME)/.glide
+	$(DOCKER_GO_BUILD) glide install -strip-vendor
 
-	# To build without Docker just run "glide install -strip-vendor"
-	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
-          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
-	fi; \
-    docker run --rm -i \
-      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
-      -v $(HOME)/.glide:/home/user/.glide:rw \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      $(CALICO_BUILD) /bin/sh -c ' \
-		  cd /go/src/$(PACKAGE_NAME) && \
-          glide install -strip-vendor'
+# Default the libcalico repo and version but allow them to be overridden
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
+
+## Update libcalico pin in glide.yaml
+update-libcalico:
+	$(DOCKER_GO_BUILD) sh -c '\
+        echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
+        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        echo "Old version: $$OLD_VER";\
+        if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
+            sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
+            if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
+              glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
+            fi;\
+          OUTPUT=`mktemp`;\
+          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
+          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+        fi'
 
 bin/confd-$(ARCH): $(SRC_FILES) vendor
 	$(DOCKER_GO_BUILD) \
@@ -191,9 +200,8 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) sh -c '\
-			cd  /go/src/$(PACKAGE_NAME) && \
-			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
 
 .PHONY: fix
 ## Fix static checks
