@@ -170,8 +170,7 @@ update-libcalico:
           glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
           if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
         fi'
-#| grep -v "golang.org/x/sys"
-#glide up --strip-vendor;
+
 bin/calico-typha: bin/calico-typha-$(ARCH)
 	ln -f bin/calico-typha-$(ARCH) bin/calico-typha
 
