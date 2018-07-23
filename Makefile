@@ -234,6 +234,23 @@ vendor vendor/.up-to-date: glide.lock
 	  touch vendor/.up-to-date; \
 	fi
 
+# Default the typha repo and version but allow them to be overridden
+TYPHA_REPO?=github.com/projectcalico/typha
+TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha master 2>/dev/null | cut -f 1)
+
+## Update typha pin in glide.yaml
+update-typha:
+	    $(DOCKER_GO_BUILD) sh -c '\
+        echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
+        export OLD_VER=$$(grep --after 50 typha glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        echo "Old version: $$OLD_VER";\
+        if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
+          sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" glide.yaml && \
+          OUTPUT=`mktemp`;\
+          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
+          if ! grep -v "github.com/onsi/gomega" $$OUTPUT | grep -v "golang.org/x/sys" | grep -v "github.com/onsi/ginkgo" | grep "\[WARN\]"; then true; else false; fi; \
+        fi'
+
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
