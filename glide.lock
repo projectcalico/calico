@@ -1,5 +1,5 @@
-hash: 46aee92c52d7bd2845a16f634c0f2a9710de0fcd1f9820a9539d78696c269d17
-updated: 2018-07-12T15:07:08.712458877-07:00
+hash: 9b92d7ec08f47a1d8c3b8a7ca3ae8c826efc1eb666e8f70449a2a927b01a7d1e
+updated: 2018-07-23T21:07:57.048440695Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -20,8 +20,7 @@ imports:
 - name: github.com/BurntSushi/toml
   version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
 - name: github.com/coreos/etcd
-  version: e8287287893bd4080040e4fe68dae8a20476b095
-  repo: https://github.com/projectcalico/etcd.git
+  version: 33245c6b5b49130ca99280408fadfab01aac0e48
   subpackages:
   - auth/authpb
   - client
@@ -36,7 +35,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -45,14 +44,12 @@ imports:
   - spew
 - name: github.com/dgrijalva/jwt-go
   version: 01aeca54ebda6e0fbfafd0a524d234159c05ec20
-- name: github.com/dustin/go-humanize
-  version: bb3d318650d48840a39aa21a027c6630e198e626
 - name: github.com/ghodss/yaml
-  version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 358ee7663966325963d4e8b2e1fbd570c5195153
+  version: d58d458bec3cb5adec4b7ddb41131855eac0b33f
 - name: github.com/gogo/protobuf
-  version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
+  version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
   - gogoproto
   - proto
@@ -95,6 +92,13 @@ imports:
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
   - simplelru
+- name: github.com/hpcloud/tail
+  version: a1dbeea552b7c8df4b542c66073e393de198a800
+  subpackages:
+  - ratelimiter
+  - util
+  - watch
+  - winfile
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/json-iterator/go
@@ -102,7 +106,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 1eb2608e4dea19483ff0bdb260b63c09bd15bf98
+  version: 45d401a21f474dfb40c8d416eb69f9a0e9f1f73a
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -112,7 +116,7 @@ imports:
   - pkg/resource/template
   - pkg/run
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -130,7 +134,7 @@ imports:
 - name: github.com/modern-go/reflect2
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
 - name: github.com/onsi/ginkgo
-  version: fa5fabab2a1bfbd924faf4c067d07ae414e2aedf
+  version: 3774a09d95489ccaa16032e0770d08ea77ba6184
   subpackages:
   - config
   - extensions/table
@@ -151,7 +155,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 62bff4df71bdbc266561a0caee19f0594b17c240
+  version: b6ea1ea48f981d0f615a154a45eabb9dd466556d
   subpackages:
   - format
   - internal/assertion
@@ -169,7 +173,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: e96139346993f50495051ede7e6be44778a42ecb
+  version: 8086fab99bf61b6b264533916f8d879499ab0e19
   subpackages:
   - binder
   - buildinfo
@@ -211,7 +215,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 10c63d26035e5cf5124a2a148e4e15365b83c2e1
+  version: 59442b7bbc710bec5e8abb49ea71b5d31fc67754
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -258,13 +262,13 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 5ef90ad5dd6d0d6a12ecb736d8f813b4b7020739
+  version: affe04576279eee09eb0e2f4ccaa2848db48f6c6
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: bcbbc08eb2ddff3af83bbf11e7ec13b4fd730b6e
   subpackages:
   - prometheus
   - prometheus/promhttp
@@ -279,7 +283,7 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: f98634e408857669d61064b283c4cde240622865
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
   - xfs
 - name: github.com/satori/go.uuid
@@ -297,13 +301,13 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/crypto
-  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
+  version: c126467f60eb25f8f27e5a981f32a87e3965053f
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 66aacef3dd8a676686c7ae3716979581e8b03c47
+  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
   subpackages:
   - context
   - context/ctxhttp
@@ -316,6 +320,7 @@ imports:
   - internal/timeseries
   - lex/httplex
   - trace
+  - websocket
 - name: golang.org/x/oauth2
   version: a6bd8cefa1811bd24b86f8902872e4e8225f74c4
   subpackages:
@@ -324,7 +329,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 88d2dcc510266da9f7f8c7f34e1940716cab5f5c
+  version: 1b2967e3c290b7c545b3db0deeda16e9be4f98a2
   subpackages:
   - unix
   - windows
@@ -389,10 +394,14 @@ imports:
   - status
   - tap
   - transport
+- name: gopkg.in/fsnotify/fsnotify.v1
+  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
   version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
+- name: gopkg.in/tomb.v1
+  version: c131134a1947e9afd9cecfe11f4c6dff0732ae58
 - name: gopkg.in/yaml.v2
   version: 670d4cfef0544295bc27a114dbac37980d83185a
 - name: k8s.io/api
