@@ -114,8 +114,43 @@ vendor: glide.lock
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
 		-v $(HOME)/.glide:/home/user/.glide:rw \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		$(CALICO_BUILD) \
-		/bin/sh -c 'cd /go/src/$(PACKAGE_NAME) && glide install -strip-vendor'
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) glide install -strip-vendor
+
+
+## Default the repos and versions but allow them to be overridden
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
+FELIX_REPO?=github.com/projectcalico/felix
+FELIX_VERSION?=$(shell git ls-remote git@github.com:projectcalico/felix master 2>/dev/null | cut -f 1)
+CONFD_REPO?=github.com/projectcalico/confd
+CONFD_VERSION?=$(shell git ls-remote git@github.com:projectcalico/confd master 2>/dev/null | cut -f 1)
+
+### Update pins in glide.yaml
+update-felix-confd-libcalico:
+	docker run --rm \
+        -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+        -v $(HOME)/.glide:/home/user/.glide:rw \
+        -w /go/src/$(PACKAGE_NAME) \
+        -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+        $(CALICO_BUILD) sh -c '\
+          echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
+          echo "Updating felix to $(FELIX_VERSION) from $(FELIX_REPO)"; \
+          echo "Updating confd to $(CONFD_VERSION) from $(CONFD_REPO)"; \
+          export OLD_LIBCALICO_VER=$$(grep --after 50 libcalico glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+          export OLD_FELIX_VER=$$(grep --after 50 felix glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+          export OLD_CONFD_VER=$$(grep --after 50 confd glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+          echo "Old libcalico version: $$OLD_LIBCALICO_VER";\
+          echo "Old felix version: $$OLD_FELIX_VER";\
+          echo "Old confid version: $$OLD_CONFD_VER";\
+          if [ $(LIBCALICO_VERSION) != $$OLD_LIBCALICO_VER ] || [ $(FELIX_VERSION) != $$OLD_FELIX_VER ] || [ $(CONFD_VERSION) != $$OLD_CONFD_VER ]; then \
+            sed -i "s/$$OLD_LIBCALICO_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
+            sed -i "s/$$OLD_FELIX_VER/$(FELIX_VERSION)/" glide.yaml && \
+            sed -i "s/$$OLD_CONFD_VER/$(CONFD_VERSION)/" glide.yaml && \
+            OUTPUT=`mktemp`;\
+            glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
+            if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+          fi'
 
 $(NODE_CONTAINER_BIN_DIR)/calico-node: vendor
 	docker run --rm \
@@ -125,9 +160,8 @@ $(NODE_CONTAINER_BIN_DIR)/calico-node: vendor
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e GOCACHE=/go-cache \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) sh -c '\
-			cd /go/src/$(PACKAGE_NAME) && \
-			go build -v -o $@ $(LDFLAGS) ./cmd/calico-node/main.go'
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) go build -v -o $@ $(LDFLAGS) ./cmd/calico-node/main.go
 
 ###############################################################################
 # Building the image
@@ -198,9 +232,8 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) sh -c '\
-			cd  /go/src/$(PACKAGE_NAME) && \
-			gometalinter --deadline=300s --disable-all --enable=goimports --vendor pkg/...'
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) gometalinter --deadline=300s --disable-all --enable=goimports --vendor pkg/...
 
 .PHONY: fix
 ## Fix static checks
@@ -217,7 +250,8 @@ fv: vendor run-k8s-apiserver
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	--net=host \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r -skipPackage vendor pkg/startup pkg/allocateipip'
+	-w /go/src/$(PACKAGE_NAME) \
+	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/startup pkg/allocateipip
 
 # etcd is used by the STs
 .PHONY: run-etcd
