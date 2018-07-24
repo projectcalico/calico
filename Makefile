@@ -37,6 +37,14 @@ endif
 ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
+
+
+# list of arches *not* to build when doing *-all
+#    until s390x works correctly
+EXCLUDEARCH ?= s390x
+VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
+
+
 ###############################################################################
 GO_BUILD_VER?=v0.17
 GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)
@@ -82,7 +90,7 @@ endif
 ###############################################################################
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/dikastes-,$(ARCHES))
+build-all: $(addprefix bin/dikastes-,$(VALIDARCHES))
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
@@ -197,13 +205,13 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 CONTAINER_CREATED=.dikastes.created-$(ARCH)
 .PHONY: image calico/dikastes
 image: $(CONTAINER_NAME)
-image-all: $(addprefix sub-image-,$(ARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(CONTAINER_NAME): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH)
-	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
 endif
@@ -224,7 +232,7 @@ ifeq ($(ARCH),amd64)
 	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
 endif
 
-push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -238,7 +246,7 @@ ifeq ($(ARCH),amd64)
 endif
 
 ## tag images of all archs
-tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
 sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -275,22 +283,22 @@ ut: proto
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean build static-checks ut
+ci: clean build-all static-checks ut
 
 ###############################################################################
 # CD
 ###############################################################################
 .PHONY: cd
 ## Deploys images to registry
-cd: image
+cd: image-all
 ifndef CONFIRM
 	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
 endif
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
-	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
-	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+	$(MAKE) tag-images-all push-all IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ###############################################################################
 # Release
