@@ -96,6 +96,13 @@ register:
 ifneq ($(BUILDARCH),$(ARCH))
 	docker run --rm --privileged multiarch/qemu-user-static:register || true
 endif
+
+
+# list of arches *not* to build when doing *-all
+#    until s390x works correctly
+EXCLUDEARCH ?= s390x
+VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
+
 ###############################################################################
 CONTAINER_NAME=calico/felix
 PACKAGE_NAME?=github.com/projectcalico/felix
@@ -207,7 +214,7 @@ clean:
 # Building the binary
 ###############################################################################
 build: bin/calico-felix
-build-all: $(addprefix sub-build-,$(ARCHES))
+build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
@@ -288,7 +295,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 
 # by default, build the image for the target architecture
 .PHONY: image-all
-image-all: $(addprefix sub-image-,$(ARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
@@ -298,7 +305,7 @@ calico/felix-$(ARCH): bin/calico-felix-$(ARCH) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
-	docker build --pull -t calico/felix:latest-$(ARCH) --file ./docker-image/Dockerfile.$(ARCH) docker-image
+	docker build --pull -t calico/felix:latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image
 ifeq ($(ARCH),amd64)
 	docker tag calico/felix:latest-$(ARCH) calico/felix:latest
 endif
@@ -309,7 +316,7 @@ ifndef IMAGETAG
 endif
 
 ## push all arches
-push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -332,7 +339,7 @@ ifeq ($(ARCH),amd64)
 endif
 
 ## tag images of all archs
-tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
 sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -622,7 +629,7 @@ bin/test-connection: $(SRC_FILES) vendor/.up-to-date
 .PHONY: ci cd
 
 ## run CI cycle - build, test, etc.
-ci: image bin/calico-felix.exe ut upload-to-coveralls static-checks
+ci: image-all bin/calico-felix.exe ut upload-to-coveralls static-checks
 ifeq (,$(filter fv, $(EXCEPT)))
 	@$(MAKE) fv
 endif
@@ -639,8 +646,8 @@ endif
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
-	$(MAKE) tag-images push IMAGETAG=$(BRANCH_NAME)
-	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+	$(MAKE) tag-images-all push-all IMAGETAG=$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 
 ###############################################################################
