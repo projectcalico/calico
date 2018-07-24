@@ -74,6 +74,11 @@ ifeq ($(RELEASE),true)
 DOCKER_REPOS+=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico.org us.gcr.io/projectcalico.org
 endif
 
+# list of arches *not* to build when doing *-all
+#    until s390x works correctly
+EXCLUDEARCH ?= s390x
+VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
+
 
 ETCD_VER=v3.3.7
 ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VER)-$(BUILDARCH)
@@ -96,7 +101,7 @@ clean:
 # Building the binary
 ###############################################################################
 build: $(BIN)/calico $(BIN)/calico-ipam
-build-all: $(addprefix sub-build-,$(ARCHES))
+build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
@@ -161,7 +166,7 @@ $(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
 # Building the image
 ###############################################################################
 image: $(DEPLOY_CONTAINER_MARKER)
-image-all: $(addprefix sub-image-,$(ARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
@@ -178,7 +183,7 @@ ifeq ($(ARCH),amd64)
 	for r in $(DOCKER_REPOS); do docker push $$r/cni:$(IMAGETAG); done
 endif
 
-push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -190,12 +195,12 @@ ifeq ($(ARCH),amd64)
 endif
 
 ## tag images of all archs
-tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
 sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
-	docker build -f Dockerfile.$(ARCH) -t $(CONTAINER_NAME):latest-$(ARCH) .
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	# Need amd64 builds tagged as :latest because Semaphore depends on that
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
@@ -332,7 +337,7 @@ test-install-cni: image k8s-install/scripts/install_cni.test
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks test-cni-versions image test-install-cni
+ci: clean static-checks test-cni-versions image-all test-install-cni
 
 ## Deploys images to registry
 cd:
@@ -342,8 +347,8 @@ endif
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
-	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
-	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+	$(MAKE) tag-images-all push-all IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 
 ###############################################################################
