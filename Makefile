@@ -38,14 +38,10 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-
-
-
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
-
 
 # Determine which OS.
 OS?=$(shell uname -s | tr A-Z a-z)
