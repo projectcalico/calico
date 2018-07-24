@@ -102,7 +102,7 @@ endif
 # Building the binary
 ###############################################################################
 build: bin/confd
-build-all: $(addprefix sub-build-,$(ARCHES))
+build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
@@ -147,11 +147,11 @@ endif
 ###############################################################################
 # Building the image
 ###############################################################################
-image-all: $(addprefix sub-image-,$(ARCHES))
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 image: build
-	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) .
+	docker build -t $(CONTAINER_NAME):latest-$(ARCH) -f Dockerfile.$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) .
 ifeq ($(ARCH),amd64)
 	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
 endif
@@ -172,7 +172,7 @@ ifeq ($(ARCH),amd64)
 endif
 
 ## push all archs
-push-all: imagetag $(addprefix sub-push-,$(ARCHES))
+push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -187,7 +187,7 @@ ifeq ($(ARCH),amd64)
 endif
 
 ## tag images of all archs
-tag-images-all: imagetag $(addprefix sub-tag-images-,$(ARCHES))
+tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
 sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
@@ -303,7 +303,7 @@ bin/calicoctl:
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks test
+ci: clean image-all static-checks test
 
 ## Deploys images to registry
 cd:
@@ -313,8 +313,8 @@ endif
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
-	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
-	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
+	$(MAKE) tag-images-all push-all IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ###############################################################################
 # Release
