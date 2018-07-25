@@ -1,4 +1,4 @@
-FROM amd64/busybox:1.28.3
+FROM amd64/alpine:3.8
 
 LABEL maintainer "Tom Denham <tom@tigera.io>"
 
