@@ -1,4 +1,4 @@
-FROM ppc64le/busybox:1.28.3
+FROM ppc64le/alpine:3.8
 
 LABEL maintainer "Tom Denham <tom@tigera.io>"
 
