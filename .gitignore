@@ -10,7 +10,7 @@ certs
 .coverage
 cover
 *.tar
-*.created
+*.created-*
 docker
 **/*.sw[pon]
 birdcl
