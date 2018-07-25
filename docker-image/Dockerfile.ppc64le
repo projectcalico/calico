@@ -1,7 +1,7 @@
 ARG QEMU_IMAGE=calico/go-build:latest
 FROM ${QEMU_IMAGE} as qemu
 
-FROM ppc64le/alpine:3.6 as base
+FROM ppc64le/alpine:3.8 as base
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Enable non-native builds of this image on an amd64 hosts.

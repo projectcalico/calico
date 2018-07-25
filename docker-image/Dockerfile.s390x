@@ -1,7 +1,7 @@
 ARG QEMU_IMAGE=calico/go-build:latest
 FROM ${QEMU_IMAGE} as qemu
 
-FROM s390x/alpine:3.6
+FROM s390x/alpine:3.8
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
 # Enable non-native builds of this image on an amd64 hosts.
