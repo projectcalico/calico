@@ -16,4 +16,4 @@ spec:
       destination:
         selector: projectcalico.org/namespace == 'istio-system' && istio == 'pilot'
         ports:
-          - 15003
+          - 15011
