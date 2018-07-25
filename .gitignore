@@ -8,3 +8,4 @@ junit.xml
 *.swp
 .generate_exes
 .generate_files
+checkouts
