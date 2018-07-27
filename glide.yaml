@@ -2,7 +2,7 @@ package: github.com/projectcalico/node
 import:
 - package: github.com/kelseyhightower/confd
   repo: https://github.com/projectcalico/confd.git
-  version: c5284d30b7466d86e0c17216c1c32fe2ed97c0d5
+  version: 4a7044b63b2e0025744cb8054e6cab9a2481767a
   subpackages:
   - pkg/config
   - pkg/run
