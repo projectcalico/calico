@@ -164,20 +164,27 @@ class EtcdWatcher(object):
             LOG.info("%s Calling pre-snapshot hook", my_name)
             snapshot_data = self._pre_snapshot_hook()
 
-            # Get all existing values and process them through the dispatcher.
-            LOG.info("%s Loading snapshot", my_name)
-            for result in etcdv3.get_prefix(self.prefix,
-                                            revision=last_revision):
-                key, value, mod_revision = result
-                # Convert to what the dispatcher expects - see below.
-                response = Response(
-                    action='set',
-                    key=key,
-                    value=value,
-                    mod_revision=mod_revision,
-                )
-                LOG.debug("status event: %s", response)
-                self.dispatcher.handle_event(response)
+            try:
+                # Get all existing values and process them through the
+                # dispatcher.
+                LOG.info("%s Loading snapshot", my_name)
+                for result in etcdv3.get_prefix(self.prefix,
+                                                revision=last_revision):
+                    key, value, mod_revision = result
+                    # Convert to what the dispatcher expects - see below.
+                    response = Response(
+                        action='set',
+                        key=key,
+                        value=value,
+                        mod_revision=mod_revision,
+                    )
+                    LOG.debug("status event: %s", response)
+                    self.dispatcher.handle_event(response)
+            except ConnectionFailedError as e:
+                LOG.debug("%r", e)
+                LOG.warning("etcd not available, will retry in 5s")
+                eventlet.sleep(5)
+                continue
 
             # Allow subclass to do post-snapshot reconciliation.
             LOG.info("%s Done loading snapshot, calling post snapshot hook",
