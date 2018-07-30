@@ -20,4 +20,4 @@ testtools>=2.2.0 # MIT
 
 # This is installed from git in OpenStackCI for jobs that add
 # the project to required-projects.
-neutron>=12.0.0 # Apache-2.0
+neutron>=13.0.0.0b1 # Apache-2.0
