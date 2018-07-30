@@ -1,5 +1,5 @@
-hash: 5658663e1fb94a01b92219f7518d37aed177bb6d1290870c8bd9a85c49619b9e
-updated: 2018-07-27T07:38:59.715969764Z
+hash: 3ca4e81896573a632b9ab9f63f1e8fa464c40959c365dfac980fe546196e21b9
+updated: 2018-07-30T07:34:55.047620808Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -173,7 +173,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 7f96dd0bf26300ea3927dd3dae782a6a3097cca2
+  version: 9b4afc2bdba611f4c8b6263763d7e429ca157ce0
   subpackages:
   - binder
   - buildinfo
