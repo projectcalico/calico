@@ -193,7 +193,7 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result interface{})
 
 		// If this is a parsing error, and if the callbacks support
 		// it, then send the error update.
-		log.WithError(r).Info("Error received in main syncer event processing loop")
+		log.WithError(r).Debug("Error received in main syncer event processing loop")
 		if ec, ok := ws.callbacks.(api.SyncerParseFailCallbacks); ok {
 			log.Debug("syncer receiver can receive parse failed callbacks")
 			if pe, ok := r.(cerrors.ErrorParsingDatastoreEntry); ok {

@@ -153,7 +153,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 	// - cancel any sleeps if the context is cancelled
 
 	// Make sure any previous watcher is stopped.
-	wc.logger.Info("Starting watch sync/resync processing")
+	wc.logger.Debug("Starting watch sync/resync processing")
 	wc.cleanExistingWatcher()
 
 	// If we don't have a currentWatchRevision then we need to perform a full resync.
@@ -253,7 +253,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 
 func (wc *watcherCache) cleanExistingWatcher() {
 	if wc.watch != nil {
-		wc.logger.Info("Stopping previous watcher")
+		wc.logger.Debug("Stopping previous watcher")
 		wc.watch.Stop()
 		wc.watch = nil
 	}
