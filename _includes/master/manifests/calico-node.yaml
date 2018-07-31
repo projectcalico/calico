@@ -71,7 +71,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+          image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.components["calico/node"].version}}
           env:
 {%- if include.datastore == "etcd" %}
             # The location of the {{site.prodname}} etcd cluster.
