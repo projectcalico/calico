@@ -2,11 +2,7 @@
 
 ## Resulting artifacts
 
-Creating a new release creates the following artifacts
-
-* `calico/confd:$VERSION` container images (and the quay.io variant)
-
-* `bin/confd`
+Creating a new release doesn't create any artifacts.
 
 ## Preparing for a release
 
@@ -21,7 +17,7 @@ You should have no local changes and tests should be passing.
 
 1. Choose a version e.g. `v1.0.1`
 
-1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+1. Create the release. This will generate release notes, a tag, build the code.
 
    ```
    make VERSION=v1.0.1 release
@@ -39,18 +35,11 @@ You should have no local changes and tests should be passing.
    - Title the release the same as the tag - e.g. `v1.0.1`
    - Press "Publish release"
 
-1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
-   this step for patches to older releases.**
-
-   ```
-   make VERSION=<version> release-publish-latest
-   ```
-
 ## Creating a major / minor release
 
 1. Choose a version e.g. `v1.1.0`
 
-1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+1. Create the release. This will generate release notes, a tag, build the code.
 
    ```
    make VERSION=v1.1.0 PREVIOUS_RELEASE=v1.0.0 release
@@ -67,10 +56,3 @@ You should have no local changes and tests should be passing.
    - Remove or clean up any messy commits - e.g. libcalico-go updates.
    - Title the release the same as the tag - e.g. `v1.1.0`
    - Press "Publish release"
-
-1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
-   this step for patches to older releases.**
-
-   ```
-   make VERSION=<version> release-publish-latest
-   ```
