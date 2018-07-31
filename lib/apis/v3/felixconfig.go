@@ -114,7 +114,7 @@ type FelixConfigurationSpec struct {
 	// endpoint to host, set this parameter to RETURN or ACCEPT. Use RETURN if you have your own rules in the iptables
 	// “INPUT” chain; Calico will insert its rules at the top of that chain, then “RETURN” packets to the “INPUT” chain
 	// once it has completed processing workload endpoint egress policy. Use ACCEPT to unconditionally accept packets
-	// from workloads after processing workload endpoint egress policy. [Default: DROP]
+	// from workloads after processing workload endpoint egress policy. [Default: Drop]
 	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty" validate:"omitempty,dropAcceptReturn"`
 	IptablesFilterAllowAction   string `json:"iptablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 	IptablesMangleAllowAction   string `json:"iptablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
@@ -124,12 +124,12 @@ type FelixConfigurationSpec struct {
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
 
-	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: INFO]
+	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
 	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
-	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
+	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
-	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to NONE for no logging to syslog.
-	// [Default: INFO]
+	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
+	// [Default: Info]
 	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
 
 	IPIPEnabled *bool `json:"ipipEnabled,omitempty" confignamev1:"IpInIpEnabled"`
