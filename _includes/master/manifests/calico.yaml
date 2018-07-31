@@ -16,7 +16,7 @@ calico.yaml acccepts the following include flags:
 # {{variant_name}} Version {{site.data.versions[page.version].first.title}}
 # {{site.url}}/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
 # This manifest includes the following component versions:
-#   {{site.nodecontainer}}:{{site.data.versions[page.version].first.title}}
+#   {{site.nodecontainer}}:{{site.data.versions[page.version].first.components["calico/node"].version}}
 #   calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
 {%- if include.datastore == "etcd" %}
 #   calico/kube-controllers:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
