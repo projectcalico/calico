@@ -201,7 +201,8 @@ static-checks: vendor
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
+		$(CALICO_BUILD) \
+		gometalinter --deadline=300s --disable-all --enable=vet --enable=errcheck  --enable=goimports --vendor ./...
 
 .PHONY: fix
 ## Fix static checks

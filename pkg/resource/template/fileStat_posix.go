@@ -18,13 +18,15 @@ func fileStat(name string) (fi fileInfo, err error) {
 		if err != nil {
 			return fi, err
 		}
-		defer f.Close()
+		defer f.Close() // nolint: errcheck
 		stats, _ := f.Stat()
 		fi.Uid = stats.Sys().(*syscall.Stat_t).Uid
 		fi.Gid = stats.Sys().(*syscall.Stat_t).Gid
 		fi.Mode = stats.Mode()
 		h := md5.New()
-		io.Copy(h, f)
+		if _, err := io.Copy(h, f); err != nil {
+			return fileInfo{}, err
+		}
 		fi.Md5 = fmt.Sprintf("%x", h.Sum(nil))
 		return fi, nil
 	}
