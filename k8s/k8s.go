@@ -67,27 +67,69 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 	logger.WithField("client", client).Debug("Created Kubernetes client")
 
-	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
-		// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
-		// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
-		fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
+	var routes []*net.IPNet
+	if conf.IPAM.Type == "host-local" {
+		// We're using the host-local IPAM plugin.  We implement some special-case support for that
+		// plugin.  Namely:
+		//
+		// - We support a special value for its subnet config field, "usePodCIDR".  If that is specified,
+		//   we swap the string "usePodCIDR" for the actual PodCIDR (looked up via the k8s API).
+		// - We have partial support for its "routes" setting, which allows the routes that we install into
+		//   the pod to be varied from our default (which is to insert /0 routes via the host).  If any routes
+		//   are specified in the routes section then only the specified routes are programmed.  Since Calico
+		//   uses a point-to-point link, the gateway parameter of the route is ignored and the host side IP
+		//   of the veth is used instead.
+		//
+		// We unpack the JSON data as an untyped map rather than using a typed struct because we want to
+		// round-trip any fields that we don't know about.
 		var stdinData map[string]interface{}
 		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 			return nil, err
 		}
-		podCidr, err := getPodCidr(client, conf, epIDs.Node)
-		if err != nil {
-			logger.Info("Failed to getPodCidr")
-			return nil, err
+		ipamData := stdinData["ipam"].(map[string]interface{})
+
+		if strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
+			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
+			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
+			fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
+			podCidr, err := getPodCidr(client, conf, epIDs.Node)
+			if err != nil {
+				logger.Info("Failed to getPodCidr")
+				return nil, err
+			}
+			logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
+			ipamData["subnet"] = podCidr
+			fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
 		}
-		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
-		stdinData["ipam"].(map[string]interface{})["subnet"] = podCidr
-		fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
+
+		if hlRoutes, ok := ipamData["routes"].([]interface{}); ok {
+			for _, route := range hlRoutes {
+				route := route.(map[string]interface{})
+				dst, _ := route["dst"].(string)
+				if dst != "" {
+					_, cidr, err := net.ParseCIDR(dst)
+					if err != nil {
+						logger.WithError(err).WithField("routeDest", dst).Error(
+							"Failed to parse destination of host-local IPAM route in CNI configuration.")
+						return nil, err
+					}
+					routes = append(routes, cidr)
+				}
+			}
+		}
+
 		args.StdinData, err = json.Marshal(stdinData)
 		if err != nil {
 			return nil, err
 		}
 		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+	}
+
+	if len(routes) == 0 {
+		logger.Debug("No routes specified in CNI configuration, using defaults.")
+		routes = utils.DefaultRoutes
+	} else {
+		logger.WithField("routes", routes).Info("Using custom routes from CNI configuration.")
 	}
 
 	labels := make(map[string]string)
@@ -286,7 +328,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	hostVethName := k8sconversion.VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
-	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
+	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName, routes)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
 		releaseIPAM()
