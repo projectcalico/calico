@@ -754,7 +754,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 			},
 
-				Entry("valid single k8s env var", []EnvItem{{"CALICO_K8S_NODE_REF", "node1"}}, api.OrchRef{"node1", "k8s"}, true),
+				Entry("valid single k8s env var", []EnvItem{{"CALICO_K8S_NODE_REF", "node1"}}, api.OrchRef{"node1", "k8s"}, true), // nolint: vet
 			)
 
 			It("Should not configure any OrchRefs when no valid env vars are passed", func() {
@@ -769,7 +769,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				os.Setenv("CALICO_K8S_NODE_REF", "node1")
 
 				node := &api.Node{}
-				node.Spec.OrchRefs = append(node.Spec.OrchRefs, api.OrchRef{"node1", "k8s"})
+				node.Spec.OrchRefs = append(node.Spec.OrchRefs, api.OrchRef{"node1", "k8s"}) // nolint: vet
 				configureNodeRef(node)
 
 				Expect(node.Spec.OrchRefs).To(HaveLen(1))
@@ -868,13 +868,13 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		errors := []error{}
 		for _, node := range nodes.Items {
 			wg.Add(1)
-			go func() {
+			go func(n api.Node) {
 				defer wg.Done()
-				err = ensureDefaultConfig(ctx, cfg, c, &node)
+				err = ensureDefaultConfig(ctx, cfg, c, &n)
 				if err != nil {
 					errors = append(errors, err)
 				}
-			}()
+			}(node)
 		}
 
 		wg.Wait()

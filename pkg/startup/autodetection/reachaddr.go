@@ -34,7 +34,7 @@ func ReachDestination(dest string, version int) (*net.IPNet, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer conn.Close() // nolint: errcheck
 
 	// Get the local address as a golang IP and use that to find the matching
 	// interface CIDR.
