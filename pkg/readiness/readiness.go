@@ -91,13 +91,17 @@ func checkBIRDReady(ipv string) error {
 
 // checkFelixReady checks if felix is ready by making an http request to
 // Felix's readiness endpoint.
-func checkFelixReady() error {
+func checkFelixReady() (err error) {
 	c := &http.Client{Timeout: 5 * time.Second}
 	resp, err := c.Get(felixReadinessEp)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if e := resp.Body.Close(); e != nil {
+			err = e
+		}
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("readiness probe reporting %d", resp.StatusCode)
