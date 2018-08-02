@@ -80,9 +80,9 @@ func (crw *k8sWatcherConverter) HasTerminated() bool {
 // Loop to process the events stream from the underlying k8s Watcher and convert them to
 // backend KVPs.
 func (crw *k8sWatcherConverter) processK8sEvents() {
-	crw.logCxt.Info("Kubernetes watcher/converter started")
+	crw.logCxt.Debug("Kubernetes watcher/converter started")
 	defer func() {
-		crw.logCxt.Info("Kubernetes watcher/converter stopped, closing result channel")
+		crw.logCxt.Debug("Kubernetes watcher/converter stopped, closing result channel")
 		crw.Stop()
 		close(crw.resultChan)
 		atomic.AddUint32(&crw.terminated, 1)
@@ -121,7 +121,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 				if e.Type == api.WatchError {
 					crw.logCxt.WithError(e.Error).Debug("Watch event was an error event type")
 					if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-						crw.logCxt.Info("Watch event indicates a terminated watcher")
+						crw.logCxt.Debug("Watch event indicates a terminated watcher")
 						return
 					}
 				}
@@ -130,7 +130,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 				return
 			}
 		case <-crw.context.Done(): // user cancel
-			crw.logCxt.Info("Process watcher done event in kdd client")
+			crw.logCxt.Debug("Process watcher done event in kdd client")
 			return
 		}
 	}
