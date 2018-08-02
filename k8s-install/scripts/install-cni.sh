@@ -95,9 +95,15 @@ done
 
 TMP_CONF='/calico.conf.tmp'
 # If specified, overwrite the network configuration file.
-if [ "${CNI_NETWORK_CONFIG:-}" != "" ]; then
-cat >$TMP_CONF <<EOF
-${CNI_NETWORK_CONFIG:-}
+: ${CNI_NETWORK_CONFIG_FILE:=}
+: ${CNI_NETWORK_CONFIG:=}
+if [ -e "${CNI_NETWORK_CONFIG_FILE}" ]; then
+  echo "Using CNI config template from ${CNI_NETWORK_CONFIG_FILE}."
+  cp "${CNI_NETWORK_CONFIG_FILE}" "${TMP_CONF}"
+elif [ "${CNI_NETWORK_CONFIG}" != "" ]; then
+  echo "Using CNI config template from CNI_NETWORK_CONFIG environment variable."
+  cat >$TMP_CONF <<EOF
+${CNI_NETWORK_CONFIG}
 EOF
 fi
 
