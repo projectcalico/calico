@@ -1,5 +1,5 @@
 {
-    "name": "k8s-pod-network",
+    "name": "alternate",
     "type": "calico",
     "etcd_endpoints": "",
     "etcd_key_file": "",
