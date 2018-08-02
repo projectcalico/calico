@@ -73,7 +73,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		// plugin.  Namely:
 		//
 		// - We support a special value for its subnet config field, "usePodCIDR".  If that is specified,
-		//   we swap the string "usePodCIDR" for the actual PodCIDR (looked up via the k8s API).
+		//   we swap the string "usePodCIDR" for the actual PodCIDR (looked up via the k8s API) before we pass the
+		//   configuration to the plugin.
 		// - We have partial support for its "routes" setting, which allows the routes that we install into
 		//   the pod to be varied from our default (which is to insert /0 routes via the host).  If any routes
 		//   are specified in the routes section then only the specified routes are programmed.  Since Calico
@@ -86,43 +87,59 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 			return nil, err
 		}
-		ipamData := stdinData["ipam"].(map[string]interface{})
 
-		if strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
-			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
-			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
-			fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
-			podCidr, err := getPodCidr(client, conf, epIDs.Node)
-			if err != nil {
-				logger.Info("Failed to getPodCidr")
-				return nil, err
-			}
-			logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
-			ipamData["subnet"] = podCidr
-			fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
-		}
-
-		if hlRoutes, ok := ipamData["routes"].([]interface{}); ok {
-			for _, route := range hlRoutes {
-				route := route.(map[string]interface{})
-				dst, _ := route["dst"].(string)
-				if dst != "" {
-					_, cidr, err := net.ParseCIDR(dst)
-					if err != nil {
-						logger.WithError(err).WithField("routeDest", dst).Error(
-							"Failed to parse destination of host-local IPAM route in CNI configuration.")
-						return nil, err
-					}
-					routes = append(routes, cidr)
+		// Defer to ReplaceHostLocalIPAMPodCIDRs to swap the "usePodCidr" value out.
+		var cachedPodCidr string
+		getRealPodCIDR := func() (string, error) {
+			if cachedPodCidr == "" {
+				var err error
+				cachedPodCidr, err = getPodCidr(client, conf, epIDs.Node)
+				if err != nil {
+					return "", err
 				}
 			}
+			return cachedPodCidr, nil
+		}
+		err = utils.ReplaceHostLocalIPAMPodCIDRs(logger, stdinData, getRealPodCIDR)
+		if err != nil {
+			return nil, err
 		}
 
+		// Write any changes we made back to the input data so that it'll be passed on to the IPAM plugin.
 		args.StdinData, err = json.Marshal(stdinData)
 		if err != nil {
 			return nil, err
 		}
 		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+
+		// Extract any custom routes from the IPAM configuration.
+		ipamData := stdinData["ipam"].(map[string]interface{})
+		untypedRoutes := ipamData["routes"]
+		hlRoutes, ok := untypedRoutes.([]interface{})
+		if untypedRoutes != nil && !ok {
+			return nil, fmt.Errorf(
+				"failed to parse host-local IPAM routes section; expecting list, not: %v", stdinData["ipam"])
+		}
+		for _, route := range hlRoutes {
+			route := route.(map[string]interface{})
+			untypedDst, ok := route["dst"]
+			if !ok {
+				logger.Debug("Ignoring host-ipam route with no dst")
+				continue
+			}
+			dst, ok := untypedDst.(string)
+			if !ok {
+				return nil, fmt.Errorf(
+					"invalid IPAM routes section; expecting 'dst' to be a string, not: %v", untypedDst)
+			}
+			_, cidr, err := net.ParseCIDR(dst)
+			if err != nil {
+				logger.WithError(err).WithField("routeDest", dst).Error(
+					"Failed to parse destination of host-local IPAM route in CNI configuration.")
+				return nil, err
+			}
+			routes = append(routes, cidr)
+		}
 	}
 
 	if len(routes) == 0 {

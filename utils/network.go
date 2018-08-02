@@ -33,7 +33,7 @@ var (
 	// IPv4AllNet represents the IPv4 all-addresses CIDR 0.0.0.0/0.
 	IPv4AllNet *net.IPNet
 	// IPv6AllNet represents the IPv6 all-addresses CIDR ::/0.
-	IPv6AllNet *net.IPNet
+	IPv6AllNet    *net.IPNet
 	DefaultRoutes []*net.IPNet
 )
 

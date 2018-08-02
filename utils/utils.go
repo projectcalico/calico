@@ -135,19 +135,24 @@ func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) e
 		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 
 	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
-	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
+	if conf.IPAM.Type == "host-local" {
 		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
 		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
-		dummyPodCidr := "0.0.0.0/0"
+		const dummyPodCidr = "0.0.0.0/0"
 		var stdinData map[string]interface{}
-
 		err := json.Unmarshal(args.StdinData, &stdinData)
 		if err != nil {
 			return err
 		}
 
 		logger.WithField("podCidr", dummyPodCidr).Info("Using a dummy podCidr to release the IP")
-		stdinData["ipam"].(map[string]interface{})["subnet"] = dummyPodCidr
+		getDummyPodCIDR := func() (string, error) {
+			return dummyPodCidr, nil
+		}
+		err = ReplaceHostLocalIPAMPodCIDRs(logger, stdinData, getDummyPodCIDR)
+		if err != nil {
+			return err
+		}
 
 		args.StdinData, err = json.Marshal(stdinData)
 		if err != nil {
@@ -163,6 +168,59 @@ func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) e
 	}
 
 	return err
+}
+
+// ReplaceHostLocalIPAMPodCIDRs extracts the host-local IPAM config section and replaces our special-case "usePodCidr"
+// subnet value with pod CIDR retrieved by the passed-in getPodCIDR function.  Typically, the passed-in function
+// would access the datastore to retrieve the podCIDR. However, for tear-down we use a dummy value that returns
+// 0.0.0.0/0.
+func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]interface{}, getPodCIDR func() (string, error)) error {
+	ipamData := stdinData["ipam"].(map[string]interface{})
+	// Older versions of host-local IPAM store a single subnet in the top-level IPAM dict.
+	err := replaceHostLocalIPAMPodCIDR(logger, ipamData, getPodCIDR)
+	if err != nil {
+		return err
+	}
+	// Newer versions store one or more subnets in the "ranges" list:
+	untypedRanges := ipamData["ranges"]
+	if untypedRanges != nil {
+		rangeSets, ok := untypedRanges.([]interface{})
+		if !ok {
+			return fmt.Errorf("failed to parse host-local IPAM ranges section; was expecting a list, not: %v",
+				ipamData["ranges"])
+		}
+		for _, urs := range rangeSets {
+			rs, ok := urs.([]interface{})
+			if !ok {
+				return fmt.Errorf("failed to parse host-local IPAM range set; was expecting a list, not: %v", rs)
+			}
+			for _, r := range rs {
+				err := replaceHostLocalIPAMPodCIDR(logger, r, getPodCIDR)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, getPodCidr func() (string, error)) error {
+	logrus.WithField("ipamData", rawIpamData).Debug("Examining IPAM data for usePodCidr")
+	ipamData := rawIpamData.(map[string]interface{})
+	subnet, _ := ipamData["subnet"].(string)
+	if strings.EqualFold(subnet, "usePodCidr") {
+		fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
+		podCidr, err := getPodCidr()
+		if err != nil {
+			logger.Info("Failed to getPodCidr")
+			return err
+		}
+		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
+		ipamData["subnet"] = podCidr
+		fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
+	}
+	return nil
 }
 
 // ValidateNetworkName checks that the network name meets felix's expectations
