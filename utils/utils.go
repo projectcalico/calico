@@ -174,8 +174,32 @@ func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) e
 // subnet value with pod CIDR retrieved by the passed-in getPodCIDR function.  Typically, the passed-in function
 // would access the datastore to retrieve the podCIDR. However, for tear-down we use a dummy value that returns
 // 0.0.0.0/0.
+//
+// To make sure that unknown fields are round-tripped, we manipulate the JSON as maps and slices rather than by
+// unmarshaling it into a struct.  The structure of the JSON is as follows; we support replacing usePodCidr in
+// either the "ipam" dict or its nested ranges section:
+//
+//    {
+//      "cniVersion": "%s",
+//      ...
+//      "ipam": {
+//        "type": "host-local",
+//        "subnet": "usePodCidr",
+//        "ranges": [
+//          [
+//             {
+//               "subnet": "usePodCidr"
+//             }
+//          ]
+//        ]
+//      }
+//      ...
+//    }
 func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]interface{}, getPodCIDR func() (string, error)) error {
-	ipamData := stdinData["ipam"].(map[string]interface{})
+	ipamData, ok := stdinData["ipam"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", stdinData["ipam"])
+	}
 	// Older versions of host-local IPAM store a single subnet in the top-level IPAM dict.
 	err := replaceHostLocalIPAMPodCIDR(logger, ipamData, getPodCIDR)
 	if err != nil {
@@ -207,7 +231,10 @@ func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]int
 
 func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, getPodCidr func() (string, error)) error {
 	logrus.WithField("ipamData", rawIpamData).Debug("Examining IPAM data for usePodCidr")
-	ipamData := rawIpamData.(map[string]interface{})
+	ipamData, ok := rawIpamData.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", rawIpamData)
+	}
 	subnet, _ := ipamData["subnet"].(string)
 	if strings.EqualFold(subnet, "usePodCidr") {
 		fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")

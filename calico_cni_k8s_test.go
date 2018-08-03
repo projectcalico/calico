@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"regexp"
+
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
@@ -29,11 +31,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"regexp"
 )
 
 func ensureNamespace(clientset *kubernetes.Clientset, name string) {
@@ -949,7 +950,7 @@ var _ = Describe("CalicoCni", func() {
 					       ]
 					    ],
 					    "routes": [
-					      {"dst": "10.123.0.0/16"},
+					      {"dst": "10.123.0.0/16", "gw": "10.123.0.1"},
 					      {"dst": "10.124.0.0/16"},
 					      {"dst": "dead:beef::/96"}
 					    ]
