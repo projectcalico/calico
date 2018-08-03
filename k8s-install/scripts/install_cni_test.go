@@ -39,7 +39,7 @@ func runCniContainer(extraArgs ...string) error {
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
-		"-v", cwd + ":/template",
+		"-v", cwd + "/test-templates:/template",
 		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
