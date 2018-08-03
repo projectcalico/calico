@@ -255,7 +255,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install'
+			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
 	make stop-etcd
 
 ## Run the tests in a container (as root) for different CNI spec versions
