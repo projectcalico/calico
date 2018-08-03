@@ -75,7 +75,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 		return nil, fmt.Errorf("Cannot process template resource %s - %s", path, err.Error())
 	}
 
-	tr := &tc.TemplateResource
+	tr := tc.TemplateResource
 	tr.keepStageFile = config.KeepStageFile
 	tr.noop = config.Noop
 	tr.storeClient = config.StoreClient
@@ -108,7 +108,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	tr.PrefixedKeys = appendPrefix(tr.Prefix, tr.Keys)
 
 	tr.Src = filepath.Join(config.TemplateDir, tr.Src)
-	return tr, nil
+	return &tr, nil
 }
 
 // setVars sets the Vars for template resource.
@@ -134,7 +134,7 @@ func (t *TemplateResource) setVars() error {
 // template and setting the desired owner, group, and mode. It also sets the
 // StageFile for the template resource.
 // It returns an error if any.
-func (t *TemplateResource) createStageFile() (err error) {
+func (t *TemplateResource) createStageFile() error {
 	log.Debug("Using source template " + t.Src)
 
 	if !isFileExist(t.Src) {
@@ -155,27 +155,16 @@ func (t *TemplateResource) createStageFile() (err error) {
 	}
 
 	if err = tmpl.Execute(temp, nil); err != nil {
+		temp.Close()
+		os.Remove(temp.Name())
 		return err
 	}
-	defer func() {
-		if err != nil {
-			// The key error to return is the failure to execute.
-			// to preserve that error ignore the errors in close and clean
-			temp.Close()           // nolint:errcheck
-			os.Remove(temp.Name()) // nolint:errcheck
-		} else {
-			err = temp.Close()
-		}
-	}()
+	defer temp.Close()
 
 	// Set the owner, group, and mode on the stage file now to make it easier to
 	// compare against the destination configuration file later.
-	if err := os.Chmod(temp.Name(), t.FileMode); err != nil {
-		return err
-	}
-	if err := os.Chown(temp.Name(), t.Uid, t.Gid); err != nil {
-		return err
-	}
+	os.Chmod(temp.Name(), t.FileMode)
+	os.Chown(temp.Name(), t.Uid, t.Gid)
 	t.StageFile = temp
 	return nil
 }
@@ -185,14 +174,12 @@ func (t *TemplateResource) createStageFile() (err error) {
 // overwriting the target config file. Finally, sync will run a reload command
 // if set to have the application or service pick up the changes.
 // It returns an error if any.
-func (t *TemplateResource) sync() (err error) {
+func (t *TemplateResource) sync() error {
 	staged := t.StageFile.Name()
 	if t.keepStageFile {
 		log.Info("Keeping staged file: " + staged)
 	} else {
-		defer func() {
-			err = os.Remove(staged)
-		}()
+		defer os.Remove(staged)
 	}
 
 	log.Debug("Comparing candidate config to " + t.Dest)
@@ -227,14 +214,11 @@ func (t *TemplateResource) sync() (err error) {
 					return rerr
 				}
 				err := ioutil.WriteFile(t.Dest, contents, t.FileMode)
+				// make sure owner and group match the temp file, in case the file was created with WriteFile
+				os.Chown(t.Dest, t.Uid, t.Gid)
 				if err != nil {
 					return err
 				}
-				// make sure owner and group match the temp file, in case the file was created with WriteFile
-				if err := os.Chown(t.Dest, t.Uid, t.Gid); err != nil {
-					return err
-				}
-
 			} else {
 				return err
 			}
