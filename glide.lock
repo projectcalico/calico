@@ -1,5 +1,5 @@
-hash: 91d01ab1a90d02b6d6f4aec6ddb71291f835b58e4f06d3ad9617ce42f09fe704
-updated: 2018-07-25T23:24:03.646837061Z
+hash: f925393eda9be11a43857ee38363994d1564867f935c0d19215b0c6a3651e138
+updated: 2018-08-03T04:10:29.307464679Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 09d19a73222af1b8f0a9ffc4a3344aa40e3aac80
+  version: 466dae8e0a4c4ec6d26a15652a708a33cfa28b5f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -220,7 +220,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
+  version: c7de2306084e37d54b8be01f3541a8464345e9a5
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -245,7 +245,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: c126467f60eb25f8f27e5a981f32a87e3965053f
+  version: 56440b844dfe139a8ac053f4ecac0b20b79058f4
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -301,7 +301,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
   subpackages:
   - internal
   - internal/app_identity
