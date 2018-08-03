@@ -1,5 +1,5 @@
-hash: d5cb12630f36fd5fd5b563a461388dfa33cfaec6da5c6791cafd1f918d00383a
-updated: 2018-07-26T06:19:02.620046819Z
+hash: e1fec2ab762f7727b4fbbc27165811c345ea2123857321fecf1434e5c16e57f1
+updated: 2018-08-03T06:19:16.531315983Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -197,7 +197,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 09d19a73222af1b8f0a9ffc4a3344aa40e3aac80
+  version: 466dae8e0a4c4ec6d26a15652a708a33cfa28b5f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -235,7 +235,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 2acca41864deeed64e93bd2f12ef17072fae9bac
+  version: a14c9d3651189da5112dfebedfbbd2c5ba84ffea
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -251,7 +251,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
+  version: c7de2306084e37d54b8be01f3541a8464345e9a5
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -275,7 +275,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: c126467f60eb25f8f27e5a981f32a87e3965053f
+  version: 56440b844dfe139a8ac053f4ecac0b20b79058f4
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -330,7 +330,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
   subpackages:
   - internal
   - internal/app_identity
@@ -342,7 +342,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 02b4e95473316948020af0b7a4f0f22c73929b0e
+  version: daca94659cb50e9f37c1b834680f2e46358f10b0
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
