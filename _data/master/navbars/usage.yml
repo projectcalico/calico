@@ -55,6 +55,8 @@ toc:
   path: /usage/configuration/conntrack
 - title: Calico for OpenStack
   section:
+  - title: Endpoint Labels
+    path: /usage/openstack/labels
   - title: Configuration
     path: /usage/openstack/configuration
   - title: Detailed Semantics
