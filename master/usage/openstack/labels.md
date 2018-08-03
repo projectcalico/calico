@@ -3,24 +3,24 @@ title: Endpoint Labels
 canonical_url: 'https://docs.projectcalico.org/v3.2/usage/openstack/labels'
 ---
 
-When {{site.prodname}} represents an OpenStack VM as a Calico WorkloadEndpoint, it puts
-labels on the WorkloadEndpoint to identify the project and security groups that the VM
-belongs to.
+When {{site.prodname}} represents an OpenStack VM as a {{site.prodname}} WorkloadEndpoint,
+it puts labels on the WorkloadEndpoint to identify the project and security groups that
+the VM belongs to.
 
 For the VM's OpenStack project (previously known as 'tenant'), those labels are:
 
-| Label Name                               | Value                   |
-|------------------------------------------|-------------------------|
-| projectcalico.org/openstack-project-id   | <the VM's project ID>   |
-| projectcalico.org/openstack-project-name | <the VM's project name> |
-|------------------------------------------|-------------------------|
+| Label Name                                 | Value                     |
+|--------------------------------------------|---------------------------|
+| `projectcalico.org/openstack-project-id`   | `<the VM's project ID>`   |
+| `projectcalico.org/openstack-project-name` | `<the VM's project name>` |
+|--------------------------------------------|---------------------------|
 
 For each security group that the VM belongs to, those labels are:
 
 | Label Name                                                  | Value                   |
 |-------------------------------------------------------------|-------------------------|
-| sg.projectcalico.org/openstack-\<security group ID\>        | \<security group name\> |
-| sg-name.projectcalico.org/openstack-\<security group name\> | \<security group ID\>   |
+| `sg.projectcalico.org/openstack-<security group ID>`        | `<security group name>` |
+| `sg-name.projectcalico.org/openstack-<security group name>` | `<security group ID>`   |
 |-------------------------------------------------------------|-------------------------|
 
 > **Note**: Calico only allows certain characters in label names and values
