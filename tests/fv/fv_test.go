@@ -193,29 +193,6 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}, time.Second*2, 500*time.Millisecond).Should(BeNil())
 		})
 
-		It("should be removed if they reference a k8sNode that doesn't exist", func() {
-			cn := &api.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: cNodeName,
-				},
-				Spec: api.NodeSpec{
-					OrchRefs: []api.OrchRef{
-						{
-							NodeName:     "k8sfakenode",
-							Orchestrator: "k8s",
-						},
-					},
-				},
-			}
-			_, err := calicoClient.Nodes().Create(context.Background(), cn, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() *api.Node {
-				node, _ := calicoClient.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
-				return node
-			}, time.Second*15, 500*time.Millisecond).Should(BeNil())
-		})
-
 		It("should not be removed in response to a k8s node delete if another orchestrator owns it", func() {
 			kn := &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
