@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	DefaultStatusFile string = "status.json"
+	DefaultStatusFile = "status.json"
 )
 
 type ConditionStatus struct {
@@ -46,20 +46,14 @@ func New(file string) *Status {
 	return &st
 }
 
-// SetReady sets the status of one ready key and the reason associated with
-// that status.
-func (s *Status) SetReady(key string, val bool, reason string) {
-	needUpdate := false
+// SetReady sets the status of one ready key and the reason associated with that status.
+func (s *Status) SetReady(key string, ready bool, reason string) {
 	s.readyMutex.Lock()
-	if prev, ok := s.Readiness[key]; !ok {
-		needUpdate = true
-	} else if prev.Ready != val || prev.Reason != reason {
-		needUpdate = true
-	}
-	s.Readiness[key] = ConditionStatus{Ready: val, Reason: reason}
-	s.readyMutex.Unlock()
-	if needUpdate {
-		_ = s.WriteStatus()
+	defer s.readyMutex.Unlock()
+
+	if prev, ok := s.Readiness[key]; !ok || prev.Ready != ready || prev.Reason != reason {
+		s.Readiness[key] = ConditionStatus{Ready: ready, Reason: reason}
+		_ = s.writeStatus()
 	}
 }
 
@@ -68,6 +62,7 @@ func (s *Status) SetReady(key string, val bool, reason string) {
 func (s *Status) GetReady(key string) bool {
 	s.readyMutex.Lock()
 	defer s.readyMutex.Unlock()
+
 	v, ok := s.Readiness[key]
 	if !ok {
 		return false
@@ -97,9 +92,10 @@ func (s *Status) GetReadiness() bool {
 // are not ready the reasons are combined and returned.
 // The output format is '<reason 1>; <reason 2>'.
 func (s *Status) GetNotReadyConditions() string {
-	var unready []string
 	s.readyMutex.Lock()
 	defer s.readyMutex.Unlock()
+
+	var unready []string
 	for _, v := range s.Readiness {
 		if !v.Ready {
 			unready = append(unready, v.Reason)
@@ -109,15 +105,16 @@ func (s *Status) GetNotReadyConditions() string {
 
 }
 
-// WriteStatus writes out the status in json format.
-func (c *Status) WriteStatus() error {
-	b, err := json.Marshal(c)
+// writeStatus writes out the status in json format.
+// Lock should be held by caller.
+func (s *Status) writeStatus() error {
+	b, err := json.Marshal(s)
 	if err != nil {
 		logrus.Errorf("Failed to marshal readiness: %s", err)
 		return err
 	}
 
-	err = ioutil.WriteFile(c.statusFile, b, 0644)
+	err = ioutil.WriteFile(s.statusFile, b, 0644)
 	if err != nil {
 		logrus.Errorf("Failed to write readiness file: %s", err)
 		return err
@@ -128,15 +125,15 @@ func (c *Status) WriteStatus() error {
 
 // ReadStatusFile reads in the status file as written by WriteStatus.
 func ReadStatusFile(file string) (*Status, error) {
-	st := Status{}
+	st := &Status{}
 	contents, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	err = json.Unmarshal(contents, &st)
+	err = json.Unmarshal(contents, st)
 	if err != nil {
 		return nil, err
 	}
 
-	return &st, nil
+	return st, nil
 }
