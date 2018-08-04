@@ -75,7 +75,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 		return nil, fmt.Errorf("Cannot process template resource %s - %s", path, err.Error())
 	}
 
-	tr := tc.TemplateResource
+	tr := &tc.TemplateResource
 	tr.keepStageFile = config.KeepStageFile
 	tr.noop = config.Noop
 	tr.storeClient = config.StoreClient
@@ -108,7 +108,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	tr.PrefixedKeys = appendPrefix(tr.Prefix, tr.Keys)
 
 	tr.Src = filepath.Join(config.TemplateDir, tr.Src)
-	return &tr, nil
+	return tr, nil
 }
 
 // setVars sets the Vars for template resource.
@@ -155,16 +155,29 @@ func (t *TemplateResource) createStageFile() error {
 	}
 
 	if err = tmpl.Execute(temp, nil); err != nil {
-		temp.Close()
-		os.Remove(temp.Name())
+		// The key error to return is the failure to execute.
+		// to preserve that error ignore the errors in close and clean
+		temp.Close()           // nolint:errcheck
+		os.Remove(temp.Name()) // nolint:errcheck
 		return err
 	}
-	defer temp.Close()
+	defer func() {
+		if e := temp.Close(); e != nil {
+			// Just log the error but don't carry it up the calling stack.
+			log.WithError(e).WithField("filename", temp.Name()).Error("error closing file")
+		}
+	}()
 
 	// Set the owner, group, and mode on the stage file now to make it easier to
 	// compare against the destination configuration file later.
-	os.Chmod(temp.Name(), t.FileMode)
-	os.Chown(temp.Name(), t.Uid, t.Gid)
+	if err := os.Chmod(temp.Name(), t.FileMode); err != nil {
+		log.WithError(err).WithField("filename", temp.Name()).Error("error changing mode")
+		return err
+	}
+	if err := os.Chown(temp.Name(), t.Uid, t.Gid); err != nil {
+		log.WithError(err).WithField("filename", temp.Name()).Error("error changing ownership")
+		return err
+	}
 	t.StageFile = temp
 	return nil
 }
@@ -179,7 +192,16 @@ func (t *TemplateResource) sync() error {
 	if t.keepStageFile {
 		log.Info("Keeping staged file: " + staged)
 	} else {
-		defer os.Remove(staged)
+		defer func() {
+			if e := os.Remove(staged); e != nil {
+				if !os.IsNotExist(e) {
+					// Just log the error but don't carry it up the calling stack.
+					log.WithError(e).WithField("filename", staged).Error("error removing file")
+				} else {
+					log.Debugf("Ignore not exists err. %s", e.Error())
+				}
+			}
+		}()
 	}
 
 	log.Debug("Comparing candidate config to " + t.Dest)
@@ -213,12 +235,16 @@ func (t *TemplateResource) sync() error {
 				if rerr != nil {
 					return rerr
 				}
-				err := ioutil.WriteFile(t.Dest, contents, t.FileMode)
-				// make sure owner and group match the temp file, in case the file was created with WriteFile
-				os.Chown(t.Dest, t.Uid, t.Gid)
-				if err != nil {
+				if err := ioutil.WriteFile(t.Dest, contents, t.FileMode); err != nil {
+					log.WithError(err).WithField("filename", t.Dest).Error("failed to write to file")
 					return err
 				}
+				// make sure owner and group match the temp file, in case the file was created with WriteFile
+				if err := os.Chown(t.Dest, t.Uid, t.Gid); err != nil {
+					log.WithError(err).WithField("filename", t.Dest).Error("failed to change owner")
+					return err
+				}
+
 			} else {
 				return err
 			}

@@ -68,8 +68,7 @@ type watchProcessor struct {
 }
 
 func WatchProcessor(config Config, stopChan, doneChan chan bool, errChan chan error) Processor {
-	var wg sync.WaitGroup
-	return &watchProcessor{config, stopChan, doneChan, errChan, wg}
+	return &watchProcessor{config, stopChan, doneChan, errChan, sync.WaitGroup{}}
 }
 
 func (p *watchProcessor) Process() {
