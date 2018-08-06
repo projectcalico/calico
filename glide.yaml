@@ -62,6 +62,10 @@ import:
   - prometheus
   - prometheus/promhttp
   - prometheus/push
+- package: github.com/prometheus/procfs
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  subpackages:
+  - xfs
 - package: github.com/satori/go.uuid
 - package: github.com/sirupsen/logrus
   version: v1.0.4
@@ -91,6 +95,7 @@ import:
   - pkg/api/errors
   - pkg/apis/meta/v1
 - package: k8s.io/client-go
+  version: 7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65
   subpackages:
   - kubernetes
   - rest
