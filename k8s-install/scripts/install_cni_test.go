@@ -39,6 +39,7 @@ func runCniContainer(extraArgs ...string) error {
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
+		"-v", cwd + "/test-templates:/template",
 		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
@@ -143,38 +144,7 @@ var _ = Describe("install-cni.sh tests", func() {
 			It("Should parse and output a templated config", func() {
 				err := runCniContainer()
 				Expect(err).NotTo(HaveOccurred())
-
-				expectedFile := "expected_10-calico.conf"
-
-				var expected = []byte{}
-				if file, err := os.Open(expectedFile); err != nil {
-					Fail("Could not open " + expectedFile + " for reading")
-				} else {
-					_, err := file.Read(expected)
-					if err != nil {
-						Fail("Could not read from expected_10-calico.conf")
-					}
-					err = file.Close()
-					if err != nil {
-						fmt.Println("Failed to close expected_10-calico.conf")
-					}
-				}
-
-				var received = []byte{}
-				if file, err := os.Open("tmp/net.d/10-calico.conf"); err != nil {
-					Fail("Could not open 10-calico.conf for reading")
-				} else {
-					_, err := file.Read(received)
-					if err != nil {
-						Fail("Could not read from 10-calico.conf")
-					}
-					err = file.Close()
-					if err != nil {
-						fmt.Println("Failed to close 10-calico.conf")
-					}
-				}
-
-				Expect(expected).To(Equal(received))
+				expectFilesEqual("expected_10-calico.conf", "tmp/net.d/10-calico.conf")
 			})
 		})
 
@@ -183,38 +153,29 @@ var _ = Describe("install-cni.sh tests", func() {
 				err := runCniContainer("-e", "CNI_CONF_NAME=10-calico.conflist")
 				Expect(err).NotTo(HaveOccurred())
 
-				expectedFile := "expected_10-calico.conf"
-
-				var expected = []byte{}
-				if file, err := os.Open(expectedFile); err != nil {
-					Fail("Could not open " + expectedFile + " for reading")
-				} else {
-					_, err := file.Read(expected)
-					if err != nil {
-						Fail("Could not read from expected_10-calico.conf")
-					}
-					err = file.Close()
-					if err != nil {
-						fmt.Println("Failed to close expected_10-calico.conf")
-					}
-				}
-
-				var received = []byte{}
-				if file, err := os.Open("tmp/net.d/10-calico.conflist"); err != nil {
-					Fail("Could not open 10-calico.conflist for reading")
-				} else {
-					_, err := file.Read(received)
-					if err != nil {
-						Fail("Could not read from 10-calico.conflist")
-					}
-					err = file.Close()
-					if err != nil {
-						fmt.Println("Failed to close 10-calico.conflist")
-					}
-				}
-
-				Expect(expected).To(Equal(received))
+				expectFilesEqual("expected_10-calico.conf", "tmp/net.d/10-calico.conflist")
 			})
+		})
+
+		It("should use CNI_NETWORK_CONFIG", func() {
+			err := runCniContainer(
+				"-e", "CNI_NETWORK_CONFIG=filecontents",
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			actual, err := ioutil.ReadFile("tmp/net.d/10-calico.conf")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(actual)).To(Equal("filecontents\n"))
+		})
+
+		It("should use CNI_NETWORK_CONFIG_FILE over CNI_NETWORK_CONFIG", func() {
+			err := runCniContainer(
+				"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
+				"-e", "CNI_NETWORK_CONFIG_FILE=/template/calico.conf.alternate",
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectFilesEqual("expected_10-calico.conf.alternate", "tmp/net.d/10-calico.conf")
 		})
 
 		Context("copying /calico-secrets", func() {
@@ -246,3 +207,13 @@ var _ = Describe("install-cni.sh tests", func() {
 		})
 	})
 })
+
+func expectFilesEqual(filenameExpected, filenameActual string) {
+	expected, err := ioutil.ReadFile(filenameExpected)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to read expected file "+filenameExpected)
+	actual, err := ioutil.ReadFile(filenameActual)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to read actual file "+filenameActual)
+
+	ExpectWithOffset(1, actual).To(Equal(expected), fmt.Sprintf(
+		"actual file (%s) differed from expected file (%s)", filenameActual, filenameExpected))
+}

@@ -317,7 +317,7 @@ stop-etcd:
 ###############################################################################
 # We pre-build the test binary so that we can run it outside a container and allow it
 # to interact with docker.
-k8s-install/scripts/install_cni.test: vendor
+k8s-install/scripts/install_cni.test: vendor k8s-install/scripts/*.go
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
