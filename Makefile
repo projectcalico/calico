@@ -230,7 +230,7 @@ static-checks: vendor
 .PHONY: fix
 ## Fix static checks
 fix:
-	goimports -w $(SRCFILES)
+	goimports -w $(SRCFILES) $(TEST_SRCFILES)
 
 .PHONY: install-git-hooks
 ## Install Git hooks
