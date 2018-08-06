@@ -44,19 +44,24 @@ type ipipManager struct {
 
 	// Dataplane shim.
 	dataplane ipipDataplane
+
+	// Configured list of external node ip cidr's to be added to the ipset.
+	externalNodeCIDRs []string
 }
 
 func newIPIPManager(
 	ipsetsDataplane ipsetsDataplane,
 	maxIPSetSize int,
+	externalNodeCidrs []string,
 ) *ipipManager {
-	return newIPIPManagerWithShim(ipsetsDataplane, maxIPSetSize, realIPIPNetlink{})
+	return newIPIPManagerWithShim(ipsetsDataplane, maxIPSetSize, realIPIPNetlink{}, externalNodeCidrs)
 }
 
 func newIPIPManagerWithShim(
 	ipsetsDataplane ipsetsDataplane,
 	maxIPSetSize int,
 	dataplane ipipDataplane,
+	externalNodeCIDRs []string,
 ) *ipipManager {
 	ipipMgr := &ipipManager{
 		ipsetsDataplane:    ipsetsDataplane,
@@ -64,9 +69,10 @@ func newIPIPManagerWithShim(
 		dataplane:          dataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: maxIPSetSize,
-			SetID:   rules.IPSetIDAllHostIPs,
-			Type:    ipsets.IPSetTypeHashIP,
+			SetID:   rules.IPSetIDAllHostNets,
+			Type:    ipsets.IPSetTypeHashNet,
 		},
+		externalNodeCIDRs: externalNodeCIDRs,
 	}
 	return ipipMgr
 }
@@ -212,8 +218,11 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		// to (at least transiently) share an IP.  That would add occupancy and make the
 		// code more complex.
 		log.Info("All-hosts IP set out-of sync, refreshing it.")
-		members := make([]string, 0, len(m.activeHostnameToIP))
+		members := make([]string, 0, len(m.activeHostnameToIP)+len(m.externalNodeCIDRs))
 		for _, ip := range m.activeHostnameToIP {
+			members = append(members, ip)
+		}
+		for _, ip := range m.externalNodeCIDRs {
 			members = append(members, ip)
 		}
 		m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)

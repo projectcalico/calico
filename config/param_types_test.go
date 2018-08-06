@@ -38,3 +38,24 @@ var _ = DescribeTable("Endpoint list parameter parsing",
 	Entry("Two URLs extra commas", ",http://etcd:1234,,http://etcd2:2345,",
 		[]string{"http://etcd:1234/", "http://etcd2:2345/"}),
 )
+
+var _ = DescribeTable("CIDR list parameter parsing",
+	func(raw string, expected interface{}, expectSuccess bool) {
+		p := CIDRListParam{Metadata{
+			Name: "CIDRs",
+		}}
+		actual, err := p.Parse(raw)
+		if expectSuccess {
+			Expect(err).To(BeNil())
+			Expect(actual).To(Equal(expected))
+		} else {
+			Expect(err).NotTo(BeNil())
+		}
+	},
+	Entry("Empty", "", []string{}, true),
+	Entry("Single IPv4", "1.1.1.1", []string{"1.1.1.1/32"}, true),
+	Entry("Single CIDR", "1.1.1.1/32", []string{"1.1.1.1/32"}, true),
+	Entry("Single CIDR subnet", "1.1.1.1/24", []string{"1.1.1.0/24"}, true),
+	Entry("Mix of IP and CIDRs", "1.1.1.1/24, 2.2.2.2", []string{"1.1.1.0/24", "2.2.2.2/32"}, true),
+	Entry("Reject IPv6", "aabc::1111/32", []string{}, false),
+)

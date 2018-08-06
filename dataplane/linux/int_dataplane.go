@@ -121,6 +121,8 @@ type Config struct {
 	HealthAggregator   *health.HealthAggregator
 
 	DebugSimulateDataplaneHangAfter time.Duration
+
+	ExternalNodesCidrs []string
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -321,7 +323,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manger to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize)
+		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	}
 	if config.IPv6Enabled {

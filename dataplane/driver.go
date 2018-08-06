@@ -163,6 +163,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			},
 			HealthAggregator:                healthAggregator,
 			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
+			ExternalNodesCidrs:              configParams.ExternalNodesCIDRList,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
