@@ -13,15 +13,16 @@ import (
 	"strings"
 	"syscall"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/containernetworking/cni/pkg/types"
-	types020 "github.com/containernetworking/cni/pkg/types/020"
+	"github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
-	version "github.com/mcuadros/go-version"
+	"github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -151,6 +152,9 @@ func WipeK8sPods() {
 		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
 
 		if err != nil {
+			if kerrors.IsNotFound(err) {
+				continue
+			}
 			panic(err)
 		}
 	}

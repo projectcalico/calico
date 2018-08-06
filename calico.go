@@ -288,7 +288,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 			// 3) Set up the veth
-			hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result, logger, "")
+			hostVethName, contVethMac, err := utils.DoNetworking(
+				args, conf, result, logger, "", utils.DefaultRoutes)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
 				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)

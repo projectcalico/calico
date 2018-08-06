@@ -29,8 +29,39 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+var (
+	// IPv4AllNet represents the IPv4 all-addresses CIDR 0.0.0.0/0.
+	IPv4AllNet *net.IPNet
+	// IPv6AllNet represents the IPv6 all-addresses CIDR ::/0.
+	IPv6AllNet    *net.IPNet
+	DefaultRoutes []*net.IPNet
+)
+
+func init() {
+	var err error
+	_, IPv4AllNet, err = net.ParseCIDR("0.0.0.0/0")
+	if err != nil {
+		panic(err)
+	}
+	_, IPv6AllNet, err = net.ParseCIDR("::/0")
+	if err != nil {
+		panic(err)
+	}
+	DefaultRoutes = []*net.IPNet{
+		IPv4AllNet,
+		IPv6AllNet, // Only used if we end up adding a v6 address.
+	}
+}
+
 // DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(args *skel.CmdArgs, conf types.NetConf, result *current.Result, logger *logrus.Entry, desiredVethName string) (hostVethName, contVethMAC string, err error) {
+func DoNetworking(
+	args *skel.CmdArgs,
+	conf types.NetConf,
+	result *current.Result,
+	logger *logrus.Entry,
+	desiredVethName string,
+	routes []*net.IPNet,
+) (hostVethName, contVethMAC string, err error) {
 	// Select the first 11 characters of the containerID for the host veth.
 	hostVethName = "cali" + args.ContainerID[:Min(11, len(args.ContainerID))]
 	contVethName := args.IfName
@@ -120,8 +151,15 @@ func DoNetworking(args *skel.CmdArgs, conf types.NetConf, result *current.Result
 					return fmt.Errorf("failed to add route inside the container: %v", err)
 				}
 
-				if err = ip.AddDefaultRoute(gw, contVeth); err != nil {
-					return fmt.Errorf("failed to add the default route inside the container: %v", err)
+				for _, r := range routes {
+					if r.IP.To4() == nil {
+						logger.WithField("route", r).Debug("Skipping non-IPv4 route")
+						continue
+					}
+					logger.WithField("route", r).Debug("Adding IPv4 route")
+					if err = ip.AddRoute(r, gw, contVeth); err != nil {
+						return fmt.Errorf("failed to add IPv4 route for %v via %v: %v", r, gw, err)
+					}
 				}
 
 				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
@@ -167,9 +205,15 @@ func DoNetworking(args *skel.CmdArgs, conf types.NetConf, result *current.Result
 
 				hostIPv6Addr := addresses[0].IP
 
-				_, defNet, _ := net.ParseCIDR("::/0")
-				if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
-					return fmt.Errorf("failed to add IPv6 default gateway to %v %v", hostIPv6Addr, err)
+				for _, r := range routes {
+					if r.IP.To4() != nil {
+						logger.WithField("route", r).Debug("Skipping non-IPv6 route")
+						continue
+					}
+					logger.WithField("route", r).Debug("Adding IPv6 route")
+					if err = ip.AddRoute(r, hostIPv6Addr, contVeth); err != nil {
+						return fmt.Errorf("failed to add IPv6 route for %v via %v: %v", r, hostIPv6Addr, err)
+					}
 				}
 
 				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
