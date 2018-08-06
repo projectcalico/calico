@@ -15,11 +15,19 @@
 package status_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"testing"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+	logrus.SetLevel(logrus.InfoLevel)
+}
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
