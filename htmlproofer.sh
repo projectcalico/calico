@@ -5,7 +5,7 @@
 HP_VERSION=v0.2
 
 # Local directories to ignore when checking external links
-HP_IGNORE_LOCAL_DIRS="/v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/,/v2.3/,/v2.4/,/v2.5/"
+HP_IGNORE_LOCAL_DIRS="/v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/,/v2.3/,/v2.4/,/v2.5/,/v3.2/"
 
 # URLs to ignore when checking external links.
 HP_IGNORE_URLS="/docs.openshift.org/,#,/github.com\/projectcalico\/calico\/releases\/download/"
