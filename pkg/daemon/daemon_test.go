@@ -235,29 +235,20 @@ var _ = Describe("Daemon", func() {
 
 var _ = Context("Healthcheck command", func() {
 	var d *TyphaDaemon
-	var exitRC int
 	var h *health.HealthAggregator
 	var port int
-
-	mockExit := func(rc int) {
-		exitRC = rc
-		panic("mockExit") // Need to panic to break out of the method.
-	}
 
 	healthcheckRC := func(kind string) int {
 		d.ParseCommandLineArgs([]string{
 			"check", kind, fmt.Sprintf("--port=%d", port),
 		})
-		Expect(d.DoHealthCheckAndExit).To(Panic())
-		return exitRC
+		return d.CalculateHealthRC()
 	}
 
 	BeforeEach(func() {
 		d = New()
 		logrus.SetOutput(GinkgoWriter)
 		logrus.SetLevel(logrus.DebugLevel)
-		d.OSExit = mockExit
-		exitRC = -1
 
 		h = health.NewHealthAggregator()
 		port = 19000 + GinkgoParallelNode()*1000 + rand.IntnRange(0, 1000)

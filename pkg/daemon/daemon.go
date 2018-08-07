@@ -95,9 +95,6 @@ type TyphaDaemon struct {
 	healthCheckType string
 	// healthCheckPort is set to the --port argument (or the default port).
 	healthCheckPort int
-
-	// OSExit is a shim for os.Exit().
-	OSExit func(int)
 }
 
 func New() *TyphaDaemon {
@@ -111,7 +108,6 @@ func New() *TyphaDaemon {
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
-		OSExit:                os.Exit,
 	}
 }
 
@@ -119,7 +115,7 @@ func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) error {
 	t.DoEarlyRuntimeSetup()
 	t.ParseCommandLineArgs(nil)
 	if t.healthCheckOnly {
-		t.DoHealthCheckAndExit()
+		os.Exit(t.CalculateHealthRC())
 	}
 	err := t.LoadConfiguration(cxt)
 	if err != nil { // Should only happen if context is canceled.
@@ -427,26 +423,25 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 		}
 	}
 }
-func (t *TyphaDaemon) DoHealthCheckAndExit() {
+func (t *TyphaDaemon) CalculateHealthRC() int {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", t.healthCheckPort, t.healthCheckType)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.WithError(err).Error("Failed to make HTTP request for health URL")
-		t.OSExit(1)
+		return 1
 	}
 	var client http.Client
 	client.Timeout = time.Second
 	resp, err := client.Do(req)
 	if err != nil {
 		log.WithError(err).Error("Failed to get health URL")
-		t.OSExit(2)
+		return 2
 	}
-	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		t.OSExit(0)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.WithField("statusCode", resp.StatusCode).Error("Bad status code from health check URL")
+		return 3
 	}
-
-	log.WithField("statusCode", resp.StatusCode).Error("Bad status code from health check URL")
-	t.OSExit(3)
+	return 0
 }
 
 // ClientV3Shim wraps a real client, allowing its syncer to be mocked.
