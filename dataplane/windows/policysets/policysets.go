@@ -549,7 +549,7 @@ func (s *PolicySets) NewHostRule(isInbound bool) *hns.ACLPolicy {
 		direction = hns.In
 	}
 
-	priority := 0
+	var priority uint16 = 0
 
 	if !s.supportedFeatures.Acl.AclNoHostRulePriority {
 		log.Debugf("This HNS version requires host rule priority to be specified. Adding priority=100 to Host rules.")
@@ -562,7 +562,7 @@ func (s *PolicySets) NewHostRule(isInbound bool) *hns.ACLPolicy {
 		Action:    hns.Allow,
 		Direction: direction,
 		Protocol:  256, // Any
-		Priority:  uint16(priority),
+		Priority:  priority,
 	}
 }
 
