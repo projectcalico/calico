@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
+	"strconv"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
@@ -54,6 +56,8 @@ const usage = `Typha, Calico's fan-out proxy.
 
 Usage:
   calico-typha [options]
+  calico-typha check readiness [--port=<port>]
+  calico-typha check liveness [--port=<port>]
 
 Options:
   -c --config-file=<filename>  Config file to load [default: /etc/calico/typha.cfg].
@@ -84,6 +88,13 @@ type TyphaDaemon struct {
 
 	// Health monitoring.
 	healthAggregator *health.HealthAggregator
+
+	// healthCheckOnly is set to true if Typha is started as calico-typha check (readiness|liveness).
+	healthCheckOnly bool
+	// healthCheckType is set to "readiness" or "liveness" when parsing the calico-typha check command.
+	healthCheckType string
+	// healthCheckPort is set to the --port argument (or the default port).
+	healthCheckPort int
 }
 
 func New() *TyphaDaemon {
@@ -103,6 +114,9 @@ func New() *TyphaDaemon {
 func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) error {
 	t.DoEarlyRuntimeSetup()
 	t.ParseCommandLineArgs(nil)
+	if t.healthCheckOnly {
+		os.Exit(t.CalculateHealthRC())
+	}
 	err := t.LoadConfiguration(cxt)
 	if err != nil { // Should only happen if context is canceled.
 		return err
@@ -134,6 +148,22 @@ func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
 	if err != nil {
 		println(usage)
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
+	}
+	if arguments["check"] == true {
+		t.healthCheckOnly = true
+		if arguments["liveness"] == true {
+			t.healthCheckType = "liveness"
+		} else {
+			t.healthCheckType = "readiness"
+		}
+		t.healthCheckPort = 9098
+		if portStr, ok := arguments["--port"].(string); ok {
+			port, err := strconv.Atoi(portStr)
+			if err != nil {
+				log.Fatalf("Failed to parse --port argument: %v, exiting: %v", portStr, err)
+			}
+			t.healthCheckPort = port
+		}
 	}
 	t.ConfigFilePath = arguments["--config-file"].(string)
 	t.BuildInfoLogCxt = log.WithFields(log.Fields{
@@ -392,6 +422,26 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 			return
 		}
 	}
+}
+func (t *TyphaDaemon) CalculateHealthRC() int {
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", t.healthCheckPort, t.healthCheckType)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.WithError(err).Error("Failed to make HTTP request for health URL")
+		return 1
+	}
+	var client http.Client
+	client.Timeout = time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		log.WithError(err).Error("Failed to get health URL")
+		return 2
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.WithField("statusCode", resp.StatusCode).Error("Bad status code from health check URL")
+		return 3
+	}
+	return 0
 }
 
 // ClientV3Shim wraps a real client, allowing its syncer to be mocked.
