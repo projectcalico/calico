@@ -27,6 +27,8 @@ The full list of parameters which can be set is as follows.
 | --------------------------------- | --------------------------------------- | -------------| ------ |
 | `DatastoreType`                   | `TYPHA_DATASTORETYPE`                   | The datastore that Typha should read endpoints and policy information from. [Default: `etcdv3`] | `etcdv3`, `kubernetes`|
 | `HealthEnabled`                   | `TYPHA_HEALTHENABLED`                   | When enabled, exposes Typha health information via an http endpoint. | boolean |
+| `HealthPort`                      | `TYPHA_HEALTHPORT`                      | The port that Typha will serve health information over. [Default: `9098`] | int |
+| `HealthHost`                      | `TYPHA_HEALTHHOST`                      | The address that Typha will bind its health endpoint to. [Default: `localhost`] | string |
 | `LogFilePath`                     | `TYPHA_LOGFILEPATH`                     | The full path to the Typha log. Set to `none` to disable file logging. [Default: `/var/log/calico/typha.log`] | string |
 | `LogSeverityFile`                 | `TYPHA_LOGSEVERITYFILE`                 | The log severity above which logs are sent to the log file. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `LogSeverityScreen`               | `TYPHA_LOGSEVERITYSCREEN`               | The log severity above which logs are sent to the stdout. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
@@ -35,6 +37,13 @@ The full list of parameters which can be set is as follows.
 | `PrometheusMetricsEnabled`        | `TYPHA_PROMETHEUSMETRICSENABLED`        | Set to `true` to enable the Prometheus metrics server in Typha. [Default: `false`] | boolean |
 | `PrometheusMetricsPort`           | `TYPHA_PROMETHEUSMETRICSPORT`           | Experimental: TCP port that the Prometheus metrics server should bind to. [Default: `9091`] | int |
 | `PrometheusProcessMetricsEnabled` | `TYPHA_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
+
+> **Note**: By default, if the health endpoint is enabled Typha listens on localhost.  However, if  Typhs is used in
+> Kubernetes, the kubelet will do health checks using the pod IP.  To work around this discrepancy, the Typha image
+> supports a health-check CLI command that fetches the health endpoint:
+> `calico-typha check (readiness|liveness) --port=<port>`.  If you modify the health port, you will need to add the
+> `--port=<port>` argument to the liveness and readiness probe commands in the manifest.
+{: .alert .alert-info}
 
 #### etcd datastore configuration
 
