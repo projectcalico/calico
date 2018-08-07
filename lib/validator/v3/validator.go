@@ -545,6 +545,21 @@ func validateFelixConfigSpec(v *validator.Validate, structLevel *validator.Struc
 			}
 		}
 	}
+
+	// Validate that the externalNodesCIDRList is composed of valid cidr's.
+	if c.ExternalNodesCIDRList != nil {
+		for _, cidr := range *c.ExternalNodesCIDRList {
+			log.Debugf("Cidr is: %s", cidr)
+			ip, _, err := cnet.ParseCIDROrIP(cidr)
+			if err != nil {
+				structLevel.ReportError(reflect.ValueOf(cidr),
+					"ExternalNodesCIDRList", "", reason("has invalid CIDR(s)"))
+			} else if ip.Version() != 4 {
+				structLevel.ReportError(reflect.ValueOf(cidr),
+					"ExternalNodesCIDRList", "", reason("has invalid IPv6 CIDR"))
+			}
+		}
+	}
 }
 
 func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.StructLevel) {
